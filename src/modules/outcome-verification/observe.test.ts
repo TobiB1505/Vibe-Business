@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  htmlResponse,
   redirectResponse,
   textResponse,
   xmlResponse,
@@ -277,5 +278,143 @@ describe("what an observation reduces to (§8, §14, §15)", () => {
     const observation = await observePublicProduct(expected(), http);
 
     expect(observation.effectiveOrigin).toBe("https://www.product.test");
+  });
+});
+
+/**
+ * Probing the public pages one agentic change touched (ADR 0071).
+ *
+ * The property under test is the same one the file opens with — that this is
+ * not a crawl — under a profile whose paths are not fixed constants. The pages
+ * come from the frozen expectation's own checks and from nowhere else, so a
+ * link, a redirect target or anything inside a fetched page can never become a
+ * request.
+ */
+function routeExpectation(paths: string[]): ExpectedOutcome {
+  return expected({
+    profile: "agentic_public_routes_outcome_v1",
+    profileVersion: "agentic-public-routes-outcome-v1",
+    resources: ["public_route"],
+    checks: paths.map((path) => ({
+      kind: "public_route_serves_page" as const,
+      target: path,
+      resource: "public_route" as const,
+    })),
+  });
+}
+
+describe("probing the pages an agentic change touched (ADR 0071)", () => {
+  it("requests exactly the pages the contract names, and nothing they link to", async () => {
+    const http = outcomeHttp({
+      [`${OUTCOME_ORIGIN}/`]: htmlResponse('<a href="/elsewhere">go</a>'),
+      [`${OUTCOME_ORIGIN}/pricing`]: htmlResponse("<h1>Plans</h1>"),
+      [`${OUTCOME_ORIGIN}/elsewhere`]: htmlResponse("<h1>No</h1>"),
+    });
+
+    await observePublicProduct(routeExpectation(["/", "/pricing"]), http);
+
+    expect(http.transport.requests.map((request) => request.url)).toEqual([
+      `${OUTCOME_ORIGIN}/`,
+      `${OUTCOME_ORIGIN}/pricing`,
+    ]);
+  });
+
+  it("records that a page answered at the path it was asked for", async () => {
+    const http = outcomeHttp({ [`${OUTCOME_ORIGIN}/pricing`]: htmlResponse("<h1>Plans</h1>") });
+
+    const observation = await observePublicProduct(routeExpectation(["/pricing"]), http);
+    const probe = observation.byRoute.get("/pricing");
+
+    expect(probe?.reachable).toBe(true);
+    expect(probe?.reachable === true && probe.facts).toEqual({
+      kind: "route",
+      pathPreserved: true,
+    });
+  });
+
+  it("records a redirect to a different page as the page not being served", async () => {
+    // The shape of an anonymous visitor being sent to a login screen, and of a
+    // path the site has since renamed. Both are "we did not see the page we
+    // asked about", which is not the same claim as "the page is broken".
+    const http = outcomeHttp({
+      [`${OUTCOME_ORIGIN}/pricing`]: redirectResponse(`${OUTCOME_ORIGIN}/login`),
+      [`${OUTCOME_ORIGIN}/login`]: htmlResponse("<h1>Sign in</h1>"),
+    });
+
+    const observation = await observePublicProduct(routeExpectation(["/pricing"]), http);
+    const probe = observation.byRoute.get("/pricing");
+
+    expect(probe?.reachable === true && probe.facts).toEqual({
+      kind: "route",
+      pathPreserved: false,
+    });
+  });
+
+  it("keeps an origin adoption apart from a path change", async () => {
+    // `example.com` → `www.example.com` is the origin being adopted, which
+    // `effectiveOrigin` records and the evaluator accepts. The path survived.
+    const http = outcomeHttp(
+      {
+        [`${OUTCOME_ORIGIN}/pricing`]: redirectResponse("https://www.product.test/pricing"),
+        "https://www.product.test/pricing": htmlResponse("<h1>Plans</h1>"),
+      },
+      { [OUTCOME_HOSTNAME]: [OUTCOME_ADDRESS], "www.product.test": [OUTCOME_ADDRESS] },
+    );
+
+    const observation = await observePublicProduct(routeExpectation(["/pricing"]), http);
+    const probe = observation.byRoute.get("/pricing");
+
+    expect(observation.effectiveOrigin).toBe("https://www.product.test");
+    expect(probe?.reachable === true && probe.facts).toEqual({
+      kind: "route",
+      pathPreserved: true,
+    });
+  });
+
+  it("separates the origin's own error from a failure to look", async () => {
+    const http = outcomeHttp({
+      [`${OUTCOME_ORIGIN}/broken`]: { status: 500 },
+      [`${OUTCOME_ORIGIN}/gone`]: { status: 404 },
+      // A WAF answering 403 to our user agent is a fact about our request, and
+      // reporting it as the customer's product being broken is the single most
+      // damaging thing this module could say (§19, §23).
+      [`${OUTCOME_ORIGIN}/blocked`]: { status: 403 },
+    });
+
+    const observation = await observePublicProduct(
+      routeExpectation(["/broken", "/gone", "/blocked"]),
+      http,
+    );
+
+    const kindOf = (path: string) => {
+      const probe = observation.byRoute.get(path);
+      return probe?.reachable === false ? probe.kind : "reachable";
+    };
+
+    expect(kindOf("/broken")).toBe("contradicted");
+    expect(kindOf("/gone")).toBe("absent");
+    expect(kindOf("/blocked")).toBe("error");
+  });
+
+  it("reads a page route serving something that is not a page as a contradiction", async () => {
+    const http = outcomeHttp({ [`${OUTCOME_ORIGIN}/pricing`]: xmlResponse("<x/>") });
+
+    const observation = await observePublicProduct(routeExpectation(["/pricing"]), http);
+    const probe = observation.byRoute.get("/pricing");
+
+    expect(probe?.reachable === false && probe.kind).toBe("contradicted");
+  });
+
+  it("re-applies the page budget to a stored expectation, whatever it asks for", async () => {
+    // A frozen expectation written under an earlier, larger budget must not be
+    // able to spend today's requests (§9, CLAUDE.md rule 27).
+    const paths = Array.from({ length: 9 }, (_, index) => `/p${index}`);
+    const http = outcomeHttp(
+      Object.fromEntries(paths.map((path) => [`${OUTCOME_ORIGIN}${path}`, htmlResponse("<h1/>")])),
+    );
+
+    await observePublicProduct(routeExpectation(paths), http);
+
+    expect(http.transport.requests).toHaveLength(DEFAULT_OUTCOME_BUDGETS.maxObservedRoutes);
   });
 });

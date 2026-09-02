@@ -360,3 +360,69 @@ describe("the card the panel renders (§29, §33, §34)", () => {
     expect(card.businessImpactMeasured).toBe(false);
   });
 });
+
+/**
+ * The agentic path reaches the verifier (ADR 0071).
+ *
+ * The gap this closes was a roadmap entry for three sprints: every change the
+ * coding agent produced resolved to `outcome_not_supported`, so the measurement
+ * half of the product was wired to two deterministic SEO generators and to
+ * nothing a customer's agent had ever built.
+ */
+describe("an agentic change is verifiable, or refused for a stated reason (ADR 0071)", () => {
+  it("is eligible when a changed file serves a public page", async () => {
+    seed({
+      capability: "agentic_execution_v1",
+      changedPaths: ["src/app/pricing/page.tsx"],
+    });
+
+    const eligibility = await evaluateOutcomeEligibility(client(), params);
+
+    expect(eligibility.eligible).toBe(true);
+    if (!eligibility.eligible) return;
+    expect(eligibility.outcomeProfile).toBe("agentic_public_routes_outcome_v1");
+    expect(eligibility.expected.checks.map((check) => check.target)).toEqual(["/pricing"]);
+  });
+
+  it("refuses a backend-only change as having no public surface, not as unsupported", async () => {
+    // Two different sentences. "Vibe cannot verify this kind of change" would be
+    // false now, and "there is nothing public to check" is what happened.
+    seed({
+      capability: "agentic_execution_v1",
+      changedPaths: ["src/modules/billing/catalog.ts"],
+    });
+
+    expect(await evaluateOutcomeEligibility(client(), params)).toEqual({
+      eligible: false,
+      reason: "outcome_no_public_surface",
+    });
+  });
+
+  it("tells the founder what will be looked at before the click, and its limit", async () => {
+    seed({
+      capability: "agentic_execution_v1",
+      changedPaths: ["src/app/pricing/page.tsx"],
+    });
+
+    const card = await getOutcomeCard(client(), params);
+
+    expect(card.state).toBe("not_started");
+    expect(card.canVerify).toBe(true);
+    // The sentence that stops a green tick reading as "your change is on your
+    // site". It is a field rather than component copy for exactly that reason.
+    expect(card.profileNote).toContain("cannot tell you whether the new version");
+  });
+
+  it("explains a backend-only change on the card rather than staying silent", async () => {
+    seed({
+      capability: "agentic_execution_v1",
+      changedPaths: ["src/modules/billing/catalog.ts"],
+    });
+
+    const card = await getOutcomeCard(client(), params);
+
+    expect(card.state).toBe("unavailable");
+    expect(card.failureCode).toBe("outcome_no_public_surface");
+    expect(card.failureMessage).toContain("nothing public to check");
+  });
+});

@@ -1,4 +1,9 @@
-import type { OutcomeCheckKind, OutcomeCheckResult, OutcomeFailureCode } from "./schema";
+import type {
+  OutcomeCheckKind,
+  OutcomeCheckResult,
+  OutcomeFailureCode,
+  OutcomeProfile,
+} from "./schema";
 
 /**
  * User-facing copy for outcome verification (Sprint 12A §22, §23, §29–§34).
@@ -31,6 +36,13 @@ export const OUTCOME_FAILURE_MESSAGES: Record<OutcomeFailureCode, string> = {
   // wrong — the same discipline `validation_not_supported` follows.
   outcome_not_supported:
     "Vibe cannot verify the production outcome of this kind of change yet.",
+
+  // Not a defect and not a limitation of Vibe's coverage — the change simply
+  // has no public page behind it, which is the ordinary shape of backend work.
+  // Says what would have been looked at, so the sentence is informative rather
+  // than a shrug.
+  outcome_no_public_surface:
+    "This change did not touch a page Vibe can find on your public site, so there is nothing public to check.",
 
   outcome_public_origin_unavailable:
     "Vibe needs a verified production URL for this project before it can check your public product.",
@@ -69,8 +81,40 @@ const CHECK_LABELS: Record<OutcomeCheckKind, (target: string | null) => string> 
   sitemap_includes_public_root: () => "homepage included in sitemap",
   sitemap_includes_path: (target) => `${target ?? "page"} included in sitemap`,
   sitemap_excludes_private_prefix: (target) => `${target ?? "private routes"} excluded from sitemap`,
+
+  /**
+   * Written as an observation, not as a verdict.
+   *
+   * "`/pricing` answers" is what happened. "`/pricing` works", "`/pricing` is
+   * live" and "`/pricing` updated" are three things this check cannot tell
+   * anybody, and each of them is what a reader would take from a green tick
+   * unless the label refuses to say it.
+   */
+  public_route_serves_page: (target) => `${target ?? "page"} answers`,
 };
 
 export function outcomeCheckLabel(result: Pick<OutcomeCheckResult, "kind" | "target">): string {
   return CHECK_LABELS[result.kind](result.target);
+}
+
+/**
+ * What `verified` means for one profile, in one sentence (ADR 0071).
+ *
+ * The card renders this beside every outcome, in every state, because the two
+ * profiles verify genuinely different things and the surrounding copy —
+ * "Production outcome verified" — reads identically for both.
+ *
+ * The agentic sentence gives away its own limit on purpose. A founder reading a
+ * green tick after a merge will assume the change is live unless something in
+ * front of them says otherwise, and Vibe reads no deployment API (§3, §34).
+ */
+export const OUTCOME_PROFILE_SCOPE_NOTES: Record<OutcomeProfile, string> = {
+  nextjs_seo_foundations_outcome_v1:
+    "Vibe checks the two files this change publishes — robots.txt and your sitemap — and what they say about your pages.",
+  agentic_public_routes_outcome_v1:
+    "Vibe checks that the pages this change touched are still being served. It cannot tell you whether the new version is the one serving them, and it does not read what is on the page.",
+};
+
+export function outcomeProfileScopeNote(profile: OutcomeProfile): string {
+  return OUTCOME_PROFILE_SCOPE_NOTES[profile];
 }

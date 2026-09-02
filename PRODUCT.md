@@ -253,6 +253,8 @@ Understand → Diagnose → Prioritize → Plan → Execute → Measure
 
 The honest reading of `Measure`: Vibe verifies what a merged change made observable in production ([ADR 0020](docs/decisions/0020-production-outcome-verification.md)), and can compare a business metric across two windows ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) — but no metric source is connected, so every project resolves to `waiting_for_source`. Vibe never claims a change *caused* a business result.
 
+The two profiles verify different things and say so on the card. For the SEO generators, Vibe checks the two files the change publishes and what they say about your pages. For a change the agent produced, it checks that the public pages the change touched are still being served ([ADR 0071](docs/decisions/0071-agentic-outcome-verification.md)) — which catches a merge that took a page down, and which is **not** evidence that the new version is the one serving. Vibe reads no deployment API and never says `deployed`, `live` or `shipped`.
+
 Vibe Business does not present users with large audit reports. After an analysis, the system surfaces a small number of highly prioritized opportunities. Example:
 
 > **Opportunity 1** — Improve homepage value proposition

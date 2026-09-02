@@ -1,4 +1,3 @@
-import type { SandboxCommand } from "@/modules/validation/commands";
 
 /**
  * The isolated workspace an agent acts on (EXECUTION CORE-4 §7, §8, §52).
@@ -71,38 +70,20 @@ export type WorkspaceCommandResult = {
   timedOut: boolean;
 };
 
-export interface AgentWorkspace {
-  /**
-   * Lists one directory, bounded.
-   *
-   * One directory rather than a tree, because a recursive listing of an
-   * unfamiliar repository is exactly the unbounded crawl Rule 27 forbids — and
-   * because an agent that has to walk deliberately produces a `filesRead`
-   * count that means something.
-   */
-  list(input: { path: string; maxEntries: number }): Promise<readonly WorkspaceEntry[]>;
-
-  /** Bounded content search. The query is a literal, never a shell fragment. */
-  search(input: {
-    query: string;
-    /** Restricts the search to a subtree. Repository-relative. */
-    path: string;
-    maxResults: number;
-  }): Promise<readonly WorkspaceMatch[]>;
-
+/**
+ * Reading one file back out of the workspace.
+ *
+ * The whole of what survives ADR 0029 on this side. `verifyCandidateChange`
+ * needs the bytes at a path Vibe already observed changing, and nothing else in
+ * the product asks the workspace for anything any more: the harness edits files
+ * with its own tools inside the VM, so there is no brokered list, search,
+ * write, remove or run to perform.
+ *
+ * This replaces an `AgentWorkspace` interface that declared all six. Rule 76 is
+ * why the difference matters: an effect that must never happen is an absent
+ * capability, not a denied one — and five methods nothing invoked were five
+ * denials that refused nothing.
+ */
+export interface WorkspaceReader {
   read(input: { path: string; maxBytes: number }): Promise<WorkspaceReadResult>;
-
-  write(input: { path: string; content: string }): Promise<WorkspaceWriteResult>;
-
-  remove(input: { path: string }): Promise<WorkspaceWriteResult>;
-
-  /**
-   * Runs one **Vibe-constructed** command.
-   *
-   * The type says so: `SandboxCommand` is `{command, args[]}`, never a string,
-   * so there is no interpolation point even in principle. The gateway is the
-   * only caller and it builds the command from a check *name* the agent chose
-   * out of a closed set (`AGENT_CHECK_NAMES`).
-   */
-  run(input: { command: SandboxCommand; timeoutMs: number }): Promise<WorkspaceCommandResult>;
 }

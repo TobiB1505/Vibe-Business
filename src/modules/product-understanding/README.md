@@ -62,5 +62,6 @@ demoted with its value dropped.
 
 Repository file paths, file contents, dependency versions, config values, signed-in page
 headings, anything matching an email/URL/key/long-identifier shape. URL paths *are*
-forwarded: `/pricing` is product structure a visitor can see, and it tells a model
-everything `src/app/pricing/page.tsx` would without leaking repository structure.
+forwarded: `/pricing` is product structure a visitor can see, and it tells a model what the
+file serving it would without naming that file. Which file that is — or whether the prices
+live on a route of their own at all — is repository structure, and stays here.

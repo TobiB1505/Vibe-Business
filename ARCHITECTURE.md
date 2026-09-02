@@ -38,11 +38,10 @@ Onboarding
   → Opportunity
   → Action Plan
   → Execution Contract  (an immutable spec + a compiled policy)
-  → Agent Execution     (in an isolated sandbox, behind a tool gateway)
+  → Agent Execution     (in an isolated sandbox, with an explicitly named tool set)
   → Prepared Change     (a commit on an isolated branch)
   → Independent Validation
   → Preview
-  → Visual Review
   → Approval            (bound to one exact commit)
   → Merge               (fast-forward, verified by read-back)
   → Outcome Verification
@@ -123,7 +122,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.7 Git Branch / Change Layer
 
-**[Confirmed principle]** All AI-authored code changes land on an isolated, non-default branch (via the GitHub Integration Layer). This layer owns branch lifecycle (create, update, discard) for execution jobs.
+**[Confirmed principle]** All AI-authored code changes land on an isolated, non-default branch (via the GitHub Integration Layer). What that layer may do to a ref is deliberately narrower than a lifecycle: it **creates** an execution branch and commits to it, and that is all. There is no update, no force-update, no rewrite and no delete — `merge/git-port.ts` and `execution/git-port.ts` have no `updateRef` and no `deleteRef` at all, which is an absent capability rather than a denied one ([rule 71](CLAUDE.md), [rule 76](CLAUDE.md)). The one ref Vibe ever moves is the default branch, by fast-forward to one approved commit — see [§3.10](#310-approval--merge-layer). A prepared change a founder rejects is discarded as a *row*; its branch stays, and removing it is the repository owner's to do.
 
 ### 3.8 Build & Validation Layer
 
@@ -292,7 +291,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts (superseded as a gate by 0065; historical rows only) | §3.9 |
 | [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity (amended by 0063) | §3.10 |
 | [0019](docs/decisions/0019-safe-approved-change-merge.md) | Safe approved-change merge | §3.10 |
-| [0020](docs/decisions/0020-production-outcome-verification.md) | Production outcome verification | Measurement |
+| [0020](docs/decisions/0020-production-outcome-verification.md) | Production outcome verification (extended by 0071) | Measurement |
 | [0021](docs/decisions/0021-business-outcome-measurement.md) | Business outcome measurement | Measurement |
 | [0022](docs/decisions/0022-sentry-observability.md) | Sentry for errors and baseline tracing | Cross-cutting |
 | [0023](docs/decisions/0023-project-scoped-onboarding-orchestration.md) | Project-scoped onboarding orchestration | Onboarding |
@@ -342,6 +341,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0067](docs/decisions/0067-plan-screen-renders-the-resolver.md) | The plan screen renders the execution resolver | §3.6 |
 | [0068](docs/decisions/0068-retention-periods.md) | Retention periods, by what the data is for (Accepted; closes ADR 0056's deferred P-2) | §3.11, §3.12, storage |
 | [0069](docs/decisions/0069-retention-sweep-trigger.md) | What deletes the expired rows, and what it may not touch — `pg_cron` (Accepted; closes ADR 0068's deferred D-2) | §3.11, §3.12, storage |
+| [0070](docs/decisions/0070-the-sandbox-is-the-boundary.md) | The sandbox is the boundary; the tool gateway is retired | §3.6 |
+| [0071](docs/decisions/0071-agentic-outcome-verification.md) | Outcome verification for agentic changes: routes Vibe observed | Measurement |
 
 ### Layers with no section above
 
@@ -356,7 +357,7 @@ These exist, are governed by the ADRs named, and are described in depth by their
 - **Execution Contract / Context** — `src/modules/execution-contract/`, `src/modules/execution-context/` · ADRs 0026, 0031, 0034. The immutable spec and compiled policy an execution runs under, and the bounded brief it starts from.
 - **Coding Agent** — `src/modules/coding-agent/` · ADRs 0027, 0029, 0032, 0033. The agent harness, its sandbox placement, its gateway, and how a run's result is verified against Vibe's own observation.
 - **Merge** — `src/modules/merge/` · ADR 0019.
-- **Outcome Verification / Business Measurement** — `src/modules/outcome-verification/`, `src/modules/business-measurement/` · ADRs 0020, 0021.
+- **Outcome Verification / Business Measurement** — `src/modules/outcome-verification/`, `src/modules/business-measurement/` · ADRs 0020, 0021, 0071. Two profiles: what the SEO generators publish, and whether the public pages an agentic change touched are still being served.
 - **Durable Operations** — `src/modules/operations/` · ADRs 0013, 0030, 0037. Also the only module permitted to use the service-role client.
 - **Billing and Economy** — `src/modules/billing/`, `src/modules/economy/` · ADRs 0025, 0038.
 

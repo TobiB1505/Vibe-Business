@@ -28,9 +28,12 @@ PreparedChange → ValidationRun → Review → Approval → Safe Merge     unch
 > in 44 ms with zero turns. The harness now runs in the execution's own sandbox
 > and samples through the Agent Gateway — see
 > [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md).
-> `ExecutionToolGateway` and `AgentWorkspace` are unchanged and still describe
-> the `gateway_tools` topology; the change set now comes from a filesystem
-> comparison Vibe performs rather than from the gateway's write record.
+> `ExecutionToolGateway` and `AgentWorkspace` outlived the topology they
+> belonged to by two weeks, constructed on every run and invoked by nothing;
+> [ADR 0070](../../../docs/decisions/0070-the-sandbox-is-the-boundary.md) deleted
+> both. What survives of the workspace is `WorkspaceReader`, one method, used to
+> read a changed file back. The change set comes from a filesystem comparison
+> Vibe performs, and the boundary is the VM plus `verifyCandidateChange`.
 
 ## The principle, one layer on
 
@@ -50,11 +53,8 @@ a counter or a clock.
 | --- | --- |
 | `schema.ts` | the tool vocabulary, denial reasons, run statuses, failure codes, versions |
 | `provider.ts` | *what is a coding agent, expressed without naming a vendor?* |
-| `claude/adapter.ts` | the one file that imports the Claude Agent SDK |
-| `claude/tools.ts` | Zod shapes for the adapter. Not the enforcement |
-| `workspace.ts` | *what can an agent do to the world?* — the complete list |
-| `sandbox-workspace.ts` | that list, over a Vercel Sandbox |
-| `gateway.ts` | *may this call happen?* — default deny, and the audit trail |
+| `workspace.ts` | `WorkspaceReader` — reading one file back, the only thing Vibe still does to a workspace |
+| `sandbox-workspace.ts` | that read, over a Vercel Sandbox |
 | `prompt.ts` | *what is the agent told?* — deterministic, versioned, fenced |
 | `candidate.ts` | *what actually changed?* — read back, never reported |
 | `budget.ts` | the spec's ceilings, expanded into runtime counters |
@@ -68,15 +68,19 @@ a counter or a clock.
 ## Four things this module refuses to do
 
 **It does not trust the agent's account of its own work.** The changed paths
-come from the gateway's record of the writes it brokered; the bytes come from
-reading the workspace back; the baseline comes from the pinned commit. An agent
+come from Vibe's own comparison of the filesystem — a listing before the run, a
+marker, and a listing after — the bytes come from reading the workspace back,
+and the baseline comes from the pinned commit. There is no broker to ask: the
+harness edits files inside the VM (ADR 0070). An agent
 that says "I only changed two files" has made a claim, and `candidate.ts`
 counts them.
 
 **It does not let a tool exist for an effect it must not have.** Network, git,
-deploy and database access are not denied capabilities — they are absent
-methods on `AgentWorkspace`. The globally-forbidden checks in `gateway.ts` are
-belt and braces for a stored policy that somehow names one.
+deploy and database access are absent from the harness's tool set, which
+`sandbox-runtime/protocol.ts` names explicitly rather than taking from a preset
+— there is no `WebFetch`, no `WebSearch` and no MCP server, and
+`program.test.ts` asserts it. Absent, not denied: a denial is a decision
+something has to get right, and an absence is not (rule 76, ADR 0070).
 
 **It does not interpolate third-party text into a system prompt.** The Planner's
 prose, the customer's decisions and the repository's own facts all go into the
@@ -113,4 +117,7 @@ route, risk, validation profile, granted capabilities, ceilings, and the exact
 instruction the agent would receive — without spending anything.
 
 See [ADR 0027](../../../docs/decisions/0027-coding-agent-provider-and-tool-gateway.md)
-and [the sprint record](../../../docs/sprints/0040-execution-core4-first-coding-agent.md).
+for the provider boundary, [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md)
+for where the harness runs, [ADR 0070](../../../docs/decisions/0070-the-sandbox-is-the-boundary.md)
+for why the gateway is gone, and
+[the sprint record](../../../docs/sprints/0040-execution-core4-first-coding-agent.md).

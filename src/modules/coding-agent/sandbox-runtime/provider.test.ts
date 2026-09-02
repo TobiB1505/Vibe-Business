@@ -55,7 +55,6 @@ function request(overrides: Partial<CodingAgentRequest> = {}): CodingAgentReques
     effort: "high",
     tools: [],
     limits: { maxTurns: 30, maxWallClockMs: 600_000, maxProviderSpendUsd: 2.5 },
-    invokeTool: async () => ({ kind: "ok", content: "" }),
     signal: new AbortController().signal,
     ...overrides,
   };
