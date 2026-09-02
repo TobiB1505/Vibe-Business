@@ -85,10 +85,26 @@ Five planted defects, each caught by exactly the intended assertion: a shortened
 
 - **The financial ten-year sweep.** Decided, not written. The oldest financial row is dated 2026-08-17, so it could not delete anything before 2036, could not be tested against a tombstoned account because none exists, and carries ADR 0056 F5's landmine — partial deletion of the billing graph leaves `posted_credits` overstated with no repair path.
 - **The derived-intelligence count rule.** `pg_cron` schedules a clock and a count rule is not a clock.
-- **The privacy-page disclosure.** It becomes truthful for two classes on deploy and stays untrue for two. Publishing per class as each becomes enforced is the honest sequence.
+- **The privacy-page disclosure**, at the time this was written. It was done later the same day — see below.
 
 ## What has not been proved
 
 - **That the job runs.** Nothing here has executed inside Supabase. The extension is available and not installed; the first real proof is the first firing.
 - **That an unscheduled job would be noticed.** ADR 0069 §D-1: scheduling from a migration makes divergence *detectable*, and nothing yet detects it.
 - **That a swept run is handled correctly by every economy reader.** `readMetric` and `comparableRuns` apply the horizon; a caller that reads a raw column still sees an absence with no explanation attached.
+
+## Continued the same day: deployed, and the disclosure
+
+**Deployed through the Supabase MCP server**, because the CLI workflow rule 29 prefers was unavailable — no access token in this container and no link, so `db push` could not run. Verified against the live database rather than trusting the `success` response: `pg_cron 1.6.4` installed, the function `SECURITY INVOKER` with `search_path` pinned, one job at `17 3 * * *` and active, `anon`/`authenticated`/`service_role`/`public` all refused `EXECUTE`, and row counts identical before and after. The security advisor reports nothing new.
+
+**Inspecting the history first (rule 30) found drift**, and it is worth recording because nothing else would have surfaced it: `20260902103212_discard_prepared_change` is applied on the database and exists in **no commit in this repository** — written in this repo's voice by a parallel session that applied it without landing the file. It touches only `prepared_changes` CHECK constraints, so it is orthogonal to this work and the ordering holds. It was read before anything was applied, and deliberately **not** recreated here: a second, competing file is not a fix.
+
+**MCP assigns the migration version at apply time**, not from the filename, so the history recorded `20260902103614` against a file named `20260902120000`. The file was renamed to match — otherwise a later `db push` would see it as unapplied and run it again (harmless, since it is idempotent, but the history would then carry it twice).
+
+**The privacy notice states the two enforced periods**, and only those. The financial and derived classes are described as what is *kept*, because ADR 0068 decided periods for both and ADR 0069 built neither — "up to ten years" is a criterion the law sets and Vibe honours by keeping; "then deleted" would be a promise with nothing behind it. The missing half is on the page's own pending list.
+
+Three claims about account deletion were checked against the product's own confirmation copy rather than written from memory, and one was wrong: a subscription **is** cancelled immediately, with no refund of time already paid for — not, as first drafted, left running.
+
+`retention-disclosure.test.ts` binds the published sentence to `periods.ts`. Verified by planting the drift it exists to catch: a published ninety days against an enforced sixty, a period on the page that no sweep implements, and the word "automatically" attached to the financial class.
+
+**Still not proved:** that the job fires. Everything above is structure. The first real evidence is tomorrow morning's run — which will delete nothing, because the first eligible row is dated 2026-11-17.

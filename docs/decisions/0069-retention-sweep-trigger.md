@@ -122,6 +122,8 @@ So the horizon is recorded beside the availability dates, as a rolling bound rat
 
 **The privacy-page disclosure.** It becomes truthful for the operational and audit classes once this deploys, and stays untrue for the two classes above. Publishing a period per class as each becomes enforced is the honest sequence; publishing all four now would restate the problem this ADR exists to fix.
 
+> **[2026-09-02, later the same day] Done for the two enforced classes, in exactly that sequence.** The migration was applied (recorded as `20260902103614`) and verified against the live database — extension installed, `SECURITY INVOKER`, job active, no Data API role able to execute it, no row deleted. `/privacy` now states ninety days and eighteen months as facts, and states the financial and derived classes as **what is kept** rather than as a promise to delete. `retention-disclosure.test.ts` fails if a published period stops matching `periods.ts`, if a period appears that no sweep implements, or if the financial class acquires the word "automatically". The unbuilt half stays on the page's own pending list.
+
 ## Consequences
 
 - **Something finally deletes.** For the two classes covered, the period stated in code is the period the data has.
