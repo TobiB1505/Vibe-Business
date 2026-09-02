@@ -108,6 +108,7 @@ const LABELS: Record<AuditEventType, string> = {
   "change_preparation.started": "Change preparation started",
   "change_preparation.completed": "Change prepared",
   "change_preparation.failed": "Change preparation failed",
+  "change_preparation.discarded": "Change discarded",
 
   "change_validation.started": "Validation started",
   "change_validation.passed": "Validation passed",

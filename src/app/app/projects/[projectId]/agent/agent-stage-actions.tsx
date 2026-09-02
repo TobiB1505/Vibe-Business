@@ -2,6 +2,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { ApprovalPanel } from "../approval-panel";
 import { BusinessImpactPanel } from "../business-impact-panel";
+import { DiscardPanel } from "../discard-panel";
 import { MergePanel } from "../merge-panel";
 import { OutcomePanel } from "../outcome-panel";
 import { PreviewPanel } from "../preview-panel";
@@ -106,6 +107,18 @@ export function AgentReviewDecision({
             merged={change.progress.merged}
             presentation="workspace"
           />
+
+          {/* The third answer. Approve and merge move the change forward; this
+              is how a founder says no, and without it the only ways out of an
+              unwanted change were to approve it or to abandon the Move. */}
+          <div className="border-line-2 border-t pt-4">
+            <DiscardPanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              approved={change.progress.approved}
+              merged={change.progress.merged}
+            />
+          </div>
         </div>
 
         <div className="border-line-2 min-w-0 border-t pt-5 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">

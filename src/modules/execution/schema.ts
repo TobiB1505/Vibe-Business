@@ -164,7 +164,30 @@ export type ExecutionFailureReason = (typeof EXECUTION_FAILURE_REASONS)[number];
 
 export type ExecutionFailureCode = ExecutionBlockReason | ExecutionFailureReason;
 
-export type PreparedChangeStatus = "preparing" | "prepared" | "failed" | "superseded";
+/**
+ * Where a prepared change stands.
+ *
+ * `discarded` is a human rejection and the only way to reject one. It replaces
+ * a `superseded` that lived in this union from the table's first day and never
+ * existed in the database: no CHECK admitted it, nothing wrote it, nothing read
+ * it. What it cost was not a stray word — it was that a change a founder did
+ * not want stayed `prepared` forever, kept answering "this Move already has a
+ * prepared change", and held the single-active index against its own execution
+ * identity so the step could not be run again.
+ *
+ * Nothing sets `discarded` automatically. A newer preparation for the same Move
+ * does not supersede an older one, because the unique index refuses the second
+ * insert while the first is still active — which is the same fact stated by the
+ * database instead of by a status.
+ */
+export const PREPARED_CHANGE_STATUSES = [
+  "preparing",
+  "prepared",
+  "failed",
+  "discarded",
+] as const;
+
+export type PreparedChangeStatus = (typeof PREPARED_CHANGE_STATUSES)[number];
 
 /** One file the capability generated. Content lives on the branch, not here (§23). */
 export type PreparedFile = {

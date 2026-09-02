@@ -129,6 +129,7 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "operationId",
     "operation_id",
     "opportunityId",
+    "opportunity_id",
     "opportunitySetId",
     "preparedChangeId",
     "prepared_change_id",
@@ -206,6 +207,10 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "validationDepthReason",
     "default_branch",
     "branchName",
+    // The snake_case sibling, written by `change_preparation.discarded`. Always
+    // Vibe-generated (`branchNameFor` produces `vibe/…`), so it names a ref
+    // this product created, not anything the founder wrote.
+    "branch_name",
     "disclosure",
     "detail",
     "fields",
