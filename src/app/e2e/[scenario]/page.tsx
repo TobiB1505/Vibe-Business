@@ -695,10 +695,8 @@ export default async function E2eScenarioPage({
         {label}
         <WorkspaceSection
           id="business-audit"
-          title="Business Health"
           eyebrow="Business intelligence"
           variant="intelligence"
-          description="Your whole business in one connected view — what is working, what matters and where to move next."
           actions={
             <RunAuditButton
               projectId="project_e2e"
@@ -964,10 +962,8 @@ export default async function E2eScenarioPage({
         {label}
         <WorkspaceSection
           id="business-audit"
-          title="Business Health"
           eyebrow="Business intelligence"
           variant="intelligence"
-          description="Your whole business in one connected view — what is working, what matters and where to move next."
         >
           {view ? (
             <AuditOverview
