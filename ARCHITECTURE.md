@@ -122,7 +122,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.7 Git Branch / Change Layer
 
-**[Confirmed principle]** All AI-authored code changes land on an isolated, non-default branch (via the GitHub Integration Layer). This layer owns branch lifecycle (create, update, discard) for execution jobs.
+**[Confirmed principle]** All AI-authored code changes land on an isolated, non-default branch (via the GitHub Integration Layer). What that layer may do to a ref is deliberately narrower than a lifecycle: it **creates** an execution branch and commits to it, and that is all. There is no update, no force-update, no rewrite and no delete — `merge/git-port.ts` and `execution/git-port.ts` have no `updateRef` and no `deleteRef` at all, which is an absent capability rather than a denied one ([rule 71](CLAUDE.md), [rule 76](CLAUDE.md)). The one ref Vibe ever moves is the default branch, by fast-forward to one approved commit — see [§3.10](#310-approval--merge-layer). A prepared change a founder rejects is discarded as a *row*; its branch stays, and removing it is the repository owner's to do.
 
 ### 3.8 Build & Validation Layer
 

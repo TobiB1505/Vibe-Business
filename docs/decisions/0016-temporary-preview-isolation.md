@@ -1,6 +1,6 @@
 # 0016 - Temporary Preview Isolation
 
-Status: Accepted
+Status: Accepted; §1, §3, §7 and §11 superseded by [0064](0064-preview-before-validation.md)
 Date: 2026-08-13
 Builds on [0015](0015-untrusted-repository-execution-provider.md)
 
