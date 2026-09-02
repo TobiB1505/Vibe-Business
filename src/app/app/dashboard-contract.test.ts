@@ -227,6 +227,22 @@ describe("the dashboard does not scale its queries with its projects", () => {
   });
 
   /**
+   * The dashboard reads the product's name and logo, and must do it the way it
+   * reads a score: two denormalised columns, never the document they came from.
+   *
+   * `result` is a full product-profile.v1 with an evidence array on every
+   * field. One of those per project is precisely the payload this module
+   * exists to keep off the dashboard, and it would arrive looking like a
+   * feature.
+   */
+  it("reads the product identity as columns, bounded by the same profile ids", () => {
+    expect(readModel).toContain('.select("project_id, product_name, product_logo_url")');
+    expect(readModel).toContain('.in("id", profileIds)');
+    expect(readModel).not.toContain('"result"');
+    expect(readModel).not.toContain("result,");
+  });
+
+  /**
    * An append-only log grows forever, so a dashboard query over one is fine on
    * day one and a full-table scan by month six. This used to be phrased as
    * "the `audit_events` read is bounded"; CORE-6 removed that read entirely
@@ -286,18 +302,39 @@ describe("attention is presentation, not a new engine", () => {
    * deliberately does not do, and a substring match over comments would fail
    * on its own documentation.
    */
-  it("imports nothing but its own types", () => {
+  it("imports nothing but its own types and one pure helper", () => {
     const imports = attention.match(/^import[\s\S]*?from\s+"[^"]+";$/gm) ?? [];
     const sources = imports.map((line) => line.match(/from\s+"([^"]+)"/)?.[1] ?? "");
 
     expect(sources.length).toBeGreaterThan(0);
     for (const from of sources) {
-      expect(from, `attention.ts imports ${from}`).toBe("./dashboard");
+      // `./display-name` is the one name every product surface must agree on.
+      // The assertion below is what makes admitting it safe: it may not become
+      // a door into anything by importing something itself.
+      expect(["./dashboard", "./display-name"], `attention.ts imports ${from}`).toContain(from);
     }
   });
 
+  /**
+   * Asserted as the absence of any import at all, which is the whole claim:
+   * a module that imports nothing cannot become a door into a client bundle,
+   * a Supabase client or an engine, no matter who reaches for it next. A
+   * substring sweep was tried first and failed on this file's own prose, for
+   * exactly the reason the assertion above it records.
+   */
+  it("admits only a helper that can pull nothing in behind it", () => {
+    const displayName = source(join(MODULES, "projects/display-name.ts"));
+
+    expect(displayName).not.toMatch(/^\s*import\b/m);
+  });
+
   it("calls no provider, model or inference helper", () => {
-    for (const forbidden of ["generateStructured(", "countInputTokens(", "AIProvider", "anthropic"]) {
+    for (const forbidden of [
+      "generateStructured(",
+      "countInputTokens(",
+      "AIProvider",
+      "anthropic",
+    ]) {
       expect(attention, `attention.ts references ${forbidden}`).not.toContain(forbidden);
     }
   });

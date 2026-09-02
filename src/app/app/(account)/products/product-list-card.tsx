@@ -13,7 +13,8 @@ import { StatusPill, statusToneText, type StatusTone } from "@/components/ui/sta
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { initialsFrom } from "@/modules/auth/initials";
-import { productDisplayName, type ProductOverviewItem } from "@/modules/projects/product-summary";
+import { productDisplayName } from "@/modules/projects/display-name";
+import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { buildScoreSeries } from "@/modules/projects/score-series";
 import { productListStatus } from "./product-list-state";
 

@@ -1,5 +1,6 @@
 import type { StatusTone } from "@/components/ui/status-pill";
-import { productDisplayName, type ProductOverviewItem } from "@/modules/projects/product-summary";
+import { productDisplayName } from "@/modules/projects/display-name";
+import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 
 export type ProductFilter = "all" | "attention" | "analysed" | "setup";
 export type ProductSort = "priority" | "recent" | "signal" | "name";

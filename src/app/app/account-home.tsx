@@ -5,6 +5,7 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { ArrowRightIcon, PlusIcon } from "@/components/ui/dashboard-icons";
 import { buildAttentionItems, orderProjectsByAttention } from "@/modules/projects/attention";
+import { productDisplayName } from "@/modules/projects/display-name";
 import type { DashboardProject } from "@/modules/projects/dashboard";
 import { BusinessSignalPanel } from "./business-signal-panel";
 import { NextMoveCard } from "./next-move-card";
@@ -84,7 +85,9 @@ export function AccountHome({
   unfinishedSetupProjectId?: string | null;
 }) {
   const attention = buildAttentionItems(projects);
-  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+  const projectNames = new Map(
+    projects.map((project) => [project.id, productDisplayName(project)]),
+  );
 
   /*
    * Most-urgent first. The same ordering carries both halves of this screen:
@@ -137,15 +140,13 @@ export function AccountHome({
         <h1 className="text-fg text-headline sm:text-display font-bold tracking-[-0.04em] text-balance">
           {headline}
         </h1>
-        {projects.length > 0 && (
-          <p className="text-fg-muted text-base">{summary}</p>
-        )}
+        {projects.length > 0 && <p className="text-fg-muted text-base">{summary}</p>}
       </header>
 
       {hero && (
         <section aria-labelledby="signal-heading" className="flex flex-col gap-5">
           <h2 id="signal-heading" className="sr-only">
-            {hero.name}
+            {productDisplayName(hero)}
           </h2>
           <BusinessSignalPanel project={hero} />
           <NextMoveCard project={hero} />
@@ -160,7 +161,10 @@ export function AccountHome({
             <h2 id="products-heading" className="text-fg text-title font-bold">
               Your products
             </h2>
-            <Link href="/app/products" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+            <Link
+              href="/app/products"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
               View all products
               <ArrowRightIcon size={16} />
             </Link>

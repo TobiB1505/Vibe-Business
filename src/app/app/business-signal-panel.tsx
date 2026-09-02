@@ -8,6 +8,7 @@ import { Surface } from "@/components/ui/surface";
 import { formatDate, formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import type { DashboardProject } from "@/modules/projects/dashboard";
+import { productDisplayName } from "@/modules/projects/display-name";
 import { buildScoreSeries, type ScoreSeries } from "@/modules/projects/score-series";
 
 const SCORE_TONE: Record<ScoreTone, StatusTone> = {
@@ -85,7 +86,7 @@ function SignalCopy({ project }: { project: DashboardProject }) {
         href={`/app/projects/${project.id}`}
         className="text-mint hover:text-mint-hover mt-1 w-fit text-sm font-semibold transition-interactive"
       >
-        {project.name}
+        {productDisplayName(project)}
       </Link>
     </div>
   );
