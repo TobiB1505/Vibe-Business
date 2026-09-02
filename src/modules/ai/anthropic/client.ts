@@ -37,8 +37,3 @@ export function getAIProvider(): AIProvider {
   cached = new AnthropicProvider(client.messages);
   return cached;
 }
-
-/** Test-only: clears the cached provider. */
-export function __resetAIProviderCacheForTests(): void {
-  cached = undefined;
-}
