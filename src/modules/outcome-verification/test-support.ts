@@ -161,6 +161,14 @@ export type SeedOutcomeOptions = {
   /** False models a repository snapshot that is no longer resolvable. */
   withSnapshot?: boolean;
   routes?: RouteSummary[];
+  /**
+   * The paths Vibe verified as changed by the commit.
+   *
+   * Ignored by the SEO contract and load-bearing for the agentic one, whose
+   * expectations *are* the intersection of these with the route table
+   * (ADR 0071).
+   */
+  changedPaths?: string[];
 };
 
 /**
@@ -211,7 +219,11 @@ export function seedMergedChange(db: FakeDatabase, options: SeedOutcomeOptions =
     base_sha: "b".repeat(40),
     base_branch: "main",
     branch_name: "vibe/seo-foundations",
-    files: [{ path: "src/app/sitemap.ts", contentHash: "a".repeat(64), bytes: 512 }],
+    files: (options.changedPaths ?? ["src/app/sitemap.ts"]).map((path) => ({
+      path,
+      contentHash: "a".repeat(64),
+      bytes: 512,
+    })),
   });
 
   db.seed("change_approvals", {

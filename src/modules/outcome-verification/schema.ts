@@ -64,12 +64,32 @@ export const OUTCOME_EVIDENCE_SCHEMA_VERSION = "outcome-evidence-v1" as const;
  * There is deliberately no generic "measure a change" profile. A profile that
  * could describe any capability would be a profile that describes none.
  */
-export const OUTCOME_PROFILES = ["nextjs_seo_foundations_outcome_v1"] as const;
+export const OUTCOME_PROFILES = [
+  "nextjs_seo_foundations_outcome_v1",
+  /**
+   * The agentic path's profile (ADR 0071).
+   *
+   * It is deliberately not "a generic measure-a-change profile", which the
+   * paragraph above rules out and still does. It is a profile for one narrow,
+   * repeatable question that happens to be answerable whatever the agent built:
+   * *are the public pages this change touched still being served?*
+   *
+   * The routes come from Vibe's own two observations — the changed paths it
+   * verified off the commit, and the repository analyzer's route table for the
+   * pinned snapshot — intersected. No model, no prose, no diff reading.
+   *
+   * What it does **not** establish is arrival: a 200 is equally consistent with
+   * the old build still serving. That limit is in the name, in the check label,
+   * in `OUTCOME_PROFILE_SCOPE_NOTES`, and on the card.
+   */
+  "agentic_public_routes_outcome_v1",
+] as const;
 export type OutcomeProfile = (typeof OUTCOME_PROFILES)[number];
 
 /** Profile output versions, bumped whenever the expected facts change meaning. */
 export const OUTCOME_PROFILE_VERSIONS: Record<OutcomeProfile, string> = {
   nextjs_seo_foundations_outcome_v1: "nextjs-seo-foundations-outcome-v1",
+  agentic_public_routes_outcome_v1: "agentic-public-routes-outcome-v1",
 };
 
 export function outcomeProfileVersionFor(profile: OutcomeProfile): string {
@@ -84,10 +104,29 @@ export function outcomeProfileVersionFor(profile: OutcomeProfile): string {
  * link it finds in them. Adding an endpoint here is a deliberate act with a
  * budget attached, not a consequence of a parser discovering a URL.
  */
-export const OUTCOME_RESOURCES = ["robots_txt", "sitemap_xml"] as const;
+export const OUTCOME_RESOURCES = [
+  "robots_txt",
+  "sitemap_xml",
+  /**
+   * One public page, at a path the contract names.
+   *
+   * The only resource whose path is not fixed here, and the reason it is still
+   * not a crawl: the paths come from the contract's frozen check list, which is
+   * the intersection of Vibe's verified changed paths with the analyzer's route
+   * table. Nothing found *in* a fetched page ever becomes a request.
+   */
+  "public_route",
+] as const;
 export type OutcomeResource = (typeof OUTCOME_RESOURCES)[number];
 
-export const OUTCOME_RESOURCE_PATHS: Record<OutcomeResource, string> = {
+/**
+ * The fixed path for each resource that has one.
+ *
+ * `public_route` is absent on purpose: a fixed-path lookup for it would be a
+ * lie, and its absence from this record is what forces every call site to take
+ * the path from the check's `target` instead.
+ */
+export const OUTCOME_RESOURCE_PATHS: Record<Exclude<OutcomeResource, "public_route">, string> = {
   robots_txt: "/robots.txt",
   sitemap_xml: "/sitemap.xml",
 };
@@ -113,6 +152,19 @@ export const OUTCOME_CHECK_KINDS = [
   "sitemap_includes_public_root",
   "sitemap_includes_path",
   "sitemap_excludes_private_prefix",
+  /**
+   * One public page answers, as a page, at the path Vibe asked for.
+   *
+   * Stated this narrowly because every wider reading of it is false. It is not
+   * "the change is live" — a 200 says nothing about which build produced it —
+   * and it is not "the page is correct". It is the one thing an anonymous GET
+   * can establish: the route the change touched has not stopped serving.
+   *
+   * The failure direction is where the value is. A merged change that takes the
+   * homepage to a 500 is the most expensive thing this pipeline can do, and it
+   * is exactly what this check reads as `failed`.
+   */
+  "public_route_serves_page",
 ] as const;
 export type OutcomeCheckKind = (typeof OUTCOME_CHECK_KINDS)[number];
 
@@ -250,6 +302,15 @@ export type OutcomeObservedValue = {
   truncated?: boolean;
   /** Typed transport failure. Never provider prose. */
   transportError?: string;
+  /**
+   * Whether the response arrived at the path that was requested.
+   *
+   * False when redirects landed somewhere else — an anonymous visitor sent to
+   * `/login`, or a path the site has since renamed. Recorded rather than folded
+   * into `present`, because "we were served a different page" and "the page
+   * said something unexpected" are different observations.
+   */
+  pathPreserved?: boolean;
 };
 
 export type OutcomeCheckResult = {
@@ -275,6 +336,15 @@ export const OUTCOME_FAILURE_CODES = [
   "outcome_merge_unverified",
   /** No deterministic outcome verifier exists for this capability (§10). */
   "outcome_not_supported",
+  /**
+   * The capability has a verifier, and this change gives it nothing to look at:
+   * no changed path resolves to a public route in the analyzer's table.
+   *
+   * A backend-only change is the ordinary case, not a defect — which is why it
+   * is its own code rather than `outcome_expectation_unavailable`, whose copy
+   * says Vibe lost the evidence.
+   */
+  "outcome_no_public_surface",
   /** No safe public origin is configured for this project (§11). */
   "outcome_public_origin_unavailable",
   /**

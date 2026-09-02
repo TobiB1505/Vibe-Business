@@ -1,5 +1,5 @@
 import type { OutcomeEligibility } from "./eligibility";
-import { outcomeCheckLabel } from "./messages";
+import { outcomeCheckLabel, outcomeProfileScopeNote } from "./messages";
 import type {
   ChangeOutcomeVerification,
   OutcomeCheckStatus,
@@ -68,6 +68,19 @@ export type OutcomeCard = {
    * omission, which is the exact misreading this whole sprint is built around.
    */
   checks: OutcomeCheckLine[];
+  /**
+   * What this profile's `verified` means, in one sentence (ADR 0071).
+   *
+   * A field rather than a string in a component, for the same reason
+   * `businessImpactMeasured` is: the two profiles check genuinely different
+   * things and the state copy around them is identical, so a redesign that
+   * dropped this line would silently promote "these pages answer" into "the
+   * change is live on your site".
+   *
+   * Null only when no profile is known — nothing is merged, or the change was
+   * refused before a contract resolved.
+   */
+  profileNote: string | null;
   observedAt: string | null;
   windowEndsAt: string | null;
   attemptCount: number;
@@ -133,6 +146,7 @@ const EMPTY = {
   publicOrigin: null,
   mergedCommitSha: null,
   checks: [] as OutcomeCheckLine[],
+  profileNote: null,
   observedAt: null,
   windowEndsAt: null,
   attemptCount: 0,
@@ -152,6 +166,7 @@ export function buildOutcomeCard(input: OutcomeCardInput): OutcomeCard {
       publicOrigin: latest.publicOrigin,
       mergedCommitSha: latest.mergedCommitSha,
       checks: checkLines(latest),
+      profileNote: outcomeProfileScopeNote(latest.outcomeProfile),
       observedAt: latestObservedAt(latest),
       windowEndsAt: latest.verificationWindowEndsAt,
       attemptCount: latest.attemptCount,
@@ -185,6 +200,9 @@ export function buildOutcomeCard(input: OutcomeCardInput): OutcomeCard {
       state: "not_started",
       publicOrigin: input.eligibility.publicOrigin,
       mergedCommitSha: input.eligibility.mergedCommitSha,
+      // Before the click, not only after it. What Vibe is about to look at is
+      // what makes the button worth pressing, or worth not pressing.
+      profileNote: outcomeProfileScopeNote(input.eligibility.outcomeProfile),
       canVerify: true,
     };
   }

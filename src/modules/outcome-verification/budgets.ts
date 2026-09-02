@@ -7,14 +7,29 @@
  * the crawler, and required by CLAUDE.md rule 27 and rule 39.
  *
  * The numbers are much smaller than the crawler's, because this is a much
- * smaller act. **Outcome verification is not a crawl.** It requests the two
- * exact paths its contract names, reads derived facts out of them, and follows
- * nothing. A whole verification's worst case is fourteen requests over fifteen
- * minutes.
+ * smaller act. **Outcome verification is not a crawl.** It requests the exact
+ * paths its contract names, reads derived facts out of them, and follows
+ * nothing.
+ *
+ * The worst case is the profile with the most resources. For the SEO profile it
+ * is fourteen requests over fifteen minutes — two documents, seven attempts. For
+ * the agentic profile it is `maxObservedRoutes` pages times the same seven
+ * attempts, and only when nothing ever passes: an intact site answers on the
+ * first attempt and the window closes there (§20).
  */
 export type OutcomeBudgets = {
   /** Largest robots.txt accepted. */
   maxRobotsBytes: number;
+  /**
+   * Largest public page accepted, matched to the crawler's own per-page budget.
+   *
+   * Deliberately not smaller. A page probe only needs the status line, the
+   * content type and the final URL — but `node-transport.ts` refuses a response
+   * whose declared `content-length` exceeds the budget, so a budget sized to
+   * what we *read* would reject most real pages before their status was ever
+   * observed, and report a healthy site as unreachable.
+   */
+  maxRoutePageBytes: number;
   /** Largest sitemap accepted — a real defence, not a formality (§15). */
   maxSitemapBytes: number;
   /** `<loc>` values read from one sitemap before the scan stops. */
@@ -37,16 +52,29 @@ export type OutcomeBudgets = {
    * as budget: this is somebody's production website.
    */
   attemptOffsetsMs: readonly number[];
+  /**
+   * Public pages one contract may probe.
+   *
+   * Small, and for politeness rather than cost: every one of these is a real
+   * GET against somebody's production website, repeated on each attempt. A
+   * change touching more pages than this is verified over the first
+   * `maxObservedRoutes` in route order and marks the expectation `truncated`,
+   * which is the same answer the SEO contract gives when its own lists run
+   * over (CLAUDE.md rule 27).
+   */
+  maxObservedRoutes: number;
 };
 
 export const DEFAULT_OUTCOME_BUDGETS: OutcomeBudgets = {
   maxRobotsBytes: 64 * 1024,
+  maxRoutePageBytes: 1024 * 1024,
   maxSitemapBytes: 512 * 1024,
   maxSitemapUrls: 500,
   requestTimeoutMs: 6_000,
   maxRedirects: 3,
   observationWindowMs: 15 * 60 * 1000,
   attemptOffsetsMs: [0, 30_000, 60_000, 120_000, 240_000, 480_000, 900_000],
+  maxObservedRoutes: 4,
 };
 
 /**
