@@ -931,7 +931,38 @@ describe("§20, §35 — cleanup and settlement", () => {
       network_egress_bytes: 1_024,
       // Unknown is not zero: Vercel exposes no attributable per-sandbox cost.
       provider_cost_usd: null,
+      // And Vibe's own derivation beside it, which is a different claim and
+      // says so by living in different columns (ADR 0073). Before this the
+      // sandbox half of every run's cost was simply absent from the ledger.
+      //
+      // The rate card and the allocation are recorded even here, where the
+      // estimate itself is refused: they are facts about what the sandbox ran
+      // under, and knowing which card *would* have priced a row is what makes
+      // the refusal readable rather than blank.
+      cost_pricing_version: "vercel-sandbox-2026-08-20",
+      vcpus: 4,
+      /*
+       * And no figure, because this fixture records CPU but no wall-clock
+       * lifetime — so the memory term is unknown and the total would be a
+       * floor. A floor written into a cost column reads as the whole bill,
+       * which is the failure `economy/cost.ts` exists to prevent. The
+       * arithmetic for a fully measured sandbox is pinned in
+       * `economy/sandbox-usage-estimate.test.ts`.
+       */
+      estimated_cost_nano_usd: null,
     });
+
+    /*
+     * And straight into the billing ledger (ADR 0073).
+     *
+     * `billing_usage_events` is what makes margin knowable, and its only writer
+     * was a repair pass an operator ran by hand — so on 2026-09-02 its newest
+     * row was six days old and the run this sprint is about appeared in it
+     * nowhere. The measurement and its projection are now the same event.
+     */
+    const metered = db.rows("billing_usage_events");
+    expect(metered.length).toBeGreaterThan(0);
+    expect(metered.map((row) => (row as { sku: string }).sku)).toContain("sandbox_active_cpu_ms");
   });
 
   it("names the sandbox after the attempt, not the identity", () => {

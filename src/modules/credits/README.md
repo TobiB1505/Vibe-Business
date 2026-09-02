@@ -21,7 +21,8 @@ A Vibe Credit is defined by Vibe, not by a provider. Provider usage is measured 
 | `rating.ts` | Provider-usage rating. Deliberately **not** where retail prices live. |
 | `margin-guard.ts` | Recomputes every live price's contribution margin from the provider rates in force. Reports; never prices. |
 | `projection.ts` | Normalizing provider ledgers into economic usage events. |
-| `reconciliation.ts` | Backfilling that projection, idempotently. |
+| `meter.ts` | Running that projection **as usage is written**, so the ledger is current by construction (ADR 0073). |
+| `reconciliation.ts` | Finding what the meter missed, idempotently. It used to be the only writer, and its only caller was a probe. |
 
 ## The two price layers, which are not the same thing
 
@@ -58,6 +59,7 @@ A `RetailPrice` has four shapes, and the two that look redundant are not:
 
 - **The ledger defines the balance.** Materialized figures on the account and on each lot are caches, and both are proven against the rows that define them rather than trusted.
 - **A reservation is not a charge**, and settlement may never silently exceed the maximum a customer approved.
+- **A charge lands on what the price describes.** An agent improvement is priced as a *validated* improvement, so its hold survives the run and the validation verdict settles or releases it — never the moment a reviewable change exists ([ADR 0073](../../../docs/decisions/0073-the-charge-lands-on-what-was-sold.md)). Validation, preview and review stay unpriced on purpose: their cost is inside that price.
 - **Credits that expire soonest are spent first**, so purchased Credits are preserved until expiring capacity is exhausted.
 - **Expiration is an append-only event.** Nothing is ever deleted; a lapsed grant stays answerable forever.
 - **Nothing here is reachable from a browser.** Every billing table has select policies and no write policies; the absence is the enforcement.
