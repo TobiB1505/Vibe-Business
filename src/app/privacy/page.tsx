@@ -3,7 +3,7 @@ import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
 
 export const metadata: Metadata = {
-  title: "Privacy — Vibe Business",
+  title: "Privacy",
   description: "What Vibe Business reads, what it keeps, and what it does not.",
 };
 

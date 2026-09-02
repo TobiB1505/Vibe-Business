@@ -42,6 +42,12 @@ import { OnboardingOperationFailure, OnboardingStalled } from "./operation-state
 import { ProductConfirmation } from "./product-confirmation";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Setting up your product",
+  description: "Vibe is getting to know your product.",
+};
 
 export default async function ProjectOnboardingPage({
   params,

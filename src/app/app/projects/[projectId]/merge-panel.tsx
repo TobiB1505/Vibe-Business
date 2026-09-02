@@ -62,8 +62,9 @@ function shortSha(sha: string | null): string | null {
 function NotDeployed() {
   return (
     <p className="text-xs text-fg-muted">
-      Not deployed by Vibe. Vibe does not call a deployment provider, and no deployment has been
-      verified.
+      Vibe never deploys. It moved your default branch and nothing else — if your repository
+      builds and releases on its own, that is what happens next, and Vibe neither triggers nor
+      observes it.
     </p>
   );
 }

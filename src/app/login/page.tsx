@@ -5,6 +5,12 @@ import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { getSession } from "@/modules/auth/session";
 import { LoginForm } from "./login-form";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Sign in",
+  description: "Sign in to Vibe Business.",
+};
 
 /**
  * The sign-in screen.

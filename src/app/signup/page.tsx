@@ -2,6 +2,12 @@ import Link from "next/link";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { SignupForm } from "./signup-form";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Create account",
+  description: "Create your Vibe Business account.",
+};
 
 /**
  * `next` is sanitized here, once, so the value that reaches the form — and

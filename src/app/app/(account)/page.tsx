@@ -4,6 +4,12 @@ import { requireSession } from "@/modules/auth/session";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
 import { AccountHome } from "../account-home";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Your products",
+  description: "Every product you have connected to Vibe.",
+};
 
 /**
  * The account dashboard (Sprint UI-3, rebuilt in CORE-6).

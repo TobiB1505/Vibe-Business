@@ -59,7 +59,11 @@ function NotMerged({ merged }: { merged: boolean }) {
    * what a person authorized.
    */
   if (merged) {
-    return <p className="text-xs text-fg-muted">Merged. Vibe has not verified a deployment.</p>;
+    return (
+      <p className="text-xs text-fg-muted">
+        Merged into your default branch. Vibe never deploys.
+      </p>
+    );
   }
 
   return <p className="text-xs text-fg-muted">Nothing has been merged or deployed.</p>;

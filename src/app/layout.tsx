@@ -25,7 +25,21 @@ export const metadata: Metadata = {
   // currently sets a relative metadata URL — this establishes the base
   // before one needs it, rather than after a wrong resolution ships.
   metadataBase: new URL(getAppUrl()),
-  title: "Vibe Business",
+  /*
+   * A template, so a route states its own name and the product name is
+   * appended once (UX audit F-1).
+   *
+   * Twenty-two of twenty-nine routes had no title at all and inherited the
+   * bare product name, which made every tab, every bookmark and every history
+   * entry identical — the contract's "every route has a truthful metadata
+   * title" was true of seven. `default` is what the landing page and any route
+   * that sets none still gets.
+   */
+  title: {
+    default: "Vibe Business",
+    template: "%s — Vibe Business",
+    
+  },
   description: "The business layer for AI-built products.",
 };
 

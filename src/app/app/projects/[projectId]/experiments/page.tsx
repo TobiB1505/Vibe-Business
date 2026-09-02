@@ -3,6 +3,12 @@ import { EmptyState } from "@/components/ui/states";
 import { getProjectImpact } from "@/modules/business-measurement/project-impact";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { ExperimentCard } from "../experiment-card";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Experiments",
+  description: "Every change Vibe shipped, and what happened after.",
+};
 
 /**
  * Experiments (Sprint UI-2 Part 2 as Impact; reframed by CORE-5).

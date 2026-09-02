@@ -2,6 +2,12 @@ import { notFound, redirect } from "next/navigation";
 import { projectSectionHref } from "@/components/layout/project-shell";
 import { isDogfoodEligibleProject } from "@/modules/coding-agent/website-preflight";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Agent run",
+  description: "One planned step, run by Vibe.",
+};
 
 /**
  * Old per-step URLs now land on the single Agent workspace. The step route no

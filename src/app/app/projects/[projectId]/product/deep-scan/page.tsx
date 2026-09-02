@@ -12,6 +12,12 @@ import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intellig
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { DeepScanPanel } from "../../deep-scan-panel";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Deep scan",
+  description: "What Vibe sees once it is signed in to your product.",
+};
 
 /**
  * Deep Scan (Sprint UI-2 Part 2).

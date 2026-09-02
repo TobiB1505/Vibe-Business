@@ -55,6 +55,12 @@ import { AgentStartAction } from "./agent-start-action";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Agent",
+  description: "Watch Vibe prepare a change on its own branch.",
+};
 
 /**
  * The customer-facing Agent workspace.
