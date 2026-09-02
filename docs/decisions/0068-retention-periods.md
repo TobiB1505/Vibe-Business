@@ -75,6 +75,14 @@ After an erasure these rows are already anonymized in place (ADR 0056 §8), so t
 
 `agent_execution_events`, `product_scan_events`, `sandbox_usage_events`, and the operational body of `operation_runs`.
 
+> **[2026-09-02, later the same day] Two of these were misclassified, and the schema says so.** Writing the sweep ([ADR 0069](0069-retention-sweep-trigger.md) §5) checked each table against the live foreign keys and against what reads it, and found this line wrong in two places.
+>
+> **`sandbox_usage_events` is a billing source, not an operational event.** [`credits/reconciliation.ts`](../../src/modules/credits/reconciliation.ts) projects it into `billing_usage_events`, exactly as it does `ai_usage_events`. The argument §5 makes two paragraphs below — deleting metering while keeping the charge makes "why was this account charged N credits" unanswerable — applies to it word for word and was not applied. `review_browser_usage`, unnamed here, is the third of the same family. Both follow the financial class. The erasure path had already reached this judgement independently: all three are in `TOMBSTONED_TABLES`.
+>
+> **`operation_runs` cannot be swept by row age at any period.** It is the parent of six `on delete cascade` edges. Deleting one row takes `prepared_changes`, `review_artifacts`, `validation_runs`, `preview_sessions` and the whole `agent_execution_runs` subtree with it — the artifacts rule 67 requires a human approval to bind to. "The operational body of" was meant as a payload, and a reader implementing this literally would have deleted the rows. ADR 0069 §5 F1 puts `operation_runs` out of scope of any age sweep; narrowing it to specific columns is a decision nobody has taken.
+>
+> `agent_activity_events` and `agent_tool_events` are added to this class there, as siblings of `agent_execution_events` that this line omits for no reason it states.
+
 These exist so a person can watch a run and read it back shortly afterwards. Nobody opens a ninety-day-old agent event feed. This is the class with the highest write rate and the lowest retained value, so it is where nearly all of the eventual saving is — and it carries no statutory obligation in either direction.
 
 `ai_usage_events` is deliberately **not** in this class. It prices what the ledger charged, and ADR 0056 §7 already established that deleting metering while keeping the charge makes "why was this account charged N credits" permanently unanswerable — a rule 7 defect. It follows the financial class.
@@ -110,6 +118,8 @@ The same argument decides the operator interface: **there is none.** No admin sc
 **D-1 — Whether a Credit ledger row is a `Buchungsbeleg`.** §3 adopts ten years as the safe direction while this is open. Resolving it may shorten the period for part of the class; it cannot lengthen it.
 
 **D-2 — The trigger mechanism.** Nothing in this repository runs on a schedule, and rule 24 requires an ADR before that changes. Read-triggered sweeping (the pattern ADR 0042 §P2 uses for staleness) is the option that needs no new technology and is the one to evaluate first.
+
+> **[2026-09-02, later the same day] Closed by [ADR 0069](0069-retention-sweep-trigger.md): `pg_cron`.** The option nominated here was evaluated first, as asked, and does not fit. Nobody reads a ninety-day-old event, so read-triggering would reach exactly the rows that do not need deleting; and any activity-driven variant never fires for an account that has stopped being active, which is the case Art. 5(1)(e) is about. Retention needs a clock, and the cheapest clock is the one already inside the database.
 
 **D-3 — Retention still has no reader.** ADR 0056 §Deferred P-6 stands: once `user_id` is NULL the surviving audit rows match no RLS policy and are invisible to every application path. Deciding how long to keep something nobody can read is worth doing, and it does not make the something readable.
 
