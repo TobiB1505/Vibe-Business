@@ -191,7 +191,7 @@ The one thing deliberately absent: **no consumption rate card is active.** `CRED
 
 **[Confirmed principle]** Security-sensitive integrations (GitHub auth, tokens, webhooks, credentials) use least privilege and are never committed to the repository. See [CLAUDE.md](CLAUDE.md).
 
-**[Confirmed — ADR 0013]** Background/asynchronous work runs as **durable operations on Vercel Workflows** — plain async TypeScript under a `"use workflow"` directive, with no separate queue, worker or scheduler service. The pipeline in [§2](#2-core-flow) cannot run synchronously within one request, and a durable operation owns its own lifetime: an `operation_runs` row survives the request that started it. **[Confirmed — ADR 0037]** one durable operation may enqueue the next. Implemented in `src/modules/operations/`. See [0013-durable-operation-execution.md](docs/decisions/0013-durable-operation-execution.md). A *further* background technology beside it still requires a new ADR ([CLAUDE.md](CLAUDE.md) rule 24).
+**[Confirmed — ADR 0013]** Background/asynchronous work runs as **durable operations on Vercel Workflows** — plain async TypeScript under a `"use workflow"` directive, with no separate queue, worker or scheduler service. The pipeline in [§2](#2-core-flow) cannot run synchronously within one request, and a durable operation owns its own lifetime: an `operation_runs` row survives the request that started it. **[Confirmed — ADR 0037]** one durable operation may enqueue the next. Implemented in `src/modules/operations/`. See [0013-durable-operation-execution.md](docs/decisions/0013-durable-operation-execution.md). A *further* background technology beside it still requires a new ADR ([CLAUDE.md](CLAUDE.md) rule 24). **[Confirmed — ADR 0069]** exactly one such ADR exists: `pg_cron` runs the daily retention sweep, because a retention period needs a clock and neither Workflows nor any read-triggered pattern provides one. It is a Postgres extension rather than a service, it executes no application code, and it is not an execution path — a durable customer operation is still a Workflow.
 
 ---
 
@@ -249,10 +249,11 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
 3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
-5. **Retention period for tombstoned financial and anonymized audit records** — [ADR 0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) decides *what* survives an erasure and makes the period expressible, and deliberately decides no duration and no jurisdiction. No implementation may invent one.
 6. **Whether retained audit history gets an operator read path** — once the owner column is null the surviving rows match no RLS policy, so they are readable by nobody ([ADR 0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) §Deferred). Retention without a reader is storage, not evidence; no admin surface exists to change that.
 
 **Resolved since this list was written:**
+
+5. ~~Retention period for tombstoned financial and anonymized audit records~~ → [ADR 0068](docs/decisions/0068-retention-periods.md): four classes by what the data is for — financial ten years under HGB §257 / AO §147, audit trail eighteen months, operational events ninety days, derived intelligence by count rather than age. The periods are named constants in code and configurable nowhere else. Whether a Credit ledger row is a `Buchungsbeleg` stays open, and ten years is adopted as the safe direction while it is. [ADR 0069](docs/decisions/0069-retention-sweep-trigger.md) then built what enforces it — a daily `pg_cron` sweep — for two of the four classes, and corrected the third and fourth: `operation_runs` cascades into the artifacts an approval binds to and is out of reach of any age sweep, and two tables classed as operational are billing sources.
 
 7. ~~Untrusted Repository Execution Provider~~ → [ADR 0015](docs/decisions/0015-untrusted-repository-execution-provider.md): Vercel Sandbox.
 8. ~~Preview integration for non-Vercel-compatible repositories~~ → obsolete as framed. [ADR 0016](docs/decisions/0016-temporary-preview-isolation.md) replaced deployment-based previews with a restored validation artifact, so Vercel compatibility stopped being the constraint.
@@ -339,6 +340,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0065](docs/decisions/0065-the-preview-is-the-review.md) | The preview is the review (Accepted; supersedes 0017 as a gate, amends 0063 and 0018. A visual approval binds to the preview session of the same commit plus the code diff, and no browser session is paid to photograph one route of it) | Review, approvals, `change_approvals`, §3.9, §3.10 |
 | [0066](docs/decisions/0066-payment-meaning-across-evidence-families.md) | Payment meaning is read from every evidence family that can carry it | §3.6 |
 | [0067](docs/decisions/0067-plan-screen-renders-the-resolver.md) | The plan screen renders the execution resolver | §3.6 |
+| [0068](docs/decisions/0068-retention-periods.md) | Retention periods, by what the data is for (Accepted; closes ADR 0056's deferred P-2) | §3.11, §3.12, storage |
+| [0069](docs/decisions/0069-retention-sweep-trigger.md) | What deletes the expired rows, and what it may not touch — `pg_cron` (Accepted; closes ADR 0068's deferred D-2) | §3.11, §3.12, storage |
 
 ### Layers with no section above
 

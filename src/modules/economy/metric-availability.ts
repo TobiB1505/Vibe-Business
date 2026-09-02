@@ -24,6 +24,8 @@
  * bounds when the writer started.
  */
 
+import { OPERATIONAL_EVENT_RETENTION_DAYS } from "@/modules/retention/periods";
+
 export const METRIC_AVAILABILITY = [
   { metric: "providerCost", since: "2026-08-19T00:00:00Z", note: "ai_usage_events from the first agentic run" },
   { metric: "inputTokens", since: "2026-08-19T00:00:00Z", note: null },
@@ -82,13 +84,69 @@ export const METRIC_AVAILABILITY = [
 
 export type MetricName = (typeof METRIC_AVAILABILITY)[number]["metric"];
 
+/**
+ * The mirror question, and the one this module did not have to ask until now.
+ *
+ * Everything above answers *when did Vibe start counting* — a null before that
+ * date "means nobody was counting", and reading it as a zero "puts a fabricated
+ * data point into a correlation and moves the answer."
+ *
+ * Since [ADR 0069](../../../docs/decisions/0069-retention-sweep-trigger.md) a
+ * daily `pg_cron` sweep deletes `agent_execution_events` after ninety days, so
+ * there is now a second date and it moves: **how far back do the rows still
+ * exist.** The failure it introduces is worse than the one above, because it is
+ * invisible from the data. A run whose events were swept is not a run with null
+ * metrics — it is a run that does not appear at all, and an average over
+ * whatever survived is well formed and wrong.
+ *
+ * Nothing forces a reader to consult this, exactly as nothing forces them to
+ * consult {@link METRIC_AVAILABILITY}. It is stated where the person asking the
+ * question is already looking, and {@link readMetric} and
+ * {@link comparableRuns} apply it without being asked.
+ */
+export const HARNESS_EVENT_RETENTION_DAYS = OPERATIONAL_EVENT_RETENTION_DAYS;
+
+/**
+ * The metrics that vanish with the events, rather than merely being null.
+ *
+ * `harness-metrics.ts` derives all three from `agent_execution_events` and
+ * nothing materializes them per run, so the event stream is the only record
+ * (ADR 0069 §5 F3). Every other metric here lives on the run row, which the
+ * sweep cannot reach — `operation_runs` and its `agent_execution_runs` subtree
+ * are excluded from every age sweep at every period.
+ */
+export const SWEPT_EVIDENCE_METRICS = [
+  "harnessToolCalls",
+  "harnessReadOperations",
+  "harnessUniqueFilesRead",
+] as const satisfies readonly MetricName[];
+
+/** The date before which harness evidence has been deleted, as of `now`. */
+export function retainedSince(now: Date = new Date()): string {
+  const cutoff = new Date(now);
+  cutoff.setUTCDate(cutoff.getUTCDate() - HARNESS_EVENT_RETENTION_DAYS);
+  return cutoff.toISOString();
+}
+
+function isSweptEvidence(metric: MetricName): boolean {
+  return (SWEPT_EVIDENCE_METRICS as readonly string[]).includes(metric);
+}
+
+
+
 export type MetricReading<T> =
   /** The metric existed and was recorded — including a genuine zero. */
   | { status: "observed"; value: T }
   /** Instrumentation did not exist when this run happened. */
   | { status: "unavailable"; since: string }
   /** Instrumentation existed and the value is still missing. A real gap. */
-  | { status: "missing" };
+  | { status: "missing" }
+  /**
+   * Instrumentation existed and its evidence has since been deleted on
+   * schedule. Not a gap, and emphatically not a zero — the run happened and
+   * Vibe no longer holds what would answer the question (ADR 0069 §6).
+   */
+  | { status: "swept"; retainedSince: string };
 
 export function availableSince(metric: MetricName): string | null {
   return METRIC_AVAILABILITY.find((entry) => entry.metric === metric)?.since ?? null;
@@ -105,6 +163,7 @@ export function readMetric<T>(
   metric: MetricName,
   runCreatedAt: string,
   value: T | null | undefined,
+  now: Date = new Date(),
 ): MetricReading<T> {
   const since = availableSince(metric);
 
@@ -112,7 +171,17 @@ export function readMetric<T>(
     return { status: "unavailable", since };
   }
 
-  if (value === null || value === undefined) return { status: "missing" };
+  if (value === null || value === undefined) {
+    // Order matters: a value that is present is `observed` whatever its age,
+    // because something evidently still holds it. Only an absent value on a run
+    // past the horizon is attributable to the sweep, and calling that `missing`
+    // would report a gap in instrumentation that never existed.
+    const horizon = retainedSince(now);
+    if (isSweptEvidence(metric) && Date.parse(runCreatedAt) < Date.parse(horizon)) {
+      return { status: "swept", retainedSince: horizon };
+    }
+    return { status: "missing" };
+  }
 
   return { status: "observed", value };
 }
@@ -126,9 +195,16 @@ export function readMetric<T>(
 export function comparableRuns<R extends { createdAt: string }>(
   metric: MetricName,
   runs: readonly R[],
+  now: Date = new Date(),
 ): R[] {
   const since = availableSince(metric);
-  if (since === null) return [...runs];
+  const floor = isSweptEvidence(metric)
+    ? // Both bounds apply, and the later one wins: instrumentation that arrived
+      // after the horizon is still the binding constraint.
+      [since, retainedSince(now)].filter((d): d is string => d !== null).sort().at(-1)
+    : since;
 
-  return runs.filter((run) => Date.parse(run.createdAt) >= Date.parse(since));
+  if (floor === undefined || floor === null) return [...runs];
+
+  return runs.filter((run) => Date.parse(run.createdAt) >= Date.parse(floor));
 }
