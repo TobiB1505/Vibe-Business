@@ -173,7 +173,34 @@ would have tried to apply all three again onto a schema that already has them.
 The files are renamed to the applied versions. Rule 34 says the files are the
 source of truth and the remote converges to them — here the remote had already
 recorded a version, and the honest fix is the one that makes both histories name
-the same three migrations rather than the one that looks tidier.
+the same migrations rather than the one that looks tidier.
+
+## A fourth migration, and the defect CI did not report
+
+The schema job went red on `browser_runtime_images`: `anon` and `authenticated`
+hold `TRUNCATE`, `REFERENCES` and `TRIGGER`. The creating migration argued that
+RLS with no policies was the whole access rule, and that is true for SELECT,
+INSERT, UPDATE and DELETE and **false for TRUNCATE** — RLS does not govern it,
+so a role holding it empties the table regardless of every policy.
+`owner-pin.migration.ts` already carried that sentence in its own docblock.
+
+**Reading the grants afterwards found the larger half.** `service_role` held
+those same three and **no `SELECT` and no `INSERT`** — the default-privileges
+revoke covers it too, deliberately. The first Deep Scan would have failed with
+`42501` at the image lookup: before the insert, before the browser, before
+anything a person could see a reason for. The feature was dead on arrival and
+the red check was a different symptom of the same forgotten line.
+
+Which is exactly what `20260823220000_data_api_default_privileges.sql` predicts
+in its own header — *"a migration that creates a table and forgets its grants
+produces a table the Data API cannot see. That fails loudly in CI."* It did.
+
+**And the first reading of the failure was wrong.** It blamed the shared default
+for revoking four privileges and not seven. Checking the other 51 tables
+disproved it: not one holds `TRUNCATE`, because the convention here is that each
+migration states its own grants —
+`20260825132534_founder_input_resolution.sql` is the pattern. The shared default
+is untouched; the gap was this migration's.
 
 `VIBE_BROWSER_SESSION_SECRET` must be set before a scan can start.
 `BROWSERBASE_API_KEY` can be removed, and the subscription with it.
