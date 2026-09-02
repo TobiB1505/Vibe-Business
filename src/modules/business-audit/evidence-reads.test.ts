@@ -9,7 +9,17 @@ import {
   type QueryRecorder,
 } from "@/modules/operations/test-support";
 import { hasSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
-import { getAuditCurrency, getAuditReadiness, readAuditEvidence } from "./service";
+import {
+  actionPlanReadinessFrom,
+  getActionPlanReadiness,
+  readActionPlanReadinessInputs,
+} from "@/modules/action-plans/service";
+import {
+  getAuditAccessStatus,
+  getAuditCurrency,
+  getAuditReadiness,
+  readAuditEvidence,
+} from "./service";
 
 /**
  * How many times one Business Health render asks for the same document
@@ -68,6 +78,14 @@ beforeEach(() => {
   seed();
 });
 
+const EVIDENCE_TABLES = [
+  "repository_intelligence_snapshots",
+  "live_product_intelligence_snapshots",
+  "authenticated_product_intelligence_snapshots",
+  "product_profiles",
+  "business_readiness_audits",
+];
+
 describe("the reads Business Health makes", () => {
   /*
    * The page's own composition, reduced to the three read models that share
@@ -82,14 +100,6 @@ describe("the reads Business Health makes", () => {
       getAuditCurrency(supabase, PROJECT, evidence),
     ]);
   }
-
-  const EVIDENCE_TABLES = [
-    "repository_intelligence_snapshots",
-    "live_product_intelligence_snapshots",
-    "authenticated_product_intelligence_snapshots",
-    "product_profiles",
-    "business_readiness_audits",
-  ];
 
   it("asks for each evidence document exactly once", async () => {
     await healthReads();
@@ -140,6 +150,89 @@ describe("the reads Business Health makes", () => {
     );
     expect(await getAuditCurrency(supabase, PROJECT, evidence)).toEqual(
       await getAuditCurrency(supabase, PROJECT),
+    );
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * The two call sites that were not sharing (PERF-004, PERF-005)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The prefetch parameter above is only worth having where it is passed, and
+ * two call sites on the two heaviest routes were not passing it.
+ *
+ * `getAuditAccessStatus` took no evidence at all, so Business Health read the
+ * pack, handed it to the two read models beside this one, and then this one
+ * read the whole pack again. The Action Plan was the same mistake multiplied:
+ * every input readiness needs is project-scoped, and it asked for all of them
+ * once per Move on screen.
+ */
+describe("the evidence a caller already holds is not read again", () => {
+  it("answers the audit entitlement without a second pass over the pack", async () => {
+    const supabase = client();
+    const evidence = await readAuditEvidence(supabase, PROJECT);
+
+    await getAuditAccessStatus(supabase, { projectId: PROJECT, userId: USER }, evidence);
+
+    for (const table of EVIDENCE_TABLES.filter((t) => t !== "business_readiness_audits")) {
+      expect(readsOf(recorder, table), `${table} was read again for the entitlement`).toBe(1);
+    }
+
+    /*
+     * The audit table is the exception, and counting reads of it would be the
+     * wrong assertion: the entitlement asks it three further questions of its
+     * own — has one completed, is one running, how many started recently —
+     * and those are narrow, differently-filtered reads rather than a second
+     * copy of anything.
+     *
+     * What must not happen twice is the *document*. Only the pack's own read
+     * selects `result`, which is the multi-hundred-kilobyte column.
+     */
+    const documentReads = selectsOf(recorder, "business_readiness_audits").filter((columns) =>
+      columns.includes("result"),
+    );
+    expect(documentReads, "the audit document was transferred twice").toHaveLength(1);
+
+    /*
+     * This fixture has no completed audit, which is the sharp case rather than
+     * a gap in it: the pack's answer is `null`, and reaching for the prefetched
+     * value with `??` would treat that real answer as an absent one and read
+     * the table again to rediscover it. Branching on whether the pack was given
+     * is what makes "no audit" shareable.
+     */
+  });
+
+  it("still answers for a caller that holds nothing", async () => {
+    // The parameter is an optimisation, never a requirement — the same
+    // property the readiness fallback above asserts.
+    const status = await getAuditAccessStatus(client(), { projectId: PROJECT, userId: USER });
+
+    expect(status.blockedReason).not.toBe(undefined);
+  });
+
+  it("reads what every Move shares once, however many Moves there are", async () => {
+    const supabase = client();
+    const inputs = await readActionPlanReadinessInputs(supabase, PROJECT);
+
+    const before = { ...recorder };
+    const answers = ["move_a", "move_b", "move_c", "move_d", "move_e"].map((id) =>
+      actionPlanReadinessFrom(inputs, id),
+    );
+
+    expect(answers).toHaveLength(5);
+    expect(
+      recorder.reads.length,
+      "deriving readiness for a Move must not reach the database at all",
+    ).toBe(before.reads.length);
+  });
+
+  it("gives one Move the same answer whether the caller shared inputs or not", async () => {
+    const supabase = client();
+    const inputs = await readActionPlanReadinessInputs(supabase, PROJECT);
+
+    expect(actionPlanReadinessFrom(inputs, null)).toEqual(
+      await getActionPlanReadiness(supabase, PROJECT, null),
     );
   });
 });

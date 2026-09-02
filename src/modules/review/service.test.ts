@@ -1,22 +1,23 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
+import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { FIXTURE_COMMIT_SHA } from "@/modules/validation/test-support";
 import { computeReviewIdentity } from "./identity";
 import { REVIEW_POLICY } from "./policy";
 import { REVIEW_POLICY_VERSION, reviewProfileVersionFor } from "./schema";
-import { getReviewCard, getReviewImages, startChangeReview } from "./service";
+import { getReviewCard, getReviewImages } from "./service";
 import { fakeStorage, withFakeStorage } from "./test-support";
 
 /**
- * Eligibility, authority and privacy (Sprint 11A §37, §38, §40, §41).
+ * Reading a historical visual review: authority and privacy (ADR 0074).
  *
- * Three families, and they are the three ways review goes wrong: photographing
- * the wrong thing, photographing something the caller does not own, and paying
- * for a browser nobody asked for.
+ * The capture path is gone — no route reaches it, no operation starts one, and
+ * the provider client was deleted. What remains is the read side, which one
+ * historical approval still depends on, and its two failure modes are the ones
+ * that were always the dangerous ones: handing an image to somebody who does
+ * not own it, and handing one out past its retention deadline.
  *
- * Every one asserts against a fake executor and fake storage that open no
- * browser, so "zero browser sessions" is a counter rather than a reading of the
- * source.
+ * Every test asserts against fake storage that opens no browser, so "zero
+ * browser sessions" stays a counter rather than a reading of the source.
  */
 
 const USER = "user_1";
@@ -29,7 +30,6 @@ const PREVIEW = "preview_1";
 const ORIGIN = "https://vibe-business.example";
 
 let db: FakeDatabase;
-let executor: FakeExecutor;
 let storage: ReturnType<typeof fakeStorage>;
 
 const LATER = () => new Date(Date.now() + 10 * 60 * 1000).toISOString();
@@ -39,35 +39,23 @@ function client() {
   return withFakeStorage(fakeSupabase(db), storage);
 }
 
-function identityFor(overrides: { previewSessionId?: string; policyVersion?: string } = {}) {
+function identityFor() {
   return computeReviewIdentity({
     projectId: PROJECT,
     preparedChangeId: PREPARED,
     preparedCommitSha: FIXTURE_COMMIT_SHA,
     validationRunId: VALIDATION,
-    previewSessionId: overrides.previewSessionId ?? PREVIEW,
+    previewSessionId: PREVIEW,
     beforeOrigin: ORIGIN,
     route: REVIEW_POLICY.route,
     reviewProfile: "public_visual_review_v1",
     reviewProfileVersion: reviewProfileVersionFor("public_visual_review_v1"),
-    reviewPolicyVersion: overrides.policyVersion ?? REVIEW_POLICY_VERSION,
+    reviewPolicyVersion: REVIEW_POLICY_VERSION,
   });
 }
 
-function seed(
-  options: {
-    productionUrl?: string | null;
-    validationStatus?: string;
-    previewStatus?: string;
-    previewExpiresAt?: string;
-    previewPreparedChangeId?: string;
-  } = {},
-) {
-  db.seed("projects", {
-    id: PROJECT,
-    user_id: USER,
-    production_url: options.productionUrl === undefined ? ORIGIN : options.productionUrl,
-  });
+function seed() {
+  db.seed("projects", { id: PROJECT, user_id: USER, production_url: ORIGIN });
   db.seed("projects", { id: OTHER_PROJECT, user_id: OTHER_USER, production_url: ORIGIN });
 
   db.seed("prepared_changes", {
@@ -84,241 +72,15 @@ function seed(
     project_id: PROJECT,
     user_id: USER,
     prepared_change_id: PREPARED,
-    status: options.validationStatus ?? "passed",
+    status: "passed",
     prepared_commit_sha: FIXTURE_COMMIT_SHA,
     created_at: "2026-08-14T00:00:00.000Z",
-  });
-
-  db.seed("preview_sessions", {
-    id: PREVIEW,
-    project_id: PROJECT,
-    user_id: USER,
-    prepared_change_id: options.previewPreparedChangeId ?? PREPARED,
-    validation_run_id: VALIDATION,
-    operation_run_id: "preview_op_1",
-    artifact_snapshot_id: "snap_1",
-    preview_profile: "nextjs_preview_v1",
-    preview_identity: "p".repeat(64),
-    provider: "vercel_sandbox",
-    status: options.previewStatus ?? "running",
-    stage: "completed",
-    port: 3000,
-    ready_at: new Date().toISOString(),
-    expires_at: options.previewExpiresAt ?? LATER(),
-  });
-}
-
-function start(params: { userId?: string; projectId?: string; previewSessionId?: string } = {}) {
-  return startChangeReview(client(), executor, {
-    projectId: params.projectId ?? PROJECT,
-    userId: params.userId ?? USER,
-    preparedChangeId: PREPARED,
-    previewSessionId: params.previewSessionId ?? PREVIEW,
   });
 }
 
 beforeEach(() => {
   db = new FakeDatabase();
-  executor = new FakeExecutor();
   storage = fakeStorage();
-});
-
-describe("eligibility", () => {
-  it("starts one durable operation for a validated, running preview", async () => {
-    seed();
-
-    const outcome = await start();
-
-    expect(outcome.kind).toBe("capturing");
-    expect(executor.starts).toHaveLength(1);
-    expect(executor.starts[0].operationType).toBe("change_review");
-  });
-
-  it("requires a preview when none is running", async () => {
-    seed({ previewStatus: "stopped" });
-
-    expect(await start()).toEqual({ kind: "failed", error: "review_preview_required" });
-    expect(executor.starts).toHaveLength(0);
-  });
-
-  it("requires a preview that has not passed its deadline", async () => {
-    seed({ previewExpiresAt: EARLIER() });
-
-    // A preview past its deadline is being torn down. Photographing it would
-    // race the teardown and produce whichever the browser reached first.
-    expect(await start()).toEqual({ kind: "failed", error: "review_preview_required" });
-  });
-
-  it("blocks when the validation did not pass", async () => {
-    seed({ validationStatus: "failed" });
-
-    // "After" must be a *validated* artifact. Without that it is a screenshot
-    // of something nobody checked builds.
-    expect(await start()).toEqual({ kind: "failed", error: "review_preview_required" });
-    expect(executor.starts).toHaveLength(0);
-  });
-
-  it("refuses a preview belonging to a different prepared change", async () => {
-    seed({ previewPreparedChangeId: "prepared_other" });
-
-    // The exact-linkage rule (§6). Comparing against a preview of a different
-    // change would attribute someone else's diff to this one.
-    expect(await start()).toEqual({ kind: "failed", error: "review_preview_required" });
-  });
-
-  it("reports a missing public origin honestly", async () => {
-    seed({ productionUrl: null });
-
-    expect(await start()).toEqual({ kind: "failed", error: "review_before_unavailable" });
-    expect(executor.starts).toHaveLength(0);
-  });
-});
-
-describe("authority", () => {
-  it("refuses another user's project", async () => {
-    seed();
-
-    expect(await start({ userId: OTHER_USER })).toEqual({
-      kind: "failed",
-      error: "project_not_found",
-    });
-    expect(executor.starts).toHaveLength(0);
-  });
-
-  it("refuses a preview session from another project", async () => {
-    seed();
-    db.seed("preview_sessions", {
-      id: "preview_other",
-      project_id: OTHER_PROJECT,
-      user_id: OTHER_USER,
-      prepared_change_id: PREPARED,
-      validation_run_id: VALIDATION,
-      operation_run_id: "op_other",
-      artifact_snapshot_id: "snap_other",
-      preview_profile: "nextjs_preview_v1",
-      preview_identity: "q".repeat(64),
-      provider: "vercel_sandbox",
-      status: "running",
-      port: 3000,
-      expires_at: LATER(),
-    });
-
-    // Named directly, with the caller's own project. Scoping is a query
-    // predicate, so the other tenant's session is invisible rather than
-    // forbidden — there is no path that reads it and then decides.
-    expect(await start({ previewSessionId: "preview_other" })).toEqual({
-      kind: "failed",
-      error: "review_preview_required",
-    });
-  });
-
-  it("accepts no parameter that could choose a URL, route, viewport or provider", async () => {
-    seed();
-
-    await start();
-
-    const artifact = db.rows("review_artifacts")[0];
-    // Everything consequential is server-resolved. The shape of
-    // `StartReviewParams` is the real guarantee; these record what it produces,
-    // so a widened input surface shows up here.
-    expect(artifact.route).toBe(REVIEW_POLICY.route);
-    expect(artifact.before_origin).toBe(ORIGIN);
-    expect(artifact.provider).toBe("browserbase");
-    expect(artifact.review_policy_version).toBe(REVIEW_POLICY_VERSION);
-    expect(artifact.review_profile).toBe("public_visual_review_v1");
-  });
-
-  it("takes the before origin from the project, never from the caller", async () => {
-    seed({ productionUrl: "https://the-real-product.example" });
-
-    await start();
-
-    // A caller who could name this could point Vibe's browser at any site and
-    // have the screenshot stored under their project as though it were theirs.
-    expect(db.rows("review_artifacts")[0].before_origin).toBe("https://the-real-product.example");
-  });
-});
-
-describe("idempotency", () => {
-  it("reuses an existing comparison for the same identity", async () => {
-    seed();
-    db.seed("review_artifacts", {
-      id: "review_existing",
-      project_id: PROJECT,
-      user_id: USER,
-      prepared_change_id: PREPARED,
-      validation_run_id: VALIDATION,
-      preview_session_id: PREVIEW,
-      operation_run_id: "op_old",
-      review_profile: "public_visual_review_v1",
-      review_identity: identityFor(),
-      route: REVIEW_POLICY.route,
-      before_origin: ORIGIN,
-      status: "ready",
-      expires_at: LATER(),
-    });
-
-    const outcome = await start();
-
-    expect(outcome).toMatchObject({ kind: "reused", reviewArtifactId: "review_existing" });
-    expect(executor.starts).toHaveLength(0);
-  });
-
-  it("does not reuse a comparison captured under a different policy", async () => {
-    seed();
-    db.seed("review_artifacts", {
-      id: "review_old_policy",
-      project_id: PROJECT,
-      user_id: USER,
-      prepared_change_id: PREPARED,
-      validation_run_id: VALIDATION,
-      preview_session_id: PREVIEW,
-      operation_run_id: "op_old",
-      review_profile: "public_visual_review_v1",
-      review_identity: identityFor({ policyVersion: "review-policy-v0" }),
-      route: REVIEW_POLICY.route,
-      before_origin: ORIGIN,
-      status: "ready",
-      expires_at: LATER(),
-    });
-
-    // Images captured under other viewport or settle rules describe conditions
-    // that no longer exist (§19).
-    expect((await start()).kind).not.toBe("reused");
-  });
-
-  it("does not reuse a comparison of a different preview session", async () => {
-    seed();
-    db.seed("review_artifacts", {
-      id: "review_other_preview",
-      project_id: PROJECT,
-      user_id: USER,
-      prepared_change_id: PREPARED,
-      validation_run_id: VALIDATION,
-      preview_session_id: "preview_previous",
-      operation_run_id: "op_old",
-      review_profile: "public_visual_review_v1",
-      review_identity: identityFor({ previewSessionId: "preview_previous" }),
-      route: REVIEW_POLICY.route,
-      before_origin: ORIGIN,
-      status: "ready",
-      expires_at: LATER(),
-    });
-
-    // "After" is a photograph of one specific running sandbox, not of a commit.
-    expect((await start()).kind).not.toBe("reused");
-  });
-
-  it("turns a double click into one operation and one artifact", async () => {
-    seed();
-
-    const [first, second] = await Promise.all([start(), start()]);
-
-    expect(db.rows("operation_runs")).toHaveLength(1);
-    expect(db.rows("review_artifacts")).toHaveLength(1);
-    expect(executor.starts).toHaveLength(1);
-    expect([first.kind, second.kind]).toContain("capturing");
-  });
 });
 
 describe("no hidden spend", () => {
@@ -331,34 +93,24 @@ describe("no hidden spend", () => {
       resolveFailureMessage: () => "safe copy",
     });
 
-    // The regression this exists for (§40). Reading a page is not asking to
-    // spend money, and a browser session is billed by the second.
+    // The regression this exists for (Sprint 11A §40). Reading a page is not
+    // asking to spend money. With the capture path deleted there is no code
+    // left that could, but the assertion is what would catch a reintroduction.
     expect(card.state).toBe("not_generated");
     expect(db.rows("review_artifacts")).toHaveLength(0);
     expect(db.rows("operation_runs")).toHaveLength(0);
     expect(db.rows("review_browser_usage")).toHaveLength(0);
-    expect(executor.starts).toHaveLength(0);
-  });
-
-  it("starts nothing when a preview becomes ready", async () => {
-    seed();
-
-    // A running preview alone must never trigger a capture. Only the explicit
-    // click does (§23).
-    const card = await getReviewCard(client(), {
-      projectId: PROJECT,
-      preparedChangeId: PREPARED,
-      resolveFailureMessage: () => null,
-    });
-
-    expect(card.state).toBe("not_generated");
-    expect(executor.starts).toHaveLength(0);
+    expect(storage.signed).toEqual([]);
   });
 
   it("records no AI usage", async () => {
     seed();
 
-    await start();
+    await getReviewCard(client(), {
+      projectId: PROJECT,
+      preparedChangeId: PREPARED,
+      resolveFailureMessage: () => null,
+    });
 
     // Nothing in a review calls a model, so no inference row is earned (§22).
     expect(db.rows("ai_usage_events")).toHaveLength(0);

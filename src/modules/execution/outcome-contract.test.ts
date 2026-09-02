@@ -29,6 +29,7 @@ function contract(routes: RouteSummary[] = OUTCOME_ROUTES, capability = "nextjs_
     capability,
     publicOrigin: OUTCOME_ORIGIN,
     repository: outcomeSnapshot(routes),
+    changedPaths: [],
   });
 }
 
@@ -67,6 +68,7 @@ describe("which capabilities have a verifier (§10)", () => {
         capability: "nextjs_seo_foundations_v2",
         publicOrigin: OUTCOME_ORIGIN,
         repository: null,
+        changedPaths: [],
       }),
     ).toEqual({ supported: false, reason: "outcome_expectation_unavailable" });
   });
@@ -208,5 +210,139 @@ describe("the contract agrees with the bytes the generator writes (§5)", () => 
   it("expects the sitemap URL the generated robots.txt actually declares", () => {
     expect(robotsSource).toContain(`sitemap: "${OUTCOME_ORIGIN}/sitemap.xml"`);
     expect(checkIds()).toContain("robots_declares_sitemap");
+  });
+});
+
+/**
+ * The agentic contract (ADR 0071).
+ *
+ * A different kind of contract from the one above, and these tests are written
+ * to hold the difference in place. The SEO contract is derived from what a
+ * generator emits and is coupled to that generator's own functions. This one is
+ * derived from **what changed** — two of Vibe's own observations, intersected —
+ * and the property worth defending is that it never widens past them.
+ */
+function agentic(changedPaths: string[], routes: RouteSummary[] = OUTCOME_ROUTES) {
+  return resolveOutcomeContract({
+    capability: "agentic_execution_v1",
+    publicOrigin: OUTCOME_ORIGIN,
+    repository: outcomeSnapshot(routes),
+    changedPaths,
+  });
+}
+
+function agenticPaths(changedPaths: string[], routes: RouteSummary[] = OUTCOME_ROUTES): string[] {
+  const resolved = agentic(changedPaths, routes);
+  if (!resolved.supported) throw new Error(`expected supported, got ${resolved.reason}`);
+  return resolved.expected.checks.map((check) => check.target ?? "");
+}
+
+describe("the agentic capability now has a verifier (ADR 0071)", () => {
+  it("maps agentic execution to the public-routes profile", () => {
+    expect(outcomeProfileForCapability("agentic_execution_v1")).toBe(
+      "agentic_public_routes_outcome_v1",
+    );
+  });
+
+  it("expects exactly the public routes the changed files serve", () => {
+    // `src/app/pricing/page.tsx` serves `/pricing` **in this repository**, which
+    // is the analyzer's conclusion rather than a guess from the filename.
+    expect(agenticPaths(["src/app/pricing/page.tsx"])).toEqual(["/pricing"]);
+    expect(agenticPaths(["src/app/page.tsx", "src/app/pricing/page.tsx"])).toEqual([
+      "/",
+      "/pricing",
+    ]);
+  });
+
+  it("names `public_route` as its only resource, and takes every path from a check", () => {
+    const resolved = agentic(["src/app/pricing/page.tsx"]);
+    if (!resolved.supported) throw new Error("expected supported");
+
+    expect(resolved.expected.resources).toEqual(["public_route"]);
+    // The path lives on the check, not on a resource path table — which is what
+    // stops a second page from being fetched without a check that names it.
+    expect(resolved.expected.checks.map(outcomeCheckId)).toEqual([
+      "public_route_serves_page:/pricing",
+    ]);
+  });
+
+  it("ignores a changed file the route table does not connect to a page", () => {
+    // A route handler, a library module, a test: real changes, no public page.
+    // Under-claiming is the safe direction — the alternative is reporting on
+    // pages this change never touched.
+    expect(agentic(["src/app/api/hook/route.ts"])).toEqual({
+      supported: false,
+      reason: "outcome_no_public_surface",
+    });
+    expect(agentic(["src/modules/billing/catalog.ts"])).toEqual({
+      supported: false,
+      reason: "outcome_no_public_surface",
+    });
+  });
+
+  it("never probes a dynamic route, because it is a template and not a URL", () => {
+    // Requesting `/app/projects/[projectId]` literally observes a 404 and would
+    // report it as the change having broken a page.
+    expect(agentic(["src/app/app/projects/[projectId]/page.tsx"])).toEqual({
+      supported: false,
+      reason: "outcome_no_public_surface",
+    });
+  });
+
+  it("refuses rather than guessing when the repository evidence is gone", () => {
+    expect(
+      resolveOutcomeContract({
+        capability: "agentic_execution_v1",
+        publicOrigin: OUTCOME_ORIGIN,
+        repository: null,
+        changedPaths: ["src/app/page.tsx"],
+      }),
+    ).toEqual({ supported: false, reason: "outcome_expectation_unavailable" });
+  });
+
+  it("refuses when route analysis was limited, rather than probing nothing", () => {
+    // `resolveExecutionSurface` returns an empty resolution for a `limited` or
+    // `none` route mode, so the intersection is empty and the honest answer is
+    // that there is no public surface to look at.
+    const snapshot = outcomeSnapshot();
+    const limited = {
+      ...snapshot,
+      routes: { ...snapshot.routes, mode: "limited" },
+    } as typeof snapshot;
+
+    expect(
+      resolveOutcomeContract({
+        capability: "agentic_execution_v1",
+        publicOrigin: OUTCOME_ORIGIN,
+        repository: limited,
+        changedPaths: ["src/app/page.tsx"],
+      }),
+    ).toEqual({ supported: false, reason: "outcome_no_public_surface" });
+  });
+
+  it("bounds the page list and says so, rather than probing everything", () => {
+    const many: RouteSummary[] = Array.from({ length: 9 }, (_, index) => ({
+      path: `/p${index}`,
+      kind: "page",
+      dynamic: false,
+      sourcePath: `src/app/p${index}/page.tsx`,
+    }));
+
+    const resolved = agentic(
+      many.map((route) => route.sourcePath),
+      many,
+    );
+    if (!resolved.supported) throw new Error("expected supported");
+
+    expect(resolved.expected.checks).toHaveLength(4);
+    // Reaching the budget marks the expectation rather than silently narrowing
+    // what was checked (CLAUDE.md rule 27).
+    expect(resolved.expected.truncated).toBe(true);
+  });
+
+  it("is deterministic: the same change always produces the same expectation", () => {
+    expect(agenticPaths(["src/app/pricing/page.tsx", "src/app/page.tsx"])).toEqual(
+      agenticPaths(["src/app/page.tsx", "src/app/pricing/page.tsx"]),
+    );
   });
 });

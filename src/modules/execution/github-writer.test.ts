@@ -363,3 +363,132 @@ describe("PART H — no amendment after a commit exists", () => {
     }
   });
 });
+
+/**
+ * Removing a file (ADR 0074).
+ *
+ * The write path was additive for its whole life, and `candidate.ts` refused a
+ * deletion rather than write a commit missing part of what the agent did. What
+ * follows is the other half of lifting that refusal: the tree entry that
+ * removes a path, and the read-back that asserts absence rather than assuming
+ * it. The fake below models a real base tree — the existing one seeds a branch
+ * from `FILES` whatever the tree said, which cannot answer "is it gone?".
+ */
+describe("prepareChangeOnBranch — deletions (ADR 0074)", () => {
+  const AGENTIC_TARGET: WriteTarget = {
+    ...TARGET,
+    branchName: "vibe/agent-delete-abc123",
+    capability: "agentic_execution_v2",
+    commitMessage: "refactor(app): remove the unused pricing page",
+  };
+
+  /** A host whose branch content is whatever the tree entries said it is. */
+  function treeGit(baseFiles: Record<string, string>) {
+    const refs: Record<string, string> = {};
+    const blobs: Record<string, string> = {};
+    const trees: Record<string, Record<string, string>> = { "tree-of-base-sha": { ...baseFiles } };
+    const branch: Record<string, string> = {};
+    let counter = 0;
+
+    const port: GitWritePort = {
+      async getRefSha(ref) {
+        return refs[ref] ?? null;
+      },
+      async getFileContent(path, ref) {
+        if (ref === AGENTIC_TARGET.branchName) return branch[path] ?? null;
+        return baseFiles[path] ?? null;
+      },
+      async getCommitTreeSha(commitSha) {
+        return `tree-of-${commitSha}`;
+      },
+      async createBlob(content) {
+        const sha = `blob-${(counter += 1)}`;
+        blobs[sha] = content;
+        return sha;
+      },
+      async createTree({ baseTreeSha, files: entries }) {
+        const sha = `tree-${(counter += 1)}`;
+        const next = { ...(trees[baseTreeSha] ?? {}) };
+        for (const entry of entries) {
+          // The Git data model's own semantics, which is the whole point of
+          // this fake: a null blob removes the path from the new tree.
+          if (entry.blobSha === null) delete next[entry.path];
+          else next[entry.path] = blobs[entry.blobSha] ?? "";
+        }
+        trees[sha] = next;
+        return sha;
+      },
+      async createCommit({ treeSha }) {
+        const sha = `commit-${(counter += 1)}`;
+        trees[`tree-of-${sha}`] = trees[treeSha] ?? {};
+        return sha;
+      },
+      async createRef({ ref, sha }) {
+        refs[ref.replace(/^refs\//, "")] = sha;
+        for (const key of Object.keys(branch)) delete branch[key];
+        Object.assign(branch, trees[`tree-of-${sha}`] ?? {});
+      },
+    };
+
+    return { port, branch };
+  }
+
+  it("removes the path from the tree, and reads it back absent", async () => {
+    const git = treeGit({ "src/app/pricing/page.tsx": "export default () => null;\n" });
+
+    const result = await prepareChangeOnBranch(git.port, AGENTIC_TARGET, [], [
+      "src/app/pricing/page.tsx",
+    ]);
+
+    expect(result.ok).toBe(true);
+    expect(git.branch["src/app/pricing/page.tsx"]).toBeUndefined();
+  });
+
+  it("writes and removes in the same commit", async () => {
+    const git = treeGit({
+      "src/app/pricing/page.tsx": "export default () => null;\n",
+      "src/app/page.tsx": "old home\n",
+    });
+
+    const result = await prepareChangeOnBranch(
+      git.port,
+      AGENTIC_TARGET,
+      [{ path: "src/app/page.tsx", content: "new home\n", contentHash: sha256("new home\n"), bytes: 9 }],
+      ["src/app/pricing/page.tsx"],
+    );
+
+    expect(result.ok).toBe(true);
+    expect(git.branch).toEqual({ "src/app/page.tsx": "new home\n" });
+  });
+
+  /**
+   * The read-back is the verification, not the API's own 201. A host that
+   * accepted the tree and served the path anyway is a failed write.
+   */
+  it("fails verification when a deleted path is still there afterwards", async () => {
+    const git = treeGit({ "src/app/pricing/page.tsx": "export default () => null;\n" });
+    const original = git.port.getFileContent;
+    git.port.getFileContent = async (path, ref) =>
+      ref === AGENTIC_TARGET.branchName ? "still here\n" : original(path, ref);
+
+    const result = await prepareChangeOnBranch(git.port, AGENTIC_TARGET, [], [
+      "src/app/pricing/page.tsx",
+    ]);
+
+    expect(result).toEqual({ ok: false, reason: "write_verification_failed" });
+  });
+
+  /**
+   * A path nobody may write is a path nobody may remove. Refused before any
+   * call reaches the host, exactly as a forbidden write is.
+   */
+  it("refuses to remove a path outside the capability allowlist", async () => {
+    const git = treeGit({ ".github/workflows/deploy.yml": "on: push\n" });
+
+    const result = await prepareChangeOnBranch(git.port, AGENTIC_TARGET, [], [
+      ".github/workflows/deploy.yml",
+    ]);
+
+    expect(result).toEqual({ ok: false, reason: "change_preparation_failed" });
+  });
+});

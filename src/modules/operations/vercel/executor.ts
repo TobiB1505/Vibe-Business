@@ -6,7 +6,6 @@ import { opportunityGenerationWorkflow } from "../opportunities/workflow";
 import { changeValidationWorkflow } from "../change-validation/workflow";
 import { changePreviewWorkflow } from "../change-preview/workflow";
 import { previewTeardownWorkflow } from "../change-preview/teardown-workflow";
-import { changeReviewWorkflow } from "../change-review/workflow";
 import { changePreparationWorkflow } from "../change-preparation/workflow";
 import { changeMergeWorkflow } from "../change-merge/workflow";
 import { changeOutcomeVerificationWorkflow } from "../change-outcome-verification/workflow";
@@ -48,7 +47,7 @@ const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> =
   change_validation: changeValidationWorkflow,
   change_preview: changePreviewWorkflow,
   preview_teardown: previewTeardownWorkflow,
-  change_review: changeReviewWorkflow,
+  change_review: retiredWorkflow,
   change_merge: changeMergeWorkflow,
   change_outcome_verification: changeOutcomeVerificationWorkflow,
   business_measurement: businessMeasurementWorkflow,
@@ -58,6 +57,26 @@ const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> =
   agent_execution: agentExecutionWorkflow,
   account_erasure: accountErasureWorkflow,
 };
+
+/**
+ * An operation type that exists only so its history stays readable.
+ *
+ * `change_review` was the screenshot comparison. [ADR 0065](../../../../docs/decisions/0065-the-preview-is-the-review.md)
+ * replaced it with the preview and left the path unreachable; ADR 0074 deleted
+ * it once the last artifact passed its retention. Two `operation_runs` rows
+ * from 2026-08-14 still carry the type, so it stays in `OperationType` and in
+ * the SQL CHECK — a record nothing can read is not a record.
+ *
+ * Nothing can enqueue one: `startChangeReview` is gone and it was the only
+ * entry point. This exists because `WORKFLOWS` is a `Record` over the closed
+ * union, which is what makes *forgetting* a workflow a type error — a property
+ * worth more than the one dead key it costs. Throwing rather than resolving is
+ * deliberate: a silent success on an operation nothing should have started
+ * would leave a row that never finishes.
+ */
+async function retiredWorkflow(operationId: string): Promise<void> {
+  throw new Error(`change_review is retired and cannot be started (operation ${operationId})`);
+}
 
 export class VercelWorkflowExecutor implements OperationExecutor {
   readonly name = "vercel_workflow";

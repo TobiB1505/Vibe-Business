@@ -20,11 +20,19 @@ Three primitives are readable from outside, and nothing else:
 | `sandbox-cost.ts` | `credits/margin-guard.ts` | Dimensions to nanodollars. Arithmetic, not policy. |
 
 `sprint-0054-safety.test.ts` enforces that list: any other import from this
-module, from anywhere but the internal calibration harness, fails the build.
-The predictive estimator in `intelligence/` stays unreachable — wiring it into
-the execution flow needs persistence, which is a later decision, and a quote
-that reached the execution path is a quote that would eventually authorize
-something.
+module, from anywhere but the internal calibration harness and one named
+boundary file, fails the build.
+
+**The predictive estimator has one reader outside this module, and it may not
+carry a number out of it** ([ADR 0072](../../../docs/decisions/0072-the-evidence-behind-the-ceiling.md)).
+`coding-agent/run-forecast.ts` reads it to say what stands behind the Credit
+ceiling above the Run button — how many comparable runs, and what about this
+run pushes toward the top of the figure. Its `RunForecast` has four fields and
+none is money, which the same suite checks by reading its source. The reason
+the guard exists is unchanged: a quote reaching the execution path is a quote
+that would eventually authorize something, so the estimate is consumed for its
+structure and never for its magnitude. `quote-simulation.ts` and
+`safety-margin.ts` stay unreadable by anybody.
 
 ## Files
 
@@ -68,7 +76,7 @@ something.
 | `repository-signal.ts` | Repository **complexity** as a bounded multiplier. Contains no nanodollars. |
 | `repository-drift.ts` | Repository **volatility** between executions. Also contains no nanodollars. |
 | `historical-similarity.ts` | Neighbour matching with a pluggable weighting policy. |
-| `pre-execution-estimate.ts` | The estimator. Sees nothing a run produced. |
+| `pre-execution-estimate.ts` | The estimator. Sees nothing a run produced. Read by `coding-agent/run-forecast.ts`, for its structure only (ADR 0072). |
 | `quote-simulation.ts` | What a quote would look like. `activated: false` is a literal type. |
 | `safety-margin.ts` | The internally protected cost. Never customer-facing. |
 | `prediction-snapshot.ts` | The whole reasoning chain, replayable to the same estimate. |
@@ -78,6 +86,13 @@ something.
 | `prediction-bias.ts` | Cohorts the estimator systematically misprices. |
 | `variance-explanation.ts` | Why a run cost more than expected — or that nothing here explains it. |
 | `growth-simulation.ts` | The four stress axes together, repository growth included. |
+
+Three of these have no consumer and are deliberately not given one:
+`safety-margin.ts`, because charging a customer for Vibe's uncertainty is a
+decision nobody has made; `growth-simulation.ts`, because it is a rate-card
+planning tool whose home is `docs/business/` rather than the product; and
+`variance-explanation.ts`, because it explains why an actual differed from an
+estimate and there is no post-run economics surface to explain it on.
 
 ## Invariants worth knowing before changing anything here
 

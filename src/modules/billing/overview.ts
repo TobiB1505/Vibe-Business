@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { findNextExpiry } from "@/modules/credits/grants";
 import {
   listActiveLots,
-  listAllocationsForGrants,
+  sumLotAllocationCapacity,
   reconcileAndRepairLotAllocations,
 } from "@/modules/credits/lot-store";
 import { remainingCapacity, spendableCapacity, spendableLots, type CreditLot } from "@/modules/credits/lots";
@@ -16,6 +16,7 @@ import { alertOperator } from "@/lib/observability/alert";
 import {
   findCreditAccountByUser,
   listActiveReservations,
+  hasLedgerEntryWithKey,
   listLedgerEntries,
   listReservationsByIds,
   sumLedgerDeltas,
@@ -246,8 +247,19 @@ export async function getBillingOverview(
   const now = params.now ?? new Date();
   const limit = params.activityLimit ?? 8;
 
-  const account = await findCreditAccountByUser(supabase, params.userId);
-  const subscription = await findActiveSubscription(supabase, params.userId);
+  /*
+   * Two independent questions, asked together (PERF-017).
+   *
+   * Neither read needs the other's answer, and they were sequential only
+   * because they were written on consecutive lines. An account that does not
+   * exist yet pays for one subscription read it will not use — a state that
+   * ends the moment anything charges the wallet, and cheaper than a round trip
+   * on every render for everyone else.
+   */
+  const [account, subscription] = await Promise.all([
+    findCreditAccountByUser(supabase, params.userId),
+    findActiveSubscription(supabase, params.userId),
+  ]);
 
   const plan: BillingPlanView = subscription
     ? {
@@ -272,7 +284,9 @@ export async function getBillingOverview(
     };
   }
 
-  const [lots, entries, postedFromLedger, expiry, reservations] = await Promise.all([
+  const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
+
+  const [lots, entries, postedFromLedger, expiry, reservations, welcomeGranted] = await Promise.all([
     listActiveLots(supabase, account.id),
     // What the page *shows*: the most recent movements, capped (VB-025).
     listLedgerEntries(supabase, account.id),
@@ -282,6 +296,9 @@ export async function getBillingOverview(
     sumLedgerDeltas(supabase, account.id),
     findNextExpiry(supabase, account.id, now),
     listActiveReservations(supabase, account.id),
+    // Asked of the database rather than derived from `entries`, which is
+    // capped and newest-first while this row is the oldest one an account has.
+    hasLedgerEntryWithKey(supabase, account.id, welcomeKey),
   ]);
 
   /*
@@ -298,10 +315,10 @@ export async function getBillingOverview(
    * audit trail, the underlying row) rather than something this page's own
    * return value needs.
    */
-  const allocationsByGrant = await listAllocationsForGrants(supabase, lots.map((lot) => lot.id));
+  const occupiedByGrant = await sumLotAllocationCapacity(supabase, lots.map((lot) => lot.id));
 
   const [lotReconciliation] = await Promise.all([
-    reconcileAndRepairLotAllocations(supabase, { lots, allocationsByGrant, userId: params.userId }),
+    reconcileAndRepairLotAllocations(supabase, { lots, occupiedByGrant, userId: params.userId }),
     reconcileAndRepairBalance(supabase, {
       account,
       postedFromLedger,
@@ -322,9 +339,6 @@ export async function getBillingOverview(
    * above, so a repair this same call just made is reflected immediately.
    */
   const availableCredits = spendableCapacity(lotReconciliation.lots, now);
-
-  const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
-  const welcomeGranted = entries.some((entry) => entry.idempotencyKey === welcomeKey);
 
   /*
    * What live work is holding, from the reservations this call already read.

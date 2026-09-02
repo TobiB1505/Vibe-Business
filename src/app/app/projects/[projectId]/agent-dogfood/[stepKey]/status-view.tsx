@@ -16,9 +16,9 @@ import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-executio
 // `live-view.ts` is server-only (Sprint 0053).
 import { validationStillSettling } from "@/modules/coding-agent/observability/poll";
 import {
-  getDogfoodRunStatusAction,
-  resolveDogfoodFounderInputAction,
-  type DogfoodRunStatus,
+  getAgentRunStatusAction,
+  resolveAgentFounderInputAction,
+  type AgentRunStatus,
 } from "./actions";
 
 /** Matches the existing Action Plan panel's own cadence (§16, §20). */
@@ -35,7 +35,7 @@ const POLL_INTERVAL_MS = 3_000;
  * Both halves are pure functions kept out of this component, so the decision is
  * unit-tested rather than asserted by a screenshot.
  */
-function stillWatching(status: DogfoodRunStatus): boolean {
+function stillWatching(status: AgentRunStatus): boolean {
   return (
     operationPollPhase(status.live.operation) === "working" ||
     validationStillSettling(status.live)
@@ -61,14 +61,14 @@ export function StatusView({
   status: initial,
 }: {
   projectId: string;
-  status: DogfoodRunStatus;
+  status: AgentRunStatus;
 }) {
-  const { latest: polled } = useOperationPoll<DogfoodRunStatus>({
+  const { latest: polled } = useOperationPoll<AgentRunStatus>({
     key: initial.live.operation.operationId,
     enabled: stillWatching(initial),
     intervalMs: POLL_INTERVAL_MS,
     poll: async () => {
-      const next = await getDogfoodRunStatusAction(projectId, initial.live.operation.operationId);
+      const next = await getAgentRunStatusAction(projectId, initial.live.operation.operationId);
       return next ? { kind: "value", value: next } : { kind: "unavailable" };
     },
     // Stops on its own answer: the server render cannot know the run ended.
@@ -115,7 +115,7 @@ export function StatusView({
           projectId={projectId}
           request={founderInputRequest}
           context="runtime_execution"
-          resolveAction={resolveDogfoodFounderInputAction}
+          resolveAction={resolveAgentFounderInputAction}
         />
       )}
 
@@ -140,7 +140,7 @@ export function StatusView({
 function RecommendedReview({
   classification,
 }: {
-  classification: NonNullable<DogfoodRunStatus["recommendedReview"]>;
+  classification: NonNullable<AgentRunStatus["recommendedReview"]>;
 }) {
   return (
     <div className="flex flex-col gap-1 rounded-md border border-line-2 p-4">

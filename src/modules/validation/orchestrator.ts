@@ -1,3 +1,4 @@
+import { describeThrown } from "@/lib/errors/describe";
 import { createHash } from "node:crypto";
 import { SANDBOX_BUDGETS } from "./budgets";
 import { describeCommand, planValidationSteps, type SandboxCommand } from "./commands";
@@ -99,8 +100,15 @@ export type ValidationTarget = {
    */
   sourceRoot: string;
   workspaceRoot: string;
-  /** Path + sha256 of every file Vibe prepared, for integrity checking (§29). */
-  preparedFiles: readonly { path: string; contentHash: string }[];
+  /**
+   * Path + sha256 of every file Vibe prepared, for integrity checking (§29).
+   *
+   * A `null` hash is a *deletion*: the claim being checked is that the path
+   * reads back as nothing at the prepared commit. Same integrity question,
+   * opposite answer — and the alternative, dropping deletions before they get
+   * here, would leave the one kind of change nobody verified.
+   */
+  preparedFiles: readonly { path: string; contentHash: string | null }[];
   /** Unique per attempt. Names the sandbox, so a retry cannot collide (§21). */
   validationRunId: string;
 };
@@ -170,18 +178,7 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /invalid environment variables/i,
 ];
 
-/**
- * A safe description of an unknown thrown value.
- *
- * Provider errors can carry request context, headers and occasionally
- * credentials, so the object is never stored. Its name and message are, after
- * the same sanitizer step output goes through — which is the difference
- * between "we refuse to look" and "we cannot find out".
- */
-function describeError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return "non-error value thrown";
-}
+
 
 /**
  * Reads a file only when it fits entirely within the budget.
@@ -413,7 +410,7 @@ export async function provisionSandbox(
 
     return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
   } catch (error) {
-    return { ok: false, failureCode: "sandbox_unavailable", failureDetail: detail(describeError(error)) };
+    return { ok: false, failureCode: "sandbox_unavailable", failureDetail: detail(describeThrown(error)) };
   }
 }
 
@@ -493,6 +490,16 @@ export async function verifySource(
         path: inSandbox(target.sourceRoot, target.workspaceRoot, file.path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
+
+      if (file.contentHash === null) {
+        // A deletion. Absence is the whole guarantee, so a file that is still
+        // there is the same class of finding as a wrong hash: the tree in the
+        // sandbox is not the tree Vibe prepared.
+        if (content !== null) {
+          return fail("source_integrity_failed", `prepared deletion still present: ${file.path}`);
+        }
+        continue;
+      }
 
       if (content === null) {
         // Describe what is actually on disk. `ls -a` is Vibe's own command with
@@ -597,7 +604,7 @@ export async function verifySource(
 
     return { ok: true, sourceIntegrity, runtime: sandbox.runtime };
   } catch (error) {
-    return fail("validation_run_failed", describeError(error));
+    return fail("validation_run_failed", describeThrown(error));
   }
 }
 
@@ -775,7 +782,7 @@ export async function runCheckPhase(
     return {
       ok: false,
       failureCode: "validation_run_failed",
-      failureDetail: detail(describeError(error)),
+      failureDetail: detail(describeThrown(error)),
       step: null,
     };
   }

@@ -98,9 +98,10 @@ test.describe("observing", () => {
     const outcome = outcomeSection(page);
 
     await expect(outcome.getByText("Checking production…")).toBeVisible();
-    await expect(outcome).toContainText(
-      "Vibe is checking whether the intended change appears on your public product.",
-    );
+    // What is being checked comes from the profile, because the two profiles
+    // check different things and this line is the only place the screen says
+    // which (ADR 0071).
+    await expect(outcome).toContainText("Vibe checks the two files this change publishes");
     // Nobody knows how long somebody else's deployment takes.
     await expect(outcome).not.toContainText("%");
   });
@@ -223,6 +224,57 @@ test.describe("Vibe could not check", () => {
   });
 });
 
+/**
+ * The agentic profile on screen (ADR 0071).
+ *
+ * The unit tests prove the card carries the right sentence; these prove a
+ * founder sees it. Rule 69's third question — is the actual browser-visible
+ * state tested — and the one this sprint got wrong first: replacing the
+ * observing copy with a profile-driven line left the fixture rendering nothing
+ * at all, and only this suite noticed.
+ */
+test.describe("an agentic change's outcome", () => {
+  test("names the pages it looked at, one line each", async ({ page }) => {
+    const external = await forbidExternalCalls(page);
+    await page.goto("/e2e/outcome_verified_agentic");
+    const outcome = outcomeSection(page);
+
+    await expect(outcome.getByText("Production outcome verified")).toBeVisible();
+    await expect(outcome.getByText("/ answers", { exact: false })).toBeVisible();
+    await expect(outcome.getByText("/pricing answers", { exact: false })).toBeVisible();
+
+    expect(external).toEqual([]);
+  });
+
+  test("says what a green tick does not mean, beside the green tick", async ({ page }) => {
+    await page.goto("/e2e/outcome_verified_agentic");
+    const outcome = outcomeSection(page);
+
+    // The moment a founder is most likely to read more than happened. A 200 is
+    // equally consistent with the previous build still serving, and the screen
+    // has to say so rather than leave it true in a docblock.
+    await expect(outcome).toContainText(
+      "cannot tell you whether the new version is the one serving them",
+    );
+    await expect(outcome).toContainText("does not read what is on the page");
+  });
+
+  test("shows a page that stopped answering rather than summarising it away", async ({ page }) => {
+    await page.goto("/e2e/outcome_partial_agentic");
+    const outcome = outcomeSection(page);
+
+    // The failure direction this profile exists for. Under the old mapping the
+    // whole screen said "Vibe cannot verify this kind of change yet".
+    await expect(outcomeHeadline(page, "Partially observed")).toBeVisible();
+
+    // Both lines, the one that held and the one that did not (§31).
+    await expect(outcome.getByText("/ answers", { exact: false })).toBeVisible();
+    await expect(outcome.getByText("/pricing answers", { exact: false })).toBeVisible();
+
+    await expect(outcome.getByText("Production outcome verified")).toHaveCount(0);
+  });
+});
+
 test.describe("nothing anywhere claims a deployment", () => {
   const scenarios = [
     "outcome_not_started",
@@ -231,6 +283,8 @@ test.describe("nothing anywhere claims a deployment", () => {
     "outcome_partial",
     "outcome_not_observed",
     "outcome_failed",
+    "outcome_verified_agentic",
+    "outcome_partial_agentic",
   ];
 
   for (const scenario of scenarios) {

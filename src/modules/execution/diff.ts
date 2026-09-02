@@ -83,15 +83,16 @@ export type DiffContentReader = {
 /**
  * What happened to one file.
  *
- * `deleted` is deliberately absent. The GitHub writer is additive and refuses
- * deletions, so a prepared change never contains one — and `getTextFile`
- * returns `null` for an absent file, a binary one, an oversized one and a
- * directory alike, which means a missing head side cannot be *told apart* from
- * a deletion anyway. Collapsing the two is the mistake `candidate.ts` records
- * making once: an oversized build artifact read as the agent removing a
- * repository file.
+ * `deleted` exists since ADR 0074, and the caution the previous version of this
+ * comment recorded still holds: it is **never inferred from a missing head
+ * side**. `getTextFile` returns `null` for an absent file, a binary one, an
+ * oversized one and a directory alike, so a null head still means `unreadable`.
+ * A file is deleted only because the stored `prepared_changes.files` row says
+ * so — Vibe's own record of what it wrote, not a read that came back empty.
+ * Collapsing the two is the mistake `candidate.ts` records making once: an
+ * oversized build artifact read as the agent removing a repository file.
  */
-export type DiffFileStatus = "added" | "modified" | "unreadable";
+export type DiffFileStatus = "added" | "modified" | "deleted" | "unreadable";
 
 export type DiffFile = {
   path: string;
@@ -147,7 +148,29 @@ function clip(content: string): { text: string; truncated: boolean; bytes: numbe
  * omitted: review has to show that something is there it could not display,
  * because a file silently missing from a diff is a file nobody reviewed.
  */
-function compareFile(path: string, baseText: string | null, headText: string | null): DiffFile {
+function compareFile(
+  path: string,
+  baseText: string | null,
+  headText: string | null,
+  deleted = false,
+): DiffFile {
+  if (deleted) {
+    // The head side is absent *by design*, so it is never read and never
+    // compared. What the reviewer needs is the base side in full, in red.
+    const base = baseText === null ? null : clip(baseText);
+    const diff = base === null ? null : computeLineDiff(base.text, "");
+
+    return {
+      path,
+      status: "deleted",
+      hunks: diff?.hunks ?? [],
+      added: 0,
+      removed: diff?.removed ?? 0,
+      truncated: base?.truncated ?? false,
+      bytes: 0,
+    };
+  }
+
   if (headText === null) {
     return { path, status: "unreadable", hunks: [], added: 0, removed: 0, truncated: false, bytes: 0 };
   }
@@ -202,12 +225,18 @@ export async function getPreparedDiff(
      * rather than a listing, and it is fetched at the pinned base SHA — a
      * source the change itself never touched (rule 55).
      */
+    const deleted = file.status === "deleted";
+
     const [baseText, headText] = await Promise.all([
       reader.getTextFile(file.path, prepared.baseSha, DIFF_LIMITS.maxBytesPerFile),
-      reader.getTextFile(file.path, commitSha, DIFF_LIMITS.maxBytesPerFile),
+      // Not read for a deletion: there is nothing at the head to read, and the
+      // request would spend a round trip to learn what the row already says.
+      deleted
+        ? Promise.resolve(null)
+        : reader.getTextFile(file.path, commitSha, DIFF_LIMITS.maxBytesPerFile),
     ]);
 
-    const compared = compareFile(file.path, baseText, headText);
+    const compared = compareFile(file.path, baseText, headText, deleted);
     totalBytes += compared.bytes;
     files.push(compared);
   }

@@ -115,8 +115,12 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     // than an inviting button (Sprint 7 §19).
     getActiveBusinessAuditOperation(supabase, projectId),
     getAuditReadiness(supabase, projectId, evidence),
-    getAuditAccessStatus(supabase, { projectId, userId }),
-    getDeepScanAccessStatus(supabase, { projectId, userId }),
+    getAuditAccessStatus(supabase, { projectId, userId }, evidence),
+    getDeepScanAccessStatus(supabase, {
+      projectId,
+      userId,
+      owned: { productionUrl: project.productionUrl },
+    }),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
     // CORE-2 §18: "Where I'd start" links to the existing Opportunity Engine's
@@ -272,10 +276,8 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     // the only way out of that state. It now resolves on this route.
     <WorkspaceSection
       id="business-audit"
-      title="Business Health"
       eyebrow="Business intelligence"
       variant="intelligence"
-      description="Your whole business in one connected view — what is working, what matters and where to move next."
       actions={
         <RunAuditButton
           projectId={project.id}

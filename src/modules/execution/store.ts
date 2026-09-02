@@ -291,6 +291,34 @@ export async function markPreparedChangePrepared(
   return (data ?? []).length > 0;
 }
 
+/**
+ * Records that a person rejected this change.
+ *
+ * Scoped to `prepared`, so it is idempotent and cannot reach a row that is
+ * still being written or that already failed. A second click reports `false`
+ * and changes nothing, which is what lets the caller distinguish "you just
+ * discarded it" from "it was already gone" without reading first.
+ *
+ * `completed_at` is deliberately left as it was. It records when the change
+ * became prepared, which is still true; overwriting it would lose when the
+ * commit was made in order to record when someone stopped wanting it, and the
+ * audit event carries the second timestamp already.
+ */
+export async function discardPreparedChange(
+  supabase: SupabaseClient,
+  params: { preparedChangeId: string },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("prepared_changes")
+    .update({ status: "discarded" })
+    .eq("id", params.preparedChangeId)
+    .eq("status", "prepared")
+    .select("id");
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
 export async function markPreparedChangeFailed(
   supabase: SupabaseClient,
   params: { preparedChangeId: string; failureCode: ExecutionFailureCode },

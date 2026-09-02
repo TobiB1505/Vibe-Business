@@ -12,8 +12,11 @@ import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
 import { REVIEW_POLICY } from "@/modules/review/policy";
 import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { releaseOperationBilling } from "./billing";
-import { failOperationRun, getOperationRunById } from "./store";
+import { failOperationRun, getOperationRunById, type StoredOperationRun } from "./store";
 import type { OperationType } from "./schema";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveAgentHold } from "@/modules/coding-agent/hold";
+import { findValidationRunByOperation } from "@/modules/validation/store";
 
 /**
  * The backstop for a durable operation nothing is carrying any more (ADR 0042
@@ -139,6 +142,42 @@ const OPERATION_STALE_DEADLINE_MS: Record<OperationType, number | null> = {
 };
 
 /**
+ * Whether a run looks like one nothing is carrying any more.
+ *
+ * ## Why this is separate from the sweep
+ *
+ * Because it answers the cheap question, and the sweep opens a service-role
+ * client and reads a row by primary key to answer it. `getOperationStatus`
+ * called the sweep before its own read on every poll, for every polling
+ * surface, for every signed-in person at once — a round trip whose answer was
+ * "no" essentially always (PERF-020).
+ *
+ * A caller that has already read the run can ask here first for nothing. What
+ * it must not do is act on the answer: this is a filter in front of the sweep,
+ * never a substitute for it. `expireStaleOperation` still re-reads the row
+ * under its own authority before it writes, because a row read a moment ago
+ * through somebody else's client is evidence, not permission.
+ *
+ * Only `running` counts, mirroring the sweep's original guard: `queued` may
+ * simply not have been picked up yet, and `needs_user` is not a staleness
+ * question at all.
+ */
+export function isPastStaleDeadline(
+  operation: Pick<StoredOperationRun, "status" | "startedAt" | "operationType">,
+  now: (() => number) | undefined = Date.now,
+): boolean {
+  if (operation.status !== "running" || !operation.startedAt) return false;
+
+  const deadlineMs = OPERATION_STALE_DEADLINE_MS[operation.operationType];
+  if (deadlineMs === null) return false;
+
+  const startedAt = Date.parse(operation.startedAt);
+  if (!Number.isFinite(startedAt)) return false;
+
+  return (now ?? Date.now)() >= startedAt + deadlineMs;
+}
+
+/**
  * Fails an operation whose workflow stopped carrying it, and releases its
  * Credits.
  *
@@ -169,17 +208,7 @@ export async function expireStaleOperation(params: {
    * nobody, and the caller's own read is RLS-scoped separately.
    */
   const operation = await getOperationRunById(supabase, params.operationId);
-  if (!operation || operation.status !== "running" || !operation.startedAt) {
-    return { expired: false };
-  }
-
-  const deadlineMs = OPERATION_STALE_DEADLINE_MS[operation.operationType];
-  if (deadlineMs === null) return { expired: false };
-
-  const startedAt = Date.parse(operation.startedAt);
-  if (!Number.isFinite(startedAt)) return { expired: false };
-
-  if ((params.now ?? Date.now)() < startedAt + deadlineMs) return { expired: false };
+  if (!operation || !isPastStaleDeadline(operation, params.now)) return { expired: false };
 
   // VB-012 — a swept operation means a workflow died, which is worth knowing
   // about before the pattern becomes a customer's report.
@@ -216,5 +245,53 @@ export async function expireStaleOperation(params: {
     providerUsageOccurred: true,
   });
 
+  /*
+   * A swept validation also owes an answer to somebody else's hold (ADR 0073).
+   *
+   * Since settlement moved to the validation verdict, the Credits an agent run
+   * reserved sit open until one arrives. A validation that dies is a verdict
+   * that never comes — and the release above cannot reach that hold, because it
+   * is keyed to *this* operation and the hold belongs to the agent's.
+   *
+   * Without this, a customer's balance would carry a reservation against a
+   * purchase nothing will ever complete, and no other path would ever close it.
+   * The verdict is the honest one: no validated improvement exists, so nothing
+   * is charged.
+   */
+  if (operation.operationType === "change_validation") {
+    await releaseAgentHoldBehindValidation(supabase, operation);
+  }
+
   return { expired: true };
+}
+
+/**
+ * Releases the agent hold behind a validation that will never answer.
+ *
+ * Reached through the validation run's own `prepared_change_id`, which is the
+ * link the database records — an operation id alone cannot find the hold.
+ *
+ * Never throws: this is a backstop, and a billing fault inside it must not stop
+ * an operation from being expired. `resolveAgentHold` is idempotent and refuses
+ * a reservation that is already terminal, so a sweep racing a verdict that
+ * settled first reports `already_closed` and takes nothing back.
+ */
+async function releaseAgentHoldBehindValidation(
+  supabase: SupabaseClient,
+  operation: { id: string; projectId: string | null },
+): Promise<void> {
+  if (operation.projectId === null) return;
+
+  try {
+    const run = await findValidationRunByOperation(supabase, operation.id);
+    if (!run) return;
+
+    await resolveAgentHold(supabase, {
+      projectId: operation.projectId,
+      preparedChangeId: run.preparedChangeId,
+      outcome: "unvalidated",
+    });
+  } catch {
+    // Reported by the operator alert this function's caller already sent.
+  }
 }

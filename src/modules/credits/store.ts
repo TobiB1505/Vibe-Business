@@ -243,6 +243,40 @@ export async function listLedgerEntries(
 }
 
 /**
+ * Whether one specific ledger entry exists, by its idempotency key.
+ *
+ * ## Why this is not `listLedgerEntries().some(…)`
+ *
+ * Because that answer is wrong on an old account, and wrong in the direction
+ * that re-offers something already given. `listLedgerEntries` is capped at
+ * `LEDGER_READ_LIMIT` and ordered newest first, while the entry callers ask
+ * about here — the welcome grant — is the *oldest* row an account has. Past
+ * the cap it falls out of the window, `some` returns false, and the billing
+ * screen says the welcome Credits are still available.
+ *
+ * The cap itself is right (VB-025); deriving a historical fact from a recent
+ * window is what was wrong. This asks the database the question directly, and
+ * `billing_credit_ledger_idempotency_idx` — unique on
+ * `(credit_account_id, idempotency_key)` — answers it from one index lookup
+ * that never grows with the account.
+ */
+export async function hasLedgerEntryWithKey(
+  supabase: SupabaseClient,
+  creditAccountId: string,
+  idempotencyKey: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("billing_credit_ledger")
+    .select("id")
+    .eq("credit_account_id", creditAccountId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
  * The posted balance the ledger implies, summed in the database (VB-025).
  *
  * ## Why this is not `listLedgerEntries().reduce(…)`

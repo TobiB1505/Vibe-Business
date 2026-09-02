@@ -139,7 +139,7 @@ const MARK_CLASSES: Record<TimelineStep["state"], string> = {
   skipped: "text-fg-faint",
 };
 
-export function ExecutionTimeline({ steps }: { steps: readonly TimelineStep[] }) {
+function ExecutionTimeline({ steps }: { steps: readonly TimelineStep[] }) {
   return (
     <Surface level="section" padding="md" className="flex flex-col gap-3">
       <MonoLabel>Progress</MonoLabel>
@@ -192,7 +192,7 @@ function candidateFileCount(model: AgentExecutionLiveModel): number | null {
  * and changed six; a panel that had promised eighteen changes would have been
  * wrong for ten minutes and then wrong the other way.
  */
-export function ChangedFilesPanel({
+function ChangedFilesPanel({
   files,
   candidateFiles,
 }: {
@@ -280,7 +280,7 @@ export function ValidationPanel({ state }: { state: ValidationState }) {
  * Developer inspector
  * ------------------------------------------------------------------------ */
 
-export function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }) {
+function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }) {
   const { metrics, economics, operation } = model;
   const provider = economics.provider;
 

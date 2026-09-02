@@ -1,6 +1,6 @@
 # ADR 0063 — The Review Classification Becomes a Gate
 
-- **Status:** Accepted
+- **Status:** Accepted; amended by [0065](0065-the-preview-is-the-review.md) — what `visual` calls for is now a preview
 - **Date:** 2026-09-01
 - **Supersedes:** [ADR 0037 §2](0037-automatic-validation-and-review-classification.md)'s "deterministic and advisory"
 - **Amends:** [ADR 0018](0018-human-approval-authority.md) — an approval may now bind to either of two evidence forms

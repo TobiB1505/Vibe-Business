@@ -79,19 +79,42 @@ export async function readAgentRunGatewayState(
    * Summing the tokens gets both cases right without needing to know which
    * happened: a failure that billed nothing contributes zero on its own.
    */
-  const { data: usage } = await supabase
-    .from("ai_usage_events")
-    .select("output_tokens, status")
-    .eq("job_id", params.runId);
+  /*
+   * Two aggregates, one round trip, no rows (PERF-002).
+   *
+   * This used to select every usage row the run had written and reduce them
+   * here. That is quadratic across a run — request *n* carried *n-1* rows, and
+   * a large run is allowed 260 requests — and it sat behind
+   * `max_rows = 1000`, past which PostgREST would have truncated the read
+   * silently and under-reported spend against the ceiling it feeds.
+   *
+   * The error is thrown rather than absorbed, unlike the run read above whose
+   * absence is a real answer ("no such run"). A failed aggregate has no
+   * truthful default: zero would hand the run its whole budget back, which is
+   * exactly what a missing function would have done quietly if this deployed
+   * ahead of its migration.
+   */
+  const { data: usage, error: usageError } = await supabase.rpc("sum_agent_run_usage", {
+    p_run_id: params.runId,
+  });
 
-  const rows = (usage ?? []) as { output_tokens: number | null; status: string }[];
+  if (usageError) throw usageError;
+
+  // `returns table(...)` reaches PostgREST as an array of one row, and a
+  // `bigint` comes back as a string once it is large enough.
+  const totals = (Array.isArray(usage) ? usage[0] : usage) as
+    | { spent_output_tokens: number | string | null; forwarded_requests: number | string | null }
+    | undefined;
+
+  const spentOutputTokens = Number(totals?.spent_output_tokens ?? 0);
+  const forwardedFromLedger = Number(totals?.forwarded_requests ?? 0);
 
   return {
     status: row.status,
     projectId: row.project_id,
     userId: row.user_id,
     executionSpecId: row.execution_spec_id,
-    spentOutputTokens: rows.reduce((total, entry) => total + (entry.output_tokens ?? 0), 0),
+    spentOutputTokens,
     /*
      * Every forwarded request writes a row, succeeded or failed, so the request
      * ceiling counts attempts rather than successes. A loop that fails every
@@ -103,7 +126,7 @@ export async function readAgentRunGatewayState(
      * can only tighten the ceiling, and a run that started before the column
      * existed — its counter still zero — is still bounded by its ledger.
      */
-    forwardedRequests: Math.max(rows.length, row.gateway_requests_started ?? 0),
+    forwardedRequests: Math.max(forwardedFromLedger, row.gateway_requests_started ?? 0),
   };
 }
 

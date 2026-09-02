@@ -13,7 +13,7 @@ Policy Compiler             default deny, outside any prompt
       ↓
   mode · allowed tools · forbidden actions · repository + base SHA
   write scope · required validation · Credit ceiling · interrupt rules
-  stop conditions · freshness checks
+  stop conditions · live-premise checks
       ↓
 CODING AGENT                modules/coding-agent — ADR 0027, 0029
       ↓
@@ -40,7 +40,7 @@ compiled policy with a default-deny predicate is a fact.
 | `policy.ts` | *what may an execution do?* — default deny, globally forbidden set |
 | `budget.ts` | *how much may it cost?* — no approved policy exists yet |
 | `validation-requirements.ts` | *what must independently pass?* — derived from the real profile |
-| `freshness.ts` | *what must be re-checked immediately before a write?* |
+| `live-premise.ts` | *is the defect this step exists to fix still there?* — re-checked against live state before a Credit is spent (rule 55) |
 | `spec.ts` | the immutable instruction package |
 | `identity.ts` | what makes two specs the same spec |
 | `secrets.ts` | why the schema, not a scanner, is the defence |

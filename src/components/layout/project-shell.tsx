@@ -102,6 +102,73 @@ export type ProjectSubsectionId = (typeof PROJECT_SUBSECTIONS)[number]["id"];
  */
 export type WorkspaceSectionId = ProjectSectionId | ProjectSubsectionId | "business-audit";
 
+/**
+ * Every section that renders a heading. `home` is not one: the project index
+ * renders the Business Health section, so `business-audit` is the id it uses.
+ */
+export type WorkspaceHeadingId = Exclude<WorkspaceSectionId, "home">;
+
+/**
+ * What each workspace section calls itself, in one place (PERF-015).
+ *
+ * ## Why this is a registry and not two props
+ *
+ * Every one of these sections is rendered twice — once by its `page.tsx` and
+ * once by the `loading.tsx` standing in for it — and the two have to agree,
+ * because the skeleton is on screen first and the page replaces it. Where they
+ * disagreed, the founder watched the description of the screen they were
+ * waiting for get swapped for a different one at the moment it arrived.
+ *
+ * Three had drifted: Experiments, Project Settings and My Product. The audit
+ * found the first two by reading the files; the third turned up only when the
+ * copy was put in one place, which is the argument for putting it there. A
+ * prop that two files must pass the same string to is a prop that will
+ * eventually be passed two strings, and neither file looks wrong on its own.
+ *
+ * The page's wording wins in each case: it is what a reader ends up with.
+ */
+export const WORKSPACE_SECTION_HEADINGS: Record<
+  WorkspaceHeadingId,
+  { title: string; description: string }
+> = {
+  "business-audit": {
+    title: "Business Health",
+    description:
+      "Your whole business in one connected view — what is working, what matters and where to move next.",
+  },
+  "my-product": {
+    title: "My Product",
+    description: "Here's how Vibe understands your product.",
+  },
+  "deep-scan": {
+    title: "Deep Scan",
+    description:
+      "What your product looks like after signing in — the part repository and public-page evidence cannot reach.",
+  },
+  "action-plan": {
+    title: "Action Plan",
+    description: "Your prioritized plan to strengthen your business.",
+  },
+  agent: {
+    title: "Agent",
+    description:
+      "Each change moves through validation, preview, review and your approval before anything can be merged.",
+  },
+  experiments: {
+    title: "Experiments",
+    description:
+      "Every change Vibe shipped, and what became true afterwards. Vibe reports what it observed; it never claims a change caused it.",
+  },
+  settings: {
+    title: "Project Settings",
+    description: "What Vibe is connected to, what you have told it, and how to disconnect or delete it.",
+  },
+  activity: {
+    title: "Activity",
+    description: "The append-only record of what Vibe did, when, and with what result.",
+  },
+};
+
 /** The canonical URL of one workspace section. One place builds these. */
 export function projectSectionHref(projectId: string, sectionId: WorkspaceSectionId): string {
   const base = `/app/projects/${projectId}`;
@@ -315,20 +382,21 @@ export function ProjectBreadcrumb({
  *
  * A `<section>` with an `aria-labelledby` pointing at its own heading, so the
  * document outline matches the navigation a sighted user sees.
+ *
+ * The heading comes from the id rather than from props: a route and the
+ * `loading.tsx` standing in for it must say the same thing, and the way to
+ * guarantee that is to leave them nothing to disagree about — see
+ * `WORKSPACE_SECTION_HEADINGS`.
  */
 export function WorkspaceSection({
   id,
-  title,
-  description,
   actions,
   headerStatus,
   eyebrow,
   variant = "default",
   children,
 }: {
-  id: WorkspaceSectionId;
-  title: string;
-  description?: ReactNode;
+  id: WorkspaceHeadingId;
   actions?: ReactNode;
   /** A compact state that belongs to the intelligence command surface. */
   headerStatus?: ReactNode;
@@ -336,6 +404,7 @@ export function WorkspaceSection({
   variant?: "default" | "intelligence";
   children: ReactNode;
 }) {
+  const { title, description } = WORKSPACE_SECTION_HEADINGS[id];
   const intelligence = variant === "intelligence";
 
   return (

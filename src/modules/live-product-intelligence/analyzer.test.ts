@@ -578,3 +578,134 @@ describe("SEO coverage on a partly client-rendered site", () => {
     expect(snapshot.readability?.clientRenderedPaths).toEqual(["/app", "/dashboard"]);
   });
 });
+
+/**
+ * A site whose prices are a section on the homepage, not a route.
+ *
+ * This is Vibe Business's own landing page, reduced to the shape that mattered.
+ * The live analysis of 2026-09-02 read it, found €0, €19 and €49 on `/`, and in
+ * the same snapshot reported `pricing: detected false, confidence high`. That
+ * contradiction became a Move telling a founder no visitor could see a price —
+ * and an agent run that correctly refused to build a pricing page that already
+ * existed.
+ *
+ * Every detail here is load-bearing:
+ *
+ * - pricing lives at `/#pricing`, a fragment, so no path can match it and
+ *   `url.ts` drops the fragment before link inference ever sees it;
+ * - the section's `h2` is written for humans — it contains neither "pricing"
+ *   nor "plans", so the heading rule misses too;
+ * - the words "Simple plans" sit in a `<span>`, which is what the real page
+ *   renders, and headings are the only text the classifier reads.
+ */
+const ANCHOR_PRICING_SITE = {
+  "https://anchor.test/robots.txt": textResponse("User-agent: *\nAllow: /\n"),
+  "https://anchor.test/": htmlResponse(`<!doctype html>
+<html lang="en">
+<head><title>Anchor — turn your software into a business</title>
+<meta name="description" content="Anchor turns your software into a business.">
+<meta name="viewport" content="width=device-width"></head>
+<body>
+  <nav><a href="/#how">How it works</a><a href="/#pricing">Pricing</a><a href="/login">Log in</a></nav>
+  <h1>Turn your software into a business</h1>
+  <p>Anchor reads your product and your code, then tells you what to build next and
+  builds it with you. Start free and add capacity when the work grows over time.</p>
+  <section id="pricing">
+    <span>Simple plans</span>
+    <h2>Start free. Add capacity when the work grows.</h2>
+    <article><h3>Free</h3><p>€0 / month</p><a href="/signup">Start with Free</a></article>
+    <article><h3>Builder</h3><p>€19 / month</p><a href="/signup">Start with Builder</a></article>
+    <article><h3>Pro</h3><p>€49 / month</p><a href="/signup">Start with Pro</a></article>
+  </section>
+</body></html>`),
+  "https://anchor.test/login": htmlResponse(
+    `<html lang="en"><head><title>Log in</title></head><body><form action="/login"><input type="email"><input type="password"><button>Log in</button></form></body></html>`,
+  ),
+  "https://anchor.test/signup": htmlResponse(
+    `<html lang="en"><head><title>Sign up</title></head><body><form><input type="email"><input type="password"><input type="password"><button>Sign up</button></form></body></html>`,
+  ),
+};
+
+describe("prices that live in a section rather than on a page", () => {
+  it("detects the pricing surface from the in-page anchor the site links", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://anchor.test/",
+      dependencies: fakeDependencies(ANCHOR_PRICING_SITE),
+    });
+
+    const pricing = snapshot.productSurfaces.find((surface) => surface.id === "pricing");
+    expect(pricing?.detected).toBe(true);
+
+    // Medium, not high. The site says the section is there; Vibe did not fetch
+    // it as a document of its own, and claiming otherwise would make an
+    // inference sound like an observation.
+    expect(pricing?.confidence).toBe("medium");
+    expect(pricing?.evidence.some((item) => item.kind === "nav_label")).toBe(true);
+  });
+
+  it("does not claim a pricing page was read, because none was", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://anchor.test/",
+      dependencies: fakeDependencies(ANCHOR_PRICING_SITE),
+    });
+
+    // The two facts the Move collapsed into one: there is no pricing *page*,
+    // and the site does show prices. Both true, and neither implies the other.
+    expect(snapshot.pricing?.pricingPageReached).toBe(false);
+    expect(snapshot.pricing?.observedPricePoints.map((point) => point.amount).sort((a, b) => a - b)).toEqual([
+      0, 19, 49,
+    ]);
+  });
+
+  it("never reports high confidence in an absence it also contradicts", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://anchor.test/",
+      dependencies: fakeDependencies(ANCHOR_PRICING_SITE),
+    });
+
+    const pricing = snapshot.productSurfaces.find((surface) => surface.id === "pricing");
+    const foundPrices = (snapshot.pricing?.observedPricePoints.length ?? 0) > 0;
+
+    // The invariant, stated as the snapshot's own consistency rather than as
+    // this fixture's expected values: no part of one crawl may be confidently
+    // certain of what another part of the same crawl just found.
+    expect(foundPrices && pricing?.detected === false && pricing?.confidence === "high").toBe(false);
+  });
+});
+
+/**
+ * A pricing page that is linked and never fetched.
+ *
+ * `pricingPageReached` was derived from the merged `detected` flag, which has
+ * always included link-only inference — so a footer link to `/pricing` was
+ * enough to make Vibe state that it had *read* the page. The audit turns that
+ * into "Your pricing page was read and states no machine-readable price", a
+ * sentence about a document nobody opened.
+ */
+const LINKED_PRICING_SITE = {
+  "https://linked.test/robots.txt": textResponse("User-agent: *\nDisallow: /pricing\n"),
+  "https://linked.test/": htmlResponse(`<!doctype html>
+<html lang="en">
+<head><title>Linked — ship faster</title><meta name="viewport" content="width=device-width"></head>
+<body>
+  <nav><a href="/pricing">Pricing</a></nav>
+  <h1>Ship faster</h1>
+  <p>Linked helps teams get their work in front of customers without a release engineer.</p>
+</body></html>`),
+};
+
+describe("a pricing page that was linked but never opened", () => {
+  it("infers the surface without claiming the page was read", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://linked.test/",
+      dependencies: fakeDependencies(LINKED_PRICING_SITE),
+    });
+
+    const pricing = snapshot.productSurfaces.find((surface) => surface.id === "pricing");
+    expect(pricing?.detected).toBe(true);
+    expect(pricing?.confidence).toBe("medium");
+
+    // The whole point: inferred is not read.
+    expect(snapshot.pricing?.pricingPageReached).toBe(false);
+  });
+});

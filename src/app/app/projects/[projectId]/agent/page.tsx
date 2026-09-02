@@ -53,6 +53,8 @@ import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
+import { forecastRun } from "@/modules/coding-agent/run-forecast";
+import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 
 /**
  * The customer-facing Agent workspace.
@@ -101,15 +103,12 @@ export default async function ProjectAgentPage({
    * The description is one sentence for every state, because it renders before
    * the state is known. A header that first said "Vibe can work on your
    * product" and then swapped to "Vibe is working on your task" would be a
-   * false status line arriving one tick early.
+   * false status line arriving one tick early. It lives in
+   * `WORKSPACE_SECTION_HEADINGS` now, which is what stops the same sentence
+   * from arriving twice in two different wordings.
    */
   return (
-    <WorkspaceSection
-      id="agent"
-      title="Agent"
-      description="Each change moves through validation, preview, review and your approval before anything can be merged."
-      actions={<AgentTrustPanel />}
-    >
+    <WorkspaceSection id="agent" actions={<AgentTrustPanel />}>
       <Suspense fallback={<SkeletonSection />}>
         <AgentWorkspaceBody
           supabase={supabase}
@@ -377,6 +376,24 @@ async function AgentWorkspaceBody({
     ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
     : null;
 
+  /*
+   * What stands behind that ceiling (ADR 0072).
+   *
+   * Free and offline: pure over the static run history plus the snapshot the
+   * route resolver already read. It produces no money and no second number —
+   * the ceiling is the figure, and this says how much evidence is under it and
+   * what about this run pushes toward the top of it.
+   */
+  const runForecast =
+    agenticStep && agenticResolution
+      ? forecastRun({
+          at: new Date(),
+          step: agenticStep,
+          riskClass: agenticResolution.riskClass,
+          snapshot: agentRoutes?.available ? agentRoutes.snapshot : null,
+        })
+      : null;
+
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */
   const live = agentWorking;
@@ -473,6 +490,11 @@ async function AgentWorkspaceBody({
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
+                forecastNotes={
+                  runForecast
+                    ? [forecastEvidenceNote(runForecast), ...forecastDriverNotes(runForecast)]
+                    : undefined
+                }
                 caption={
                   (requestedTaskMatchesRun && change !== null) ||
                   (focus?.kind === "focused" && focus.action.kind === "already_prepared")

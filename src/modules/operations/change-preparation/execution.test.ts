@@ -74,7 +74,11 @@ function fakeGit(seed: { refs?: Record<string, string>; files?: Record<string, R
       writes.push("createTree");
       const sha = `tree-${(counter += 1)}`;
       trees[sha] = Object.fromEntries(
-        input.files.map((file) => [file.path, blobs[file.blobSha] ?? ""]),
+        // A null blob removes the path; this fake carries no base tree, so
+        // removal is simply an entry that never appears in the new one.
+        input.files
+          .filter((file) => file.blobSha !== null)
+          .map((file) => [file.path, blobs[file.blobSha as string] ?? ""]),
       );
       return sha;
     },

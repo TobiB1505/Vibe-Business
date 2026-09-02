@@ -5,6 +5,36 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    rules: {
+      /**
+       * An unused name is an error, and a leading underscore is how a
+       * deliberate one says so.
+       *
+       * It was a warning, and warnings accumulate: twenty-two had collected,
+       * and twenty of them were parameters a signature requires and a body has
+       * no use for — `useActionState`'s `previous` and `formData`, the second
+       * argument `@supabase/ssr` hands a cookie writer, the arguments of a
+       * mock that only counts its calls. Every one of those was already named
+       * with the underscore that conventionally means "on purpose", and
+       * nothing was reading it.
+       *
+       * Honouring the convention is what makes the rule worth raising: with
+       * the deliberate ones silent, a warning is a finding again rather than
+       * noise to scroll past, so it can fail the build instead of joining a
+       * count nobody reads.
+       */
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
   globalIgnores([
     ".next/**",
     "out/**",

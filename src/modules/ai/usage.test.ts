@@ -11,13 +11,28 @@ import { recordAIUsage, type RecordUsageParams } from "./usage";
  * losing the trace of one that was.
  */
 
+/**
+ * The insert, with the `RETURNING` the real client performs.
+ *
+ * `.insert().select().single()` is one PostgREST request, not two, and the
+ * inserted row is what `meterAiUsage` projects into the billing ledger
+ * (ADR 0073). A double that stopped at `insert` would let this file pass while
+ * the metering call it enables threw in production — which is exactly what
+ * happened when the chain was added.
+ *
+ * `data` is deliberately null here: these tests are about what is *written*,
+ * and returning a row would drag the whole projection into their assertions.
+ * A null return exercises the guard that keeps the metering optional.
+ */
 function captureInsert() {
   const rows: Record<string, unknown>[] = [];
   const supabase = {
     from: () => ({
-      insert: async (row: Record<string, unknown>) => {
+      insert: (row: Record<string, unknown>) => {
         rows.push(row);
-        return { error: null };
+        return {
+          select: () => ({ single: async () => ({ data: null, error: null }) }),
+        };
       },
     }),
   } as unknown as SupabaseClient;

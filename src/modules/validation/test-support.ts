@@ -167,6 +167,29 @@ export type FakeSandboxProvider = SandboxProvider & {
   exposedPorts(): readonly number[];
   /** Origins handed out, for asserting the URL is never assembled by Vibe. */
   origins(): number[];
+  /**
+   * Puts bytes in the workspace the way the harness does — from inside.
+   *
+   * Under ADR 0029 an agent's writes never travel through Vibe: it edits files
+   * with its own tools inside the VM, and Vibe learns what changed by walking
+   * the filesystem afterwards. A test that wants a run to have changed
+   * something has to change the filesystem, because that is the only thing the
+   * observation can see.
+   *
+   * Before this, the fake agent provider invoked a broker and the change
+   * appeared through Vibe — the topology ADR 0029 retired — so every test about
+   * "what a run changed" was passing for a reason production does not have.
+   */
+  writeFile(path: string, content: string): void;
+  /**
+   * Removes bytes from the workspace the way the harness does — from inside.
+   *
+   * The counterpart of `writeFile`, and needed for the same reason: since
+   * ADR 0074 a run may remove a file, and Vibe learns that by walking the
+   * filesystem and finding a path that is no longer there. A test that stubbed
+   * the deletion anywhere else would be asserting about its own stub.
+   */
+  deleteFile(path: string): void;
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -204,14 +227,27 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
    * `find`, over the fake's own filesystem.
    *
    * Only the shape the agent runtime builds is understood: prune a few
-   * directories, take regular files, print paths relative to the walk root, and
-   * optionally restrict to what is newer than a marker. Enough to make the
-   * change-discovery path real rather than stubbed, and narrow enough that a
-   * command this does not recognise falls through to the configured results.
+   * directories *by name* and a few *by path*, take regular files, print paths
+   * relative to the walk root, and optionally restrict to what is newer than a
+   * marker. Enough to make the change-discovery path real rather than stubbed,
+   * and narrow enough that a command this does not recognise falls through to
+   * the configured results.
+   *
+   * The `-path` half is not decoration: build output that lands inside the
+   * source tree cannot be pruned by directory name without taking a customer's
+   * hand-written files with it, so the runtime prunes it by path — and a fake
+   * that ignored those tokens would report a walk the real one does not do.
    */
   function runFind(command: string, cwd: string): string {
     const prefix = cwd === "." || cwd === "" ? "" : `${cwd}/`;
     const pruned = [...command.matchAll(/-name (\S+)/g)].map((match) => match[1]);
+    // `find`'s `-path` glob: `*` matches any run of characters, `/` included.
+    const prunedPaths = [...command.matchAll(/-path (\S+)/g)].map(
+      (match) =>
+        new RegExp(
+          `^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
+        ),
+    );
     const newer = /-newer (\S+)/.exec(command);
     const since = newer ? (writtenAt.get(newer[1]) ?? 0) : 0;
 
@@ -220,6 +256,8 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       .map((path) => path.slice(prefix.length))
       .filter((path) => path.length > 0 && !path.startsWith("/"))
       .filter((path) => !pruned.some((name) => path.split("/").includes(name)))
+      // `find` matches `-path` against the walked path, which starts at `./`.
+      .filter((path) => !prunedPaths.some((pattern) => pattern.test(`./${path}`)))
       .filter((path) => (writtenAt.get(`${prefix}${path}`) ?? 0) > since)
       .sort();
 
@@ -244,6 +282,71 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       });
 
       if (options.throwOn === rendered) throw new Error("provider exploded");
+
+      /*
+       * A configured failure is believed, whatever the command is.
+       *
+       * Four branches below — the here-document write, `rm -f`, `mkdir` and
+       * `touch` — performed their mutation and answered `exitCode: 0` before
+       * `options.results` or `defaultExitCode` was ever read. A test that said
+       * `defaultExitCode: 1` was silently overruled for exactly the commands
+       * whose failure paths most needed staging: `captureWorkspaceBaseline`'s
+       * write, `plantChangeMarker`'s touch, and the agent runtime's install.
+       *
+       * The same lesson as the NUL guard above, one level out. A fake that
+       * cannot be told a command failed is not modelling a command; it is
+       * modelling the happy path and calling it a sandbox.
+       *
+       * Only failures return early. A configured *success* falls through so the
+       * branches keep doing their real work — writing the file, removing the
+       * path — which is what makes those tests verify state rather than an exit
+       * code.
+       */
+      const configured = options.results?.[rendered];
+      const exitCode = configured?.exitCode ?? options.defaultExitCode ?? 0;
+      if (exitCode !== 0) {
+        return {
+          exitCode,
+          durationMs: 5,
+          output: configured?.output ?? "",
+          timedOut: configured?.timedOut ?? false,
+        };
+      }
+
+      /*
+       * argv cannot carry a NUL, so neither may this fake.
+       *
+       * An argument list is a list of C strings and a C string ends at the
+       * first NUL byte, so an argument containing one cannot reach a process at
+       * all. Node refuses before it spawns — `ERR_INVALID_ARG_VALUE` — and
+       * `vercel/provider.ts` catches that throw and reports it as an ordinary
+       * failed command, which is what the caller sees.
+       *
+       * Modelled here because *not* modelling it cost four days. Sprint 0107
+       * changed `sandbox-runtime/changes.ts` to ask `find` for `-printf "%P\0"`
+       * with a real NUL byte — the escape belongs to `find`, which turns it
+       * into NUL itself, not to argv — and from that commit every agent run
+       * died at its first workspace listing, reported as `sandbox_lost`, while
+       * this fake happily answered with a file list and the whole suite stayed
+       * green.
+       *
+       * It is the same lesson the `sh -c` branch below already records, one
+       * layer down: a fake that accepts an argument list an operating system
+       * cannot carry is not modelling a process. Kept as a *result* rather than
+       * a throw so the failure arrives exactly where production puts it.
+       */
+      const parts = [input.command.command, ...input.command.args];
+      const nul = parts.findIndex((part) => part.includes("\0"));
+      if (nul !== -1) {
+        const argument = nul === 0 ? "'file'" : `'args[${nul - 1}]'`;
+        const received = parts[nul].replaceAll("\0", "\\x00");
+        return {
+          exitCode: 1,
+          durationMs: 0,
+          output: `TypeError: The argument ${argument} must be a string without null bytes. Received '${received}'`,
+          timedOut: false,
+        };
+      }
 
       // The loopback health probe, modelled as `curl` actually behaves: a
       // non-zero exit when nothing answers, and the status code on stdout when
@@ -387,9 +490,8 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         }
       }
 
-      const configured = options.results?.[rendered];
       return {
-        exitCode: configured?.exitCode ?? options.defaultExitCode ?? 0,
+        exitCode,
         durationMs: 10,
         output: configured?.output ?? "",
         timedOut: configured?.timedOut ?? false,
@@ -478,6 +580,15 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
   return {
     id: "vercel_sandbox",
     events,
+
+    writeFile(path: string, content: string) {
+      files[path] = content;
+      touch(path);
+    },
+
+    deleteFile(path: string) {
+      delete files[path];
+    },
 
     async create(input) {
       events.push({ kind: "create", input });

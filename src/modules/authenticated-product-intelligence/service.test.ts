@@ -528,6 +528,79 @@ describe("getDeepScanAccessStatus — safe projection", () => {
   });
 });
 
+/**
+ * The fourth read of one row (PERF-004).
+ *
+ * Both callers arrive from `requireProjectAccess`, which has already read the
+ * project and already compared its owner to the session. This function read it
+ * again — on Business Health, the most visited route in the product, that was
+ * the fourth read of the same row in one render.
+ *
+ * Counted rather than reasoned about, for the reason VB-022 gives: the read is
+ * correct at its own call site, and the cost only exists in the total.
+ */
+describe("getDeepScanAccessStatus — the project read", () => {
+  function countingClient(db: InstanceType<typeof FakeDatabase>) {
+    const reads: string[] = [];
+    const inner = fakeSupabase(db) as unknown as { from: (table: string) => unknown };
+    const supabase = {
+      from(table: string) {
+        reads.push(table);
+        return inner.from(table);
+      },
+    } as unknown as Parameters<typeof getDeepScanAccessStatus>[0];
+
+    return { supabase, projectsRead: () => reads.filter((table) => table === "projects").length };
+  }
+
+  it("reads the project when the caller has nothing to hand over", async () => {
+    const { db, projectId } = setup({ productionUrl: "https://acme.test" });
+    const { supabase, projectsRead } = countingClient(db);
+
+    await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER });
+
+    expect(projectsRead()).toBe(1);
+  });
+
+  it("does not read it again when the caller already proved it", async () => {
+    const { db, projectId } = setup({ productionUrl: "https://acme.test" });
+    const { supabase, projectsRead } = countingClient(db);
+
+    await getDeepScanAccessStatus(supabase, {
+      projectId,
+      userId: OWNER,
+      owned: { productionUrl: "https://acme.test" },
+    });
+
+    expect(projectsRead()).toBe(0);
+  });
+
+  it("gives the same answer either way", async () => {
+    const { db, supabase, projectId } = setup({ productionUrl: "https://acme.test" });
+    void db;
+
+    expect(
+      await getDeepScanAccessStatus(supabase, {
+        projectId,
+        userId: OWNER,
+        owned: { productionUrl: "https://acme.test" },
+      }),
+    ).toEqual(await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER }));
+  });
+
+  it("tells a project with no production URL apart from a project it cannot see", async () => {
+    /*
+     * Both used to end at a falsy `production_url`. They are different answers:
+     * a project with nothing configured has an entitlement status, and a
+     * project this user does not own has none.
+     */
+    const { supabase, projectId } = setup({ productionUrl: null });
+
+    expect(await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER })).not.toBeNull();
+    expect(await getDeepScanAccessStatus(supabase, { projectId, userId: INTRUDER })).toBeNull();
+  });
+});
+
 describe("audit events", () => {
   it("records start and completion without provider internals", async () => {
     const { db, supabase, projectId } = setup();

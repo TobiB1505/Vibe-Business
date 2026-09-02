@@ -41,7 +41,11 @@ export default async function ProjectDeepScanPage({
 
   const [deepScanAccess, latestSnapshot, latestLiveSnapshot, latestDeepScanSnapshot, latestSession] =
     await Promise.all([
-      getDeepScanAccessStatus(supabase, { projectId, userId }),
+      getDeepScanAccessStatus(supabase, {
+        projectId,
+        userId,
+        owned: { productionUrl: project.productionUrl },
+      }),
       getLatestSuccessfulSnapshot(supabase, projectId),
       getLatestSuccessfulLiveSnapshot(supabase, projectId),
       getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
@@ -74,11 +78,7 @@ export default async function ProjectDeepScanPage({
     : null;
 
   return (
-    <WorkspaceSection
-      id="deep-scan"
-      title="Deep Scan"
-      description="What your product looks like after signing in — the part repository and public-page evidence cannot reach."
-    >
+    <WorkspaceSection id="deep-scan">
       {deepScanModel ? (
         <DeepScanPanel projectId={project.id} model={deepScanModel} />
       ) : (

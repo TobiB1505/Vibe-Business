@@ -4,7 +4,7 @@ Owns the user's connected projects (`Project`, `RepositoryConnection` — see [A
 
 ## What exists (Sprint 1)
 
-- `connect.ts` — `createProjectWithRepository()`: creates a Project + its one RepositoryConnection in a single transaction, with duplicate-repository protection (unique constraint on `repository_connections.github_repository_id`). A failed connection insert rolls the project back; there is no compensating delete, because neither this path nor `disconnect.ts` may hold `DELETE` on `public.projects` any more — see [ADR 0056 §5](../../../docs/decisions/0056-lifecycle-erasure-and-retention.md).
+- `connect.ts` — `createProjectWithRepository()`: creates a Project + its one RepositoryConnection in a single transaction, with duplicate-repository protection (unique constraint on `repository_connections.github_repository_id`). A failed connection insert rolls the project back; there is no compensating delete, because no path in this module may hold `DELETE` on `public.projects` any more — which is also why the disconnect path that once did is gone, and detaching now leaves the project standing. See [ADR 0056 §5](../../../docs/decisions/0056-lifecycle-erasure-and-retention.md).
 - `attach.ts` — `attachRepositoryToProject()`: connects a repository to a project that already exists, which is what makes a detached project recoverable rather than an archive. Also `findReconnectInstallationId()`, which reads the project's connection *history* to send a reconnect straight to the right installation.
 - `repository-connection.ts` — the one place `repository_connections` is queried from. A detached row is history, not a connection; `liveConnections()` excludes it and `anyConnections()` says out loud that it wants it.
 

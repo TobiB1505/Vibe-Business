@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OPPORTUNITY_GENERATION_CONFIG } from "@/modules/ai/operations";
-import { getAuditCurrency } from "@/modules/business-audit/service";
+import { getAuditCurrency, type AuditEvidence } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAudit, getProjectAuditById } from "@/modules/business-audit/store";
 import { resolveMoveLineage, type MoveLineageMap } from "./lineage";
 import { OPPORTUNITY_PROMPT_VERSION } from "./prompt";
@@ -44,11 +44,29 @@ export type OpportunityReadiness = {
 export async function getOpportunityReadiness(
   supabase: SupabaseClient,
   projectId: string,
+  evidence?: AuditEvidence,
 ): Promise<OpportunityReadiness> {
   const [audit, currency] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
-    getAuditCurrency(supabase, projectId),
+    getAuditCurrency(supabase, projectId, evidence),
   ]);
+
+  return opportunityReadinessFrom({ audit, currency });
+}
+
+/**
+ * The same answer, from inputs the caller already holds (PERF-005).
+ *
+ * The Action Plan screen reads the audit and its currency anyway, for the
+ * per-Move readiness beside this. Asking for them twice on one render was two
+ * round trips and, when the audit document is one of them, a second transfer
+ * of a multi-hundred-kilobyte JSONB column.
+ */
+export function opportunityReadinessFrom(inputs: {
+  audit: Awaited<ReturnType<typeof getLatestSuccessfulAudit>>;
+  currency: Awaited<ReturnType<typeof getAuditCurrency>>;
+}): OpportunityReadiness {
+  const { audit, currency } = inputs;
 
   if (!audit?.result) return { ready: false, blockedReason: "audit_missing", auditId: null };
 

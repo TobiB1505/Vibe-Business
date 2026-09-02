@@ -1,4 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { meterSandboxUsage } from "@/modules/credits/meter";
+import type { SandboxUsageRow } from "@/modules/credits/projection";
+import { estimateSandboxCost } from "@/modules/economy/sandbox-usage-estimate";
+import { SANDBOX_RESOURCES } from "./budgets";
+import type { Database } from "@/types/database";
 import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type { ValidationDepth } from "./depth";
 import type { CleanupStatus } from "./orchestrator";
@@ -77,7 +82,19 @@ const COLUMNS =
   "status, stage, steps, failure_code, failure_detail, source_integrity, artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
-type Row = Record<string, unknown>;
+/**
+ * The row shape, from the generated schema (`src/types/README.md`).
+ *
+ * It was `Record<string, unknown>`, so the mapper below was unchecked: the
+ * compiler verified neither that a column exists nor that it holds what the
+ * mapper reads it as, and a renamed column would have passed `tsc`.
+ *
+ * The `as unknown as` at each read stays, for the reason the README gives —
+ * postgrest narrows a result by parsing the *literal* select string, and
+ * these columns are a shared runtime constant. The hop is unchecked; every
+ * property access after it is not.
+ */
+type Row = Database["public"]["Tables"]["validation_runs"]["Row"];
 
 function mapRow(row: Row): StoredValidationRun {
   return {
@@ -529,7 +546,15 @@ export async function recordSandboxUsage(
     failureDetail: string | null;
   },
 ): Promise<void> {
-  const { error } = await supabase.from("sandbox_usage_events").insert({
+  const estimate = estimateSandboxCost({
+    purpose: "change_validation",
+    sandboxDurationMs: params.sandboxDurationMs,
+    activeCpuMs: params.usage?.activeCpuDurationMs ?? null,
+    outboundBytes: params.usage?.networkEgressBytes ?? null,
+    vcpus: SANDBOX_RESOURCES.vcpus,
+  });
+
+  const { data, error } = await supabase.from("sandbox_usage_events").insert({
     project_id: params.projectId,
     user_id: params.userId,
     validation_run_id: params.validationRunId,
@@ -541,11 +566,26 @@ export async function recordSandboxUsage(
     active_cpu_ms: params.usage?.activeCpuDurationMs ?? null,
     network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
     network_egress_bytes: params.usage?.networkEgressBytes ?? null,
+    // What the provider said, which for a Vercel sandbox is nothing. Left
+    // exactly as it was: the estimate beside it is a different claim and gets
+    // its own columns (ADR 0073).
     provider_cost_usd: params.usage?.costUsd ?? null,
+    estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
+    cost_pricing_version: estimate.pricingVersion,
+    vcpus: estimate.vcpus,
     cleanup_status: params.cleanupStatus,
     failure_code: params.failureCode,
     failure_detail: params.failureDetail,
-  });
+  }).select("id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at").single();
+
+  /*
+   * Into the billing ledger immediately (ADR 0073).
+   *
+   * Not a batch, not a sweep, and not a repair pass an operator has to
+   * remember: the measurement and its projection are the same event, so the
+   * ledger that makes margin knowable is current by construction.
+   */
+  if (data) await meterSandboxUsage(supabase, data as unknown as SandboxUsageRow);
 
   // A ledger write must never take down the operation that earned it: the run
   // already happened and its verdict is real. Surfaced by absence in the

@@ -27,7 +27,7 @@ const FIRST_CUSTOMER = "/e2e/needs_user_first_customer";
 const STAGE = "/e2e/needs_user_stage";
 const NO_CONTEXT = "/e2e/needs_user_no_context";
 
-async function topOf(page: Page, locator: ReturnType<Page["getByText"]>): Promise<number> {
+async function topOf(locator: ReturnType<Page["getByText"]>): Promise<number> {
   const box = await locator.first().boundingBox();
   if (!box) throw new Error("element not visible");
   return box.y;
@@ -72,7 +72,7 @@ test.describe("what Vibe understood comes before what it asks (§11, §30)", () 
     const context = page.getByText(/worked that out from your product/i);
     await expect(context).toBeVisible();
 
-    expect(await topOf(page, context)).toBeLessThan(await topOf(page, heading));
+    expect(await topOf(context)).toBeLessThan(await topOf(heading));
   });
 
   /**

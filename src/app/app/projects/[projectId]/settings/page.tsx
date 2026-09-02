@@ -70,11 +70,7 @@ export default async function ProjectSettingsPage({
     : "/app/connect/github";
 
   return (
-    <WorkspaceSection
-      id="settings"
-      title="Project Settings"
-      description="What Vibe is connected to, what you have told it, and how to disconnect or delete it."
-    >
+    <WorkspaceSection id="settings">
       <div className="flex flex-col gap-5">
         {/*
           CORE-2a.3 §32, §33: this influences every audit, so it cannot be

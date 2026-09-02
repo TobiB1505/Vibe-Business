@@ -8,9 +8,9 @@ import {
   DOGFOOD_START_REFUSAL_LABELS,
 } from "@/modules/coding-agent/view";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
-import { startDogfoodRunAction, type StartDogfoodRunState } from "./actions";
+import { startAgentRunAction, type StartAgentRunState } from "./actions";
 
-const initialState: StartDogfoodRunState = null;
+const initialState: StartAgentRunState = null;
 
 /**
  * The one explicit authorization control (EXECUTION CORE-4 website gate,
@@ -23,7 +23,7 @@ const initialState: StartDogfoodRunState = null;
  * check makes the rare race harmless even so.
  */
 export function RunPanel({ projectId, stepKey }: { projectId: string; stepKey: string }) {
-  const action = startDogfoodRunAction.bind(null, projectId, stepKey);
+  const action = startAgentRunAction.bind(null, projectId, stepKey);
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (

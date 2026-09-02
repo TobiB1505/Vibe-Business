@@ -45,7 +45,7 @@ import {
   getOperationRun,
   type StoredOperationRun,
 } from "./store";
-import { expireStaleOperation } from "./staleness";
+import { expireStaleOperation, isPastStaleDeadline } from "./staleness";
 import { buildOperationView, type OperationView } from "./view";
 
 /**
@@ -427,15 +427,38 @@ export async function startBusinessAuditOperation(
  * page loads repair it once — and a no-op for `agent_execution` and every
  * never-billed operation type, which either have their own mechanism or none
  * to run (`staleness.ts`).
+ *
+ * ## Why the sweep runs second now (PERF-020)
+ *
+ * It used to run first, unconditionally. That opened a service-role client and
+ * read the run by primary key before this function read the run it was asked
+ * for — on every tick of every polling surface, for everyone signed in, to
+ * answer "no" essentially every time. This is the busiest read in the product.
+ *
+ * The order is reversed, not the guarantee. The read this function was going
+ * to make anyway is enough to tell whether a sweep could possibly do anything,
+ * and when it could, the sweep runs and the row is read back so the answer
+ * reflects it. A live run costs one round trip instead of two; a genuinely
+ * dead one costs three, once, and then it is not running any more.
+ *
+ * What is deliberately not done is deciding from that first read. It came
+ * through the caller's client and may be a moment old, so it filters and
+ * `expireStaleOperation` still re-reads under its own authority before it
+ * writes anything.
  */
 export async function getOperationStatus(
   supabase: SupabaseClient,
   params: { projectId: string; operationId: string },
 ): Promise<OperationView | null> {
-  await expireStaleOperation({ operationId: params.operationId });
-
   const operation = await getOperationRun(supabase, params);
-  return operation ? view(operation) : null;
+  if (!operation) return null;
+  if (!isPastStaleDeadline(operation)) return view(operation);
+
+  const { expired } = await expireStaleOperation({ operationId: params.operationId });
+  if (!expired) return view(operation);
+
+  const swept = await getOperationRun(supabase, params);
+  return swept ? view(swept) : null;
 }
 
 /** The live operation a reloaded project page should display (§19). */

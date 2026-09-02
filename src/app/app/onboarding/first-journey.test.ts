@@ -280,3 +280,35 @@ describe("the first journey speaks to a founder", () => {
     }
   });
 });
+
+/**
+ * What the step costs to render (PERF-006).
+ *
+ * This route is polled every 2.5 seconds while a scan runs, so a round trip
+ * here is paid over and over during the part of the product a founder sees
+ * first. Every read the step needs is gated on the onboarding record that is
+ * already in hand, and none depends on another — so they belong in one wave.
+ *
+ * Textual, because that is where the mistake lives: an `await` written into
+ * the gate, which reads perfectly well on its own line and costs a round trip
+ * that nothing was waiting for.
+ */
+describe("the onboarding step reads in one wave", () => {
+  it("asks for the step's reads together", () => {
+    expect(PAGE).toContain("] = await Promise.all([");
+  });
+
+  it("does not await inside a state gate", () => {
+    const gatedAwaits = PAGE.match(/onboarding\.state === "[a-z_]+"\s*\?\s*await /g) ?? [];
+    expect(gatedAwaits, "a conditional read was awaited on its own").toEqual([]);
+  });
+
+  /**
+   * The exception, and it is a real one: `auditFailure` is gated on `surface`,
+   * which is derived from `auditReadiness` in the wave above it. A read that
+   * genuinely depends on an earlier answer stays sequential.
+   */
+  it("keeps the one genuinely dependent read after what it depends on", () => {
+    expect(PAGE.indexOf("const surface =")).toBeLessThan(PAGE.indexOf("const auditFailure ="));
+  });
+});

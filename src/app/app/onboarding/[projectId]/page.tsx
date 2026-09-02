@@ -60,43 +60,59 @@ export default async function ProjectOnboardingPage({
   if (!onboarding) notFound();
   if (onboarding.state === "complete") redirect(`/app/projects/${projectId}`);
 
-  const scanEvents = onboarding.understandingOperation
-    ? await getProductScanEvents(supabase, {
-        projectId,
-        operationId: onboarding.understandingOperation.operationId,
-      })
-    : [];
-
-  const auditReadiness =
-    onboarding.productProfile?.stored.confirmedAt && !onboarding.audit
-      ? await getAuditReadiness(supabase, projectId)
-      : null;
-
   /*
-   * The scored document, read only in the state that renders it (VB-022).
+   * Everything the current step needs, in one wave (PERF-006).
    *
-   * `getProjectOnboarding` returns a stamp — that an audit exists, and when —
-   * because this route is polled throughout onboarding and the document is
-   * large. Here is the one state that needs its contents.
+   * Each of these is gated on `onboarding`, which is already in hand, and none
+   * of them depends on another — so awaiting them in sequence bought nothing
+   * and cost a round trip each. Most states switch on only one or two, but the
+   * ones that overlap are exactly the states this route is polled in every
+   * 2.5 seconds while a scan runs.
+   *
+   * The gates themselves are unchanged. A read that was conditional is still
+   * conditional; it now resolves to `null` in the same wave rather than being
+   * skipped in its own step.
+   *
+   * `revealedAudit` is the scored document, and the reason it is gated at all
+   * (VB-022): `getProjectOnboarding` returns only a stamp — that an audit
+   * exists, and when — because this route is polled and the document is large.
+   * This is the one state that needs its contents.
+   *
+   * `firstMovePlan` cannot exist the first time anyone reaches that state: a
+   * plan requires an explicit, paid "Plan this move" click from the workspace,
+   * which is reachable only after onboarding completes. It is read for whoever
+   * returns with one already in place (Rule 60: this page never starts that
+   * paid call itself), and every field it produces is nullable by design.
    */
-  const revealedAudit =
-    onboarding.state === "audit_reveal"
-      ? await getLatestSuccessfulAudit(supabase, projectId)
-      : null;
-  const opportunityOperation =
-    onboarding.state === "first_move"
-      ? await getActiveOpportunityOperation(supabase, projectId)
-      : null;
-  /*
-   * A plan cannot exist yet the first time anyone reaches this state — it
-   * requires an explicit, paid "Plan this move" click from the workspace,
-   * which is reachable only after onboarding completes. This read exists for
-   * whoever returns to onboarding with one already in place (Rule 60: this
-   * page never starts that paid call itself), and every field it produces is
-   * nullable by design — nothing here is a completion prerequisite.
-   */
-  const firstMovePlan =
-    onboarding.state === "first_move" ? await getOnboardingFirstMove(supabase, projectId) : null;
+  const [
+    scanEvents,
+    auditReadiness,
+    revealedAudit,
+    opportunityOperation,
+    firstMovePlan,
+    understandingFailure,
+  ] = await Promise.all([
+    onboarding.understandingOperation
+      ? getProductScanEvents(supabase, {
+          projectId,
+          operationId: onboarding.understandingOperation.operationId,
+        })
+      : [],
+    onboarding.productProfile?.stored.confirmedAt && !onboarding.audit
+      ? getAuditReadiness(supabase, projectId)
+      : null,
+    onboarding.state === "audit_reveal" ? getLatestSuccessfulAudit(supabase, projectId) : null,
+    onboarding.state === "first_move" ? getActiveOpportunityOperation(supabase, projectId) : null,
+    onboarding.state === "first_move" ? getOnboardingFirstMove(supabase, projectId) : null,
+    /*
+     * The last attempt, when it failed and the founder has not been told
+     * (UI-S1 §15). Read only for the step that is on screen: a failed
+     * understanding run is irrelevant once a profile exists.
+     */
+    onboarding.state === "product_scanning" && !onboarding.understandingOperation
+      ? getLastFailedOperation(supabase, { projectId, operationType: "product_scan" })
+      : null,
+  ]);
 
   /*
    * What the audit step should show (UI-S1 §9–§12).
@@ -117,18 +133,10 @@ export default async function ProjectOnboardingPage({
       : null;
 
   /*
-   * The last attempt, when it failed and the founder has not been told
-   * (UI-S1 §15). Read only for the step that is on screen: a failed
-   * understanding run is irrelevant once a profile exists, and a failed audit
-   * is irrelevant while one is running.
+   * The one read that is genuinely sequential: it is gated on `surface`, which
+   * is derived from `auditReadiness` above. A failed audit is irrelevant while
+   * one is running, so the gate is the point rather than an obstacle.
    */
-  const understandingFailure =
-    onboarding.state === "product_scanning" && !onboarding.understandingOperation
-      ? await getLastFailedOperation(supabase, {
-          projectId,
-          operationType: "product_scan",
-        })
-      : null;
   const auditFailure =
     surface === "ready_to_start"
       ? await getLastFailedOperation(supabase, { projectId, operationType: "business_audit" })

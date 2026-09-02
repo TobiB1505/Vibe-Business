@@ -26,12 +26,19 @@ import {
  * 2. the read-back equals the approved commit
  * 3. the capability has a deterministic verifier
  * 4. a safe public origin exists
+ * 5. the verifier has something to look at for *this* change
  * ```
  *
  * Blocked, failed and unmerged merges are not verifiable and never become so.
  * There is deliberately no AI fallback for an unsupported capability (§10): a
  * model asked to invent success criteria after the fact would produce criteria
  * that always seem to be met, which is the most expensive kind of nothing.
+ *
+ * Gate 5 arrived with the agentic profile (ADR 0071) and is the one refusal
+ * here that is not about coverage. A capability whose contract is derived from
+ * the change rather than from the generator can be perfectly supported and
+ * still have nothing public to observe — a backend-only commit — which is
+ * `outcome_no_public_surface`, not `outcome_not_supported`.
  *
  * ## Why the origin is resolved here rather than accepted
  *
@@ -172,6 +179,16 @@ export async function evaluateOutcomeEligibility(
     capability: prepared.capability,
     publicOrigin: origin.origin,
     repository: snapshot?.result ?? null,
+    // Vibe's own observation of the commit, not the agent's account of it
+    // (rule 77). The SEO contract ignores it; the agentic one is derived from
+    // it, which is what makes that contract about *this* change.
+    //
+    // Removed paths are held out. The agentic contract asks whether the routes
+    // this change touched still answer, and a route the change deleted is
+    // supposed to be gone — expecting a 200 from it would fail a correct
+    // change. A change that only removes files therefore supports no outcome
+    // contract, which is reported as exactly that rather than as a failure.
+    changedPaths: prepared.files.filter((file) => file.status !== "deleted").map((file) => file.path),
   });
 
   if (!contract.supported) return { eligible: false, reason: contract.reason };

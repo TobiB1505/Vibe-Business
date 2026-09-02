@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type {
   CaptureStatus,
@@ -33,7 +34,19 @@ const COLUMNS =
   "after_width, after_height, before_captured_at, after_captured_at, status, failure_code, " +
   "review_identity, created_at, updated_at, expires_at";
 
-type Row = Record<string, unknown>;
+/**
+ * The row shape, from the generated schema (`src/types/README.md`).
+ *
+ * It was `Record<string, unknown>`, so the mapper below was unchecked: the
+ * compiler verified neither that a column exists nor that it holds what the
+ * mapper reads it as, and a renamed column would have passed `tsc`.
+ *
+ * The `as unknown as` at each read stays, for the reason the README gives —
+ * postgrest narrows a result by parsing the *literal* select string, and
+ * these columns are a shared runtime constant. The hop is unchecked; every
+ * property access after it is not.
+ */
+type Row = Database["public"]["Tables"]["review_artifacts"]["Row"];
 
 function mapRow(row: Row): ReviewArtifact {
   return {
@@ -317,49 +330,3 @@ export async function completeReviewArtifact(
   return (data ?? []).length > 0;
 }
 
-/**
- * Records browser spend (§22, §53).
- *
- * Called only from durable execution, under the service-role client. The table
- * has **no INSERT policy** — a request-bound write would be refused by RLS and,
- * if that failure were swallowed the way a best-effort ledger write usually is,
- * the spend would vanish silently. That is exactly what happened to preview
- * usage in Sprint 10B, and it is why this write lives where it does.
- *
- * The unique index on `review_artifact_id` makes a retry safe: a second insert
- * loses at the database rather than double-counting a session that ran once.
- */
-export async function recordReviewBrowserUsage(
-  supabase: SupabaseClient,
-  params: {
-    projectId: string;
-    userId: string;
-    reviewArtifactId: string;
-    provider: ReviewProviderId;
-    status: "ready" | "failed";
-    durationMs: number;
-    captures: number;
-    failureCode: ReviewFailureCode | null;
-  },
-): Promise<void> {
-  const { error } = await supabase.from("review_browser_usage").insert({
-    project_id: params.projectId,
-    user_id: params.userId,
-    review_artifact_id: params.reviewArtifactId,
-    operation: "change_review",
-    provider: params.provider,
-    status: params.status,
-    duration_ms: Math.max(0, Math.round(params.durationMs)),
-    captures: params.captures,
-    // Browserbase reports no attributable price with a session. A figure
-    // derived from a public rate card would be a guess wearing an accounting
-    // figure's clothes.
-    provider_cost_usd: null,
-    failure_code: params.failureCode,
-  });
-
-  // A ledger write must never take down the review that earned it — the browser
-  // already ran and the spend is real either way. The unique index means a
-  // retried terminal step lands here and loses, which is the outcome wanted.
-  if (error) return;
-}

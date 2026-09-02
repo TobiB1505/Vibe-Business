@@ -226,8 +226,20 @@ describe("the stepper owns selection without owning business state", () => {
 
   it("loads existing readiness per Move rather than deriving it in the browser", () => {
     expect(MOVES_PAGE).toContain("planReadinessByOpportunity");
-    expect(MOVES_PAGE).toContain("getActionPlanReadiness(supabase, projectId, opportunity.id)");
+    expect(MOVES_PAGE).toContain("actionPlanReadinessFrom(readinessInputs, opportunity.id)");
     expect(WORKSPACE).not.toContain("executionReadiness === \"ready\"");
+  });
+
+  /**
+   * Same answer, one read (PERF-005). Every input readiness rests on is
+   * project-scoped, so asking per Move was three avoidable round trips each —
+   * about forty queries on a five-Move screen. The guard is textual because
+   * that is where the mistake lives: an `await` inside the map over Moves.
+   */
+  it("asks the database once for what every Move shares", () => {
+    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId)");
+    expect(MOVES_PAGE).not.toContain("await getActionPlanReadiness(");
+    expect(MOVES_PAGE).not.toContain("getOpportunityReadiness(supabase");
   });
 
   it("keeps the one primary Move action in the detail region", () => {
@@ -473,7 +485,7 @@ describe("the plan hands off to the agent, and the agent points back", () => {
   it("starts only through the existing freshly admitted server action", () => {
     expect(AGENT_PAGE).toContain("resolveDogfoodPlanRoutes");
     expect(AGENT_READY).toContain("startAction");
-    expect(AGENT_START).toContain("startDogfoodRunAction");
+    expect(AGENT_START).toContain("startAgentRunAction");
     expect(DOGFOOD_ACTIONS).toContain("previewDogfoodStep");
     expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
     expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");

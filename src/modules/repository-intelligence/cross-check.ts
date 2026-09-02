@@ -142,7 +142,7 @@ export function buildIntelligenceCrossChecks(
     });
   }
 
-  checks.push(...crossCheckSignedInProduct(live, authenticated, { livePricing, liveCheckout }));
+  checks.push(...crossCheckSignedInProduct(authenticated, { livePricing, liveCheckout }));
 
   return checks;
 }
@@ -157,7 +157,6 @@ export function buildIntelligenceCrossChecks(
  * healthy.
  */
 function crossCheckSignedInProduct(
-  live: LiveProductIntelligenceSnapshot,
   authenticated: AuthenticatedProductIntelligenceSnapshot | null,
   publicSurfaces: { livePricing: boolean; liveCheckout: boolean },
 ): IntelligenceCrossCheck[] {

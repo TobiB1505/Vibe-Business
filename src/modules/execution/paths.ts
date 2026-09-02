@@ -1,5 +1,10 @@
 import { isForbiddenExecutionPath } from "@/modules/execution-contract/policy";
-import { AGENTIC_EXECUTION_CAPABILITY, type ExecutionCapability } from "./schema";
+import {
+  AGENTIC_EXECUTION_CAPABILITY,
+  isAgenticCapability,
+  type AgenticExecutionCapability,
+  type ExecutionCapability,
+} from "./schema";
 
 /**
  * Where a capability is allowed to write (Sprint 9 §13, §32).
@@ -32,7 +37,9 @@ import { AGENTIC_EXECUTION_CAPABILITY, type ExecutionCapability } from "./schema
  * {@link checkWritePath}.
  */
 const CAPABILITY_BASENAMES: Record<
-  Exclude<ExecutionCapability, typeof AGENTIC_EXECUTION_CAPABILITY>,
+  // Both agentic capabilities are excluded: neither writes a fixed set of
+  // basenames, which is the whole difference between a generator and an agent.
+  Exclude<ExecutionCapability, AgenticExecutionCapability>,
   readonly string[]
 > = {
   nextjs_seo_foundations_v1: ["robots.ts", "sitemap.ts"],
@@ -114,7 +121,11 @@ export function checkWritePath(path: string, capability: ExecutionCapability): P
    * pretended otherwise would either block real work or be a name for nothing.
    * Blast radius is bounded by count and bytes instead — `checkWriteScope`.
    */
-  if (capability === AGENTIC_EXECUTION_CAPABILITY) {
+  // Both agentic capabilities, not only the current one: a v1 change still on a
+  // branch is re-checked under the same rule it was written under, and the rule
+  // did not change — ADR 0074 widened what may be *removed*, and a removal goes
+  // through this same call.
+  if (isAgenticCapability(capability)) {
     return isForbiddenExecutionPath(path) ? { ok: false, reason: "forbidden_location" } : { ok: true };
   }
 

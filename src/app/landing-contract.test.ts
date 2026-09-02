@@ -43,9 +43,9 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
 /*
  * The proof section the landing page actually renders (UI-19).
  *
- * It was `business-map-preview.tsx` until the redesign; nothing imports that
- * file any more, and a contract pointed at an unrendered component guards
- * nothing. This is the component a visitor meets.
+ * A contract pointed at an unrendered component guards nothing, so this is the
+ * component a visitor meets. Its predecessor survived the redesign as an
+ * unimported file for a while and has since been deleted.
  */
 const PROOF = read("src/components/marketing/landing-business-brain.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");
@@ -95,6 +95,21 @@ describe("the landing page sends people the right way", () => {
     expect(firstCta).toBeGreaterThan(-1);
     // Either the page offers no sign-in of its own, or sign-up comes first.
     if (firstSignIn > -1) expect(firstCta).toBeLessThan(firstSignIn);
+  });
+
+  /**
+   * A paid plan's button says where it was going.
+   *
+   * Every plan card pointed at `/signup` and stopped there, so a visitor who
+   * had just chosen Builder landed signed in with no mention of paying and no
+   * route to it — the one real gap on a pricing section that was otherwise
+   * complete. Asserted here rather than in a component test because it is a
+   * claim about the page a stranger sees.
+   */
+  it("carries a chosen paid plan through signup to the billing surface", () => {
+    expect(LANDING).toContain('/signup?next=${encodeURIComponent("/app/billing")}');
+    // The free plan has nothing to pay for, so it keeps the plain destination.
+    expect(LANDING).toContain('plan.key === "free"');
   });
 
   it("still offers signing in, on every public page", () => {

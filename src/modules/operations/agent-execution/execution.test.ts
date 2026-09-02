@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeAgentSpec, fakeDetachedAgentProvider } from "@/modules/coding-agent/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
-import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
+import { agentSandboxNameFor, computeCandidateDigest } from "@/modules/coding-agent/identity";
 import type { BaseContentPort, BaseTreePort } from "@/modules/coding-agent/candidate";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
-import { runtimeFounderInputRequirement } from "@/modules/founder-input/runtime";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import {
   DEPENDENCY_HOSTS,
@@ -79,6 +78,13 @@ function fakeGit() {
     async createTree(input) {
       writes += 1;
       for (const file of input.files) {
+        // A null blob is the removal shape: the entry drops out of the base
+        // tree. Modelled rather than ignored, so a read-back that asserts a
+        // path is gone is asserting against a tree that actually lost it.
+        if (file.blobSha === null) {
+          tree.delete(file.path);
+          continue;
+        }
         const content = blobs.get(file.blobSha);
         if (content !== undefined) tree.set(file.path, content);
       }
@@ -184,6 +190,8 @@ function target(): AgentRepositoryTarget {
 }
 
 const SANDBOX_HOME = "/vercel/sandbox";
+/** The workspace root inside the sandbox, as `SANDBOX_FILES` spells it. */
+const SANDBOX_WORKSPACE = "product";
 
 /**
  * Commands every agent step depends on the sandbox answering.
@@ -505,165 +513,30 @@ describe("§37 — the paid loop runs at most once", () => {
     expect(db.rows("agent_execution_runs")[0]).toMatchObject({ duration_ms: 1_234 });
   });
 
-  it("records the tool trail and the activity trail even on failure", async () => {
-    const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
-    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+  /*
+   * `agent_tool_events` and `agent_activity_events` are no longer written.
+   *
+   * This asserted two allowed-then-denied rows and a non-empty activity list,
+   * and it passed because the fake invoked a broker. Production has written
+   * neither table since ADR 0029 — the harness never calls back — so the rows
+   * this asserted have not existed for any real run. What a run did is in
+   * `agent_execution_events`, from the harness's own feed.
+   */
 
-    const provider = fakeDetachedAgentProvider({
-      calls: [
-        { tool: "read_file", input: { path: "src/app/page.tsx" } },
-        { tool: "read_file", input: { path: ".env" } },
-      ],
-      outcome: "provider_error",
-    });
-
-    await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, ["typecheck"]);
-
-    const events = db.rows("agent_tool_events");
-    expect(events).toHaveLength(2);
-    expect(events.map((event) => event.decision)).toEqual(["allowed", "denied"]);
-    expect(db.rows("agent_activity_events").length).toBeGreaterThan(0);
-  });
 });
 
 describe("§25 — a question pauses the run", () => {
-  it("persists the interrupt, pauses both records, and does not proceed", async () => {
-    const { operation, run } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
-    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
-
-    const provider = fakeDetachedAgentProvider({
-      calls: [
-        { tool: "request_decision", input: { situation: "business_decision_required" } },
-        { tool: "write_file", input: { path: "src/app/page.tsx", content: "changed" } },
-      ],
-    });
-
-    const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
-      "typecheck",
-    ]);
-
-    // The pause happens at start, before there is anything to watch or collect.
-    expect(outcome).toEqual({ ok: true, paused: true, changedPaths: null, observedPathCount: 0 });
-
-    const interrupts = db.rows("execution_interrupts");
-    expect(interrupts).toHaveLength(1);
-    expect(interrupts[0]).toMatchObject({
-      status: "open",
-      interrupt_type: "business_decision_required",
-      agent_execution_run_id: run.id,
-    });
-
-    expect(db.rows("agent_execution_runs")[0].status).toBe("needs_user_input");
-    expect(db.rows("operation_runs")[0].status).toBe("needs_user");
-
-    // The write after the question was never attempted.
-    expect(provider.attempted.map((entry) => entry.tool)).toEqual(["request_decision"]);
-  });
-
-  it("turns a sandbox-discovered ambiguity into the canonical founder-input request", async () => {
-    const { operation, run } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
-    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
-
-    const provider = fakeDetachedAgentProvider({
-      outcome: "aborted",
-      runtimeFounderInput: {
-        kind: "decision",
-        question: "Which launch audience should this change target?",
-        options: ["Existing customers", "Invite-only beta"],
-      },
-    });
-    const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
-      "typecheck",
-    ]);
-
-    expect(outcome).toEqual({
-      ok: true,
-      paused: true,
-      observedPathCount: 0,
-      changedPaths: null,
-    });
-    expect(db.rows("execution_interrupts")).toHaveLength(1);
-    expect(db.rows("execution_interrupts")[0]).toMatchObject({
-      agent_execution_run_id: run.id,
-      interrupt_type: "business_decision_required",
-      status: "open",
-    });
-    expect(db.rows("project_founder_input_requests")).toHaveLength(1);
-    expect(db.rows("project_founder_input_requests")[0]).toMatchObject({
-      origin: "execution_blocker",
-      input_kind: "decision",
-      response_type: "single_select",
-      question: "Which launch audience should this change target?",
-      alternatives: [
-        { id: "option-1", label: "Existing customers", value: "Existing customers", explanation: null },
-        { id: "option-2", label: "Invite-only beta", value: "Invite-only beta", explanation: null },
-      ],
-      status: "open",
-    });
-    expect(db.rows("agent_execution_runs")[0].status).toBe("needs_user_input");
-    expect(db.rows("operation_runs")[0].status).toBe("needs_user");
-  });
-
-  it("does not ask again when the immutable spec already contains the resolution", async () => {
-    const draft = {
-      kind: "decision" as const,
-      question: "Which launch audience should this change target?",
-      options: ["Existing customers", "Invite-only beta"],
-    };
-    const requirement = runtimeFounderInputRequirement({
-      stepKey: fakeAgentSpec().stepKey,
-      draft,
-    });
-    expect(requirement).not.toBeNull();
-    if (!requirement) return;
-
-    const { operation } = seed();
-    const specRow = db.rows("execution_specs")[0];
-    const persistedSpec = specRow.spec as ReturnType<typeof fakeAgentSpec>;
-    specRow.spec = {
-      ...persistedSpec,
-      businessContext: {
-        ...persistedSpec.businessContext,
-        approvedDecisions: [
-          {
-            key: `decision:${requirement.subjectKey}`,
-            stepOrder: null,
-            decision: "Use an invite-only beta.",
-          },
-        ],
-      },
-    };
-
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
-    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
-    const provider = fakeDetachedAgentProvider({
-      outcome: "aborted",
-      runtimeFounderInput: draft,
-    });
-
-    const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
-      "typecheck",
-    ]);
-
-    expect(outcome).toEqual({ ok: false, failureCode: "inference_interrupted" });
-    expect(db.rows("execution_interrupts")).toHaveLength(0);
-    expect(db.rows("project_founder_input_requests")).toHaveLength(0);
-  });
-
-  /**
-   * ADR 0042 §P2 — a question that pauses the run releases its Credits with
-   * `abandoned_with_usage`: real inference already ran to reach the interrupt
-   * (the activity and tool events recorded above are proof of that), so this
-   * is neither `cancelled_before_usage` nor a failure — Vibe already paid the
-   * provider, and the release says so.
+  /*
+   * The in-process twin of the test below is gone.
    *
-   * There is no re-acquire on this operation: resolving the founder input
-   * terminalizes this immutable attempt. Fresh admission creates a new spec,
-   * operation, run, and reservation after the resolution commits.
+   * It drove `request_decision` through the fake's brokered tool loop, which is
+   * how a question reached Vibe when the harness ran in this process. Under ADR
+   * 0029 it reports through the runtime protocol instead, and the test that
+   * follows asserts the same three things — the interrupt row, the founder
+   * input request, and the paused outcome — through the path production
+   * actually takes.
    */
+
   it("releases the hold with abandoned_with_usage when a question pauses a funded run", async () => {
     const { operation, run } = seed();
     db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
@@ -692,7 +565,14 @@ describe("§25 — a question pauses the run", () => {
     const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
     await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
     const provider = fakeDetachedAgentProvider({
-      calls: [{ tool: "request_decision", input: { situation: "business_decision_required" } }],
+      outcome: "aborted",
+      // How a question actually reaches Vibe: the harness reports it in its
+      // result through the runtime protocol, and the observe step raises it.
+      runtimeFounderInput: {
+        kind: "decision",
+        question: "Which launch audience should this change target?",
+        options: ["Existing customers", "Invite-only beta"],
+      },
     });
 
     const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
@@ -709,49 +589,65 @@ describe("§25 — a question pauses the run", () => {
 });
 
 describe("§27, §28 — Vibe computes and checks the change", () => {
-  async function runToChange(calls: { tool: string; input: unknown }[]) {
+  /**
+   * A run that changed something, changed the way a run actually changes it.
+   *
+   * This used to script brokered tool calls and let the gateway apply them, so
+   * the change arrived through Vibe. Under ADR 0029 nothing does: the harness
+   * edits files inside the VM and Vibe walks the filesystem afterwards. The
+   * writes therefore go into the sandbox from `onStart`, which is where the
+   * harness is conceptually running — and the observation has to find them on
+   * its own, which is the property these tests are for.
+   */
+  async function runToChange(writes: { path: string; content: string }[]) {
     const { operation } = seed();
     const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
-    const shared = deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider({ calls }) });
+    const shared = deps({
+      sandboxProvider: sandbox,
+      provider: fakeDetachedAgentProvider({
+        calls: writes.map(() => ({ tool: "write_file", input: {} })),
+        onStart: () => {
+          for (const write of writes) {
+            sandbox.writeFile(`${SANDBOX_WORKSPACE}/${write.path}`, write.content);
+          }
+        },
+      }),
+    });
 
     await provisionAgentWorkspaceStep(shared, operation.id);
-    await runAgent(shared, operation.id, ["typecheck", "test", "build"]);
-    return { operation, shared, sandbox };
+    const agent = await runAgent(shared, operation.id, ["typecheck", "test", "build"]);
+    // Exactly what the workflow passes to the extract step: the filesystem
+    // observation the agent step made while the sandbox was still alive.
+    const observed = agent.ok && agent.changedPaths ? [...agent.changedPaths] : null;
+    return { operation, shared, sandbox, observed };
   }
 
   it("refuses a run that changed nothing", async () => {
-    const { operation, shared } = await runToChange([
-      { tool: "read_file", input: { path: "src/app/page.tsx" } },
-    ]);
+    // The agent read and wrote nothing, so the filesystem is as it was.
+    const { operation, shared, observed } = await runToChange([]);
 
-    const outcome = await extractAndVerifyStep(shared, operation.id);
+    const outcome = await extractAndVerifyStep(shared, operation.id, observed);
     expect(outcome).toEqual({ ok: false, failureCode: "agent_produced_no_change" });
   });
 
   it("refuses a change whose bytes reproduce the base exactly", async () => {
-    const { operation, shared } = await runToChange([
-      {
-        tool: "write_file",
-        input: {
-          path: "src/app/page.tsx",
-          content: "export default function Page() { return null; }\n",
-        },
-      },
+    const { operation, shared, observed } = await runToChange([
+      { path: "src/app/page.tsx", content: "export default function Page() { return null; }\n" },
     ]);
 
-    const outcome = await extractAndVerifyStep(shared, operation.id);
+    const outcome = await extractAndVerifyStep(shared, operation.id, observed);
     // The write was brokered, the file is on disk, and it is identical to the
     // base — so there is no change, and no reviewable artifact is created.
     expect(outcome).toEqual({ ok: false, failureCode: "agent_produced_no_change" });
   });
 
   it("accepts a real change and hands back exactly what will be written", async () => {
-    const { operation, shared } = await runToChange([
-      { tool: "write_file", input: { path: "src/app/page.tsx", content: "export default () => <b/>;\n" } },
-      { tool: "write_file", input: { path: "src/app/new.tsx", content: "export const x = 1;\n" } },
+    const { operation, shared, observed } = await runToChange([
+      { path: "src/app/page.tsx", content: "export default () => <b/>;\n" },
+      { path: "src/app/new.tsx", content: "export const x = 1;\n" },
     ]);
 
-    const outcome = await extractAndVerifyStep(shared, operation.id);
+    const outcome = await extractAndVerifyStep(shared, operation.id, observed);
 
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
@@ -840,18 +736,20 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     const shared = deps({
       sandboxProvider: sandbox,
       provider: fakeDetachedAgentProvider({
-        calls: [
-          {
-            tool: "write_file",
-            input: { path: "src/app/page.tsx", content: "export default () => <b/>;\n" },
-          },
-        ],
+        calls: [{ tool: "write_file", input: {} }],
+        // The harness writes inside the VM; Vibe finds it by walking after.
+        onStart: () =>
+          sandbox.writeFile(
+            `${SANDBOX_WORKSPACE}/src/app/page.tsx`,
+            "export default () => <b/>;\n",
+          ),
       }),
     });
 
     await provisionAgentWorkspaceStep(shared, operation.id);
-    await runAgent(shared, operation.id, ["typecheck"]);
-    const extracted = await extractAndVerifyStep(shared, operation.id);
+    const agent = await runAgent(shared, operation.id, ["typecheck"]);
+    const observed = agent.ok && agent.changedPaths ? [...agent.changedPaths] : null;
+    const extracted = await extractAndVerifyStep(shared, operation.id, observed);
     if (!extracted.ok) throw new Error("fixture did not produce a change");
 
     return { operation, run, shared, extracted };
@@ -996,6 +894,73 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     expect(git.writes).toBe(0);
   });
 
+  /**
+   * A run that removed a file (ADR 0074).
+   *
+   * The deletion is made the way production makes one — the file disappears
+   * from the workspace, and Vibe finds out by walking it. Nothing in this test
+   * tells the pipeline that a deletion happened; the observation does.
+   */
+  describe("a change that removes a file", () => {
+    async function preparedWithDeletion() {
+      const { operation, run } = seed();
+      const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+      const shared = deps({
+        sandboxProvider: sandbox,
+        provider: fakeDetachedAgentProvider({
+          calls: [{ tool: "write_file", input: {} }],
+          onStart: () => sandbox.deleteFile(`${SANDBOX_WORKSPACE}/src/app/page.tsx`),
+        }),
+      });
+
+      await provisionAgentWorkspaceStep(shared, operation.id);
+      const agent = await runAgent(shared, operation.id, ["typecheck"]);
+      const observed = agent.ok && agent.changedPaths ? [...agent.changedPaths] : null;
+      const extracted = await extractAndVerifyStep(shared, operation.id, observed);
+      if (!extracted.ok) throw new Error("fixture did not produce a change");
+
+      return { operation, run, shared, extracted };
+    }
+
+    it("records the removed path as a deletion, with no hash and no bytes", async () => {
+      const { operation, shared, extracted } = await preparedWithDeletion();
+
+      const outcome = await writeAgentBranchStep(
+        shared,
+        operation.id,
+        extracted.observedPaths,
+        extracted.candidateDigest,
+      );
+
+      expect(outcome.ok).toBe(true);
+
+      const change = db.rows("prepared_changes")[0] as { files: Record<string, unknown>[] };
+      expect(change.files).toEqual([{ path: "src/app/page.tsx", status: "deleted" }]);
+    });
+
+    /**
+     * The digest binds the deletion set, not only the bytes.
+     *
+     * Without this, a run whose only difference was *which* files it removed
+     * would reproduce the digest the first pass computed, and the write step
+     * would happily write a different change than the one that was verified.
+     */
+    it("refuses when the deletion set does not hash to the digest it was given", async () => {
+      const { operation, shared, extracted } = await preparedWithDeletion();
+
+      const outcome = await writeAgentBranchStep(
+        shared,
+        operation.id,
+        extracted.observedPaths,
+        // The digest of the same run with nothing removed.
+        computeCandidateDigest([]),
+      );
+
+      expect(outcome).toEqual({ ok: false, failureCode: "agent_change_rejected" });
+      expect(git.writes).toBe(0);
+    });
+  });
+
   it("records the change under the agentic capability, with no opportunity set", async () => {
     const { operation, shared, extracted } = await prepared();
 
@@ -1008,8 +973,8 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
 
     const change = db.rows("prepared_changes")[0];
     expect(change).toMatchObject({
-      execution_capability: "agentic_execution_v1",
-      execution_version: "agentic-execution-v1",
+      execution_capability: "agentic_execution_v2",
+      execution_version: "agentic-execution-v2",
       opportunity_set_id: null,
       opportunity_id: null,
       status: "prepared",
@@ -1040,7 +1005,38 @@ describe("§20, §35 — cleanup and settlement", () => {
       network_egress_bytes: 1_024,
       // Unknown is not zero: Vercel exposes no attributable per-sandbox cost.
       provider_cost_usd: null,
+      // And Vibe's own derivation beside it, which is a different claim and
+      // says so by living in different columns (ADR 0073). Before this the
+      // sandbox half of every run's cost was simply absent from the ledger.
+      //
+      // The rate card and the allocation are recorded even here, where the
+      // estimate itself is refused: they are facts about what the sandbox ran
+      // under, and knowing which card *would* have priced a row is what makes
+      // the refusal readable rather than blank.
+      cost_pricing_version: "vercel-sandbox-2026-08-20",
+      vcpus: 4,
+      /*
+       * And no figure, because this fixture records CPU but no wall-clock
+       * lifetime — so the memory term is unknown and the total would be a
+       * floor. A floor written into a cost column reads as the whole bill,
+       * which is the failure `economy/cost.ts` exists to prevent. The
+       * arithmetic for a fully measured sandbox is pinned in
+       * `economy/sandbox-usage-estimate.test.ts`.
+       */
+      estimated_cost_nano_usd: null,
     });
+
+    /*
+     * And straight into the billing ledger (ADR 0073).
+     *
+     * `billing_usage_events` is what makes margin knowable, and its only writer
+     * was a repair pass an operator ran by hand — so on 2026-09-02 its newest
+     * row was six days old and the run this sprint is about appeared in it
+     * nowhere. The measurement and its projection are now the same event.
+     */
+    const metered = db.rows("billing_usage_events");
+    expect(metered.length).toBeGreaterThan(0);
+    expect(metered.map((row) => (row as { sku: string }).sku)).toContain("sandbox_active_cpu_ms");
   });
 
   it("names the sandbox after the attempt, not the identity", () => {
@@ -1129,8 +1125,8 @@ describe("§20, §35 — cleanup and settlement", () => {
 describe("the sandbox-hosted harness", () => {
   const HOME = "/vercel/sandbox";
   const LIST =
-    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\0";
-  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\0`;
+    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage -o -name .swc -o -path */.well-known/workflow/* ) -prune -o -type f -printf %P\\0";
+  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage -o -name .swc -o -path */.well-known/workflow/* ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\\0`;
 
   /** The workspace as the fake sandbox reports it, before and after the run. */
   function walk(options: { before: string[]; after: string[]; touched: string[] }) {
@@ -1229,9 +1225,9 @@ describe("the sandbox-hosted harness", () => {
       // The write lands in the fake's own filesystem, and the marker plus
       // `find -newer` is what finds it again. Nothing consults the tool trail.
       provider: fakeDetachedAgentProvider({
-        calls: [
-          { tool: "write_file", input: { path: "src/app/robots.ts", content: "export const x = 1;\n" } },
-        ],
+        calls: [{ tool: "write_file", input: {} }],
+        onStart: () =>
+          sandbox.writeFile(`${SANDBOX_WORKSPACE}/src/app/robots.ts`, "export const x = 1;\n"),
       }),
     });
 
@@ -1322,6 +1318,80 @@ describe("the sandbox-hosted harness", () => {
       failureCode: "sandbox_lost",
     });
     expect(provider.starts()).toBe(0);
+  });
+
+  /**
+   * The four days, and why they were four days rather than an hour.
+   *
+   * A real `find` argument carried a NUL byte, so no process could be started
+   * with it. The provider said so in one sentence — `TypeError: The argument
+   * 'args[31]' must be a string without null bytes` — and every layer above
+   * threw the sentence away: the listing returned `truncated`, the baseline
+   * returned `false`, and the step returned `sandbox_lost`, a failure code with
+   * no detail field at all. Every run since 2026-08-28 ended there, saying
+   * nothing.
+   *
+   * So the assertion is not that the run fails. It is that the run explains
+   * itself: which observation broke, what the command said, and what the
+   * provider reports about the sandbox — the last from `inspect()`, which had
+   * an implementation, a test, and no production caller until this path.
+   */
+  it("records why the workspace was lost, with the failing command's own words", async () => {
+    const { operation } = seed();
+    const message = "TypeError: The argument 'args[31]' must be a string without null bytes";
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      inspectDetail: "status=running timeout=900000ms",
+      results: {
+        ...walk({ before: [], after: [], touched: [] }),
+        [LIST]: { exitCode: 1, output: message },
+      },
+    });
+    const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+    await runAgent(deps, operation.id, ["typecheck"]);
+
+    const failure = db
+      .rows("agent_execution_events")
+      .find((event) => event.type === "workspace_failed");
+
+    expect(failure).toBeDefined();
+
+    const metadata = failure?.metadata as {
+      observation: string;
+      detail: string;
+      sandboxState: string;
+    };
+
+    // Which observation, not merely that one failed. `listing` and
+    // `baseline_write` are different bugs reached through the same return.
+    expect(metadata.observation).toBe("listing");
+    expect(metadata.detail).toContain("must be a string without null bytes");
+    // Asked only on a path that has already failed, and only there: "the
+    // sandbox is fine and the command is malformed" is a different finding
+    // from "the sandbox stopped", and the observation alone cannot tell them
+    // apart.
+    expect(metadata.sandboxState).toBe("status=running timeout=900000ms");
+    expect(sandbox.events.some((event) => event.kind === "inspect")).toBe(true);
+  });
+
+  /** No failed observation, no extra provider call. The healthy path pays nothing. */
+  it("never asks the provider to explain a workspace that worked", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      results: walk({ before: [], after: [], touched: [] }),
+    });
+    const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+    await runAgent(deps, operation.id, ["typecheck"]);
+
+    expect(sandbox.events.some((event) => event.kind === "inspect")).toBe(false);
+    expect(
+      db.rows("agent_execution_events").some((event) => event.type === "workspace_failed"),
+    ).toBe(false);
   });
 
   /** The marker lives outside the repository, so it is never itself a change. */

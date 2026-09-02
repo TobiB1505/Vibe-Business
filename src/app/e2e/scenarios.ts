@@ -3,6 +3,7 @@
  * gone. Same object, one hop closer to where it is produced.
  */
 import type { PreparedChangeWorkspaceItem as PreparedChangeCard } from "@/modules/execution/workspace";
+import { OUTCOME_PROFILE_SCOPE_NOTES } from "@/modules/outcome-verification/messages";
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
@@ -238,6 +239,29 @@ function checkLines(
   }));
 }
 
+/**
+ * The scope note a real card carries, taken from the domain rather than typed
+ * here.
+ *
+ * Copied into a fixture, this sentence could drift from the one the product
+ * shows and the E2E would keep passing against the drift. It is the sentence
+ * that stops a green tick being read as a claim about which build is serving
+ * (ADR 0071), which makes it the last one worth asserting a stale copy of.
+ */
+const SEO_SCOPE_NOTE = OUTCOME_PROFILE_SCOPE_NOTES.nextjs_seo_foundations_outcome_v1;
+const AGENTIC_SCOPE_NOTE = OUTCOME_PROFILE_SCOPE_NOTES.agentic_public_routes_outcome_v1;
+
+/** The check lines the agentic profile produces: one page, one line. */
+function routeCheckLines(
+  paths: Array<[string, OutcomeCheckLine["status"]]>,
+): OutcomeCheckLine[] {
+  return paths.map(([path, status]) => ({
+    checkId: `public_route_serves_page:${path}`,
+    label: `${path} answers`,
+    status,
+  }));
+}
+
 function outcomeCard(overrides: Partial<OutcomeCard> = {}): OutcomeCard {
   return {
     state: "unavailable",
@@ -246,6 +270,7 @@ function outcomeCard(overrides: Partial<OutcomeCard> = {}): OutcomeCard {
     publicOrigin: null,
     mergedCommitSha: null,
     checks: [],
+    profileNote: null,
     observedAt: null,
     windowEndsAt: null,
     attemptCount: 0,
@@ -769,6 +794,7 @@ export const E2E_SCENARIOS = {
     outcomeChange(
       outcomeCard({
         state: "not_started",
+        profileNote: SEO_SCOPE_NOTE,
         publicOrigin: PUBLIC_ORIGIN,
         mergedCommitSha: MERGED_COMMIT,
         canVerify: true,
@@ -780,6 +806,7 @@ export const E2E_SCENARIOS = {
     outcomeChange(
       outcomeCard({
         state: "observing",
+        profileNote: SEO_SCOPE_NOTE,
         verificationId: "outcome_e2e",
         operationRunId: "operation_e2e",
         publicOrigin: PUBLIC_ORIGIN,
@@ -803,6 +830,7 @@ export const E2E_SCENARIOS = {
     outcomeChange(
       outcomeCard({
         state: "verified",
+        profileNote: SEO_SCOPE_NOTE,
         verificationId: "outcome_e2e",
         publicOrigin: PUBLIC_ORIGIN,
         mergedCommitSha: MERGED_COMMIT,
@@ -823,6 +851,7 @@ export const E2E_SCENARIOS = {
     outcomeChange(
       outcomeCard({
         state: "partial",
+        profileNote: SEO_SCOPE_NOTE,
         verificationId: "outcome_e2e",
         publicOrigin: PUBLIC_ORIGIN,
         mergedCommitSha: MERGED_COMMIT,
@@ -837,6 +866,7 @@ export const E2E_SCENARIOS = {
     outcomeChange(
       outcomeCard({
         state: "not_observed",
+        profileNote: SEO_SCOPE_NOTE,
         verificationId: "outcome_e2e",
         publicOrigin: PUBLIC_ORIGIN,
         mergedCommitSha: MERGED_COMMIT,
@@ -870,6 +900,7 @@ export const E2E_SCENARIOS = {
     outcomeChange(
       outcomeCard({
         state: "failed",
+        profileNote: SEO_SCOPE_NOTE,
         verificationId: "outcome_e2e",
         publicOrigin: PUBLIC_ORIGIN,
         mergedCommitSha: MERGED_COMMIT,
@@ -885,6 +916,56 @@ export const E2E_SCENARIOS = {
         failureCode: "outcome_origin_unreachable",
         failureMessage:
           "Vibe could not reach your public product while checking, so it could not verify the outcome.",
+        attemptCount: 7,
+      }),
+    ),
+
+  /**
+   * The agentic profile, verified (ADR 0071).
+   *
+   * The state that did not exist until this profile did: a change the coding
+   * agent produced, merged, and the two public pages it touched answering. The
+   * screen this scenario is here to hold is the one where a founder is most
+   * likely to read more than happened — a green tick after a merge — so what
+   * the E2E asserts is the sentence that says which claim is not being made.
+   */
+  outcome_verified_agentic: (): PreparedChangeCard =>
+    outcomeChange(
+      outcomeCard({
+        state: "verified",
+        profileNote: AGENTIC_SCOPE_NOTE,
+        verificationId: "outcome_e2e",
+        publicOrigin: PUBLIC_ORIGIN,
+        mergedCommitSha: MERGED_COMMIT,
+        checks: routeCheckLines([
+          ["/", "passed"],
+          ["/pricing", "passed"],
+        ]),
+        observedAt: "2026-08-14T14:52:11.000Z",
+        attemptCount: 1,
+      }),
+    ),
+
+  /**
+   * The failure direction this profile exists for (ADR 0071).
+   *
+   * A merged agentic change whose `/pricing` now answers 500. Under the old
+   * mapping this whole screen read "Vibe cannot verify the production outcome
+   * of this kind of change yet."
+   */
+  outcome_partial_agentic: (): PreparedChangeCard =>
+    outcomeChange(
+      outcomeCard({
+        state: "partial",
+        profileNote: AGENTIC_SCOPE_NOTE,
+        verificationId: "outcome_e2e",
+        publicOrigin: PUBLIC_ORIGIN,
+        mergedCommitSha: MERGED_COMMIT,
+        checks: routeCheckLines([
+          ["/", "passed"],
+          ["/pricing", "failed"],
+        ]),
+        observedAt: "2026-08-14T14:56:00.000Z",
         attemptCount: 7,
       }),
     ),

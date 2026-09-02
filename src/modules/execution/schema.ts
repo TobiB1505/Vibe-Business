@@ -54,6 +54,22 @@ export const EXECUTION_CAPABILITIES = [
    * part of that meaning; they are recorded per run, where they belong.
    */
   "agentic_execution_v1",
+  /**
+   * The same producer, with a write path that can remove a file (ADR 0074).
+   *
+   * Exactly the bump the paragraph above describes: a wider write scope is a
+   * new value, so that a `v1` row keeps meaning what it meant — additive only,
+   * because that was all the writer could do. Nothing else about the agentic
+   * path changed: same sandbox, same tool set, same policy, same validation,
+   * same approval, same fast-forward.
+   *
+   * Note what did *not* need a bump. `EXECUTION_POLICY_VERSION` versions the
+   * grants a spec is compiled under, and deleting inside the workspace was
+   * already one of them — `workspace_delete_file` has been granted since CORE-4.
+   * What changed is what Vibe is willing to *write*, and that is what a
+   * capability names.
+   */
+  "agentic_execution_v2",
 ] as const;
 export type ExecutionCapability = (typeof EXECUTION_CAPABILITIES)[number];
 
@@ -61,7 +77,27 @@ export type ExecutionCapability = (typeof EXECUTION_CAPABILITIES)[number];
 export const CURRENT_SEO_FOUNDATIONS_CAPABILITY = "nextjs_seo_foundations_v2" as const;
 
 /** The capability every agent-produced change is recorded under (§29). */
-export const AGENTIC_EXECUTION_CAPABILITY = "agentic_execution_v1" as const;
+export const AGENTIC_EXECUTION_CAPABILITY = "agentic_execution_v2" as const;
+
+/**
+ * Every capability the coding agent has ever produced a change under.
+ *
+ * Read by the places that ask "did an agent make this?" of a *stored* row —
+ * an outcome profile, a screen's origin line, a measurement contract. Asking
+ * with `=== AGENTIC_EXECUTION_CAPABILITY` would quietly stop recognising v1
+ * changes the day the constant moved, which is the failure a version bump is
+ * supposed to prevent rather than cause.
+ */
+export type AgenticExecutionCapability = "agentic_execution_v1" | "agentic_execution_v2";
+
+export const AGENTIC_EXECUTION_CAPABILITIES: readonly AgenticExecutionCapability[] = [
+  "agentic_execution_v1",
+  "agentic_execution_v2",
+];
+
+export function isAgenticCapability(capability: string): capability is AgenticExecutionCapability {
+  return (AGENTIC_EXECUTION_CAPABILITIES as readonly string[]).includes(capability);
+}
 
 /**
  * The capabilities a *plan step* or an *ExecutionSpec* may name.
@@ -81,8 +117,12 @@ export const AGENTIC_EXECUTION_CAPABILITY = "agentic_execution_v1" as const;
  * built to keep apart.
  */
 export const DETERMINISTIC_EXECUTION_CAPABILITIES = EXECUTION_CAPABILITIES.filter(
-  (capability): capability is Exclude<ExecutionCapability, typeof AGENTIC_EXECUTION_CAPABILITY> =>
-    capability !== AGENTIC_EXECUTION_CAPABILITY,
+  // Every agentic value, not the current one. Excluding only the constant would
+  // have let `agentic_execution_v1` fall into this list the moment a second
+  // agentic capability existed, and a plan step could then claim a generator
+  // that has never existed.
+  (capability): capability is Exclude<ExecutionCapability, AgenticExecutionCapability> =>
+    !isAgenticCapability(capability),
 );
 
 /**
@@ -104,6 +144,17 @@ export const NEXTJS_SEO_FOUNDATIONS_V2_VERSION = "nextjs-seo-foundations-v2" as 
 export const AGENTIC_EXECUTION_VERSION = "agentic-execution-v1" as const;
 
 /**
+ * What agentic execution v2 produces: the same pipeline, writing a commit that
+ * may remove a file (ADR 0074).
+ *
+ * A distinct string rather than a reuse of the v1 one, because capability and
+ * version both feed the execution identity — and a version that did not move
+ * when the pipeline's meaning did is exactly the drift the map below exists to
+ * prevent.
+ */
+export const AGENTIC_EXECUTION_V2_VERSION = "agentic-execution-v2" as const;
+
+/**
  * The generator version a capability produces.
  *
  * A single map rather than a constant read at each call site, because
@@ -115,6 +166,7 @@ export const CAPABILITY_VERSIONS: Record<ExecutionCapability, string> = {
   nextjs_seo_foundations_v1: NEXTJS_SEO_FOUNDATIONS_VERSION,
   nextjs_seo_foundations_v2: NEXTJS_SEO_FOUNDATIONS_V2_VERSION,
   agentic_execution_v1: AGENTIC_EXECUTION_VERSION,
+  agentic_execution_v2: AGENTIC_EXECUTION_V2_VERSION,
 };
 
 export function capabilityVersionFor(capability: ExecutionCapability): string {
@@ -164,15 +216,51 @@ export type ExecutionFailureReason = (typeof EXECUTION_FAILURE_REASONS)[number];
 
 export type ExecutionFailureCode = ExecutionBlockReason | ExecutionFailureReason;
 
-export type PreparedChangeStatus = "preparing" | "prepared" | "failed" | "superseded";
+/**
+ * Where a prepared change stands.
+ *
+ * `discarded` is a human rejection and the only way to reject one. It replaces
+ * a `superseded` that lived in this union from the table's first day and never
+ * existed in the database: no CHECK admitted it, nothing wrote it, nothing read
+ * it. What it cost was not a stray word — it was that a change a founder did
+ * not want stayed `prepared` forever, kept answering "this Move already has a
+ * prepared change", and held the single-active index against its own execution
+ * identity so the step could not be run again.
+ *
+ * Nothing sets `discarded` automatically. A newer preparation for the same Move
+ * does not supersede an older one, because the unique index refuses the second
+ * insert while the first is still active — which is the same fact stated by the
+ * database instead of by a status.
+ */
+export const PREPARED_CHANGE_STATUSES = [
+  "preparing",
+  "prepared",
+  "failed",
+  "discarded",
+] as const;
+
+export type PreparedChangeStatus = (typeof PREPARED_CHANGE_STATUSES)[number];
 
 /** One file the capability generated. Content lives on the branch, not here (§23). */
 export type PreparedFile = {
   /** Repository-relative, produced only by capability code (§13). */
   path: string;
-  /** sha256 of the generated content, for post-write verification (§25). */
-  contentHash: string;
-  bytes: number;
+  /**
+   * What this commit did to the path. Absent means written, which is what every
+   * row stored before ADR 0074 meant and still means — a stored file is not
+   * reinterpreted by a later capability learning a second verb.
+   */
+  status?: "deleted";
+  /**
+   * sha256 of the generated content, for post-write verification (§25).
+   *
+   * Absent for a deletion, where there is no content to hash and the
+   * post-write verification is the opposite claim: the path reads back as
+   * nothing. Recording a hash of the empty string would make a removed file
+   * indistinguishable from an emptied one.
+   */
+  contentHash?: string;
+  bytes?: number;
   /**
    * How many lines this file gained and lost.
    *

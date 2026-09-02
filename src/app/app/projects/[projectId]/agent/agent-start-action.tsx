@@ -9,12 +9,12 @@ import {
   DOGFOOD_START_REFUSAL_LABELS,
 } from "@/modules/coding-agent/view";
 import {
-  startDogfoodRunAction,
-  type StartDogfoodRunState,
+  startAgentRunAction,
+  type StartAgentRunState,
 } from "../agent-dogfood/[stepKey]/actions";
 import { AgentStartRefusalNotice } from "./agent-start-refusal-notice";
 
-const initialState: StartDogfoodRunState = null;
+const initialState: StartAgentRunState = null;
 
 /**
  * The real, allowlisted Agent start inside the new workspace.
@@ -37,7 +37,7 @@ export function AgentStartAction({
    */
   repositoryReadHref: string;
 }) {
-  const action = startDogfoodRunAction.bind(null, projectId, stepKey);
+  const action = startAgentRunAction.bind(null, projectId, stepKey);
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (

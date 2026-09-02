@@ -374,10 +374,53 @@ describe("sandbox usage", () => {
     expect(events.map((event) => event.sku)).toEqual(["sandbox_duration_ms", "sandbox_ingress_bytes"]);
   });
 
-  it("keeps cost unknown when the provider reports none", () => {
+  it("keeps cost unknown when neither the provider nor Vibe has a figure", () => {
     const events = projectSandboxUsage(sandboxRow());
     expect(events[0].costStatus).toBe("cost_unknown");
     expect(events.every((event) => event.rawCostNanoUsd === null)).toBe(true);
+  });
+
+  /**
+   * ADR 0073 — Vibe's own derivation, kept apart from the provider's figure.
+   *
+   * Vercel still reports nothing per sandbox, so `provider_cost_usd` is still
+   * null and still correct. What changed is that a founder-attested rate card
+   * makes the cost derivable, and `cost_estimated` is what stops that
+   * derivation being summed as though the provider had stated it.
+   */
+  it("reads Vibe's estimate as an estimate, never as a provider price", () => {
+    const events = projectSandboxUsage(
+      sandboxRow({
+        estimated_cost_nano_usd: 38_500_000,
+        cost_pricing_version: "vercel-sandbox-2026-08-20",
+      }),
+    );
+
+    expect(events[0].costStatus).toBe("cost_estimated");
+    expect(events[0].rawCostNanoUsd).toBe(38_500_000);
+    // The rate card travels with the figure, so a later price change cannot
+    // silently restate this row.
+    expect(events[0].providerPricingVersion).toBe("vercel-sandbox-2026-08-20");
+    // Still exactly one SKU carries the cost, so a sum equals the ledger.
+    expect(events.slice(1).every((event) => event.rawCostNanoUsd === null)).toBe(true);
+  });
+
+  it("prefers a real provider price over its own estimate", () => {
+    // The order is the point rather than a fallback convenience: a row that
+    // ever gains an attributable billed amount stops using the estimate
+    // without anybody having to remember to.
+    const events = projectSandboxUsage(
+      sandboxRow({
+        provider_cost_usd: "0.05",
+        estimated_cost_nano_usd: 38_500_000,
+        cost_pricing_version: "vercel-sandbox-2026-08-20",
+      }),
+    );
+
+    expect(events[0].costStatus).toBe("costed");
+    expect(events[0].rawCostNanoUsd).toBe(50_000_000);
+    // A provider figure carries its own provenance by being the provider's.
+    expect(events[0].providerPricingVersion).toBeNull();
   });
 });
 

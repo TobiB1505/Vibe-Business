@@ -212,11 +212,7 @@ export default async function MyProductPage({
   ];
 
   return (
-    <WorkspaceSection
-      id="my-product"
-      title="My Product"
-      description="Here's how Vibe understands your product."
-    >
+    <WorkspaceSection id="my-product">
       <div className="flex flex-col gap-5">
         <div id={SCAN_ANCHOR} className="scroll-mt-6">
           <ProductScanExperience

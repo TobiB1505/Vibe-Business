@@ -55,17 +55,3 @@ export function getSupabaseServiceEnv(
   cached = result.data;
   return cached;
 }
-
-/** True when durable execution can reach the database, without throwing. */
-export function hasSupabaseServiceRoleKey(
-  source: Record<string, string | undefined> = process.env,
-): boolean {
-  return supabaseServiceEnvSchema.safeParse({
-    SUPABASE_SERVICE_ROLE_KEY: source.SUPABASE_SERVICE_ROLE_KEY,
-  }).success;
-}
-
-/** Test-only: clears the cached env so tests can exercise fresh parses. */
-export function __resetSupabaseServiceEnvCacheForTests(): void {
-  cached = undefined;
-}

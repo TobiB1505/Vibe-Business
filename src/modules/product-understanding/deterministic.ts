@@ -38,9 +38,22 @@ import {
  * repository evidence alone.
  */
 
-type Support = { confidence: ProfileConfidence; sources: EvidenceSource[]; evidence: string[] };
+type Support = {
+  confidence: ProfileConfidence;
+  sources: EvidenceSource[];
+  evidence: string[];
+  /**
+   * Whether any source was actually read.
+   *
+   * Deliberately *not* a fifth `ProfileConfidence`. That vocabulary is four
+   * values consumed by the evidence pack, `validate.ts` and the audit's own
+   * absence-suffix rules, and this is not a degree of certainty — it is whether
+   * the question was asked at all. Internal to this module for the same reason.
+   */
+  inspected: boolean;
+};
 
-const NOTHING: Support = { confidence: "not_found", sources: [], evidence: [] };
+const NOTHING: Support = { confidence: "not_found", sources: [], evidence: [], inspected: true };
 
 /**
  * Combines what the code says with what the live site serves.
@@ -74,17 +87,32 @@ function combine(input: {
     evidence.push(input.repo.id);
   }
 
-  if (evidence.length === 0) return NOTHING;
+  /*
+   * Did anyone look?
+   *
+   * A reader answers `undefined` when its snapshot does not exist and `null`
+   * when the snapshot was read and the surface was not there. Only the second
+   * is a finding. A key the caller omitted entirely is a source this particular
+   * signal does not consult, and says nothing either way — so it is `undefined`
+   * too, and a signal is uninspected only when *no* consulted source was read.
+   */
+  const consulted = [input.live, input.repo, input.signedIn];
+  const inspected = consulted.some((source) => source !== undefined);
+
+  if (evidence.length === 0) return { ...NOTHING, inspected };
 
   const observed = Boolean(input.live?.detected) || Boolean(input.signedIn?.detected);
-  return { confidence: observed ? "confirmed" : "likely", sources, evidence };
+  return { confidence: observed ? "confirmed" : "likely", sources, evidence, inspected };
 }
 
 function liveSurface(
   snapshot: LiveProductIntelligenceSnapshot | null,
   id: LiveProductIntelligenceSnapshot["productSurfaces"][number]["id"],
 ) {
-  if (!snapshot) return null;
+  // `undefined` means the snapshot does not exist, `null` that it does and the
+  // surface is absent. Collapsing the two is how "Vibe could not identify a
+  // pricing path" came to be said about a project Vibe had never analysed.
+  if (!snapshot) return undefined;
   const surface = snapshot.productSurfaces.find((candidate) => candidate.id === id);
   return surface?.detected ? { detected: true, id: evidenceId.liveSurface(id) } : null;
 }
@@ -93,7 +121,7 @@ function repoSurface(
   snapshot: RepositoryIntelligenceSnapshot | null,
   id: RepositoryIntelligenceSnapshot["businessSurfaces"][number]["id"],
 ) {
-  if (!snapshot) return null;
+  if (!snapshot) return undefined;
   const surface = snapshot.businessSurfaces.find((candidate) => candidate.id === id);
   return surface?.detected ? { detected: true, id: evidenceId.repoSurface(id) } : null;
 }
@@ -102,13 +130,14 @@ function authSurface(
   snapshot: AuthenticatedProductIntelligenceSnapshot | null,
   id: AuthenticatedProductIntelligenceSnapshot["productSurfaces"][number]["id"],
 ) {
-  if (!snapshot) return null;
+  if (!snapshot) return undefined;
   const surface = snapshot.productSurfaces.find((candidate) => candidate.id === id);
   return surface?.detected ? { detected: true, id: evidenceId.authSurface(id) } : null;
 }
 
 function repoIntegration(snapshot: RepositoryIntelligenceSnapshot | null, category: string) {
-  if (!snapshot) return null;
+  // `undefined` for "no snapshot", as the three surface readers above.
+  if (!snapshot) return undefined;
   const signal = snapshot.integrationSignals.find((candidate) => candidate.category === category);
   return signal ? { detected: true, id: evidenceId.repoIntegration(signal.id) } : null;
 }
@@ -117,7 +146,7 @@ function liveCta(
   snapshot: LiveProductIntelligenceSnapshot | null,
   category: LiveProductIntelligenceSnapshot["conversionSignals"]["ctas"][number]["category"],
 ) {
-  if (!snapshot) return null;
+  if (!snapshot) return undefined;
   const present = snapshot.conversionSignals.ctas.some((cta) => cta.category === category);
   return present ? { detected: true, id: evidenceId.liveCta(category) } : null;
 }
@@ -126,7 +155,7 @@ function liveForm(
   snapshot: LiveProductIntelligenceSnapshot | null,
   kind: LiveProductIntelligenceSnapshot["conversionSignals"]["forms"][number]["kind"],
 ) {
-  if (!snapshot) return null;
+  if (!snapshot) return undefined;
   const present = snapshot.conversionSignals.forms.some((form) => form.kind === kind);
   return present ? { detected: true, id: evidenceId.liveForm(kind) } : null;
 }
@@ -329,8 +358,13 @@ export function deriveJourney(input: DeterministicInput): JourneyStage[] {
       id: "entry_point",
       detail: homepage ? "A visitor lands on the public homepage." : null,
       support: homepage
-        ? { confidence: "confirmed", sources: ["live_product"], evidence: [evidenceId.livePage("/")] }
-        : NOTHING,
+        ? {
+            confidence: "confirmed",
+            sources: ["live_product"],
+            evidence: [evidenceId.livePage("/")],
+            inspected: true,
+          }
+        : { ...NOTHING, inspected: live !== null },
     },
     {
       id: "sign_up",
@@ -365,8 +399,11 @@ export function deriveJourney(input: DeterministicInput): JourneyStage[] {
             confidence: "confirmed",
             sources: ["live_product"],
             evidence: [evidenceId.livePrimaryCta()],
+            inspected: true,
           }
-        : NOTHING,
+        : // A call to action is something only the live site can have, so with
+          // no live snapshot nobody looked.
+          { ...NOTHING, inspected: live !== null },
     },
     {
       id: "pricing",
@@ -393,14 +430,28 @@ export function deriveJourney(input: DeterministicInput): JourneyStage[] {
       support: combine({
         live: liveSurface(live, "dashboard_app"),
         repo: repoSurface(repo, "dashboard_app"),
-        signedIn: auth?.applicationSignals.authenticatedAreaReached
-          ? { detected: true, id: evidenceId.authArea() }
-          : null,
+        signedIn: !auth
+          ? undefined
+          : auth.applicationSignals.authenticatedAreaReached
+            ? { detected: true, id: evidenceId.authArea() }
+            : null,
       }),
     },
   ];
 
-  return stages.map((stage) => ({
+  /*
+   * A stage nobody looked at is left out, not reported as missing.
+   *
+   * `evidence-v3.ts` states journey absence rather than omitting it, and its
+   * comment is right: *"there is no pricing stage" is one of the most
+   * audit-relevant facts the profile holds, and an omitted line is invisible to
+   * a model.* That argument holds for a stage Vibe searched for. For one it
+   * never searched for, the same line mints `profile.journey.<id>_not_found` —
+   * "No pricing stage was found in the customer journey" — out of nothing.
+   */
+  return stages
+    .filter((stage) => stage.support.inspected)
+    .map((stage) => ({
     id: stage.id,
     detail: stage.support.confidence === "not_found" ? null : stage.detail,
     confidence: stage.support.confidence,
@@ -426,6 +477,18 @@ export function deriveBusinessSignals(input: DeterministicInput): BusinessSignal
   const signals: BusinessSignal[] = [];
 
   function push(id: BusinessSignalId, present: string, absent: string, support: Support) {
+    /*
+     * Rule 44, in the negative direction.
+     *
+     * An unassessable dimension is excluded, never reported as a bad result.
+     * Emitting `absent` here for a project with no snapshots put a sentence
+     * with no source behind it into the audit's evidence pack — and the pack's
+     * own doctrine is that nothing stops a model treating a weak fact as a
+     * strong one except the words it arrives in. These words say "could not
+     * identify".
+     */
+    if (!support.inspected) return;
+
     signals.push({
       id,
       statement: support.confidence === "not_found" ? absent : present,
@@ -482,8 +545,15 @@ export function deriveBusinessSignals(input: DeterministicInput): BusinessSignal
       : "The public site has a visible call to action.",
     "Vibe found no clear call to action on the pages it inspected.",
     primaryCta
-      ? { confidence: "confirmed", sources: ["live_product"], evidence: [evidenceId.livePrimaryCta()] }
-      : NOTHING,
+      ? {
+          confidence: "confirmed",
+          sources: ["live_product"],
+          evidence: [evidenceId.livePrimaryCta()],
+          inspected: true,
+        }
+      : // "Vibe found no clear call to action on the pages it inspected" is a
+        // claim about pages. With no live snapshot there were none.
+        { ...NOTHING, inspected: live !== null },
   );
 
   push(
@@ -503,9 +573,12 @@ export function deriveBusinessSignals(input: DeterministicInput): BusinessSignal
     combine({
       live: liveSurface(live, "dashboard_app"),
       repo: repoSurface(repo, "dashboard_app"),
-      signedIn: auth?.applicationSignals.authenticatedAreaReached
-        ? { detected: true, id: evidenceId.authArea() }
-        : null,
+      // `undefined` without a Deep Scan: no signed-in area was looked for.
+      signedIn: !auth
+        ? undefined
+        : auth.applicationSignals.authenticatedAreaReached
+          ? { detected: true, id: evidenceId.authArea() }
+          : null,
     }),
   );
 

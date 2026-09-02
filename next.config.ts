@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { withWorkflow } from "workflow/next";
 import { securityHeaders } from "./src/lib/security/headers";
+import { retiredAddressRedirects } from "./src/lib/routing/retired-addresses";
 
 const nextConfig: NextConfig = {
   /**
@@ -18,11 +19,17 @@ const nextConfig: NextConfig = {
    * project page* loaded Playwright and 500'd on a missing `browsers.json`,
    * even though no Deep Scan was running.
    *
-   * Known gap: `browsers.json` is still not traced into the deployed function,
-   * so the analysis step itself will fail on Vercel until that is solved.
-   * `outputFileTracingIncludes` was tried and verified to have no effect under
-   * Turbopack builds, so it is deliberately not configured here rather than
-   * left in as config that looks like a fix. See
+   * `browsers.json` **is** traced, and by a different mechanism than the one
+   * that belongs in this file. `outputFileTracingIncludes` was tried and
+   * verified to have no effect under Turbopack builds, so it is deliberately
+   * not configured here rather than left in as config that looks like a fix.
+   * What works instead is giving the tracer something static to follow: a
+   * one-line pnpm patch exposes `./browsers.json` in the package's `exports`,
+   * and `require.resolve("playwright-core/browsers.json")` in
+   * `playwright/connector.ts` is a specifier it resolves. Verified with a
+   * positive and a negative control — the traced file set was rebuilt into a
+   * clean tree and loaded, and removing that one file from it reproduced the
+   * production error exactly. See
    * docs/sprints/0005-authenticated-live-product-intelligence.md.
    */
   serverExternalPackages: ["playwright-core"],
@@ -44,6 +51,17 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders() }];
+  },
+
+  /**
+   * The workspace addresses that used to exist (PERF-023).
+   *
+   * The table and the reasoning live in `src/lib/routing/retired-addresses.ts`,
+   * where a test can reach them: this file cannot be loaded outside a Next
+   * build, so a redirect written only here is a redirect nothing asserts.
+   */
+  async redirects() {
+    return retiredAddressRedirects();
   },
 };
 

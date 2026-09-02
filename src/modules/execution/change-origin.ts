@@ -11,9 +11,9 @@ import type { BusinessOpportunity } from "@/modules/opportunities/schema";
  * and held to the same causal-language checker as a measured result.
  *
  * An agent-produced change has no such sentence and cannot have one. Its
- * capability is `agentic_execution_v1` for every change an agent ever writes,
- * so a per-capability rationale could only say something true of all of them
- * and informative about none. The first real dogfood made the consequence
+ * capability names the producer — `agentic_execution_v*` for every change an
+ * agent ever writes — so a per-capability rationale could only say something
+ * true of all of them and informative about none. The first real dogfood made the consequence
  * visible: the card opened with a status line and then a branch name, because
  * `businessRationaleFor` returned null and the rationale section rendered
  * nothing at all.

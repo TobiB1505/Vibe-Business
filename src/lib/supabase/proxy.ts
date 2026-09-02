@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getPublicEnv } from "@/lib/env/env";
+import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded-fetch";
 import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { loginPathWithNext, sanitizeNextPath } from "@/modules/auth/redirects";
 
@@ -70,6 +71,28 @@ export async function updateSession(request: NextRequest) {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      /**
+       * The last Supabase client without a deadline had it (PERF-016).
+       *
+       * `server.ts` and `service.ts` both bound their requests at
+       * `SUPABASE_REQUEST_TIMEOUT_MS`; this one did not, and it is the one on
+       * the critical path of every matched request in the product. A hung
+       * auth socket held a function open with a blank page behind it until the
+       * platform's own 300-second ceiling — the failure mode `bounded-fetch`
+       * exists to prevent, in the place it costs most.
+       *
+       * The same 15 seconds, deliberately, rather than something tighter. The
+       * `getClaims()` call below fails open, so a deadline short enough to
+       * trip on a slow-but-working verification would sign people out — and
+       * nothing about a verification that takes longer than fifteen seconds
+       * was going to render a page anyway.
+       *
+       * Without the clock-skew retry `server.ts` installs: that absorbs a
+       * first-second failure at the moment a session is created, which is a
+       * different request from this one, and adding a retry inside the
+       * deadline of every page request is not a bound anybody asked for.
+       */
+      global: { fetch: withBoundedFetch({ timeoutMs: SUPABASE_REQUEST_TIMEOUT_MS }) },
       cookieOptions: AUTH_COOKIE_OPTIONS,
       cookies: {
         getAll() {

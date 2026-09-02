@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAgenticCapability } from "@/modules/execution/schema";
 import { PRODUCT_UNDERSTANDING_CONFIG } from "@/modules/ai/operations";
 import { UNDERSTANDING_EVIDENCE_VERSION } from "@/modules/product-understanding/evidence";
 import { PROMPT_VERSION as PROFILE_PROMPT_VERSION } from "@/modules/product-understanding/prompt";
@@ -939,7 +940,7 @@ export class FakeDatabase {
      */
     if (
       table === "prepared_changes" &&
-      candidate.execution_capability !== "agentic_execution_v1" &&
+      !isAgenticCapability(String(candidate.execution_capability)) &&
       (candidate.opportunity_set_id == null || candidate.opportunity_id == null)
     ) {
       return {
@@ -1047,9 +1048,27 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     if (this.orderColumn) {
       const column = this.orderColumn;
       rows = [...rows].sort((a, b) => {
-        const left = String(a[column] ?? "");
-        const right = String(b[column] ?? "");
-        return this.orderAscending ? left.localeCompare(right) : right.localeCompare(left);
+        const direction = this.orderAscending ? 1 : -1;
+        const left = a[column];
+        const right = b[column];
+
+        /*
+         * Numbers compare as numbers.
+         *
+         * Everything used to be stringified before comparison, which sorts an
+         * integer column as text: `sequence` came back 1, 10, 11, … 2, 20. Every
+         * ordered read in the product that is keyed on a counter rather than a
+         * timestamp was therefore modelled wrongly — the Product Scan timeline,
+         * the agent execution events, the agent activity feed, all of which order
+         * by `sequence` and several of which then cap the result, so the fake
+         * would hand back a different *set* of rows than Postgres would, not just
+         * a different order.
+         */
+        if (typeof left === "number" && typeof right === "number") {
+          return (left - right) * direction;
+        }
+
+        return String(left ?? "").localeCompare(String(right ?? "")) * direction;
       });
     }
 
@@ -1495,6 +1514,66 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
       .filter((row) => row.credit_account_id === params.p_credit_account_id)
       .reduce((total, row) => total + Number(row.credit_delta ?? 0), 0),
   }),
+
+  /**
+   * `sum_lot_allocation_capacity` (PERF-018).
+   *
+   * Modelled as the migration defines it, including the two things the billing
+   * page's drift detection depends on. The occupancy rule is the CASE: a held
+   * allocation occupies its full amount, a consumed one only what it charged,
+   * a released one nothing. And a lot with **no** allocations produces no row
+   * at all rather than a zero — `group by` cannot emit one, and a fake that
+   * invented it would let a caller forget its own `?? ZERO_CREDITS`.
+   *
+   * `supabase/tests/lot-capacity.migration.ts` proves the same arithmetic
+   * against a real cluster. That is what makes this handler a model rather than
+   * a second implementation nobody checked — the failure Sprint 0115 recorded,
+   * where a fake answered a question production answered differently.
+   */
+  sum_lot_allocation_capacity: (db, params) => {
+    const grantIds = new Set((params.p_grant_ids as string[] | undefined) ?? []);
+    const occupied = new Map<string, number>();
+
+    for (const row of db.rows("billing_credit_allocations")) {
+      const grantId = String(row.grant_id);
+      if (!grantIds.has(grantId)) continue;
+
+      const status = String(row.status);
+      const units =
+        status === "held"
+          ? Number(row.credit_units ?? 0)
+          : status === "consumed"
+            ? Number(row.consumed_units ?? 0)
+            : 0;
+
+      occupied.set(grantId, (occupied.get(grantId) ?? 0) + units);
+    }
+
+    return {
+      data: [...occupied].map(([grant_id, occupied_units]) => ({ grant_id, occupied_units })),
+    };
+  },
+
+  /**
+   * `sum_agent_run_usage` (PERF-002).
+   *
+   * Modelled as the migration defines it, including the two things the
+   * gateway's ceiling depends on: every row the run wrote counts, whatever its
+   * status (VB-016), and a run with no rows answers zero rather than nothing.
+   * Shaped as `returns table(...)` reaches PostgREST — an array of one row —
+   * so the caller's unwrapping is exercised here too.
+   */
+  sum_agent_run_usage: (db, params) => {
+    const rows = db.rows("ai_usage_events").filter((row) => row.job_id === params.p_run_id);
+    return {
+      data: [
+        {
+          spent_output_tokens: rows.reduce((total, row) => total + Number(row.output_tokens ?? 0), 0),
+          forwarded_requests: rows.length,
+        },
+      ],
+    };
+  },
 };
 
 /**

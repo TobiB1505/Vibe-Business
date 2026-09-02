@@ -15,15 +15,19 @@ import { describe, expect, it } from "vitest";
  *
  * So the mechanism, not the vigilance, is what this file changes: **nothing in
  * this repository failed when a document stopped being true.** Lint did not.
- * `tsc` did not. Five thousand tests did not. The build did not. Now five
- * things do.
+ * `tsc` did not. Five thousand tests did not. The build did not. Now seven
+ * things do — Sprint 0124 added the two that catch drift *inside* a document
+ * rather than between documents: a module README naming a file that no longer
+ * exists, and a decision that was superseded without its own page saying so.
  *
  * ## What this asserts, and what it cannot
  *
  * It asserts **structure**: that every record is reachable from its index, that
  * every index row points at something, that every relative link resolves, that
- * every decision is visible from the map, and that a specific list of retired
- * claims has not come back to the file it was retired from.
+ * every decision is visible from the map, that a module README names files that
+ * exist, that a superseded decision points at the one that superseded it, and
+ * that a specific list of retired claims has not come back to the file it was
+ * retired from.
  *
  * It cannot assert that any prose is **true**. A Decision Index row can name
  * the wrong layer and stay green. `RETIRED_CLAIMS` holds the drift Sprint 0056
@@ -33,11 +37,13 @@ import { describe, expect, it } from "vitest";
  *
  * ## What is deliberately not asserted
  *
- * - **Module README presence.** Eleven modules have none. A README written to
- *   satisfy a test is the "list of intentions pretending to be documentation"
- *   that `docs/business/README.md` bans, and asserting presence would *bless*
- *   the three dead stub directories rather than retire them. Recorded as a gap
- *   in `docs/ROADMAP.md` instead.
+ * - **Module README presence.** Thirteen modules have none, and the count is
+ *   not the argument. A README written to satisfy a test is the "list of
+ *   intentions pretending to be documentation" that `docs/business/README.md`
+ *   bans, and asserting presence would *bless* the dead stub directories rather
+ *   than retire them. Sprint 0124 revisited this and kept the position: the new
+ *   check below makes the READMEs that exist accurate, and manufactures none.
+ *   Recorded as a gap in `docs/ROADMAP.md` instead.
  * - **No duplicate sprint numbers.** `0054` is used twice, and fixing it means
  *   renaming a file four documents link to.
  * - **Anchor validation.** A slugifier that disagrees with GitHub's would fail
@@ -471,5 +477,191 @@ describe("every decision is visible from ARCHITECTURE.md", () => {
       `These decisions exist and ARCHITECTURE.md does not reference them, so they are ` +
         `invisible from the map: ${absent.join(", ")}. Add a row to §8 Decision Index.`,
     ).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * F — a module README names files that exist
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Sprint 0124.
+ *
+ * ## The drift this catches, which nothing else could
+ *
+ * Section C already resolves every markdown *link*. A module README's most
+ * load-bearing content is not links, though — it is the table that says which
+ * file answers which question, and those are backticked filenames. Two of them
+ * had been pointing at files that no longer exist: `execution-contract`'s
+ * `freshness.ts`, renamed to `live-premise.ts` sprints ago, and `projects`'s
+ * `disconnect.ts`, retired by ADR 0056. Both survived every check in this file
+ * and every grep anybody ran, because a name in backticks is prose.
+ *
+ * ## Why the fallback is repo-wide rather than module-local
+ *
+ * READMEs legitimately name their neighbours — `action-plans` explains itself
+ * partly in terms of `business-audit/conclusions.ts`, and `coding-agent` cites
+ * `credits/retail.ts` from the economy module. Requiring every name to live
+ * inside its own module would make eleven true sentences fail.
+ *
+ * So the rule is the weakest one that still catches the defect: **a file named
+ * in a module README exists somewhere under `src/`.** It cannot notice a name
+ * that resolves to the wrong module's file of the same name — `store.ts` exists
+ * seven times over — and saying that here is what stops a green run from being
+ * read as "every reference is correct".
+ *
+ * ## What is deliberately not asserted, still
+ *
+ * **Module README presence**, for the reason the header gives: a README written
+ * to satisfy a test is the "list of intentions pretending to be documentation"
+ * that `docs/business/README.md` bans. This check makes the READMEs that exist
+ * accurate; it does not manufacture more of them.
+ */
+describe("every file a module README names exists", () => {
+  /** Every file under `src/`, at any depth, as a repo-relative path. */
+  function sourceFiles(dir: string): string[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(dir, entry.name);
+      return entry.isDirectory() ? sourceFiles(full) : [relative(ROOT, full)];
+    });
+  }
+
+  const files = new Set(sourceFiles(join(ROOT, "src")).map((p) => p.split("\\").join("/")));
+
+  /**
+   * A backticked `.ts`/`.tsx` name, or a path ending in one.
+   *
+   * `NNNN` is excluded because `economy/README.md` names the *pattern*
+   * `sprint-NNNN-safety.test.ts` — a rule about what each sprint adds, not a
+   * claim that one file is called that.
+   */
+  function namedFiles(source: string): string[] {
+    return [...source.matchAll(/`([A-Za-z0-9_][A-Za-z0-9_./-]*\.tsx?)`/g)]
+      .map((match) => match[1])
+      .filter((name) => !name.includes("NNNN"));
+  }
+
+  const readmes = readdirSync(join(ROOT, "src/modules"), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join("src/modules", entry.name, "README.md"))
+    .filter((path) => existsSync(join(ROOT, path)));
+
+  it("finds the module READMEs it is supposed to be checking", () => {
+    expect(readmes.length).toBeGreaterThan(15);
+  });
+
+  it("resolves every named file", () => {
+    const unresolved = readmes.flatMap((readme) => {
+      const moduleDir = dirname(readme);
+      return namedFiles(read(join(ROOT, readme)))
+        .filter(
+          (name) =>
+            !files.has(`${moduleDir}/${name}`) &&
+            ![...files].some((path) => path === name || path.endsWith(`/${name}`)),
+        )
+        .map((name) => `${readme} names ${name}`);
+    });
+
+    expect(
+      unresolved,
+      `A module README names a file that does not exist. Either the file was ` +
+        `renamed and the README was not, or it was deleted:\n${unresolved.join("\n")}`,
+    ).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * G — a superseded decision says so on its own page
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Sprint 0124.
+ *
+ * ## The asymmetry this closes
+ *
+ * When ADR B supersedes or amends ADR A, B always says so — that is the first
+ * line anybody writes. A said nothing, in ten cases out of thirteen. So a
+ * reader who opens ADR 0016 sees `Status: Accepted` and four sections that
+ * stopped being true when 0064 shipped, and the only place recording that is a
+ * page they have no reason to open.
+ *
+ * Rule 83 is explicit that a record is not rewritten to match the present. This
+ * does not rewrite one: the original text stands untouched, and the status line
+ * gains a dated pointer — the form ADR 0027 already used for 0029.
+ *
+ * ## Why the detector reads the claiming ADR's header
+ *
+ * Because the claim is the fact. Three ADRs open with "Supersedes: nothing.
+ * Extends [X]" or "Supersedes / amends: none. Complements [X]", and reading the
+ * link without reading the sentence turns each of those into a demand for a
+ * back-reference to a supersession that was explicitly disclaimed. The two
+ * exclusions below — `by`, and `nothing`/`none` — are what separates "B
+ * supersedes A" from "B is amended by A" and from "B supersedes nothing".
+ */
+describe("a superseded decision says so on its own page", () => {
+  const STATUS_LINE = /^\s*[-*]?\s*\*{0,2}status\*{0,2}\s*:/i;
+
+  const adrs = readdirSync(DECISIONS)
+    .filter((f) => /^\d{4}-.*\.md$/.test(f))
+    .sort();
+
+  /** The lines before the first `## `, which is where every ADR states this. */
+  function header(file: string): string {
+    const lines = read(join(DECISIONS, file)).split("\n");
+    const end = lines.findIndex((line) => line.startsWith("## "));
+    return lines.slice(0, end === -1 ? lines.length : end).join("\n");
+  }
+
+  const headers = new Map(adrs.map((file) => [file.slice(0, 4), header(file)]));
+
+  /** Numbers this ADR claims to supersede, amend or replace. */
+  function claims(number: string, head: string): string[] {
+    const found = new Set<string>();
+
+    for (const match of head.matchAll(/\b(supersedes|amends|replaces)\b([^\n]*)/gi)) {
+      const rest = match[2];
+      for (const link of rest.matchAll(/\[(?:ADR\s*)?(\d{4})\]/g)) {
+        const before = rest.slice(0, link.index ?? 0);
+        // "amended **by** [X]" is X claiming this one, not the reverse; and
+        // "supersedes **nothing**. Extends [X]" claims nothing at all.
+        if (/\bby\b/i.test(before) || /\b(nothing|none)\b/i.test(before)) continue;
+        if (link[1] !== number) found.add(link[1]);
+      }
+    }
+
+    return [...found].sort();
+  }
+
+  it("finds the supersession claims it is supposed to be checking", () => {
+    const total = [...headers].flatMap(([number, head]) => claims(number, head));
+    expect(total.length).toBeGreaterThan(5);
+  });
+
+  it("names the newer decision on the older decision's status line", () => {
+    const silent: string[] = [];
+
+    for (const [number, head] of headers) {
+      for (const target of claims(number, head)) {
+        const targetHead = headers.get(target);
+        if (targetHead === undefined) continue;
+
+        const status = targetHead.split("\n").find((line) => STATUS_LINE.test(line)) ?? "";
+        if (!status.includes(number)) {
+          silent.push(`ADR ${target} does not mention ADR ${number}, which supersedes or amends it`);
+        }
+      }
+    }
+
+    expect(
+      silent,
+      `A reader who opens the older decision cannot tell that part of it no longer ` +
+        `holds. Add a pointer to its Status line — the original text stays ` +
+        `(rule 83):\n${silent.join("\n")}`,
+    ).toEqual([]);
+  });
+
+  it("gives every decision a status line at all", () => {
+    const without = adrs.filter((file) => !header(file).split("\n").some((l) => STATUS_LINE.test(l)));
+    expect(without, `These ADRs state no status: ${without.join(", ")}`).toEqual([]);
   });
 });

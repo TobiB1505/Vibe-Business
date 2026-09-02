@@ -38,6 +38,56 @@ jobs:
       - name: Build
         run: pnpm build
 
+  # The schema-authority suite (`supabase/tests/*.migration.ts`).
+  #
+  # ## Why this job exists
+  #
+  # It did not, and that is how a `create extension pg_cron` at the top of a
+  # migration reached `main`: the harness provisions a bare PostgreSQL cluster
+  # and applies every migration to it, so an unavailable extension failed all
+  # fifteen files at startup — and nothing in CI ran them. The suite had been
+  # local-only since it was written, which makes it a suite that rots.
+  #
+  # ## Why it is not in `pnpm test`
+  #
+  # The same reason the browser job is not: it needs PostgreSQL server binaries,
+  # and a unit suite that silently requires a database is one people stop
+  # running. The harness records this itself, and can only ever reach a cluster
+  # it created — there is no connection string and no environment variable that
+  # could point it at a deployed database.
+  migrations:
+    name: Schema authority against real PostgreSQL
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The runner image ships PostgreSQL, but which minor version it ships is
+      # not this repository's decision. Failing here with the paths the harness
+      # actually looks in beats failing later inside a test with a stack trace.
+      - name: Verify PostgreSQL server binaries
+        run: |
+          for dir in /usr/lib/postgresql/16/bin /usr/lib/postgresql/17/bin; do
+            if [ -x "$dir/initdb" ]; then echo "found $dir"; exit 0; fi
+          done
+          echo "No initdb in the paths supabase/tests/harness.ts searches." >&2
+          exit 1
+
+      - name: Migration tests
+        run: pnpm db:test
+
   # A separate, required job (Sprint 11C.1). Kept out of `pnpm test` on purpose:
   # a unit suite that silently launches a browser is a unit suite people stop
   # running locally. This one is never allowed to fail — an E2E failure means

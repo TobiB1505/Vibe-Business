@@ -200,6 +200,17 @@ export function buildSeoSignals(input: {
 
 export type AggregatedSurfaces = {
   surfaces: ProductSurfaceSignal[];
+  /**
+   * Surfaces whose own page was actually fetched.
+   *
+   * Exposed because `detected` answers a weaker question than some callers
+   * need. It is true for a surface Vibe merely saw a link to, so a caller
+   * asking "did we *read* that page" cannot use it — and one did, silently,
+   * for years: `pricingPageReached` was derived from `detected`, which turned a
+   * footer link to `/pricing` into the audit sentence "Your pricing page was
+   * read and states no machine-readable price", about a document nobody opened.
+   */
+  fetchedSurfaces: ReadonlySet<ProductSurfaceId>;
   perPageSurfaces: Map<string, ProductSurfaceId[]>;
 };
 
@@ -220,6 +231,8 @@ export function buildProductSurfaces(input: {
   const fetchedSurfaces = new Set<ProductSurfaceId>();
   const perPageSurfaces = new Map<string, ProductSurfaceId[]>();
 
+  const sectionSurfacesByPage = new Map<string, ProductSurfaceId[]>();
+
   for (const page of input.pages) {
     const classification = classifyPage({
       requestedPath: page.requestedPath,
@@ -228,6 +241,7 @@ export function buildProductSurfaces(input: {
     });
 
     perPageSurfaces.set(page.requestedPath, classification.surfaces);
+    sectionSurfacesByPage.set(page.requestedPath, classification.sectionSurfaces);
 
     for (const surface of classification.surfaces) fetchedSurfaces.add(surface);
     for (const [surface, items] of classification.evidence) {
@@ -236,7 +250,19 @@ export function buildProductSurfaces(input: {
     }
   }
 
+  /*
+   * Inferred, not read: a link the site exposes to a surface we never fetched
+   * as a document of its own. Two sources feed it, and they are the same
+   * strength — a link to another path, and a link to a section of this one.
+   */
   const linkOnlySurfaces = new Set<ProductSurfaceId>();
+
+  for (const [, surfaces] of sectionSurfacesByPage) {
+    for (const surface of surfaces) {
+      if (!fetchedSurfaces.has(surface)) linkOnlySurfaces.add(surface);
+    }
+  }
+
   for (const path of input.discoveredPaths) {
     const surface = classifyLinkTarget(path);
     if (surface === null || !LINK_INFERABLE_SURFACES.has(surface)) continue;
@@ -263,7 +289,7 @@ export function buildProductSurfaces(input: {
     };
   });
 
-  return { surfaces, perPageSurfaces };
+  return { surfaces, fetchedSurfaces, perPageSurfaces };
 }
 
 /**

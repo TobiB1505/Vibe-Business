@@ -1,5 +1,8 @@
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
-import type { ProductProfile } from "@/modules/product-understanding/schema";
+import type {
+  BusinessSignalId,
+  ProductProfile,
+} from "@/modules/product-understanding/schema";
 
 export type ProductScanPresentation = {
   name: string;
@@ -28,11 +31,25 @@ export function buildProductScanPresentation(
   const view = buildUnderstandingView(profile, synthesized);
   const framework = view.technical.find((row) => row.label === "Framework")?.value ?? null;
   const audience = view.dna.find((row) => row.id === "audience")?.value ?? null;
-  const businessModel = profile.businessSignals.some((signal) => signal.id === "subscription_capability")
+  /*
+   * A signal that was *found*, not merely one that was asked about.
+   *
+   * This read `.some((signal) => signal.id === …)`, and every signal is emitted
+   * for every profile — so the `null` branch was unreachable and every product
+   * ever scanned reported at least "Pricing observed", including one whose
+   * pricing signal said Vibe had found none. Presence in the list means the
+   * dimension was assessed; `confidence` is what says how it came out.
+   */
+  const found = (id: BusinessSignalId) =>
+    profile.businessSignals.some(
+      (signal) => signal.id === id && signal.confidence !== "not_found",
+    );
+
+  const businessModel = found("subscription_capability")
     ? "Subscription signals"
-    : profile.businessSignals.some((signal) => signal.id === "payment_capability")
+    : found("payment_capability")
       ? "Payment signals"
-      : profile.businessSignals.some((signal) => signal.id === "pricing_surface")
+      : found("pricing_surface")
         ? "Pricing observed"
         : null;
 

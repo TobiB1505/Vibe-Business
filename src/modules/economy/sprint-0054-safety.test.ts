@@ -102,12 +102,23 @@ describe("the Economy Intelligence layer bills nobody", () => {
    * the recorded prediction and the executed run answer different questions —
    * exactly the drift this suite exists to prevent.
    *
-   * So this is an allowlist naming its one reader, not a deleted guard. What it
+   * So this is an allowlist naming its readers, not a deleted guard. What it
    * still forbids is the thing that matters: the estimator being wired into the
    * production execution path, which needs persistence and is the Credit
    * Settlement sprint's decision to make.
+   *
+   * ADR 0072 named the second reader, `coding-agent/run-forecast.ts`, and it is
+   * a different kind of caller from the first — it renders to a founder. What
+   * makes it admissible is not an argument but a shape: it is read-only, it
+   * runs on a page render and never on the start action, and **its return type
+   * contains no amount**. The estimator's cost, upper bound, multipliers and
+   * provider rates all stop inside it, and the test below reads its source to
+   * keep that true rather than trusting this paragraph.
    */
-  const PERMITTED_ECONOMY_READERS = [join("modules", "coding-agent", "dogfood")];
+  const PERMITTED_ECONOMY_READERS = [
+    join("modules", "coding-agent", "dogfood"),
+    join("modules", "coding-agent", "run-forecast.ts"),
+  ];
 
   /**
    * What the rest of the application may import from here, by module.
@@ -136,6 +147,19 @@ describe("the Economy Intelligence layer bills nobody", () => {
     "@/modules/economy/execution-class",
     "@/modules/economy/infrastructure-rates",
     "@/modules/economy/sandbox-cost",
+    /*
+     * ADR 0073. Composes the two above and adds nothing of its own: the
+     * founder-attested rate card, and the arithmetic that turns CPU
+     * milliseconds and wall time into nanodollars.
+     *
+     * It is on this list rather than inlined at each writer because there are
+     * three of them — validation, preview and the agent — and "what did this
+     * sandbox cost" answered three times is "what did this sandbox cost"
+     * answered differently the first time somebody edits one. It decides no
+     * amount that was not already decidable by importing its two parts
+     * directly, which is the property this list is drawn on.
+     */
+    "@/modules/economy/sandbox-usage-estimate",
   ];
 
   it("is read only by the economy module, the calibration harness and the permitted primitives", () => {
@@ -154,11 +178,20 @@ describe("the Economy Intelligence layer bills nobody", () => {
   });
 
   /**
-   * The narrower rule the allowlist above must not be allowed to erode: the
-   * calibration harness may ask what class a change is, and may not ask what it
-   * will cost. A quote reaching the execution path is a quote that will
-   * eventually authorize something.
+   * The narrower rule the allowlist above must not be allowed to erode: a
+   * caller may ask what class a change is, and may not ask what it will cost.
+   * A quote reaching the execution path is a quote that will eventually
+   * authorize something.
+   *
+   * `run-forecast.ts` is the one file permitted to read the estimator, and the
+   * two tests after this one are the price of that permission. `quote-simulation`
+   * and `safety-margin` stay unreadable by anybody: the first produces a Credit
+   * figure from a hypothetical rate card, and the second buffers a number for
+   * Vibe's own planning — "charging a customer for Vibe's uncertainty is a
+   * separate decision that nobody has made", in that file's own words.
    */
+  const ESTIMATOR_BOUNDARY = join("modules", "coding-agent", "run-forecast.ts");
+
   it("never lets the predictive estimator reach the execution path", () => {
     const forbidden = [
       "economy/intelligence/pre-execution-estimate",
@@ -169,12 +202,61 @@ describe("the Economy Intelligence layer bills nobody", () => {
     const offenders = walk(join(process.cwd(), "src"))
       .filter((file) => !file.includes(join("modules", "economy")))
       .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => !file.endsWith(ESTIMATOR_BOUNDARY))
       .filter((file) => {
         const code = readFileSync(file, "utf8");
         return forbidden.some((module) => code.includes(module));
       });
 
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The permission's actual condition (ADR 0072).
+   *
+   * The boundary file may read the estimator because nothing monetary survives
+   * it. That is a property of its source, so it is checked by reading its
+   * source — the same instrument the rest of this file uses, and the reason the
+   * allowlist above is not simply a hole.
+   *
+   * Comments are stripped first: the file's own docblock explains at length why
+   * it produces no cost, and matching that prose would fail it for saying so.
+   */
+  it("lets no amount out of the one file permitted to read the estimator", () => {
+    const code = readFileSync(join(process.cwd(), "src", ESTIMATOR_BOUNDARY), "utf8")
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
+
+    for (const forbidden of [
+      "nanoUsd",
+      "estimatedCost",
+      "Credit",
+      "usd",
+      "price",
+      "quote",
+      "safety-margin",
+      "safetyMargin",
+    ]) {
+      expect(code.toLowerCase(), `run-forecast.ts mentions ${forbidden}`).not.toContain(
+        forbidden.toLowerCase(),
+      );
+    }
+  });
+
+  /**
+   * And that the shape it exports is the one that was reviewed.
+   *
+   * A field list is the thing an "improvement" quietly grows. Pinning it means
+   * adding one is a deliberate edit to this test with a reason beside it, which
+   * is exactly the friction a boundary is for.
+   */
+  it("exports the four non-monetary fields the boundary was granted for", () => {
+    const code = readFileSync(join(process.cwd(), "src", ESTIMATOR_BOUNDARY), "utf8");
+    const shape = code.slice(code.indexOf("export type RunForecast = {"));
+    const body = shape.slice(0, shape.indexOf("\n};"));
+
+    const fields = [...body.matchAll(/^\s{2}(\w+):/gm)].map((match) => match[1]);
+    expect(fields).toEqual(["comparableRuns", "confidence", "repositoryMeasured", "drivers"]);
   });
 });
 

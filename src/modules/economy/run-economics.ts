@@ -19,10 +19,18 @@ import {
  *
  * ## Why a sandbox rate must be passed in
  *
- * Because Vibe does not have one. `sandbox_usage_events.provider_cost_usd` is
- * null in every row ever written, and no sandbox price exists anywhere in the
- * codebase — `validation/budgets.ts` knows the microVM has four vCPUs and
- * nothing about what four vCPUs cost.
+ * Because this module is a scenario harness and must not adopt one silently.
+ * `sandbox_usage_events.provider_cost_usd` is null in every row ever written —
+ * Vercel reports no attributable per-sandbox amount — and this file is where an
+ * operator runs *what-if* analyses, which is precisely the place a defaulted
+ * rate would turn an assumption into a quoted figure.
+ *
+ * *(2026-09-02, ADR 0073: "no sandbox price exists anywhere in the codebase" was
+ * true when written and is not now. `VERCEL_SANDBOX_RATES` has been
+ * founder-attested since 2026-08-20 and the ledger records a derived
+ * `estimated_cost_nano_usd` beside each row. This parameter stays required
+ * anyway: a scenario is asked under a rate the operator chose, and reaching for
+ * the current card here would silently answer a different question.)*
  *
  * A default rate here would be a number invented in a module and then quoted
  * back as though it were evidence. So the parameter is optional and its absence

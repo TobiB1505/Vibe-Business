@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACTION_PLANNING_CONFIG } from "@/modules/ai/operations";
-import { getAuditCurrency } from "@/modules/business-audit/service";
+import { getAuditCurrency, type AuditEvidence } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
@@ -136,12 +136,69 @@ export async function getActionPlanReadiness(
   projectId: string,
   requestedOpportunityId: string | null = null,
 ): Promise<ActionPlanReadiness> {
+  return actionPlanReadinessFrom(
+    await readActionPlanReadinessInputs(supabase, projectId),
+    requestedOpportunityId,
+  );
+}
+
+/**
+ * Everything readiness needs that does not depend on *which* Move is asked
+ * about (PERF-005).
+ *
+ * All four reads are project-scoped: the audit, whether it is still current,
+ * the Move set, and the product profile. None of them varies with
+ * `requestedOpportunityId`. Naming them as one thing is what lets a screen
+ * showing five Moves read them once instead of five times — see
+ * `actionPlanReadinessFrom`.
+ */
+export type ActionPlanReadinessInputs = {
+  audit: Awaited<ReturnType<typeof getLatestSuccessfulAudit>>;
+  currency: Awaited<ReturnType<typeof getAuditCurrency>>;
+  opportunities: Awaited<ReturnType<typeof getLatestOpportunities>>;
+  profile: Awaited<ReturnType<typeof getLatestProfile>>;
+};
+
+/**
+ * The four reads, in parallel, once.
+ *
+ * `evidence` is passed through to `getAuditCurrency` when the caller has
+ * already read it (VB-022) — the same prefetch shape the Business Health
+ * read models use, for the same reason.
+ */
+export async function readActionPlanReadinessInputs(
+  supabase: SupabaseClient,
+  projectId: string,
+  evidence?: AuditEvidence,
+): Promise<ActionPlanReadinessInputs> {
   const [audit, currency, opportunities, profile] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
-    getAuditCurrency(supabase, projectId),
+    getAuditCurrency(supabase, projectId, evidence),
     getLatestOpportunities(supabase, projectId),
     getLatestProfile(supabase, projectId),
   ]);
+
+  return { audit, currency, opportunities, profile };
+}
+
+/**
+ * Readiness for one Move, from inputs the caller already holds.
+ *
+ * Pure, and that is the point rather than a convenience: the Action Plan
+ * screen asks this about every Move it renders, and when the question carried
+ * its own reads that was three avoidable round trips per Move — roughly
+ * forty queries on a five-Move screen to answer a question whose inputs are
+ * identical every time. A pure function cannot regress into that shape.
+ *
+ * `getActionPlanReadiness` remains the one-Move answer for callers that hold
+ * nothing yet, and is now this function with a read in front of it, so the two
+ * cannot disagree about what "ready" means.
+ */
+export function actionPlanReadinessFrom(
+  inputs: ActionPlanReadinessInputs,
+  requestedOpportunityId: string | null = null,
+): ActionPlanReadiness {
+  const { audit, currency, opportunities, profile } = inputs;
 
   if (!audit?.result) return blocked("audit_missing", null);
 

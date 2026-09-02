@@ -70,17 +70,3 @@ export function CreditPrice({
     </span>
   );
 }
-
-/**
- * The same price as plain text, for a sentence rather than a label.
- *
- * Returns null for a free operation, so a caller can render the whole clause
- * conditionally instead of building a sentence around a missing number.
- */
-export function creditPriceLabel(
-  operation: RetailOperationKind,
-  pricingClass?: ExecutionPricingClass | null,
-): string | null {
-  const credits = priceOf(operation, pricingClass);
-  return credits === null ? null : `${formatCreditsForDisplay(credits)} Credits`;
-}

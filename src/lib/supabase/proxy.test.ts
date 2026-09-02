@@ -23,8 +23,12 @@ let cookiesSupabaseWillSet: CookieToSet[] = [];
 /** Cache headers the fake client passes alongside them, as @supabase/ssr does. */
 let headersSupabaseWillSet: Record<string, string> = {};
 
+/** The options the proxy hands @supabase/ssr, captured for the deadline test. */
+let clientOptions: { global?: { fetch?: typeof fetch } } | null = null;
+
 vi.mock("@supabase/ssr", () => ({
   createServerClient: vi.fn((_url: string, _key: string, options: {
+    global?: { fetch?: typeof fetch };
     cookies: {
       getAll: () => unknown;
       setAll: (cookies: CookieToSet[], headers: Record<string, string>) => void;
@@ -32,6 +36,7 @@ vi.mock("@supabase/ssr", () => ({
   }) => ({
     auth: {
       getClaims: async () => {
+        clientOptions = options;
         // Real @supabase/ssr writes cookies from inside getClaims() when the
         // token needed refreshing, so the fake does too — that ordering is
         // exactly what the "return supabaseResponse as-is" rule protects.
@@ -364,5 +369,43 @@ describe("degrading safely", () => {
     const response = await updateSession(request("/app"));
 
     expect(locationOf(response)?.pathname).toBe("/login");
+  });
+});
+
+/**
+ * The last Supabase client without a deadline (PERF-016).
+ *
+ * `server.ts` and `service.ts` bound their requests; this one did not, and it
+ * is the one in front of every matched request in the product. A hung auth
+ * socket held the function open with a blank page behind it until the
+ * platform's own ceiling.
+ *
+ * Asserted as behaviour rather than a name, for the reason `server.test.ts`
+ * gives: a name is a proxy for "the wrapper is installed" and stops being one
+ * the moment the composition changes.
+ */
+describe("the proxy's own Supabase client", () => {
+  it("gives its auth call a deadline", async () => {
+    const realFetch = globalThis.fetch;
+    const seen: (AbortSignal | null | undefined)[] = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(init?.signal);
+      return new Response("{}", { status: 200 });
+    }) as unknown as typeof fetch;
+
+    try {
+      getClaimsMock.mockResolvedValue({ data: null, error: null });
+      await updateSession(request("/"));
+
+      const installed = clientOptions?.global?.fetch;
+      expect(installed, "the proxy client installs no fetch of its own").toBeTypeOf("function");
+
+      await installed!("https://project.supabase.co/auth/v1/user");
+      expect(seen[0], "a request left the proxy client with no deadline").toBeInstanceOf(
+        AbortSignal,
+      );
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });

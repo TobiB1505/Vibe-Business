@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { xmlResponse, textResponse } from "@/modules/live-product-intelligence/test-support";
+import {
+  htmlResponse,
+  redirectResponse,
+  xmlResponse,
+  textResponse,
+} from "@/modules/live-product-intelligence/test-support";
 import { resolveOutcomeContract } from "@/modules/execution/outcome-contract";
 import { allChecksPassed, classifyOutcome, evaluateObservation } from "./evaluate";
 import { observePublicProduct } from "./observe";
@@ -31,6 +36,7 @@ function contract(): ExpectedOutcome {
     capability: "nextjs_seo_foundations_v2",
     publicOrigin: OUTCOME_ORIGIN,
     repository: outcomeSnapshot(),
+    changedPaths: [],
   });
   if (!resolved.supported) throw new Error("expected a supported contract");
   return resolved.expected;
@@ -332,5 +338,114 @@ describe("classification boundaries (§20, §21, §22, §23)", () => {
     // An unsupported capability with no checks would otherwise verify for free.
     expect(allChecksPassed([])).toBe(false);
     expect(classifyOutcome([])).toBe("failed");
+  });
+});
+
+/**
+ * The agentic profile, end to end (ADR 0071).
+ *
+ * Same discipline as everything above: the contract is resolved by the real
+ * `resolveOutcomeContract`, the observation by the real `observePublicProduct`
+ * against the fake transport, and the classification by the real evaluator. No
+ * hand-written result array — what is asserted is what production would
+ * conclude.
+ */
+function agenticContract(changedPaths: string[]): ExpectedOutcome {
+  const resolved = resolveOutcomeContract({
+    capability: "agentic_execution_v1",
+    publicOrigin: OUTCOME_ORIGIN,
+    repository: outcomeSnapshot(),
+    changedPaths,
+  });
+  if (!resolved.supported) throw new Error(`expected supported, got ${resolved.reason}`);
+  return resolved.expected;
+}
+
+async function observeAgentic(
+  changedPaths: string[],
+  routes: Parameters<typeof outcomeHttp>[0],
+): Promise<OutcomeCheckResult[]> {
+  const expected = agenticContract(changedPaths);
+  const observation = await observePublicProduct(expected, outcomeHttp(routes), {
+    budgets: DEFAULT_OUTCOME_BUDGETS,
+  });
+  return evaluateObservation(expected, observation);
+}
+
+const CHANGED_PAGES = ["src/app/page.tsx", "src/app/pricing/page.tsx"];
+
+describe("an agentic change whose pages are being served (ADR 0071)", () => {
+  it("verifies when both touched pages answer", async () => {
+    const results = await observeAgentic(CHANGED_PAGES, {
+      [`${OUTCOME_ORIGIN}/`]: htmlResponse("<h1>Home</h1>"),
+      [`${OUTCOME_ORIGIN}/pricing`]: htmlResponse("<h1>Plans</h1>"),
+    });
+
+    expect(results.map((result) => result.checkId)).toEqual([
+      "public_route_serves_page:/",
+      "public_route_serves_page:/pricing",
+    ]);
+    expect(classifyOutcome(results)).toBe("verified");
+  });
+
+  it("stores the status line and never the page", async () => {
+    // The same evidence policy the two document probes work under (§14, §15,
+    // CLAUDE.md rule 37) — and here it is also the boundary of the claim: this
+    // profile does not read a page's content, so it cannot report on it.
+    const results = await observeAgentic(["src/app/pricing/page.tsx"], {
+      [`${OUTCOME_ORIGIN}/pricing`]: htmlResponse("<h1>Plans</h1><p>19 EUR</p>"),
+    });
+
+    expect(JSON.stringify(results)).not.toContain("19 EUR");
+    expect(JSON.stringify(results)).not.toContain("<h1>");
+    expect(results[0].observedValue.httpStatus).toBe(200);
+    expect(results[0].observedValue.pathPreserved).toBe(true);
+  });
+});
+
+describe("an agentic change that broke a page (ADR 0071)", () => {
+  it("reads a 500 on a touched page as failed, not as an absence", async () => {
+    // The most expensive thing this pipeline can do is merge a change that
+    // takes a public page down, and this is the check that says so.
+    const results = await observeAgentic(CHANGED_PAGES, {
+      [`${OUTCOME_ORIGIN}/`]: htmlResponse("<h1>Home</h1>"),
+      [`${OUTCOME_ORIGIN}/pricing`]: { status: 500 },
+    });
+
+    expect(statusOf(results, "public_route_serves_page:/pricing")).toBe("failed");
+    expect(statusOf(results, "public_route_serves_page:/")).toBe("passed");
+    expect(classifyOutcome(results)).toBe("partial");
+  });
+
+  it("reads a 404 as the page not being published, not as it being broken", async () => {
+    const results = await observeAgentic(["src/app/pricing/page.tsx"], {
+      [`${OUTCOME_ORIGIN}/pricing`]: { status: 404 },
+    });
+
+    expect(statusOf(results, "public_route_serves_page:/pricing")).toBe("not_observed");
+    expect(classifyOutcome(results)).toBe("not_observed");
+  });
+
+  it("never blames the product for a request Vibe could not make", async () => {
+    // A rate limiter and a bot-blocking WAF answer exactly like this on a
+    // perfectly healthy page. `failed` here would be Vibe telling a founder
+    // their site is broken because of our user agent (§19, §23).
+    const results = await observeAgentic(["src/app/pricing/page.tsx"], {
+      [`${OUTCOME_ORIGIN}/pricing`]: { status: 429 },
+    });
+
+    expect(statusOf(results, "public_route_serves_page:/pricing")).toBe("error");
+    expect(classifyOutcome(results)).toBe("failed");
+  });
+
+  it("reports a page that redirects elsewhere as not observed", async () => {
+    const results = await observeAgentic(["src/app/pricing/page.tsx"], {
+      [`${OUTCOME_ORIGIN}/pricing`]: redirectResponse(`${OUTCOME_ORIGIN}/plans`),
+      [`${OUTCOME_ORIGIN}/plans`]: htmlResponse("<h1>Plans</h1>"),
+    });
+
+    const result = results[0];
+    expect(result.status).toBe("not_observed");
+    expect(result.observedValue.pathPreserved).toBe(false);
   });
 });
