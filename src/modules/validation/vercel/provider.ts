@@ -43,6 +43,10 @@ function toProviderPolicy(policy: SandboxNetworkPolicy) {
   // `deny-all` blocks DNS resolution as well as egress, which is what makes it
   // meaningful against exfiltration rather than merely inconvenient.
   if (policy.mode === "deny_all") return "deny-all" as const;
+  // Spelled out rather than expressed as `allow: ["*"]`, which would be the
+  // same policy wearing the allowlist's name — bounded-looking in every log,
+  // every test and every review that reads the mode instead of the list.
+  if (policy.mode === "allow_all") return "allow-all" as const;
   return { allow: [...policy.domains] };
 }
 

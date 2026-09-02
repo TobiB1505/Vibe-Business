@@ -49,7 +49,28 @@ import type { SandboxCommand } from "./commands";
 export type SandboxNetworkPolicy =
   | { mode: "deny_all" }
   /** Domain allowlist. Enforced by SNI, and it also constrains DNS resolution. */
-  | { mode: "allow_domains"; domains: readonly string[] };
+  | { mode: "allow_domains"; domains: readonly string[] }
+  /**
+   * No egress restriction at all.
+   *
+   * **This mode exists for exactly one caller and a structural test enforces
+   * that** — see `network-policy-scope.test.ts`. It is here because a browser a
+   * person signs into cannot have its destinations enumerated in advance: an
+   * identity provider, a CDN, a font host, a bot-check, a webhook a login form
+   * posts to. An allowlist that has to contain all of those is not a boundary,
+   * it is a list somebody maintains until the day a customer cannot log in.
+   *
+   * What makes it acceptable in that one place is what is *in* the sandbox: no
+   * customer repository, no Vibe credential, no database, no source code —
+   * only Chromium and a guard Vibe wrote. There is nothing there to exfiltrate,
+   * which is the property `deny_all` exists to protect everywhere else and the
+   * reason it must keep protecting it there.
+   *
+   * Never widen a repository-executing sandbox to this. Rule 64 says the most
+   * restrictive policy the provider supports, and for anything that runs a
+   * customer's code that is still `deny_all` before the first command.
+   */
+  | { mode: "allow_all" };
 
 export type SandboxCommandResult = {
   exitCode: number;

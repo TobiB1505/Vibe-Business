@@ -57,10 +57,20 @@ export const BROWSER_GUARD_ENV = {
   viewToken: "VIBE_VIEW_TOKEN",
   publicPort: "VIBE_PUBLIC_PORT",
   devtoolsPort: "VIBE_DEVTOOLS_PORT",
+  /**
+   * Where the guard records that it is listening *and* that Chromium answered.
+   *
+   * Vibe reads this file back rather than probing the public port, because
+   * probing would mean spending the control token to ask a question — and a
+   * capability used as a health check is a capability in one more place. The
+   * file says the one thing the caller needs: this session can be used now.
+   */
+  readyFile: "VIBE_READY_FILE",
 } as const;
 
 export const BROWSER_GUARD_PROGRAM = `
 import { createServer } from "node:http";
+import { writeFileSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
 import { WebSocketServer, WebSocket } from "ws";
 
@@ -68,8 +78,9 @@ const controlToken = process.env.VIBE_CONTROL_TOKEN;
 const viewToken = process.env.VIBE_VIEW_TOKEN;
 const publicPort = Number(process.env.VIBE_PUBLIC_PORT);
 const devtoolsPort = Number(process.env.VIBE_DEVTOOLS_PORT);
+const readyFile = process.env.VIBE_READY_FILE;
 
-if (!controlToken || !viewToken || !publicPort || !devtoolsPort) {
+if (!controlToken || !viewToken || !publicPort || !devtoolsPort || !readyFile) {
   console.error("guard: incomplete environment");
   process.exit(1);
 }
@@ -302,7 +313,37 @@ view.on("connection", async (client) => {
   page.on("error", close);
 });
 
-server.listen(publicPort, "0.0.0.0", () => {
+/**
+ * Chromium is a separate process started at the same moment as this one, so
+ * "listening" is not "usable". The file is written only once DevTools has
+ * answered, which is what makes it the single readiness signal rather than a
+ * hint the caller has to confirm.
+ *
+ * A ceiling rather than an unbounded wait: a browser that never comes up must
+ * fail the session, not hold it open until the sandbox's own timeout.
+ */
+async function waitForChromium(deadlineMs) {
+  const until = Date.now() + deadlineMs;
+  while (Date.now() < until) {
+    try {
+      await devtools("/json/version");
+      return true;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+  return false;
+}
+
+server.listen(publicPort, "0.0.0.0", async () => {
+  if (!(await waitForChromium(30000))) {
+    console.error("guard: chromium did not answer");
+    process.exit(1);
+  }
+  // The content is deliberately not a token, a URL or a port. Vibe already
+  // knows all three; what it cannot know from outside is whether this VM is
+  // ready, and that is the whole message.
+  writeFileSync(readyFile, "ready");
   console.log("guard listening");
 });
 `;
