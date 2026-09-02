@@ -71,9 +71,57 @@ const LISTING_TIMEOUT_MS = 60_000;
 
 export type WorkspaceListing = {
   paths: ReadonlySet<string>;
-  /** True when the cap was reached, so the listing is known incomplete. */
+  /** True when the cap was reached, or the command failed. Known incomplete either way. */
   truncated: boolean;
+  /**
+   * What the listing command said when it failed. `null` when it did not.
+   *
+   * A complete listing that reached the cap is *not* a failure: the command
+   * worked and there was simply more of the workspace than Vibe will look at.
+   * That case is `truncated: true` with `failure: null`, and the two are
+   * different bugs with different fixes.
+   */
+  failure: string | null;
 };
+
+/**
+ * Which of Vibe's own observations failed.
+ *
+ * A vocabulary rather than a sentence, because this is what an operator filters
+ * an event log by. Every value names a command Vibe runs on its own behalf —
+ * never anything the repository or the agent chose.
+ */
+export const WORKSPACE_OBSERVATIONS = [
+  "reconnect",
+  "sandbox_home",
+  "listing",
+  "baseline_write",
+  "marker",
+] as const;
+
+export type WorkspaceObservation = (typeof WORKSPACE_OBSERVATIONS)[number];
+
+/**
+ * One observation, and what it said if it did not work.
+ *
+ * ## Why these stopped being booleans
+ *
+ * Because for four days every agent run ended at `sandbox_lost` — the failure
+ * code with no detail field at all — and the message that would have named the
+ * cause in one reading (`TypeError: The argument 'args[31]' must be a string
+ * without null bytes`) was produced by the provider, carried faithfully through
+ * `run()`, and then discarded by `if (result.exitCode !== 0) return …` one
+ * frame later.
+ *
+ * `validation/orchestrator.ts` had already learned this and carries a
+ * `failureDetail` on every failing exit, sanitized and persisted. This is the
+ * same shape for the observation path: the caller decides what to do, and the
+ * evidence for why travels with the decision instead of being reconstructed
+ * afterwards from a guess.
+ */
+export type WorkspaceObservationResult =
+  | { ok: true }
+  | { ok: false; observation: WorkspaceObservation; detail: string | null };
 
 export type WorkspaceChanges = {
   /** Repository-relative, sorted, deduplicated. */
@@ -155,17 +203,28 @@ export async function listWorkspaceFiles(input: {
      * observed set entirely, rather than being caught later by a read that
      * would already have followed it.
      *
-     * `%P\0` rather than `%P\n`: see `parsePaths`.
+     * `%P\\0` rather than `%P\\n`: see `parsePaths`. The escape is *two
+     * characters* and belongs to `find`, which turns it into a NUL itself — not
+     * to argv, which cannot carry one. Writing a real NUL here is how the whole
+     * observation path died for four days: an argument list is a list of C
+     * strings, so Node refuses to spawn at all, the provider reports the throw
+     * as a failed command, and every run ended at its first listing as
+     * `sandbox_lost`. The fake sandbox now refuses a NUL argument the same way,
+     * so the next attempt fails in `pnpm test` instead of in production.
      */
-    command: { command: "find", args: [".", ...pruneExpression(), "-type", "f", "-printf", "%P\0"] },
+    command: { command: "find", args: [".", ...pruneExpression(), "-type", "f", "-printf", "%P\\0"] },
     cwd: input.cwd,
     timeoutMs: LISTING_TIMEOUT_MS,
   });
 
-  if (result.exitCode !== 0) return { paths: new Set(), truncated: true };
+  // The output is carried, not dropped. When this command cannot run at all the
+  // provider reports the throw here, and that message is the whole diagnosis.
+  if (result.exitCode !== 0) {
+    return { paths: new Set(), truncated: true, failure: result.output };
+  }
 
   const parsed = parsePaths(result.output);
-  return { paths: parsed.paths, truncated: parsed.truncated };
+  return { paths: parsed.paths, truncated: parsed.truncated, failure: null };
 }
 
 /**
@@ -204,17 +263,28 @@ export async function captureWorkspaceBaseline(input: {
   cwd: string;
   /** Absolute, outside the repository, so the baseline is never itself a change. */
   baselinePath: string;
-}): Promise<boolean> {
+}): Promise<WorkspaceObservationResult> {
   const listing = await listWorkspaceFiles({ sandbox: input.sandbox, cwd: input.cwd });
-  if (listing.truncated) return false;
+  if (listing.truncated) {
+    return {
+      ok: false,
+      observation: "listing",
+      // A command that failed says why; a walk that hit the cap has nothing to
+      // say, so Vibe says it instead rather than reporting an empty reason.
+      detail: listing.failure ?? `the listing reached its ${MAX_WORKSPACE_PATHS}-path cap`,
+    };
+  }
 
-  return writeSandboxTextFile(input.sandbox, {
+  const written = await writeSandboxTextFile(input.sandbox, {
     path: input.baselinePath,
     // NUL-delimited, matching `parsePaths` — the file has to be written the
     // way it will be read, and a newline is a legal character in a name
     // (VB-029).
     content: [...listing.paths].sort().map((path) => `${path}\0`).join(""),
   });
+
+  if (!written.ok) return { ok: false, observation: "baseline_write", detail: written.output };
+  return { ok: true };
 }
 
 /**
@@ -238,7 +308,7 @@ export async function readWorkspaceBaseline(input: {
   if (content === null) return null;
 
   const parsed = parsePaths(content);
-  return { paths: parsed.paths, truncated: parsed.truncated };
+  return { paths: parsed.paths, truncated: parsed.truncated, failure: null };
 }
 
 /**
@@ -255,14 +325,15 @@ export async function plantChangeMarker(input: {
   sandbox: SandboxHandle;
   /** Absolute path, outside the repository tree. */
   markerPath: string;
-}): Promise<boolean> {
+}): Promise<WorkspaceObservationResult> {
   const result = await input.sandbox.run({
     command: { command: "touch", args: ["--", input.markerPath] },
     cwd: ".",
     timeoutMs: 30_000,
   });
 
-  return result.exitCode === 0;
+  if (result.exitCode !== 0) return { ok: false, observation: "marker", detail: result.output };
+  return { ok: true };
 }
 
 /**
@@ -292,8 +363,9 @@ export async function discoverWorkspaceChanges(input: {
         "-newer",
         input.markerPath,
         "-printf",
-        // NUL, for the same reason as the full listing above (VB-029).
-        "%P\0",
+        // NUL, for the same reason as the full listing above (VB-029) — and
+        // written as the two-character escape for the reason recorded there.
+        "%P\\0",
       ],
     },
     cwd: input.cwd,

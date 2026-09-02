@@ -1129,8 +1129,8 @@ describe("§20, §35 — cleanup and settlement", () => {
 describe("the sandbox-hosted harness", () => {
   const HOME = "/vercel/sandbox";
   const LIST =
-    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\0";
-  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\0`;
+    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\\0";
+  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\\0`;
 
   /** The workspace as the fake sandbox reports it, before and after the run. */
   function walk(options: { before: string[]; after: string[]; touched: string[] }) {
@@ -1322,6 +1322,80 @@ describe("the sandbox-hosted harness", () => {
       failureCode: "sandbox_lost",
     });
     expect(provider.starts()).toBe(0);
+  });
+
+  /**
+   * The four days, and why they were four days rather than an hour.
+   *
+   * A real `find` argument carried a NUL byte, so no process could be started
+   * with it. The provider said so in one sentence — `TypeError: The argument
+   * 'args[31]' must be a string without null bytes` — and every layer above
+   * threw the sentence away: the listing returned `truncated`, the baseline
+   * returned `false`, and the step returned `sandbox_lost`, a failure code with
+   * no detail field at all. Every run since 2026-08-28 ended there, saying
+   * nothing.
+   *
+   * So the assertion is not that the run fails. It is that the run explains
+   * itself: which observation broke, what the command said, and what the
+   * provider reports about the sandbox — the last from `inspect()`, which had
+   * an implementation, a test, and no production caller until this path.
+   */
+  it("records why the workspace was lost, with the failing command's own words", async () => {
+    const { operation } = seed();
+    const message = "TypeError: The argument 'args[31]' must be a string without null bytes";
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      inspectDetail: "status=running timeout=900000ms",
+      results: {
+        ...walk({ before: [], after: [], touched: [] }),
+        [LIST]: { exitCode: 1, output: message },
+      },
+    });
+    const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+    await runAgent(deps, operation.id, ["typecheck"]);
+
+    const failure = db
+      .rows("agent_execution_events")
+      .find((event) => event.type === "workspace_failed");
+
+    expect(failure).toBeDefined();
+
+    const metadata = failure?.metadata as {
+      observation: string;
+      detail: string;
+      sandboxState: string;
+    };
+
+    // Which observation, not merely that one failed. `listing` and
+    // `baseline_write` are different bugs reached through the same return.
+    expect(metadata.observation).toBe("listing");
+    expect(metadata.detail).toContain("must be a string without null bytes");
+    // Asked only on a path that has already failed, and only there: "the
+    // sandbox is fine and the command is malformed" is a different finding
+    // from "the sandbox stopped", and the observation alone cannot tell them
+    // apart.
+    expect(metadata.sandboxState).toBe("status=running timeout=900000ms");
+    expect(sandbox.events.some((event) => event.kind === "inspect")).toBe(true);
+  });
+
+  /** No failed observation, no extra provider call. The healthy path pays nothing. */
+  it("never asks the provider to explain a workspace that worked", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      results: walk({ before: [], after: [], touched: [] }),
+    });
+    const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+    await runAgent(deps, operation.id, ["typecheck"]);
+
+    expect(sandbox.events.some((event) => event.kind === "inspect")).toBe(false);
+    expect(
+      db.rows("agent_execution_events").some((event) => event.type === "workspace_failed"),
+    ).toBe(false);
   });
 
   /** The marker lives outside the repository, so it is never itself a change. */

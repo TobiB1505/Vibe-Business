@@ -1,5 +1,6 @@
 import "server-only";
 
+import { sanitizeCommandOutput } from "@/modules/validation/logs";
 import type { SandboxHandle } from "@/modules/validation/sandbox-port";
 import type {
   CodingAgentRequest,
@@ -389,6 +390,23 @@ const MAX_PROGRESS_BYTES = 256 * 1024;
  * row that said `turns: 0` — every turn had really happened, and the only
  * record of them died with the step that was watching.
  */
+/**
+ * A write failure, with the reason attached rather than replaced.
+ *
+ * `failureDetail` is contractually sanitized (never raw provider text, never
+ * model text), so the command's output is put through the same scrubber every
+ * stored command output uses and bounded to one readable line. What is *not*
+ * done is dropping it: "the agent runtime program could not be written" is a
+ * restatement of the control flow, and the sentence after the dash is the only
+ * part an operator can act on.
+ */
+function writeFailure(what: string, output: string): string {
+  const sanitized = sanitizeCommandOutput(output).text.replace(/\s+/g, " ").trim();
+  if (sanitized.length === 0) return `${what} could not be written`;
+  const bounded = sanitized.length > 200 ? `${sanitized.slice(0, 200)}…` : sanitized;
+  return `${what} could not be written — ${bounded}`;
+}
+
 export function createSandboxCodingAgentProvider(
   deps: SandboxAgentRuntimeDeps,
 ): DetachedCodingAgentProvider {
@@ -446,14 +464,19 @@ export function createSandboxCodingAgentProvider(
         path: `${deps.runtimeDir}/run.mjs`,
         content: AGENT_RUNTIME_PROGRAM,
       });
-      if (!wrote) return { ok: false, failureDetail: "the agent runtime program could not be written" };
+      if (!wrote.ok) {
+        return { ok: false, failureDetail: writeFailure("the agent runtime program", wrote.output) };
+      }
 
       const configured = await writeSandboxTextFile(deps.sandbox, {
         path: `${deps.runtimeDir}/request.json`,
         content: JSON.stringify(payload),
       });
-      if (!configured) {
-        return { ok: false, failureDetail: "the agent runtime request could not be written" };
+      if (!configured.ok) {
+        return {
+          ok: false,
+          failureDetail: writeFailure("the agent runtime request", configured.output),
+        };
       }
 
       // Cancelled before it began. Checked here rather than trusted to the
