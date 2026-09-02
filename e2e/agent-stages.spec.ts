@@ -38,6 +38,21 @@ test.describe("the workspace follows the target composition", () => {
     await expect(page.getByTestId("agent-credit-estimate")).toContainText(
       "Up to 100 Credits",
     );
+
+    /*
+     * And what stands behind that ceiling (ADR 0072).
+     *
+     * The number alone reads the same whether Vibe has done this seven times or
+     * never, which is the gap this closes. What must never appear beside it is
+     * a second, predicted figure: the estimator's leave-one-out backtest is out
+     * by 24% on average across 7 runs, and its repository term has been
+     * validated against nothing.
+     */
+    const forecast = page.getByTestId("agent-run-forecast");
+    await expect(forecast).toContainText("comparable run");
+    await expect(forecast).not.toContainText("$");
+    await expect(forecast).not.toContainText("Credits");
+
     await expect(page.getByRole("button", { name: "Run with Vibe" })).toBeVisible();
   });
 

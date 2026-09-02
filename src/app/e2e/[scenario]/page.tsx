@@ -107,6 +107,7 @@ import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenario
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
 import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
+import { agentReadyForecastNotes } from "../agent-stage-scenarios";
 import {
   E2E_ONBOARDING_SCENARIOS,
   isE2eOnboardingScenario,
@@ -615,6 +616,14 @@ export default async function E2eScenarioPage({
                 liveUrl="https://vibebusiness.de"
                 caption={caption}
                 creditEstimate="100"
+                /*
+                 * What stands behind that ceiling (ADR 0072). Rendered from the
+                 * real forecast against the real run history rather than from
+                 * hand-written strings: the sentence that says a ceiling is
+                 * policy rather than a measurement is the one a fixture must
+                 * not be able to soften.
+                 */
+                forecastNotes={agentReadyForecastNotes()}
                 startAction={
                   <div className="flex w-full flex-col gap-3">
                     {startRefusal && (

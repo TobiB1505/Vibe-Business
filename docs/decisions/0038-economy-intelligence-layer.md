@@ -1,6 +1,6 @@
 # 0038 - The Economy Intelligence Layer
 
-Status: Accepted (extends 0024)
+Status: Accepted (extends 0024); amended by [0072](0072-the-evidence-behind-the-ceiling.md) — the layer stops being an unwired island
 Date: 2026-08-20
 
 Builds on [0024](0024-vibe-credits-economic-layer.md), [0030](0030-agent-execution-observability.md), [0036](0036-risk-adaptive-validation-depth.md).

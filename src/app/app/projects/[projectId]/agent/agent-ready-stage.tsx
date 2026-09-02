@@ -19,6 +19,7 @@ export function AgentReadyStage({
   caption,
   startAction,
   creditEstimate,
+  forecastNotes,
 }: {
   task: AgentTask | null;
   planHref: string;
@@ -29,6 +30,14 @@ export function AgentReadyStage({
   startAction?: React.ReactNode;
   /** Formatted server-owned ceiling for the exact run being offered. */
   creditEstimate?: string | null;
+  /**
+   * What stands behind that ceiling, already rendered into sentences.
+   *
+   * Strings rather than the estimate, for the same reason `creditEstimate` is a
+   * string: the copy is domain vocabulary and belongs beside the domain, and a
+   * client component that could reach the estimator could reach its money.
+   */
+  forecastNotes?: readonly string[];
 }) {
   return (
     <div
@@ -78,6 +87,7 @@ export function AgentReadyStage({
           {(startAction !== undefined || task === null) && (
             <AgentStartCta
               creditEstimate={startAction ? creditEstimate : null}
+              forecastNotes={startAction ? forecastNotes : undefined}
               note={
                 startAction
                   ? "Vibe re-checks the current code and every safety limit before starting"

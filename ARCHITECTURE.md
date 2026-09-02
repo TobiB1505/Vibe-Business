@@ -309,7 +309,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0035](docs/decisions/0035-commit-message-compiler.md) | Commit message compiler | §3.7 |
 | [0036](docs/decisions/0036-risk-adaptive-validation-depth.md) | Risk-adaptive validation depth | §3.8 |
 | [0037](docs/decisions/0037-automatic-validation-and-review-classification.md) | Automatic validation and review classification | §3.8, §4 |
-| [0038](docs/decisions/0038-economy-intelligence-layer.md) | Economy intelligence layer | §3.11 |
+| [0038](docs/decisions/0038-economy-intelligence-layer.md) | Economy intelligence layer (amended by 0072) | §3.11 |
 | [0039](docs/decisions/0039-documentation-currency.md) | Where truth lives, and how documentation stays current | This document |
 | [0040](docs/decisions/0040-ci-hosted-database-concurrency-gate.md) | Where a real-database concurrency test runs, and what it may reach | §3.11 |
 | [0041](docs/decisions/0041-marketing-attribution-pixel.md) | The Meta Pixel, and the two boundaries it runs inside | Cross-cutting |
@@ -343,6 +343,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0069](docs/decisions/0069-retention-sweep-trigger.md) | What deletes the expired rows, and what it may not touch — `pg_cron` (Accepted; closes ADR 0068's deferred D-2) | §3.11, §3.12, storage |
 | [0070](docs/decisions/0070-the-sandbox-is-the-boundary.md) | The sandbox is the boundary; the tool gateway is retired | §3.6 |
 | [0071](docs/decisions/0071-agentic-outcome-verification.md) | Outcome verification for agentic changes: routes Vibe observed | Measurement |
+| [0072](docs/decisions/0072-the-evidence-behind-the-ceiling.md) | The estimator informs the Run button; it does not price it | §3.11 |
 
 ### Layers with no section above
 

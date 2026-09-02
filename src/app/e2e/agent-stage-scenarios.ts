@@ -160,6 +160,8 @@ const PREVIEW_CHANGES: PreviewChange[] = [
 const PREVIEW_IMAGES: PreviewImages | null = null;
 
 import type { MergeFile, MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import { forecastRun } from "@/modules/coding-agent/run-forecast";
+import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 
 /*
  * Paths without line counts, because no diff statistic is stored. The fixture
@@ -356,4 +358,26 @@ export type E2eAgentStageScenario = keyof typeof E2E_AGENT_STAGE_SCENARIOS;
 
 export function isE2eAgentStageScenario(value: string): value is E2eAgentStageScenario {
   return value in E2E_AGENT_STAGE_SCENARIOS;
+}
+
+/**
+ * The sentences under the Credit ceiling on the ready hero (ADR 0072).
+ *
+ * Computed by the real forecast against the real run history, not written out
+ * here. The line that distinguishes "based on N comparable runs" from "this is
+ * Vibe's policy ceiling rather than a measured one" is exactly the line a
+ * hand-written fixture would keep green after the product stopped saying it.
+ *
+ * The step is one of the shapes `HISTORICAL_RUNS` actually records, so the
+ * scenario renders the measured branch — the one a founder sees today.
+ */
+export function agentReadyForecastNotes(): readonly string[] {
+  const forecast = forecastRun({
+    at: new Date("2026-09-02T12:00:00.000Z"),
+    step: { changeKind: "product_change", evidenceIds: ["live.seo.robots_meta_missing"] },
+    riskClass: "moderate",
+    snapshot: null,
+  });
+
+  return forecast ? [forecastEvidenceNote(forecast), ...forecastDriverNotes(forecast)] : [];
 }
