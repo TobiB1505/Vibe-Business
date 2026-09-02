@@ -246,6 +246,36 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       if (options.throwOn === rendered) throw new Error("provider exploded");
 
       /*
+       * A configured failure is believed, whatever the command is.
+       *
+       * Four branches below — the here-document write, `rm -f`, `mkdir` and
+       * `touch` — performed their mutation and answered `exitCode: 0` before
+       * `options.results` or `defaultExitCode` was ever read. A test that said
+       * `defaultExitCode: 1` was silently overruled for exactly the commands
+       * whose failure paths most needed staging: `captureWorkspaceBaseline`'s
+       * write, `plantChangeMarker`'s touch, and the agent runtime's install.
+       *
+       * The same lesson as the NUL guard above, one level out. A fake that
+       * cannot be told a command failed is not modelling a command; it is
+       * modelling the happy path and calling it a sandbox.
+       *
+       * Only failures return early. A configured *success* falls through so the
+       * branches keep doing their real work — writing the file, removing the
+       * path — which is what makes those tests verify state rather than an exit
+       * code.
+       */
+      const configured = options.results?.[rendered];
+      const exitCode = configured?.exitCode ?? options.defaultExitCode ?? 0;
+      if (exitCode !== 0) {
+        return {
+          exitCode,
+          durationMs: 5,
+          output: configured?.output ?? "",
+          timedOut: configured?.timedOut ?? false,
+        };
+      }
+
+      /*
        * argv cannot carry a NUL, so neither may this fake.
        *
        * An argument list is a list of C strings and a C string ends at the
@@ -422,9 +452,8 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         }
       }
 
-      const configured = options.results?.[rendered];
       return {
-        exitCode: configured?.exitCode ?? options.defaultExitCode ?? 0,
+        exitCode,
         durationMs: 10,
         output: configured?.output ?? "",
         timedOut: configured?.timedOut ?? false,

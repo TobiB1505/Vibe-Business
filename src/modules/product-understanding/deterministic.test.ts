@@ -187,6 +187,74 @@ describe("business signals", () => {
       "Vibe could not identify a pricing path in the sources it read.",
     );
   });
+
+  /**
+   * "Nothing was found" and "nothing was looked at" are different statements,
+   * and only one of them is evidence.
+   *
+   * `combine()` reduced both to `not_found`, because `liveSurface()` and
+   * `repoSurface()` return `null` for a snapshot that does not exist and for a
+   * snapshot whose surface is absent alike. The signal above — *"Vibe could not
+   * identify a pricing path in the sources it read"* — was therefore emitted
+   * for a project Vibe had never analysed, and reached the audit model as a
+   * finding with no source behind it. That is rule 44 read backwards: an
+   * unassessable dimension must be excluded, never reported as a negative.
+   */
+  it("says nothing at all about a project it has not analysed", () => {
+    const uninspected = deriveBusinessSignals({
+      repository: null,
+      liveProduct: null,
+      signedInProduct: null,
+    });
+
+    expect(uninspected.map((signal) => signal.id)).toEqual([]);
+  });
+
+  /**
+   * The other half: one source is enough to make a search real. A repository
+   * that was read and holds no pricing page is a finding, and stays one.
+   */
+  it("still reports an absence it actually looked for", () => {
+    const codeRead = deriveBusinessSignals({
+      repository: fakeRepositorySnapshot({
+        businessSurfaces: fakeRepositorySnapshot().businessSurfaces.map((surface) =>
+          surface.id === "pricing_page" ? { ...surface, detected: false } : surface,
+        ),
+      }),
+      liveProduct: null,
+      signedInProduct: null,
+    });
+
+    expect(codeRead.find((signal) => signal.id === "pricing_surface")?.statement).toBe(
+      "Vibe could not identify a pricing path in the sources it read.",
+    );
+  });
+});
+
+describe("the customer journey", () => {
+  /**
+   * `evidence-v3.ts` states journey absence rather than omitting it, and its
+   * reasoning is right for a stage Vibe searched for. For one it never searched
+   * for, the same code mints `profile.journey.<id>_not_found` — "No pricing
+   * stage was found in the customer journey" — with nothing behind it. That id
+   * is real: it appeared in a production run's execution-surface event.
+   */
+  it("omits a stage it never looked for", () => {
+    expect(
+      deriveJourney({ repository: null, liveProduct: null, signedInProduct: null }).map(
+        (stage) => stage.id,
+      ),
+    ).toEqual([]);
+  });
+
+  it("still reports a stage it searched for and did not find", () => {
+    const stages = deriveJourney(codeOnly());
+    const missing = stages.filter((stage) => stage.confidence === "not_found");
+
+    // A repository was read, so every stage it can speak to is a real search.
+    expect(stages.length).toBeGreaterThan(0);
+    expect(missing.length).toBeGreaterThan(0);
+  });
 });
 
 describe("technical profile", () => {

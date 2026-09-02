@@ -115,6 +115,11 @@ export type AuditEventType =
   | "change_validation.artifact_capture_failed"
   | "change_preparation.completed"
   | "change_preparation.failed"
+  // A person rejected a prepared change. Its own event rather than a variant of
+  // `failed`, for the same reason `change_approval.revoked` is not
+  // `invalidated`: "Vibe could not build this" and "a person did not want it"
+  // are different histories, and only the second is a decision.
+  | "change_preparation.discarded"
   // Agentic execution (EXECUTION CORE-4 §24). Domain lifecycle, distinct from
   // the generic operation.* execution events.
   //
