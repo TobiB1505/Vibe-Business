@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type KeyboardEvent, useId, useRef, useState } from "react";
-import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import type { BusinessLens } from "@/modules/business-audit/schema";
@@ -15,13 +15,6 @@ import type {
 } from "@/modules/projects/business-brain-view";
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 
-const PANEL_TRANSITION = {
-  type: "spring" as const,
-  stiffness: 300,
-  damping: 30,
-  mass: 0.72,
-};
-const PANEL_OPACITY_TRANSITION = { duration: 0.16, ease: "easeOut" as const };
 const DETAIL_TABS = ["overview", "evidence", "signals", "history"] as const;
 type DetailTab = (typeof DETAIL_TABS)[number];
 
@@ -118,6 +111,9 @@ function PriorityCard({
   const lens = priority.lensIds[0] ?? null;
 
   return (
+    // Overview and focus deliberately share one grid template. Animating the
+    // columns made the old and new panels occupy the same pixels during the
+    // first selection and left the overview collapsed after closing focus.
     <div
       className={cn(
         "relative overflow-hidden rounded-[1.15rem] border p-5",
@@ -248,31 +244,21 @@ function DefaultPanel({
   movesHref,
   hasMoves,
   onExplore,
-  entranceDelay,
   reducedMotion,
 }: {
   view: BusinessBrainView;
   movesHref: string;
   hasMoves: boolean;
   onExplore: (lens: BusinessLens) => void;
-  entranceDelay: number;
   reducedMotion: boolean;
 }) {
   return (
     <motion.div
       key="default"
-      layout
-      className="col-start-1 row-start-1 flex min-w-0 flex-col gap-4"
-      initial={reducedMotion ? { opacity: 0, x: 0 } : { opacity: 0, x: 10 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={reducedMotion ? { opacity: 0, x: 0 } : { opacity: 0, x: -7 }}
-      transition={{
-        opacity: reducedMotion
-          ? { duration: 0.08 }
-          : { ...PANEL_OPACITY_TRANSITION, delay: entranceDelay },
-        x: reducedMotion ? { duration: 0.08 } : { ...PANEL_TRANSITION, delay: entranceDelay },
-        layout: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
-      }}
+      className="flex min-w-0 flex-col gap-4"
+      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reducedMotion ? 0.08 : 0.16, ease: "easeOut" }}
     >
       <section className="business-brain-side-card flex flex-col gap-4 p-4 sm:p-5">
         <h2 className="text-fg text-base font-semibold tracking-[-0.02em]">What matters now</h2>
@@ -367,21 +353,10 @@ function SelectedPanel({
   return (
     <motion.section
       key={node.id}
-      layout
-      className="business-brain-focus-panel col-start-1 row-start-1 flex min-h-[40rem] min-w-0 flex-col overflow-hidden"
-      initial={
-        reducedMotion ? { opacity: 0, x: 0, scale: 1 } : { opacity: 0, x: 12, scale: 0.992 }
-      }
-      animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={
-        reducedMotion ? { opacity: 0, x: 0, scale: 1 } : { opacity: 0, x: -8, scale: 0.996 }
-      }
-      transition={{
-        opacity: reducedMotion ? { duration: 0.08 } : PANEL_OPACITY_TRANSITION,
-        x: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
-        scale: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
-        layout: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
-      }}
+      className="business-brain-focus-panel flex min-w-0 flex-col overflow-hidden"
+      initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: reducedMotion ? 0.08 : 0.16, ease: "easeOut" }}
       data-testid="selected-lens-detail"
     >
       <div className="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6 sm:pt-6">
@@ -571,6 +546,10 @@ function SelectedPanel({
           )}
         </motion.div>
       </AnimatePresence>
+
+      <div className="border-line-1 border-t px-4 pb-4 sm:px-5 sm:pb-5">
+        <SelectedScoringDisclosure node={node} />
+      </div>
     </motion.section>
   );
 }
@@ -585,53 +564,69 @@ function HonestTabEmpty({ title, body }: { title: string; body: string }) {
   );
 }
 
-function SelectedScoringRail({ node }: { node: BusinessBrainNode }) {
+function SelectedScoringDisclosure({ node }: { node: BusinessBrainNode }) {
   const evidence = [...node.evidence];
   for (const item of node.problem?.evidence ?? []) {
     if (!evidence.some((existing) => existing.id === item.id)) evidence.push(item);
   }
   const sourceCount = new Set(evidence.map((item) => item.source)).size;
   const score = node.score;
-  const scoreColor = node.health === "weak" ? "var(--color-coral)" : node.health === "adequate" ? "var(--color-amber)" : "var(--color-mint)";
+  const scoreTone =
+    node.health === "weak"
+      ? "text-coral"
+      : node.health === "adequate"
+        ? "text-amber"
+        : "text-mint";
 
   return (
-    <motion.aside className="flex min-w-0 flex-col gap-4" aria-label={`How ${node.label} was scored`} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ ...PANEL_TRANSITION, delay: 0.06 }}>
-      <section className="business-brain-focus-rail p-5">
-        <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border">
-            <BrainIcon className="size-6" />
+    <details
+      className="group mt-4 rounded-xl border border-line-1 bg-surface-2/45"
+      data-testid="selected-scoring-context"
+    >
+      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:ring-2 focus-visible:ring-mint">
+        <span
+          aria-hidden="true"
+          className="border-mint/20 bg-mint/[0.06] text-mint flex size-9 shrink-0 items-center justify-center rounded-full border"
+        >
+          <BrainIcon className="size-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="text-fg block text-sm font-semibold">How we scored this</span>
+          <span className="text-fg-meta mt-0.5 block text-xs">
+            {evidence.length} signals · {sourceCount} {sourceCount === 1 ? "source" : "sources"} · current lens score {score ?? "—"}
           </span>
-          <h2 className="text-fg text-sm font-semibold">How we scored this</h2>
-        </div>
-        <dl className="border-line-1 mt-5 flex flex-col divide-y divide-line-1 border-y">
-          <div className="flex items-center justify-between py-3 text-sm"><dt className="text-fg-secondary">Signals</dt><dd className="text-fg font-semibold tabular-nums">{evidence.length}</dd></div>
-          <div className="flex items-center justify-between py-3 text-sm"><dt className="text-fg-secondary">Sources</dt><dd className="text-fg font-semibold tabular-nums">{sourceCount}</dd></div>
-          <div className="flex items-center justify-between py-3 text-sm"><dt className="text-fg-secondary">Score</dt><dd className="font-semibold tabular-nums" style={{ color: scoreColor }}>{score ?? "—"}</dd></div>
-        </dl>
+        </span>
+        <span aria-hidden="true" className="text-fg-muted transition-transform group-open:rotate-180">⌄</span>
+      </summary>
 
-        <div className="mt-5">
-          <h3 className="text-fg-secondary text-sm font-medium">Current lens score</h3>
-          <div className="mt-4 flex items-center gap-4">
-            <div className="relative flex size-20 shrink-0 items-center justify-center rounded-full" style={{ background: score === null ? "var(--color-surface-4)" : `conic-gradient(${scoreColor} ${score}%, rgb(255 255 255 / 0.07) ${score}% 100%)` }}>
-              <div className="bg-app flex size-[4.1rem] items-center justify-center rounded-full">
-                <span className="text-fg text-xl font-semibold tabular-nums">{score ?? "—"}</span>
-              </div>
-            </div>
-            <p className="text-fg-muted text-xs leading-relaxed">This reading comes from the current audit only. It is separate from the overall Business Health score.</p>
+      <aside
+        aria-label={`How ${node.label} was scored`}
+        className="border-line-1 grid gap-4 border-t px-4 py-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"
+      >
+        <dl className="grid grid-cols-3 gap-2">
+          <div className="border-line-1 bg-surface-3 rounded-lg border p-3">
+            <dt className="text-fg-meta text-[0.68rem]">Signals</dt>
+            <dd className="text-fg mt-1 text-lg font-semibold tabular-nums">{evidence.length}</dd>
           </div>
+          <div className="border-line-1 bg-surface-3 rounded-lg border p-3">
+            <dt className="text-fg-meta text-[0.68rem]">Sources</dt>
+            <dd className="text-fg mt-1 text-lg font-semibold tabular-nums">{sourceCount}</dd>
+          </div>
+          <div className="border-line-1 bg-surface-3 rounded-lg border p-3">
+            <dt className="text-fg-meta text-[0.68rem]">Score</dt>
+            <dd className={cn("mt-1 text-lg font-semibold tabular-nums", scoreTone)}>{score ?? "—"}</dd>
+          </div>
+        </dl>
+        <div className="flex min-w-0 flex-col justify-center gap-2">
+          <p className="text-fg-secondary text-xs leading-relaxed">
+            This lens reading comes from the current audit and remains separate from the overall Business Health score.
+          </p>
+          <p className="text-fg-muted text-xs leading-relaxed">
+            Missing or inconclusive evidence remains unscored and never becomes zero. No comparable history exists for this area yet.
+          </p>
         </div>
-
-        <div className="border-line-1 mt-5 border-t pt-5">
-          <h3 className="text-fg-secondary text-sm font-medium">Score over time</h3>
-          <p className="text-fg-muted mt-2 text-xs leading-relaxed">No comparable history for this area yet.</p>
-        </div>
-      </section>
-
-      <section className="business-brain-focus-rail p-5">
-        <h2 className="text-fg text-sm font-semibold">About our scoring</h2>
-        <p className="text-fg-muted mt-3 text-xs leading-relaxed">Vibe scores each business lens only when the audit has enough evidence. Missing or inconclusive evidence remains unscored and never becomes zero.</p>
-      </section>
-    </motion.aside>
+      </aside>
+    </details>
   );
 }
 
@@ -646,40 +641,24 @@ export function AuditIntelligence({
 }) {
   const reducedMotion = Boolean(useReducedMotion());
   const [selected, setSelected] = useState<BusinessLens | null>(null);
-  const [hovered, setHovered] = useState<BusinessLens | null>(null);
-  const [hasInteracted, setHasInteracted] = useState(false);
   const node = selected ? (view.nodes.find((candidate) => candidate.id === selected) ?? null) : null;
 
   function select(lens: BusinessLens) {
-    setHasInteracted(true);
     setSelected((current) => (current === lens ? null : lens));
   }
 
   return (
-    <LayoutGroup>
-      <motion.div
-        layout
-        className={cn(
-          "grid min-w-0 gap-5 xl:items-start",
-          node
-            ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,0.85fr)] min-[1400px]:!grid-cols-[minmax(29rem,1.12fr)_minmax(25rem,0.92fr)_minmax(12rem,0.48fr)]"
-            : "xl:grid-cols-[minmax(0,1.62fr)_minmax(21rem,0.72fr)]",
-        )}
-        data-testid="audit-intelligence"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{
-          opacity: { duration: reducedMotion ? 0.08 : 0.2 },
-          layout: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
-        }}
+    <div
+      className="grid min-w-0 gap-5 min-[1420px]:grid-cols-[minmax(0,1.35fr)_minmax(28rem,0.85fr)] min-[1680px]:grid-cols-[minmax(0,1.45fr)_minmax(31rem,0.8fr)] min-[1420px]:items-start"
+      data-testid="audit-intelligence"
+      data-view={node ? "selected" : "overview"}
+    >
+      <section
+        className="business-brain-stage relative min-w-0 overflow-hidden rounded-[1.25rem] border border-line-2 p-4 sm:p-6"
+        data-testid="audit-map-panel"
       >
-        <motion.section
-          layout
-          className="business-brain-stage relative min-w-0 overflow-hidden rounded-[1.25rem] border border-line-2 p-4 sm:p-6"
-          data-testid="audit-map-panel"
-        >
           <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
-          <header className="relative z-10 flex flex-wrap items-start justify-between gap-4">
+          <header className="relative z-10 flex min-h-[3.75rem] flex-wrap items-start justify-between gap-4">
             {node ? (
               <div className="flex flex-col gap-2">
                 <h2 className="sr-only">Your Business Brain — {node.label}</h2>
@@ -707,9 +686,7 @@ export function AuditIntelligence({
             <BusinessMap
               view={view}
               selected={selected}
-              hovered={hovered}
               onSelect={select}
-              onHover={setHovered}
             />
           </div>
 
@@ -722,53 +699,34 @@ export function AuditIntelligence({
             </ul>
             <p className="text-fg-meta text-xs">Missing evidence is never scored as zero.</p>
           </footer>
-        </motion.section>
+      </section>
 
-        <aside
-          className="grid min-w-0"
-          aria-live="polite"
-          aria-label={node ? `${node.label} details` : "What matters now"}
-          data-testid={node ? undefined : "current-priorities"}
-        >
-          <AnimatePresence mode="sync" initial>
-            {node ? (
-              <SelectedPanel
-                key={node.id}
-                node={node}
-                view={view}
-                movesHref={movesHref}
-                hasMoves={hasMoves}
-                onClose={() => setSelected(null)}
-                onSelect={select}
-              />
-            ) : (
-              <DefaultPanel
-                view={view}
-                movesHref={movesHref}
-                hasMoves={hasMoves}
-                onExplore={select}
-                entranceDelay={hasInteracted || reducedMotion ? 0 : 0.16}
-                reducedMotion={reducedMotion}
-              />
-            )}
-          </AnimatePresence>
-        </aside>
-
-        <AnimatePresence initial={false}>
-          {node && (
-            <motion.div
-              key={`scoring-${node.id}`}
-              className="xl:col-start-2 xl:row-start-2 min-[1400px]:!col-start-3 min-[1400px]:!row-start-1"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: reducedMotion ? 0.08 : 0.2 }}
-            >
-              <SelectedScoringRail node={node} />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </LayoutGroup>
+      <aside
+        className="grid min-w-0"
+        aria-live="polite"
+        aria-label={node ? `${node.label} details` : "What matters now"}
+        data-testid={node ? undefined : "current-priorities"}
+      >
+        {node ? (
+          <SelectedPanel
+            key={node.id}
+            node={node}
+            view={view}
+            movesHref={movesHref}
+            hasMoves={hasMoves}
+            onClose={() => setSelected(null)}
+            onSelect={select}
+          />
+        ) : (
+          <DefaultPanel
+            view={view}
+            movesHref={movesHref}
+            hasMoves={hasMoves}
+            onExplore={select}
+            reducedMotion={reducedMotion}
+          />
+        )}
+      </aside>
+    </div>
   );
 }
