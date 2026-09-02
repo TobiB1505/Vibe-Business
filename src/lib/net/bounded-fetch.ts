@@ -36,6 +36,8 @@
  * did reach a conclusion. Not any `4xx`, which will say the same thing again.
  */
 
+import { sleep as sharedSleep } from "@/lib/async/sleep";
+
 /** Attempts after the first, for a safe method. */
 export type BoundedFetchOptions = {
   /** Deadline for one attempt, not for the whole sequence. */
@@ -80,7 +82,6 @@ function backoffDelay(attempt: number, baseMs: number, maxMs: number): number {
   return Math.floor(Math.random() * ceiling);
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * Wraps a `fetch` with a per-attempt deadline and, for safe methods, a bounded
@@ -100,7 +101,7 @@ export function withBoundedFetch(
     backoffBaseMs = DEFAULT_BACKOFF_BASE_MS,
     backoffMaxMs = DEFAULT_BACKOFF_MAX_MS,
     onRetry,
-    sleep = defaultSleep,
+    sleep = sharedSleep,
   } = options;
 
   return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

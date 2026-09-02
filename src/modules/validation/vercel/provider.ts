@@ -1,3 +1,4 @@
+import { sleep } from "@/lib/async/sleep";
 import "server-only";
 
 import { Sandbox, Snapshot, type Command } from "@vercel/sandbox";
@@ -36,10 +37,6 @@ import type {
  * Also relevant, and deliberately unused: `ports` (no preview in 10A, §43) and
  * `drives`/snapshots (no reuse across runs).
  */
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /** Maps the domain's policy vocabulary onto the SDK's. */
 function toProviderPolicy(policy: SandboxNetworkPolicy) {

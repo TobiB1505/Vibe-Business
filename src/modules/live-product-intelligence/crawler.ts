@@ -1,3 +1,4 @@
+import { sleep } from "@/lib/async/sleep";
 import { CrawlBudgetTracker, type CrawlBudgets, DEFAULT_CRAWL_BUDGETS } from "./budgets";
 import { classifyLinkTarget } from "./classifier";
 import { parseHtml, type ParsedHtml } from "./html";
@@ -80,8 +81,6 @@ function priorityFor(pathname: string): number {
   if (surface === null) return 1;
   return SURFACE_PRIORITY[surface] ?? 1;
 }
-
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** Maps a safeFetch failure onto the crawl-level failure vocabulary. */
 function toCrawlFailure(result: Exclude<SafeFetchResult, { ok: true }>): CrawlFailure {
