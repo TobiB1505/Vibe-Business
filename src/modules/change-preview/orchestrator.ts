@@ -1,3 +1,4 @@
+import { describeThrown } from "@/lib/errors/describe";
 import { describeCommand, installCommand } from "@/modules/validation/commands";
 import { sanitizeCommandOutput } from "@/modules/validation/logs";
 import { inSandbox } from "@/modules/validation/orchestrator";
@@ -174,18 +175,7 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /invalid environment variables/i,
 ];
 
-/**
- * A safe description of an unknown thrown value.
- *
- * Provider errors can carry request context, headers and occasionally
- * credentials, so the object is never stored. Its name and message are, after
- * the same sanitizer the validation step output goes through — the difference
- * between "we refuse to look" and "we cannot find out" (ADR 0015 §9).
- */
-function describeError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return "non-error value thrown";
-}
+
 
 function detail(text: string | null): string | null {
   return text === null ? null : sanitizeCommandOutput(text).text;
@@ -354,7 +344,7 @@ export async function provisionPreviewWorkspace(
 
     return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
   } catch (error) {
-    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeError(error)) };
+    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeThrown(error)) };
   }
 }
 
@@ -387,7 +377,7 @@ async function create(
     return {
       ok: false,
       failureCode: "preview_provider_unavailable",
-      failureDetail: detail(describeError(error)),
+      failureDetail: detail(describeThrown(error)),
     };
   }
 }
@@ -481,7 +471,7 @@ export async function startPreviewServer(
       return {
         ok: false,
         failureCode: "preview_start_failed",
-        failureDetail: detail(describeError(error)),
+        failureDetail: detail(describeThrown(error)),
       };
     }
 
@@ -539,7 +529,7 @@ export async function startPreviewServer(
       ),
     };
   } catch (error) {
-    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeError(error)) };
+    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeThrown(error)) };
   }
 }
 
@@ -581,7 +571,7 @@ async function resolveOrigin(sandbox: SandboxHandle): Promise<StartOutcome> {
     return {
       ok: false,
       failureCode: "preview_provider_unavailable",
-      failureDetail: detail(describeError(error)),
+      failureDetail: detail(describeThrown(error)),
     };
   }
 }
