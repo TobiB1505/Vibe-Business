@@ -175,7 +175,25 @@ export async function listActiveLots(
   return ((data ?? []) as LotRow[]).map(mapLot);
 }
 
-/** Every lot, including expired ones — history, for the customer's activity view. */
+/**
+ * Every lot an account has, expired ones included — **read by tests only**.
+ *
+ * The docblock here used to say "history, for the customer's activity view".
+ * There is no such view and there never was: the billing screen reads
+ * {@link listActiveLots} plus a ledger capped at `LEDGER_READ_LIMIT`, and the
+ * only callers of this function are the count assertions in
+ * `billing/webhook-service.test.ts`.
+ *
+ * That matters beyond tidiness, because the 2026-09-01 audit cited this
+ * function under PERF-018 as an unbounded read on a customer path — a
+ * conclusion the docblock invited and the call graph refuses. It is unbounded,
+ * and nothing a customer does reaches it.
+ *
+ * Kept rather than deleted: asserting "this webhook produced two lots" through
+ * the same read path the application uses is worth more than the alternative,
+ * which is a test reaching into the fake client's rows and passing while
+ * production disagrees.
+ */
 export async function listAllLots(
   supabase: SupabaseClient,
   creditAccountId: string,
