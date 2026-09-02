@@ -70,6 +70,10 @@ Two smaller things sit in the same block: `main now points at 78cbdac` puts a co
 
 **As a customer:** the stepper is the product's answer to *what is the plan*, and three quarters of it is unreadable without clicking. The information the founder came for is the one thing the component elides.
 
+> **[2026-09-02, later the same day] All five are fixed.** F-1: a title template in the root layout and nineteen routes given their own name, guarded by `src/app/route-titles.test.ts` — three exemptions, each argued, and a stale one fails too. F-2: the marketing headline is a `<p>`, on the argument that a heading which disappears below `lg` cannot be what the page is about. F-3: the copy stays and the conditions are coupled — the caller knows whether the question renders below and hands the answer in, so the card falls back to its own location-free wording otherwise. F-4: "verified" belongs to the outcome check alone; the deployment facts say themselves plainly, and the merge panel's test was moved from pinning the sentences to asserting the claim, rule 74's CI/CD half included. F-5: two lines and a little more width fit every current title.
+>
+> Re-captured after the change: all four stepper steps read in full, the card on `moves_ranked` now says *"Vibe needs a decision from you before this can move"* because no question is below it, and `has not verified` appears nowhere on `outcome_verified`.
+
 ---
 
 ## 3. Four findings that were wrong, and why that matters
