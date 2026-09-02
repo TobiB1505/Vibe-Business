@@ -76,6 +76,18 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
       "through it, and it refuses to write without VIBE_REFUND_CONFIRM=yes.",
   },
   {
+    file: join("modules", "authenticated-product-intelligence", "sandbox-browser", "client.ts"),
+    why:
+      "ADR 0076. `browser_runtime_images` is Vibe's own infrastructure rather than customer " +
+      "data — which provider snapshot a browser sandbox starts from, the same value for every " +
+      "customer. It has RLS enabled with deliberately no policies, so a cookie-scoped client " +
+      "reads nothing and writes nothing, and there is no ownership to scope it by because there " +
+      "is no owner. It is not moved into src/modules/operations because a Deep Scan is not a " +
+      "durable operation: no operation_runs row, no OPERATION_TYPES entry, and this read happens " +
+      "inside a Server Action's request. No query here takes an identifier from a caller; the " +
+      "only argument any of them makes is the guard's own version constant.",
+  },
+  {
     file: join("modules", "authenticated-product-intelligence", "billing.ts"),
     why:
       "launch-v1. An additional Deep Scan is Credit-priced, and the hold has to be taken before " +

@@ -1,6 +1,6 @@
 # ADR 0012 — Authenticated browser analysis and ephemeral authentication state
 
-**Status:** Accepted
+**Status:** Accepted — superseded in its **choice of provider** by [0076](0076-the-browser-we-own.md) on 2026-09-02. Everything this ADR decided about *how* an authenticated analysis may work — the human signs in, nothing reusable is stored, the analysis is read-only — stands unchanged and is what 0076 implements on a different browser.
 **Date:** 2026-08-11
 **Supersedes / amends:** none. Complements [ADR 0010](0010-safe-outbound-http-inspection.md) (public, anonymous, static HTTP inspection) rather than replacing it.
 

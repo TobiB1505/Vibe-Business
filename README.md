@@ -32,7 +32,7 @@ pnpm build                  # production build
 
 `pnpm build`, `pnpm lint`, `pnpm typecheck` and `pnpm test` all run without any environment variables configured — CI runs them with no secrets at all.
 
-Running the *application* needs a configured Supabase project; individual features additionally need their own credentials (GitHub App, Anthropic, Browserbase, Stripe). [.env.example](.env.example) documents each variable and the feature that requires it, and [docs/setup/](docs/setup/github-app.md) covers the one-time setup each provider needs.
+Running the *application* needs a configured Supabase project; individual features additionally need their own credentials (GitHub App, Anthropic, Vercel Sandbox, Stripe). [.env.example](.env.example) documents each variable and the feature that requires it, and [docs/setup/](docs/setup/github-app.md) covers the one-time setup each provider needs.
 
 Database migrations run through the Supabase CLI against a linked project:
 

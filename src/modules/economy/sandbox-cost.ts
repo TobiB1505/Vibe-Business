@@ -41,6 +41,15 @@ export const SANDBOX_PURPOSES = [
   "change_validation",
   "change_preview",
   "change_review",
+  /**
+   * The Deep Scan's browser (ADR 0076).
+   *
+   * A separate purpose rather than folded into `other`, because it is the one
+   * sandbox whose wall clock is mostly a person reading a login form. Its
+   * shape — long, almost idle, two vCPUs — is nothing like a validation's, and
+   * a cost figure grouped with those would describe neither.
+   */
+  "deep_scan_browser",
   "other",
 ] as const;
 export type SandboxPurpose = (typeof SANDBOX_PURPOSES)[number];

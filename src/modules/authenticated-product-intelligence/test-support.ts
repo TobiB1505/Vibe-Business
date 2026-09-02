@@ -4,13 +4,14 @@ import type {
   BrowserLiveView,
   BrowserSessionHandle,
   BrowserSessionProvider,
+  BrowserSessionUsage,
   ProviderResult,
 } from "./provider";
 
 /**
  * In-memory doubles for the Deep Scan store and service (Sprint 5 §33).
  *
- * No test may reach Browserbase, Supabase, or a real browser. The database
+ * No test may reach a browser provider, Supabase, or a real browser. The database
  * double is deliberately more than a stub: it models the three partial unique
  * indexes the migration relies on, because those indexes *are* the safety
  * argument for "a double click cannot start two browsers" and "the included
@@ -259,11 +260,11 @@ export type FakeProviderBehaviour = {
   createSession?: ProviderResult<BrowserSessionHandle>;
   getConnection?: ProviderResult<BrowserConnection>;
   getLiveView?: ProviderResult<BrowserLiveView>;
-  terminateSession?: ProviderResult<void>;
+  terminateSession?: ProviderResult<BrowserSessionUsage | null>;
 };
 
 export class FakeBrowserProvider implements BrowserSessionProvider {
-  readonly name = "browserbase";
+  readonly name = "vercel_sandbox_browser";
   readonly calls: { method: string; arg?: string }[] = [];
 
   constructor(private readonly behaviour: FakeProviderBehaviour = {}) {}
@@ -304,9 +305,13 @@ export class FakeBrowserProvider implements BrowserSessionProvider {
     return this.behaviour.getLiveView ?? { ok: true, value: { url: "https://live.example/view" } };
   }
 
-  async terminateSession(providerSessionId: string): Promise<ProviderResult<void>> {
+  async terminateSession(
+    providerSessionId: string,
+  ): Promise<ProviderResult<BrowserSessionUsage | null>> {
     this.calls.push({ method: "terminateSession", arg: providerSessionId });
-    return this.behaviour.terminateSession ?? { ok: true, value: undefined };
+    // Reports nothing by default, which is the honest shape for a fake: a
+    // measurement a test did not stage is a measurement that was not taken.
+    return this.behaviour.terminateSession ?? { ok: true, value: null };
   }
 }
 

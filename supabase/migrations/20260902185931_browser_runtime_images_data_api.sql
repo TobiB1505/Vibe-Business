@@ -1,0 +1,43 @@
+-- The grants `browser_runtime_images` was created without (ADR 0076, VB-015).
+--
+-- `20260902173050_browser_runtime_images.sql` created the table and did not
+-- state its Data API privileges. That migration is left as written — it is a
+-- record of what ran — and this is the correction.
+--
+-- ## Two defects, and the larger one is not the one CI reported
+--
+-- **What CI caught**: `anon` and `authenticated` hold `TRUNCATE`, `REFERENCES`
+-- and `TRIGGER`. The creating migration argued that RLS with no policies was
+-- the whole access rule, which is true for SELECT, INSERT, UPDATE and DELETE
+-- and **false for TRUNCATE** — row-level security does not govern it, so a role
+-- holding it empties the table regardless of every policy. That is the sentence
+-- `supabase/tests/owner-pin.migration.ts` already carried in its own docblock.
+--
+-- **What reading the grants afterwards caught**: `service_role` holds those
+-- same three and **no `SELECT` and no `INSERT`**. The default privileges
+-- revoke (`20260823220000`) covers `service_role` too, deliberately, so a table
+-- whose migration says nothing is a table nothing can read. The first Deep Scan
+-- would have failed with `42501` at the image lookup — before the insert, before
+-- the browser, before anything a person could see a reason for.
+--
+-- This is precisely the safety net `20260823220000` describes in its own
+-- header: *"a migration that creates a table and forgets its grants produces a
+-- table the Data API cannot see. That fails loudly in CI."* It did.
+--
+-- ## Why the shared default is not touched
+--
+-- The first reading of this failure blamed `20260823220000` for revoking
+-- `select, insert, update, delete` and not the other three. That was wrong, and
+-- checking the other 51 tables is what showed it: not one of them holds
+-- `TRUNCATE`, because the convention here is that **each migration states its
+-- own grants** — `20260825132534_founder_input_resolution.sql` is the pattern,
+-- revoking from `anon, authenticated` and granting back exactly what the code
+-- needs. `browser_runtime_images` is the only table in `public` where `anon`
+-- holds anything at all. The gap was this migration's, not the default's.
+
+revoke all on table public.browser_runtime_images from anon, authenticated;
+
+-- Exactly what the code does and nothing more: `resolve()` reads the newest
+-- usable row, and a completed build inserts one. Nothing updates a row and
+-- nothing deletes one — an image that expires is simply no longer selected.
+grant select, insert on table public.browser_runtime_images to service_role;

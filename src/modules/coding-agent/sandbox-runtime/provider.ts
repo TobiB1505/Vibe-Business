@@ -10,7 +10,7 @@ import type {
   DetachedStartOutcome,
 } from "../provider";
 import type { AgentProviderOutcome } from "../schema";
-import { writeSandboxTextFile } from "./files";
+import { writeSandboxTextFile } from "@/modules/validation/sandbox-files";
 import { AGENT_RUNTIME_PROGRAM } from "./program";
 import {
   AGENT_RUNTIME_TOOLS,

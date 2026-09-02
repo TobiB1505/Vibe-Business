@@ -236,21 +236,49 @@ export type DeepScanUsageRow = {
   project_id: string;
   duration_ms: number;
   created_at: string;
+  /**
+   * Which browser produced the measurement.
+   *
+   * Read from the row rather than assumed. It was assumed — a literal
+   * `"browserbase"` — and after ADR 0076 that would have filed every scan run
+   * in Vibe's own sandbox under a provider Vibe no longer uses, in the ledger
+   * every price is derived from.
+   */
+  provider: string;
+  /** Vibe's own derivation, when the session reported dimensions (ADR 0076). */
+  estimated_cost_nano_usd?: number | null;
+  cost_pricing_version?: string | null;
 };
 
 /**
  * Projects Deep Scan browser time (§41).
  *
- * The cost is **always** unknown, and that is not a gap in this function — it
- * is the state of the world. Browserbase does not return a price with a
- * session, and `buildDeepScanUsage` pins `providerCostUsd: null` as a literal
- * type so no code path can invent one. Billing records the measured
- * milliseconds and says the cost is unknown.
+ * The cost is unknown, and until ADR 0076 that was the state of the world
+ * rather than a gap: Browserbase did not return a price with a session, and
+ * `buildDeepScanUsage` pins `providerCostUsd: null` as a literal type so no
+ * code path can invent one.
+ *
+ * It is no longer either, for a session Vibe's own sandbox ran. Termination
+ * reports the dimensions, `VERCEL_SANDBOX_RATES` has been founder-attested
+ * since 2026-08-20, and `estimateSandboxCost` derives the figure — the same
+ * function, the same rate card and the same `cost_estimated` status the agent's
+ * sandboxes use, so the two can be summed together and neither is mistaken for
+ * a bill.
+ *
+ * A row with no estimate still says `cost_unknown`, and that stays the honest
+ * answer for the seven Browserbase rows and for any session that never came up.
+ * Nothing is backfilled: deriving a Vercel figure for a scan Browserbase ran
+ * would date an estimate to a provider that did not run it.
  */
 export function projectDeepScanUsage(
   row: DeepScanUsageRow,
   owner: { userId: string },
 ): BillableUsage[] {
+  // No provider ever states a price here, so there is no stored figure to
+  // prefer over the estimate — unlike `projectSandboxUsage`, where the order
+  // between the two is the point.
+  const estimated = row.estimated_cost_nano_usd ?? null;
+
   return [
     {
       sourceKind: "deep_scan_provider_usage",
@@ -258,13 +286,13 @@ export function projectDeepScanUsage(
       operationRunId: null,
       projectId: row.project_id,
       userId: owner.userId,
-      provider: "browserbase",
+      provider: row.provider,
       sku: "browser_duration_ms",
       quantity: row.duration_ms,
       occurredAt: row.created_at,
-      rawCostNanoUsd: null,
-      costStatus: "cost_unknown",
-      providerPricingVersion: null,
+      rawCostNanoUsd: estimated,
+      costStatus: estimated !== null ? "cost_estimated" : "cost_unknown",
+      providerPricingVersion: estimated !== null ? (row.cost_pricing_version ?? null) : null,
     },
   ];
 }

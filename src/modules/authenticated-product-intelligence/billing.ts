@@ -35,7 +35,7 @@ import type { DeepScanAccessMode } from "./entitlement";
  *
  * ## Why the session id, and why it is minted before the session
  *
- * A hold has to be taken before Vibe pays Browserbase for a browser — that is
+ * A hold has to be taken before Vibe pays for a browser — that is
  * the whole point of §18's ordering, and discovering an empty wallet after
  * buying a session is both a cost leak and an insult. But the hold also needs a
  * durable identity that the settle and release paths can find again, and the

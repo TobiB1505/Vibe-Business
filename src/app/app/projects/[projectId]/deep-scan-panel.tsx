@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { LiveBrowserCanvas } from "./live-browser-canvas";
 import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
@@ -113,7 +114,7 @@ function Heading({ title, status }: { title: string; status?: string }) {
  */
 /** What the browser will stop on, for the modal's Tab wrap. */
 const FOCUSABLE =
-  'a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])';
+  'a[href], button, input, select, textarea, canvas, [tabindex]:not([tabindex="-1"])';
 
 function LiveViewDialog({
   liveViewUrl,
@@ -178,9 +179,10 @@ function LiveViewDialog({
       const last = focusable[focusable.length - 1];
       const active = document.activeElement;
 
-      // Wrap at both ends, and pull focus back in if it has already escaped —
-      // which it can, because the iframe inside this dialog is its own focus
-      // context and the browser does not always return through our elements.
+      // Wrap at both ends, and pull focus back in if it has already escaped.
+      // The canvas keeps its own keydown handler and swallows Tab so a login
+      // form's fields can be moved between, so the wrap here is what catches
+      // focus that left through anything else.
       if (!dialog.contains(active)) {
         event.preventDefault();
         first.focus();
@@ -217,10 +219,11 @@ function LiveViewDialog({
           </p>
         </div>
 
-        {/* aspect-video matches the 1280x720 viewport requested in the
-            Browserbase adapter. Any other ratio makes the provider letterbox
-            the browser, which is what made this look broken. */}
-        <div className="aspect-video w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
+        {/* The aspect ratio matches the viewport Chromium is launched with
+            (`BROWSER_SANDBOX.viewport`). Any other ratio would letterbox the
+            frame, and a letterboxed frame puts a person's click somewhere
+            other than where they aimed. */}
+        <div className="aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
           {loading && (
             <p role="status" className="p-4 text-sm text-fg-secondary">
               Opening a temporary browser…
@@ -232,15 +235,11 @@ function LiveViewDialog({
             </p>
           )}
           {liveViewUrl && !error && (
-            <iframe
-              // The URL comes only from the authorized server action.
-              src={liveViewUrl}
-              title="Temporary browser for signing in to your product"
-              className="block h-full w-full"
-              // Deliberately minimal. No camera, microphone, geolocation, or
-              // clipboard — none has been shown necessary for a login (§7).
-              sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-            />
+            // Pixels, not a document. What used to sit here was an iframe
+            // running the customer's own signed-in application inside this
+            // page; this is a JPEG on a canvas, which executes nothing
+            // (ADR 0076). The URL comes only from the authorized server action.
+            <LiveBrowserCanvas viewUrl={liveViewUrl} />
           )}
         </div>
 

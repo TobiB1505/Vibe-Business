@@ -314,7 +314,13 @@ describe("stored cost parsing", () => {
 describe("browser usage", () => {
   it("records Deep Scan duration with an unknown cost, never zero", () => {
     const events = projectDeepScanUsage(
-      { id: "scan-1", project_id: "project-1", duration_ms: 42_000, created_at: "2026-08-14T00:00:00Z" },
+      {
+        id: "scan-1",
+        project_id: "project-1",
+        duration_ms: 42_000,
+        created_at: "2026-08-14T00:00:00Z",
+        provider: "browserbase",
+      },
       { userId: "user-1" },
     );
 
@@ -322,6 +328,83 @@ describe("browser usage", () => {
     expect(events[0].quantity).toBe(42_000);
     expect(events[0].costStatus).toBe("cost_unknown");
     expect(events[0].rawCostNanoUsd).toBeNull();
+  });
+
+  it("files a scan under the browser that produced it", () => {
+    const events = projectDeepScanUsage(
+      {
+        id: "scan-2",
+        project_id: "project-1",
+        duration_ms: 30_000,
+        created_at: "2026-09-02T00:00:00Z",
+        provider: "vercel_sandbox_browser",
+      },
+      { userId: "user-1" },
+    );
+
+    // This was a literal `"browserbase"`, so after ADR 0076 every scan run in
+    // Vibe's own sandbox would have been filed under a provider Vibe no longer
+    // uses — in the ledger every price is derived from.
+    expect(events[0].provider).toBe("vercel_sandbox_browser");
+  });
+
+  it("carries a derived figure as an estimate, never as a bill", () => {
+    const events = projectDeepScanUsage(
+      {
+        id: "scan-4",
+        project_id: "project-1",
+        duration_ms: 90_000,
+        created_at: "2026-09-02T00:00:00Z",
+        provider: "vercel_sandbox_browser",
+        estimated_cost_nano_usd: 3_529_000,
+        cost_pricing_version: "vercel-sandbox-2026-08-20",
+      },
+      { userId: "user-1" },
+    );
+
+    // `cost_estimated` is what keeps a figure Vibe computed from being summed
+    // beside one a provider stated. Folding it into `costed` would let an
+    // assumption be counted as a measurement (ADR 0073, ADR 0076).
+    expect(events[0].costStatus).toBe("cost_estimated");
+    expect(events[0].rawCostNanoUsd).toBe(3_529_000);
+    expect(events[0].providerPricingVersion).toBe("vercel-sandbox-2026-08-20");
+  });
+
+  it("still says unknown for a session that reported nothing", () => {
+    const events = projectDeepScanUsage(
+      {
+        id: "scan-5",
+        project_id: "project-1",
+        duration_ms: 5_000,
+        created_at: "2026-09-02T00:00:00Z",
+        provider: "vercel_sandbox_browser",
+        estimated_cost_nano_usd: null,
+        cost_pricing_version: null,
+      },
+      { userId: "user-1" },
+    );
+
+    // A browser that never came up measured nothing. Unknown is the honest
+    // answer, and zero would be summed.
+    expect(events[0].costStatus).toBe("cost_unknown");
+    expect(events[0].rawCostNanoUsd).toBeNull();
+  });
+
+  it("keeps a historical Browserbase row filed under Browserbase", () => {
+    const events = projectDeepScanUsage(
+      {
+        id: "scan-3",
+        project_id: "project-1",
+        duration_ms: 30_000,
+        created_at: "2026-08-14T00:00:00Z",
+        provider: "browserbase",
+      },
+      { userId: "user-1" },
+    );
+
+    // A cost figure belongs to the provider that produced it, and the seven
+    // rows written before the swap are not relabelled.
+    expect(events[0].provider).toBe("browserbase");
   });
 
   it("records visual-review browser duration the same way", () => {
@@ -436,7 +519,13 @@ describe("cost summary", () => {
     const usage = [
       ...projectAiUsage(aiRow()),
       ...projectDeepScanUsage(
-        { id: "scan-1", project_id: "project-1", duration_ms: 42_000, created_at: "2026-08-14T00:00:00Z" },
+        {
+          id: "scan-1",
+          project_id: "project-1",
+          duration_ms: 42_000,
+          created_at: "2026-08-14T00:00:00Z",
+          provider: "browserbase",
+        },
         { userId: "user-1" },
       ),
     ];
