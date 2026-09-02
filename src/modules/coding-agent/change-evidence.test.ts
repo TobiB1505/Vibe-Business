@@ -361,3 +361,84 @@ describe("verification is unchanged", () => {
     expect(evidence.classCounts.source).toBe(1);
   });
 });
+
+/**
+ * The run of 2026-08-19, as the audit log actually recorded it.
+ *
+ * The audit of 2026-09-01 assumed these paths were lost — "the two
+ * `agent_change_rejected` runs of 08-19 predate the event writer and carry no
+ * events, so their rejection kind is gone". They are not: both events are in
+ * `audit_events`, and one carries the full changed-path list. Its lesson is the
+ * opposite of the one that was expected. Not a single candidate has ever been
+ * refused for a deletion; this one was refused for size, and five sixths of
+ * that size was build output the observation walked into.
+ *
+ * Kept as the paths, verbatim, because the point is which of them a person
+ * wrote. Six did.
+ */
+const RUN_2026_08_19 = [
+  ".swc/.gitignore",
+  ".swc/plugins/linux_x86_64_22.0.1/6ea9d3dec20e87696401db15d4c456817f842cb74b13af645633912dceb61bd5.wasmer-v7",
+  "next-env.d.ts",
+  "src/app/.well-known/workflow/v1/.gitignore",
+  "src/app/.well-known/workflow/v1/config.json",
+  "src/app/.well-known/workflow/v1/flow/route.js",
+  "src/app/.well-known/workflow/v1/flow/route.js.debug.json",
+  "src/app/.well-known/workflow/v1/manifest.json",
+  "src/app/.well-known/workflow/v1/step/route.js",
+  "src/app/.well-known/workflow/v1/step/route.js.debug.json",
+  "src/app/.well-known/workflow/v1/webhook/[token]/route.js",
+  "src/app/app/layout.tsx",
+  "src/app/forgot-password/page.tsx",
+  "src/app/layout.tsx",
+  "src/app/login/page.tsx",
+  "src/app/reset-password/page.tsx",
+  "src/app/signup/page.tsx",
+  "tsconfig.tsbuildinfo",
+];
+
+/** The six a person wrote, out of the seventeen the observation carried. */
+const RUN_2026_08_19_SOURCE = [
+  "src/app/app/layout.tsx",
+  "src/app/forgot-password/page.tsx",
+  "src/app/layout.tsx",
+  "src/app/login/page.tsx",
+  "src/app/reset-password/page.tsx",
+  "src/app/signup/page.tsx",
+];
+
+describe("the run that was refused for its own build output", () => {
+  it("counts six source files, not fourteen", () => {
+    const source = RUN_2026_08_19.filter((path) => classifyChangedPath(path) === "source");
+
+    expect(source).toEqual(RUN_2026_08_19_SOURCE);
+  });
+
+  it("calls every artifact in it what it is", () => {
+    for (const path of RUN_2026_08_19) {
+      if (RUN_2026_08_19_SOURCE.includes(path)) continue;
+      // `.gitignore` has no extension this list knows, so it is `unknown`
+      // rather than being flattered into source — which is the classifier
+      // behaving, not a gap.
+      const artifactClass = classifyChangedPath(path);
+      expect(["generated", "unknown"], path).toContain(artifactClass);
+    }
+  });
+
+  /**
+   * The three that were counted as source before this was measured, each for a
+   * different reason: a compiled route ends in `.js`, a build manifest in
+   * `.json`, and Next's generated ambient declaration in `.ts`.
+   */
+  it("no longer reads compiled routes, manifests or next-env as handwritten", () => {
+    expect(classifyChangedPath("src/app/.well-known/workflow/v1/flow/route.js")).toBe("generated");
+    expect(classifyChangedPath("src/app/.well-known/workflow/v1/manifest.json")).toBe("generated");
+    expect(classifyChangedPath("next-env.d.ts")).toBe("generated");
+    expect(classifyChangedPath(".swc/plugins/x.wasmer-v7")).toBe("generated");
+  });
+
+  /** And the directory a customer writes by hand is still theirs. */
+  it("leaves a hand-written .well-known file alone", () => {
+    expect(classifyChangedPath("src/app/.well-known/security.txt")).toBe("source");
+  });
+});

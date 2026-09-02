@@ -189,12 +189,29 @@ async function workspace(): Promise<{ home: string; cwd: string }> {
   await mkdir(join(repo, "src"), { recursive: true });
   await mkdir(join(repo, "node_modules", "pkg"), { recursive: true });
   await mkdir(join(repo, ".git"), { recursive: true });
+  // Build output, in the two shapes a real run produced: one directory the
+  // prune list names, and one that lands *inside* the source tree.
+  await mkdir(join(repo, ".swc", "plugins"), { recursive: true });
+  await mkdir(join(repo, "src", "app", ".well-known", "workflow", "v1", "flow"), {
+    recursive: true,
+  });
 
   await writeFile(join(repo, "src", "a.ts"), "export const a = 1;\n");
   await writeFile(join(repo, NEWLINE_NAME), "export const weird = 1;\n");
   await writeFile(join(repo, "src", "untouched.ts"), "export const untouched = 1;\n");
   await writeFile(join(repo, "node_modules", "pkg", "index.js"), "module.exports = {};\n");
   await writeFile(join(repo, ".git", "HEAD"), "ref: refs/heads/main\n");
+  await writeFile(join(repo, ".swc", "plugins", "x.wasmer-v7"), "binary-ish\n");
+  await writeFile(
+    join(repo, "src", "app", ".well-known", "workflow", "v1", "flow", "route.js"),
+    "export const compiled = true;\n",
+  );
+  // The hand-written neighbour, one directory up: `.well-known` is a real route
+  // directory and pruning it by name would take this with it.
+  await writeFile(
+    join(repo, "src", "app", ".well-known", "security.txt"),
+    "Contact: mailto:security@example.test\n",
+  );
   await symlink(join(repo, "src", "a.ts"), join(repo, "src", "link.ts"));
 
   return { home, cwd: "repo" };
@@ -211,7 +228,12 @@ canary("Vibe's observation, against a real filesystem", () => {
     // The whole point of the NUL delimiter: a newline in a name is one path,
     // not two. Splitting on newlines produced `src/we` and `ird.ts`, and
     // neither of them is a file anybody touched.
-    expect([...listing.paths].sort()).toEqual(["src/a.ts", "src/untouched.ts", NEWLINE_NAME]);
+    expect([...listing.paths].sort()).toEqual([
+      "src/a.ts",
+      "src/app/.well-known/security.txt",
+      "src/untouched.ts",
+      NEWLINE_NAME,
+    ]);
 
     // `-type f`, so the link never enters the observed set at all rather than
     // being caught later by a read that would already have followed it.
@@ -221,6 +243,20 @@ canary("Vibe's observation, against a real filesystem", () => {
     // paths and reading a hundred thousand (Rule 27).
     expect([...listing.paths].some((path) => path.startsWith("node_modules/"))).toBe(false);
     expect([...listing.paths].some((path) => path.startsWith(".git/"))).toBe(false);
+
+    /*
+     * The two shapes of build output a real run walked into, and the file that
+     * proves the prune is not too wide.
+     *
+     * On 2026-08-19 a candidate carried 17 paths and 1,012,096 bytes, of which
+     * six paths were written by a person: `.swc` held a 421 KB plugin blob, and
+     * `.well-known/workflow/v1` held two 262 KB compiled routes that were
+     * counted as source because they end in `.js`. `security.txt` sits in the
+     * same `.well-known` directory and is nobody's build output.
+     */
+    expect([...listing.paths].some((path) => path.startsWith(".swc/"))).toBe(false);
+    expect([...listing.paths].some((path) => path.includes("/.well-known/workflow/"))).toBe(false);
+    expect(listing.paths.has("src/app/.well-known/security.txt")).toBe(true);
 
     // An observation that might be incomplete is refused, not trimmed.
     expect(listing.truncated).toBe(false);
@@ -242,6 +278,7 @@ canary("Vibe's observation, against a real filesystem", () => {
     expect(read?.truncated).toBe(false);
     expect([...(read?.paths ?? [])].sort()).toEqual([
       "src/a.ts",
+      "src/app/.well-known/security.txt",
       "src/untouched.ts",
       NEWLINE_NAME,
     ]);

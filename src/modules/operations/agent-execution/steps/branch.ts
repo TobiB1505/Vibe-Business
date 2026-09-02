@@ -70,7 +70,10 @@ export async function writeAgentBranchStep(
   const rebuilt = await rebuildVerifiedCandidate(deps, { run, spec, target, observedPaths });
   if (!rebuilt.ok) return rebuilt;
 
-  if (!rebuilt.verification.accepted || rebuilt.verification.files.length === 0) {
+  if (
+    !rebuilt.verification.accepted ||
+    (rebuilt.verification.files.length === 0 && rebuilt.verification.deletions.length === 0)
+  ) {
     // The first pass accepted this change, so a refusal here means the
     // workspace is no longer what was verified. Refusing is the only safe
     // reading; nothing is written.
@@ -78,8 +81,9 @@ export async function writeAgentBranchStep(
   }
 
   const files = rebuilt.verification.files;
+  const deletions = rebuilt.verification.deletions;
 
-  if (computeCandidateDigest(files) !== candidateDigest) {
+  if (computeCandidateDigest(files, deletions) !== candidateDigest) {
     // Same shape as a moved base: what was approved and what is here are not
     // the same thing, so this refuses rather than reasoning about the
     // difference (Rule 56's posture, applied to the workspace).
@@ -200,6 +204,7 @@ export async function writeAgentBranchStep(
       commitMessage: renderCommitMessage(compiledMessage),
     },
     files.map((file) => ({ path: file.path, content: file.content, contentHash: file.contentHash, bytes: file.bytes })),
+    deletions,
   );
 
   if (!write.ok) {
@@ -216,20 +221,27 @@ export async function writeAgentBranchStep(
     /* The counts come from verification, which held both the workspace bytes
        and the pinned commit's baseline. A file it could not compare stores no
        count rather than a zero (rule 44). */
-    files: files.map((file) => ({
-      path: file.path,
-      contentHash: file.contentHash,
-      bytes: file.bytes,
-      ...(file.linesAdded !== null && file.linesRemoved !== null
-        ? { linesAdded: file.linesAdded, linesRemoved: file.linesRemoved }
-        : {}),
-    })),
+    files: [
+      ...files.map((file) => ({
+        path: file.path,
+        contentHash: file.contentHash,
+        bytes: file.bytes,
+        ...(file.linesAdded !== null && file.linesRemoved !== null
+          ? { linesAdded: file.linesAdded, linesRemoved: file.linesRemoved }
+          : {}),
+      })),
+      /* A removed path is one of the files this change touched, so it is in the
+         same list every reader already walks — the diff, the classification,
+         the outcome routes. It carries no hash and no byte count because there
+         is nothing to measure, and `status` is what tells them apart. */
+      ...deletions.map((path) => ({ path, status: "deleted" as const })),
+    ],
   });
 
   await recordLifecycle(deps, run, "branch_prepared", "Your change is ready to review", {
     branch: prepared.branchName,
     commitSha: write.commitSha,
-    files: files.length,
+    files: files.length + deletions.length,
   });
 
   return {

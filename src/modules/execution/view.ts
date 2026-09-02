@@ -218,4 +218,5 @@ export const CAPABILITY_LABELS: Record<ExecutionCapability, string> = {
   // produced it. "Agentic execution v1" is our vocabulary; "a change to your
   // app" is theirs, and the plan step beside it says which change.
   agentic_execution_v1: "Change to your app",
+  agentic_execution_v2: "Change to your app",
 };

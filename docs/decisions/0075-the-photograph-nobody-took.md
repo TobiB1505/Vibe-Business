@@ -1,4 +1,4 @@
-# 0074 - The photograph nobody took: the visual review capture path is deleted
+# 0075 - The photograph nobody took: the visual review capture path is deleted
 
 Status: Accepted
 Date: 2026-09-02

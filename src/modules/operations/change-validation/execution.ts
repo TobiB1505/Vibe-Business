@@ -235,7 +235,9 @@ async function resolveRunContext(
       workspaceRoot: profile.workspaceRoot,
       preparedFiles: prepared.files.map((file) => ({
         path: file.path,
-        contentHash: file.contentHash,
+        /* A deletion carries no hash and is checked as absence, not as a
+           hash of nothing. Undefined would read as "not measured". */
+        contentHash: file.contentHash ?? null,
       })),
       validationRunId: run.id,
     },

@@ -232,6 +232,64 @@ describe("base versus head (Sprint 0055 §1)", () => {
     expect(result.diff.removed).toBe(1);
   });
 
+  /**
+   * A removed file (ADR 0074).
+   *
+   * The status comes from the stored row and never from a head read that came
+   * back empty — `getTextFile` returns null for an absent file, a binary one
+   * and an oversized one alike, so inferring a deletion from it would report
+   * the wrong thing for two of the three.
+   */
+  describe("a file the change removed", () => {
+    beforeEach(() => {
+      db = new FakeDatabase();
+      reads = [];
+      seedPrepared({ files: [{ path: "src/app/pricing/page.tsx", status: "deleted" }] });
+    });
+
+    it("shows the base version in full, as removals", async () => {
+      const result = await getPreparedDiff(
+        fakeSupabase(db),
+        reader({ "src/app/pricing/page.tsx": { base: "one\ntwo\n" } }),
+        { projectId: PROJECT, preparedChangeId: "prepared_1" },
+      );
+
+      if (!result.ok) throw new Error("expected a diff");
+      const [file] = result.diff.files;
+
+      expect(file.status).toBe("deleted");
+      expect(file.added).toBe(0);
+      expect(file.removed).toBe(2);
+      expect(file.hunks[0].lines).toEqual([
+        { kind: "removed", text: "one" },
+        { kind: "removed", text: "two" },
+      ]);
+    });
+
+    it("never reads the head side, because there is nothing there to read", async () => {
+      await getPreparedDiff(
+        fakeSupabase(db),
+        reader({ "src/app/pricing/page.tsx": { base: "one\n" } }),
+        { projectId: PROJECT, preparedChangeId: "prepared_1" },
+      );
+
+      expect(reads).toEqual([`${BASE_SHA}:src/app/pricing/page.tsx`]);
+    });
+
+    it("still says deleted when the base version could not be read", async () => {
+      // Unreadable would be the wrong word: Vibe knows exactly what it did to
+      // this path. What it cannot show is the version it removed.
+      const result = await getPreparedDiff(fakeSupabase(db), reader({}), {
+        projectId: PROJECT,
+        preparedChangeId: "prepared_1",
+      });
+
+      if (!result.ok) throw new Error("expected a diff");
+      expect(result.diff.files[0].status).toBe("deleted");
+      expect(result.diff.files[0].hunks).toEqual([]);
+    });
+  });
+
   it("carries the two commits and the policy version, so the diff can be recomputed", async () => {
     // What an approval binds to (ADR 0063): the same two immutable commits under
     // the same rules produce the same diff.

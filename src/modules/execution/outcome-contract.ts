@@ -93,6 +93,9 @@ const CAPABILITY_OUTCOME_PROFILES: Record<ExecutionCapability, OutcomeProfile | 
    * the homepage.
    */
   agentic_execution_v1: "agentic_public_routes_outcome_v1",
+  /* Same profile as v1: the verifier reads the routes Vibe observed the
+     change touch, and a change that removes a route file touches it too. */
+  agentic_execution_v2: "agentic_public_routes_outcome_v1",
 };
 
 export function outcomeProfileForCapability(capability: string): OutcomeProfile | null {

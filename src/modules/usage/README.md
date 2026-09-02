@@ -9,6 +9,6 @@ Usage half of the Usage/Credit Layer — see [ARCHITECTURE.md §3.11](../../../A
 | Provider tokens and provider cost | `ai_usage_events` — written by [`modules/ai/usage.ts`](../ai) |
 | Sandbox wall time, active CPU, egress | `sandbox_usage_events` |
 | Deep Scan browser seconds | `deep_scan_provider_usage` |
-| ~~Visual review browser seconds~~ | `review_browser_usage` — **no writer since [ADR 0074](../../../docs/decisions/0074-the-photograph-nobody-took.md)**; the rows stand, nothing adds to them |
+| ~~Visual review browser seconds~~ | `review_browser_usage` — **no writer since [ADR 0075](../../../docs/decisions/0075-the-photograph-nobody-took.md)**; the rows stand, nothing adds to them |
 
 Customer-facing Credits are a separate ledger again, in [`modules/credits`](../credits) — provider cost and Credits are deliberately different systems ([ADR 0024](../../../docs/decisions/0024-vibe-credits-economic-layer.md)).

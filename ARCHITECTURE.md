@@ -142,7 +142,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0063]** A preview is not always the right instrument. `review/classification.ts` decides deterministically — from verified changed paths, the analyzer's route table and a structural render-impact proof, with no model call — whether a change deserves a preview, a code diff, or both. A change that alters no rendered page is asked for neither preview nor comparison.
 
-**[Confirmed — ADR 0065, completed by ADR 0074]** For a change that *does* alter a page, the preview **is** the review. Screenshot comparison ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)) photographed one route at one viewport, which is a poorer instrument than the running application it photographed, and Vibe paid a browser session for the reduction. 0065 made the path unreachable; [ADR 0074](docs/decisions/0074-the-photograph-nobody-took.md) deleted it once the last artifact passed its retention. Nothing in `review/` opens a browser any more. The read path stays, because one historical approval rests on a comparison and an approval nobody can audit is not one.
+**[Confirmed — ADR 0065, completed by ADR 0075]** For a change that *does* alter a page, the preview **is** the review. Screenshot comparison ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)) photographed one route at one viewport, which is a poorer instrument than the running application it photographed, and Vibe paid a browser session for the reduction. 0065 made the path unreachable; [ADR 0075](docs/decisions/0075-the-photograph-nobody-took.md) deleted it once the last artifact passed its retention. Nothing in `review/` opens a browser any more. The read path stays, because one historical approval rests on a comparison and an approval nobody can audit is not one.
 
 **[Open decision]** Previewing a repository whose prepared commit cannot be served by a single detected dev command.
 
@@ -288,7 +288,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0014](docs/decisions/0014-first-execution-safety.md) | First execution safety: model opinion authorizes nothing | §3.6, §3.7 |
 | [0015](docs/decisions/0015-untrusted-repository-execution-provider.md) | Vercel Sandbox as the execution provider | §3.8 |
 | [0016](docs/decisions/0016-temporary-preview-isolation.md) | Temporary preview isolation (§1, §3, §7, §11 superseded by 0064) | §3.9 |
-| [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts (superseded as a gate by 0065; capture code deleted by 0074; historical rows only) | §3.9 |
+| [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts (superseded as a gate by 0065; capture code deleted by 0075; historical rows only) | §3.9 |
 | [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity (amended by 0063) | §3.10 |
 | [0019](docs/decisions/0019-safe-approved-change-merge.md) | Safe approved-change merge | §3.10 |
 | [0020](docs/decisions/0020-production-outcome-verification.md) | Production outcome verification (extended by 0071) | Measurement |
@@ -345,7 +345,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0071](docs/decisions/0071-agentic-outcome-verification.md) | Outcome verification for agentic changes: routes Vibe observed | Measurement |
 | [0072](docs/decisions/0072-the-evidence-behind-the-ceiling.md) | The estimator informs the Run button; it does not price it | §3.11 |
 | [0073](docs/decisions/0073-the-charge-lands-on-what-was-sold.md) | Settlement waits for validation; the usage ledger fills itself | §3.11 |
-| [0074](docs/decisions/0074-the-photograph-nobody-took.md) | The visual review capture path is deleted (completes 0065; the read path stays for one historical approval) | §3.9 |
+| [0074](docs/decisions/0074-removing-a-file.md) | A prepared change may remove a file; the observation decides which | §3.6 |
+| [0075](docs/decisions/0075-the-photograph-nobody-took.md) | The visual review capture path is deleted (completes 0065; the read path stays for one historical approval) | §3.9 |
 
 ### Layers with no section above
 

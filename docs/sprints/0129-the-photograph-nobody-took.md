@@ -84,4 +84,4 @@ assert authorization and expiry against a fake store — they would catch a
 regression, and they are not evidence that the surviving path is exercised. The
 one approval that depends on it is fifteen days old.
 
-[ADR 0074](../decisions/0074-the-photograph-nobody-took.md).
+[ADR 0075](../decisions/0075-the-photograph-nobody-took.md).
