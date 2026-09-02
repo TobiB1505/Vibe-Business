@@ -15,14 +15,14 @@ const CORE = { x: 390, y: 350 };
 
 const NODE_POSITIONS: Record<BusinessLens, { x: number; y: number }> = {
   offer: { x: 390, y: 76 },
-  audience: { x: 570, y: 142 },
-  acquisition: { x: 665, y: 270 },
-  conversion: { x: 660, y: 430 },
-  revenue_economics: { x: 548, y: 560 },
-  business_readiness: { x: 370, y: 604 },
-  retention: { x: 186, y: 548 },
-  measurement: { x: 108, y: 395 },
-  scalability: { x: 174, y: 198 },
+  audience: { x: 585, y: 140 },
+  acquisition: { x: 690, y: 290 },
+  conversion: { x: 685, y: 475 },
+  revenue_economics: { x: 555, y: 600 },
+  business_readiness: { x: 365, y: 612 },
+  retention: { x: 175, y: 565 },
+  measurement: { x: 90, y: 405 },
+  scalability: { x: 175, y: 190 },
 };
 
 const STARS = [

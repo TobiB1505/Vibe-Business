@@ -76,8 +76,9 @@ function DetailInsightIcon({ kind }: { kind: "found" | "matter" | "connected" | 
         </svg>
       )}
       {kind === "move" && (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-6">
-          <path d="M5 21V4M5 5h10l-1.8 3L15 11H5" />
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-5">
+          <path d="M7 17 17 7" />
+          <path d="M9 7h8v8" />
         </svg>
       )}
     </span>
@@ -548,7 +549,7 @@ function SelectedPanel({
       </AnimatePresence>
 
       <div className="border-line-1 border-t px-4 pb-4 sm:px-5 sm:pb-5">
-        <SelectedScoringDisclosure node={node} />
+        <SelectedScoringDisclosure node={node} overallScore={view.overall.score} />
       </div>
     </motion.section>
   );
@@ -564,19 +565,46 @@ function HonestTabEmpty({ title, body }: { title: string; body: string }) {
   );
 }
 
-function SelectedScoringDisclosure({ node }: { node: BusinessBrainNode }) {
-  const evidence = [...node.evidence];
-  for (const item of node.problem?.evidence ?? []) {
-    if (!evidence.some((existing) => existing.id === item.id)) evidence.push(item);
-  }
-  const sourceCount = new Set(evidence.map((item) => item.source)).size;
+function SelectedScoringDisclosure({
+  node,
+  overallScore,
+}: {
+  node: BusinessBrainNode;
+  overallScore: number | null;
+}) {
   const score = node.score;
   const scoreTone =
     node.health === "weak"
       ? "text-coral"
       : node.health === "adequate"
         ? "text-amber"
-        : "text-mint";
+        : node.health === "strong"
+          ? "text-mint"
+          : "text-fg-muted";
+  const scoreBar =
+    node.health === "weak"
+      ? "bg-coral"
+      : node.health === "adequate"
+        ? "bg-amber"
+        : node.health === "strong"
+          ? "bg-mint"
+          : "bg-fg-disabled";
+  const overallTone =
+    overallScore === null
+      ? "text-fg-muted"
+      : overallScore >= 70
+        ? "text-mint"
+        : overallScore >= 50
+          ? "text-amber"
+          : "text-coral";
+  const overallBar =
+    overallScore === null
+      ? "bg-fg-disabled"
+      : overallScore >= 70
+        ? "bg-mint"
+        : overallScore >= 50
+          ? "bg-amber"
+          : "bg-coral";
 
   return (
     <details
@@ -593,7 +621,7 @@ function SelectedScoringDisclosure({ node }: { node: BusinessBrainNode }) {
         <span className="min-w-0 flex-1">
           <span className="text-fg block text-sm font-semibold">How we scored this</span>
           <span className="text-fg-meta mt-0.5 block text-xs">
-            {evidence.length} signals · {sourceCount} {sourceCount === 1 ? "source" : "sources"} · current lens score {score ?? "—"}
+            Lens score {score ?? "—"} · Business Health {overallScore ?? "—"}
           </span>
         </span>
         <span aria-hidden="true" className="text-fg-muted transition-transform group-open:rotate-180">⌄</span>
@@ -601,30 +629,37 @@ function SelectedScoringDisclosure({ node }: { node: BusinessBrainNode }) {
 
       <aside
         aria-label={`How ${node.label} was scored`}
-        className="border-line-1 grid gap-4 border-t px-4 py-4 sm:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]"
+        className="border-line-1 border-t px-4 py-4"
       >
-        <dl className="grid grid-cols-3 gap-2">
-          <div className="border-line-1 bg-surface-3 rounded-lg border p-3">
-            <dt className="text-fg-meta text-[0.68rem]">Signals</dt>
-            <dd className="text-fg mt-1 text-lg font-semibold tabular-nums">{evidence.length}</dd>
+        <dl className="grid gap-3 sm:grid-cols-2">
+          <div className="border-line-1 bg-surface-3 rounded-xl border p-4">
+            <dt className="text-fg-meta text-[0.68rem] font-medium tracking-[0.08em] uppercase">Lens score</dt>
+            <dd className="mt-2 flex items-end justify-between gap-3">
+              <span className={cn("text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", scoreTone)}>
+                {score ?? "—"}<span className="text-fg-meta ml-1 text-xs font-normal tracking-normal">/100</span>
+              </span>
+              <span className="text-fg-secondary truncate text-xs">{node.label}</span>
+            </dd>
+            <div className="bg-surface-1 mt-3 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
+              <span className={cn("block h-full rounded-full", scoreBar)} style={{ width: `${score ?? 0}%` }} />
+            </div>
           </div>
-          <div className="border-line-1 bg-surface-3 rounded-lg border p-3">
-            <dt className="text-fg-meta text-[0.68rem]">Sources</dt>
-            <dd className="text-fg mt-1 text-lg font-semibold tabular-nums">{sourceCount}</dd>
-          </div>
-          <div className="border-line-1 bg-surface-3 rounded-lg border p-3">
-            <dt className="text-fg-meta text-[0.68rem]">Score</dt>
-            <dd className={cn("mt-1 text-lg font-semibold tabular-nums", scoreTone)}>{score ?? "—"}</dd>
+          <div className="border-line-1 bg-surface-3 rounded-xl border p-4">
+            <dt className="text-fg-meta text-[0.68rem] font-medium tracking-[0.08em] uppercase">Business Health</dt>
+            <dd className="mt-2 flex items-end justify-between gap-3">
+              <span className={cn("text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", overallTone)}>
+                {overallScore ?? "—"}<span className="text-fg-meta ml-1 text-xs font-normal tracking-normal">/100</span>
+              </span>
+              <span className="text-fg-secondary text-xs">Overall</span>
+            </dd>
+            <div className="bg-surface-1 mt-3 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
+              <span className={cn("block h-full rounded-full", overallBar)} style={{ width: `${overallScore ?? 0}%` }} />
+            </div>
           </div>
         </dl>
-        <div className="flex min-w-0 flex-col justify-center gap-2">
-          <p className="text-fg-secondary text-xs leading-relaxed">
-            This lens reading comes from the current audit and remains separate from the overall Business Health score.
-          </p>
-          <p className="text-fg-muted text-xs leading-relaxed">
-            Missing or inconclusive evidence remains unscored and never becomes zero. No comparable history exists for this area yet.
-          </p>
-        </div>
+        <p className="text-fg-muted mt-3 text-xs leading-relaxed">
+          The lens score is diagnostic and remains separate from Business Health. Missing or inconclusive evidence stays unscored and never becomes zero.
+        </p>
       </aside>
     </details>
   );

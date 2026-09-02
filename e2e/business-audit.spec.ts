@@ -98,6 +98,9 @@ test.describe("signature Business Brain", () => {
     await expect(scoring).not.toBeVisible();
     await page.getByText(/how we scored this/i).click();
     await expect(scoring).toBeVisible();
+    await expect(scoring).toContainText(/lens score/i);
+    await expect(scoring).toContainText(/business health/i);
+    await expect(scoring).not.toContainText(/signals|sources/i);
     const scoringBox = await scoring.boundingBox();
     expect(scoringBox!.x).toBeGreaterThanOrEqual(detailBox!.x);
     expect(scoringBox!.x + scoringBox!.width).toBeLessThanOrEqual(
@@ -131,6 +134,28 @@ test.describe("signature Business Brain", () => {
     const scalabilityBox = await lens(page, /^scalability,/i).boundingBox();
     expect(Math.abs(offerBox!.width - scalabilityBox!.width)).toBeLessThanOrEqual(1);
     expect(Math.abs(offerBox!.height - scalabilityBox!.height)).toBeLessThanOrEqual(1);
+  });
+
+  test("keeps the dense right-side planet orbit visibly separated", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+
+    const rightOrbit = await Promise.all(
+      ["Audience", "Acquisition", "Conversion", "Revenue & Economics", "Business Readiness"].map(
+        async (name) => (await lens(page, new RegExp(`^${name},`, "i")).boundingBox())!,
+      ),
+    );
+
+    for (let index = 0; index < rightOrbit.length - 1; index += 1) {
+      const current = rightOrbit[index];
+      const next = rightOrbit[index + 1];
+      const centerDistance = Math.hypot(
+        current.x + current.width / 2 - (next.x + next.width / 2),
+        current.y + current.height / 2 - (next.y + next.height / 2),
+      );
+      const visibleGap = centerDistance - (current.width + next.width) / 2;
+      expect(visibleGap).toBeGreaterThan(24);
+    }
   });
 
   test("keeps unsupported per-lens history honest in the selected focus view", async ({
