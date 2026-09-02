@@ -1,6 +1,6 @@
 # 0031 - Execution Context Intelligence: verify relevant facts, do not broadly rediscover
 
-Status: Accepted (extends 0027, 0029, 0030)
+Status: Accepted (extends 0027, 0029, 0030); partly superseded by [0034](0034-execution-surface-and-lifecycle.md)
 Date: 2026-08-19
 
 ## Context

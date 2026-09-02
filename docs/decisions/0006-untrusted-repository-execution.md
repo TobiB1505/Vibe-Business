@@ -1,6 +1,6 @@
 # 0006 - Untrusted Repository Execution
 
-Status: Accepted (security principle) / Deferred (concrete provider)
+Status: Accepted (security principle) / Deferred (concrete provider); the deferred half is superseded by [0015](0015-untrusted-repository-execution-provider.md)
 Date: 2026-08-09
 
 ## Context

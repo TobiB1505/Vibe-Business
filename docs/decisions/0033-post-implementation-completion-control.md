@@ -1,6 +1,6 @@
 # 0033 - Post-Implementation Completion Control: stop paying for exploration after the job has converged
 
-Status: Accepted (extends 0027, 0029, 0031, 0032)
+Status: Accepted (extends 0027, 0029, 0031, 0032); partly superseded by [0034](0034-execution-surface-and-lifecycle.md)
 Date: 2026-08-19
 
 ## Context

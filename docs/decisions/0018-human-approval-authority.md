@@ -1,6 +1,6 @@
 # 0018 - Human Approval Authority
 
-Status: Accepted
+Status: Accepted; amended by [0063](0063-review-classification-as-a-gate.md) and [0065](0065-the-preview-is-the-review.md) — an approval may bind to a third evidence form
 Date: 2026-08-14
 Builds on [0014](0014-first-execution-safety.md), [0016](0016-temporary-preview-isolation.md), [0017](0017-visual-review-artifacts.md)
 

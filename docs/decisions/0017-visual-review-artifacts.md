@@ -1,6 +1,6 @@
 # 0017 - Visual Review Artifacts
 
-Status: Accepted
+Status: Accepted; superseded by [0065](0065-the-preview-is-the-review.md) in its role as a gate — the artifacts, their retention and their signed-URL rules stand for the rows that exist
 Date: 2026-08-14
 Builds on [0012](0012-authenticated-browser-analysis.md), [0016](0016-temporary-preview-isolation.md)
 

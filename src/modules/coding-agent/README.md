@@ -28,10 +28,12 @@ PreparedChange → ValidationRun → Review → Approval → Safe Merge     unch
 > in 44 ms with zero turns. The harness now runs in the execution's own sandbox
 > and samples through the Agent Gateway — see
 > [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md).
-> `ExecutionToolGateway` and `AgentWorkspace` are unchanged and still describe
-> the tool-gateway topology, which [ADR 0070](../../../docs/decisions/0070-the-sandbox-is-the-boundary.md)
-> has since deleted; the change set comes from a filesystem comparison Vibe
-> performs, and the boundary is the VM plus `verifyCandidateChange`.
+> `ExecutionToolGateway` and `AgentWorkspace` outlived the topology they
+> belonged to by two weeks, constructed on every run and invoked by nothing;
+> [ADR 0070](../../../docs/decisions/0070-the-sandbox-is-the-boundary.md) deleted
+> both. What survives of the workspace is `WorkspaceReader`, one method, used to
+> read a changed file back. The change set comes from a filesystem comparison
+> Vibe performs, and the boundary is the VM plus `verifyCandidateChange`.
 
 ## The principle, one layer on
 

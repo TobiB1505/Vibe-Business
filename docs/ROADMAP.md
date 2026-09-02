@@ -160,6 +160,9 @@ An agent run settles at the reserved fixed price when the prepared change exists
 **No operator can correct a charge.**
 `refundCharge` is implemented, tested through its decision function, constrained by a database CHECK — and has zero callers. So does the adjustment kind. There is no admin surface of any kind.
 
+**Thirteen modules explain themselves nowhere.**
+`src/modules/operations/` is 30,602 lines and has no README; so do `validation` (9,244), `authenticated-product-intelligence` (7,516), `execution-context` (6,243), `outcome-verification` (5,424), `business-measurement` (5,321), `billing` (5,097), `review` (4,829), `change-preview` (4,433), `merge` (3,672) and three smaller ones. Twenty-one modules do have one, and those are held accurate: since [Sprint 0124](sprints/0124-the-names-that-outlived-their-files.md) a README naming a file that does not exist fails `documentation-currency.test.ts`. What that test deliberately does **not** assert is presence, and the reason is the one `docs/business/README.md` gives — a README written to satisfy a test is a list of intentions pretending to be documentation, and asserting presence would bless the dead stub directories rather than retire them. So this is a gap to close by writing, module by module, when there is something true to say; the largest ones are worth it first, because `operations/` is where a reader has the least chance of reconstructing the shape from the filenames.
+
 ---
 
 ## Dropped

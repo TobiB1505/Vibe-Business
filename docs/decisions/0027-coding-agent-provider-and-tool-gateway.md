@@ -1,6 +1,6 @@
 # 0027 - Agentic Coding: Provider Abstraction, Tool Gateway, and Independent Validation
 
-Status: Accepted; §2 and §3 amended by [0029](0029-agent-runtime-placement-and-credential-broker.md)
+Status: Accepted; §2 and §3 amended by [0029](0029-agent-runtime-placement-and-credential-broker.md); its second half superseded by [0070](0070-the-sandbox-is-the-boundary.md)
 Date: 2026-08-18
 Builds on [0005](0005-ai-provider-abstraction.md), [0006](0006-untrusted-repository-execution.md), [0011](0011-ai-inference-and-evidence-trust-boundary.md), [0013](0013-durable-operation-execution.md), [0014](0014-first-execution-safety.md), [0015](0015-untrusted-repository-execution-provider.md), [0026](0026-agentic-execution-contract.md)
 
