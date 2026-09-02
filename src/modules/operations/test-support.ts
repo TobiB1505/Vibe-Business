@@ -1515,6 +1515,45 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
   }),
 
   /**
+   * `sum_lot_allocation_capacity` (PERF-018).
+   *
+   * Modelled as the migration defines it, including the two things the billing
+   * page's drift detection depends on. The occupancy rule is the CASE: a held
+   * allocation occupies its full amount, a consumed one only what it charged,
+   * a released one nothing. And a lot with **no** allocations produces no row
+   * at all rather than a zero — `group by` cannot emit one, and a fake that
+   * invented it would let a caller forget its own `?? ZERO_CREDITS`.
+   *
+   * `supabase/tests/lot-capacity.migration.ts` proves the same arithmetic
+   * against a real cluster. That is what makes this handler a model rather than
+   * a second implementation nobody checked — the failure Sprint 0115 recorded,
+   * where a fake answered a question production answered differently.
+   */
+  sum_lot_allocation_capacity: (db, params) => {
+    const grantIds = new Set((params.p_grant_ids as string[] | undefined) ?? []);
+    const occupied = new Map<string, number>();
+
+    for (const row of db.rows("billing_credit_allocations")) {
+      const grantId = String(row.grant_id);
+      if (!grantIds.has(grantId)) continue;
+
+      const status = String(row.status);
+      const units =
+        status === "held"
+          ? Number(row.credit_units ?? 0)
+          : status === "consumed"
+            ? Number(row.consumed_units ?? 0)
+            : 0;
+
+      occupied.set(grantId, (occupied.get(grantId) ?? 0) + units);
+    }
+
+    return {
+      data: [...occupied].map(([grant_id, occupied_units]) => ({ grant_id, occupied_units })),
+    };
+  },
+
+  /**
    * `sum_agent_run_usage` (PERF-002).
    *
    * Modelled as the migration defines it, including the two things the

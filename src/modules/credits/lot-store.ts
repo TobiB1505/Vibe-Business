@@ -16,7 +16,7 @@ import {
 } from "./lots";
 import { sleep } from "@/lib/async/sleep";
 import { CONTENTION_ATTEMPTS, retryDelayMs } from "./contention";
-import { creditUnits, type CreditUnits } from "./units";
+import { creditUnits, ZERO_CREDITS, type CreditUnits } from "./units";
 
 /**
  * Credit lot and allocation persistence (BILLING CORE-2 §13, §14, §15, §16, §17).
@@ -230,7 +230,7 @@ export async function reconcileAndRepairLotAllocations(
   supabase: SupabaseClient,
   params: {
     lots: readonly CreditLot[];
-    allocationsByGrant: ReadonlyMap<string, LotAllocationSummary[]>;
+    occupiedByGrant: ReadonlyMap<string, CreditUnits>;
     userId: string;
   },
 ): Promise<{ lots: CreditLot[]; consistent: boolean }> {
@@ -238,8 +238,10 @@ export async function reconcileAndRepairLotAllocations(
   let allConsistent = true;
 
   for (const lot of params.lots) {
-    const allocations = params.allocationsByGrant.get(lot.id) ?? [];
-    const reconciliation = reconcileLotAllocation(lot, allocations);
+    // Absent means nothing occupies the lot — `group by` emits no row for a
+    // lot with no allocations, which is the same answer the row read gave.
+    const occupied = params.occupiedByGrant.get(lot.id) ?? ZERO_CREDITS;
+    const reconciliation = reconcileLotAllocation(lot, occupied);
 
     if (reconciliation.consistent) {
       corrected.push(lot);
@@ -292,7 +294,11 @@ export async function reconcileAndRepairLotAllocations(
       continue;
     }
 
-    const reCheck = reconcileLotAllocation(refreshed, allocations);
+    // Deliberately the same `occupied` rather than a fresh aggregate: the
+    // repair materializes capacity onto the *lot*, so what must have moved is
+    // `refreshed.allocatedCreditUnits`. Re-summing the allocations would hide a
+    // repair that did nothing.
+    const reCheck = reconcileLotAllocation(refreshed, occupied);
     if (!reCheck.consistent) {
       allConsistent = false;
       await recordAuditEvent(supabase, {
@@ -594,40 +600,53 @@ export type LotAllocationSummary = {
 };
 
 /**
- * Every allocation row for a set of lots, grouped by the lot (`grant_id`)
- * each belongs to — one batched query rather than one per lot (ADR 0042 §P3).
+ * What each lot's allocations occupy, summed in the database (PERF-018).
  *
- * Shaped for {@link reconcileLotAllocation} directly. A lot with no
- * allocations at all is not a special case here: it is simply absent from
- * the returned map, and `reconcileLotAllocation` already treats a missing/
- * empty allocation list as `expected: 0`.
+ * ## Why this is not a row read any more
+ *
+ * It was `select ALLOCATION_COLUMNS ... .in("grant_id", grantIds)` — every
+ * allocation row for every lot the account has ever held, transferred on every
+ * render of the billing page so that `reconcileLotAllocation` could add them up
+ * here. Behind `max_rows = 1000` that truncates with no error, and the result
+ * is not a slow page but a **fabricated drift**: a lower `expected`, an
+ * operator alert that fires on every visit and means nothing, a false
+ * `credit_drift.detected`, and — with `BILLING_REPAIR_ENABLED` — a service-role
+ * repair for nothing followed by a `repair_failed` on the re-check against the
+ * same truncated list.
+ *
+ * The balance was never at risk: `repair_lot_allocation` re-derives inside the
+ * database and never overwrites `allocated_credit_units` (ADR 0041 §P3). The
+ * damage is a false alarm, which is its own kind of expensive.
+ *
+ * ## A lot with no allocations is absent, not zero
+ *
+ * `group by` returns no row for a lot nothing has allocated against, so it is
+ * simply missing from the map — exactly as the row version left it out — and
+ * the caller's `?? ZERO_CREDITS` is what says "nothing occupies it". Making the
+ * function emit a zero row instead would need a join against the grants, which
+ * is work to produce a value the caller already has.
  */
-export async function listAllocationsForGrants(
+export async function sumLotAllocationCapacity(
   supabase: SupabaseClient,
   grantIds: readonly string[],
-): Promise<Map<string, LotAllocationSummary[]>> {
-  const byGrant = new Map<string, LotAllocationSummary[]>();
-  if (grantIds.length === 0) return byGrant;
+): Promise<Map<string, CreditUnits>> {
+  const occupied = new Map<string, CreditUnits>();
+  if (grantIds.length === 0) return occupied;
 
-  const { data, error } = await supabase
-    .from("billing_credit_allocations")
-    .select(ALLOCATION_COLUMNS)
-    .in("grant_id", grantIds);
+  const { data, error } = await supabase.rpc("sum_lot_allocation_capacity", {
+    p_grant_ids: grantIds,
+  });
 
+  // Thrown rather than absorbed. An empty map is a truthful answer to "no lot
+  // has any allocation" and a catastrophic answer to "the aggregate failed":
+  // every lot would report its whole materialized figure as drift.
   if (error) throw error;
 
-  for (const row of (data ?? []) as AllocationRow[]) {
-    const summary: LotAllocationSummary = {
-      status: row.status,
-      creditUnits: creditUnits(row.credit_units),
-      consumedUnits: row.consumed_units == null ? null : creditUnits(row.consumed_units),
-    };
-    const existing = byGrant.get(row.grant_id);
-    if (existing) existing.push(summary);
-    else byGrant.set(row.grant_id, [summary]);
+  for (const row of (data ?? []) as { grant_id: string; occupied_units: number }[]) {
+    occupied.set(row.grant_id, creditUnits(Number(row.occupied_units)));
   }
 
-  return byGrant;
+  return occupied;
 }
 
 export async function listReservationAllocations(

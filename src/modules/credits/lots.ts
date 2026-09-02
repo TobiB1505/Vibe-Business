@@ -1,4 +1,4 @@
-import { creditUnits, subtractCredits, sumCredits, type CreditUnits, ZERO_CREDITS } from "./units";
+import { creditUnits, subtractCredits, sumCredits, type CreditUnits } from "./units";
 
 /**
  * Credit lots, spend order and allocation (BILLING CORE-2 §11, §13, §15, §16, §17).
@@ -370,19 +370,17 @@ export function lotsDueForExpiry(
  */
 export function reconcileLotAllocation(
   lot: CreditLot,
-  allocations: readonly { status: "held" | "consumed" | "released"; creditUnits: CreditUnits; consumedUnits: CreditUnits | null }[],
+  occupied: CreditUnits,
 ): { consistent: boolean; expected: CreditUnits; drift: CreditUnits } {
-  const expected = sumCredits(
-    allocations.map((allocation) => {
-      // A live hold occupies its full held amount; a consumed allocation
-      // occupies only what it actually charged; a released one occupies
-      // nothing.
-      if (allocation.status === "held") return allocation.creditUnits;
-      if (allocation.status === "consumed") return allocation.consumedUnits ?? ZERO_CREDITS;
-      return ZERO_CREDITS;
-    }),
-  );
-
-  const drift = subtractCredits(lot.allocatedCreditUnits, expected);
-  return { consistent: drift === 0, expected, drift };
+  // `occupied` arrives already summed, by `sum_lot_allocation_capacity`. The
+  // occupancy rule — a live hold occupies its full held amount, a consumed
+  // allocation only what it charged, a released one nothing — used to be three
+  // lines here over an array of every allocation row the account has ever had.
+  //
+  // That read sat behind `max_rows = 1000` and would have truncated silently,
+  // making `expected` too low and this function report a drift that does not
+  // exist (PERF-018). The rule now lives in the migration and this takes the
+  // number, so there is no second copy of it to disagree.
+  const drift = subtractCredits(lot.allocatedCreditUnits, occupied);
+  return { consistent: drift === 0, expected: occupied, drift };
 }
