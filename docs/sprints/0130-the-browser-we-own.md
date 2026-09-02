@@ -155,11 +155,25 @@ otherwise.
 **There is no fallback.** Direct replacement was the founder's call after the
 risk was named. Reverting means restoring an adapter from git history.
 
-Two migrations ship unapplied: `20260902170000_browser_runtime_images.sql`,
-`20260902171000_browser_provider_is_the_sandbox.sql` and
-`20260902172000_deep_scan_measured_cost.sql`. The second is not optional — the
-provider CHECK admits one name today, so without it the first real scan fails on
-an insert, several seconds after a person has been shown a browser.
+## The migrations, and a naming correction
+
+Three, applied to production on 2026-09-02 and verified by reading the schema
+back rather than by trusting three `success` replies: the table exists with RLS
+on and **zero policies**, the provider CHECK admits both names, the five new
+columns are present, and **0 of the 7 historical rows carry an estimate**.
+
+They went through the Supabase MCP rather than `supabase db push`, because this
+container has no linked project and `pnpm db:status` refuses without one. That
+has one consequence worth recording, because it is the kind that surfaces weeks
+later as a confusing failure: **MCP assigns its own version timestamps**, so the
+applied versions were `20260902173050/173102/173120` while the files were named
+`170000/171000/172000`. Two histories that do not agree, and a later `db push`
+would have tried to apply all three again onto a schema that already has them.
+
+The files are renamed to the applied versions. Rule 34 says the files are the
+source of truth and the remote converges to them — here the remote had already
+recorded a version, and the honest fix is the one that makes both histories name
+the same three migrations rather than the one that looks tidier.
 
 `VIBE_BROWSER_SESSION_SECRET` must be set before a scan can start.
 `BROWSERBASE_API_KEY` can be removed, and the subscription with it.
