@@ -68,6 +68,24 @@ The browser tests answer the question the other layers cannot: whether a founder
 
 If the second turns out badly, the answer is a shorter chain, not a bigger ceiling.
 
+## Deployment
+
+`20260902190000_execution_spec_build_chain` is **applied** to the Vibe-Business project (`dcbwlctscooefwnivxzv`, confirmed by name before anything was touched — rule 33).
+
+Checked before, not assumed (rule 30): neither column existed, neither helper function existed, and there were zero `execution_specs_chain_*` constraints. Nothing had been applied by hand.
+
+**Renamed from `20260902180000` before applying, and the reason is worth recording.** `main` moved again while this branch was open — the four migrations of [Sprint 0130](0130-the-browser-we-own.md) were already on the remote, the newest at `20260902185931`. A file numbered `…180000` sorts *below* that, which would have left the history non-monotonic and made `supabase db push` skip it on the next run without `--include-all`. The migration was neither deployed nor merged, so renaming cost nothing and keeps `db push` correct permanently. None of the four touches `execution_specs`; it was purely an ordering question.
+
+**Not by the CLI, for the reason this project keeps recording.** `supabase link` needs a personal access token this environment does not carry and which does not belong in one, so the linked workflow of [Sprint 0002a](0002a-supabase-cli-workflow.md) was genuinely unavailable. The MCP server's `apply_migration` runs the file's own SQL and writes `supabase_migrations.schema_migrations`, which is the property rule 29 protects.
+
+**And the same repair it always needs.** `apply_migration` stamped `20260902194309` from the wall clock; the row was corrected to the filename's version and read back, the reconciliation `supabase migration repair --status applied` performs. `supabase/migrations/` stays the source of truth (rule 34).
+
+Verified by reading the catalog rather than from the call's own success: both columns `not null` with `'{}'` defaults; all four CHECKs with their exact predicates; both helpers `provolatile = 'i'` and `prosecdef = false` with an empty `search_path`; `execution_specs_immutable` still present; and **all 14 existing rows reading `'{}'`, none null** — the distinction that matters, because null would mean "we do not know what this run delivered" and every existing row does know.
+
+Advisors after: **no new lint from this migration.** Security shows five `rls_enabled_no_policy` INFOs — the four deliberate insert-only ledgers plus `browser_runtime_images`, which arrived with Sprint 0130 — and the standing leaked-password WARN. Performance: **zero WARN**, only `unused_index` INFOs, no unindexed foreign key.
+
+The application code that writes these columns is on this branch and not deployed. Nothing on `main` writes them, and every existing row satisfies every new constraint through the default.
+
 ## What this deliberately did not do
 
 - **No per-member verification.** The chain does not check each `doneWhen`. That is a new authority over what "delivered" means, and asking the agent would be rules 77 and 78.
