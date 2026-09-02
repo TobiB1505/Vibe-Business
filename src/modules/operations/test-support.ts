@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { isAgenticCapability } from "@/modules/execution/schema";
 import { PRODUCT_UNDERSTANDING_CONFIG } from "@/modules/ai/operations";
 import { UNDERSTANDING_EVIDENCE_VERSION } from "@/modules/product-understanding/evidence";
 import { PROMPT_VERSION as PROFILE_PROMPT_VERSION } from "@/modules/product-understanding/prompt";
@@ -939,7 +940,7 @@ export class FakeDatabase {
      */
     if (
       table === "prepared_changes" &&
-      candidate.execution_capability !== "agentic_execution_v1" &&
+      !isAgenticCapability(String(candidate.execution_capability)) &&
       (candidate.opportunity_set_id == null || candidate.opportunity_id == null)
     ) {
       return {

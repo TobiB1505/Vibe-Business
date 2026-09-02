@@ -70,6 +70,8 @@ The new suite runs its inserts as `authenticated`, and the first assertion in it
 
 **Not dogfooded.** Rule 69's fourth question is open, and this sprint is one where it matters more than usual because it changes what happens *inside a sandbox*. Three assumptions are reasoned and unobserved: that `next dev` starts under `deny_all` with an exposed port, that the first-request compile fits the 180-second health budget, and that the public route for port 3000 exists with no prior build. One real run against a real repository answers all three or none. Recorded in [ROADMAP.md](../ROADMAP.md).
 
+*[2026-09-02] Answered, and the record stays as written. A `nextjs_dev_preview_v1` session started at 00:39:46 UTC and answered its health probe at 00:40:35 — 49 seconds of a 180-second budget — and an approval is bound to it by `preview_session_id`. All three premises held: the development server starts under `deny_all` with an exposed port, the first-request compile fits, and the public route exists with no prior build.*
+
 **One environment note, unchanged from last sprint.** `pnpm test:e2e` cannot launch in this container: Playwright expects `chromium_headless_shell-1234` and the image carries `-1194`. The suite passes in full when pointed at the browser that is present.
 
 ## Deployment

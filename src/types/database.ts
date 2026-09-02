@@ -3972,7 +3972,9 @@ export type Database = {
         Row: {
           active_cpu_ms: number | null
           cleanup_status: string | null
+          cost_pricing_version: string | null
           created_at: string
+          estimated_cost_nano_usd: number | null
           failure_code: string | null
           failure_detail: string | null
           id: string
@@ -3988,11 +3990,14 @@ export type Database = {
           status: string
           user_id: string | null
           validation_run_id: string | null
+          vcpus: number | null
         }
         Insert: {
           active_cpu_ms?: number | null
           cleanup_status?: string | null
+          cost_pricing_version?: string | null
           created_at?: string
+          estimated_cost_nano_usd?: number | null
           failure_code?: string | null
           failure_detail?: string | null
           id?: string
@@ -4008,11 +4013,14 @@ export type Database = {
           status: string
           user_id?: string | null
           validation_run_id?: string | null
+          vcpus?: number | null
         }
         Update: {
           active_cpu_ms?: number | null
           cleanup_status?: string | null
+          cost_pricing_version?: string | null
           created_at?: string
+          estimated_cost_nano_usd?: number | null
           failure_code?: string | null
           failure_detail?: string | null
           id?: string
@@ -4028,6 +4036,7 @@ export type Database = {
           status?: string
           user_id?: string | null
           validation_run_id?: string | null
+          vcpus?: number | null
         }
         Relationships: [
           {

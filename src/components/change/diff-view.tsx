@@ -29,6 +29,7 @@ import type { DiffFile, PreparedDiff } from "@/modules/execution/diff";
 
 function StatusLabel({ status }: { status: DiffFile["status"] }) {
   if (status === "added") return <span className="text-mint">new file</span>;
+  if (status === "deleted") return <span className="text-coral">file deleted</span>;
   if (status === "unreadable") return <span className="text-amber">could not be read</span>;
   return null;
 }
@@ -98,7 +99,7 @@ function FileDiff({ file }: { file: DiffFile }) {
         <p className="text-xs text-fg-muted">
           <StatusLabel status={file.status} />
           {file.status === "modified" && <Counts added={file.added} removed={file.removed} />}
-          {file.status === "added" && (
+          {(file.status === "added" || file.status === "deleted") && (
             <>
               {" · "}
               <Counts added={file.added} removed={file.removed} />
@@ -114,6 +115,14 @@ function FileDiff({ file }: { file: DiffFile }) {
         <p className="text-xs text-fg-muted">
           This file is part of the change, but Vibe could not read it as text — it may be binary or
           larger than the review limit. It is on the branch.
+        </p>
+      ) : file.hunks.length === 0 && file.status === "deleted" ? (
+        /* The row says the path was removed; the base side is what could not be
+           read. Saying "no textual difference" here would describe a deletion
+           as a change that did nothing. */
+        <p className="text-xs text-fg-muted">
+          This file was removed. Vibe could not read the version it removed — it may be binary or
+          larger than the review limit.
         </p>
       ) : file.hunks.length === 0 ? (
         <p className="text-xs text-fg-muted">No textual difference between the two commits.</p>

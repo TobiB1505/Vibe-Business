@@ -100,8 +100,15 @@ export type ValidationTarget = {
    */
   sourceRoot: string;
   workspaceRoot: string;
-  /** Path + sha256 of every file Vibe prepared, for integrity checking (§29). */
-  preparedFiles: readonly { path: string; contentHash: string }[];
+  /**
+   * Path + sha256 of every file Vibe prepared, for integrity checking (§29).
+   *
+   * A `null` hash is a *deletion*: the claim being checked is that the path
+   * reads back as nothing at the prepared commit. Same integrity question,
+   * opposite answer — and the alternative, dropping deletions before they get
+   * here, would leave the one kind of change nobody verified.
+   */
+  preparedFiles: readonly { path: string; contentHash: string | null }[];
   /** Unique per attempt. Names the sandbox, so a retry cannot collide (§21). */
   validationRunId: string;
 };
@@ -483,6 +490,16 @@ export async function verifySource(
         path: inSandbox(target.sourceRoot, target.workspaceRoot, file.path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
+
+      if (file.contentHash === null) {
+        // A deletion. Absence is the whole guarantee, so a file that is still
+        // there is the same class of finding as a wrong hash: the tree in the
+        // sandbox is not the tree Vibe prepared.
+        if (content !== null) {
+          return fail("source_integrity_failed", `prepared deletion still present: ${file.path}`);
+        }
+        continue;
+      }
 
       if (content === null) {
         // Describe what is actually on disk. `ls -a` is Vibe's own command with

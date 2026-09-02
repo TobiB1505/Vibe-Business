@@ -37,6 +37,7 @@ import {
   type StoredValidationRun,
 } from "@/modules/validation/store";
 import type { OperationFailureCode } from "../failures";
+import { resolveAgentHold, type AgentHoldOutcome } from "@/modules/coding-agent/hold";
 import {
   claimResultForOperation,
   completeOperationRun,
@@ -234,7 +235,9 @@ async function resolveRunContext(
       workspaceRoot: profile.workspaceRoot,
       preparedFiles: prepared.files.map((file) => ({
         path: file.path,
-        contentHash: file.contentHash,
+        /* A deletion carries no hash and is checked as absence, not as a
+           hash of nothing. Undefined would read as "not measured". */
+        contentHash: file.contentHash ?? null,
       })),
       validationRunId: run.id,
     },
@@ -782,7 +785,23 @@ export async function finalizeValidationStep(
   return { ok: true, validationRunId: run.id, status: "passed" };
 }
 
-/** Step 10 — finish, idempotently. */
+/**
+ * Step 10 — finish, idempotently, and charge for what was sold (ADR 0073).
+ *
+ * This is where a customer's Credits are actually taken. Not because validation
+ * is priced — it carries no price of its own, and `credits/retail.ts` explains
+ * why — but because *"a customer bought a validated improvement, not a
+ * pipeline"*, and this is the line at which one exists.
+ *
+ * The settlement is gated on winning the status swap, for the reason the agent
+ * run's own finalization gives: whoever wins owns billing finalization, so a
+ * sweep racing this workflow cannot release a hold this process is about to
+ * charge.
+ *
+ * A validation started by hand for a change whose agent hold was already
+ * settled or released resolves to `already_closed` and charges nothing. That is
+ * the ordinary shape of "Validate again", not an error.
+ */
 export async function completeValidationStep(
   deps: ValidationDeps,
   operationId: string,
@@ -796,6 +815,8 @@ export async function completeValidationStep(
 
   const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
+
+  await settleAgentHold(deps, operation, "validated");
 
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
@@ -837,9 +858,63 @@ export async function failValidationStep(
   const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
+  // The improvement did not pass. Vibe paid the provider for the run that
+  // produced it and the customer pays nothing — CREDIT_ECONOMICS.md's approved
+  // failure policy, reached through the same door the pass uses (ADR 0073).
+  await settleAgentHold(deps, operation, "unvalidated");
+
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
     eventType: "operation.failed",
     metadata: { projectId: operation.projectId, operationId, failureCode },
+  });
+}
+
+/**
+ * Resolves the agent hold behind the change this validation judged.
+ *
+ * The prepared change is read from the validation run rather than from the
+ * operation, because that is the link the database actually records — and it is
+ * what makes "which hold does this verdict answer for" a lookup rather than an
+ * inference.
+ *
+ * Never throws into the workflow. A verdict that has been written must not be
+ * undone by a billing fault; an unresolved hold is recoverable and a lost
+ * verdict is not. What it must not do is fail silently, so both the outcome and
+ * the failure are recorded.
+ */
+async function settleAgentHold(
+  deps: ValidationDeps,
+  operation: { id: string; projectId: string; userId: string },
+  outcome: AgentHoldOutcome,
+): Promise<void> {
+  const run = await findValidationRunByOperation(deps.supabase, operation.id);
+  if (!run) return;
+
+  let resolution: string;
+  try {
+    const resolved = await resolveAgentHold(deps.supabase, {
+      projectId: operation.projectId,
+      preparedChangeId: run.preparedChangeId,
+      outcome,
+    });
+    resolution = resolved.kind;
+  } catch {
+    resolution = "error";
+  }
+
+  await recordAuditEvent(deps.supabase, {
+    userId: operation.userId,
+    projectId: operation.projectId,
+    eventType: "agent_execution.hold_resolved",
+    metadata: {
+      projectId: operation.projectId,
+      operationId: operation.id,
+      preparedChangeId: run.preparedChangeId,
+      validationRunId: run.id,
+      outcome,
+      resolution,
+      decidedBy: "validation_verdict",
+    },
   });
 }

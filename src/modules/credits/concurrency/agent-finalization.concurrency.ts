@@ -36,7 +36,7 @@ import {
  * authority. It does not, and the callers are two different processes:
  *
  * ```
- * workflow process       finishAgentExecutionStep   → settle or release
+ * workflow process       finishAgentExecutionStep   → release, or hold open
  * web request process    expireStaleAgentExecution  → release
  * ```
  *
@@ -62,10 +62,15 @@ import {
 /**
  * Funded for the whole suite, derived rather than guessed.
  *
- * Every iteration takes one `agent_execution_dogfood` hold, and a hold that
- * *settles* is spent for good — nothing returns it. So the account has to cover
- * the worst case where all three scenarios charge on every iteration, and that
- * total moves whenever `ITERATIONS` does.
+ * Every iteration takes one `agent_execution_dogfood` hold, and a hold that is
+ * not released is unavailable for good — a settled one is spent, and an open
+ * one is still reserved. So the account has to cover the worst case where no
+ * iteration returns its hold, and that total moves whenever `ITERATIONS` does.
+ *
+ * ADR 0073 changed which of the two happens on the succeeded side — the hold
+ * now stays open for the validation verdict instead of settling — and left this
+ * number alone on purpose: both outcomes consume the same capacity, so the
+ * worst case is the one it was already sized for.
  *
  * It was a flat `creditsToUnits(5000)`, sized for twenty iterations and left
  * behind when Sprint 0069 raised them to sixty. The suite then exhausted the
@@ -213,10 +218,19 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
         // Exactly one agent terminal transition.
         expect(["succeeded", "failed"]).toContain(state.runStatus);
 
-        // Exactly one billing terminal effect, and it agrees with the winner.
+        /*
+         * The winner's answer, and nobody else's.
+         *
+         * The succeeded side changed with ADR 0073 and the change is the point:
+         * a finished agent run no longer charges. It leaves the hold open for
+         * the validation verdict, because the price is for a *validated*
+         * improvement. So "the workflow won" now means an untouched hold rather
+         * than a charge — and what this test exists for is unchanged, that the
+         * loser wrote nothing.
+         */
         if (state.runStatus === "succeeded") {
-          expect(state.charges).toBe(1);
-          expect(state.reservationStatus).toBe("settled");
+          expect(state.charges).toBe(0);
+          expect(state.reservationStatus).toBe("active");
         } else {
           expect(state.charges).toBe(0);
           expect(state.reservationStatus).toBe("released");
@@ -230,8 +244,19 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
           "charged against a hold recorded as released",
         ).toBe(false);
 
-        // And the hold is closed either way — nothing stays reserved.
-        expect(["settled", "released"]).toContain(state.reservationStatus);
+        /*
+         * A hold may stay open, and only on the side where something is still
+         * coming.
+         *
+         * This used to read "the hold is closed either way", which was the
+         * right invariant while the run's own end was the last word on the
+         * money. It is not any more — but the dangerous direction is: a run
+         * that *failed* has no verdict to wait for, so an open hold there is a
+         * customer's Credits reserved against nothing.
+         */
+        if (state.runStatus === "failed") {
+          expect(state.reservationStatus).toBe("released");
+        }
 
         winners[state.runStatus] = (winners[state.runStatus] ?? 0) + 1;
       } finally {
@@ -251,8 +276,12 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
   /**
    * Workflow wins, deterministically: the expiry is not due, so it must decline
    * and touch nothing.
+   *
+   * Renamed with ADR 0073. It used to settle here and no longer does — the hold
+   * waits for the validation verdict — so a name promising a settlement would
+   * describe the opposite of what the body now asserts.
    */
-  it(`settles once when the run is not yet stale, ${ITERATIONS} times`, async () => {
+  it(`holds once when the run is not yet stale, ${ITERATIONS} times`, async () => {
     await forEachIteration(async (iteration) => {
       const fixture = await runningRun(iteration, "workflow-wins");
 
@@ -274,8 +303,13 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
         const state = await terminalState(fixture.operationRunId, fixture.reservationId);
         expect(state.runStatus).toBe("succeeded");
         expect(state.operationStatus).toBe("completed");
-        expect(state.charges).toBe(1);
-        expect(state.reservationStatus).toBe("settled");
+
+        // Winning still carries billing authority — it is what entitles this
+        // process to resolve the hold rather than the sweep racing it. What
+        // that authority now does on success is nothing: the verdict settles
+        // it, and until then the hold stays open (ADR 0073).
+        expect(state.charges).toBe(0);
+        expect(state.reservationStatus).toBe("active");
       } finally {
         await deleteAgentRun(admin.current!, fixture.operationRunId);
       }

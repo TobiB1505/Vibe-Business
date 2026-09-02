@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeAgentSpec, fakeDetachedAgentProvider } from "@/modules/coding-agent/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
-import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
+import { agentSandboxNameFor, computeCandidateDigest } from "@/modules/coding-agent/identity";
 import type { BaseContentPort, BaseTreePort } from "@/modules/coding-agent/candidate";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
@@ -78,6 +78,13 @@ function fakeGit() {
     async createTree(input) {
       writes += 1;
       for (const file of input.files) {
+        // A null blob is the removal shape: the entry drops out of the base
+        // tree. Modelled rather than ignored, so a read-back that asserts a
+        // path is gone is asserting against a tree that actually lost it.
+        if (file.blobSha === null) {
+          tree.delete(file.path);
+          continue;
+        }
         const content = blobs.get(file.blobSha);
         if (content !== undefined) tree.set(file.path, content);
       }
@@ -887,6 +894,73 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     expect(git.writes).toBe(0);
   });
 
+  /**
+   * A run that removed a file (ADR 0074).
+   *
+   * The deletion is made the way production makes one — the file disappears
+   * from the workspace, and Vibe finds out by walking it. Nothing in this test
+   * tells the pipeline that a deletion happened; the observation does.
+   */
+  describe("a change that removes a file", () => {
+    async function preparedWithDeletion() {
+      const { operation, run } = seed();
+      const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+      const shared = deps({
+        sandboxProvider: sandbox,
+        provider: fakeDetachedAgentProvider({
+          calls: [{ tool: "write_file", input: {} }],
+          onStart: () => sandbox.deleteFile(`${SANDBOX_WORKSPACE}/src/app/page.tsx`),
+        }),
+      });
+
+      await provisionAgentWorkspaceStep(shared, operation.id);
+      const agent = await runAgent(shared, operation.id, ["typecheck"]);
+      const observed = agent.ok && agent.changedPaths ? [...agent.changedPaths] : null;
+      const extracted = await extractAndVerifyStep(shared, operation.id, observed);
+      if (!extracted.ok) throw new Error("fixture did not produce a change");
+
+      return { operation, run, shared, extracted };
+    }
+
+    it("records the removed path as a deletion, with no hash and no bytes", async () => {
+      const { operation, shared, extracted } = await preparedWithDeletion();
+
+      const outcome = await writeAgentBranchStep(
+        shared,
+        operation.id,
+        extracted.observedPaths,
+        extracted.candidateDigest,
+      );
+
+      expect(outcome.ok).toBe(true);
+
+      const change = db.rows("prepared_changes")[0] as { files: Record<string, unknown>[] };
+      expect(change.files).toEqual([{ path: "src/app/page.tsx", status: "deleted" }]);
+    });
+
+    /**
+     * The digest binds the deletion set, not only the bytes.
+     *
+     * Without this, a run whose only difference was *which* files it removed
+     * would reproduce the digest the first pass computed, and the write step
+     * would happily write a different change than the one that was verified.
+     */
+    it("refuses when the deletion set does not hash to the digest it was given", async () => {
+      const { operation, shared, extracted } = await preparedWithDeletion();
+
+      const outcome = await writeAgentBranchStep(
+        shared,
+        operation.id,
+        extracted.observedPaths,
+        // The digest of the same run with nothing removed.
+        computeCandidateDigest([]),
+      );
+
+      expect(outcome).toEqual({ ok: false, failureCode: "agent_change_rejected" });
+      expect(git.writes).toBe(0);
+    });
+  });
+
   it("records the change under the agentic capability, with no opportunity set", async () => {
     const { operation, shared, extracted } = await prepared();
 
@@ -899,8 +973,8 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
 
     const change = db.rows("prepared_changes")[0];
     expect(change).toMatchObject({
-      execution_capability: "agentic_execution_v1",
-      execution_version: "agentic-execution-v1",
+      execution_capability: "agentic_execution_v2",
+      execution_version: "agentic-execution-v2",
       opportunity_set_id: null,
       opportunity_id: null,
       status: "prepared",
@@ -931,7 +1005,38 @@ describe("§20, §35 — cleanup and settlement", () => {
       network_egress_bytes: 1_024,
       // Unknown is not zero: Vercel exposes no attributable per-sandbox cost.
       provider_cost_usd: null,
+      // And Vibe's own derivation beside it, which is a different claim and
+      // says so by living in different columns (ADR 0073). Before this the
+      // sandbox half of every run's cost was simply absent from the ledger.
+      //
+      // The rate card and the allocation are recorded even here, where the
+      // estimate itself is refused: they are facts about what the sandbox ran
+      // under, and knowing which card *would* have priced a row is what makes
+      // the refusal readable rather than blank.
+      cost_pricing_version: "vercel-sandbox-2026-08-20",
+      vcpus: 4,
+      /*
+       * And no figure, because this fixture records CPU but no wall-clock
+       * lifetime — so the memory term is unknown and the total would be a
+       * floor. A floor written into a cost column reads as the whole bill,
+       * which is the failure `economy/cost.ts` exists to prevent. The
+       * arithmetic for a fully measured sandbox is pinned in
+       * `economy/sandbox-usage-estimate.test.ts`.
+       */
+      estimated_cost_nano_usd: null,
     });
+
+    /*
+     * And straight into the billing ledger (ADR 0073).
+     *
+     * `billing_usage_events` is what makes margin knowable, and its only writer
+     * was a repair pass an operator ran by hand — so on 2026-09-02 its newest
+     * row was six days old and the run this sprint is about appeared in it
+     * nowhere. The measurement and its projection are now the same event.
+     */
+    const metered = db.rows("billing_usage_events");
+    expect(metered.length).toBeGreaterThan(0);
+    expect(metered.map((row) => (row as { sku: string }).sku)).toContain("sandbox_active_cpu_ms");
   });
 
   it("names the sandbox after the attempt, not the identity", () => {
@@ -1020,8 +1125,8 @@ describe("§20, §35 — cleanup and settlement", () => {
 describe("the sandbox-hosted harness", () => {
   const HOME = "/vercel/sandbox";
   const LIST =
-    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\\0";
-  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\\0`;
+    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage -o -name .swc -o -path */.well-known/workflow/* ) -prune -o -type f -printf %P\\0";
+  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage -o -name .swc -o -path */.well-known/workflow/* ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\\0`;
 
   /** The workspace as the fake sandbox reports it, before and after the run. */
   function walk(options: { before: string[]; after: string[]; touched: string[] }) {

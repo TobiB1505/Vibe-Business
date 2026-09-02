@@ -1,6 +1,6 @@
 # 0070 - The sandbox is the boundary; the tool gateway is retired
 
-Status: Accepted
+Status: Accepted; amended by [0074](0074-removing-a-file.md) — a verified candidate may remove a file
 Date: 2026-09-02
 
 Supersedes [ADR 0027](0027-coding-agent-provider-and-tool-gateway.md) in its

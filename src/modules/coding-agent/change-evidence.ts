@@ -159,6 +159,23 @@ const GENERATED_PATTERNS: readonly RegExp[] = [
   /(^|\/)storybook-static\//,
   /\.tsbuildinfo$/,
   /(^|\/)\.eslintcache$/,
+  /*
+   * The three that a real run proved this list was missing.
+   *
+   * On 2026-08-19 a candidate was refused for `too_many_files` and
+   * `diff_too_large` — 17 paths, 1,012,096 bytes — and only six of them were
+   * files a person had written. Four of the rest were counted as `source`,
+   * because a compiled route ends in `.js`, a build manifest in `.json`, and
+   * Next's generated ambient declaration in `.ts`.
+   *
+   * `changes.ts` now prunes all three so the walk never reaches them. They are
+   * labelled here too, for the reason this list has always overlapped the prune
+   * list: a path that arrives under some other topology should still read as
+   * what it is.
+   */
+  /(^|\/)\.swc\//,
+  /(^|\/)\.well-known\/workflow\//,
+  /(^|\/)next-env\.d\.ts$/,
 ];
 
 /** Written while something ran, and belonging to nobody's repository. */

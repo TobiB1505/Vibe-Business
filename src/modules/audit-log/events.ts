@@ -151,6 +151,7 @@ export type AuditEventType =
    * like a user who has not clicked yet.
    */
   | "agent_execution.validation_enqueued"
+  | "agent_execution.hold_resolved"
   | "agent_execution.failed"
   // Temporary preview (Sprint 10B-2). None of these may carry the preview
   // origin: an unlisted public URL to a VM serving untrusted code is

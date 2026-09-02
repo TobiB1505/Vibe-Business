@@ -1,6 +1,6 @@
 # ADR 0061 — What a Credit buys, and what each number is worth trusting
 
-**Status:** Accepted; the rate card it set is amended by [0062](0062-sonnet-5-price-rise-cancelled.md), the reasoning that set it is not
+**Status:** Accepted; the rate card it set is amended by [0062](0062-sonnet-5-price-rise-cancelled.md), the reasoning that set it is not; its settlement timing amended by [0073](0073-the-charge-lands-on-what-was-sold.md) — the prices are unchanged
 **Date:** 2026-08-31
 **Extends:** [ADR 0024](0024-vibe-credits-economic-layer.md), [ADR 0025](0025-stripe-payment-rail-and-credit-grants.md)
 **Satisfies:** [CLAUDE.md](../../CLAUDE.md) rule 78

@@ -181,6 +181,15 @@ export type FakeSandboxProvider = SandboxProvider & {
    * "what a run changed" was passing for a reason production does not have.
    */
   writeFile(path: string, content: string): void;
+  /**
+   * Removes bytes from the workspace the way the harness does — from inside.
+   *
+   * The counterpart of `writeFile`, and needed for the same reason: since
+   * ADR 0074 a run may remove a file, and Vibe learns that by walking the
+   * filesystem and finding a path that is no longer there. A test that stubbed
+   * the deletion anywhere else would be asserting about its own stub.
+   */
+  deleteFile(path: string): void;
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -218,14 +227,27 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
    * `find`, over the fake's own filesystem.
    *
    * Only the shape the agent runtime builds is understood: prune a few
-   * directories, take regular files, print paths relative to the walk root, and
-   * optionally restrict to what is newer than a marker. Enough to make the
-   * change-discovery path real rather than stubbed, and narrow enough that a
-   * command this does not recognise falls through to the configured results.
+   * directories *by name* and a few *by path*, take regular files, print paths
+   * relative to the walk root, and optionally restrict to what is newer than a
+   * marker. Enough to make the change-discovery path real rather than stubbed,
+   * and narrow enough that a command this does not recognise falls through to
+   * the configured results.
+   *
+   * The `-path` half is not decoration: build output that lands inside the
+   * source tree cannot be pruned by directory name without taking a customer's
+   * hand-written files with it, so the runtime prunes it by path — and a fake
+   * that ignored those tokens would report a walk the real one does not do.
    */
   function runFind(command: string, cwd: string): string {
     const prefix = cwd === "." || cwd === "" ? "" : `${cwd}/`;
     const pruned = [...command.matchAll(/-name (\S+)/g)].map((match) => match[1]);
+    // `find`'s `-path` glob: `*` matches any run of characters, `/` included.
+    const prunedPaths = [...command.matchAll(/-path (\S+)/g)].map(
+      (match) =>
+        new RegExp(
+          `^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
+        ),
+    );
     const newer = /-newer (\S+)/.exec(command);
     const since = newer ? (writtenAt.get(newer[1]) ?? 0) : 0;
 
@@ -234,6 +256,8 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       .map((path) => path.slice(prefix.length))
       .filter((path) => path.length > 0 && !path.startsWith("/"))
       .filter((path) => !pruned.some((name) => path.split("/").includes(name)))
+      // `find` matches `-path` against the walked path, which starts at `./`.
+      .filter((path) => !prunedPaths.some((pattern) => pattern.test(`./${path}`)))
       .filter((path) => (writtenAt.get(`${prefix}${path}`) ?? 0) > since)
       .sort();
 
@@ -560,6 +584,10 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
     writeFile(path: string, content: string) {
       files[path] = content;
       touch(path);
+    },
+
+    deleteFile(path: string) {
+      delete files[path];
     },
 
     async create(input) {

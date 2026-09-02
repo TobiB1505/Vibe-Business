@@ -184,6 +184,11 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "operation",
     "operationType",
     "outcome",
+    // ADR 0073: which of `settled` / `released` / `no_hold` / `already_closed`
+    // the verdict produced, and which authority decided it. Closed vocabularies
+    // about Vibe's own billing machinery, naming no amount and no person.
+    "resolution",
+    "decidedBy",
     // VB-020: "release" | "settlement" — which repair a stuck hold is owed.
     "owed",
     "outcome_profile",

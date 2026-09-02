@@ -430,8 +430,8 @@ async function buildPreparedChangeCard(
     // prepared changes.
     // The Move this change was prepared to address. One row, no provider call,
     // and the only source of meaning an agent-produced change has: its
-    // capability is `agentic_execution_v1` for every agentic change ever
-    // written, so a per-capability rationale cannot say anything about it.
+    // capability names the producer and nothing else, so a per-capability
+    // rationale cannot say anything about it.
     //
     // Both ids are nullable on the row, and a change missing either is simply a
     // change with no origin to show — not an error, and not worth a query.

@@ -247,23 +247,64 @@ describe("the run-status swap decides who finalizes the money", () => {
 
     const runs = db().rows("agent_execution_runs") as unknown as { status: string }[];
     expect(runs).toHaveLength(1);
-    // Exactly one agent terminal transition happened.
-    expect(["completed", "failed"]).toContain(runs[0].status);
+    /*
+     * Exactly one agent terminal transition happened.
+     *
+     * `succeeded` was missing from this list, and could be: in this harness the
+     * expiry always wins the `Promise.all`, so the branch below has only ever
+     * seen `failed`. The test directly after this one drives the other side.
+     */
+    expect(["succeeded", "failed"]).toContain(runs[0].status);
 
-    // Exactly one billing terminal effect, and it must agree with the winner.
-    if (runs[0].status === "completed") {
-      expect(charges()).toHaveLength(1);
-      expect(reservation().status).toBe("settled");
+    /*
+     * The winner's answer, and nobody else's.
+     *
+     * The completed side changed with ADR 0073 and the change is the point: a
+     * finished agent run no longer charges. It leaves the hold open for the
+     * validation verdict, because the price is for a *validated* improvement.
+     * So "the workflow won" now means an untouched hold rather than a charge —
+     * and the thing this test exists for is unchanged, that the loser wrote
+     * nothing.
+     */
+    if (runs[0].status === "succeeded") {
+      expect(charges()).toHaveLength(0);
+      expect(reservation().status).toBe("active");
     } else {
       expect(charges()).toHaveLength(0);
       expect(reservation().status).toBe("released");
     }
 
-    // Never both. A charge standing against a hold marked released is the
+    // Never both. A charge standing against a hold recorded as released is the
     // state E2b measured 20 times out of 20 against real PostgreSQL.
     expect(
       charges().length === 1 && reservation().status === "released",
       "charged against a hold recorded as released",
     ).toBe(false);
+  });
+
+  /**
+   * The branch the race above cannot reach, driven directly (ADR 0073).
+   *
+   * `Promise.all` decides which actor wins, and in this harness the expiry
+   * always does — so the settle side of that test has never executed. Stating
+   * the completed side on its own is what makes "a finished run does not
+   * charge" a fact this suite checks rather than one it happens to allow.
+   */
+  it("leaves the hold open when the workflow wins, because validation has not answered", async () => {
+    const { operationId } = await seedRunningExecution();
+
+    await finishAgentExecutionStep(deps(), operationId, {
+      kind: "succeeded",
+      preparedChangeId: "change-1",
+    });
+
+    const runs = db().rows("agent_execution_runs") as unknown as { status: string }[];
+    expect(runs[0].status).toBe("succeeded");
+
+    // The improvement exists. The *validated* improvement — which is what the
+    // price is for — does not yet.
+    expect(charges()).toHaveLength(0);
+    expect(reservation().status).toBe("active");
+    expect(account().posted_credits).toBe(creditsToUnits(500));
   });
 });

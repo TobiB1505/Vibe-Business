@@ -327,7 +327,14 @@ export const CANDIDATE_REJECTIONS = [
   "secret_material_introduced",
   /** The workspace was not, or is no longer, the pinned base commit (§8, §54). */
   "source_revision_unverified",
-  /** A deletion outside what the policy permits. */
+  /**
+   * Historical, and unreachable since ADR 0074.
+   *
+   * Every candidate carrying a deletion was refused with this before the write
+   * path could express one. A deletion is now checked as a write is, so a
+   * protected path reports `forbidden_path` and an ordinary one is written.
+   * The value stays in the vocabulary because stored audit rows may name it.
+   */
   "deletion_not_permitted",
   /**
    * A file that exists but is too large to read back, so the change cannot be
@@ -379,19 +386,19 @@ export type CandidateVerification =
  * reported as three problems, because fixing one and rediscovering the next is
  * how a repair loop burns a budget.
  *
- * ## Why deletions are refused in V1
+ * ## Deletions, since ADR 0074
  *
- * `workspace_delete_file` is a granted capability — the agent can delete inside
- * its own workspace, which is sometimes the right implementation. But the
- * *write path* to GitHub cannot express one: `github-writer.ts` builds a tree
- * additively from the base tree and its port has no operation that removes an
- * entry. So a candidate containing a deletion cannot be written faithfully, and
- * the honest answer is to refuse it rather than to silently write a change that
- * is missing part of what the agent did (§59's exactness requirement).
+ * They used to be refused here, and the refusal was honest: `github-writer.ts`
+ * built its tree additively and its port had no operation that removed an
+ * entry, so a candidate containing a deletion could not be written faithfully.
+ * Refusing beat writing a change missing part of what the agent did (§59).
  *
- * That is a real limitation, recorded as one. Widening it means teaching the
- * git writer to remove tree entries, which is a change to the most consequential
- * write path in the product and belongs in its own sprint.
+ * The write path can express one now, so the refusal is gone and what replaced
+ * it is narrower rather than absent. A deletion is checked against
+ * `isAgenticWritablePath` exactly as a write is — a path nobody may write is a
+ * path nobody may remove — and it counts as one changed file against the
+ * blast-radius ceilings. Which paths those are is Vibe's set difference, never
+ * the agent's account of its own work (Rule 77).
  */
 export function verifyCandidateChange(input: {
   spec: ExecutionSpec;
@@ -404,8 +411,23 @@ export function verifyCandidateChange(input: {
 
   if (!input.sourceRevisionVerified) rejections.push("source_revision_unverified");
 
-  const deletions = input.candidate.files.filter((file) => file.status === "deleted");
-  if (deletions.length > 0) rejections.push("deletion_not_permitted");
+  /*
+   * Deletions, checked the same way writes are (ADR 0074 §3).
+   *
+   * `forbidden_path` rather than a deletion-specific rejection: the finding is
+   * that the change touches a path the policy protects, and whether it touched
+   * it by writing or by removing does not change what a reader has to do about
+   * it.
+   */
+  const deletions = input.candidate.files
+    .filter((file) => file.status === "deleted")
+    .map((file) => file.path);
+
+  for (const path of deletions) {
+    if (!isAgenticWritablePath(path) && !rejections.includes("forbidden_path")) {
+      rejections.push("forbidden_path");
+    }
+  }
 
   if (input.candidate.unreadablePaths.length > 0) rejections.push("change_not_representable");
 
@@ -439,6 +461,7 @@ export function verifyCandidateChange(input: {
   const accepted = acceptProposedChange(
     input.spec,
     writes.map((file) => ({ path: file.path, content: file.content })),
+    deletions,
   );
 
   if (!accepted.accepted) {
@@ -468,6 +491,9 @@ export function verifyCandidateChange(input: {
         };
       })
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
-    deletions: [],
+    // Sorted for the same reason the writes are: two runs that removed the same
+    // paths produce byte-identical records, which is what the candidate digest
+    // downstream depends on.
+    deletions: [...deletions].sort(),
   };
 }
