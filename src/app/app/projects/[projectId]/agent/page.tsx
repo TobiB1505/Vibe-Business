@@ -53,6 +53,8 @@ import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
+import { forecastRun } from "@/modules/coding-agent/run-forecast";
+import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 
 /**
  * The customer-facing Agent workspace.
@@ -374,6 +376,24 @@ async function AgentWorkspaceBody({
     ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
     : null;
 
+  /*
+   * What stands behind that ceiling (ADR 0072).
+   *
+   * Free and offline: pure over the static run history plus the snapshot the
+   * route resolver already read. It produces no money and no second number —
+   * the ceiling is the figure, and this says how much evidence is under it and
+   * what about this run pushes toward the top of it.
+   */
+  const runForecast =
+    agenticStep && agenticResolution
+      ? forecastRun({
+          at: new Date(),
+          step: agenticStep,
+          riskClass: agenticResolution.riskClass,
+          snapshot: agentRoutes?.available ? agentRoutes.snapshot : null,
+        })
+      : null;
+
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */
   const live = agentWorking;
@@ -470,6 +490,11 @@ async function AgentWorkspaceBody({
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
+                forecastNotes={
+                  runForecast
+                    ? [forecastEvidenceNote(runForecast), ...forecastDriverNotes(runForecast)]
+                    : undefined
+                }
                 caption={
                   (requestedTaskMatchesRun && change !== null) ||
                   (focus?.kind === "focused" && focus.action.kind === "already_prepared")

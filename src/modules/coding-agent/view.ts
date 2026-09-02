@@ -6,6 +6,7 @@ import type { ExecutionAdmission } from "@/modules/execution-contract/schema";
 import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
 import type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
+import type { RunForecast, RunForecastDriver } from "./run-forecast";
 
 /**
  * Customer-safe copy for the coding-agent runtime (EXECUTION CORE-4 website gate, §5).
@@ -180,4 +181,84 @@ export function preflightRefusalLabel(
   }
 
   return PREFLIGHT_REFUSAL_LABELS[refusal];
+}
+
+/* ---------------------------------------------------------------------------
+ * The evidence behind the ceiling on the Run button (ADR 0072)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What a founder is told about a cost driver.
+ *
+ * Keyed on the driver and its direction, never on `EstimateCostDriver.detail` —
+ * those strings are Vibe's own working notes ("complexity 1.34x against the
+ * reference repository") and belong in a calibration report, not on a screen
+ * somebody is about to spend money from.
+ *
+ * A `Record` over the closed union, so a new driver without copy is a type
+ * error rather than a blank line under a price.
+ */
+const FORECAST_DRIVER_COPY: Record<
+  RunForecastDriver["driver"],
+  Partial<Record<RunForecastDriver["effect"], string>>
+> = {
+  historical_baseline: {
+    unknown: "Vibe has not run work of this shape before, so this ceiling rests on policy rather than on a measurement.",
+  },
+  repository_complexity: {
+    raises: "Your repository is larger than the one this ceiling was measured against, so this run may sit near the top of it.",
+    lowers: "Your repository is smaller than the one this ceiling was measured against.",
+    unknown: "Vibe has not measured your repository at this commit, so the size of it is not in this figure.",
+  },
+  context_pressure: {
+    raises: "Not all of the relevant code fits into what Vibe hands the agent, which tends to make a run cost more.",
+  },
+  repository_drift: {
+    raises: "Your repository has moved a lot since Vibe last worked in it, so the agent has more to read.",
+  },
+  validation_depth: {
+    raises: "This change needs deeper checks than usual.",
+    lowers: "This change needs lighter checks than usual.",
+    // The ordinary pre-run answer: depth is resolved from a Prepared Change,
+    // which does not exist yet. Silent rather than alarming — "we do not know
+    // yet" beside a Run button reads as a warning, and it is not one.
+  },
+  cohort_correction: {
+    raises: "Vibe is allowing for having under-estimated work like this before.",
+    lowers: "Vibe is allowing for having over-estimated work like this before.",
+  },
+};
+
+/**
+ * The sentences that go under the Credit ceiling, in order, at most two.
+ *
+ * Two because this sits directly above the button that spends money, and a
+ * paragraph there is a paragraph nobody reads. The estimator emits its drivers
+ * in a fixed order — baseline, repository, pressure, drift, validation, cohort
+ * — so the two a founder sees are deterministic rather than whichever happened
+ * to be loudest.
+ */
+export function forecastDriverNotes(forecast: RunForecast): readonly string[] {
+  return forecast.drivers
+    .map((driver) => FORECAST_DRIVER_COPY[driver.driver][driver.effect])
+    .filter((copy): copy is string => copy !== undefined)
+    .slice(0, 2);
+}
+
+/**
+ * How much evidence stands behind the ceiling.
+ *
+ * Says the count, because "based on 7 comparable runs" and "based on Vibe's
+ * pricing policy" are different claims and only one of them is a measurement.
+ * Zero is not hidden: a ceiling with nothing behind it is exactly the thing a
+ * founder should be told about before they press the button (rule 78).
+ */
+export function forecastEvidenceNote(forecast: RunForecast): string {
+  if (forecast.comparableRuns === 0) {
+    return "No comparable run has been completed yet, so this is Vibe's policy ceiling rather than a measured one.";
+  }
+
+  return forecast.comparableRuns === 1
+    ? "Based on 1 comparable run Vibe has completed."
+    : `Based on ${forecast.comparableRuns} comparable runs Vibe has completed.`;
 }

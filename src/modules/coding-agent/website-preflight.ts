@@ -23,6 +23,7 @@ import { resolveExecutionValidation } from "@/modules/execution-contract/validat
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { GithubDomainError } from "@/modules/github/errors";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import {
   internalDogfoodProjectIds,
   isAgenticExecutionAuthorized,
@@ -199,6 +200,19 @@ export type DogfoodPlanRoutes =
       available: true;
       plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
       resolutions: readonly ExecutionResolution[];
+      /**
+       * The snapshot a run started from here would be pinned to (ADR 0072).
+       *
+       * Carried so the pre-run forecast can measure the repository the run will
+       * actually work in, rather than reporting `repository_unmeasured` beside
+       * a Credit ceiling for a repository Vibe has analysed.
+       *
+       * Read here rather than threaded out of `resolvePlanExecutionRoutes`,
+       * which has a second caller whose return shape this must not change. It
+       * is the same row and the same function, so the two cannot disagree; the
+       * cost is one indexed lookup on this page.
+       */
+      snapshot: RepositoryIntelligenceSnapshot | null;
     };
 
 /**
@@ -302,11 +316,12 @@ export async function resolveDogfoodPlanRoutes(
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { available: false, reason: "no_action_plan" };
 
-  return {
-    available: true,
-    plan,
-    resolutions: await resolvePlanExecutionRoutes(supabase, { ...params, plan }),
-  };
+  const [resolutions, snapshot] = await Promise.all([
+    resolvePlanExecutionRoutes(supabase, { ...params, plan }),
+    getLatestSuccessfulSnapshot(supabase, params.projectId),
+  ]);
+
+  return { available: true, plan, resolutions, snapshot: snapshot?.result ?? null };
 }
 
 export async function previewDogfoodStep(

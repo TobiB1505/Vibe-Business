@@ -25,11 +25,24 @@ import { cn } from "@/lib/utils/cn";
 export function AgentStartCta({
   children,
   creditEstimate,
+  forecastNotes,
   note = "You can stop Vibe at any time",
 }: {
   children: React.ReactNode;
   /** Already-resolved run ceiling. Never derived in the client. */
   creditEstimate?: string | null;
+  /**
+   * What stands behind that ceiling, in sentences the domain wrote (ADR 0072).
+   *
+   * The ceiling alone is a number with nothing under it — the same "Up to N
+   * Credits" whether Vibe has done this seven times or never. These say which,
+   * and what about this run pushes toward the top of the figure.
+   *
+   * Never a second number: a predicted price would move every time the
+   * repository grew, which is exactly what run #6 → #9 did at 2.16x for an
+   * identical step.
+   */
+  forecastNotes?: readonly string[];
   note?: string;
 }) {
   const reduceMotion = useReducedMotion();
@@ -65,6 +78,22 @@ export function AgentStartCta({
             Up to {creditEstimate} Credits
           </strong>
         </div>
+      )}
+
+      {creditEstimate && forecastNotes && forecastNotes.length > 0 && (
+        <ul
+          className="text-fg-muted flex w-full flex-col gap-1.5 text-[0.8125rem] leading-snug"
+          data-testid="agent-run-forecast"
+        >
+          {forecastNotes.map((sentence) => (
+            <li key={sentence} className="flex gap-2">
+              <span aria-hidden="true" className="text-line-2 select-none">
+                &middot;
+              </span>
+              <span className="min-w-0">{sentence}</span>
+            </li>
+          ))}
+        </ul>
       )}
 
       <div className="relative w-full overflow-hidden rounded-full">
