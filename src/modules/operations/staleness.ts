@@ -14,6 +14,9 @@ import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { releaseOperationBilling } from "./billing";
 import { failOperationRun, getOperationRunById, type StoredOperationRun } from "./store";
 import type { OperationType } from "./schema";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveAgentHold } from "@/modules/coding-agent/hold";
+import { findValidationRunByOperation } from "@/modules/validation/store";
 
 /**
  * The backstop for a durable operation nothing is carrying any more (ADR 0042
@@ -242,5 +245,53 @@ export async function expireStaleOperation(params: {
     providerUsageOccurred: true,
   });
 
+  /*
+   * A swept validation also owes an answer to somebody else's hold (ADR 0073).
+   *
+   * Since settlement moved to the validation verdict, the Credits an agent run
+   * reserved sit open until one arrives. A validation that dies is a verdict
+   * that never comes — and the release above cannot reach that hold, because it
+   * is keyed to *this* operation and the hold belongs to the agent's.
+   *
+   * Without this, a customer's balance would carry a reservation against a
+   * purchase nothing will ever complete, and no other path would ever close it.
+   * The verdict is the honest one: no validated improvement exists, so nothing
+   * is charged.
+   */
+  if (operation.operationType === "change_validation") {
+    await releaseAgentHoldBehindValidation(supabase, operation);
+  }
+
   return { expired: true };
+}
+
+/**
+ * Releases the agent hold behind a validation that will never answer.
+ *
+ * Reached through the validation run's own `prepared_change_id`, which is the
+ * link the database records — an operation id alone cannot find the hold.
+ *
+ * Never throws: this is a backstop, and a billing fault inside it must not stop
+ * an operation from being expired. `resolveAgentHold` is idempotent and refuses
+ * a reservation that is already terminal, so a sweep racing a verdict that
+ * settled first reports `already_closed` and takes nothing back.
+ */
+async function releaseAgentHoldBehindValidation(
+  supabase: SupabaseClient,
+  operation: { id: string; projectId: string | null },
+): Promise<void> {
+  if (operation.projectId === null) return;
+
+  try {
+    const run = await findValidationRunByOperation(supabase, operation.id);
+    if (!run) return;
+
+    await resolveAgentHold(supabase, {
+      projectId: operation.projectId,
+      preparedChangeId: run.preparedChangeId,
+      outcome: "unvalidated",
+    });
+  } catch {
+    // Reported by the operator alert this function's caller already sent.
+  }
 }

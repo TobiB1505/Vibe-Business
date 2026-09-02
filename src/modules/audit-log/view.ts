@@ -221,6 +221,10 @@ const LABELS: Record<AuditEventType, string> = {
   "agent_execution.change_rejected": "Vibe refused its own change and wrote nothing",
   "agent_execution.completed": "Vibe finished a change, ready for review",
   "agent_execution.validation_enqueued": "Vibe sent the change for validation",
+  // Says what happened to the money without naming an amount: the ledger is
+  // where a charge lives, and an audit line that half-quotes one is worse
+  // than one that points at it.
+  "agent_execution.hold_resolved": "Vibe settled or released the Credits held for this change",
   "agent_execution.failed": "Vibe stopped without changing anything",
 };
 

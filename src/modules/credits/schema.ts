@@ -188,6 +188,18 @@ export const NON_CHARGEABLE_SKUS: readonly UsageSku[] = ["anthropic_thinking_tok
 export const COST_STATUSES = [
   /** A real price, computed by the authoritative pricing module. */
   "costed",
+  /**
+   * Derived from a quantity the provider reported and a rate Vibe holds
+   * (ADR 0073).
+   *
+   * Its own value rather than `costed`, because the two are different claims.
+   * A model call's cost is the provider's own arithmetic against its own price
+   * book. A sandbox's is Vibe's arithmetic against a rate a person attested to,
+   * over CPU milliseconds and wall time the provider did report. Folding the
+   * second into the first would let an assumption be summed as a measurement,
+   * which is the one thing `economy/cost.ts` exists to prevent.
+   */
+  "cost_estimated",
   /** The provider does not report a price and Vibe refuses to invent one. */
   "cost_unknown",
   /** Priced in principle, but no price is configured for this model/date. */

@@ -1,4 +1,6 @@
 import "server-only";
+import { meterAiUsage } from "@/modules/credits/meter";
+import type { AiUsageRow } from "@/modules/credits/projection";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateProviderCost, UnpricedModelError } from "./pricing";
@@ -89,7 +91,7 @@ export async function recordAIUsage(
     }
   }
 
-  const { error } = await supabase.from("ai_usage_events").insert({
+  const { data, error } = await supabase.from("ai_usage_events").insert({
     user_id: params.userId,
     project_id: params.projectId,
     operation: params.operation,
@@ -107,7 +109,24 @@ export async function recordAIUsage(
     pricing_version: pricingVersion,
     latency_ms: params.latencyMs,
     failure_code: params.failureCode,
-  });
+  })
+    .select(
+      "id, user_id, project_id, operation, provider, model, job_id, status, " +
+        "input_tokens, output_tokens, thinking_tokens, cache_read_input_tokens, " +
+        "cache_creation_input_tokens, provider_cost_usd, pricing_version, created_at",
+    )
+    .single();
+
+  /*
+   * Into the billing ledger immediately (ADR 0073).
+   *
+   * `billing_usage_events` is what makes margin knowable and what every price
+   * in `retail.ts` was derived from, and its only writer was a repair pass an
+   * operator ran by hand — so on 2026-09-02 its newest row was six days old.
+   * The measurement and its projection are the same event; treating them as one
+   * is what keeps the ledger current by construction.
+   */
+  if (data) await meterAiUsage(supabase, data as unknown as AiUsageRow);
 
   if (error) {
     console.error("[ai-usage] failed to record usage event", {

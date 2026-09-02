@@ -12,7 +12,8 @@ import {
   findAgentRunByOperation,
 } from "@/modules/coding-agent/store";
 import { recordAgentSandboxUsage } from "@/modules/coding-agent/usage";
-import { releaseOperationCredits, settleOperationCredits } from "@/modules/credits/operation-billing";
+import { releaseOperationCredits } from "@/modules/credits/operation-billing";
+import { resolveAgentHold, type AgentHoldOutcome } from "@/modules/coding-agent/hold";
 import { type SandboxHandle } from "@/modules/validation/sandbox-port";
 import type { OperationFailureCode } from "../../failures";
 import { completeOperationRun, failOperationRun } from "../../store";
@@ -95,14 +96,24 @@ export async function cleanupAgentWorkspaceStep(
  * ------------------------------------------------------------------------ */
 
 /**
- * Finishes the run and resolves its Credit hold.
+ * Finishes the run, and resolves its Credit hold **only on failure**.
  *
- * The dogfood settlement policy, applied: a run that produced a reviewable
- * change settles; every failure releases. That is not a new rule — it is
- * CREDIT_ECONOMICS.md's approved failure policy ("a Vibe/system failure, a
- * provider failure, and an operation that produced no usable result are all 0
- * charged, Vibe absorbs"), and §35 asks the dogfood to follow the documented
- * one rather than to invent production failure charging.
+ * Every failure releases. That is CREDIT_ECONOMICS.md's approved failure policy
+ * ("a Vibe/system failure, a provider failure, and an operation that produced
+ * no usable result are all 0 charged, Vibe absorbs"), unchanged.
+ *
+ * ## What moved, and why (ADR 0073)
+ *
+ * Success no longer settles here. It used to, the moment a reviewable change
+ * existed — three seconds before validation started, in production run
+ * `c462c083`. But the price says what is being sold, and `credits/retail.ts`
+ * says it plainly: validation carries no price of its own because *"a customer
+ * bought a validated improvement, not a pipeline"*. Charging before the checks
+ * ran meant a change Vibe would refuse to ship could still be paid for in full.
+ *
+ * So the hold survives this step and `coding-agent/hold.ts` resolves it from
+ * the validation verdict. `enqueueValidationStep` below is where a run that
+ * will never get one is released instead.
  *
  * Provider usage that really happened stays recorded either way. Internal cost
  * and customer price are separate facts, and a release does not pretend the
@@ -155,12 +166,14 @@ export async function finishAgentExecutionStep(
     // is letting a process that lost the swap keep writing.
     if (!transitioned) return;
 
-    if (run.creditReservationId) {
-      await settleOperationCredits(deps.supabase, {
-        reservationId: run.creditReservationId,
-        policyVersion: run.budgetPolicyVersion,
-      });
-    }
+    /*
+     * The hold is deliberately left open (ADR 0073).
+     *
+     * Winning the swap still carries billing authority — it is what entitles
+     * *this* process to resolve the hold rather than a sweep racing it — and
+     * what that authority now does on success is nothing. The verdict settles
+     * it, or `enqueueValidationStep` releases it when no verdict is coming.
+     */
 
     await completeOperationRun(deps.supabase, {
       operationId,
@@ -290,11 +303,26 @@ function toAgentFailureCode(code: OperationFailureCode): AgentFailureCode {
  * ## Why a failure here cannot fail the run
  *
  * The agent execution is already complete: the branch is written, the prepared
- * change exists, the credits are settled and the run row says `succeeded`.
- * Validation not starting is a missing convenience, not a broken execution —
- * the user can still click "Validate change" and get exactly what they would
- * have got before this sprint. So every outcome is recorded and none is
- * propagated.
+ * change exists and the run row says `succeeded`. Validation not starting is a
+ * missing convenience, not a broken execution — the user can still click
+ * "Validate change" and get exactly what they would have got before this
+ * sprint. So every outcome is recorded and none is propagated.
+ *
+ * ## Why it is nonetheless where the hold is decided (ADR 0073)
+ *
+ * Because this is the only place that knows whether a verdict is coming. Since
+ * settlement moved to the validation verdict, a run whose validation never
+ * starts would otherwise hold a customer's Credits open forever — reserved
+ * against a purchase nothing will ever complete.
+ *
+ * `reused` is the one outcome that settles here: it means this exact artifact
+ * has already passed under this exact policy, so the validated improvement
+ * exists and there is no second verdict to wait for.
+ *
+ * A failure releases, and it cannot mean "this repository has no validation":
+ * eligibility refuses admission on `validation_not_supported` before a run
+ * begins. It means something moved underneath a run that had already started,
+ * which the approved failure policy absorbs.
  *
  * ## Ownership
  *
@@ -303,6 +331,48 @@ function toAgentFailureCode(code: OperationFailureCode): AgentFailureCode {
  * ownership it filters on must be the ownership the database already recorded
  * (Rule 53).
  */
+/**
+ * Resolves the hold when the hand-off already knows the answer.
+ *
+ * `null` is "a verdict is coming" and does nothing, which is the ordinary path.
+ * A failure to resolve is swallowed for the same reason the enqueue itself is:
+ * this step must never fail a completed execution. What it must not do is stay
+ * silent — an unresolved hold is money, so the outcome is recorded either way.
+ */
+async function resolveHoldFor(
+  deps: AgentExecutionDeps,
+  run: { id: string; projectId: string; userId: string; preparedChangeId: string | null },
+  outcome: AgentHoldOutcome | null,
+): Promise<void> {
+  if (outcome === null || run.preparedChangeId === null) return;
+
+  let resolution: string;
+  try {
+    const resolved = await resolveAgentHold(deps.supabase, {
+      projectId: run.projectId,
+      preparedChangeId: run.preparedChangeId,
+      outcome,
+    });
+    resolution = resolved.kind;
+  } catch {
+    resolution = "error";
+  }
+
+  await recordAuditEvent(deps.supabase, {
+    userId: run.userId,
+    projectId: run.projectId,
+    eventType: "agent_execution.hold_resolved",
+    metadata: {
+      projectId: run.projectId,
+      agentExecutionRunId: run.id,
+      preparedChangeId: run.preparedChangeId,
+      outcome,
+      resolution,
+      decidedBy: "validation_handoff",
+    },
+  });
+}
+
 export async function enqueueValidationStep(
   deps: AgentExecutionDeps,
   executor: OperationExecutor,
@@ -343,4 +413,18 @@ export async function enqueueValidationStep(
       ...(detail ? { detail } : {}),
     },
   });
+
+  /*
+   * And only now the hold, so the trail reads in the order things happened:
+   * Vibe handed the change over, and *therefore* the money did or did not move.
+   *
+   * `reused` is the only outcome that settles — the artifact has already passed
+   * under this exact policy, so the validated improvement exists. `failed`
+   * releases. `started` and `running` leave it held for the verdict.
+   */
+  await resolveHoldFor(
+    deps,
+    run,
+    outcome === "reused" ? "validated" : outcome === "failed" ? "unvalidated" : null,
+  );
 }
