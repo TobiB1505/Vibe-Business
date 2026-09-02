@@ -155,9 +155,16 @@ export async function listWorkspaceFiles(input: {
      * observed set entirely, rather than being caught later by a read that
      * would already have followed it.
      *
-     * `%P\0` rather than `%P\n`: see `parsePaths`.
+     * `%P\\0` rather than `%P\\n`: see `parsePaths`. The escape is *two
+     * characters* and belongs to `find`, which turns it into a NUL itself — not
+     * to argv, which cannot carry one. Writing a real NUL here is how the whole
+     * observation path died for four days: an argument list is a list of C
+     * strings, so Node refuses to spawn at all, the provider reports the throw
+     * as a failed command, and every run ended at its first listing as
+     * `sandbox_lost`. The fake sandbox now refuses a NUL argument the same way,
+     * so the next attempt fails in `pnpm test` instead of in production.
      */
-    command: { command: "find", args: [".", ...pruneExpression(), "-type", "f", "-printf", "%P\0"] },
+    command: { command: "find", args: [".", ...pruneExpression(), "-type", "f", "-printf", "%P\\0"] },
     cwd: input.cwd,
     timeoutMs: LISTING_TIMEOUT_MS,
   });
@@ -292,8 +299,9 @@ export async function discoverWorkspaceChanges(input: {
         "-newer",
         input.markerPath,
         "-printf",
-        // NUL, for the same reason as the full listing above (VB-029).
-        "%P\0",
+        // NUL, for the same reason as the full listing above (VB-029) — and
+        // written as the two-character escape for the reason recorded there.
+        "%P\\0",
       ],
     },
     cwd: input.cwd,

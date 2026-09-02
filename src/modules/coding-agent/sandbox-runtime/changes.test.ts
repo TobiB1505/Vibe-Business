@@ -20,8 +20,8 @@ import {
 
 const MARKER = "/vercel/sandbox/.vibe-agent/marker";
 
-const LIST = "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\0";
-const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${MARKER} -printf %P\0`;
+const LIST = "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\\0";
+const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${MARKER} -printf %P\\0`;
 
 async function handle(options: FakeSandboxOptions = {}) {
   const provider = fakeSandboxProvider(options);

@@ -245,6 +245,41 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
       if (options.throwOn === rendered) throw new Error("provider exploded");
 
+      /*
+       * argv cannot carry a NUL, so neither may this fake.
+       *
+       * An argument list is a list of C strings and a C string ends at the
+       * first NUL byte, so an argument containing one cannot reach a process at
+       * all. Node refuses before it spawns — `ERR_INVALID_ARG_VALUE` — and
+       * `vercel/provider.ts` catches that throw and reports it as an ordinary
+       * failed command, which is what the caller sees.
+       *
+       * Modelled here because *not* modelling it cost four days. Sprint 0107
+       * changed `sandbox-runtime/changes.ts` to ask `find` for `-printf "%P\0"`
+       * with a real NUL byte — the escape belongs to `find`, which turns it
+       * into NUL itself, not to argv — and from that commit every agent run
+       * died at its first workspace listing, reported as `sandbox_lost`, while
+       * this fake happily answered with a file list and the whole suite stayed
+       * green.
+       *
+       * It is the same lesson the `sh -c` branch below already records, one
+       * layer down: a fake that accepts an argument list an operating system
+       * cannot carry is not modelling a process. Kept as a *result* rather than
+       * a throw so the failure arrives exactly where production puts it.
+       */
+      const parts = [input.command.command, ...input.command.args];
+      const nul = parts.findIndex((part) => part.includes("\0"));
+      if (nul !== -1) {
+        const argument = nul === 0 ? "'file'" : `'args[${nul - 1}]'`;
+        const received = parts[nul].replaceAll("\0", "\\x00");
+        return {
+          exitCode: 1,
+          durationMs: 0,
+          output: `TypeError: The argument ${argument} must be a string without null bytes. Received '${received}'`,
+          timedOut: false,
+        };
+      }
+
       // The loopback health probe, modelled as `curl` actually behaves: a
       // non-zero exit when nothing answers, and the status code on stdout when
       // something does. Keyed on the command rather than stubbed by name so a
