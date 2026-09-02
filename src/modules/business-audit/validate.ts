@@ -163,12 +163,6 @@ function filterEvidenceIds(
   return kept;
 }
 
-function normalizeScore(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value !== "number" || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
 const TONES: ConclusionTone[] = [...CONCLUSION_TONES];
 
 function cleanLensList(value: unknown): BusinessLens[] {

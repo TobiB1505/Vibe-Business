@@ -169,7 +169,7 @@ describe("duplicates", () => {
 
 describe("plan size", () => {
   it("caps a plan at the ceiling", () => {
-    const steps = Array.from({ length: 12 }, (unused, index) =>
+    const steps = Array.from({ length: 12 }, (_unused, index) =>
       fakeWirePlanStep({
         order: index + 1,
         title: `Distinct step ${index + 1}`,

@@ -47,7 +47,6 @@ const SECOND_COMMIT = "c".repeat(40);
 let db: FakeDatabase;
 
 const LATER = () => new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-const EARLIER = () => new Date(Date.now() - 60 * 1000).toISOString();
 
 function client() {
   return fakeSupabase(db);

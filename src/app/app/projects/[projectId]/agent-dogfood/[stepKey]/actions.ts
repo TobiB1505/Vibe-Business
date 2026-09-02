@@ -9,7 +9,6 @@ import {
   agentChangeHref,
   agentMoveHref,
 } from "@/modules/action-plans/source";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReviewClassificationResult } from "@/modules/review/classification";
 import { resolveReviewClassification } from "@/modules/review/classification-service";
 import { requireSession } from "@/modules/auth/session";
