@@ -75,6 +75,16 @@ const TEXT_PATTERNS: Partial<Record<ProductSurfaceId, RegExp>> = {
 
 export type PageClassification = {
   surfaces: ProductSurfaceId[];
+  /**
+   * Surfaces the page points at *within itself*, via an anchor link.
+   *
+   * Kept apart from `surfaces` rather than merged into it, because the two are
+   * different strengths of evidence and `buildProductSurfaces` turns that
+   * difference into a confidence. A fetched page whose path says `/pricing` was
+   * read; a homepage that links to `/#pricing` has told us a section exists and
+   * nothing more.
+   */
+  sectionSurfaces: ProductSurfaceId[];
   evidence: Map<ProductSurfaceId, LiveEvidence[]>;
 };
 
@@ -100,6 +110,7 @@ export function classifyPage(input: {
   const { requestedPath, finalPath, html } = input;
   const evidence = new Map<ProductSurfaceId, LiveEvidence[]>();
   const detected = new Set<ProductSurfaceId>();
+  const sections = new Set<ProductSurfaceId>();
 
   const mark = (id: ProductSurfaceId, item: LiveEvidence) => {
     detected.add(id);
@@ -169,7 +180,88 @@ export function classifyPage(input: {
     }
   }
 
-  return { surfaces: [...detected], evidence };
+  /*
+   * Sections this page links to within itself.
+   *
+   * Recorded last so a real detection always wins: a page that *is* the pricing
+   * page and also links to its own `#pricing` heading is a fetched surface, not
+   * an inferred one, and adding it here would only weaken what we already know.
+   */
+  for (const link of html.links) {
+    const surface = classifyInPageAnchor(link.href, link.text, finalPath);
+    if (surface === null || detected.has(surface)) continue;
+
+    sections.add(surface);
+    push(evidence, surface, {
+      kind: link.inNav ? "nav_label" : "link_text",
+      path: finalPath,
+      detail: `${link.text.trim().slice(0, 60) || "section"} — section on this page`,
+    });
+  }
+
+  return { surfaces: [...detected], sectionSurfaces: [...sections], evidence };
+}
+
+/**
+ * A surface that lives on this page, named by an anchor the page links to.
+ *
+ * ## Why this exists
+ *
+ * Because a single-page marketing site keeps its pricing in a section, not on a
+ * route, and every other rule here needs a route. Vibe Business's own landing
+ * page is the example: prices sit under `/#pricing`, so `PATH_PATTERNS` cannot
+ * match (the path is `/`), `url.ts` strips the fragment before link inference
+ * sees it, and the section's own `h2` — "Start free. Add capacity when the work
+ * grows." — contains neither "pricing" nor "plans". The classifier reported
+ * `pricing: detected false, confidence high` about a page that was, at that
+ * moment, displaying €0, €19 and €49.
+ *
+ * The information was never missing. `ParsedLink` carries the **raw** `href`,
+ * fragment intact, and the link's own text, and neither was ever read here.
+ *
+ * ## What counts
+ *
+ * A same-page anchor: a bare `#pricing`, or a path-plus-fragment whose path is
+ * the page itself. The fragment is tested as though it were a path, so one set
+ * of patterns keeps serving both `/pricing` and `#pricing`; the link text is
+ * tested against the weaker text patterns, which is how a section labelled
+ * "Preise" is found when its id is `plans`.
+ *
+ * Not checked: whether an element with that id actually exists. `ParsedHtml`
+ * does not extract element ids, and a dead anchor is the same cost the existing
+ * link inference already accepts for a footer link to a `/privacy` that 404s.
+ */
+export function classifyInPageAnchor(
+  href: string,
+  text: string,
+  finalPath: string,
+): ProductSurfaceId | null {
+  const hash = href.indexOf("#");
+  if (hash === -1) return null;
+
+  const before = href.slice(0, hash);
+  // Same page, or no page at all. A fragment on *another* path is that path's
+  // business and is already handled as an ordinary link.
+  if (before !== "" && before !== finalPath && before !== "/") return null;
+
+  const fragment = href.slice(hash + 1).trim();
+  if (fragment === "") return null;
+
+  for (const [surface, pattern] of Object.entries(PATH_PATTERNS) as [
+    Exclude<ProductSurfaceId, "homepage">,
+    RegExp,
+  ][]) {
+    if (pattern.test(`/${fragment}`)) return surface;
+  }
+
+  const label = text.trim();
+  if (label === "") return null;
+
+  for (const [surface, pattern] of Object.entries(TEXT_PATTERNS) as [ProductSurfaceId, RegExp][]) {
+    if (pattern.test(label)) return surface;
+  }
+
+  return null;
 }
 
 /**

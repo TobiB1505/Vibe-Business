@@ -478,7 +478,21 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href="/signup"
+                  /*
+                   * A paid plan's button carries where it was going.
+                   *
+                   * Every card sent a visitor to `/signup` and no further, so
+                   * someone who had just chosen Builder arrived signed in with
+                   * nothing on screen about paying and no route named. `next`
+                   * is read and sanitized once, in `signup/page.tsx`, and the
+                   * free plan keeps the plain destination because there is
+                   * nothing to pay for.
+                   */
+                  href={
+                    plan.key === "free"
+                      ? "/signup"
+                      : `/signup?next=${encodeURIComponent("/app/billing")}`
+                  }
                   className={`${buttonClasses({
                     variant: featured ? "primary" : "secondary",
                   })} mt-auto w-full`}
