@@ -967,6 +967,17 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     private readonly mode: "select" | "insert" | "update" | "delete" | "upsert",
     private readonly payload?: Row | Row[],
     private readonly onConflict?: string,
+    /**
+     * PostgREST's `ignoreDuplicates`, which is `ON CONFLICT DO NOTHING`.
+     *
+     * A different operation from the default upsert, not a flag on it: the
+     * default *updates* the conflicting row, and for `billing_usage_events`
+     * that would silently rewrite financial history every time a repair pass
+     * ran. Modelled here because the billing projection depends on the
+     * difference, and a fake that ignored it would report rows as inserted
+     * that Postgres had skipped.
+     */
+    private readonly ignoreDuplicates = false,
   ) {}
 
   eq(column: string, value: unknown): this {
@@ -1169,6 +1180,11 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
             : undefined;
 
         if (existing) {
+          // `DO NOTHING` leaves the row alone *and* returns nothing for it, so
+          // a caller counting the returned rows counts what was actually
+          // written. That count is what reconciliation reports as `inserted`.
+          if (this.ignoreDuplicates) continue;
+
           const candidate = { ...existing, ...payload, updated_at: new Date().toISOString() };
           const violation = this.db.checkConstraints(this.table, candidate, existing.id);
           if (violation) return { data: null, error: violation };
@@ -1649,8 +1665,22 @@ export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): Supaba
           write(table, () => new FakeQuery(db, table, "insert", payload)),
         update: (payload: Row) => write(table, () => new FakeQuery(db, table, "update", payload)),
         delete: () => write(table, () => new FakeQuery(db, table, "delete")),
-        upsert: (payload: Row | Row[], options?: { onConflict?: string }) =>
-          write(table, () => new FakeQuery(db, table, "upsert", payload, options?.onConflict)),
+        upsert: (
+          payload: Row | Row[],
+          options?: { onConflict?: string; ignoreDuplicates?: boolean },
+        ) =>
+          write(
+            table,
+            () =>
+              new FakeQuery(
+                db,
+                table,
+                "upsert",
+                payload,
+                options?.onConflict,
+                options?.ignoreDuplicates ?? false,
+              ),
+          ),
       };
     },
     rpc(name: string, params?: Record<string, unknown>) {
