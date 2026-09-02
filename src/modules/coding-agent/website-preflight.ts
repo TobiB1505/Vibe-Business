@@ -33,7 +33,10 @@ import {
 import { CORE4_DOGFOOD_DISCOVERY } from "./budget";
 import { runAgentPreflight, type AgentPreflight } from "./preflight";
 import type { DogfoodStepReason } from "./start-refusal";
-import { completedStepsFromFounderResolutions } from "@/modules/founder-input/completion";
+import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
+import { listAgentStepCompletionEvidence } from "@/modules/action-plans/completion-store";
+import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
+import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
 import { liveConnections } from "@/modules/projects/repository-connection";
@@ -246,6 +249,63 @@ export function resolveRouteAgentEconomics(params: {
 }
 
 /**
+ * The steps a successor may be routed on top of.
+ *
+ * Not the same set the plan screen shows as done, and the difference is the
+ * point — `completedStepsForExecutionRouting` holds the argument. In one
+ * sentence: an agent step counts here only once its change is on the default
+ * branch, because that branch is what the next run is prepared against.
+ *
+ * Reads state and nothing else, like every other read in this file: no live
+ * HEAD, no crawl, no spend.
+ */
+async function routingCompletedSteps(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    actionPlanId: string;
+    steps: readonly ActionPlanStep[];
+  },
+): Promise<{
+  completedSteps: ReadonlySet<number>;
+  /* Handed back rather than re-read: `previewDogfoodStep` compiles the same
+     resolutions into the spec's `approvedDecisions`, and two reads of one
+     table could disagree about what the founder has settled. */
+  founderResolutions: Awaited<ReturnType<typeof listActiveFounderResolutions>>;
+}> {
+  const { projectId, actionPlanId, steps } = params;
+
+  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+    listActiveFounderResolutions(supabase, projectId),
+    listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId }),
+    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId }),
+  ]);
+
+  /* The second hop, and only when there is something to ask about. A plan with
+     no completed agent step asks the merge table nothing at all. */
+  const preparedChangeIds = [...new Set(agentEvidence.map((item) => item.preparedChangeId))];
+  const merges =
+    preparedChangeIds.length > 0
+      ? await getLatestMergesForPreparedChanges(supabase, { projectId, preparedChangeIds })
+      : new Map();
+
+  const mergedPreparedChangeIds = new Set(
+    [...merges].filter(([, merge]) => merge.status === "merged").map(([id]) => id),
+  );
+
+  return {
+    completedSteps: completedStepsForExecutionRouting(
+      steps,
+      founderResolutions,
+      agentEvidence,
+      mergedPreparedChangeIds,
+      founderActionEvidence,
+    ),
+    founderResolutions,
+  };
+}
+
+/**
  * How each step of one plan would route, with no allowlist in front of it.
  *
  * Split out because *"what could Vibe build?"* and *"may you start it right
@@ -274,12 +334,16 @@ export async function resolvePlanExecutionRoutes(
   // All three may legitimately be absent, and the resolver says so per step
   // with its own reasons. What it must not do is invent repository state or
   // treat a founder-owned prerequisite as completed without its resolution.
-  const [connection, snapshot, founderResolutions] = await Promise.all([
+  const [connection, snapshot, routing] = await Promise.all([
     loadOwnedRepositoryConnection(supabase, { projectId, userId }),
     getLatestSuccessfulSnapshot(supabase, projectId),
-    listActiveFounderResolutions(supabase, projectId),
+    routingCompletedSteps(supabase, {
+      projectId,
+      actionPlanId: plan.id,
+      steps: plan.steps,
+    }),
   ]);
-  const completedSteps = completedStepsFromFounderResolutions(plan.steps, founderResolutions);
+  const completedSteps = routing.completedSteps;
 
   const repository: RepositoryContext = {
     connection: connection
@@ -557,8 +621,11 @@ export async function resolveExecutableStep(
   const { step, planSteps, lineage } = params;
   const plan = lineage;
 
-  const founderResolutions = await listActiveFounderResolutions(supabase, params.projectId);
-  const completedSteps = completedStepsFromFounderResolutions(planSteps, founderResolutions);
+  const { completedSteps, founderResolutions } = await routingCompletedSteps(supabase, {
+    projectId: params.projectId,
+    actionPlanId: plan.id,
+    steps: planSteps,
+  });
 
   const connection = await loadOwnedRepositoryConnection(supabase, {
     projectId: params.projectId,

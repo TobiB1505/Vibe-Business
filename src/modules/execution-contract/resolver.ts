@@ -113,10 +113,18 @@ export type PlanContext = {
   /**
    * Step orders recorded as finished.
    *
-   * Empty today — nothing in the product completes a step yet, exactly as
-   * `action-plans/sequence.ts` documents. Threaded through rather than assumed
-   * so that the moment completion exists, dependency resolution is already
-   * correct rather than needing to be rediscovered.
+   * Threaded through rather than assumed, and the caller decides what "finished"
+   * means. There are two honest answers and this is the narrower one: a step
+   * counts here when the next step could actually be built on top of it, which
+   * for an agent step means its change is on the default branch
+   * (`completedStepsForExecutionRouting`). The plan screen asks the wider
+   * question and answers it from a passed validation (ADR 0054).
+   *
+   * It was empty for a long time, and the comment saying so outlived the fact
+   * by several sprints: ADR 0054 shipped the projection, and nothing passed it
+   * here. A validated, merged step went on reading as an unfinished
+   * prerequisite, so its successor was permanently unstartable and the screen
+   * told the founder an earlier step had to finish first.
    */
   completedSteps: ReadonlySet<number>;
   /** Whether this plan is still the project's current one. */

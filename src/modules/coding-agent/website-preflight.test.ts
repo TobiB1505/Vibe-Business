@@ -869,3 +869,126 @@ describe("previewDogfoodStep — a fixed defect does not buy a run", () => {
     });
   });
 });
+
+/**
+ * The successor that never came up.
+ *
+ * On the founder's own plan, step 2 ("Build a public pricing page") ran,
+ * verified and validated, and step 3 ("Make the pricing page reachable")
+ * depends on it. Step 3 was permanently unstartable, and the screen said an
+ * earlier step had to finish first.
+ *
+ * Two independent causes, both here:
+ *
+ *  1. the router asked only for founder resolutions, so no amount of agent
+ *     evidence could satisfy a dependency;
+ *  2. `completedByAgentExecution` required `isExecutableByVibe`, which is false
+ *     for every agent-built step by construction — the agentic route is the one
+ *     with no registry capability.
+ *
+ * This suite is the regression test for both, driven end to end through the
+ * real store reads rather than through either projection in isolation.
+ */
+describe("a build step whose prerequisite is another build step", () => {
+  /** Step 2 ran, verified and validated. Whether it merged is the variable. */
+  function seedDeliveredPredecessor(options: { merged: boolean }) {
+    db.seed("execution_specs", {
+      id: "spec-2",
+      project_id: PROJECT,
+      action_plan_id: "plan-1",
+      step_key: "2-build",
+      step_order: 2,
+    });
+    db.seed("agent_execution_runs", {
+      id: "run-2",
+      project_id: PROJECT,
+      execution_spec_id: "spec-2",
+      execution_origin: "planner",
+      status: "succeeded",
+      prepared_change_id: "change-2",
+    });
+    db.seed("agent_execution_events", {
+      id: "event-2",
+      project_id: PROJECT,
+      agent_execution_run_id: "run-2",
+      type: "change_verified",
+    });
+    db.seed("validation_runs", {
+      id: "validation-2",
+      project_id: PROJECT,
+      prepared_change_id: "change-2",
+      status: "passed",
+      source_integrity: { changedFilesVerified: true },
+    });
+
+    if (options.merged) {
+      db.seed("change_merges", {
+        id: "merge-2",
+        project_id: PROJECT,
+        prepared_change_id: "change-2",
+        status: "merged",
+        created_at: "2026-08-26T00:00:00.000Z",
+      });
+    }
+  }
+
+  function seedTwoBuildSteps() {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      { ...AGENTIC_STEP, step_key: "2-build", step_order: 2 },
+      { ...AGENTIC_STEP, step_key: "3-link", step_order: 3, depends_on: [2] },
+    ]);
+  }
+
+  it("offers the successor once the earlier build is on the default branch", async () => {
+    seedTwoBuildSteps();
+    seedDeliveredPredecessor({ merged: true });
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "3-link",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(true);
+    if (!preview.eligible) return;
+    expect(preview.resolution.mode).toBe("agentic");
+    expect(preview.resolution.blockedBy).toEqual([]);
+  });
+
+  /*
+   * The narrower question the router asks. A run is prepared against the
+   * default branch, so starting the successor here would hand the agent a tree
+   * without the page it is supposed to link to.
+   */
+  it("still blocks it while that change waits on a branch", async () => {
+    seedTwoBuildSteps();
+    seedDeliveredPredecessor({ merged: false });
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "3-link",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(false);
+    if (preview.eligible) return;
+    expect(preview.reason).toBe("not_agentic");
+  });
+
+  it("blocks it when the earlier build never ran at all", async () => {
+    seedTwoBuildSteps();
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "3-link",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(false);
+  });
+});

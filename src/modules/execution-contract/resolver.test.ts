@@ -273,6 +273,44 @@ describe("execution resolver — dependency block (§27, §45)", () => {
     expect(resolution.mode).toBe("agentic");
     expect(resolution.blockedBy).toEqual([]);
   });
+
+  /*
+   * The shape the founder's own plan is in: step 3 depends on step 2, and both
+   * are Vibe's own product changes. A build prerequisite is deliberately *not*
+   * absorbable preparation — `PREPARATORY_CHANGE_KINDS` is `analysis` and
+   * nothing else — so the only thing that clears it is completion.
+   *
+   * Which is exactly why the router had to start reading completion: for as
+   * long as it counted founder resolutions alone, this pair had a first case
+   * that was permanent.
+   */
+  describe("a build step that depends on another build step", () => {
+    const first = fakePlanStep({ id: "2-build", order: 2 });
+    const second = fakePlanStep({ id: "3-link", order: 3, dependsOn: [2] });
+
+    it("blocks while the earlier build is not recorded as finished", () => {
+      const resolution = resolveStepExecution(
+        fakeResolveInput({ step: second, plan: fakePlanContext([first, second]) }),
+      );
+
+      expect(resolution.mode).toBe("blocked");
+      expect(resolution.reason).toBe("dependency_unsatisfied");
+      // Never absorbed: a product change is not preparation, whatever it costs.
+      expect(resolution.absorbedPreparation).toEqual([]);
+    });
+
+    it("resolves agentic once it is", () => {
+      const resolution = resolveStepExecution(
+        fakeResolveInput({
+          step: second,
+          plan: fakePlanContext([first, second], { completedSteps: new Set([2]) }),
+        }),
+      );
+
+      expect(resolution.mode).toBe("agentic");
+      expect(resolution.blockedBy).toEqual([]);
+    });
+  });
 });
 
 describe("execution resolver — risk (§19, §46)", () => {
