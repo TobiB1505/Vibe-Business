@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type {
   CaptureStatus,
@@ -33,7 +34,19 @@ const COLUMNS =
   "after_width, after_height, before_captured_at, after_captured_at, status, failure_code, " +
   "review_identity, created_at, updated_at, expires_at";
 
-type Row = Record<string, unknown>;
+/**
+ * The row shape, from the generated schema (`src/types/README.md`).
+ *
+ * It was `Record<string, unknown>`, so the mapper below was unchecked: the
+ * compiler verified neither that a column exists nor that it holds what the
+ * mapper reads it as, and a renamed column would have passed `tsc`.
+ *
+ * The `as unknown as` at each read stays, for the reason the README gives —
+ * postgrest narrows a result by parsing the *literal* select string, and
+ * these columns are a shared runtime constant. The hop is unchecked; every
+ * property access after it is not.
+ */
+type Row = Database["public"]["Tables"]["review_artifacts"]["Row"];
 
 function mapRow(row: Row): ReviewArtifact {
   return {
