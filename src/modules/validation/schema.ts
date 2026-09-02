@@ -133,13 +133,36 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
  * Timeouts are policy, not tuning. A budget decides which artifacts can pass at
  * all, which is why it lives behind a version rather than in a constant someone
  * can raise quietly.
+ *
+ * ## v5 → v6
+ *
+ * The set of authorized install commands grew, and with it the hosts one of
+ * them may reach. Yarn Berry resolves from `registry.yarnpkg.com`, which was not
+ * in `DEPENDENCY_HOSTS`, and `bun install` is a command no prior policy ever
+ * authorized. Both change what "installed exactly what the lockfile said" was
+ * checked to mean, so a pass recorded under v5 was checked against a narrower
+ * set of installers than a v6 pass is — and must not be reused to answer for
+ * one.
  */
-export const SANDBOX_POLICY_VERSION = "sandbox-policy-v5" as const;
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v6" as const;
 
 export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
 export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];
 
-export const PACKAGE_MANAGERS = ["pnpm", "npm"] as const;
+/**
+ * The package managers Vibe can install from a lockfile, exactly.
+ *
+ * ## Yarn 1 is absent, and it is a decision rather than an omission
+ *
+ * `yarn_berry` is Yarn 3+, recognised by a `.yarnrc.yml` beside the lockfile.
+ * Yarn 1 shares the lockfile name and does not share `--frozen-lockfile`'s
+ * meaning: it does not reliably fail when `package.json` has gained a
+ * dependency the lockfile lacks. That is precisely the "silently validate a
+ * dependency tree nobody committed" failure a locked install exists to prevent,
+ * so a Yarn 1 repository is refused by name — with copy saying Yarn 3+ works —
+ * rather than installed with a flag that means something weaker than it looks.
+ */
+export const PACKAGE_MANAGERS = ["pnpm", "npm", "yarn_berry", "bun"] as const;
 export type SupportedPackageManager = (typeof PACKAGE_MANAGERS)[number];
 
 /**
@@ -206,6 +229,8 @@ export const VALIDATION_BLOCK_REASONS = [
   "ambiguous_workspace",
   /** No lockfile, so a locked install is impossible. */
   "lockfile_missing",
+  /** A lockfile Vibe has no locked install for — Yarn 1, above all. */
+  "package_manager_unsupported",
   /** No `package.json` anywhere, so there is no Node application to build. */
   "not_a_node_project",
   /** A manifest, but no `build` script — nothing for a change to be checked against. */

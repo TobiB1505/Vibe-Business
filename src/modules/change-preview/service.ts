@@ -168,7 +168,9 @@ export async function startChangePreview(
   const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
   const resolution = snapshot?.result ? resolveValidationProfile(snapshot.result) : null;
   const previewProfile = resolution?.supported
-    ? previewProfileFor(resolution.profile, resolution.frameworks)
+    ? previewProfileFor(resolution.profile, resolution.frameworks, {
+        moduleLinker: resolution.moduleLinker,
+      })
     : null;
   if (!previewProfile) return { kind: "failed", error: "preview_not_supported" };
 

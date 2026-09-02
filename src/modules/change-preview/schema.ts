@@ -111,13 +111,14 @@ export const PREVIEW_PROFILE_VERSIONS: Record<PreviewProfile, string> = {
 export function previewProfileFor(
   validationProfile: ValidationProfile,
   frameworks: readonly string[],
+  options: { moduleLinker?: "node_modules" | "pnp" | null } = {},
 ): PreviewProfile | null {
   // The validation profile is not consulted: every profile that admits an
   // application admits it for preview too, and what decides is whether a server
   // command exists. The parameter stays so a future profile that genuinely
   // cannot be previewed — a Python contract, say — has somewhere to say so.
   void validationProfile;
-  return previewProfileForFrameworks(frameworks);
+  return previewProfileForFrameworks(frameworks, options);
 }
 
 /**

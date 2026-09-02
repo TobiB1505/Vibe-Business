@@ -154,21 +154,37 @@ export const SANDBOX_ENVIRONMENT: Readonly<Record<string, string>> = Object.free
  *
  * Deliberately a short list, not a Merkle tree over the repository. A full
  * source manifest digest is a real future capability; building one now would be
- * overengineering for a profile that supports one framework.
+ * overengineering, and a missing entry degrades a run to
+ * `buildIdentityFilesUnverified` rather than passing something unchecked.
  */
 const BUILD_IDENTITY_FILES: readonly string[] = [
   "package.json",
   "pnpm-lock.yaml",
   "package-lock.json",
+  "npm-shrinkwrap.json",
+  "yarn.lock",
+  "bun.lock",
+  "bun.lockb",
   "next.config.ts",
   "next.config.js",
   "next.config.mjs",
   "tsconfig.json",
 ];
 
-const LOCKFILES: Record<SupportedPackageManager, string> = {
-  pnpm: "pnpm-lock.yaml",
-  npm: "package-lock.json",
+/**
+ * The lockfiles each package manager's locked install can read.
+ *
+ * A list rather than a name because bun writes either a text `bun.lock` or a
+ * binary `bun.lockb` depending on its version, and npm accepts a shrinkwrap in
+ * place of its lockfile. A run whose repository has one of them and not the
+ * other is a run with a lockfile, and refusing it would be Vibe reporting its
+ * own narrowness as the repository's fault.
+ */
+const LOCKFILES: Record<SupportedPackageManager, readonly string[]> = {
+  pnpm: ["pnpm-lock.yaml"],
+  npm: ["package-lock.json", "npm-shrinkwrap.json"],
+  yarn_berry: ["yarn.lock"],
+  bun: ["bun.lock", "bun.lockb"],
 };
 
 /** Deterministic markers that a build failed for missing configuration (§9). */
@@ -718,15 +734,21 @@ export async function runCheckPhase(
     const workdir = inSandbox(target.sourceRoot, target.workspaceRoot);
 
     if (phase === "install") {
-      const lockfile = await sandbox.readFile({
-        path: inSandbox(target.sourceRoot, target.workspaceRoot, LOCKFILES[target.packageManager]),
-        maxBytes: 1024,
-      });
-      if (lockfile === null) {
+      const expected = LOCKFILES[target.packageManager];
+      const found = await Promise.all(
+        expected.map((basename) =>
+          sandbox.readFile({
+            path: inSandbox(target.sourceRoot, target.workspaceRoot, basename),
+            maxBytes: 1024,
+          }),
+        ),
+      );
+
+      if (found.every((contents) => contents === null)) {
         return {
           ok: false,
           failureCode: "lockfile_missing",
-          failureDetail: detail(`expected ${LOCKFILES[target.packageManager]}`),
+          failureDetail: detail(`expected ${expected.join(" or ")}`),
           step: null,
         };
       }

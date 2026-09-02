@@ -79,7 +79,7 @@ beforeAll(() => {
 afterAll(() => db?.stop());
 
 /** One `validation_runs` insert, with the columns under test. */
-function insertRun(profile: string, workspaceRoot: string | null): string {
+function insertRun(profile: string, workspaceRoot: string | null, packageManager = "pnpm"): string {
   const root = workspaceRoot === null ? "" : ", workspace_root";
   const value = workspaceRoot === null ? "" : `, '${workspaceRoot}'`;
 
@@ -89,7 +89,7 @@ function insertRun(profile: string, workspaceRoot: string | null): string {
        validation_profile_version, sandbox_policy_version, sandbox_provider, package_manager,
        prepared_commit_sha, status, stage, validation_identity${root})
     values ('${projectId}', '${userId}', '${preparedChangeId}', '${operationRunId}', '${profile}',
-            'v1', 'v1', 'vercel_sandbox', 'pnpm', '${SHA}', 'running', 'provisioning',
+            'v1', 'v1', 'vercel_sandbox', '${packageManager}', '${SHA}', 'running', 'provisioning',
             md5(random()::text) || md5(random()::text)${value});
   `;
 }
@@ -198,6 +198,25 @@ describe("the preview profile a session records", () => {
     // ship, and the database should refuse it until it exists in code.
     expect(() => db.sql(insertSession("vite_dev_v1"))).toThrow(
       /preview_sessions_preview_profile_check/,
+    );
+  });
+});
+
+describe("the package manager a run records", () => {
+  it.each(["pnpm", "npm", "yarn_berry", "bun"])("accepts %s", (packageManager) => {
+    expect(() => db.sql(insertRun("node_build_v1", ".", packageManager))).not.toThrow();
+  });
+
+  /*
+   * The one that has to be refused at this layer too.
+   *
+   * `yarn_classic` is not a typo for `yarn_berry`: Yarn 1 shares the lockfile
+   * name and not the locked install's meaning, and admitting it here would let
+   * a row claim an install Vibe deliberately does not perform.
+   */
+  it.each(["yarn_classic", "yarn", "deno"])("refuses %s", (packageManager) => {
+    expect(() => db.sql(insertRun("node_build_v1", ".", packageManager))).toThrow(
+      /validation_runs_package_manager_check/,
     );
   });
 });

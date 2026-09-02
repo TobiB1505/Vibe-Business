@@ -100,7 +100,15 @@ const DEV_SERVERS: readonly DevServer[] = [
  *  - **Express, NestJS, Angular, and every non-Node framework.** No development
  *    server Vibe can name without reading repository configuration.
  */
-export function previewProfileForFrameworks(frameworks: readonly string[]): PreviewProfile | null {
+export function previewProfileForFrameworks(
+  frameworks: readonly string[],
+  options: { moduleLinker?: "node_modules" | "pnp" | null } = {},
+): PreviewProfile | null {
+  // Under Plug'n'Play there is no `node_modules/.bin/`, so every binary in the
+  // table above is absent — the server would fail to start, not fail to serve.
+  // Validation is unaffected, so this costs the preview and nothing else.
+  if (options.moduleLinker === "pnp") return null;
+
   return DEV_SERVERS.find((server) => frameworks.includes(server.frameworkId))?.profile ?? null;
 }
 

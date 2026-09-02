@@ -42,6 +42,8 @@ describe("a repository that can honour the contract", () => {
       workspaceRoot: ".",
       // The fixture's own framework, carried through from its build target.
       frameworks: ["nextjs"],
+      // No Yarn lockfile, so Yarn's module resolution is not a question here.
+      moduleLinker: null,
     });
   });
 
@@ -185,18 +187,41 @@ describe("refusals that name the missing thing", () => {
     });
   });
 
-  it.each(["yarn", "bun"] as const)(
-    "refuses a %s lockfile until its install is designed",
-    (packageManager) => {
-      // Each has its own locked-install flag, and Yarn 1 and Yarn 3+ do not share
-      // theirs. Getting one subtly wrong would validate a dependency tree the
-      // lockfile never described — a green tick for the wrong thing.
-      expect(resolveValidationProfile(fakeValidatableSnapshot({ packageManager }))).toMatchObject({
-        supported: false,
-        reason: "lockfile_missing",
-      });
-    },
-  );
+  it("refuses Yarn 1 by name, rather than calling its lockfile missing", () => {
+    /*
+     * Yarn 1 and Yarn 3+ share a lockfile name and do not share
+     * `--frozen-lockfile`'s meaning: Yarn 1's does not reliably fail when
+     * `package.json` has gained a dependency the lockfile lacks, which is the
+     * "validate a dependency tree nobody committed" failure a locked install
+     * exists to prevent.
+     *
+     * The reason matters as much as the refusal. Telling someone with a
+     * `yarn.lock` in front of them that there is no lockfile is both wrong and
+     * unactionable; naming Yarn 1 points at the upgrade that fixes it.
+     */
+    const snapshot = fakeValidatableSnapshot({
+      build: build([
+        target({
+          lockfile: { path: "yarn.lock", packageManager: "yarn_classic", inTargetDirectory: true },
+        }),
+      ]),
+    });
+
+    expect(resolveValidationProfile(snapshot)).toMatchObject({
+      supported: false,
+      reason: "package_manager_unsupported",
+    });
+  });
+
+  it.each(["yarn_berry", "bun"] as const)("accepts a %s lockfile", (packageManager) => {
+    const snapshot = fakeValidatableSnapshot({
+      build: build([
+        target({ lockfile: { path: "lock", packageManager, inTargetDirectory: true } }),
+      ]),
+    });
+
+    expect(resolveValidationProfile(snapshot)).toMatchObject({ supported: true, packageManager });
+  });
 
   it("refuses a snapshot taken before build targets were detected", () => {
     // Not the same as "no application here". Re-analysing is the founder's to

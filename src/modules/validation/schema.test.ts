@@ -7,7 +7,7 @@ import { VALIDATION_DEPTH_POLICY_VERSION } from "./depth";
 import { installCommand } from "./commands";
 import { computeValidationIdentity } from "./identity";
 import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "./sandbox-port";
-import { SANDBOX_POLICY_VERSION, VALIDATION_STAGES } from "./schema";
+import { PACKAGE_MANAGERS, SANDBOX_POLICY_VERSION, VALIDATION_STAGES } from "./schema";
 
 /**
  * The TypeScript vocabulary against the SQL that has to accept it.
@@ -223,8 +223,10 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       SANDBOX_RESOURCES.image,
       [...SOURCE_HOSTS],
       [...DEPENDENCY_HOSTS],
-      installCommand("pnpm"),
-      installCommand("npm"),
+      // Every authorized install command, not a sample of them: a digest blind
+      // to the newest member would be blind to exactly the change most likely
+      // to need a version bump.
+      ...PACKAGE_MANAGERS.map((packageManager) => installCommand(packageManager)),
     ]);
 
     return createHash("sha256").update(policy).digest("hex").slice(0, 16);
@@ -241,6 +243,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
     "sandbox-policy-v3": "1516401ee57c583c",
     "sandbox-policy-v4": "60c4a0790acd706c",
     "sandbox-policy-v5": "b581f04c52fe0e7a",
+    "sandbox-policy-v6": "c0bdbfeb0a94c7f0",
   };
 
   it("names a policy version that matches the policy actually in force", () => {

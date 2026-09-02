@@ -4,6 +4,7 @@ import type {
 } from "@/modules/repository-intelligence/schema";
 import {
   CURRENT_VALIDATION_PROFILE,
+  PACKAGE_MANAGERS,
   type SupportedPackageManager,
   type ValidationBlockReason,
   type ValidationProfile,
@@ -68,6 +69,14 @@ export type ProfileResolution =
       workspaceRoot: string;
       /** This application's own frameworks — never the repository-wide union. */
       frameworks: readonly string[];
+      /**
+       * Yarn's module resolution, or null when no Yarn lockfile applies.
+       *
+       * Carried because a preview needs it: under Plug'n'Play there is no
+       * `node_modules/.bin/`, so a framework binary cannot be invoked by path.
+       * Validation is unaffected — `yarn run build` resolves through `.pnp.cjs`.
+       */
+      moduleLinker: BuildTarget["moduleLinker"];
     }
   | {
       supported: false;
@@ -97,7 +106,13 @@ function installerFor(target: BuildTarget): SupportedPackageManager | null {
   if (!target.lockfile?.inTargetDirectory) return null;
 
   const { packageManager } = target.lockfile;
-  return packageManager === "pnpm" || packageManager === "npm" ? packageManager : null;
+  // `yarn_classic` is the one lockfile deliberately absent from the union: Yarn
+  // 1 shares the lockfile name with Berry and does not share
+  // `--frozen-lockfile`'s meaning. It is refused by name below rather than
+  // installed with a flag that means something weaker than it looks.
+  return (PACKAGE_MANAGERS as readonly string[]).includes(packageManager)
+    ? (packageManager as SupportedPackageManager)
+    : null;
 }
 
 /**
@@ -140,9 +155,19 @@ export function resolveValidationProfile(
     // where the lockfile is missing from. Several would be a list nobody asked
     // for, and the copy stays general.
     const only = buildable.length === 1 ? buildable[0] : null;
+
+    /*
+     * A lockfile that exists and cannot be honoured is a different sentence.
+     *
+     * "There is no lockfile" tells someone with a `yarn.lock` in front of them
+     * that Vibe cannot see their file, which is both wrong and unactionable.
+     * The reason has to distinguish "commit a lockfile" from "this is Yarn 1,
+     * and Yarn 3+ works".
+     */
+    const unhonourable = buildable.some((target) => target.lockfile?.inTargetDirectory);
     return {
       supported: false,
-      reason: "lockfile_missing",
+      reason: unhonourable ? "package_manager_unsupported" : "lockfile_missing",
       ...(only ? { detail: { workspaceRoot: only.directory } } : {}),
     };
   }
@@ -174,5 +199,6 @@ export function resolveValidationProfile(
     packageManager,
     workspaceRoot: target.directory,
     frameworks: target.frameworks,
+    moduleLinker: target.moduleLinker,
   };
 }

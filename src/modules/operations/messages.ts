@@ -152,6 +152,8 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
     "Vibe could not tell which app to validate. Workspaces and monorepos are not supported yet.",
   lockfile_missing:
     "No lockfile was found, so dependencies cannot be installed exactly as committed.",
+  package_manager_unsupported:
+    "Vibe found a lockfile it cannot install from exactly. Yarn 1's locked install does not reliably fail when package.json has gained a dependency the lockfile lacks, so Vibe will not treat it as one — upgrading to Yarn 3 or later makes this project work.",
   not_a_node_project:
     "Vibe checks a change by running the project's own build, and this project has no package.json — so there is nothing to check a change against, and Vibe will not make one.",
   no_build_script:

@@ -169,14 +169,14 @@ describe("authority (§34)", () => {
   });
 
   it("refuses an unsupported project before spending anything", async () => {
-    seed({ packageManager: "bun" });
+    // The fixture's `yarn` becomes a `yarn_classic` lockfile: a real file Vibe
+    // can see and deliberately will not install from, which is a different
+    // thing from a missing one and a different thing to do about it.
+    seed({ packageManager: "yarn" });
 
     const outcome = await start();
 
-    // Named, not generic: a bun lockfile is a locked install Vibe has not
-    // designed yet, which is a different thing from "this project is not
-    // supported" and a different thing for the founder to do about it.
-    expect(outcome).toEqual({ kind: "failed", error: "lockfile_missing" });
+    expect(outcome).toEqual({ kind: "failed", error: "package_manager_unsupported" });
     // The important half: no operation, so no workflow, so no sandbox.
     expect(executor.starts).toHaveLength(0);
     expect(db.rows("operation_runs")).toHaveLength(0);

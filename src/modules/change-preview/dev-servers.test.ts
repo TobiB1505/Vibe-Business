@@ -116,3 +116,30 @@ describe("every profile the table can name has a version", () => {
     }
   });
 });
+
+describe("Yarn Plug'n'Play has no binary to invoke", () => {
+  /*
+   * Under PnP there is no `node_modules/.bin/`, so every binary in the table is
+   * simply absent — the server would fail to *start*, which is a worse outcome
+   * than not offering a preview because it costs a sandbox to discover.
+   *
+   * Validation is unaffected: `yarn run build` resolves through `.pnp.cjs`. So
+   * this costs the preview and nothing else, which is what the copy says.
+   */
+  it("offers no preview for a PnP application, whatever its framework", () => {
+    expect(previewProfileForFrameworks(["nextjs"], { moduleLinker: "pnp" })).toBeNull();
+    expect(previewProfileForFrameworks(["astro"], { moduleLinker: "pnp" })).toBeNull();
+  });
+
+  it("offers one for a Berry application that kept node_modules", () => {
+    expect(previewProfileForFrameworks(["nextjs"], { moduleLinker: "node_modules" })).toBe(
+      "next_dev_v1",
+    );
+  });
+
+  it("offers one when the question does not apply", () => {
+    // Null is "no Yarn lockfile here", not "we could not tell".
+    expect(previewProfileForFrameworks(["nextjs"], { moduleLinker: null })).toBe("next_dev_v1");
+    expect(previewProfileForFrameworks(["nextjs"])).toBe("next_dev_v1");
+  });
+});
