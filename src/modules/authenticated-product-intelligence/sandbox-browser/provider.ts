@@ -8,6 +8,7 @@ import type {
   BrowserLiveView,
   BrowserSessionHandle,
   BrowserSessionProvider,
+  BrowserSessionUsage,
   CreateBrowserSessionOptions,
   ProviderResult,
 } from "../provider";
@@ -184,6 +185,7 @@ export function createSandboxBrowserSessionProvider(
           // absent from this list and stays on loopback.
           ports: [BROWSER_SANDBOX.publicPort],
           timeoutMs,
+          vcpus: BROWSER_SANDBOX.vcpus,
           env: {
             [BROWSER_GUARD_ENV.controlToken]: tokens.control,
             [BROWSER_GUARD_ENV.viewToken]: tokens.view,
@@ -247,7 +249,9 @@ export function createSandboxBrowserSessionProvider(
       return url.ok ? { ok: true, value: { url: url.value } } : url;
     },
 
-    async terminateSession(providerSessionId: string): Promise<ProviderResult<void>> {
+    async terminateSession(
+      providerSessionId: string,
+    ): Promise<ProviderResult<BrowserSessionUsage | null>> {
       let handle: SandboxHandle | null;
       try {
         handle = await deps.sandboxes.reconnect({ name: providerSessionId });
@@ -258,15 +262,32 @@ export function createSandboxBrowserSessionProvider(
       // Already gone is the outcome this asks for, so it is a success. This is
       // called on completion, failure, cancellation *and* expiry, and a
       // terminal path that throws because the thing it wanted destroyed was
-      // already destroyed would turn cleanup into an error to handle.
-      if (!handle) return { ok: true, value: undefined };
+      // already destroyed would turn cleanup into an error to handle. There is
+      // nothing left to measure, which is what `null` says.
+      if (!handle) return { ok: true, value: null };
 
       try {
-        await handle.stop();
+        const usage = await handle.stop();
+        return {
+          ok: true,
+          value: {
+            sandboxDurationMs: null,
+            activeCpuMs: usage.activeCpuDurationMs,
+            outboundBytes: usage.networkEgressBytes,
+            // Vercel reports no attributable price per sandbox, so this is null
+            // in practice — and it is read from the provider rather than pinned
+            // to null, so a provider that ever does answer stops being ignored
+            // without anybody having to remember this line exists.
+            costUsd: usage.costUsd,
+            // Configured rather than reported: the provider does not say what
+            // it allocated, so this is the profile's own request. That is
+            // exactly the distinction the estimate's basis vocabulary records.
+            vcpus: BROWSER_SANDBOX.vcpus,
+          },
+        };
       } catch {
         return failure("browser_provider_unavailable");
       }
-      return { ok: true, value: undefined };
     },
   };
 }

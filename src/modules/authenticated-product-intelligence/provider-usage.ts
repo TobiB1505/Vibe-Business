@@ -1,3 +1,5 @@
+import { estimateSandboxCost } from "@/modules/economy/sandbox-usage-estimate";
+import type { BrowserSessionUsage } from "./provider";
 import type { DeepScanAccessMode } from "./entitlement";
 
 /**
@@ -43,6 +45,23 @@ export type DeepScanProviderUsage = {
    * from an assumed rate would be a guess dressed as a measurement.
    */
   providerCostUsd: null;
+  /**
+   * Vibe's own derivation from the dimensions the provider *did* report
+   * (ADR 0076).
+   *
+   * Kept apart from `providerCostUsd` in different fields and a different
+   * `cost_status`, because folding a computed figure into a column that means
+   * "the provider charged this" everywhere else is how an assumption gets
+   * summed as a measurement — the thing `economy/cost.ts` exists to prevent.
+   *
+   * Null when the session reported nothing measurable, which is every session
+   * that never came up and every one recorded before this existed.
+   */
+  activeCpuMs: number | null;
+  outboundBytes: number | null;
+  estimatedCostNanoUsd: number | null;
+  costPricingVersion: string | null;
+  vcpus: number | null;
 };
 
 export function buildDeepScanUsage(input: {
@@ -54,8 +73,31 @@ export function buildDeepScanUsage(input: {
   endedAt: Date;
   status: DeepScanUsageStatus;
   pagesInspected?: number | null;
+  /** What termination reported, or null when it reported nothing. */
+  usage?: BrowserSessionUsage | null;
 }): DeepScanProviderUsage {
   const durationMs = Math.max(0, input.endedAt.getTime() - input.startedAt.getTime());
+  const usage = input.usage ?? null;
+
+  /*
+   * The estimate, derived only when there is something to derive it from.
+   *
+   * `estimateSandboxCost` owns the arithmetic — it is the one place a
+   * sandbox row's cost is computed, and adding a second would be the mistake
+   * its own header describes. The wall clock passed to it is Vibe's own
+   * measurement of the session rather than the provider's, because the
+   * provider does not report one and this is the same interval it billed
+   * memory for.
+   */
+  const estimate = usage
+    ? estimateSandboxCost({
+        purpose: "deep_scan_browser",
+        sandboxDurationMs: durationMs,
+        activeCpuMs: usage.activeCpuMs,
+        outboundBytes: usage.outboundBytes,
+        vcpus: usage.vcpus,
+      })
+    : null;
 
   return {
     provider: input.provider,
@@ -69,5 +111,13 @@ export function buildDeepScanUsage(input: {
     status: input.status,
     pagesInspected: input.pagesInspected ?? null,
     providerCostUsd: null,
+    activeCpuMs: usage?.activeCpuMs ?? null,
+    outboundBytes: usage?.outboundBytes ?? null,
+    estimatedCostNanoUsd: estimate?.estimatedCostNanoUsd ?? null,
+    // Both carried only when a figure was actually produced: the database
+    // constraint refuses an estimate without them, because an estimate whose
+    // rate and allocation are unknown is a number rather than an estimate.
+    costPricingVersion: estimate?.estimatedCostNanoUsd == null ? null : estimate.pricingVersion,
+    vcpus: estimate?.estimatedCostNanoUsd == null ? null : estimate.vcpus,
   };
 }

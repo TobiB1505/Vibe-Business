@@ -245,6 +245,9 @@ export type DeepScanUsageRow = {
    * every price is derived from.
    */
   provider: string;
+  /** Vibe's own derivation, when the session reported dimensions (ADR 0076). */
+  estimated_cost_nano_usd?: number | null;
+  cost_pricing_version?: string | null;
 };
 
 /**
@@ -255,18 +258,27 @@ export type DeepScanUsageRow = {
  * `buildDeepScanUsage` pins `providerCostUsd: null` as a literal type so no
  * code path can invent one.
  *
- * It is now a gap, and a nameable one. A Deep Scan runs in a Vercel sandbox,
- * `VERCEL_SANDBOX_RATES` has been founder-attested since 2026-08-20, and
- * `estimateSandboxCost` already derives a figure for the agent's sandboxes from
- * exactly that. What is missing is the measurement: `terminateSession` receives
- * a `SandboxUsage` from `stop()` and does not record it. Until it does, this
- * still says the cost is unknown — which is true, and better than an estimate
- * derived from a duration nobody measured against the right meter.
+ * It is no longer either, for a session Vibe's own sandbox ran. Termination
+ * reports the dimensions, `VERCEL_SANDBOX_RATES` has been founder-attested
+ * since 2026-08-20, and `estimateSandboxCost` derives the figure — the same
+ * function, the same rate card and the same `cost_estimated` status the agent's
+ * sandboxes use, so the two can be summed together and neither is mistaken for
+ * a bill.
+ *
+ * A row with no estimate still says `cost_unknown`, and that stays the honest
+ * answer for the seven Browserbase rows and for any session that never came up.
+ * Nothing is backfilled: deriving a Vercel figure for a scan Browserbase ran
+ * would date an estimate to a provider that did not run it.
  */
 export function projectDeepScanUsage(
   row: DeepScanUsageRow,
   owner: { userId: string },
 ): BillableUsage[] {
+  // No provider ever states a price here, so there is no stored figure to
+  // prefer over the estimate — unlike `projectSandboxUsage`, where the order
+  // between the two is the point.
+  const estimated = row.estimated_cost_nano_usd ?? null;
+
   return [
     {
       sourceKind: "deep_scan_provider_usage",
@@ -278,9 +290,9 @@ export function projectDeepScanUsage(
       sku: "browser_duration_ms",
       quantity: row.duration_ms,
       occurredAt: row.created_at,
-      rawCostNanoUsd: null,
-      costStatus: "cost_unknown",
-      providerPricingVersion: null,
+      rawCostNanoUsd: estimated,
+      costStatus: estimated !== null ? "cost_estimated" : "cost_unknown",
+      providerPricingVersion: estimated !== null ? (row.cost_pricing_version ?? null) : null,
     },
   ];
 }

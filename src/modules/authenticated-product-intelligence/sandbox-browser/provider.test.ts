@@ -242,24 +242,42 @@ describe("termination is safe on every path", () => {
 
     // Called on completion, failure, cancellation and expiry. A terminal path
     // that failed because the thing it wanted destroyed was already destroyed
-    // would turn cleanup into an error to handle.
+    // would turn cleanup into an error to handle. `null` says there was
+    // nothing left to measure, which is different from measuring zero.
     expect(await provider(fake).terminateSession("vibe-browser-gone")).toEqual({
       ok: true,
-      value: undefined,
+      value: null,
     });
   });
 
-  it("stops a live session", async () => {
+  it("stops a live session and reports what it consumed", async () => {
     const fake = sandboxes();
 
     const created = await provider(fake).createSession({ timeoutSeconds: 600 });
     if (!created.ok) expect.unreachable("session should have been created");
 
-    expect(await provider(fake).terminateSession(created.value.providerSessionId)).toEqual({
-      ok: true,
-      value: undefined,
-    });
+    const terminated = await provider(fake).terminateSession(created.value.providerSessionId);
+
+    // Termination is the only moment these figures exist — a running sandbox
+    // has no final wall clock — so throwing them away here was Deep Scan's
+    // missing cost measurement.
+    expect(terminated.ok).toBe(true);
+    expect(terminated.ok && terminated.value?.activeCpuMs).toBe(1234);
+    expect(terminated.ok && terminated.value?.vcpus).toBe(BROWSER_SANDBOX.vcpus);
+    // Vercel states no attributable price per sandbox, so this stays null and
+    // the estimate columns carry the derived figure instead.
+    expect(terminated.ok && terminated.value?.costUsd).toBeNull();
     expect(fake.stopped()).toBe(true);
+  });
+
+  it("provisions the browser profile's own allocation", async () => {
+    const fake = sandboxes();
+
+    await provider(fake).createSession({ timeoutSeconds: 600 });
+
+    // Carried into every estimate rather than assumed at the arithmetic, since
+    // CPU and memory both scale with it.
+    expect(fake.createdWith()?.vcpus).toBe(BROWSER_SANDBOX.vcpus);
   });
 
   it("tells a missing session apart from an expired one", async () => {

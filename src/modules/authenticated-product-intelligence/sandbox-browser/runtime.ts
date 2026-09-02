@@ -30,6 +30,19 @@ export const BROWSER_SANDBOX = {
    * click land somewhere other than where they aimed.
    */
   viewport: { width: 1280, height: 800 },
+  /**
+   * Two vCPUs.
+   *
+   * Lower than validation's four, and the reason is what this sandbox spends
+   * its time doing: most of a Deep Scan's wall clock is a person reading a
+   * login form, with one browser tab rendering one page. Nothing races a step
+   * deadline here.
+   *
+   * Carried into every cost estimate rather than assumed at the point of
+   * arithmetic, because CPU and memory both scale with it — a profile that
+   * moved to four would otherwise silently restate every historical figure.
+   */
+  vcpus: 2,
 } as const;
 
 /**

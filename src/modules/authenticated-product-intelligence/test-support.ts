@@ -4,6 +4,7 @@ import type {
   BrowserLiveView,
   BrowserSessionHandle,
   BrowserSessionProvider,
+  BrowserSessionUsage,
   ProviderResult,
 } from "./provider";
 
@@ -259,7 +260,7 @@ export type FakeProviderBehaviour = {
   createSession?: ProviderResult<BrowserSessionHandle>;
   getConnection?: ProviderResult<BrowserConnection>;
   getLiveView?: ProviderResult<BrowserLiveView>;
-  terminateSession?: ProviderResult<void>;
+  terminateSession?: ProviderResult<BrowserSessionUsage | null>;
 };
 
 export class FakeBrowserProvider implements BrowserSessionProvider {
@@ -304,9 +305,13 @@ export class FakeBrowserProvider implements BrowserSessionProvider {
     return this.behaviour.getLiveView ?? { ok: true, value: { url: "https://live.example/view" } };
   }
 
-  async terminateSession(providerSessionId: string): Promise<ProviderResult<void>> {
+  async terminateSession(
+    providerSessionId: string,
+  ): Promise<ProviderResult<BrowserSessionUsage | null>> {
     this.calls.push({ method: "terminateSession", arg: providerSessionId });
-    return this.behaviour.terminateSession ?? { ok: true, value: undefined };
+    // Reports nothing by default, which is the honest shape for a fake: a
+    // measurement a test did not stage is a measurement that was not taken.
+    return this.behaviour.terminateSession ?? { ok: true, value: null };
   }
 }
 
