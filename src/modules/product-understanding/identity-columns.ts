@@ -11,7 +11,7 @@ import type { BrandAssetRole, ProductProfile } from "./schema";
  *
  * It is a module of its own because two things must produce identical values:
  * this, at completion, and the backfill in
- * `20260902205500_product_identity_columns.sql`, over rows written before the
+ * `20260902220007_product_identity_columns.sql`, over rows written before the
  * columns existed. A row that disagrees with the row beside it depending on
  * when it was written is the failure mode worth a named boundary and a test
  * that compares the two.

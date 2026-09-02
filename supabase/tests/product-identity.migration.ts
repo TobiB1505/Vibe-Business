@@ -26,7 +26,7 @@ import { startCluster, type Cluster } from "./harness";
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const MIGRATION = join(
   REPO_ROOT,
-  "supabase/migrations/20260902205500_product_identity_columns.sql",
+  "supabase/migrations/20260902220007_product_identity_columns.sql",
 );
 
 /** The shipped backfill, taken from the file rather than restated. */

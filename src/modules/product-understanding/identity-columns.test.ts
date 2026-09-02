@@ -96,7 +96,7 @@ describe("the logo written beside the document", () => {
  */
 describe("the backfill agrees with the write path", () => {
   const MIGRATION = readFileSync(
-    "supabase/migrations/20260902205500_product_identity_columns.sql",
+    "supabase/migrations/20260902220007_product_identity_columns.sql",
     "utf8",
   );
 
