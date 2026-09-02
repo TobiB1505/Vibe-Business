@@ -91,6 +91,47 @@ async function readFinancialState(supabase: ReturnType<typeof client>): Promise<
   };
 }
 
+/**
+ * Every AI usage row, in pages, because one request cannot return them all.
+ *
+ * `max_rows = 1000` is a fixed property of this project's Data API — confirmed
+ * 2026-09-02, and no longer settable in the Supabase dashboard. Past a thousand
+ * rows PostgREST returns the first thousand with `206 Partial Content` and no
+ * error the client raises.
+ *
+ * Both probes below reconcile the **whole** ledger and assert exactness, so a
+ * silent truncation would not fail them — it would make them pass over less
+ * evidence and print a smaller total as if it were the total. That is the shape
+ * of wrong answer this file exists to catch, arriving through the file itself.
+ *
+ * Ordered by `id` rather than `created_at`: paging on a non-unique column can
+ * repeat or skip rows at a page boundary when values tie, and these rows are
+ * written in bursts inside one run.
+ */
+const PAGE_SIZE = 1_000;
+
+async function allAiUsageRows(supabase: ReturnType<typeof client>): Promise<AiUsageRow[]> {
+  const rows: AiUsageRow[] = [];
+
+  for (let page = 0; ; page += 1) {
+    const { data, error } = await supabase
+      .from("ai_usage_events")
+      .select(
+        "id, user_id, project_id, operation, provider, model, job_id, status, input_tokens, output_tokens, thinking_tokens, cache_read_input_tokens, cache_creation_input_tokens, provider_cost_usd, pricing_version, created_at",
+      )
+      .order("id", { ascending: true })
+      .range(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE - 1);
+
+    expect(error).toBeNull();
+    const batch = (data ?? []) as AiUsageRow[];
+    rows.push(...batch);
+
+    // A short page is the last page. A full one is not proof another exists,
+    // but asking once more is cheaper than deciding wrongly.
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
+
 describe.skipIf(!configured)("billing shadow dogfood", () => {
   /**
    * §69 — the reconciliation that must hold exactly.
@@ -102,15 +143,7 @@ describe.skipIf(!configured)("billing shadow dogfood", () => {
    */
   it("reproduces the AI ledger's stored cost exactly", async () => {
     const supabase = client();
-    const { data, error } = await supabase
-      .from("ai_usage_events")
-      .select(
-        "id, user_id, project_id, operation, provider, model, job_id, status, input_tokens, output_tokens, thinking_tokens, cache_read_input_tokens, cache_creation_input_tokens, provider_cost_usd, pricing_version, created_at",
-      )
-      .order("created_at", { ascending: true });
-
-    expect(error).toBeNull();
-    const rows = (data ?? []) as AiUsageRow[];
+    const rows = await allAiUsageRows(supabase);
     console.log(`\n=== §69 provider-cost reconciliation over ${rows.length} real AI calls ===`);
 
     const mismatches: string[] = [];
@@ -146,13 +179,7 @@ describe.skipIf(!configured)("billing shadow dogfood", () => {
   /** §70, §72 — the calibration table, keeping known and unknown apart. */
   it("reports what each operation type actually cost Vibe", async () => {
     const supabase = client();
-    const { data } = await supabase
-      .from("ai_usage_events")
-      .select(
-        "id, user_id, project_id, operation, provider, model, job_id, status, input_tokens, output_tokens, thinking_tokens, cache_read_input_tokens, cache_creation_input_tokens, provider_cost_usd, pricing_version, created_at",
-      );
-
-    const rows = (data ?? []) as AiUsageRow[];
+    const rows = await allAiUsageRows(supabase);
     const byOperation = new Map<string, AiUsageRow[]>();
     for (const row of rows) {
       byOperation.set(row.operation, [...(byOperation.get(row.operation) ?? []), row]);

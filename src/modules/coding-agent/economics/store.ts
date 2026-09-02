@@ -3,11 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   summarizeExecutionEconomics,
-  summarizeChangeEconomics,
-  type ChangeEconomics,
   type ExecutionEconomics,
   type ProviderUsageRow,
-  type RunCostRow,
   type SandboxMeteringRow,
 } from "./cost";
 
@@ -63,90 +60,6 @@ export async function readExecutionEconomics(
     startedAt: params.startedAt ?? null,
     lastEditMs: params.lastEditMs ?? null,
   });
-}
-
-/**
- * Every agent run for a project, with what it cost and whether it delivered.
- *
- * The `producedPreparedChange` half is a left join on `prepared_changes` by
- * operation — not on the run's own status. A run can complete and still leave
- * nothing reviewable, which is exactly what runs #1 and #2 did, and the whole
- * point of the metric is to count that as spend without counting it as
- * delivery.
- */
-export async function readProjectChangeEconomics(
-  supabase: SupabaseClient,
-  params: { projectId: string },
-): Promise<ChangeEconomics & { rows: readonly RunCostRow[] }> {
-  const { data: runs, error: runsError } = await supabase
-    .from("agent_execution_runs")
-    .select("id, operation_run_id")
-    .eq("project_id", params.projectId);
-
-  if (runsError) throw runsError;
-
-  const runRows = (runs ?? []) as { id: string; operation_run_id: string }[];
-  if (runRows.length === 0) {
-    return { ...summarizeChangeEconomics([]), rows: [] };
-  }
-
-  const runIds = runRows.map((row) => row.id);
-  const operationIds = runRows.map((row) => row.operation_run_id);
-
-  const [usage, sandbox, prepared] = await Promise.all([
-    supabase
-      .from("ai_usage_events")
-      .select("job_id, provider_cost_usd")
-      .in("job_id", runIds)
-      .eq("project_id", params.projectId),
-    supabase
-      .from("sandbox_usage_events")
-      .select("validation_run_id, provider_cost_usd")
-      .in("validation_run_id", runIds)
-      .eq("project_id", params.projectId),
-    supabase
-      .from("prepared_changes")
-      .select("operation_run_id, status")
-      .in("operation_run_id", operationIds)
-      .eq("project_id", params.projectId),
-  ]);
-
-  if (usage.error) throw usage.error;
-  if (sandbox.error) throw sandbox.error;
-  if (prepared.error) throw prepared.error;
-
-  const providerCost = new Map<string, number>();
-  for (const row of (usage.data ?? []) as { job_id: string; provider_cost_usd: string | number | null }[]) {
-    providerCost.set(row.job_id, (providerCost.get(row.job_id) ?? 0) + numeric(row.provider_cost_usd));
-  }
-
-  const sandboxCost = new Map<string, number | null>();
-  for (const row of (sandbox.data ?? []) as {
-    validation_run_id: string;
-    provider_cost_usd: string | number | null;
-  }[]) {
-    sandboxCost.set(
-      row.validation_run_id,
-      row.provider_cost_usd === null ? null : numeric(row.provider_cost_usd),
-    );
-  }
-
-  // "Prepared" is the first state at which a human has something to look at.
-  // A row that exists but failed to prepare bought nothing.
-  const delivered = new Set(
-    ((prepared.data ?? []) as { operation_run_id: string; status: string }[])
-      .filter((row) => row.status === "prepared")
-      .map((row) => row.operation_run_id),
-  );
-
-  const rows: RunCostRow[] = runRows.map((run) => ({
-    runId: run.id,
-    providerCostUsd: providerCost.get(run.id) ?? 0,
-    sandboxCostUsd: sandboxCost.get(run.id) ?? null,
-    producedPreparedChange: delivered.has(run.operation_run_id),
-  }));
-
-  return { ...summarizeChangeEconomics(rows), rows };
 }
 
 /** Postgres `numeric` arrives as a string. Parsing it in one place avoids drift. */
