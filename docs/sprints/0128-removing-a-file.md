@@ -71,6 +71,22 @@ Nothing in TypeScript can see that: the in-memory database models this one const
 
 **Not dogfooded.** Rule 69's fourth question is open. Everything above is reasoned and unit-proven; what no test here can answer is whether an agent, given an ordinary "remove this page" step, produces a deletion the observation actually sees. One real run answers it.
 
+## Deployment
+
+`20260902160000_agentic_execution_v2` is **applied** to the Vibe-Business project (`dcbwlctscooefwnivxzv`, confirmed by name before anything was touched — rule 33).
+
+Checked before, not assumed (rule 30): both constraints were read back first and stood in their exact pre-migration form, so neither had been applied by hand. Both changes are widenings, so every stored row satisfies the new form and nothing is rewritten.
+
+**A second, foreign migration was pending and was applied with it.** `20260902113000_sum_lot_allocation_capacity` came in with `main` and had never reached the remote — the function was absent, and `lot-store.ts` on `main` calls it by name on every render of the billing page. A shipped read calling an RPC that does not exist is a live defect, not a housekeeping item, so it was deployed rather than reported and left. It is purely additive: one `SECURITY INVOKER` function, `revoke` from `public`/`anon`, `grant` to `authenticated`/`service_role`.
+
+**Not by the CLI, and for the reason [Sprint 0114](0114-the-preview-is-the-review.md) records.** `supabase link` needs a personal access token this environment does not carry and which does not belong in one, so the linked workflow of [Sprint 0002a](0002a-supabase-cli-workflow.md) was genuinely unavailable. The Supabase MCP server's `apply_migration` runs the file's own SQL and writes `supabase_migrations.schema_migrations`, which is the property rule 29 protects.
+
+**And the same repair it needs.** `apply_migration` stamps a version from the wall clock, so history recorded `20260902153348` and `20260902153356`. Left alone, the next `pnpm db:push` would find both local files pending and re-run them. Both rows were corrected to their filenames' versions — the reconciliation `supabase migration repair --status applied` performs — and read back. `supabase/migrations/` stays the source of truth (rule 34).
+
+Verified by reading the schema back rather than from the calls' own success: both CHECK definitions with their exact predicates, and the function as `prosecdef = false` with an ACL of exactly `postgres`, `authenticated` and `service_role`. Advisors after the change: **no new security lint** (the four `rls_enabled_no_policy` INFOs are the deliberate insert-only ledgers, and the leaked-password WARN is the standing ROADMAP item), and **zero performance WARN** — only `unused_index` INFOs, with no unindexed foreign key.
+
+The application code that uses `agentic_execution_v2` is on this branch and not deployed. Nothing on `main` writes it, and every existing row satisfies both widened constraints.
+
 ## What this deliberately did not do
 
 - **No rename detection.** A rename is a write plus a deletion, and calling it a rename would be an inference about intent that Vibe's observation cannot support.

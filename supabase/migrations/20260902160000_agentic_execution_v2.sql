@@ -34,13 +34,13 @@ alter table public.prepared_changes
 alter table public.prepared_changes
   drop constraint if exists prepared_changes_opportunity_required_for_generators;
 
-alter table public.prepared_changes
-  add constraint prepared_changes_opportunity_required_for_generators
 --
 -- Written as two equality tests rather than an `in (…)` list on purpose: the
 -- migration-reading helper finds a capability's permitted values by taking the
 -- newest `check (execution_capability in (…))` for this table, and an `in` here
 -- would be read as the enumeration and shrink it to two.
+alter table public.prepared_changes
+  add constraint prepared_changes_opportunity_required_for_generators
   check (
     execution_capability = 'agentic_execution_v1'
     or execution_capability = 'agentic_execution_v2'
