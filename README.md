@@ -41,6 +41,21 @@ pnpm db:status              # supabase migration list — always inspect before 
 pnpm db:push                # apply migrations to the linked project
 ```
 
+`pnpm screenshots:uis1` and `pnpm screenshots:uis2` render the fixture routes
+under `/e2e/` and write PNGs for a person to look at. They assert nothing — they
+exist because "does one action dominate?" and "are there too many chips?" are
+questions a passing test is happy to ignore. Point them at a server already
+running with `VIBE_E2E_FIXTURES=1`; `BASE_URL`, `OUT_DIR` and `CHROMIUM_PATH`
+override the defaults. Their output is what the screenshots in
+[the 2026-08-17 UX audit](docs/audits/2026-08-17-product-ux-audit/README.md)
+are.
+
+Two JSON files sit in the repository root and belong to neither the build nor
+the test suite: `premium-ui.json` is the input configuration for an external UI
+review tool, kept because it is used. `premium-audit.json` was that tool's
+output and is gitignored — a generated artifact with a local filesystem path
+inside it does not belong in version control.
+
 Probe and dogfood scripts (`ai:probe-audit-schema`, `ai:dogfood-action-plan`, `billing:dogfood`, `execution:dogfood`, `agent:preflight`, `agent:canary`, `agent:dogfood`) are excluded from `pnpm test` on purpose: they run against real providers and real projects, and some of them spend money. Read the owning module's README before running one.
 
 ## Documentation

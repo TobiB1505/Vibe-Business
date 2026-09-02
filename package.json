@@ -31,7 +31,9 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "format": "prettier --write",
-    "format:check": "prettier --check"
+    "format:check": "prettier --check",
+    "screenshots:uis1": "node scripts/uis1-screenshots.mjs",
+    "screenshots:uis2": "node scripts/uis2-screenshots.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",
