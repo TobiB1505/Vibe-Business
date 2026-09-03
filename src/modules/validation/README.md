@@ -19,7 +19,7 @@ Admission comes first and knows nothing about the change. Depth comes second and
 
 | File | Role |
 | --- | --- |
-| `profile.ts` | Admission. A build contract, not a framework list: one manifest with a `build` script and a lockfile in its own directory. Every refusal names the missing thing. |
+| `profile.ts` | Admission. A build contract, not a framework list: one manifest with a `build` script and a lockfile it can install from — its own, or a declared workspace root's. Every refusal names the missing thing. |
 | `workspace.ts` | Applies the founder's answer to "which app?" — by exact match against candidates Vibe computed, never by building a path. |
 | `workspace-store.ts` | Reads and records that answer, re-deriving the candidates immediately before the write. |
 | `depth.ts` / `depth-inputs.ts` | How many of the profile's steps this change earns, from server-minted signals only. Every uncertain case resolves upward. |
@@ -40,9 +40,11 @@ Admission comes first and knows nothing about the change. Depth comes second and
 
 **The order in `orchestrator.ts` is the security design.** Commit verified, file hashes verified, `.git` destroyed, network narrowed, install with `--ignore-scripts`, network closed — and only then does the first repository-controlled command run. By the time someone else's JavaScript executes, the clone credential does not exist, the network is shut, and the environment holds nothing worth stealing. Reordering those steps would not fail a test somewhere else; it would end the guarantee.
 
+**"`.git` destroyed" means at the clone root, and that took a repair.** The removal and its read-back were both aimed at the *application's* directory, which is where a clone puts `.git` only when the application is the repository. For anything deeper the removal cleared nothing and the check then confirmed the absence of a file that was never going to be there — a control reporting success by construction. Both roots are cleared and both read back now ([ADR 0082](../../../docs/decisions/0082-an-application-installs-from-its-workspace.md), `SANDBOX_POLICY_VERSION` v7).
+
 **There is no local execution path, and its absence is deliberate.** A `SandboxProvider` that shelled out to the host would satisfy `sandbox-port.ts` perfectly and be a remote code execution vulnerability wearing a developer-experience costume. Tests use fakes that execute nothing; production uses Vercel Sandbox; an unavailable sandbox **fails** the validation rather than degrading to somewhere less isolated ([ADR 0015](../../../docs/decisions/0015-untrusted-repository-execution-provider.md), rule 61).
 
-**Admission is not part of what a pass means.** A stored `passed` is a statement about a transcript — these commands, this network, this commit, exit zero. Widening which repositories are admitted therefore changes nothing about earlier runs, which is why `node_build_v1` could be added without reinterpreting a single one. Two things *are* part of the claim and carry versions for that reason: the install commands (`SANDBOX_POLICY_VERSION`) and **which directory was validated** (`validation_runs.workspace_root`, hashed into the identity). A pass says what passed, and where.
+**Admission is not part of what a pass means.** A stored `passed` is a statement about a transcript — these commands, this network, this commit, exit zero. Widening which repositories are admitted therefore changes nothing about earlier runs, which is why `node_build_v1` could be added without reinterpreting a single one. Three things *are* part of the claim and carry versions for that reason: the install commands and the credential scrub (`SANDBOX_POLICY_VERSION`), **which directory was validated** (`validation_runs.workspace_root`) and **which directory it installed from** (`validation_runs.install_root`) — the last two both hashed into the identity, because the same application installed from its own directory and from a workspace root above it is two dependency trees. A pass says what passed, where, and out of what.
 
 **A retired profile is resolved by nothing.** `nextjs_node_v1` stays legal because sixteen rows carry it, and no code path produces it. There is no alias table: reading an old pass under today's rules is exactly what a version exists to prevent (rule 65).
 

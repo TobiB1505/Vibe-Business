@@ -244,6 +244,12 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
     "sandbox-policy-v4": "60c4a0790acd706c",
     "sandbox-policy-v5": "b581f04c52fe0e7a",
     "sandbox-policy-v6": "c0bdbfeb0a94c7f0",
+    // Deliberately the same digest as v6. The v7 change is secret handling —
+    // where the credential store is cleared and verified — and this digest
+    // covers budgets, hosts, resources and install commands, none of which
+    // moved. An identical digest under a new version is not a mistake here; it
+    // is the digest saying, correctly, that it cannot see this change.
+    "sandbox-policy-v7": "c0bdbfeb0a94c7f0",
   };
 
   it("names a policy version that matches the policy actually in force", () => {
@@ -261,6 +267,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       validationDepth: "standard" as const,
       validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
       workspaceRoot: ".",
+      installRoot: ".",
     };
 
     expect(
@@ -280,6 +287,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
       workspaceRoot: ".",
+      installRoot: ".",
     };
 
     const fast = computeValidationIdentity({ ...base, validationDepth: "fast" });
@@ -298,6 +306,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       validationDepth: "fast" as const,
       workspaceRoot: ".",
+      installRoot: ".",
     };
 
     expect(

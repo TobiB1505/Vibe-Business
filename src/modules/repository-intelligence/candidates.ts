@@ -56,7 +56,10 @@ const EXACT_BASENAMES: Record<string, Rule> = {
   "tsconfig.json": { priority: 2, fetchContent: false },
   "jsconfig.json": { priority: 3, fetchContent: false },
   "vercel.json": { priority: 2, fetchContent: false },
-  "pnpm-workspace.yaml": { priority: 2, fetchContent: false },
+  // Fetched since Stufe 8: its `packages:` key is what decides whether an
+  // ancestor lockfile may install an application below it, and presence of the
+  // file does not answer that — pnpm 10 keeps `overrides` here too.
+  "pnpm-workspace.yaml": { priority: 2, fetchContent: true },
   "turbo.json": { priority: 2, fetchContent: false },
   "nx.json": { priority: 3, fetchContent: false },
   "lerna.json": { priority: 3, fetchContent: false },

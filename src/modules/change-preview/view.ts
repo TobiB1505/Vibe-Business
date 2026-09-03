@@ -59,6 +59,14 @@ export type PreviewCardState =
    * Vibe simply cannot say yet which directory it would run in.
    */
   | "repository_not_ready"
+  /**
+   * The application installs from a workspace root above it (Stufe 8).
+   *
+   * A third state rather than a shade of the other two, because it is a fact
+   * about neither the framework nor the scan: both are fine. It is the one
+   * refusal here that is Vibe declining to guess.
+   */
+  | "workspace_not_previewable"
   | "ready_to_start"
   | "starting"
   | "running"
@@ -202,6 +210,9 @@ export function buildPreviewCard(input: PreviewCardInput, now: Date = new Date()
   if (input.availability === "no_dev_server") return { ...empty, state: "not_supported" };
   if (input.availability === "repository_not_ready") {
     return { ...empty, state: "repository_not_ready" };
+  }
+  if (input.availability === "workspace_not_previewable") {
+    return { ...empty, state: "workspace_not_previewable" };
   }
 
   return { ...empty, state: "ready_to_start" };

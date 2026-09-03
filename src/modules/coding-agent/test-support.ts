@@ -102,6 +102,7 @@ export function fakeAgentSpec(overrides: Partial<Parameters<typeof buildExecutio
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       sandboxSteps: ["install", "typecheck", "test", "build"],
     workspaceRoot: ".",
+      installRoot: ".",
     },
     budget: { budgetPolicyVersion: "fixture", ...fakeBudget() },
     credit: { quoteId: "quote-1", maxAuthorizedCredits: creditsToUnits(200) },

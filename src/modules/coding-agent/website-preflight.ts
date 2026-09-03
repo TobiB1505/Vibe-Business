@@ -883,6 +883,11 @@ export async function resolveExecutableStep(
       // The directory the resolved application lives in, pinned onto the spec
       // so the run's working directory cannot move underneath it (rule 67).
       workspaceRoot: validation.supported ? validation.workspaceRoot : ".",
+      // And where its dependencies come from, which is a different directory
+      // for an application inside a workspace. Pinned for the same reason and
+      // at the same moment: install and cwd have to agree, and a founder
+      // answering "which app?" mid-run must move neither.
+      installRoot: validation.supported ? validation.installRoot : ".",
     },
     approvedDecisions: founderResolutions
       .map((founderResolution) => {

@@ -757,6 +757,7 @@ export function fakeValidationTarget(overrides: Partial<ValidationTarget> = {}):
     packageManager: "pnpm",
     sourceRoot: "product",
     workspaceRoot: ".",
+    installRoot: ".",
     preparedFiles: [],
     validationRunId: "11111111-2222-3333-4444-555555555555",
     ...overrides,

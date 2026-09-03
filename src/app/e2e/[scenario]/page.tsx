@@ -577,15 +577,19 @@ export default async function E2eScenarioPage({
   }
 
   /*
-   * The two ways a preview is not offered, side by side in the browser.
+   * The three ways a preview is not offered, side by side in the browser.
    *
    * They are one branch apart in the panel and one word apart in the card, and
    * that is exactly why they are proved separately: the failure this state
    * exists to prevent is a true sentence shown to the wrong founder. The
-   * browser is the only place that distinction is visible, because both states
+   * browser is the only place that distinction is visible, because all three
    * render the same shape — a heading, a sentence, and no control.
    */
-  if (scenario === "preview-not-supported" || scenario === "preview-repository-not-ready") {
+  if (
+    scenario === "preview-not-supported" ||
+    scenario === "preview-repository-not-ready" ||
+    scenario === "preview-workspace-not-previewable"
+  ) {
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
@@ -593,7 +597,12 @@ export default async function E2eScenarioPage({
           projectId="project_e2e"
           preparedChangeId="prepared_e2e"
           card={{
-            state: scenario === "preview-not-supported" ? "not_supported" : "repository_not_ready",
+            state:
+              scenario === "preview-not-supported"
+                ? "not_supported"
+                : scenario === "preview-repository-not-ready"
+                  ? "repository_not_ready"
+                  : "workspace_not_previewable",
             previewSessionId: null,
             operationRunId: null,
             stage: null,

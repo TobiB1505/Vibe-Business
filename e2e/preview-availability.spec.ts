@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * The two ways a preview is not offered (Stufe 7).
+ * The three ways a preview is not offered (Stufe 7, Stufe 8).
  *
  * ## Why a browser test and not two unit assertions
  *
@@ -75,5 +75,35 @@ test.describe("Vibe cannot tell which application to run", () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+});
+
+test.describe("an application installed from a workspace root", () => {
+  test("blames neither the framework nor the scan", async ({ page }) => {
+    /*
+     * The third reason, added with workspace support. Both other sentences are
+     * false here — the framework has a dev server and the repository read is
+     * current — and what Vibe declines to do is guess where a workspace
+     * install put the binary. Asserted as two absences, because a state that
+     * is only ever checked by its own text will happily coexist with the wrong
+     * text somewhere else.
+     */
+    await page.goto("/e2e/preview-workspace-not-previewable");
+
+    const notice = page.getByTestId("preview-workspace-not-previewable");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("workspace root");
+    await expect(notice).not.toContainText("framework");
+    await expect(notice).not.toContainText("Scan");
+  });
+
+  test("says what still works, and offers nothing to press", async ({ page }) => {
+    // The founder has no move here, so the copy spends its second half on what
+    // they have not lost rather than on an instruction they cannot follow.
+    await page.goto("/e2e/preview-workspace-not-previewable");
+
+    const notice = page.getByTestId("preview-workspace-not-previewable");
+    await expect(notice).toContainText("Checking a change and merging it still work");
+    await expect(page.getByRole("button", { name: /preview/i })).toHaveCount(0);
   });
 });

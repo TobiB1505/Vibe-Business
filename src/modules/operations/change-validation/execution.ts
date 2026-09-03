@@ -238,14 +238,19 @@ async function resolveRunContext(
        * The resolution is re-derived on every phase, and what it answers can
        * move underneath a run in flight: a founder naming a different
        * application, or a newer snapshot finding one. The row is what this
-       * validation *is* — its identity was computed from these three values
-       * and a stored pass claims them — so a phase that read the live answer
-       * could install in one directory and build in another (rule 67).
+       * validation *is* — its identity was computed from these values and a
+       * stored pass claims them — so a phase that read the live answer could
+       * install in one directory and build in another (rule 67).
+       *
+       * That sentence was a hypothetical when it was written and is now the
+       * literal shape of a workspace run, where the two directories differ by
+       * design. Both come from the row, together, for exactly this reason.
        */
       profile: run.validationProfile,
       packageManager: run.packageManager,
       sourceRoot: repository.sourceRoot,
       workspaceRoot: run.workspaceRoot,
+      installRoot: run.installRoot,
       preparedFiles: prepared.files.map((file) => ({
         path: file.path,
         /* A deletion carries no hash and is checked as absence, not as a
@@ -348,6 +353,7 @@ export async function prepareValidationStep(
     validationDepth: depth.depth,
     validationDepthPolicyVersion: depth.policyVersion,
     workspaceRoot: profile.workspaceRoot,
+    installRoot: profile.installRoot,
   });
 
   const claim = await claimValidationRun(deps.supabase, {
@@ -364,6 +370,7 @@ export async function prepareValidationStep(
     sandboxProvider: deps.provider.id,
     packageManager: profile.packageManager,
     workspaceRoot: profile.workspaceRoot,
+    installRoot: profile.installRoot,
     preparedCommitSha: prepared.commitSha,
     validationIdentity: identity,
   });

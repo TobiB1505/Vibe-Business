@@ -48,6 +48,7 @@ function identityFor(
     validationDepth: overrides.depth ?? "standard",
     validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
     workspaceRoot: ".",
+    installRoot: ".",
   });
 }
 
@@ -458,6 +459,7 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
       validationDepth: "standard",
       validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
       workspaceRoot: ".",
+      installRoot: ".",
     });
 
     expect(identityFor()).not.toBe(underV1);
@@ -483,6 +485,7 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
         validationDepth: "standard",
         validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
         workspaceRoot: ".",
+        installRoot: ".",
       }),
       status: "passed",
       stage: "completed",

@@ -247,6 +247,14 @@ export type ExecutionRepositoryBinding = {
    * (rule 67).
    */
   workspaceRoot?: string;
+  /**
+   * The directory the install runs in. `workspaceRoot` unless a workspace root
+   * above it (Stufe 8).
+   *
+   * Optional for the same reason and read the same way: absent means the run
+   * installed where it built, which is what every run before workspaces did.
+   */
+  installRoot?: string;
 };
 
 /**
