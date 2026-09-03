@@ -66,3 +66,6 @@ src/app/.well-known/workflow/
 # Output of an external UI review tool. Regenerated on demand, and it records
 # an absolute path from whichever machine produced it.
 /premium-audit.json
+
+# Paid Nova voice eval output — per-case results, never committed.
+.nova-eval/

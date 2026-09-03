@@ -264,11 +264,99 @@ export const AGENTIC_EXECUTION_CONFIG: AgentModelConfig = {
   effort: "high",
 };
 
+/**
+ * Nova's voice (Nova Slice 9).
+ *
+ * The cheapest operation in this file, and the only one that is allowed to be:
+ * it produces no conclusion. Every fact it may state has already been decided
+ * — by the audit, by the planner, by the resolver, or by deterministic code —
+ * and this call chooses the sentences that carry them to a founder. A
+ * validation failure, a provider outage or a disabled kill switch all resolve
+ * to the slot's template, so the product works with this operation switched
+ * off entirely.
+ *
+ * **Haiku 4.5, and the same model string Product Understanding already uses.**
+ * Not `claude-haiku-4-5`: `pricing.ts` keys its effective-dated rate on
+ * `claude-haiku-4-5-20251001`, and a model id that resolves to no rate makes
+ * the call unpriceable — which is the one thing an operation whose whole
+ * argument is cost may not be.
+ *
+ * `reasoning: { mode: "none" }` is a fact about the model before it is a
+ * preference: Haiku 4.5 rejects a request carrying `thinking` or `effort`
+ * outright, as `PRODUCT_UNDERSTANDING_CONFIG` records having learned the hard
+ * way. The task does not want them either — the judgement was made upstream.
+ *
+ * Budgets are the smallest in this file. Input is a bounded payload of a few
+ * hundred tokens plus this prompt; output is at most three short paragraphs,
+ * with `MAX_NOVA_MESSAGE_CHARS` (700) as the domain ceiling and this as the
+ * transport one. `timeoutMs` is set for a founder waiting on a screen rather
+ * than for a durable step: a voice that has not arrived in ten seconds should
+ * lose to the template, because the template was always going to be shown
+ * first.
+ */
+export const NOVA_PRESENTATION_CONFIG: OperationConfig = {
+  operation: "nova_presentation",
+  model: "claude-haiku-4-5-20251001",
+  reasoning: { mode: "none" },
+  maxOutputTokens: 600,
+  maxInputTokens: 4_000,
+  timeoutMs: 10_000,
+};
+
+/**
+ * The two judges that grade Nova's voice, and why there are two.
+ *
+ * Neither is a product operation. They are measuring instruments, run only by
+ * `nova-voice.probe.ts`; nothing under `src/app` can reach them and no usage
+ * event is written for them. They live here because [rule 46](../../../CLAUDE.md)
+ * is about *where a model may be named*, not about which callers are paid — a
+ * probe that hard-coded a model string would be the same defect as a route
+ * that did.
+ *
+ * **Gold judge — Opus 5.** Used for the decision the ADR will rest on and for
+ * periodic recalibration of the cheaper one. The criterion that decides
+ * whether Nova is safe is also the subtlest: *did it invent a recommendation
+ * the payload did not carry?* A weaker judge passes that case, which is
+ * exactly the failure the eval exists to catch.
+ *
+ * **Regression judge — Sonnet 5.** Used per PR, where the question is only
+ * whether a prompt edit moved a number that Opus already established. Cheap
+ * enough to run often; calibrated against the gold judge rather than trusted
+ * on its own.
+ *
+ * Neither is Haiku: a model must never be its own judge, and the model under
+ * test is Haiku.
+ */
+export type EvalJudgeConfig = {
+  model: string;
+  reasoning: AIReasoning;
+  maxOutputTokens: number;
+  maxInputTokens: number;
+  timeoutMs: number;
+};
+
+export const NOVA_VOICE_GOLD_JUDGE_CONFIG: EvalJudgeConfig = {
+  model: "claude-opus-5",
+  reasoning: { mode: "adaptive", effort: "high" },
+  maxOutputTokens: 2_000,
+  maxInputTokens: 8_000,
+  timeoutMs: 120_000,
+};
+
+export const NOVA_VOICE_REGRESSION_JUDGE_CONFIG: EvalJudgeConfig = {
+  model: "claude-sonnet-5",
+  reasoning: { mode: "adaptive", effort: "high" },
+  maxOutputTokens: 2_000,
+  maxInputTokens: 8_000,
+  timeoutMs: 120_000,
+};
+
 const CONFIGS: Record<Exclude<AIOperation, "agentic_execution">, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
   product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
   action_planning: ACTION_PLANNING_CONFIG,
+  nova_presentation: NOVA_PRESENTATION_CONFIG,
 };
 
 export function getOperationConfig(

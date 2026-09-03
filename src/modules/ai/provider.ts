@@ -43,7 +43,23 @@ export type AIOperation =
    * `getOperationConfig` deliberately has no entry for it. What it shares is
    * accounting: one operation name, one model column, one cost book.
    */
-  | "agentic_execution";
+  | "agentic_execution"
+  /**
+   * Nova's voice: one short founder-facing message about state Vibe already
+   * holds (Nova Slice 9).
+   *
+   * The only operation on this union that produces **no new intelligence**.
+   * Every fact it may state was decided by one of the operations above or by
+   * deterministic code; this call chooses sentences, and nothing else. What it
+   * returns is a `{ message }` object with no action, no identifier, and no
+   * number the payload did not carry — see `src/modules/nova/voice/checks.ts`,
+   * which refuses the ones that do.
+   *
+   * On the union because it is a paid call and every paid call is keyed the
+   * same way in the ledger. Nothing writes a usage event for it yet: the eval
+   * probe runs it and ledgers nothing, and the product path lands in Slice 9.
+   */
+  | "nova_presentation";
 
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";
