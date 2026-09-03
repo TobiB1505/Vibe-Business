@@ -4,6 +4,8 @@ import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaActionId } from "@/modules/nova/focus";
 
 import {
+  confirmProductAction,
+  confirmProductAndStartAuditAction,
   markNovaIntroducedAction,
   setNovaWorkflowStatusAction,
 } from "@/app/app/onboarding/[projectId]/actions";
@@ -101,6 +103,16 @@ export const NOVA_ACTIONS: Record<NovaActionId, NovaActionBinding> = {
    */
   "nova.explain_workflow": { control: "server_action", action: setNovaWorkflowStatusAction },
   "nova.skip_workflow": { control: "server_action", action: setNovaWorkflowStatusAction },
+  "nova.confirm_product": { control: "server_action", action: confirmProductAction },
+  /*
+   * The coupled action, bound deliberately. `novaRevealControls` offers this id
+   * only where the audit is free, so the one press that starts a paid operation
+   * as part of a different question is a press that cannot happen (rule 60).
+   */
+  "nova.confirm_product_and_audit": {
+    control: "server_action",
+    action: confirmProductAndStartAuditAction,
+  },
   "nova.validate_again": { control: "server_action", action: rerunChangeValidationAction },
   "nova.review_change": { control: "navigation", subject: "prepared_change", href: changeHref },
   "nova.merge_change": { control: "server_action", action: mergeApprovedChangeAction },

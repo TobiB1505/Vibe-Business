@@ -51,6 +51,9 @@ export const NOVA_ACTION_IDS = [
   "nova.continue_introduction",
   "nova.explain_workflow",
   "nova.skip_workflow",
+  /* The product reveal: confirming what Vibe read, and what follows it. */
+  "nova.confirm_product",
+  "nova.confirm_product_and_audit",
   /* Everything a focus candidate can carry. */
   "nova.validate_again",
   "nova.review_change",
@@ -156,6 +159,28 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
      */
     control: "server_action",
     label: "Start now",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.confirm_product": {
+    control: "server_action",
+    label: "Yes, that is right",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.confirm_product_and_audit": {
+    /*
+     * Confirming and auditing behind one press, offered only where the audit
+     * costs nothing (§O.3). Asking a founder *"is this right?"* and then
+     * *"shall I audit it?"* is the friction Nova exists to remove — but
+     * bundling a priced operation into an unrelated question is what rule 60
+     * forbids, so the catalog carries the free-path label and
+     * `novaRevealControls` decides when it may be shown at all.
+     */
+    control: "server_action",
+    label: "Yes, on to the Business Audit",
     price: null,
     consequential: false,
     requiresConfirmation: false,

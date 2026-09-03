@@ -18,7 +18,16 @@ import {
   getActiveOpportunityOperation,
   getLastFailedOperation,
 } from "@/modules/operations/service";
+import { resolveAuditCreditGate } from "@/modules/business-audit/entitlement";
+import { getAuditAccessStatus } from "@/modules/business-audit/service";
+import { NovaMessage } from "@/components/nova/nova-message";
 import { buildNovaFirstRunFeed, deriveNovaFirstRun } from "@/modules/nova/first-run";
+import {
+  buildNovaRevealFeed,
+  buildNovaScanFeed,
+  deriveNovaOnboarding,
+  novaRevealBundlesAudit,
+} from "@/modules/nova/onboarding";
 import { auditSurface } from "@/modules/onboarding/audit-surface";
 import {
   markOnboardingMilestone,
@@ -132,6 +141,7 @@ export default async function ProjectOnboardingPage({
     opportunityOperation,
     firstMovePlan,
     understandingFailure,
+    auditAccess,
   ] = await Promise.all([
     onboarding.understandingOperation
       ? getProductScanEvents(supabase, {
@@ -153,7 +163,52 @@ export default async function ProjectOnboardingPage({
     onboarding.state === "product_scanning" && !onboarding.understandingOperation
       ? getLastFailedOperation(supabase, { projectId, operationType: "product_scan" })
       : null,
+    /*
+     * What the next audit costs, read only on the screen that asks (§O.3).
+     *
+     * It decides whether confirming the product may carry the audit with it:
+     * one press while the audit is free, two once it is priced. Read in this
+     * wave rather than inside the component, because the answer is a server
+     * fact and the control that depends on it must not be able to guess.
+     */
+    onboarding.state === "product_reveal"
+      ? getAuditAccessStatus(supabase, { projectId, userId: session.userId })
+      : null,
   ]);
+
+  /*
+   * `not_applicable` is exactly "nothing is owed" — the included first audit,
+   * or a refresh Vibe owes. Anything else means Credits, and rule 60 keeps the
+   * audit out of a question about whether Vibe read the product correctly.
+   */
+  const novaBundlesAudit =
+    auditAccess !== null && novaRevealBundlesAudit(resolveAuditCreditGate(auditAccess));
+
+  /*
+   * Nova's sentence above the two screens she narrates (§L Slice 4).
+   *
+   * The screens themselves are unchanged — `ProductScanExperience` still owns
+   * the named stages, and the reveal card still owns what was understood and
+   * the bounded correction form. What Nova adds is the sentence that says what
+   * is happening and why she is asking, which is the half a founder reads
+   * first and the half that was previously a heading.
+   */
+  const novaOnboarding = deriveNovaOnboarding(onboarding.state);
+  /*
+   * Only the sentences are rendered from the feed. The control under the
+   * reveal is `ProductConfirmation`'s, because it owns the correction form
+   * beside it — a bounded, allowlisted set of fields that Nova has no way to
+   * render and no business restating. Both read the same gate, so the button
+   * Nova would have drawn and the one that is drawn cannot disagree about
+   * whether the audit rides along.
+   */
+  const novaOnboardingMessages = (
+    novaOnboarding === "scanning"
+      ? buildNovaScanFeed()
+      : novaOnboarding === "reveal" && auditAccess !== null
+        ? buildNovaRevealFeed(resolveAuditCreditGate(auditAccess))
+        : []
+  ).filter((entry) => entry.kind === "nova.message");
 
   /*
    * What the audit step should show (UI-S1 §9–§12).
@@ -235,6 +290,14 @@ export default async function ProjectOnboardingPage({
       projectName={onboarding.projectName}
       canLeave={canLeave}
     >
+      {novaOnboardingMessages.length > 0 && (
+        <div className="flex max-w-[44rem] flex-col gap-4">
+          {novaOnboardingMessages.map((entry) => (
+            <NovaMessage key={entry.id} entry={entry} />
+          ))}
+        </div>
+      )}
+
       {onboarding.state === "connect_source" && (
         <section className="flex max-w-[44rem] flex-col gap-6 py-8">
           <MonoLabel>Connect</MonoLabel>
@@ -371,6 +434,7 @@ export default async function ProjectOnboardingPage({
               <ProductConfirmation
                 projectId={projectId}
                 profileId={onboarding.productProfile.stored.id}
+                bundlesAudit={novaBundlesAudit}
                 values={{
                   name: onboarding.productProfile.profile.identity.name.value ?? "",
                   shortDescription:
