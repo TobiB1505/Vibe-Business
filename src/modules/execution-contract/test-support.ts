@@ -99,7 +99,10 @@ export function fakeSnapshot(
         confidence: "high",
       },
     ],
-    routes: { mode: "app_router", truncated: false, routes: [] },
+    /* `root` is what makes this a repository the SEO generator could serve: an
+       App Router with nowhere to write is a shape no analyzer emits, and the
+       registry now asks. */
+    routes: { mode: "app_router", truncated: false, routes: [], root: "src/app/" },
     projectStructure: {
       monorepo: {
         detected: overrides.monorepo ?? false,

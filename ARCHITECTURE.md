@@ -70,6 +70,8 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — Sprint 2]** The first layer of analysis is **fully deterministic and contains no AI**: a versioned Repository Intelligence Snapshot built from the Git tree and two small families of downloaded files — dependency manifests, and a named list of stylesheets read for design tokens — with evidence attached to every detection. Implemented in `src/modules/repository-intelligence/`; see [docs/sprints/0002-repository-intelligence.md](docs/sprints/0002-repository-intelligence.md). AI consumes this structured output later rather than reading repositories itself.
 
+**[Confirmed — ADR 0081]** Findings about *an application* are read relative to that application, not to the repository root. The router search starts inside each build target and the directory it found is recorded on the snapshot, because a Next.js application in `frontend/` used to produce an empty route table — the same answer a project with no router gets — which then denied it an app root, a route table for the review classifier, and the free SEO capability its repository always qualified for. Two applications with routers is refused rather than resolved by picking one.
+
 **[Confirmed principle — data minimization]** Vibe Business does not store a copy of a customer's repository. Only *derived* intelligence and the evidence paths that justify it are persisted — never source files, README bodies, raw manifests, lockfiles, or configs. Repository content exists transiently in memory during analysis and is then discarded.
 
 **[Confirmed principle — untrusted repository data]** Repository-derived content is **untrusted DATA, never instructions.** This extends [ADR 0006](docs/decisions/0006-untrusted-repository-execution.md) from "do not execute it" to "do not obey it": any future AI consumer of repository text, paths, or dependency names must treat them as input to reason about, never as system instructions. Analysis reads and parses repository data; it never executes, imports, or evaluates it.
@@ -356,6 +358,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0078](docs/decisions/0078-the-validation-profile-is-a-build-contract.md) | The validation profile is a build contract, not a framework list (supersedes Sprint 0010's profile section) | §3.8 |
 | [0079](docs/decisions/0079-the-founder-names-the-application.md) | The founder names the application, from a closed list Vibe computed (amends 0078) | §3.8 |
 | [0080](docs/decisions/0080-the-probe-that-could-not-fail.md) | The health probe carries the preview's public hostname (amends 0078; Vite gets a row) | §3.9 |
+| [0081](docs/decisions/0081-routes-belong-to-an-application.md) | Routes are read relative to the application, and the router root is recorded (extends 0078) | §3.2 |
 
 ### Layers with no section above
 

@@ -8,6 +8,7 @@ import {
   capabilityVersionFor,
   type ExecutionCapability,
 } from "@/modules/execution/schema";
+import { resolveAppRoot } from "@/modules/execution/app-root";
 import type { StepChangeKind } from "./schema";
 
 /**
@@ -110,6 +111,24 @@ export const CAPABILITY_REGISTRY: readonly RegistryEntry[] = [
       // The generator emits Next.js App Router metadata routes. Anything else
       // is a different capability, and it does not exist.
       if (!detectsFramework(repository, "nextjs")) return false;
+
+      /*
+       * And the generator must have somewhere to write.
+       *
+       * `detectsFramework` reads the repository-wide framework union, so it
+       * says yes for a repository with a Next.js application three directories
+       * down — which is true and not enough. Without a resolvable app root the
+       * step was labelled as work Vibe does for free, and the start then
+       * refused it as `unsupported_repository_layout`: a promise the plan
+       * screen made and the button broke.
+       *
+       * Checked here as well as at the start, and both are load-bearing. This
+       * one decides what the plan may claim; the one in `execution/service.ts`
+       * asks the same question of live state immediately before writing
+       * anything, because a repository can be restructured between the two
+       * (rule 55).
+       */
+      if (resolveAppRoot(repository) === null) return false;
 
       // The snapshot must still agree the surfaces are missing. Preparing a
       // robots.txt for a project that has one is not an improvement.

@@ -46,9 +46,20 @@ export function fakeRepositorySnapshotFor(
     frameworks?: { id: string; name: string }[];
     robotsDetected?: boolean;
     sitemapDetected?: boolean;
+    /**
+     * The router directory, or null for a repository with no resolvable one.
+     *
+     * Present because a repository the SEO generator serves is one with
+     * somewhere to write, and this fixture claimed `app_router` with no root at
+     * all — a shape no analyzer produces. Nothing noticed while the registry
+     * asked only about frameworks; the moment it asked where the app is, six
+     * suites failed against a repository that never existed.
+     */
+    appRoot?: string | null;
   } = {},
 ): RepositoryIntelligenceSnapshot {
   const frameworks = overrides.frameworks ?? [{ id: "nextjs", name: "Next.js" }];
+  const appRoot = overrides.appRoot === undefined ? "src/app/" : overrides.appRoot;
 
   return {
     schemaVersion: "repository_intelligence.v1",
@@ -75,7 +86,12 @@ export function fakeRepositorySnapshotFor(
         confidence: "high",
       },
     ],
-    routes: { mode: "app_router", truncated: false, routes: [] },
+    routes: {
+      mode: "app_router",
+      truncated: false,
+      routes: [],
+      ...(appRoot === null ? {} : { root: appRoot }),
+    },
     projectStructure: {
       monorepo: { detected: false, tool: null, apps: [], packages: [], evidence: [], ambiguous: false },
       sourceFileCount: 132,

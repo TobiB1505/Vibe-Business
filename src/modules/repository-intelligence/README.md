@@ -42,7 +42,13 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
   says nothing about where an application lives. `BuildIntelligence` answers the per-directory
   question instead: which directories hold a manifest, whether each declares a `build` script, and
   which lockfile — if any — sits in the directory itself. It decides _admission_, never a
-  command.
+  command — and it is also where the router search starts, which is why `detectRoutes` takes it.
+- **Routes are read relative to the application, not to the repository root.** `findRouterRoot`
+  looks for `src/app/` and `app/` inside each build target, and `RouteIntelligence.root` records
+  which directory the routes came from. Anchoring at the root meant a Next.js application in
+  `frontend/` produced an empty route table — not "could not read", but the same answer a project
+  with no router gets. Two applications with routers is refused rather than resolved by picking
+  one, the same rule `resolveAppRoot` applies to writing.
 - **Repository evidence is never runtime truth.** The presentation layer may say a capability is
   _likely_; only the live product check or Deep Scan can say it works. `CapabilityStatus` has no
   `confirmed` member for that reason.

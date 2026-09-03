@@ -109,7 +109,10 @@ export async function analyzeRepository(
 
   const frameworks = detectFrameworks(context);
   const integrationSignals = detectIntegrationSignals(context);
-  const routes = detectRoutes(context, frameworks);
+  /* Routes are read relative to the applications, not to the repository root,
+     so the build targets have to exist before the router is looked for. */
+  const build = detectBuildTargets(context, { manifestsTruncated: selection.truncatedByBudget });
+  const routes = detectRoutes(context, frameworks, build);
   const monorepo = detectMonorepo(context);
 
   if (monorepo.ambiguous) {
@@ -147,7 +150,7 @@ export async function analyzeRepository(
     frameworks,
     packageManager: detectPackageManager(context),
     scripts: detectProjectScripts(context),
-    build: detectBuildTargets(context, { manifestsTruncated: selection.truncatedByBudget }),
+    build,
     runtime: detectRuntime(context),
     integrationSignals,
     routes,
