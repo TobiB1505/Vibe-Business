@@ -58,6 +58,16 @@ export type NovaVoiceRead = {
    * template, and neither is a reason for the reader to do anything.
    */
   resolved: boolean;
+  /**
+   * The attempt **this caller** made, or null if it made none.
+   *
+   * Null on every read, on a lost claim, and on an identity somebody else
+   * already resolved — so a caller that did not spend cannot accidentally
+   * write a usage row for somebody else's call. Non-null exactly once per
+   * identity, in the process that won the claim, which is what makes the
+   * ledger row and the single attempt the same event.
+   */
+  attempt: NovaVoiceOutcome | null;
 };
 
 /** The identity's inputs, stored beside the hash so a row can be read by a person. */
@@ -110,6 +120,8 @@ export async function readNovaVoiceMessage(
     source: "template",
     fallbackReason: reason,
     resolved,
+    /* A read never spends, so there is never an attempt to report. */
+    attempt: null,
   });
 
   if (data === null) return fallback(null, false);
@@ -117,7 +129,13 @@ export async function readNovaVoiceMessage(
   if (data.source === "template") return fallback(data.fallback_reason, true);
   if (data.message === null) return fallback(null, true);
 
-  return { message: data.message, source: "voice", fallbackReason: null, resolved: true };
+  return {
+    message: data.message,
+    source: "voice",
+    fallbackReason: null,
+    resolved: true,
+    attempt: null,
+  };
 }
 
 /**
@@ -246,5 +264,6 @@ export async function ensureNovaVoiceMessage(params: {
     source: outcome.source,
     fallbackReason: outcome.fallbackReason,
     resolved: true,
+    attempt: outcome,
   };
 }

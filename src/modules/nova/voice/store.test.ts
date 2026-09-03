@@ -120,6 +120,7 @@ describe("a read resolves an identity and never spends", () => {
       source: "template",
       fallbackReason: null,
       resolved: false,
+      attempt: null,
     });
   });
 
@@ -208,6 +209,7 @@ describe("one identity, one generation", () => {
       source: "voice",
       fallbackReason: null,
       resolved: true,
+      attempt: null,
     });
   });
 
@@ -343,7 +345,7 @@ describe("a fallback is as final as an accepted sentence", () => {
       forbiddenSubstrings: testCase.forbiddenSubstrings,
     });
 
-    expect(read).toEqual({
+    expect(read).toMatchObject({
       message: TEMPLATE,
       source: "template",
       fallbackReason: testCase.reason,
@@ -409,7 +411,11 @@ describe("resolving is once, not last-write-wins", () => {
         message: GOOD,
         source: "voice",
         fallbackReason: null,
+        providerInvoked: true,
         usage: null,
+        providerFailureCode: null,
+        latencyMs: 900,
+        estimatedInputTokens: 500,
         check: null,
       },
     });
@@ -420,7 +426,11 @@ describe("resolving is once, not last-write-wins", () => {
         message: TEMPLATE,
         source: "template",
         fallbackReason: "provider_failed",
+        providerInvoked: true,
         usage: null,
+        providerFailureCode: "provider_timeout",
+        latencyMs: 20_000,
+        estimatedInputTokens: 500,
         check: null,
       },
     });

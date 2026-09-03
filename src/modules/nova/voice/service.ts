@@ -1,5 +1,5 @@
 import { NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
-import type { AIProvider, AIUsage, StructuredRequest } from "@/modules/ai/provider";
+import type { AIFailureCode, AIProvider, AIUsage, StructuredRequest } from "@/modules/ai/provider";
 
 import { checkNovaMessage } from "./checks";
 import type { NovaCheckResult } from "./checks";
@@ -67,8 +67,33 @@ export type NovaVoiceOutcome = {
   source: "voice" | "template";
   /** Why the template was used. Null when the model's words were kept. */
   fallbackReason: NovaVoiceFallbackReason | null;
+  /**
+   * Whether `generateStructured` was actually called.
+   *
+   * The difference between "a call was made and produced nothing usable" and
+   * "no call was made" is the whole of what the usage ledger records, and it
+   * is not derivable from `usage`: a provider that dies before any token is
+   * billed reports none, and writing zero-cost usage as if it were charged
+   * corrupts the ledger exactly as much as omitting a call that happened
+   * (rule 47). `disabled` and `over_input_budget` are the two false cases;
+   * token counting is free and does not make this true.
+   */
+  providerInvoked: boolean;
   /** Present when a billable call was made, successful or not (rule 47). */
   usage: AIUsage | null;
+  /**
+   * The provider's own typed code, when the call failed. Null otherwise.
+   *
+   * Carried rather than collapsed into `provider_failed`, because a ledger
+   * that cannot tell a rate limit from a timeout cannot answer the question it
+   * exists for. It is the same `AIFailureCode` every other operation records;
+   * the provider's error *text* still never leaves the adapter.
+   */
+  providerFailureCode: AIFailureCode | null;
+  /** The provider's measured latency, when it answered at all. */
+  latencyMs: number | null;
+  /** The pre-call count, kept so estimate drift stays measurable. */
+  estimatedInputTokens: number | null;
   /** What the validator said, when it ran. Null when nothing reached it. */
   check: NovaCheckResult | null;
 };
@@ -118,7 +143,11 @@ export async function speakNovaMessage(params: {
     message: params.template,
     source: "template" as const,
     fallbackReason: reason,
+    providerInvoked: false,
     usage: null,
+    providerFailureCode: null,
+    latencyMs: null,
+    estimatedInputTokens: null,
     check: null,
     ...extra,
   });
@@ -131,21 +160,28 @@ export async function speakNovaMessage(params: {
   const count = await params.provider.countInputTokens(request);
   if (!count.ok) return fallback("over_input_budget");
   if (count.inputTokens > NOVA_PRESENTATION_CONFIG.maxInputTokens) {
-    return fallback("over_input_budget");
+    return fallback("over_input_budget", { estimatedInputTokens: count.inputTokens });
   }
 
+  const estimatedInputTokens = count.inputTokens;
   const result = await params.provider.generateStructured(request);
+  const billed = { providerInvoked: true, estimatedInputTokens, latencyMs: result.latencyMs };
+
   if (!result.ok) {
     /*
      * A failed call may still have been billed, so its usage travels even
      * though its words do not (rule 47). The provider's own error text stays
      * inside the adapter; only the domain code reaches here.
      */
-    return fallback("provider_failed", { usage: result.usage ?? null });
+    return fallback("provider_failed", {
+      ...billed,
+      usage: result.usage ?? null,
+      providerFailureCode: result.error,
+    });
   }
 
   const message = messageFrom(result.data);
-  if (message === null) return fallback("invalid_output", { usage: result.usage });
+  if (message === null) return fallback("invalid_output", { ...billed, usage: result.usage });
 
   /*
    * The validator runs on what the model actually wrote, not on what it was
@@ -160,14 +196,16 @@ export async function speakNovaMessage(params: {
   });
 
   if (!check.ok) {
-    return fallback("validation_rejected", { usage: result.usage, check });
+    return fallback("validation_rejected", { ...billed, usage: result.usage, check });
   }
 
   return {
     message,
     source: "voice",
     fallbackReason: null,
+    ...billed,
     usage: result.usage,
+    providerFailureCode: null,
     check,
   };
 }

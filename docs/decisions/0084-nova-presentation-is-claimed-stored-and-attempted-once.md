@@ -75,8 +75,32 @@ Rule 53 confines the service-role client to `src/modules/operations/` plus argue
 
 **Concurrency is settled in Postgres, not in a process.** `insert … on conflict (identity) do nothing … returning` is one statement the database serializes; the caller learns whether it won by whether a row came back. Two servers, two tabs, two Vercel regions and one page rendered twice all reduce to the same one winner. An in-memory guard would have been correct on one instance and wrong in production.
 
-**Nothing calls any of this.** The slice ends at the migration, the store, the identity contract, the tests and this record. `ensureNovaVoiceMessage` composes claim-then-speak-then-resolve and is reachable from tests only, exactly as `speakNovaMessage` has been. Wiring it to a feed, a page or an operation is a separate decision with its own evidence — including where the usage event is written, which is unresolved here because nothing has been billed yet.
+**Nothing calls any of this.** The slice ends at the migration, the store, the identity contract, the tests and this record. `ensureNovaVoiceMessage` composes claim-then-speak-then-resolve and is reachable from tests only, exactly as `speakNovaMessage` has been. Wiring it to a feed, a page or an operation is a separate decision with its own evidence — including where the usage event is written, which is unresolved here because nothing has been billed yet. [Closed by the amendment below.]
 
 **Slice 9's safety properties are unchanged and still load-bearing.** Tokens are counted before the provider is invoked; usage is preserved on failures so a billed attempt is recordable either way (rule 47); `checks.ts` validates what the model actually wrote rather than what it was asked for; and a rejected message resolves to the template rather than to a second opinion. There is no retry anywhere in this design — not for a provider failure, not for a validator rejection, not for a malformed response.
 
 **What this does not establish.** That the voice is worth having. Its measurement is ADR 0082's and stops at prompt quality; whether a founder reads a rephrased sentence differently from a template is unmeasured and is a dogfood question. This decision only makes it safe to ask.
+
+## Amendment (2026-09-03): the caller, and the ledger row
+
+The decision above fixed the five conditions and deliberately left open which caller satisfies them, and where the usage event is written. Both are now decided, and neither turned out to be a free choice.
+
+**The caller is the tail of an existing durable operation's final step**, after its canonical result row is persisted — `speakAfterOperation` in `src/modules/operations/nova-voice.ts`. Every Nova voice slot is downstream of an operation completing: `product_reveal` of `product_scan`, `audit_result` of `business_audit`, `move_recommendation` of `opportunity_generation`, `execution_result` of `agent_execution`, `outcome_result` of `change_merge`. At that point all five conditions are *already true* rather than newly arranged — the canonical state is persisted, there is no open HTTP request so a render structurally cannot reach a provider, the step already holds a service-role client, and `recordAIUsage` is already called on that same line for the operation's own inference.
+
+**The client is the step's own, passed as an argument.** Not `createServiceClient()`, so no new site obtains one and `REVIEWED_SITES` is unchanged. This is also not merely tidy: `ai_usage_events` lost its `authenticated` insert grant in `20260827202440`, so a Server Action could not record usage even if the rest of the design allowed it. The place that can write the ledger and the place that satisfies the five conditions are the same place, which is the strongest evidence available that it is the right one.
+
+**No new operation type.** A `nova_presentation` operation would have added a durable row, a workflow, a failure vocabulary and a state machine to a call that takes a second and is allowed to fail — all to reach a position the existing operations already occupy. Rule 24's "it needs no new infrastructure" is the argument to prefer, and here it is also the argument that is true.
+
+**The usage row is `recordAIUsage`, unchanged, with `operation: "nova_presentation"` and `jobId` set to the operation run's id.** The run id rather than the reuse identity because `job_id` is a `uuid` column and the identity is a sha256 hex string; the run id is also unused as a `job_id` by every existing caller — all five pass a result id or an agent run id — so it collides with nothing, and `ai_usage_events_job_idx` being unique on `job_id` makes a duplicate write a no-op for free.
+
+Three distinctions the row has to get right, and each is a way the ledger could be corrupted rather than a preference:
+
+- **A call that happened is recorded; a call that did not is not.** `disabled` and `over_input_budget` never reach `generateStructured`, so they write no row at all. A row for either would put invented provider cost into unit economics. This is why `NovaVoiceOutcome` carries `providerInvoked` rather than letting the caller infer it from `usage`.
+- **A call that was billed and then failed keeps its tokens; a call that died before billing anything gets none.** `recordAIUsage` already draws exactly this line, and writing zeros as if they were charged corrupts the ledger as much as omitting a real cost.
+- **A message the validator refused is a failed call.** The provider was billed and produced nothing Vibe would show, which is what failure means to this ledger. `failureCode` carries the provider's own `AIFailureCode` where there was one, so a rate limit stays distinguishable from a timeout.
+
+**Nothing is charged to a founder.** `recordAIUsage` is the internal provider-cost ledger; no Credit hold, no reservation, no `RetailOperationKind`. `nova_presentation` has no retail price because presentation is Vibe's infrastructure cost, and giving it one would be a product decision carrying a disclosure obligation (PRODUCT.md §12).
+
+**`speakAfterOperation` returns `void` and never throws.** Its result cannot be branched on, so a step that calls it behaves identically to one that does not — the standing `meterAiUsage` and `observeAccountSpend` already have as non-authoritative work following a canonical write.
+
+**Still nothing calls it.** Which slot speaks first belongs to the slice that renders it; attaching it to an operation now would spend money generating sentences no screen can display.

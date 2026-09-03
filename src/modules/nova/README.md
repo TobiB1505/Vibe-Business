@@ -203,18 +203,32 @@ and this module's only `@/modules/ai/provider` import is a type — a source
 contract asserts it stays one. A render that wanted to generate would have to
 be rewritten, not merely edited.
 
-**Nothing calls any of it.** `ensureNovaVoiceMessage` composes read → claim →
-speak → resolve and is reachable from tests only. The integration point, when
-it is built, is one call at the place a feed entry's text is chosen:
+`ensureNovaVoiceMessage` composes read → claim → speak → resolve and is the
+only entry point that may generate. Its one permitted caller is
+`speakAfterOperation` in
+[`src/modules/operations/nova-voice.ts`](../operations/nova-voice.ts) — the
+tail of a durable step, after its canonical result row is written.
 
-```
-const { message } = await ensureNovaVoiceMessage({ … })   // not called yet
-```
+That placement is not a preference. Every one of ADR 0084's five conditions is
+already true there and would have to be newly arranged anywhere else: the
+canonical state is persisted, there is no open HTTP request so a render cannot
+reach a provider through it, the client is already service-role (a Server
+Action could not write `ai_usage_events` at all — `authenticated` lost that
+insert grant in `20260827202440`), and `recordAIUsage` is already called on
+that same line for the operation's own inference. A Nova operation type would
+have added a durable row, a workflow and a failure vocabulary to reach a place
+the existing operations already stand in.
 
-and it needs two things this slice deliberately did not decide — which caller
-holds the service-role client (rule 53: `operations/`, or an argued entry in
-`REVIEWED_SITES`), and where the usage event is written. Nothing has been
-billed, so nothing is recorded.
+`speakAfterOperation` returns `void` and never throws, so a step that calls it
+behaves identically to one that does not — the same standing `meterAiUsage`
+and `observeAccountSpend` already have. Provider cost goes to the existing
+ledger as `nova_presentation`, with the operation run's id as `job_id`; there
+is no Credit hold and no retail price, because presentation is Vibe's
+infrastructure cost rather than something a founder buys.
+
+**No operation calls it yet.** Which slot speaks first is a product decision
+belonging to the slice that renders it, and attaching this now would spend
+money generating sentences no screen can display.
 
 ## What the voice may never do
 
