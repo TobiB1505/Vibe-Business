@@ -45,9 +45,7 @@ function buildFixtureSpec(
     step,
     plan: { ...FIXTURE_PLAN, assumptions: [...FIXTURE_PLAN.assumptions] },
     projectId: "project-1",
-    repository: fakeRepositoryBinding(
-      overrides.baseSha ? { baseSha: overrides.baseSha } : {},
-    ),
+    repository: fakeRepositoryBinding(overrides.baseSha ? { baseSha: overrides.baseSha } : {}),
     approvedDecisions: overrides.decisions ?? [
       { key: "2-decide-auth", stepOrder: 2, decision: "Email and password, no SSO." },
     ],
@@ -84,7 +82,7 @@ describe("ExecutionSpec — what it carries (§9)", () => {
     const spec = buildFixtureSpec();
     expect(spec.validation.supported).toBe(true);
     if (!spec.validation.supported) return;
-    expect(spec.validation.profile).toBe("nextjs_node_v1");
+    expect(spec.validation.profile).toBe("node_build_v1");
     expect(spec.validation.sandboxSteps).toEqual(["install", "typecheck", "test", "build"]);
     // §31: the agent's own report is never the authority.
     expect(spec.validation.authority).toBe("vibe_observed");
@@ -193,7 +191,12 @@ describe("ExecutionSpec — nothing ready to run for work that is not (§44, §4
   });
 
   it("refuses to build a spec for a blocked step", () => {
-    const first = fakePlanStep({ id: "1-a", order: 1, actor: "founder_decision", changeKind: "decision" });
+    const first = fakePlanStep({
+      id: "1-a",
+      order: 1,
+      actor: "founder_decision",
+      changeKind: "decision",
+    });
     const second = fakePlanStep({ id: "2-b", order: 2, dependsOn: [1] });
     const resolution = resolveStepExecution(
       fakeResolveInput({ step: second, plan: fakePlanContext([first, second]) }),

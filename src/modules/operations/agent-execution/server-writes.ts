@@ -156,7 +156,6 @@ export async function persistAgentExecutionSpec(params: {
   };
 }
 
-
 /**
  * Holds the Credits a run may spend, before any work is enqueued (§18, §55).
  *
@@ -377,15 +376,13 @@ export async function expireStaleAgentExecution(params: {
     .eq("operation_run_id", params.operationRunId)
     .maybeSingle();
 
-  const run = data as
-    | {
-        id: string;
-        project_id: string;
-        status: string;
-        started_at: string | null;
-        credit_reservation_id: string | null;
-      }
-    | null;
+  const run = data as {
+    id: string;
+    project_id: string;
+    status: string;
+    started_at: string | null;
+    credit_reservation_id: string | null;
+  } | null;
 
   // Only a run that is genuinely mid-flight can be stale. `queued` is not: it
   // has taken no provider call yet and its workflow may simply not have picked

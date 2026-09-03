@@ -175,6 +175,7 @@ describe("EXECUTION CORE-4 — agent preflight against a real project", () => {
         repositorySnapshotId: snapshot!.id,
         frameworks: snapshot!.result!.frameworks.map((framework) => framework.id),
         packageManager: snapshot!.result!.packageManager ?? "unknown",
+        workspaceRoot: validation.supported ? validation.workspaceRoot : ".",
       },
       approvedDecisions: [],
       validation,

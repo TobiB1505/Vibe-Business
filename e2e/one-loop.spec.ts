@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /**
  * Audit → Move → Prepare → Prepared, in a real browser (UI-S2 §41, §42).
@@ -27,11 +27,46 @@ const BAD_CONTEXT = "/e2e/moves_bad_context";
 
 const PAYMENT = "People don't yet have a clear way to pay you.";
 
+/**
+ * A bounding box read once the element has stopped moving.
+ *
+ * `boundingBox()` returns wherever the element is at that instant, and this
+ * card animates in. A swipe aimed at a mid-animation position lands somewhere
+ * else by the time the pointer moves — which is why this test failed under a
+ * loaded parallel run and passed alone. Two consecutive agreeing reads is the
+ * cheapest honest definition of "settled"; the assertions afterwards are
+ * unchanged.
+ */
+async function settledBox(locator: Locator) {
+  let previous = await locator.boundingBox();
+
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    await locator.page().waitForTimeout(50);
+    const current = await locator.boundingBox();
+    if (previous && current && current.x === previous.x && current.y === previous.y) return current;
+    previous = current;
+  }
+
+  return previous;
+}
+
 async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow, "horizontal overflow in px").toBeLessThanOrEqual(1);
+  /*
+   * Polled, because a carousel that is mid-slide is wider than the one that
+   * comes to rest. A single sample taken the instant a swipe ends measures the
+   * transition, not the layout — and "the page does not scroll sideways" is a
+   * claim about where it settles. A layout that genuinely overflows still fails
+   * here, at the timeout.
+   */
+  await expect
+    .poll(
+      async () =>
+        page.evaluate(
+          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+        ),
+      { message: "horizontal overflow in px" },
+    )
+    .toBeLessThanOrEqual(1);
 }
 
 test.describe("the audit hands off to the moves that answer it", () => {
@@ -409,7 +444,8 @@ test.describe("the loop survives a phone", () => {
     await page.goto(RANKED);
 
     const active = page.getByTestId("active-move");
-    const box = await active.boundingBox();
+    await expect(active).toBeVisible();
+    const box = await settledBox(active);
     expect(box).not.toBeNull();
     if (!box) return;
 

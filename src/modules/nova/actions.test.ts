@@ -207,7 +207,7 @@ describe("the two controls that touch a repository", () => {
   });
 });
 
-describe("the control with nothing behind it", () => {
+describe("an unbound control, should one appear again", () => {
   it("says why it is unbound", () => {
     for (const id of NOVA_ACTION_IDS) {
       const meta = novaActionMeta(id);
@@ -224,27 +224,31 @@ describe("the control with nothing behind it", () => {
     }
   });
 
-  it("keeps unbound ids out of what may be offered", () => {
-    expect(OFFERABLE_NOVA_ACTION_IDS).not.toContain("nova.choose_workspace");
-    expect(isOfferable("nova.choose_workspace")).toBe(false);
-    expect(isOfferable("nova.merge_change")).toBe(true);
+  /**
+   * Nothing is unbound today — Stage 4 closed the last gap. The mechanism
+   * stays because the situation recurs: an id is worth cataloguing before its
+   * action exists, and `isOfferable` is what keeps such an id off a screen in
+   * the meantime.
+   */
+  it("offers every id, now that every id has something behind it", () => {
+    expect([...OFFERABLE_NOVA_ACTION_IDS].sort()).toEqual([...NOVA_ACTION_IDS].sort());
+    for (const id of NOVA_ACTION_IDS) expect(isOfferable(id), id).toBe(true);
   });
 
   /**
-   * The pairing that keeps the gap safe.
+   * The invariant that made the gap safe, kept now that there is no gap.
    *
-   * `workspace_choice_required` is the only candidate whose control is
-   * unbound, and `read.ts` cannot raise it — `workspaceChoiceRequired` is
-   * fixed false until the resolver arrives. If either of those moves without
-   * the other, this fails: a raisable candidate with no action is a founder
-   * looking at a control that cannot be pressed.
+   * It held one entry — `workspace_choice_required`, whose action lived on the
+   * Stage 4 branch — and this is the test that failed the moment that branch
+   * merged, which is what a claim about the outside world is supposed to do.
+   * A candidate Nova can raise must never point at a control nobody can press.
    */
-  it("leaves no offerable candidate pointing at an unbound control", () => {
+  it("leaves no candidate pointing at a control that cannot be pressed", () => {
     const unbound = FOCUS_CANDIDATE_KINDS.filter((kind) => {
       const id = novaCandidateAction(kind);
       return id !== null && !isOfferable(id);
     });
 
-    expect(unbound).toEqual(["workspace_choice_required"]);
+    expect(unbound).toEqual([]);
   });
 });

@@ -112,7 +112,9 @@ describe("a run that delivers a chain", () => {
   });
 
   it("is stable across repeated computation", () => {
-    expect(computeExecutionSpecIdentity(chained)).toBe(computeExecutionSpecIdentity({ ...chained }));
+    expect(computeExecutionSpecIdentity(chained)).toBe(
+      computeExecutionSpecIdentity({ ...chained }),
+    );
   });
 
   /*

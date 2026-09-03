@@ -54,7 +54,10 @@ describe("execution resolver — real product dogfood", () => {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    expect(supabaseUrl && serviceKey, "Supabase URL and service role key are required.").toBeTruthy();
+    expect(
+      supabaseUrl && serviceKey,
+      "Supabase URL and service role key are required.",
+    ).toBeTruthy();
 
     // Read-only, and constructed here rather than through `createServiceClient`
     // so this harness cannot be mistaken for an application code path — only

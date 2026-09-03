@@ -56,6 +56,8 @@ export type StoredValidationRun = {
   sandboxProvider: SandboxProviderId;
   sandboxRuntime: string | null;
   packageManager: SupportedPackageManager;
+  /** The directory the commands ran in. `.` for a single-application repository. */
+  workspaceRoot: string;
   preparedCommitSha: string;
   status: ValidationStatus;
   stage: ValidationStage;
@@ -78,7 +80,7 @@ export type StoredValidationRun = {
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
   "validation_depth, validation_depth_policy_version, validation_depth_reason, " +
-  "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, prepared_commit_sha, " +
+  "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, workspace_root, prepared_commit_sha, " +
   "status, stage, steps, failure_code, failure_detail, source_integrity, artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
@@ -111,6 +113,9 @@ function mapRow(row: Row): StoredValidationRun {
     sandboxProvider: row.sandbox_provider as SandboxProviderId,
     sandboxRuntime: (row.sandbox_runtime as string | null) ?? null,
     packageManager: row.package_manager as SupportedPackageManager,
+    // Rows written before Stufe 4 have no column value and validated the root,
+    // which is what they would say if they could.
+    workspaceRoot: (row.workspace_root as string | null) ?? ".",
     preparedCommitSha: String(row.prepared_commit_sha),
     status: row.status as ValidationStatus,
     stage: row.stage as ValidationStage,
@@ -253,6 +258,8 @@ export async function claimValidationRun(
     sandboxPolicyVersion: string;
     sandboxProvider: SandboxProviderId;
     packageManager: SupportedPackageManager;
+    /** The directory the commands run in. Recorded so a pass says what passed. */
+    workspaceRoot: string;
     preparedCommitSha: string;
     validationIdentity: string;
   },
@@ -272,6 +279,7 @@ export async function claimValidationRun(
       sandbox_policy_version: params.sandboxPolicyVersion,
       sandbox_provider: params.sandboxProvider,
       package_manager: params.packageManager,
+      workspace_root: params.workspaceRoot,
       prepared_commit_sha: params.preparedCommitSha,
       validation_identity: params.validationIdentity,
       status: "running",
@@ -285,7 +293,10 @@ export async function claimValidationRun(
     .single();
 
   if (error) {
-    return { ok: false, error: error.code === POSTGRES_UNIQUE_VIOLATION ? "already_active" : "persistence_failed" };
+    return {
+      ok: false,
+      error: error.code === POSTGRES_UNIQUE_VIOLATION ? "already_active" : "persistence_failed",
+    };
   }
   if (!data) return { ok: false, error: "persistence_failed" };
 
@@ -554,29 +565,35 @@ export async function recordSandboxUsage(
     vcpus: SANDBOX_RESOURCES.vcpus,
   });
 
-  const { data, error } = await supabase.from("sandbox_usage_events").insert({
-    project_id: params.projectId,
-    user_id: params.userId,
-    validation_run_id: params.validationRunId,
-    operation: "change_validation",
-    provider: params.provider,
-    runtime: params.runtime,
-    status: params.status,
-    sandbox_duration_ms: params.sandboxDurationMs,
-    active_cpu_ms: params.usage?.activeCpuDurationMs ?? null,
-    network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
-    network_egress_bytes: params.usage?.networkEgressBytes ?? null,
-    // What the provider said, which for a Vercel sandbox is nothing. Left
-    // exactly as it was: the estimate beside it is a different claim and gets
-    // its own columns (ADR 0073).
-    provider_cost_usd: params.usage?.costUsd ?? null,
-    estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
-    cost_pricing_version: estimate.pricingVersion,
-    vcpus: estimate.vcpus,
-    cleanup_status: params.cleanupStatus,
-    failure_code: params.failureCode,
-    failure_detail: params.failureDetail,
-  }).select("id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at").single();
+  const { data, error } = await supabase
+    .from("sandbox_usage_events")
+    .insert({
+      project_id: params.projectId,
+      user_id: params.userId,
+      validation_run_id: params.validationRunId,
+      operation: "change_validation",
+      provider: params.provider,
+      runtime: params.runtime,
+      status: params.status,
+      sandbox_duration_ms: params.sandboxDurationMs,
+      active_cpu_ms: params.usage?.activeCpuDurationMs ?? null,
+      network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
+      network_egress_bytes: params.usage?.networkEgressBytes ?? null,
+      // What the provider said, which for a Vercel sandbox is nothing. Left
+      // exactly as it was: the estimate beside it is a different claim and gets
+      // its own columns (ADR 0073).
+      provider_cost_usd: params.usage?.costUsd ?? null,
+      estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
+      cost_pricing_version: estimate.pricingVersion,
+      vcpus: estimate.vcpus,
+      cleanup_status: params.cleanupStatus,
+      failure_code: params.failureCode,
+      failure_detail: params.failureDetail,
+    })
+    .select(
+      "id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at",
+    )
+    .single();
 
   /*
    * Into the billing ledger immediately (ADR 0073).

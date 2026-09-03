@@ -242,7 +242,10 @@ describe("§54 — a client cannot expand a tool policy or raise its own budget"
 describe("§54 — a client cannot disable validation or unblock a blocked step", () => {
   it("keeps the validation requirement derived from the repository", () => {
     const requirement = resolveExecutionValidation(
-      fakeSnapshot({ frameworks: [{ id: "rails", name: "Rails" }] }),
+      fakeSnapshot({
+        frameworks: [{ id: "rails", name: "Rails" }],
+        build: { targets: [], truncated: false },
+      }),
     );
     expect(requirement.supported).toBe(false);
   });

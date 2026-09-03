@@ -130,20 +130,29 @@ export type StartRefusalRecovery = {
 /**
  * The way forward, when a fresh read of the founder's code is it.
  *
- * Offered, never taken: a scan costs Credits, and Rule 60 is explicit that
- * blocked work explains what needs refreshing rather than spending on the
- * founder's behalf. So this returns copy and a kind — no URL, because a view
- * module has no business knowing what a route segment is called.
+ * **Offered, never taken.** Not because of what it costs — a Product Scan is
+ * free (`kill-switch.ts` files it under free work, and the rate card prices
+ * understanding at zero) — but because it is the founder's code, and Rule 60
+ * says blocked work explains what needs refreshing rather than reaching for it
+ * on their behalf. This returns copy and a kind, no URL: a view module has no
+ * business knowing what a route segment is called.
  *
  * Only for the refusals a re-read actually clears. A permanent refusal — this
  * step touches payments, the agent is not on for this project — gets nothing,
- * because offering a paid scan against a wall is worse than offering nothing.
+ * because a way forward that leads to the same wall is worse than none.
+ *
+ * Three of the four arrive after a start was refused. The fourth,
+ * `repository_analysis_outdated`, is the one that never gets that far: the step
+ * does not resolve agentic, so no start control renders and nothing can be
+ * clicked to produce it. The Agent screen asks the same question directly and
+ * uses this answer, which is why it is here rather than in a second copy table.
  */
 export function startRefusalRecovery(
   detail: AgentStartRefusalDetail,
 ): StartRefusalRecovery | null {
   const stale =
     detail.reason === "repository_snapshot_missing" ||
+    detail.resolutionReason === "repository_analysis_outdated" ||
     (detail.admission !== undefined &&
       !detail.admission.admissible &&
       (detail.admission.refusal === "repository_head_moved" ||

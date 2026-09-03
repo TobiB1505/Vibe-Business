@@ -403,7 +403,33 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
     responsibilityByStepKey: {
       "step-add-pricing-page": stepResponsibility(
         { executionSupport: "not_yet_supported" },
-        { intrinsicMode: "agentic" },
+        { intrinsicMode: "agentic", reason: "agentic_v1_eligible" },
+      ),
+    },
+  }),
+
+  /**
+   * The same step, refused — and the refusal says which repository fact.
+   *
+   * The counterpart of the scene above, and the half that was missing. The
+   * resolver is asked on this screen precisely because the stored
+   * classification knows only the deterministic registry; when it answers
+   * *yes* the row says so, and when it answered **no** it said why and the
+   * screen dropped it. `repository_analysis_outdated` is the sharpest case:
+   * "Not automated yet" is not vague there, it is false — the work is
+   * automated and one free scan is the whole of what stands in the way.
+   */
+  action_plan_repository_blocked: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
+    moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: planView({}),
+    activeOperation: null,
+    responsibilityByStepKey: {
+      "step-add-pricing-page": stepResponsibility(
+        { executionSupport: "not_yet_supported" },
+        { intrinsicMode: "unsupported", reason: "repository_analysis_outdated" },
       ),
     },
   }),

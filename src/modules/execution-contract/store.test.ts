@@ -22,7 +22,9 @@ import {
  * Spec persistence (EXECUTION CORE-3 §10, §35, §47, §55).
  */
 
-const BUDGET = resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"), [fakeBudgetPolicy()])!;
+const BUDGET = resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"), [
+  fakeBudgetPolicy(),
+])!;
 
 function specFor(baseSha?: string) {
   const step = fakePlanStep();

@@ -4087,6 +4087,7 @@ export type Database = {
           validation_depth_reason: string | null
           validation_identity: string
           validation_profile: string
+          workspace_root: string
           validation_profile_version: string
         }
         Insert: {
@@ -4121,6 +4122,7 @@ export type Database = {
           validation_depth_reason?: string | null
           validation_identity: string
           validation_profile: string
+          workspace_root?: string
           validation_profile_version: string
         }
         Update: {
@@ -4155,6 +4157,7 @@ export type Database = {
           validation_depth_reason?: string | null
           validation_identity?: string
           validation_profile?: string
+          workspace_root?: string
           validation_profile_version?: string
         }
         Relationships: [

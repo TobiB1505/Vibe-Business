@@ -176,11 +176,15 @@ describe("what a control may be offered for", () => {
     }
   });
 
-  /** The one that would otherwise render a button a founder cannot press. */
-  it("offers nothing for the workspace choice, which has no action at HEAD", () => {
+  /**
+   * Offered since Stage 4 merged and brought `chooseWorkspaceRootAction` to
+   * HEAD. It rendered a sentence and no button while the action lived only on
+   * a branch; the sweep above is what kept that honest, and it is unchanged.
+   */
+  it("offers the workspace choice now that its action exists", () => {
     const entries = feedFor({ kind: "workspace_choice_required" });
 
-    expect(entries.map((entry) => entry.kind)).toEqual(["nova.message"]);
+    expect(entries.map((entry) => entry.kind)).toEqual(["nova.message", "nova.choice"]);
   });
 
   it("offers nothing at all when there is nothing to do", () => {

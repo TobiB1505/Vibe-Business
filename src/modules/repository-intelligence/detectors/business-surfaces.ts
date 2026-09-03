@@ -109,7 +109,13 @@ const MANIFEST_PATH = new RegExp(
 );
 
 function notDetected(id: BusinessSurfaceId): BusinessSurfaceSignal {
-  return { id, name: BUSINESS_SURFACE_LABELS[id], detected: false, confidence: "high", evidence: [] };
+  return {
+    id,
+    name: BUSINESS_SURFACE_LABELS[id],
+    detected: false,
+    confidence: "high",
+    evidence: [],
+  };
 }
 
 function detected(
@@ -134,30 +140,43 @@ export function detectBusinessSurfaces(
   const authSignals = byCategory("auth");
   results.push(
     authSignals.length > 0
-      ? detected("authentication", authSignals.flatMap((signal) => signal.evidence))
+      ? detected(
+          "authentication",
+          authSignals.flatMap((signal) => signal.evidence),
+        )
       : notDetected("authentication"),
   );
 
   const paymentSignals = byCategory("payments");
   results.push(
     paymentSignals.length > 0
-      ? detected("payments", paymentSignals.flatMap((signal) => signal.evidence))
+      ? detected(
+          "payments",
+          paymentSignals.flatMap((signal) => signal.evidence),
+        )
       : notDetected("payments"),
   );
 
   const analyticsSignals = byCategory("analytics");
   results.push(
     analyticsSignals.length > 0
-      ? detected("analytics", analyticsSignals.flatMap((signal) => signal.evidence))
+      ? detected(
+          "analytics",
+          analyticsSignals.flatMap((signal) => signal.evidence),
+        )
       : notDetected("analytics"),
   );
 
   // --- Surfaces backed by a known file --------------------------------
   const robots = context.sourcePaths.find((path) => ROBOTS_PATH.test(path));
-  results.push(robots ? detected("robots", [evidence("file_path", robots)]) : notDetected("robots"));
+  results.push(
+    robots ? detected("robots", [evidence("file_path", robots)]) : notDetected("robots"),
+  );
 
   const sitemap = context.sourcePaths.find((path) => SITEMAP_PATH.test(path));
-  results.push(sitemap ? detected("sitemap", [evidence("file_path", sitemap)]) : notDetected("sitemap"));
+  results.push(
+    sitemap ? detected("sitemap", [evidence("file_path", sitemap)]) : notDetected("sitemap"),
+  );
 
   // Next.js exposes SEO metadata through a `metadata` export or a
   // generated OG image; both are conventional filenames in conventional
@@ -195,7 +214,9 @@ export function detectBusinessSurfaces(
       continue;
     }
 
-    const matches = routes.routes.filter((route) => route.kind === "page" && pattern.test(route.path));
+    const matches = routes.routes.filter(
+      (route) => route.kind === "page" && pattern.test(route.path),
+    );
     results.push(
       matches.length > 0
         ? detected(

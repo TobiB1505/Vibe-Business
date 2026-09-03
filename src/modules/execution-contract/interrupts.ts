@@ -120,9 +120,9 @@ export function interruptToApprovedDecision(
   const answer = interrupt.answer;
   const decision =
     answer.kind === "single_choice"
-      ? (interrupt.responseSchema.kind === "single_choice"
+      ? ((interrupt.responseSchema.kind === "single_choice"
           ? interrupt.responseSchema.options.find((option) => option.id === answer.optionId)?.label
-          : undefined) ?? answer.optionId
+          : undefined) ?? answer.optionId)
       : answer.kind === "confirmation"
         ? answer.confirmed
           ? "confirmed"

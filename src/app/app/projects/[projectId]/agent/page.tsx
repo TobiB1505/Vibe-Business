@@ -52,6 +52,10 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { AgentStaleReadNotice } from "./agent-stale-read-notice";
+import { AgentWorkspaceChoice } from "./agent-workspace-choice";
+import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import { resolveBuildChain } from "@/modules/execution-contract/chain";
 import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
@@ -390,6 +394,41 @@ async function AgentWorkspaceBody({
   const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
 
   /*
+   * The two refusals that are questions rather than dead ends (Stufe 4).
+   *
+   * Both land in the same place: the step does not resolve agentic, so
+   * `agenticStep` is null, so there is no start control — and `AgentReadyStage`
+   * draws an empty call-to-action block under a hero that still says Vibe
+   * understands this code. Every other refusal there is something the founder
+   * fixes in their repository. These two they settle here, in a second, free.
+   *
+   * A stale read comes first, and not only because the resolver reports them
+   * one at a time: a candidate list computed from an out-of-date scan is not a
+   * question worth asking.
+   *
+   * Only asked when nothing else is on offer. A screen showing both a Build
+   * button and a question about which app to build would be asking about the
+   * run it was simultaneously offering to start.
+   */
+  const workspaceChoice =
+    agentRoutes?.available && !agenticStep && agentRoutes.snapshot
+      ? await resolveProjectValidationTarget(supabase, {
+          projectId,
+          snapshot: agentRoutes.snapshot,
+        })
+      : null;
+  const staleRepositoryRead =
+    workspaceChoice !== null &&
+    !workspaceChoice.supported &&
+    workspaceChoice.reason === "repository_analysis_outdated";
+  const workspaceCandidates =
+    workspaceChoice &&
+    !workspaceChoice.supported &&
+    workspaceChoice.reason === "workspace_choice_required"
+      ? (workspaceChoice.candidates ?? [])
+      : [];
+
+  /*
    * The ready hero names the step the button would start, not just the Move.
    *
    * `agenticStep` is what `AgentStartAction` submits, and until this existed
@@ -526,7 +565,25 @@ async function AgentWorkspaceBody({
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
                 startAction={
-                  agenticStep ? (
+                  staleRepositoryRead ? (
+                    <AgentStaleReadNotice
+                      /* Where a scan is started, anchored at the control that
+                         starts one. The notice does not know what a route
+                         segment is called, and should not. */
+                      productHref={`${projectSectionHref(project.id, "my-product")}#product-scan`}
+                    />
+                  ) : workspaceCandidates.length > 0 ? (
+                    <AgentWorkspaceChoice
+                      candidates={workspaceCandidates}
+                      action={(candidate) => (
+                        <AgentWorkspaceChoiceAction
+                          projectId={project.id}
+                          candidate={candidate}
+                          chosen={false}
+                        />
+                      )}
+                    />
+                  ) : agenticStep ? (
                     <div className="flex w-full flex-col gap-2">
                       {/*
                         The chain is offered, never imposed. Two controls rather

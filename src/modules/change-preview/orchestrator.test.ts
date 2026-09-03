@@ -3,7 +3,8 @@ import { describeCommand, installCommand } from "@/modules/validation/commands";
 import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "@/modules/validation/sandbox-port";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { PREVIEW_BUDGETS, PREVIEW_RESOURCES } from "./budgets";
-import { previewHealthProbeCommand, previewServerCommand } from "./commands";
+import { previewHealthProbeCommand } from "./commands";
+import { previewServerCommandFor } from "./dev-servers";
 import { previewSandboxNameFor } from "./identity";
 import {
   PREVIEW_ENVIRONMENT,
@@ -41,11 +42,16 @@ function frozenClock() {
 
 /** A workspace whose HEAD is the prepared commit and whose install succeeds. */
 function readyProvider(
-  options: { files?: Record<string, string>; healthStatus?: number | null } = {},
+  options: {
+    files?: Record<string, string>;
+    healthStatus?: number | null;
+    healthHostGated?: true;
+  } = {},
 ) {
   return fakeSandboxProvider({
     files: options.files ?? clonedSandboxFiles(),
     ...(options.healthStatus !== undefined ? { healthStatus: options.healthStatus } : {}),
+    ...(options.healthHostGated ? { healthHostGated: options.healthHostGated } : {}),
     results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
   });
 }
@@ -97,7 +103,9 @@ describe("acquiring the source", () => {
 
   it("refuses to continue when the credential store survived removal", async () => {
     const provider = fakeSandboxProvider({
-      files: clonedSandboxFiles({ "product/.git/config": "[remote]\n  url = https://x@github.com" }),
+      files: clonedSandboxFiles({
+        "product/.git/config": "[remote]\n  url = https://x@github.com",
+      }),
       // `rm -f` reports success whether or not it removed anything, which is
       // exactly why the orchestrator verifies rather than assumes.
       unremovablePaths: ["product/.git/config"],
@@ -133,7 +141,10 @@ describe("the network, at each phase", () => {
       files: clonedSandboxFiles(),
       results: {
         "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA },
-        [describeCommand(installCommand("pnpm"))]: { exitCode: 1, output: "ERR_PNPM_OUTDATED_LOCKFILE" },
+        [describeCommand(installCommand("pnpm"))]: {
+          exitCode: 1,
+          output: "ERR_PNPM_OUTDATED_LOCKFILE",
+        },
       },
     });
 
@@ -265,7 +276,9 @@ describe("starting the preview server", () => {
 
     await startPreviewServer(provider, target, { clock: frozenClock() });
 
-    expect(provider.backgroundCommands()).toEqual([describeCommand(previewServerCommand())]);
+    expect(provider.backgroundCommands()).toEqual([
+      describeCommand(previewServerCommandFor(["nextjs"])!),
+    ]);
     for (const command of provider.backgroundCommands()) {
       expect(command).not.toContain("pnpm");
       expect(command).not.toContain("npx");
@@ -273,22 +286,39 @@ describe("starting the preview server", () => {
   });
 
   it("binds all interfaces on Vibe's port", async () => {
-    const command = describeCommand(previewServerCommand());
+    const command = describeCommand(previewServerCommandFor(["nextjs"])!);
 
     expect(command).toContain("-H 0.0.0.0");
     expect(command).toContain(`-p ${PREVIEW_BUDGETS.port}`);
   });
 
-  it("never runs a repository-defined script to start the server", async () => {
-    const command = previewServerCommand();
+  it("refuses to start an application no server command can start", async () => {
+    // Eligibility answered this before the session existed, so reaching here
+    // means the two disagreed — and the safe direction is to start nothing. A
+    // guessed command on a public URL is what this module exists to prevent.
+    const provider = fakeSandboxProvider({ files: clonedSandboxFiles() });
+    const target = fakePreviewTarget({ frameworks: ["express"] });
+    await provisionPreviewWorkspace(provider, target);
 
-    // `pnpm start` would let a repository decide what Vibe serves on a public
-    // port by editing one line of JSON (§14).
-    expect(command.command).not.toBe("pnpm");
-    expect(command.command).not.toBe("npm");
-    expect(command.command).not.toBe("npx");
-    expect(command.args).not.toContain("run");
+    const outcome = await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_not_supported" });
+    expect(provider.backgroundCommands()).toEqual([]);
   });
+
+  it.each([["nextjs"], ["nuxt"], ["astro"]])(
+    "never runs a repository-defined script to start a %s application",
+    (framework) => {
+      const command = previewServerCommandFor([framework])!;
+
+      // `pnpm start` would let a repository decide what Vibe serves on a public
+      // port by editing one line of JSON (§14).
+      expect(command.command).not.toBe("pnpm");
+      expect(command.command).not.toBe("npm");
+      expect(command.command).not.toBe("npx");
+      expect(command.args).not.toContain("run");
+    },
+  );
 
   it("reports a process that exited instead of waiting out the budget", async () => {
     const provider = fakeSandboxProvider({
@@ -554,5 +584,81 @@ describe("fixtures", () => {
 
     expect(teardown).toMatchObject({ cleanup: "stopped", artifactDeleted: false });
     expect(provider.deletedArtifacts()).toEqual([]);
+  });
+});
+
+/**
+ * A server that refuses the hostname it is served on.
+ *
+ * The failure this whole area exists for, and the one that used to be
+ * invisible: Vite allows every IP literal unconditionally, so a loopback probe
+ * passed while the customer's URL answered `403 Blocked request.` — a preview
+ * recorded as running for a page nobody could open.
+ */
+describe("a development server that refuses the preview's hostname", () => {
+  it("asks under the hostname a browser would send, not under loopback", async () => {
+    const provider = readyProvider();
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    // The assertion the old probe could not make. `sandbox-3000.example.invalid`
+    // is what the fake provider issues as the public origin.
+    const probes = provider.commands().filter((command) => command.startsWith("curl"));
+    expect(probes.some((probe) => probe.includes("Host: sandbox-3000.example.invalid"))).toBe(true);
+  });
+
+  it("tells the server which hostname to answer for, without touching the repository", async () => {
+    const provider = readyProvider({ healthHostGated: true });
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    // Through Vite's own environment variable, so no file in the customer's
+    // tree is edited to make Vibe's preview work.
+    const started = provider.events.find((event) => event.kind === "background");
+    expect(started).toMatchObject({
+      env: { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: "sandbox-3000.example.invalid" },
+    });
+  });
+
+  it("fails with its own reason rather than reporting a running preview", async () => {
+    const provider = readyProvider({ healthHostGated: true });
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
+      ok: false,
+      failureCode: "preview_host_rejected",
+    });
+  });
+
+  it("does not call an application that refuses everyone a host gate", async () => {
+    // A 403 at the root is ambiguous on its own: an application behind
+    // authentication answers it to every caller. Deciding from one response
+    // would mean reading the block page, which is untrusted text — so the two
+    // are told apart by asking twice, and this is the case that must not move.
+    const provider = readyProvider({ healthStatus: 403 });
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("costs a second probe only when one is needed", async () => {
+    const provider = readyProvider();
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    // One re-entry probe, one that answers. A healthy preview pays nothing for
+    // the ambiguity it never encountered.
+    const probes = provider.commands().filter((command) => command.startsWith("curl"));
+    expect(probes).toHaveLength(2);
   });
 });

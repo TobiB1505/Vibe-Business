@@ -48,6 +48,17 @@ export function computeValidationIdentity(params: {
    */
   validationDepth: ValidationDepth;
   validationDepthPolicyVersion: string;
+  /**
+   * Which directory was validated (Stufe 4).
+   *
+   * An identity input for the same reason the profile is. Once a repository can
+   * hold more than one application and a founder can say which one Vibe works
+   * on, the same commit is a legitimate question at `apps/a` and at `apps/b` —
+   * and without this, a pass recorded for one would be reused to answer the
+   * other. "This commit validated" was never the claim; "this commit validated
+   * *here*" is.
+   */
+  workspaceRoot: string;
 }): string {
   // Fixed order rather than object key order, so a refactor cannot silently
   // rehash every stored identity.
@@ -59,6 +70,7 @@ export function computeValidationIdentity(params: {
     params.sandboxPolicyVersion,
     params.validationDepth,
     params.validationDepthPolicyVersion,
+    params.workspaceRoot,
   ]);
 
   return createHash("sha256").update(canonical).digest("hex");

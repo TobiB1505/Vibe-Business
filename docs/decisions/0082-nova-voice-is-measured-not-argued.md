@@ -1,4 +1,4 @@
-# 0078 - Nova's voice model is chosen by eval, not by cost intuition
+# 0082 - Nova's voice model is chosen by eval, not by cost intuition
 
 Status: Accepted
 Date: 2026-09-03

@@ -701,15 +701,19 @@ describe("refusing before spending (§34)", () => {
     expect(provider.createdWith()).toBeNull();
   });
 
-  it("creates no sandbox for an unsupported repository", async () => {
+  it("creates no sandbox for a repository with nothing to build", async () => {
+    // A Django project has no `package.json`, so there is no build for a change
+    // to be checked against. What matters here is *when* Vibe says so: before
+    // a VM exists, rather than after five minutes and a few cents of one.
     seed();
     db.rows("repository_intelligence_snapshots")[0].result = fakeValidatableSnapshot({
       frameworks: [{ id: "django", name: "Django" }],
+      build: { targets: [], truncated: false },
     });
 
     const outcome = await runPipeline();
 
-    expect(outcome).toMatchObject({ ok: false, failureCode: "validation_not_supported" });
+    expect(outcome).toMatchObject({ ok: false, failureCode: "not_a_node_project" });
     expect(provider.createdWith()).toBeNull();
   });
 });

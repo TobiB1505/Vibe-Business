@@ -5,10 +5,7 @@ import { agentSandboxNameFor, computeCandidateDigest } from "@/modules/coding-ag
 import type { BaseContentPort, BaseTreePort } from "@/modules/coding-agent/candidate";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
-import {
-  DEPENDENCY_HOSTS,
-  SOURCE_HOSTS,
-} from "@/modules/validation/sandbox-port";
+import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "@/modules/validation/sandbox-port";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import {
@@ -211,10 +208,18 @@ const SANDBOX_FILES = {
   "product/src/app/page.tsx": "export default function Page() { return null; }\n",
 };
 
-function seed(overrides: { runStatus?: string; specMode?: string } = {}) {
+function seed(
+  overrides: {
+    runStatus?: string;
+    specMode?: string;
+    /** Overrides on the spec's repository binding, e.g. where the app lives. */
+    repository?: Partial<ReturnType<typeof fakeAgentSpec>["repository"]>;
+  } = {},
+) {
   db.seed("projects", { id: PROJECT, user_id: USER, production_url: "https://acme.com" });
 
-  const spec = fakeAgentSpec();
+  const base = fakeAgentSpec();
+  const spec = { ...base, repository: { ...base.repository, ...overrides.repository } };
   const specRow = db.seed("execution_specs", {
     project_id: PROJECT,
     action_plan_id: "plan-1",
@@ -339,7 +344,8 @@ async function runAgent(
   if (!started.ok) return started;
   // A question raised before the first turn holds the run where it is; there is
   // nothing to watch and nothing to collect.
-  if (started.paused) return { ok: true as const, paused: true, observedPathCount: 0, changedPaths: null };
+  if (started.paused)
+    return { ok: true as const, paused: true, observedPathCount: 0, changedPaths: null };
 
   for (let poll = 0; poll < 5; poll += 1) {
     const observed = await pollAgentStep(agentDeps, operationId);
@@ -376,7 +382,10 @@ describe("§8, §12 — the workspace is pinned, scrubbed and closed before the 
     const { operation } = seed();
     const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
 
-    const outcome = await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    const outcome = await provisionAgentWorkspaceStep(
+      deps({ sandboxProvider: sandbox }),
+      operation.id,
+    );
 
     expect(outcome.ok).toBe(true);
     expect(sandbox.createCount()).toBe(1);
@@ -426,24 +435,81 @@ describe("§8, §12 — the workspace is pinned, scrubbed and closed before the 
       results: { "git rev-parse HEAD": { exitCode: 0, output: MOVED_SHA } },
     });
 
-    const outcome = await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    const outcome = await provisionAgentWorkspaceStep(
+      deps({ sandboxProvider: sandbox }),
+      operation.id,
+    );
 
     expect(outcome).toEqual({ ok: false, failureCode: "repository_changed" });
     // Nothing repository-controlled ran.
     expect(sandbox.commands()).not.toContain("pnpm install --frozen-lockfile --ignore-scripts");
   });
 
+  /*
+   * Stufe 4. `resolveTarget` knows the repository and nothing about which
+   * directory inside it holds the application; it used to hard-code the root,
+   * which was right only while every admitted repository had its app there.
+   *
+   * Nothing caught the mismatch, and nothing would have: validation would have
+   * installed in `frontend/` while the agent installed in `/`, and the run
+   * would have failed after buying a VM.
+   */
+  it("installs where the spec says the application is, not at the repository root", async () => {
+    const { operation } = seed({
+      repository: { workspaceRoot: "frontend" },
+    });
+    const sandbox = fakeSandboxProvider({
+      files: {
+        "product/frontend/package.json": JSON.stringify({ scripts: { build: "next build" } }),
+      },
+      results: SANDBOX_RESULTS,
+    });
+
+    const outcome = await provisionAgentWorkspaceStep(
+      deps({ sandboxProvider: sandbox }),
+      operation.id,
+    );
+
+    expect(outcome.ok).toBe(true);
+    const install = sandbox.events.find(
+      (event) => event.kind === "command" && event.command.startsWith("pnpm install"),
+    );
+    expect(install).toMatchObject({ cwd: "product/frontend" });
+  });
+
+  it("refuses a package manager it has no install command for, rather than guessing one", async () => {
+    // The shape this replaced was `=== "npm" ? "npm" : "pnpm"`, which would
+    // have run `pnpm install --frozen-lockfile` in a yarn repository and
+    // produced a dependency tree nobody committed — then a verdict about it.
+    const { operation } = seed({ repository: { packageManager: "yarn" } });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+
+    const outcome = await provisionAgentWorkspaceStep(
+      deps({ sandboxProvider: sandbox }),
+      operation.id,
+    );
+
+    expect(outcome).toEqual({ ok: false, failureCode: "validation_not_supported" });
+    expect(sandbox.commands().some((command) => command.includes("install"))).toBe(false);
+  });
+
   it("refuses when the credential store survives the scrub", async () => {
     const { operation } = seed();
     const sandbox = fakeSandboxProvider({
-      files: { ...SANDBOX_FILES, "product/.git/config": "[remote]\n  url = https://x:token@github.com" },
+      files: {
+        ...SANDBOX_FILES,
+        "product/.git/config": "[remote]\n  url = https://x:token@github.com",
+      },
       // `rm -f` reports success whether or not it removed anything, so the
       // scrub is verified rather than inferred. This is the case where it
       // survives.
       unremovablePaths: ["product/.git/config"],
     });
 
-    const outcome = await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    const outcome = await provisionAgentWorkspaceStep(
+      deps({ sandboxProvider: sandbox }),
+      operation.id,
+    );
 
     expect(outcome).toEqual({ ok: false, failureCode: "credential_scrub_failed" });
   });
@@ -522,7 +588,6 @@ describe("§37 — the paid loop runs at most once", () => {
    * this asserted have not existed for any real run. What a run did is in
    * `agent_execution_events`, from the harness's own feed.
    */
-
 });
 
 describe("§25 — a question pauses the run", () => {
@@ -1143,7 +1208,7 @@ describe("the sandbox-hosted harness", () => {
         },
       },
       [TOUCHED]: { exitCode: 0, output: options.touched.map((path) => `${path}\0`).join("") },
-      "pwd": { exitCode: 0, output: `${HOME}\n` },
+      pwd: { exitCode: 0, output: `${HOME}\n` },
     };
   }
 
@@ -1306,7 +1371,10 @@ describe("the sandbox-hosted harness", () => {
     const { operation } = seed();
     const sandbox = fakeSandboxProvider({
       files: SANDBOX_FILES,
-      results: { ...walk({ before: [], after: [], touched: [] }), [LIST]: { exitCode: 1, output: "" } },
+      results: {
+        ...walk({ before: [], after: [], touched: [] }),
+        [LIST]: { exitCode: 1, output: "" },
+      },
     });
     const provider = fakeDetachedAgentProvider();
     const deps = sandboxRuntimeDeps(provider, sandbox);

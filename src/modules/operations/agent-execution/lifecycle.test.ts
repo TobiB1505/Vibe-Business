@@ -409,7 +409,9 @@ describe("a run nothing is carrying any more", () => {
       expired: false,
     });
 
-    expect(db.rows("agent_execution_runs").find((row) => row.id === run.id)?.status).toBe("running");
+    expect(db.rows("agent_execution_runs").find((row) => row.id === run.id)?.status).toBe(
+      "running",
+    );
     expect(db.rows("billing_credit_reservations")[0].status).toBe("active");
   });
 

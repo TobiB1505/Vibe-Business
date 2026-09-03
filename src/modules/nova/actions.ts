@@ -26,14 +26,17 @@ import type { RetailOperationKind } from "../credits/retail";
  * last "start a comparison" action deliberately, because a preview *is* the
  * review now. A `navigation` control is the honest shape for both.
  *
- * ## One id has nothing behind it yet
+ * ## Every id is bound
  *
- * `nova.choose_workspace` is `unbound`: `chooseWorkspaceRootAction` exists on
- * the Stage 4 branch and not at HEAD. That is recorded here rather than
- * quietly omitted, and it is safe because the fact that raises the candidate
- * (`workspaceChoiceRequired`) is likewise still false in `read.ts` — a test
- * below holds those two facts together, so the day one of them moves without
- * the other, the build says so.
+ * `nova.choose_workspace` was `unbound` until Stage 4 merged and brought
+ * `chooseWorkspaceRootAction` to HEAD. The `unbound` variant stays in the type
+ * because the situation it names recurs — an id worth cataloguing before its
+ * action exists — and because recording the gap is what let a test catch the
+ * moment it closed.
+ *
+ * The candidate behind it still cannot be raised: `read.ts` fixes
+ * `workspaceChoiceRequired` at false until it can answer the question without
+ * a network call. A bound control nothing offers yet is the honest state.
  */
 
 /**
@@ -240,12 +243,20 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
     requiresConfirmation: false,
   },
   "nova.choose_workspace": {
-    control: "unbound",
+    /*
+     * Bound since Stage 4 merged. It was `unbound` while
+     * `chooseWorkspaceRootAction` lived only on a branch, and the pairing test
+     * that held that claim beside `read.ts`'s is what made the staleness
+     * visible the moment the branch landed rather than months later.
+     *
+     * Free and reversible: choosing which application Vibe works on starts
+     * nothing and can be chosen again.
+     */
+    control: "server_action",
     label: "Choose which app",
     price: null,
     consequential: false,
     requiresConfirmation: false,
-    unboundReason: "chooseWorkspaceRootAction lands with Stage 4; no such export exists at HEAD.",
   },
   "nova.rescan_product": {
     control: "server_action",

@@ -11,6 +11,7 @@ import {
 } from "@/app/app/onboarding/[projectId]/actions";
 
 import { resolveAgentInterruptAction } from "./agent/interrupt-actions";
+import { chooseWorkspaceRootAction } from "./agent/workspace-actions";
 import { startAgentRunAction } from "./agent-dogfood/[stepKey]/actions";
 import { resolveFounderInputAction } from "./founder-input-action";
 import { mergeApprovedChangeAction } from "./merge-actions";
@@ -123,7 +124,7 @@ export const NOVA_ACTIONS: Record<NovaActionId, NovaActionBinding> = {
    * put a 150-to-350-Credit restart behind a control the catalog calls free.
    */
   "nova.answer_agent_question": { control: "server_action", action: resolveAgentInterruptAction },
-  "nova.choose_workspace": { control: "unbound" },
+  "nova.choose_workspace": { control: "server_action", action: chooseWorkspaceRootAction },
   "nova.rescan_product": { control: "server_action", action: startUnderstandingAction },
   "nova.start_agent": { control: "server_action", action: startAgentRunAction },
   "nova.verify_outcome": { control: "server_action", action: checkProductionOutcomeAction },

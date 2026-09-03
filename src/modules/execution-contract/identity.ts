@@ -125,9 +125,7 @@ export function computeExecutionSpecIdentity(params: {
    */
   const chain = params.chainStepKeys ?? [];
   const canonical = JSON.stringify(
-    chain.length > 1
-      ? [...base, [params.chainPolicyVersion ?? null, chain]]
-      : base,
+    chain.length > 1 ? [...base, [params.chainPolicyVersion ?? null, chain]] : base,
   );
 
   return createHash("sha256").update(canonical).digest("hex");

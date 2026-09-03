@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { FakeDatabase, fakeSupabase } from "@/modules/authenticated-product-intelligence/test-support";
+import {
+  FakeDatabase,
+  fakeSupabase,
+} from "@/modules/authenticated-product-intelligence/test-support";
 import { getSnapshotById } from "./store";
 
 /**
@@ -38,7 +41,10 @@ function seeded() {
 
 describe("getSnapshotById", () => {
   it("returns the snapshot when the project owns it", async () => {
-    const snapshot = await getSnapshotById(seeded(), { snapshotId: "snapshot_1", projectId: PROJECT });
+    const snapshot = await getSnapshotById(seeded(), {
+      snapshotId: "snapshot_1",
+      projectId: PROJECT,
+    });
 
     expect(snapshot?.id).toBe("snapshot_1");
   });
@@ -46,13 +52,19 @@ describe("getSnapshotById", () => {
   it("refuses a snapshot belonging to another project", async () => {
     // The mutation this exists for: dropping the ownership predicate would let
     // a preparation generate code from a different tenant's route intelligence.
-    const snapshot = await getSnapshotById(seeded(), { snapshotId: "snapshot_other", projectId: PROJECT });
+    const snapshot = await getSnapshotById(seeded(), {
+      snapshotId: "snapshot_other",
+      projectId: PROJECT,
+    });
 
     expect(snapshot).toBeNull();
   });
 
   it("ignores a snapshot that never completed", async () => {
-    const snapshot = await getSnapshotById(seeded(), { snapshotId: "snapshot_running", projectId: PROJECT });
+    const snapshot = await getSnapshotById(seeded(), {
+      snapshotId: "snapshot_running",
+      projectId: PROJECT,
+    });
 
     expect(snapshot).toBeNull();
   });

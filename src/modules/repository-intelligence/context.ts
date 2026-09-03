@@ -84,12 +84,16 @@ export function buildDetectionContext(
     // Other manifests are matched textually rather than fully parsed:
     // detecting a declared dependency does not require a TOML/INI parser,
     // and avoiding one keeps the dependency surface small.
-    if (PYTHON_MANIFESTS.has(basename) || ["composer.json", "Gemfile", "go.mod", "Cargo.toml"].includes(basename)) {
+    if (
+      PYTHON_MANIFESTS.has(basename) ||
+      ["composer.json", "Gemfile", "go.mod", "Cargo.toml"].includes(basename)
+    ) {
       textManifests.push({ path: file.path, content: file.content.toLowerCase() });
     }
   }
 
-  const rootPackageJson = packageJsons.find((entry) => entry.path === "package.json")?.parsed ?? null;
+  const rootPackageJson =
+    packageJsons.find((entry) => entry.path === "package.json")?.parsed ?? null;
 
   const allNodeDependencies = new Set<string>();
   for (const { parsed } of packageJsons) {
@@ -120,11 +124,15 @@ export function hasNodeDependency(context: DetectionContext, name: string): bool
 
 /** The path of the first package.json declaring `name`, for evidence. */
 export function nodeDependencySource(context: DetectionContext, name: string): string | null {
-  return context.packageJsons.find((entry) => entry.parsed.allDependencies.includes(name))?.path ?? null;
+  return (
+    context.packageJsons.find((entry) => entry.parsed.allDependencies.includes(name))?.path ?? null
+  );
 }
 
 /** True when a non-Node manifest mentions `token` (already lowercased). */
 export function textManifestMentions(context: DetectionContext, token: string): string | null {
-  const match = context.textManifests.find((manifest) => manifest.content.includes(token.toLowerCase()));
+  const match = context.textManifests.find((manifest) =>
+    manifest.content.includes(token.toLowerCase()),
+  );
   return match ? match.path : null;
 }

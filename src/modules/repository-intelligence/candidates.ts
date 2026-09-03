@@ -113,9 +113,18 @@ const PATTERN_RULES: { pattern: RegExp; rule: Rule }[] = [
   { pattern: /^remix\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 1, fetchContent: false } },
   // Fetched from CORE-1 onwards: a Tailwind config is where a project that
   // does not use CSS custom properties declares its palette instead.
-  { pattern: /^tailwind\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 3, fetchContent: true } },
-  { pattern: /^drizzle\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 2, fetchContent: false } },
-  { pattern: /^docker-compose(\.[\w-]+)?\.(yml|yaml)$/i, rule: { priority: 2, fetchContent: false } },
+  {
+    pattern: /^tailwind\.config\.(js|cjs|mjs|ts|mts)$/i,
+    rule: { priority: 3, fetchContent: true },
+  },
+  {
+    pattern: /^drizzle\.config\.(js|cjs|mjs|ts|mts)$/i,
+    rule: { priority: 2, fetchContent: false },
+  },
+  {
+    pattern: /^docker-compose(\.[\w-]+)?\.(yml|yaml)$/i,
+    rule: { priority: 2, fetchContent: false },
+  },
   { pattern: /^readme(\.[\w]+)?$/i, rule: { priority: 2, fetchContent: false } },
   { pattern: /^license(\.[\w]+)?$/i, rule: { priority: 3, fetchContent: false } },
 ];
@@ -168,7 +177,10 @@ export type CandidateSelection = {
  * sensitive, binary and generated paths can never reach a fetch — the
  * budget trim happens afterwards and cannot reintroduce them.
  */
-export function selectCandidates(entries: TreeEntry[], budgets: AnalysisBudgets): CandidateSelection {
+export function selectCandidates(
+  entries: TreeEntry[],
+  budgets: AnalysisBudgets,
+): CandidateSelection {
   const discovered: Candidate[] = [];
   const fetchable: Candidate[] = [];
 

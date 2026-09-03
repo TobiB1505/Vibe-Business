@@ -3,10 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { createSandboxCodingAgentProvider } from "@/modules/coding-agent/sandbox-runtime/provider";
 import { mintInstallationCloneCredential } from "@/modules/github/installation-token";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
-import {
-  createExecutionProbe,
-  createGithubGitWritePort,
-} from "@/modules/execution/github/adapter";
+import { createExecutionProbe, createGithubGitWritePort } from "@/modules/execution/github/adapter";
 import { getProjectWithRepository } from "@/modules/projects/queries";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import type { AgentCheckName } from "@/modules/coding-agent/schema";
@@ -331,10 +328,7 @@ export async function agentExecutionWorkflow(operationId: string) {
         else if (watched.expired) failureCode = "agent_wall_clock_exceeded";
       }
 
-      const agent =
-        failureCode === null && !paused
-          ? await collectAgent(operationId)
-          : null;
+      const agent = failureCode === null && !paused ? await collectAgent(operationId) : null;
 
       if (agent === null) {
         // Already failed above; fall through to cleanup.

@@ -1,3 +1,4 @@
+import type { BuildIntelligence, BuildTargetLockfile, PackageManagerId } from "./schema";
 import { buildDetectionContext, type DetectionContext } from "./context";
 import type { RepositoryHead, RepositoryReader, RepositoryTree, TreeEntry } from "./reader";
 
@@ -57,7 +58,9 @@ export class FakeRepositoryReader implements RepositoryReader {
     this.entries = treeFrom(options.files);
     this.files = new Map(
       options.files
-        .filter((file): file is FixtureFile & { content: string } => typeof file.content === "string")
+        .filter(
+          (file): file is FixtureFile & { content: string } => typeof file.content === "string",
+        )
         .map((file) => [file.path, file.content]),
     );
   }
@@ -84,4 +87,53 @@ export class FakeRepositoryReader implements RepositoryReader {
 
 export function packageJson(fields: Record<string, unknown>): string {
   return JSON.stringify(fields);
+}
+
+/**
+ * A `BuildIntelligence` for tests that need a snapshot to describe one app.
+ *
+ * Derived from the same overrides a fixture already takes — frameworks and
+ * package manager — so a test that says "this repository uses yarn" keeps
+ * meaning that after the profile resolver started reading build targets
+ * instead of the repository-wide fields.
+ */
+export function fakeBuildIntelligence(
+  overrides: {
+    directory?: string;
+    packageManager?: PackageManagerId;
+    frameworks?: readonly string[];
+    buildScript?: boolean;
+    declaresWorkspaces?: boolean;
+  } = {},
+): BuildIntelligence {
+  const directory = overrides.directory ?? ".";
+  const packageManager = overrides.packageManager ?? "pnpm";
+
+  const lockfiles: Record<PackageManagerId, BuildTargetLockfile | null> = {
+    pnpm: { path: "pnpm-lock.yaml", packageManager: "pnpm", inTargetDirectory: true },
+    npm: { path: "package-lock.json", packageManager: "npm", inTargetDirectory: true },
+    yarn: { path: "yarn.lock", packageManager: "yarn_classic", inTargetDirectory: true },
+    bun: { path: "bun.lock", packageManager: "bun", inTargetDirectory: true },
+    unknown: null,
+  };
+
+  const lockfile = lockfiles[packageManager];
+
+  return {
+    targets: [
+      {
+        directory,
+        manifestPath: directory === "." ? "package.json" : `${directory}/package.json`,
+        buildScript: overrides.buildScript ?? true,
+        frameworks: [...(overrides.frameworks ?? ["nextjs", "react"])],
+        lockfile:
+          lockfile && directory !== "."
+            ? { ...lockfile, path: `${directory}/${lockfile.path}` }
+            : lockfile,
+        declaresWorkspaces: overrides.declaresWorkspaces ?? false,
+        moduleLinker: null,
+      },
+    ],
+    truncated: false,
+  };
 }

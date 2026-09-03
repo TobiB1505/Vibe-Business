@@ -128,34 +128,56 @@ test.describe("signature Business Brain", () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
 
-    const offerBox = await lens(page, /^offer,/i).boundingBox();
-    const scalabilityBox = await lens(page, /^scalability,/i).boundingBox();
-    expect(Math.abs(offerBox!.width - scalabilityBox!.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(offerBox!.height - scalabilityBox!.height)).toBeLessThanOrEqual(1);
+    /*
+     * Retried until the layout settles, because `boundingBox()` does not wait
+     * for one. The map animates in, so a single sample taken while the entrance
+     * is still running measures a frame rather than the design — which is what
+     * made this test fail under a loaded parallel run and pass alone, three
+     * times in one session. The assertion is unchanged; only the moment it is
+     * taken is. A footprint that genuinely differs still fails, at the timeout.
+     */
+    await expect(async () => {
+      const offerBox = await lens(page, /^offer,/i).boundingBox();
+      const scalabilityBox = await lens(page, /^scalability,/i).boundingBox();
+      expect(Math.abs(offerBox!.width - scalabilityBox!.width)).toBeLessThanOrEqual(1);
+      expect(Math.abs(offerBox!.height - scalabilityBox!.height)).toBeLessThanOrEqual(1);
+    }).toPass();
   });
 
   test("keeps every planet evenly spaced around the orbit", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
 
-    const orbit = await Promise.all(
-      ["Offer", "Audience", "Acquisition", "Conversion", "Revenue & Economics", "Business Readiness", "Retention", "Measurement", "Scalability"].map(
-        async (name) => (await lens(page, new RegExp(`^${name},`, "i")).boundingBox())!,
-      ),
-    );
-
-    const distances = orbit.map((current, index) => {
-      const next = orbit[(index + 1) % orbit.length];
-      const centerDistance = Math.hypot(
-        current.x + current.width / 2 - (next.x + next.width / 2),
-        current.y + current.height / 2 - (next.y + next.height / 2),
+    // Same reason as the footprint test above: measured once the layout has
+    // stopped moving, rather than at whatever frame `goto` happens to return on.
+    await expect(async () => {
+      const orbit = await Promise.all(
+        [
+          "Offer",
+          "Audience",
+          "Acquisition",
+          "Conversion",
+          "Revenue & Economics",
+          "Business Readiness",
+          "Retention",
+          "Measurement",
+          "Scalability",
+        ].map(async (name) => (await lens(page, new RegExp(`^${name},`, "i")).boundingBox())!),
       );
-      const visibleGap = centerDistance - (current.width + next.width) / 2;
-      expect(visibleGap).toBeGreaterThan(34);
-      return centerDistance;
-    });
 
-    expect(Math.max(...distances) - Math.min(...distances)).toBeLessThanOrEqual(3);
+      const distances = orbit.map((current, index) => {
+        const next = orbit[(index + 1) % orbit.length];
+        const centerDistance = Math.hypot(
+          current.x + current.width / 2 - (next.x + next.width / 2),
+          current.y + current.height / 2 - (next.y + next.height / 2),
+        );
+        const visibleGap = centerDistance - (current.width + next.width) / 2;
+        expect(visibleGap).toBeGreaterThan(34);
+        return centerDistance;
+      });
+
+      expect(Math.max(...distances) - Math.min(...distances)).toBeLessThanOrEqual(3);
+    }).toPass();
   });
 
   test("keeps unsupported per-lens history honest in the selected focus view", async ({

@@ -88,7 +88,7 @@ describe("proposed change acceptance (§32)", () => {
 
   it("reports every reason a change was refused rather than the first", () => {
     const result = acceptProposedChange(spec(), [
-      { path: ".env.production", content: 'STRIPE=sk_live_51HxYzAbCdEfGhIjKlMnO' },
+      { path: ".env.production", content: "STRIPE=sk_live_51HxYzAbCdEfGhIjKlMnO" },
     ]);
 
     expect(result.accepted).toBe(false);

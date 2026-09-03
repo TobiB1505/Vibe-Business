@@ -1,6 +1,6 @@
 # 0045 - The project workspace is a command center, not an admin panel
 
-Status: Accepted; the rail's membership amended again by [0079](0079-nova-is-the-project-home.md) — Home becomes Nova and Business Health returns as its own destination, restoring the seven this ADR chose
+Status: Accepted; the rail's membership amended again by [0083](0083-nova-is-the-project-home.md) — Home becomes Nova and Business Health returns as its own destination, restoring the seven this ADR chose
 
 Date: 2026-08-23
 

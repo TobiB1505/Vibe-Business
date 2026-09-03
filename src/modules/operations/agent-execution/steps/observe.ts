@@ -7,10 +7,16 @@ import {
   loadAgentRunContext,
 } from "./shared";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { discoverWorkspaceChanges, readWorkspaceBaseline } from "@/modules/coding-agent/sandbox-runtime/changes";
+import {
+  discoverWorkspaceChanges,
+  readWorkspaceBaseline,
+} from "@/modules/coding-agent/sandbox-runtime/changes";
 import { MAX_EVENTS_PER_RUN } from "@/modules/coding-agent/observability/events";
 import { eventsFromRuntimeFeed } from "@/modules/coding-agent/observability/runtime-feed";
-import { listExecutionEvents, recordExecutionEvents } from "@/modules/coding-agent/observability/store";
+import {
+  listExecutionEvents,
+  recordExecutionEvents,
+} from "@/modules/coding-agent/observability/store";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import { loadExecutionBrief } from "@/modules/execution-context/service";
 import { summarizeContextUsage } from "@/modules/execution-context/usage";
@@ -98,7 +104,8 @@ export async function pollAgentStep(
       console.error("[agent-observability] the runtime feed could not be recorded", {
         operationId,
         agentExecutionRunId: context.run.id,
-        detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
+        detail:
+          error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
       });
     }
   }
@@ -358,7 +365,6 @@ export async function collectAgentStep(
 
   return { ok: true, paused: false, observedPathCount, changedPaths };
 }
-
 
 /* ---------------------------------------------------------------------------
  * What the briefing was worth (EXECUTION CONTEXT INTELLIGENCE, PART L, PART M)
@@ -661,9 +667,7 @@ async function recordVerificationOutcome(
     };
 
     const postEdit = events.filter(after);
-    const completionRefusals = events.filter(
-      (event) => event.type === "completion_action_refused",
-    );
+    const completionRefusals = events.filter((event) => event.type === "completion_action_refused");
 
     await recordAgentRunObservations(deps.supabase, run.id, {
       verificationCommands: harnessChecks ?? checks.length,

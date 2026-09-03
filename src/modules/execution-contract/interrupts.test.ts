@@ -96,11 +96,14 @@ describe("interrupt answers (§21)", () => {
 
   it("rejects text past the stated ceiling", () => {
     expect(
-      isValidInterruptAnswer({ kind: "text", maxLength: 10 }, { kind: "text", value: "far too long" }),
+      isValidInterruptAnswer(
+        { kind: "text", maxLength: 10 },
+        { kind: "text", value: "far too long" },
+      ),
     ).toBe(false);
-    expect(isValidInterruptAnswer({ kind: "text", maxLength: 10 }, { kind: "text", value: "  " })).toBe(
-      false,
-    );
+    expect(
+      isValidInterruptAnswer({ kind: "text", maxLength: 10 }, { kind: "text", value: "  " }),
+    ).toBe(false);
   });
 });
 
@@ -146,7 +149,14 @@ describe("an answer becomes structured business context (§28)", () => {
 describe("no chain-of-thought (§34, Rule 43)", () => {
   it("has no field on an interrupt that could carry model reasoning", () => {
     const interrupt = fakeInterrupt() as unknown as Record<string, unknown>;
-    for (const forbidden of ["reasoning", "thinking", "rationale", "transcript", "trace", "messages"]) {
+    for (const forbidden of [
+      "reasoning",
+      "thinking",
+      "rationale",
+      "transcript",
+      "trace",
+      "messages",
+    ]) {
       expect(interrupt).not.toHaveProperty(forbidden);
     }
   });

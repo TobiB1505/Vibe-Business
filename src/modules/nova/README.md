@@ -4,12 +4,12 @@ Nova is the guided experience layer over the systems Vibe already has. Its
 architecture, and the evidence for it, is [the Nova audit](../../../docs/audits/2026-09-03-nova-architecture-audit/README.md);
 its founder amendments are §O of the same record. The voice model and its
 prompt are decided by measurement, not argument — see §P and §Q of the audit,
-and [ADR 0078](../../../docs/decisions/0078-nova-voice-is-measured-not-argued.md).
+and [ADR 0082](../../../docs/decisions/0082-nova-voice-is-measured-not-argued.md).
 
 **Nova speaks on the onboarding route and nowhere else yet.**
 `/app/onboarding/[projectId]` renders her introduction, the walkthrough she
 offers once, and the sentences above the scan and the reveal. The project Home
-is still Business Health — [ADR 0079](../../../docs/decisions/0079-nova-is-the-project-home.md)
+is still Business Health — [ADR 0083](../../../docs/decisions/0083-nova-is-the-project-home.md)
 records that it will not stay that way, and `deriveNovaFocus` is built and
 tested with nothing mounting it. No usage event is written for Nova at all:
 `nova_presentation` is on the operation union for ledger-key consistency and
@@ -65,9 +65,11 @@ first. It holds no function — every Server Action in this codebase lives under
 `src/app/app/projects/[projectId]/nova-actions.ts` as a total Record of real
 references, which makes a renamed or deleted action a build failure.
 
-Two ids are addresses rather than actions (`review_change`, `view_move`), and
-one has nothing behind it at HEAD (`choose_workspace`), recorded as `unbound`
-so nothing offers it.
+Two ids are addresses rather than actions (`review_change`, `view_move`).
+Every other id is bound: `choose_workspace` was `unbound` until Stage 4 merged
+and brought `chooseWorkspaceRootAction` to HEAD, and the pair of tests either
+side of the layer boundary turned that landing into a failing build rather
+than a stale sentence.
 
 All of Nova's copy — the sentences in `feed.ts`, the labels and confirmation
 notes in `actions.ts` — is data rather than JSX. That is what makes the
@@ -144,7 +146,7 @@ subset against the founder's acceptance line — `grounded`/`no_invention` ≥
 the line, it does not enforce it.
 
 `nova-voice-prompt-v4` is the shipping prompt, closing the exclusivity and
-sequencing invention `v3` still had on Sonnet 5 (ADR 0078's amendment). Its
+sequencing invention `v3` still had on Sonnet 5 (ADR 0082's amendment). Its
 last full measurement ran 60 of 76 cases before a temporary key was revoked
 mid-run; the founder accepted that partial result rather than completing it.
 

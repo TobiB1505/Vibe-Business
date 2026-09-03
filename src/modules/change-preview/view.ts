@@ -1,4 +1,9 @@
-import { isPreviewExpired, type PreviewFailureCode, type PreviewSession, type PreviewStage } from "./schema";
+import {
+  isPreviewExpired,
+  type PreviewFailureCode,
+  type PreviewSession,
+  type PreviewStage,
+} from "./schema";
 
 /**
  * What a preview looks like to a user (Sprint 10B-3 §2, §3, §8, §14).

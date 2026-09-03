@@ -43,8 +43,22 @@ describe("every control is bound", () => {
     }
   });
 
-  it("binds the one unbound id to nothing", () => {
-    expect(BINDINGS).toMatch(/"nova\.choose_workspace":\s*\{\s*control:\s*"unbound"\s*\}/);
+  /**
+   * Bound since Stage 4 merged. While it was `unbound` this asserted the
+   * opposite, and the pair of tests either side of the layer boundary is what
+   * turned the branch landing into a failing build rather than a stale
+   * sentence in a catalog.
+   */
+  it("binds the workspace choice to the action Stage 4 brought", () => {
+    expect(BINDINGS).toContain("chooseWorkspaceRootAction");
+
+    /*
+     * Scoped to the table, not the file: `NovaActionBinding` still declares an
+     * `unbound` variant, deliberately, because the situation it names recurs.
+     * What must not exist is an entry using it.
+     */
+    const table = BINDINGS.slice(BINDINGS.indexOf("export const NOVA_ACTIONS"));
+    expect(table.slice(0, table.indexOf("\n};"))).not.toContain('control: "unbound"');
   });
 });
 

@@ -329,4 +329,3 @@ export async function completeReviewArtifact(
   if (error) throw error;
   return (data ?? []).length > 0;
 }
-

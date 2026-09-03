@@ -96,7 +96,7 @@ export type NovaPresentation = { message: string };
  * - v3 — closed the inventions the first eval pilot found on Haiku 4.5
  *   (invented causes, invented effort judgements, invented claims of work).
  *   Measured over 46 cases: Haiku `grounded` 41%, `no_invention` 39%;
- *   Sonnet 5 on the identical prompt, 72% and 78% (ADR 0078).
+ *   Sonnet 5 on the identical prompt, 72% and 78% (ADR 0082).
  * - v4 — written against Sonnet 5's *own* residual failures on v3, found by
  *   reading its transcripts rather than by guessing: third-person
  *   self-reference ("the move Vibe has identified"), citing the payload as a
@@ -116,7 +116,7 @@ export type NovaPresentation = { message: string };
  *   claim the payload never made ("the one blocker I found", "that's where I'd
  *   start"), closed with a rule naming the exact phrases, alongside an
  *   `outcome_result` slot brief that had been asserting an unstated "merged"
- *   event as fact. Measured over the resulting prompt (ADR 0078's amendment):
+ *   event as fact. Measured over the resulting prompt (ADR 0082's amendment):
  *   `no_invention` on the critical subset rose from 80% to 92.5%; the run was
  *   cut short at 60 of 76 cases by a revoked API key, and the founder accepted
  *   the partial result rather than completing it. See `eval/cases.ts`'s

@@ -1,4 +1,9 @@
-import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import { fakeBuildIntelligence } from "@/modules/repository-intelligence/test-support";
+import type {
+  BuildIntelligence,
+  PackageManagerId,
+  RepositoryIntelligenceSnapshot,
+} from "@/modules/repository-intelligence/schema";
 import {
   buildSatisfiesProfile,
   provisionSandbox,
@@ -132,6 +137,17 @@ export type FakeSandboxOptions = {
   healthStatus?: number | null;
   /** Probes that fail before `healthStatus` starts being returned. */
   healthFailingProbes?: number;
+  /**
+   * Model a Vite-style host gate: 403 for a named host, `healthStatus` for none.
+   *
+   * Derived from what Vite actually does rather than stubbed to a code. Its
+   * check allows every IP literal unconditionally, so a probe with no `Host`
+   * override — one asking as `127.0.0.1` — is always let through, while one
+   * carrying the sandbox's public hostname is refused. That asymmetry *is* the
+   * defect the real probe exists to catch, so a fake that answered both alike
+   * could not test it.
+   */
+  healthHostGated?: true;
   /** Make `publicOrigin` throw, for the provider-has-no-route path. */
   failPublicOrigin?: boolean;
   /** Make `deleteArtifact` throw, for the cleanup-failure path. */
@@ -244,9 +260,7 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
     // `find`'s `-path` glob: `*` matches any run of characters, `/` included.
     const prunedPaths = [...command.matchAll(/-path (\S+)/g)].map(
       (match) =>
-        new RegExp(
-          `^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
-        ),
+        new RegExp(`^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
     );
     const newer = /-newer (\S+)/.exec(command);
     const since = newer ? (writtenAt.get(newer[1]) ?? 0) : 0;
@@ -368,6 +382,14 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         if (stillWarming || status === null) {
           return { exitCode: 7, durationMs: 5, output: "", timedOut: false };
         }
+
+        // Read off the command, so a probe that stopped sending the header
+        // would stop seeing the gate — which is the regression this models.
+        const named = input.command.args.some((arg) => arg.startsWith("Host: "));
+        if (options.healthHostGated && named) {
+          return { exitCode: 0, durationMs: 5, output: "403", timedOut: false };
+        }
+
         return { exitCode: 0, durationMs: 5, output: String(status), timedOut: false };
       }
 
@@ -475,9 +497,10 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
       const argument = input.command.args.at(-1) ?? "";
       if (input.command.command === "rm" && argument.endsWith(".git")) {
-        const removed = argument.startsWith("/") || input.cwd === "." || input.cwd === ""
-          ? argument
-          : `${input.cwd}/${argument}`;
+        const removed =
+          argument.startsWith("/") || input.cwd === "." || input.cwd === ""
+            ? argument
+            : `${input.cwd}/${argument}`;
 
         for (const path of Object.keys(files)) {
           if (path !== removed && !path.startsWith(`${removed}/`)) continue;
@@ -647,7 +670,9 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     policies() {
       const created = events.find((event) => event.kind === "create");
-      const applied = events.filter((event) => event.kind === "policy").map((event) => event.policy);
+      const applied = events
+        .filter((event) => event.kind === "policy")
+        .map((event) => event.policy);
       return created ? [created.input.networkPolicy, ...applied] : applied;
     },
 
@@ -710,7 +735,8 @@ export function healthySandboxFiles(
       scripts: { build: "next build", test: "vitest run", typecheck: "tsc --noEmit" },
     }),
     "product/pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
-    "product/.git/config": "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n",
+    "product/.git/config":
+      '[remote "origin"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n',
   };
 
   for (const [path, content] of Object.entries(overrides)) {
@@ -832,19 +858,36 @@ export async function runValidationPhases(
 export function fakeValidatableSnapshot(
   overrides: {
     frameworks?: { id: string; name: string }[];
-    packageManager?: string;
+    packageManager?: PackageManagerId;
     monorepo?: { detected?: boolean; ambiguous?: boolean };
+    /**
+     * The build targets, when a test is about them.
+     *
+     * `null` models a snapshot written before the analyzer detected them —
+     * which is a different thing from a repository with no application, and
+     * the resolver has to say so.
+     */
+    build?: BuildIntelligence | null;
   } = {},
 ): RepositoryIntelligenceSnapshot {
   const frameworks = overrides.frameworks ?? [{ id: "nextjs", name: "Next.js" }];
 
   return {
     schemaVersion: "repository_intelligence.v1",
-    source: { branch: "main", commitSha: FIXTURE_COMMIT_SHA, treeComplete: true, analyzerVersion: "repo-intelligence-v2" },
+    source: {
+      branch: "main",
+      commitSha: FIXTURE_COMMIT_SHA,
+      treeComplete: true,
+      analyzerVersion: "repo-intelligence-v2",
+    },
     repository: { private: false, fullName: "acme/product", defaultBranch: "main" },
     packageManager: overrides.packageManager ?? "pnpm",
     languages: [],
-    frameworks: frameworks.map((framework) => ({ ...framework, evidence: [], confidence: "high" as const })),
+    frameworks: frameworks.map((framework) => ({
+      ...framework,
+      evidence: [],
+      confidence: "high" as const,
+    })),
     runtime: [],
     integrationSignals: [],
     businessSurfaces: [],
@@ -862,8 +905,26 @@ export function fakeValidatableSnapshot(
       totalTreeEntries: 160,
       topLevelDirectories: ["src"],
     },
-    metrics: { durationMs: 400, bytesFetched: 1000, filesFetched: 1, candidatesSelected: 20, treeEntriesConsidered: 160 },
+    scripts: { declared: ["build", "test", "typecheck"], source: "package.json" },
+    ...(overrides.build === null
+      ? {}
+      : {
+          build:
+            overrides.build ??
+            fakeBuildIntelligence({
+              packageManager: overrides.packageManager,
+              frameworks: frameworks.map((framework) => framework.id),
+            }),
+        }),
+    brand: { assets: [], colors: [], typefaces: [], tokenSources: [] },
+    metrics: {
+      durationMs: 400,
+      bytesFetched: 1000,
+      filesFetched: 1,
+      candidatesSelected: 20,
+      treeEntriesConsidered: 160,
+    },
     completeness: { status: "complete", reasons: [] },
     warnings: [],
-  } as unknown as RepositoryIntelligenceSnapshot;
+  };
 }
