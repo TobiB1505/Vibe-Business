@@ -85,6 +85,21 @@ export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> 
   repository_snapshot_missing: "Vibe hasn't read your code yet.",
   validation_profile_unsupported:
     "Vibe can't independently prove a change to this project builds, so it won't make one.",
+  // Each names the missing thing and, where there is one, the move that fixes
+  // it. "Vibe can't prove a change builds" is true of all of them and useful
+  // for none.
+  no_node_project:
+    "Vibe checks a change by running your project's own build, and this project has no package.json — so there's nothing to check a change against.",
+  no_build_script:
+    "Your package.json has no build script, so Vibe has no way to tell whether a change still works.",
+  no_lockfile:
+    "There's no lockfile beside your app, so Vibe can't install exactly what you committed.",
+  package_manager_unsupported:
+    "Vibe found a lockfile it won't install from exactly. Yarn 1's locked install doesn't reliably fail on a dependency the lockfile doesn't know — Yarn 3 or later works.",
+  workspace_choice_required:
+    "This repository holds more than one app. Tell Vibe which one to work on.",
+  repository_analysis_outdated:
+    "Vibe's read of your code predates this check. Refresh it and Vibe will know what it can do here.",
 };
 
 /**

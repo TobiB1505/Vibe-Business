@@ -363,7 +363,7 @@ describe("the fix changes dependency semantics and nothing else", () => {
     });
 
     expect(unvalidatable[2].mode).toBe("unsupported");
-    expect(unvalidatable[2].unmetRequirements).toContain("validation_profile_unsupported");
+    expect(unvalidatable[2].unmetRequirements).toContain("no_lockfile");
     expect(unvalidatable[2].absorbedPreparation).toEqual([]);
   });
 
@@ -389,7 +389,7 @@ describe("the fix changes dependency semantics and nothing else", () => {
     expect(unvalidatable[2].mode).toBe("blocked");
     expect(unvalidatable[2].intrinsicMode).toBe("unsupported");
     expect(unvalidatable[2].absorbedPreparation).toEqual([]);
-    expect(unvalidatable[2].unmetRequirements).toContain("validation_profile_unsupported");
+    expect(unvalidatable[2].unmetRequirements).toContain("no_lockfile");
   });
 
   it("still refuses when the repository has moved since the snapshot", () => {

@@ -58,6 +58,8 @@ export type WorkspaceCandidate = {
   packageManager: SupportedPackageManager;
   /** Framework ids from this application's own manifest. */
   frameworks: readonly string[];
+  /** Yarn's module resolution, which decides whether a preview can start. */
+  moduleLinker: BuildTarget["moduleLinker"];
 };
 
 export type ProfileResolution =
@@ -187,6 +189,7 @@ export function resolveValidationProfile(
         workspaceRoot: target.directory,
         packageManager,
         frameworks: target.frameworks,
+        moduleLinker: target.moduleLinker,
       })),
     };
   }

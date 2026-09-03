@@ -169,7 +169,10 @@ describe("execution resolver — agentic fallback (§20, §43)", () => {
     );
 
     expect(resolution.mode).toBe("unsupported");
-    expect(resolution.unmetRequirements).toContain("validation_profile_unsupported");
+    // Named, not general: a Python service has no build to check a change
+    // against, which is a different thing to tell a founder than "Vibe cannot
+    // prove a change builds".
+    expect(resolution.unmetRequirements).toContain("no_node_project");
   });
 
   it("refuses agentic when no repository is connected", () => {

@@ -13,7 +13,7 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { resolveDepthForPreparedChange } from "./depth-inputs";
 import { computeValidationIdentity } from "./identity";
-import { resolveValidationProfile } from "./profile";
+import { resolveProjectValidationTarget } from "./workspace-store";
 import {
   SANDBOX_POLICY_VERSION,
   validationProfileVersionFor,
@@ -117,7 +117,10 @@ async function resolveContext(
   const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
   if (!snapshot?.result) return { ok: false, error: "validation_not_supported" };
 
-  const profile = resolveValidationProfile(snapshot.result);
+  const profile = await resolveProjectValidationTarget(supabase, {
+    projectId: params.projectId,
+    snapshot: snapshot.result,
+  });
   if (!profile.supported) return { ok: false, error: profile.reason };
 
   /*

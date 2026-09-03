@@ -256,8 +256,18 @@ describe("more than one application", () => {
       supported: false,
       reason: "workspace_choice_required",
       candidates: [
-        { workspaceRoot: "apps/api", packageManager: "pnpm", frameworks: ["express"] },
-        { workspaceRoot: "apps/web", packageManager: "pnpm", frameworks: ["vite"] },
+        {
+          workspaceRoot: "apps/api",
+          packageManager: "pnpm",
+          frameworks: ["express"],
+          moduleLinker: null,
+        },
+        {
+          workspaceRoot: "apps/web",
+          packageManager: "pnpm",
+          frameworks: ["vite"],
+          moduleLinker: null,
+        },
       ],
     });
   });

@@ -17,7 +17,7 @@ import {
   type SourceManifestPort,
   type ValidationTarget,
 } from "@/modules/validation/orchestrator";
-import { resolveValidationProfile } from "@/modules/validation/profile";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import type { SandboxProvider, SandboxUsage } from "@/modules/validation/sandbox-port";
 import {
   SANDBOX_POLICY_VERSION,
@@ -216,7 +216,10 @@ async function resolveRunContext(
 
   const snapshot = await getLatestSuccessfulSnapshot(deps.supabase, operation.projectId);
   if (!snapshot?.result) return { ok: false, failureCode: "validation_not_supported" };
-  const profile = resolveValidationProfile(snapshot.result);
+  const profile = await resolveProjectValidationTarget(deps.supabase, {
+    projectId: operation.projectId,
+    snapshot: snapshot.result,
+  });
   if (!profile.supported) return { ok: false, failureCode: profile.reason };
 
   return {
@@ -315,7 +318,10 @@ export async function prepareValidationStep(
   const snapshot = await getLatestSuccessfulSnapshot(deps.supabase, operation.projectId);
   if (!snapshot?.result) return { ok: false, failureCode: "validation_not_supported" };
 
-  const profile = resolveValidationProfile(snapshot.result);
+  const profile = await resolveProjectValidationTarget(deps.supabase, {
+    projectId: operation.projectId,
+    snapshot: snapshot.result,
+  });
   if (!profile.supported) return { ok: false, failureCode: profile.reason };
 
   /*

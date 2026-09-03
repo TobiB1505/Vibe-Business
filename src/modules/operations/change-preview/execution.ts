@@ -23,7 +23,7 @@ import {
   type PreviewStage,
 } from "@/modules/change-preview/schema";
 import { getPreparedChange } from "@/modules/execution/store";
-import { resolveValidationProfile } from "@/modules/validation/profile";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationFailureCode } from "../failures";
@@ -181,7 +181,10 @@ async function resolveContext(
   const snapshot = await getLatestSuccessfulSnapshot(deps.supabase, operation.projectId);
   if (!snapshot?.result) return { ok: false, failureCode: "preview_not_supported" };
 
-  const profile = resolveValidationProfile(snapshot.result);
+  const profile = await resolveProjectValidationTarget(deps.supabase, {
+    projectId: operation.projectId,
+    snapshot: snapshot.result,
+  });
   if (!profile.supported) return { ok: false, failureCode: "preview_not_supported" };
 
   /*

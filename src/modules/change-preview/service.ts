@@ -14,7 +14,7 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
-import { resolveValidationProfile } from "@/modules/validation/profile";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import { PREVIEW_BUDGETS } from "./budgets";
 import { computePreviewIdentity, computeTeardownIdentity } from "./identity";
 import { resolvePreviewOrigin } from "./orchestrator";
@@ -166,7 +166,12 @@ export async function startChangePreview(
    * resolver — one detection of these facts, not two (§3, rules 25 and 57).
    */
   const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
-  const resolution = snapshot?.result ? resolveValidationProfile(snapshot.result) : null;
+  const resolution = snapshot?.result
+    ? await resolveProjectValidationTarget(supabase, {
+        projectId: params.projectId,
+        snapshot: snapshot.result,
+      })
+    : null;
   const previewProfile = resolution?.supported
     ? previewProfileFor(resolution.profile, resolution.frameworks, {
         moduleLinker: resolution.moduleLinker,

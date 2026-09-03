@@ -229,7 +229,10 @@ describe("the real Action Plan, resolved (§38, §39)", () => {
 
     const step4 = unblocked[3];
     expect(step4.mode).toBe("unsupported");
-    expect(step4.unmetRequirements).toContain("validation_profile_unsupported");
+    // `no_lockfile`, which is what this repository actually lacks: it has a
+    // `frontend/package.json` and no lockfile beside it, so Vibe cannot install
+    // exactly what was committed. That is a sentence its owner can act on.
+    expect(step4.unmetRequirements).toContain("no_lockfile");
     expect(step4.unmetRequirements).toContain("risk_class_not_permitted");
   });
 
