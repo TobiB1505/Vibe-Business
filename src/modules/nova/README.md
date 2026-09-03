@@ -18,6 +18,8 @@ focus.ts       what needs attention now, ranked — pure, and the whole of the d
 read.ts        the facts behind it, gathered in a bounded number of queries
 actions.ts     what each control says, costs, and does to the world
 feed.ts        the focus as entries on a screen — sentences, one control, progress
+first-run.ts   Nova's introduction, and the walkthrough she offers once
+onboarding.ts  the scan and the reveal, and what may ride along with "yes"
 voice/
   payload.ts   what the model is given, what it may return, and the cache identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
@@ -69,6 +71,23 @@ product's language rules unit tests over values instead of regexes over
 markup: no cause claimed, nothing deployed or shipped, nothing called safe,
 no figures. `src/components/nova/` renders those values and holds no prose of
 its own, which a source contract enforces.
+
+## The onboarding lane
+
+`deriveOnboardingState` still owns setup, untouched. Two modules read its
+answer and add what is Nova's: `first-run.ts` for the introduction and the
+optional walkthrough (backed by `nova_introduced_at` and
+`nova_workflow_status`), and `onboarding.ts` for the scan and the reveal, where
+Nova adds a sentence above screens that are otherwise unchanged.
+
+The reveal carries §O.3's one real decision. While the first audit is free,
+confirming what Vibe read also starts it — one press for one decision, with a
+label that says where it leads. Once the audit is priced the two come apart,
+because a paid operation is never the side effect of a question about accuracy
+(rule 60). `novaRevealControls` decides it from `AuditCreditGate`, the same
+gate Business Health already renders from, and `ProductConfirmation` reads the
+same answer — so the button drawn and the button Nova would have drawn cannot
+disagree.
 
 Four of §F's eleven entry types exist. The remaining seven, and the `"feed"`
 variants on the domain panels that render them, belong with the slices that
