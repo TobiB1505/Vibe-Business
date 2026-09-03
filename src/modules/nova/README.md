@@ -6,10 +6,14 @@ its founder amendments are §O of the same record. The voice model and its
 prompt are decided by measurement, not argument — see §P and §Q of the audit,
 and [ADR 0078](../../../docs/decisions/0078-nova-voice-is-measured-not-argued.md).
 
-**Nothing in this module is wired into the product yet.** No route imports it,
-no Server Action calls it, and no usage event is written for it. What exists is
-the two halves that had to come first: the rules Nova's voice is held to, and
-the read model that decides what she would be talking about.
+**Nova speaks on the onboarding route and nowhere else yet.**
+`/app/onboarding/[projectId]` renders her introduction, the walkthrough she
+offers once, and the sentences above the scan and the reveal. The project Home
+is still Business Health — [ADR 0079](../../../docs/decisions/0079-nova-is-the-project-home.md)
+records that it will not stay that way, and `deriveNovaFocus` is built and
+tested with nothing mounting it. No usage event is written for Nova at all:
+`nova_presentation` is on the operation union for ledger-key consistency and
+no inference has run through it.
 
 ## What is here
 
