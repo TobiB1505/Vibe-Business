@@ -139,7 +139,7 @@ describe("one candidate at a time", () => {
     });
 
     expect(focus.primary.kind).toBe("agent_question");
-    expect(focus.nextAction).toBe("nova.answer_question");
+    expect(focus.nextAction).toBe("nova.answer_agent_question");
   });
 
   it("raises founder_input_required for a question the plan asked", () => {
@@ -156,6 +156,15 @@ describe("one candidate at a time", () => {
     });
 
     expect(focus.primary.kind).toBe("founder_input_required");
+  });
+
+  /**
+   * The two questions carry different controls because they are answered by
+   * different Server Actions, and only one of them left a run stopped.
+   */
+  it("gives the two kinds of question two different controls", () => {
+    expect(novaCandidateAction("agent_question")).toBe("nova.answer_agent_question");
+    expect(novaCandidateAction("founder_input_required")).toBe("nova.answer_plan_question");
   });
 
   it("raises repository_read_outdated", () => {

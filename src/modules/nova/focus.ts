@@ -135,15 +135,23 @@ const CANDIDATE_ORDER: Record<FocusCandidateKind, number> = Object.fromEntries(
 /**
  * The controls a candidate can carry.
  *
- * Ids only. Slice 2's `actions.ts` binds each to an existing exported Server
- * Action and proves the binding in a test; nothing here knows what a Server
- * Action is, which is what keeps this module pure.
+ * Ids only. `actions.ts` gives each one its label, its price and its
+ * consequence, and the app layer binds it to a Server Action that already
+ * exists; nothing here knows what a Server Action is, which is what keeps this
+ * module pure.
+ *
+ * There are two ids for answering a question because there are two actions:
+ * `resolveFounderInputAction` answers the plan's, `resolveAgentInterruptAction`
+ * answers one the agent asked mid-run and deliberately does not resume it. One
+ * shared id would have made a control that could not know which of the two it
+ * was — and the difference is a paid restart.
  */
 export const NOVA_ACTION_IDS = [
   "nova.validate_again",
   "nova.review_change",
   "nova.merge_change",
-  "nova.answer_question",
+  "nova.answer_plan_question",
+  "nova.answer_agent_question",
   "nova.choose_workspace",
   "nova.rescan_product",
   "nova.start_agent",
@@ -168,8 +176,8 @@ const CANDIDATE_ACTION: Record<FocusCandidateKind, NovaActionId | null> = {
   validation_failed: "nova.validate_again",
   merge_blocked: "nova.review_change",
   repository_read_outdated: "nova.rescan_product",
-  agent_question: "nova.answer_question",
-  founder_input_required: "nova.answer_question",
+  agent_question: "nova.answer_agent_question",
+  founder_input_required: "nova.answer_plan_question",
   workspace_choice_required: "nova.choose_workspace",
   review_change: "nova.review_change",
   merge_ready: "nova.merge_change",
