@@ -23,6 +23,7 @@ import {
   isPreviewExpired,
   previewProfileFor,
   previewProfileVersionFor,
+  type PreviewAvailability,
   type PreviewFailureCode,
   type PreviewSession,
   type PreviewStatus,
@@ -413,6 +414,38 @@ export async function getPreviewStatus(
  * wait for: a preview needs a prepared commit and nothing else, which is why
  * this now reads one row (Sprint 0114).
  */
+
+/**
+ * Resolve {@link PreviewAvailability} for a project.
+ *
+ * Exported so a list resolves it **once** and hands the answer to every card.
+ * It reads the repository snapshot, and the workspace list has a test that
+ * measures reads against the number of prepared changes — the same constraint
+ * that caught the workspace root when that was first resolved per card.
+ *
+ * The same calls `startPreview` makes, in the same order, so the offer and the
+ * start cannot disagree about what is possible.
+ */
+export async function previewAvailability(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<PreviewAvailability> {
+  const snapshot = await getLatestSuccessfulSnapshot(supabase, projectId);
+  if (!snapshot?.result) return "repository_not_ready";
+
+  const resolution = await resolveProjectValidationTarget(supabase, {
+    projectId,
+    snapshot: snapshot.result,
+  });
+  if (!resolution.supported) return "repository_not_ready";
+
+  return previewProfileFor(resolution.profile, resolution.frameworks, {
+    moduleLinker: resolution.moduleLinker,
+  }) === null
+    ? "no_dev_server"
+    : "available";
+}
+
 export async function getPreviewCard(
   supabase: SupabaseClient,
   params: {
@@ -420,6 +453,11 @@ export async function getPreviewCard(
     preparedChangeId: string;
     /** Whether the change has a commit to serve. Resolved by the caller. */
     prepared: boolean;
+    /**
+     * Whether a preview can start at all, and if not why. Resolved by the
+     * caller, once per list — see {@link previewAvailability}.
+     */
+    availability: PreviewAvailability;
     /**
      * The session this change already has, when the caller read it as part of a
      * batch (VB-023). Present means "use this and read nothing"; absent means
@@ -439,6 +477,7 @@ export async function getPreviewCard(
 
   return buildPreviewCard({
     prepared: params.prepared,
+    availability: params.availability,
     session,
     failureMessage: session?.failureCode ? params.resolveFailureMessage(session.failureCode) : null,
   });

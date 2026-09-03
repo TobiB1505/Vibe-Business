@@ -57,6 +57,9 @@ function card(input: Partial<PreviewCardInput> = {}) {
   return buildPreviewCard(
     {
       prepared: true,
+      // A project whose framework Vibe can start. The cases that turn this off
+      // say so, because it is the difference between an offer and a promise.
+      availability: "available",
       session: null,
       failureMessage: null,
       ...input,
@@ -83,6 +86,51 @@ describe("eligibility states", () => {
     // A preview runs alongside validation now, not after it. There is no input
     // here through which a validation could still gate one.
     expect(card().state).toBe("ready_to_start");
+  });
+
+  /*
+   * A commit is necessary and was treated as sufficient.
+   *
+   * With no server for the framework, this card said `ready_to_start` — so the
+   * founder clicked, confirmed publishing an unlisted public URL, and only then
+   * learned nothing could start. Widening admission from single-app Next.js to
+   * every Node build contract is what made that reachable: before it, nearly
+   * every admitted project had a server command.
+   */
+  it("offers nothing when no development server exists for the framework", () => {
+    expect(card({ availability: "no_dev_server" }).state).toBe("not_supported");
+  });
+
+  it("names an unresolved repository read as its own state", () => {
+    /*
+     * Not folded into `not_supported`, because the sentence a founder would
+     * read there is false: nothing is wrong with the framework. Vibe simply
+     * cannot say yet which directory it would run in, and that has a move.
+     */
+    expect(card({ availability: "repository_not_ready" }).state).toBe("repository_not_ready");
+  });
+
+  it("keeps that separate from having no commit", () => {
+    // Different states because the founder can do different things about them:
+    // a missing commit arrives when the agent finishes, and this one does not
+    // change by waiting.
+    expect(card({ prepared: false, availability: "no_dev_server" }).state).toBe("not_available");
+  });
+});
+
+describe("a session outlives the offer that started it", () => {
+  /*
+   * Checked after the session states, deliberately. A repository that loses its
+   * server — a framework removed, an application restructured — does not make
+   * the session that already ran stop having run. Only the offer is withdrawn.
+   */
+  it("still reports a running session for a framework Vibe no longer starts", () => {
+    const state = card({
+      availability: "no_dev_server",
+      session: session({ status: "running", readyAt: EARLIER }),
+    }).state;
+
+    expect(state).toBe("running");
   });
 });
 

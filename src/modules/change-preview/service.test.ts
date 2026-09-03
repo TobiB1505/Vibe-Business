@@ -3,7 +3,11 @@ import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/t
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { PREVIEW_BUDGETS } from "./budgets";
 import { computePreviewIdentity } from "./identity";
-import { PREVIEW_POLICY_VERSION, previewProfileVersionFor } from "./schema";
+import {
+  PREVIEW_POLICY_VERSION,
+  previewProfileVersionFor,
+  type PreviewAvailability,
+} from "./schema";
 import { getPreviewCard, getPreviewStatus, startChangePreview, stopChangePreview } from "./service";
 import { FIXTURE_COMMIT_SHA } from "./test-support";
 
@@ -624,11 +628,12 @@ describe("stopping a preview", () => {
 });
 
 describe("the preview card, and what reading it must never cost", () => {
-  function card(overrides: { prepared?: boolean } = {}) {
+  function card(overrides: { prepared?: boolean; availability?: PreviewAvailability } = {}) {
     return getPreviewCard(fakeSupabase(db), {
       projectId: PROJECT,
       preparedChangeId: PREPARED,
       prepared: overrides.prepared ?? true,
+      availability: overrides.availability ?? "available",
       resolveFailureMessage: () => "safe copy",
     });
   }
