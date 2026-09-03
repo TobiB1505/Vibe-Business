@@ -52,6 +52,7 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { AgentStaleReadNotice } from "./agent-stale-read-notice";
 import { AgentWorkspaceChoice } from "./agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
 import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
@@ -393,13 +394,17 @@ async function AgentWorkspaceBody({
   const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
 
   /*
-   * The one refusal that is a question rather than a dead end (Stufe 4).
+   * The two refusals that are questions rather than dead ends (Stufe 4).
    *
-   * A repository with more than one independently installable application has
-   * no single answer to "which app did Vibe just build?", so nothing resolves
-   * agentic and there is no start control to render. Every other refusal in
-   * that position is something the founder fixes in their repository; this one
-   * they answer here, in a second, for free.
+   * Both land in the same place: the step does not resolve agentic, so
+   * `agenticStep` is null, so there is no start control — and `AgentReadyStage`
+   * draws an empty call-to-action block under a hero that still says Vibe
+   * understands this code. Every other refusal there is something the founder
+   * fixes in their repository. These two they settle here, in a second, free.
+   *
+   * A stale read comes first, and not only because the resolver reports them
+   * one at a time: a candidate list computed from an out-of-date scan is not a
+   * question worth asking.
    *
    * Only asked when nothing else is on offer. A screen showing both a Build
    * button and a question about which app to build would be asking about the
@@ -412,6 +417,10 @@ async function AgentWorkspaceBody({
           snapshot: agentRoutes.snapshot,
         })
       : null;
+  const staleRepositoryRead =
+    workspaceChoice !== null &&
+    !workspaceChoice.supported &&
+    workspaceChoice.reason === "repository_analysis_outdated";
   const workspaceCandidates =
     workspaceChoice &&
     !workspaceChoice.supported &&
@@ -556,7 +565,14 @@ async function AgentWorkspaceBody({
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
                 startAction={
-                  workspaceCandidates.length > 0 ? (
+                  staleRepositoryRead ? (
+                    <AgentStaleReadNotice
+                      /* Where a scan is started, anchored at the control that
+                         starts one. The notice does not know what a route
+                         segment is called, and should not. */
+                      productHref={`${projectSectionHref(project.id, "my-product")}#product-scan`}
+                    />
+                  ) : workspaceCandidates.length > 0 ? (
                     <AgentWorkspaceChoice
                       candidates={workspaceCandidates}
                       action={(candidate) => (
