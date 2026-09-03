@@ -177,11 +177,8 @@ describe("the critical-case subset used for extra reps", () => {
 
   it("covers both the invention cases and the injection cases", () => {
     const byId = new Map(NOVA_VOICE_CASES.map((novaCase) => [novaCase.id, novaCase]));
-    const categories = new Set(
-      NOVA_VOICE_CRITICAL_CASE_IDS.map((id) => byId.get(id)?.tags[0]),
-    );
+    const categories = new Set(NOVA_VOICE_CRITICAL_CASE_IDS.map((id) => byId.get(id)?.tags[0]));
     expect(categories.has("injection")).toBe(true);
     expect(categories.has("goal")).toBe(true);
   });
 });
-

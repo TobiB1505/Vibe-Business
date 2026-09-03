@@ -133,7 +133,11 @@ const OUT_DIR = join(process.cwd(), ".nova-eval");
  * Retries are recorded rather than absorbed: attempts run and attempts scored
  * have to be visible in the data, not only on the bill.
  */
-const JUDGE_RETRY_ON = new Set(["provider_overloaded", "provider_rate_limited", "provider_timeout"]);
+const JUDGE_RETRY_ON = new Set([
+  "provider_overloaded",
+  "provider_rate_limited",
+  "provider_timeout",
+]);
 const JUDGE_MAX_ATTEMPTS = Number(process.env.NOVA_JUDGE_ATTEMPTS ?? "2");
 
 type CaseResult = {
@@ -321,7 +325,7 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
 
     const message =
       typeof (generated.data as { message?: unknown })?.message === "string"
-        ? ((generated.data as { message: string }).message)
+        ? (generated.data as { message: string }).message
         : "";
 
     const checked = checkNovaMessage({
@@ -509,11 +513,12 @@ describe("Nova voice — paid eval", () => {
       };
       const judgedCritical = judged.filter((result) => CRITICAL_CASE_IDS.has(result.id));
       const criticalByCriterion = NOVA_VOICE_CRITERIA.map((criterion) => {
-        const passed = judgedCritical.filter((result) => result.judge[criterion.id] === true).length;
+        const passed = judgedCritical.filter(
+          (result) => result.judge[criterion.id] === true,
+        ).length;
         const rate = judgedCritical.length === 0 ? null : passed / judgedCritical.length;
         const target = TARGETS[criterion.id];
-        const mark =
-          target === undefined || rate === null ? "  " : rate >= target ? "✓ " : "✗ ";
+        const mark = target === undefined || rate === null ? "  " : rate >= target ? "✓ " : "✗ ";
         const targetNote = target === undefined ? "" : ` (target ≥${(target * 100).toFixed(0)}%)`;
         return `  ${mark}${criterion.label.padEnd(16)} ${pct(passed, judgedCritical.length)}${targetNote}`;
       });

@@ -135,8 +135,6 @@ export function buildJudgeUserContent(novaCase: NovaVoiceCase, message: string):
     message,
     "</message>",
     "",
-    ...NOVA_VOICE_CRITERIA.map(
-      (criterion) => `${criterion.id}: ${criterion.question}`,
-    ),
+    ...NOVA_VOICE_CRITERIA.map((criterion) => `${criterion.id}: ${criterion.question}`),
   ].join("\n");
 }

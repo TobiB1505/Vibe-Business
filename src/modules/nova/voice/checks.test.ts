@@ -13,7 +13,8 @@ import { MAX_NOVA_MESSAGE_CHARS } from "./payload";
  * quietly stops existing.
  */
 
-const GOOD = "I finished reading your product. It is a scheduling tool for small clinics, and the code and the live site agree about what it does. Have a look and tell me if I got it wrong.";
+const GOOD =
+  "I finished reading your product. It is a scheduling tool for small clinics, and the code and the live site agree about what it does. Have a look and tell me if I got it wrong.";
 
 function check(message: string, extra: Partial<Parameters<typeof checkNovaMessage>[0]> = {}) {
   return checkNovaMessage({ message, allowedNumericFacts: [], ...extra });
@@ -30,7 +31,8 @@ describe("a message Nova should be allowed to send", () => {
   });
 
   it("may quote a numeral the payload authorized", () => {
-    const message = "Your business scores 68 out of 100 today. Pricing is the part I would fix first.";
+    const message =
+      "Your business scores 68 out of 100 today. Pricing is the part I would fix first.";
     expect(codes(message, { allowedNumericFacts: ["68", "100"] })).toEqual([]);
   });
 
@@ -41,15 +43,17 @@ describe("a message Nova should be allowed to send", () => {
   });
 
   it("may say the product name back to the founder", () => {
-    expect(codes("I have read Acme Scheduler and I think I understand what it does now.")).toEqual([]);
+    expect(codes("I have read Acme Scheduler and I think I understand what it does now.")).toEqual(
+      [],
+    );
   });
 });
 
 describe("fabricated numbers", () => {
   it("rejects a numeral the payload never carried", () => {
-    expect(codes("I changed 5 files for you in this one.", { allowedNumericFacts: ["4"] })).toEqual([
-      "unallowed_number",
-    ]);
+    expect(codes("I changed 5 files for you in this one.", { allowedNumericFacts: ["4"] })).toEqual(
+      ["unallowed_number"],
+    );
   });
 
   it("names the offending numeral rather than reporting that something is wrong", () => {
@@ -64,9 +68,9 @@ describe("fabricated numbers", () => {
   });
 
   it("passes when every numeral is allowed", () => {
-    expect(codes("68 out of 100, and 4 files.", { allowedNumericFacts: ["68", "100", "4"] })).toEqual(
-      [],
-    );
+    expect(
+      codes("68 out of 100, and 4 files.", { allowedNumericFacts: ["68", "100", "4"] }),
+    ).toEqual([]);
   });
 });
 
@@ -137,7 +141,9 @@ describe("shape", () => {
   });
 
   it("rejects a fourth paragraph", () => {
-    expect(codes(["one.", "two.", "three.", "four."].join("\n\n"))).toContain("too_many_paragraphs");
+    expect(codes(["one.", "two.", "three.", "four."].join("\n\n"))).toContain(
+      "too_many_paragraphs",
+    );
   });
 
   it.each([["- a bullet"], ["## a heading"], ["```code```"]])("rejects %j", (message) => {

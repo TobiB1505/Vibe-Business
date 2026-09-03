@@ -312,7 +312,9 @@ export function checkNovaMessage(input: NovaCheckInput): NovaCheckResult {
   }
 
   for (const numberWord of SPELLED_NUMBERS) {
-    const pattern = new RegExp(`\\b${numberWord}\\b[^.!?]{0,24}?\\b(${COUNTABLE_NOUNS.join("|")})\\b`);
+    const pattern = new RegExp(
+      `\\b${numberWord}\\b[^.!?]{0,24}?\\b(${COUNTABLE_NOUNS.join("|")})\\b`,
+    );
     const hit = pattern.exec(normalized);
     if (hit) warnings.push({ code: "spelled_quantity", detail: hit[0] });
   }
