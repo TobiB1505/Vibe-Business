@@ -10,7 +10,7 @@ const NEXT: Detection[] = [{ id: "nextjs", name: "Next.js", confidence: "high", 
 function surfacesFor(files: FixtureFile[]) {
   const context = contextFrom(files);
   const signals = detectIntegrationSignals(context);
-  const routes = detectRoutes(context, NEXT);
+  const routes = detectRoutes(context, NEXT, { targets: [], truncated: false });
   return detectBusinessSurfaces(context, signals, routes);
 }
 

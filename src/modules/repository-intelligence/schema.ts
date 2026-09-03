@@ -23,7 +23,7 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
  */
-export const ANALYZER_VERSION = "repo-intelligence-v5" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v6" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";
@@ -164,6 +164,20 @@ export type RouteIntelligence = {
   routes: RouteSummary[];
   /** True when the route list was trimmed for display/storage size. */
   truncated: boolean;
+  /**
+   * The router directory these routes were read from, repository-relative and
+   * trailing-slashed — `src/app/` at the root, `frontend/src/app/` for an
+   * application in a subdirectory.
+   *
+   * Recorded rather than re-derived, because it is the one place that knows.
+   * Every consumer that used to reconstruct it from route source paths was
+   * reconstructing a repository-root assumption along with it.
+   *
+   * Optional: a snapshot written before `repo-intelligence-v6` has no value
+   * here, and the absence is the honest answer for it — that analysis only ever
+   * looked at the repository root.
+   */
+  root?: string;
 };
 
 export type MonorepoIntelligence = {
