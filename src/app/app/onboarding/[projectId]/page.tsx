@@ -13,14 +13,12 @@ import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getOnboardingFirstMove } from "@/modules/action-plans/service";
-import {
-  ACTOR_LABELS,
-  EXECUTION_SUPPORT_LABELS,
-} from "@/modules/action-plans/schema";
+import { ACTOR_LABELS, EXECUTION_SUPPORT_LABELS } from "@/modules/action-plans/schema";
 import {
   getActiveOpportunityOperation,
   getLastFailedOperation,
 } from "@/modules/operations/service";
+import { buildNovaFirstRunFeed, deriveNovaFirstRun } from "@/modules/nova/first-run";
 import { auditSurface } from "@/modules/onboarding/audit-surface";
 import {
   markOnboardingMilestone,
@@ -30,10 +28,15 @@ import {
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { getProductScanEvents } from "@/modules/product-scan/store";
 import { buildProductScanPresentation } from "@/modules/product-scan/presentation";
-import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../../projects/[projectId]/audit-lifecycle";
+import {
+  AuditAnalyzing,
+  AuditPreparing,
+  AuditWaitingHeader,
+} from "../../projects/[projectId]/audit-lifecycle";
 import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
 import { completeOnboardingAction } from "./actions";
+import { NovaFirstRun } from "./nova-first-run";
 import { OnboardingAuditReveal } from "./audit-reveal";
 import { AuditLivePrerequisite } from "./audit-live-prerequisite";
 import { LiveSiteStep } from "./live-site-step";
@@ -65,6 +68,38 @@ export default async function ProjectOnboardingPage({
   const onboarding = await getProjectOnboarding(supabase, { projectId, userId: session.userId });
   if (!onboarding) notFound();
   if (onboarding.state === "complete") redirect(`/app/projects/${projectId}`);
+
+  /*
+   * Nova's own two screens come before the rest of setup (NOVA-3).
+   *
+   * Derived from `deriveOnboardingState`'s answer rather than replacing it —
+   * the ten states, their reconciliation and their tests are untouched. When
+   * the first run is behind us this is `handoff`, the feed is empty, and every
+   * screen below renders exactly as it did.
+   *
+   * It returns before the reads underneath because none of them is needed to
+   * say hello: an introduction describes what Vibe does, not what it has
+   * found, so a founder seeing it should not wait on an audit stamp.
+   */
+  const firstRun = deriveNovaFirstRun({
+    onboardingState: onboarding.state,
+    novaIntroducedAt: onboarding.novaIntroducedAt,
+    novaWorkflowStatus: onboarding.novaWorkflowStatus,
+  });
+  const firstRunEntries = buildNovaFirstRunFeed(firstRun);
+
+  if (firstRunEntries.length > 0) {
+    return (
+      <OnboardingShell
+        email={session.email}
+        state={onboarding.state}
+        projectName={onboarding.projectName}
+        canLeave
+      >
+        <NovaFirstRun projectId={projectId} entries={firstRunEntries} />
+      </OnboardingShell>
+    );
+  }
 
   /*
    * Everything the current step needs, in one wave (PERF-006).
@@ -205,8 +240,8 @@ export default async function ProjectOnboardingPage({
           <MonoLabel>Connect</MonoLabel>
           <h1 className="text-fg text-display font-bold">Show Vibe what you built.</h1>
           <p className="text-fg-prose max-w-[55ch] leading-relaxed">
-            Connect the code behind your product. GitHub will ask which repositories Vibe may
-            access — you choose, and Vibe only sees the ones you pick.
+            Connect the code behind your product. GitHub will ask which repositories Vibe may access
+            — you choose, and Vibe only sees the ones you pick.
           </p>
           <div>
             <Link href="/app/connect/github" className={buttonClasses()}>
@@ -224,13 +259,22 @@ export default async function ProjectOnboardingPage({
               One more view of your product.
             </h1>
             <p className="text-fg-prose max-w-[58ch] leading-relaxed">
-              Vibe found <span className="text-fg-body">{onboarding.repository?.fullName}</span>. A live site helps Vibe compare the code with what customers can actually reach.
+              Vibe found <span className="text-fg-body">{onboarding.repository?.fullName}</span>. A
+              live site helps Vibe compare the code with what customers can actually reach.
             </p>
           </header>
           {onboarding.repository && (
-            <Surface level="panel" padding="md" className="flex flex-wrap items-center justify-between gap-3">
-              <span className="text-fg-body text-sm font-medium">{onboarding.repository.fullName}</span>
-              <span className="text-fg-meta font-mono text-xs">{onboarding.repository.defaultBranch} · connected</span>
+            <Surface
+              level="panel"
+              padding="md"
+              className="flex flex-wrap items-center justify-between gap-3"
+            >
+              <span className="text-fg-body text-sm font-medium">
+                {onboarding.repository.fullName}
+              </span>
+              <span className="text-fg-meta font-mono text-xs">
+                {onboarding.repository.defaultBranch} · connected
+              </span>
             </Surface>
           )}
           <LiveSiteStep
@@ -284,7 +328,11 @@ export default async function ProjectOnboardingPage({
 
       {onboarding.state === "product_reveal" && understanding && onboarding.productProfile && (
         <section className="flex flex-col gap-8">
-          <Surface level="card" padding="lg" className="flex flex-col items-center gap-7 text-center">
+          <Surface
+            level="card"
+            padding="lg"
+            className="flex flex-col items-center gap-7 text-center"
+          >
             {understanding.brand.logo ? (
               <ProductLogo
                 src={understanding.brand.logo.url}
@@ -300,10 +348,14 @@ export default async function ProjectOnboardingPage({
                 {understanding.headline.title}
               </h1>
               {understanding.headline.productName && (
-                <p className="text-fg-body text-xl font-semibold">{understanding.headline.productName}</p>
+                <p className="text-fg-body text-xl font-semibold">
+                  {understanding.headline.productName}
+                </p>
               )}
               {understanding.headline.understanding && (
-                <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">{understanding.headline.understanding}</p>
+                <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">
+                  {understanding.headline.understanding}
+                </p>
               )}
             </div>
             <div className="grid w-full max-w-[54rem] gap-3 text-left sm:grid-cols-2">
@@ -321,12 +373,16 @@ export default async function ProjectOnboardingPage({
                 profileId={onboarding.productProfile.stored.id}
                 values={{
                   name: onboarding.productProfile.profile.identity.name.value ?? "",
-                  shortDescription: onboarding.productProfile.profile.identity.shortDescription.value ?? "",
-                  understanding: onboarding.productProfile.profile.identity.understanding.value ?? "",
+                  shortDescription:
+                    onboarding.productProfile.profile.identity.shortDescription.value ?? "",
+                  understanding:
+                    onboarding.productProfile.profile.identity.understanding.value ?? "",
                   mainPurpose: onboarding.productProfile.profile.identity.mainPurpose.value ?? "",
                   mainPromise: onboarding.productProfile.profile.identity.mainPromise.value ?? "",
-                  primaryAudience: onboarding.productProfile.profile.audience.primaryAudience.value ?? "",
-                  problemSolved: onboarding.productProfile.profile.audience.problemSolved.value ?? "",
+                  primaryAudience:
+                    onboarding.productProfile.profile.audience.primaryAudience.value ?? "",
+                  problemSolved:
+                    onboarding.productProfile.profile.audience.problemSolved.value ?? "",
                 }}
               />
             </div>
@@ -354,7 +410,11 @@ export default async function ProjectOnboardingPage({
           {surface === "running" && onboarding.auditOperation ? (
             <>
               <OperationWatcher projectId={projectId} operation={onboarding.auditOperation} />
-              {onboarding.auditOperation.stage === "running_ai" ? <AuditAnalyzing /> : <AuditPreparing />}
+              {onboarding.auditOperation.stage === "running_ai" ? (
+                <AuditAnalyzing />
+              ) : (
+                <AuditPreparing />
+              )}
               {onboarding.auditOperation.stalled && (
                 <OnboardingStalled
                   what="looking at your business"
@@ -379,7 +439,10 @@ export default async function ProjectOnboardingPage({
               operation={auditFailure}
               action={
                 onboarding.productProfile ? (
-                  <StartAudit projectId={projectId} profileId={onboarding.productProfile.stored.id} />
+                  <StartAudit
+                    projectId={projectId}
+                    profileId={onboarding.productProfile.stored.id}
+                  />
                 ) : undefined
               }
             />
@@ -411,17 +474,29 @@ export default async function ProjectOnboardingPage({
           </header>
 
           {onboarding.opportunities?.set.opportunities[0] ? (
-            <Surface level="card" padding="lg" className="border-mint/30 flex flex-col gap-4 border">
+            <Surface
+              level="card"
+              padding="lg"
+              className="border-mint/30 flex flex-col gap-4 border"
+            >
               <MonoLabel className="text-mint">This is where I&apos;d start</MonoLabel>
-              <h2 className="text-fg text-2xl font-semibold">{onboarding.opportunities.set.opportunities[0].title}</h2>
-              <p className="text-fg-prose leading-relaxed">{onboarding.opportunities.set.opportunities[0].problem}</p>
+              <h2 className="text-fg text-2xl font-semibold">
+                {onboarding.opportunities.set.opportunities[0].title}
+              </h2>
+              <p className="text-fg-prose leading-relaxed">
+                {onboarding.opportunities.set.opportunities[0].problem}
+              </p>
               <div className="border-line-2 border-t pt-4">
                 <p className="text-fg-meta mb-1 text-xs">Why this comes first</p>
-                <p className="text-fg-secondary text-sm leading-relaxed">{onboarding.opportunities.set.opportunities[0].whyNow}</p>
+                <p className="text-fg-secondary text-sm leading-relaxed">
+                  {onboarding.opportunities.set.opportunities[0].whyNow}
+                </p>
               </div>
               {firstMovePlan?.firstActionableStep && (
                 <div className="border-line-2 border-t pt-4">
-                  <p className="text-fg-meta mb-1 text-xs">Vibe already has a plan — starting with</p>
+                  <p className="text-fg-meta mb-1 text-xs">
+                    Vibe already has a plan — starting with
+                  </p>
                   <p className="text-fg-body text-sm font-medium">
                     {firstMovePlan.firstActionableStep.title}
                   </p>
@@ -434,12 +509,17 @@ export default async function ProjectOnboardingPage({
             </Surface>
           ) : opportunityOperation ? (
             <Surface level="card" padding="lg" className="flex flex-col gap-3" role="status">
-              <h2 className="text-fg text-xl font-semibold">Vibe is finding your highest-impact opportunity.</h2>
-              <p className="text-fg-muted text-sm">You can leave and come back. No Move will be invented while this runs.</p>
+              <h2 className="text-fg text-xl font-semibold">
+                Vibe is finding your highest-impact opportunity.
+              </h2>
+              <p className="text-fg-muted text-sm">
+                You can leave and come back. No Move will be invented while this runs.
+              </p>
             </Surface>
           ) : (
             <Notice tone="info" label="Your Audit is ready">
-              Vibe knows where the business needs attention first. No actual Next Move is available yet, so onboarding will not pretend one exists.
+              Vibe knows where the business needs attention first. No actual Next Move is available
+              yet, so onboarding will not pretend one exists.
             </Notice>
           )}
 

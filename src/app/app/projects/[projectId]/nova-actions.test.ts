@@ -2,8 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-import { NOVA_ACTION_META } from "@/modules/nova/actions";
-import { NOVA_ACTION_IDS } from "@/modules/nova/focus";
+import { NOVA_ACTION_IDS, NOVA_ACTION_META } from "@/modules/nova/actions";
 
 /**
  * That every Nova control names something that exists.

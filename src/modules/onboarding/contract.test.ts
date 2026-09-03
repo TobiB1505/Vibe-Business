@@ -12,6 +12,16 @@ const MIGRATION = readFileSync(
 );
 const ACTIONS = readFileSync(join(ONBOARDING_APP, "[projectId]/actions.ts"), "utf8");
 const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
+/**
+ * The page with its whitespace collapsed, for assertions about *copy*.
+ *
+ * JSX wraps prose wherever the formatter decides, and where it decides moves
+ * whenever anything above it changes — so a raw `toContain` on a sentence
+ * fails for a sentence that is on screen exactly as written. This is the same
+ * helper, and the same lesson, as `command-center-ui.test.ts`; assertions
+ * about *code* keep using `PAGE` itself.
+ */
+const PAGE_COPY = PAGE.replace(/\s+/g, " ");
 const APP_HOME = readFileSync(join(ROOT, "src/app/app/(account)/page.tsx"), "utf8");
 /*
  * The dashboard's composition. CORE-6 split `/app` in two: the page owns the
@@ -20,14 +30,8 @@ const APP_HOME = readFileSync(join(ROOT, "src/app/app/(account)/page.tsx"), "utf
  * resume is rendered, so it is asserted here.
  */
 const APP_HOME_VIEW = readFileSync(join(ROOT, "src/app/app/account-home.tsx"), "utf8");
-const ONBOARDING_SHELL = readFileSync(
-  join(ONBOARDING_APP, "onboarding-shell.tsx"),
-  "utf8",
-);
-const PROJECT_ONBOARDING_PAGE = readFileSync(
-  join(ONBOARDING_APP, "[projectId]/page.tsx"),
-  "utf8",
-);
+const ONBOARDING_SHELL = readFileSync(join(ONBOARDING_APP, "onboarding-shell.tsx"), "utf8");
+const PROJECT_ONBOARDING_PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
 const REPOSITORY_ACTION = readFileSync(
   join(ROOT, "src/app/app/connect/github/repositories/actions.ts"),
   "utf8",
@@ -132,7 +136,9 @@ describe("onboarding orchestrates canonical domains", () => {
    * anything the browser sent.
    */
   it("guards completion with reconciled server state", () => {
-    const completion = ACTIONS.slice(ACTIONS.indexOf("export async function completeOnboardingAction"));
+    const completion = ACTIONS.slice(
+      ACTIONS.indexOf("export async function completeOnboardingAction"),
+    );
     expect(completion).toContain("getProjectOnboarding");
     expect(completion).toContain("canCompleteOnboarding");
     expect(completion).toContain("onboarding.firstMoveViewedAt !== null");
@@ -151,14 +157,16 @@ describe("onboarding orchestrates canonical domains", () => {
    * without anything noticing.
    */
   it("finishes on the account dashboard, not inside the product", () => {
-    const completion = ACTIONS.slice(ACTIONS.indexOf("export async function completeOnboardingAction"));
+    const completion = ACTIONS.slice(
+      ACTIONS.indexOf("export async function completeOnboardingAction"),
+    );
     expect(completion).toContain('redirect("/app")');
     expect(completion).not.toContain("redirect(`/app/projects/${projectId}`)");
   });
 
   it("renders only real opportunity data and an honest no-move fallback", () => {
     expect(PAGE).toContain("onboarding.opportunities?.set.opportunities[0]");
-    expect(PAGE).toContain("No actual Next Move is available yet");
+    expect(PAGE_COPY).toContain("No actual Next Move is available yet");
     expect(PAGE).not.toContain("moves prepared");
     expect(PAGE).not.toContain("Apply change");
   });

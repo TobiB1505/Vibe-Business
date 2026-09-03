@@ -276,6 +276,20 @@ export type AuditEventType =
   | "onboarding.first_move_started"
   | "onboarding.first_move_viewed"
   | "onboarding.completed"
+  /**
+   * Nova's first run (NOVA-3).
+   *
+   * The same question the onboarding events answer — how far did this founder
+   * get — for the two steps that are Nova's own. Both are recorded once, by
+   * the write that actually changed the row, so a founder pressing "Continue"
+   * in two tabs produces one event rather than two.
+   *
+   * `nova.workflow_answered` carries which answer was given, because "was
+   * shown the walkthrough" and "chose to get on with it" are different facts
+   * about the same moment and a single event name could not hold both.
+   */
+  | "nova.introduced"
+  | "nova.workflow_answered"
 
   /*
    * Billing (BILLING CORE-1 §34).

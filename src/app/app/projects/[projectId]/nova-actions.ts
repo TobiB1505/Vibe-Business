@@ -3,6 +3,11 @@ import { preparedChangeHref, projectSectionHref } from "@/components/layout/proj
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaActionId } from "@/modules/nova/focus";
 
+import {
+  markNovaIntroducedAction,
+  setNovaWorkflowStatusAction,
+} from "@/app/app/onboarding/[projectId]/actions";
+
 import { resolveAgentInterruptAction } from "./agent/interrupt-actions";
 import { startAgentRunAction } from "./agent-dogfood/[stepKey]/actions";
 import { resolveFounderInputAction } from "./founder-input-action";
@@ -87,6 +92,15 @@ function moveHref(projectId: string, opportunityId: string): string {
 }
 
 export const NOVA_ACTIONS: Record<NovaActionId, NovaActionBinding> = {
+  "nova.continue_introduction": { control: "server_action", action: markNovaIntroducedAction },
+  /*
+   * Both answers are one action with two arguments rather than two actions.
+   * The status is the founder's answer, not a different operation, and a
+   * second export whose only difference was a string literal would be two
+   * places to keep one rule.
+   */
+  "nova.explain_workflow": { control: "server_action", action: setNovaWorkflowStatusAction },
+  "nova.skip_workflow": { control: "server_action", action: setNovaWorkflowStatusAction },
   "nova.validate_again": { control: "server_action", action: rerunChangeValidationAction },
   "nova.review_change": { control: "navigation", subject: "prepared_change", href: changeHref },
   "nova.merge_change": { control: "server_action", action: mergeApprovedChangeAction },

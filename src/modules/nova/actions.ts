@@ -1,6 +1,4 @@
 import type { RetailOperationKind } from "../credits/retail";
-import { NOVA_ACTION_IDS } from "./focus";
-import type { NovaActionId } from "./focus";
 
 /**
  * What each of Nova's controls says, costs, and does to the world.
@@ -37,6 +35,38 @@ import type { NovaActionId } from "./focus";
  * below holds those two facts together, so the day one of them moves without
  * the other, the build says so.
  */
+
+/**
+ * Every control Nova can offer, in either lane.
+ *
+ * The vocabulary lives with the catalog rather than with `focus.ts`, because
+ * the two lanes have different controls and only one of them is about
+ * candidates: the first three below belong to the first run, where Nova
+ * introduces herself and offers to explain the loop, and nothing there is a
+ * `FocusCandidate` at all. `focus.ts` maps its candidates onto this
+ * vocabulary; it does not own it.
+ */
+export const NOVA_ACTION_IDS = [
+  /* The first run: Nova's own two screens. */
+  "nova.continue_introduction",
+  "nova.explain_workflow",
+  "nova.skip_workflow",
+  /* Everything a focus candidate can carry. */
+  "nova.validate_again",
+  "nova.review_change",
+  "nova.merge_change",
+  "nova.answer_plan_question",
+  "nova.answer_agent_question",
+  "nova.choose_workspace",
+  "nova.rescan_product",
+  "nova.start_agent",
+  "nova.verify_outcome",
+  "nova.plan_move",
+  "nova.view_move",
+  "nova.refresh_audit",
+] as const;
+
+export type NovaActionId = (typeof NOVA_ACTION_IDS)[number];
 
 export type NovaActionControl =
   /** A Server Action runs. The app layer holds the reference. */
@@ -103,6 +133,33 @@ export type NovaActionMeta = {
 };
 
 export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
+  "nova.continue_introduction": {
+    control: "server_action",
+    label: "Continue",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.explain_workflow": {
+    control: "server_action",
+    label: "Show me how this works",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.skip_workflow": {
+    /*
+     * Pressing this records `skipped`, which is a real answer rather than an
+     * absence — the founder was asked and chose to get on with it. Recording
+     * it as "explained" would have been the column saying something that did
+     * not happen.
+     */
+    control: "server_action",
+    label: "Start now",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
   "nova.validate_again": {
     control: "server_action",
     label: "Check it again",

@@ -3578,6 +3578,8 @@ export type Database = {
           created_at: string
           first_move_viewed_at: string | null
           live_site_status: string
+          nova_introduced_at: string | null
+          nova_workflow_status: string
           product_revealed_at: string | null
           project_id: string
           state: string
@@ -3589,6 +3591,8 @@ export type Database = {
           created_at?: string
           first_move_viewed_at?: string | null
           live_site_status?: string
+          nova_introduced_at?: string | null
+          nova_workflow_status?: string
           product_revealed_at?: string | null
           project_id: string
           state?: string
@@ -3600,6 +3604,8 @@ export type Database = {
           created_at?: string
           first_move_viewed_at?: string | null
           live_site_status?: string
+          nova_introduced_at?: string | null
+          nova_workflow_status?: string
           product_revealed_at?: string | null
           project_id?: string
           state?: string

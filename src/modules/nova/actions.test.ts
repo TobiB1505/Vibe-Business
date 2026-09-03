@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import { RETAIL_OPERATION_KINDS, resolveRetailPrice } from "../credits/retail";
-import { FOCUS_CANDIDATE_KINDS, NOVA_ACTION_IDS, novaCandidateAction } from "./focus";
+import { FOCUS_CANDIDATE_KINDS, novaCandidateAction } from "./focus";
 import {
+  NOVA_ACTION_IDS,
   NOVA_ACTION_META,
   OFFERABLE_NOVA_ACTION_IDS,
   isOfferable,
   novaActionMeta,
 } from "./actions";
+import type { NovaActionId } from "./actions";
 
 /**
  * The catalog's own rules, asserted over every control at once.
@@ -29,7 +31,7 @@ describe("the catalog covers the vocabulary", () => {
   it("names no action id the focus module does not have", () => {
     const known = new Set<string>(NOVA_ACTION_IDS);
 
-    for (const id of Object.keys(NOVA_ACTION_META)) {
+    for (const id of Object.keys(NOVA_ACTION_META) as NovaActionId[]) {
       expect(known.has(id), `${id} is not a NovaActionId`).toBe(true);
     }
   });

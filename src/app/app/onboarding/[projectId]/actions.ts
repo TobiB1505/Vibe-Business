@@ -11,8 +11,10 @@ import { auditSurface, canCompleteOnboarding } from "@/modules/onboarding/audit-
 import {
   completeProjectOnboarding,
   getProjectOnboarding,
+  markNovaIntroduced,
   markOnboardingMilestone,
   setLiveSiteStatus,
+  setNovaWorkflowStatus,
 } from "@/modules/onboarding/store";
 import type { OperationFailureCode } from "@/modules/operations/failures";
 import {
@@ -48,17 +50,14 @@ export type BeginUnderstandingState =
   | { ok: false; step: "understanding"; error: OperationFailureCode }
   | null;
 
-async function startDurableProductScan(
-  projectId: string,
-): Promise<BeginUnderstandingState> {
+async function startDurableProductScan(projectId: string): Promise<BeginUnderstandingState> {
   const session = await requireSession();
   const supabase = await createClient();
 
-  const outcome = await startProductScanOperation(
-    supabase,
-    new VercelWorkflowExecutor(),
-    { projectId, userId: session.userId },
-  );
+  const outcome = await startProductScanOperation(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+  });
   if (outcome.kind === "failed") {
     return { ok: false, step: "understanding", error: outcome.error };
   }
@@ -420,4 +419,76 @@ export async function completeOnboardingAction(projectId: string): Promise<void>
    * except the rail's own exit.
    */
   redirect("/app");
+}
+
+/**
+ * Nova's two first-run writes (NOVA-3).
+ *
+ * Positional identifiers and no `FormData`, deliberately: there is no form
+ * payload to read, and a parameter that exists only to be ignored is one the
+ * next person will reasonably start reading from
+ * (`validate-change-action.ts:40-47`).
+ *
+ * Neither starts anything, neither costs anything, and neither can be
+ * undone by the founder — nor needs to be. What they record is that a person
+ * saw a screen, which is the one class of fact Nova cannot derive from a
+ * canonical row on the next render.
+ */
+export type NovaFirstRunActionState = { ok: true } | { ok: false; error: "not_found" };
+
+async function ownedProject(projectId: string, userId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data ? supabase : null;
+}
+
+export async function markNovaIntroducedAction(
+  projectId: string,
+): Promise<NovaFirstRunActionState> {
+  const session = await requireSession();
+  const supabase = await ownedProject(projectId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
+
+  /*
+   * The event is recorded only when this call was the one that wrote the
+   * timestamp. Two tabs pressing "Continue" is ordinary, and a trail that
+   * showed two introductions would be describing something that happened once.
+   */
+  if (await markNovaIntroduced(supabase, { projectId })) {
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      projectId,
+      eventType: "nova.introduced",
+      metadata: { projectId },
+    });
+  }
+
+  revalidatePath(onboardingHref(projectId));
+  return { ok: true };
+}
+
+export async function setNovaWorkflowStatusAction(
+  projectId: string,
+  status: "explained" | "skipped",
+): Promise<NovaFirstRunActionState> {
+  const session = await requireSession();
+  const supabase = await ownedProject(projectId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
+
+  if (await setNovaWorkflowStatus(supabase, { projectId, status })) {
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      projectId,
+      eventType: "nova.workflow_answered",
+      metadata: { projectId, answer: status },
+    });
+  }
+
+  revalidatePath(onboardingHref(projectId));
+  return { ok: true };
 }
