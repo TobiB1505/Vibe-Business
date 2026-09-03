@@ -350,6 +350,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0076](docs/decisions/0076-the-browser-we-own.md) | The Deep Scan browser is a sandbox Vibe owns (supersedes 0012's provider only) | §3.3 |
 | [0077](docs/decisions/0077-build-chains.md) | One run may deliver the contiguous build steps of a Move | §3.6 |
 | [0078](docs/decisions/0078-nova-voice-is-measured-not-argued.md) | Nova's voice model is chosen by eval, not by cost intuition | §3.6 |
+| [0079](docs/decisions/0079-nova-is-the-project-home.md) | Nova is the project Home, reversing 0047's navigation | §3.6 |
 
 ### Layers with no section above
 
