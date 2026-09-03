@@ -57,3 +57,5 @@ Domain 7,712 · SQL 312 · browser 496 (5 new) · lint 0/0 · build green. No mi
 ## What this does not do
 
 It does not give the `no_dev_server` founder a way forward, because there is not one to give: the honest answer is that Vibe does not start that framework yet. And it does not add a Vite row — that remains where Stufe 4 left it, behind a real dogfood of the host gate.
+
+*[Corrected 2026-09-03, the same day it was written.]* The second sentence was **false when written**. `vite_dev_v1` shipped in [Sprint 0134](0134-the-probe-that-could-not-fail.md), last in the table, alongside the host-gate probe and `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS` — the row was not held back, the *dogfood* was, and I collapsed the two. The correct sentence is that no Vite preview has yet started in a real sandbox, which is Sprint 0134's own open item and not something this change touches. The original stands above because it is what the record said.
