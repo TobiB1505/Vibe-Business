@@ -1,6 +1,6 @@
 # 0078 - The validation profile is a build contract, not a framework list
 
-Status: Accepted; amended by [0079](0079-the-founder-names-the-application.md) — which application, when a repository holds more than one
+Status: Accepted; amended by [0079](0079-the-founder-names-the-application.md) — which application, when a repository holds more than one; and by [0080](0080-the-probe-that-could-not-fail.md) — Vite has a row, and the health probe can now fail for the reason that held it back
 Date: 2026-09-03
 
 Supersedes the *Validation profile* section of [Sprint 0010](../sprints/0010-isolated-change-validation.md), which recorded one profile, `nextjs_node_v1`, eligible on "Next.js detected, npm or pnpm, unambiguous single-app workspace, lockfile present". Changes no command, no network policy, no secret handling and no merge rule. Amended by [0079](0079-the-founder-names-the-application.md), which answers the one question this contract cannot answer alone.

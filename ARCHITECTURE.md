@@ -148,7 +148,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Narrowed — ADR 0078]** The server command comes from a table keyed on the frameworks the chosen application's own manifest declares — `next dev`, `nuxt dev`, `astro dev` — rather than from its validation profile, which stopped implying a framework when one profile came to admit every Node application. An application with no row gets **no preview**, and the copy says what that means: checking a change and merging it still work; there is nothing to look at.
 
-**[Open decision]** Which servers earn a row. Vite and SvelteKit are the ones that matter and are held back deliberately: Vite ≥ 5.4.12 refuses requests whose `Host` is not in `server.allowedHosts`, and the health probe reaches the server over loopback — so it *passes* while the customer's public URL answers "Blocked request." That is settled by a real preview against a real project, not by an argument. Remix is open for a different reason: `remix dev` and the Vite plugin are two servers behind one framework id.
+**[Confirmed — ADR 0080]** The health probe carries the preview's public hostname, and a host-gated server is told that hostname through its own environment. Vite ≥ 5.4.12 allows every IP literal unconditionally, so a loopback probe could not fail for the one reason it most needed to — it *passed* while the customer's URL answered "Blocked request." Astro, Nuxt and SvelteKit inherit the gate, because all of them are Vite servers. Both halves are closed: `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS` names the host Vibe issued without touching the repository, and a server that still refuses fails as `preview_host_rejected` rather than reporting a running preview. Vite therefore has a row. Remix stays open for an unrelated reason: `remix dev` and the Vite plugin are two servers behind one framework id.
 
 ### 3.10 Approval Layer
 
@@ -250,7 +250,7 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 
 1. **The per-SKU consumption rate card** — `CREDIT_RATE_CARDS` in `src/modules/credits/rating.ts`, which rates measured provider usage into Credits for Vibe's own cost telemetry. Not the same question as what a customer pays: [ADR 0061](docs/decisions/0061-launch-v1-operation-rate-card.md) decided that and left this alone, because `economy/` already answers "what did this cost" in nanodollars and a card here would have to price cache tokens — 55–70% of agentic provider cost — to avoid returning `sku_not_priced`. It ships empty ([§3.11](#311-usagecredit-layer)).
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
-3. **Which development servers earn a row** in the preview table ([§3.9](#39-preview-layer)). Next.js, Nuxt and Astro have one; Vite and SvelteKit wait on a real preview settling their `allowedHosts` behaviour, and Remix on which of its two servers a repository means.
+3. **Which development servers earn a row** in the preview table ([§3.9](#39-preview-layer)). Next.js, Nuxt, Astro and Vite have one — and SvelteKit is started by the Vite row, since its own binary is `vite`. Remix waits on which of its two servers a repository means. No preview has yet run against a real Vite project; what changed is that a broken one now says so.
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
 6. **Whether retained audit history gets an operator read path** — once the owner column is null the surviving rows match no RLS policy, so they are readable by nobody ([ADR 0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) §Deferred). Retention without a reader is storage, not evidence; no admin surface exists to change that.
 
@@ -355,6 +355,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0077](docs/decisions/0077-build-chains.md) | One run may deliver the contiguous build steps of a Move | §3.6 |
 | [0078](docs/decisions/0078-the-validation-profile-is-a-build-contract.md) | The validation profile is a build contract, not a framework list (supersedes Sprint 0010's profile section) | §3.8 |
 | [0079](docs/decisions/0079-the-founder-names-the-application.md) | The founder names the application, from a closed list Vibe computed (amends 0078) | §3.8 |
+| [0080](docs/decisions/0080-the-probe-that-could-not-fail.md) | The health probe carries the preview's public hostname (amends 0078; Vite gets a row) | §3.9 |
 
 ### Layers with no section above
 
