@@ -361,6 +361,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0081](docs/decisions/0081-routes-belong-to-an-application.md) | Routes are read relative to the application, and the router root is recorded (extends 0078) | §3.2 |
 | [0082](docs/decisions/0082-nova-voice-is-measured-not-argued.md) | Nova's voice model is chosen by eval, not by cost intuition | §3.6 |
 | [0083](docs/decisions/0083-nova-is-the-project-home.md) | Nova is the project Home, reversing 0047's navigation | §3.6 |
+| [0084](docs/decisions/0084-nova-presentation-is-claimed-stored-and-attempted-once.md) | Nova presentation inference is claimed, stored, and attempted once | §3.6 |
 
 ### Layers with no section above
 

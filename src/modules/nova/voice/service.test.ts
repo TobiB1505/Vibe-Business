@@ -241,37 +241,3 @@ describe("what the validator refuses never reaches a founder", () => {
     expect(outcome.usage).toEqual({ inputTokens: 500, outputTokens: 30, thinkingTokens: 0 });
   });
 });
-
-describe("the reuse key", () => {
-  /**
-   * §H.6 rejects a call per message with no reuse key. This is the key, and
-   * returning it is what lets a caller refuse to pay twice for one sentence
-   * (rule 48).
-   */
-  it("is the same for the same payload", async () => {
-    const first = await speak();
-    const second = await speak();
-
-    expect(first.identity).toBe(second.identity);
-  });
-
-  it("changes when the payload does", async () => {
-    const first = await speak();
-    const second = await speak({
-      payload: { ...PAYLOAD, nextStep: "Something else entirely." },
-    });
-
-    expect(first.identity).not.toBe(second.identity);
-  });
-
-  /** Returned even on the paths that spent nothing, so a caller can still cache. */
-  it("is returned when the tier is off", async () => {
-    const outcome = await speakNovaMessage({
-      provider: provider(),
-      payload: PAYLOAD,
-      template: TEMPLATE,
-    });
-
-    expect(outcome.identity).toHaveLength(64);
-  });
-});

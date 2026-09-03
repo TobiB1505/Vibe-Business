@@ -3,12 +3,7 @@ import type { AIProvider, AIUsage, StructuredRequest } from "@/modules/ai/provid
 
 import { checkNovaMessage } from "./checks";
 import type { NovaCheckResult } from "./checks";
-import {
-  NOVA_PRESENTATION_OUTPUT_SCHEMA,
-  NOVA_VOICE_POLICY_VERSION,
-  NOVA_VOICE_PROMPT_VERSION,
-  computeNovaVoiceIdentity,
-} from "./payload";
+import { NOVA_PRESENTATION_OUTPUT_SCHEMA } from "./payload";
 import type { NovaVoicePayload } from "./payload";
 import { buildNovaVoiceSystemPrompt, renderNovaVoiceUserContent } from "./prompt";
 
@@ -37,18 +32,21 @@ import { buildNovaVoiceSystemPrompt, renderNovaVoiceUserContent } from "./prompt
  * the fenced, untrusted-labelled block `renderNovaVoiceUserContent` builds
  * (rule 42).
  *
- * ## Why the caller must cache
+ * ## Who is allowed to call this
  *
- * §H.6 of the Nova audit rejects "a call per message, per visit, per founder,
- * with no reuse key and no ledger row that means anything", and it is right
- * to. This function returns `identity` for exactly that reason: it is
- * `computeNovaVoiceIdentity`'s hash over the payload, the prompt version, the
- * policy version and the model, and a caller that does not check a store for
- * it before calling is the thing that objection names (rule 48).
+ * Nobody, directly. §H.6 of the Nova audit rejects "a call per message, per
+ * visit, per founder, with no reuse key and no ledger row that means
+ * anything", and [ADR 0084](../../../../docs/decisions/0084-nova-presentation-is-claimed-stored-and-attempted-once.md)
+ * amends that to five conditions rather than to a yes. This function satisfies
+ * exactly one of them — the deterministic fallback. The other four are
+ * `store.ts`'s: the identity, the persisted result, the atomic claim, and a
+ * read path that cannot reach a provider.
  *
- * The store is not built yet. Until it is, this is reachable from tests and
- * from nothing else — which is stated here rather than left to be discovered,
- * because the failure mode is a bill rather than a crash.
+ * So the entry point is `ensureNovaVoiceMessage`, which claims the one attempt
+ * this identity gets before reaching here and records the outcome after. This
+ * function no longer computes an identity of its own: one definition of what
+ * makes two messages the same message, in `payload.ts`, used by the code that
+ * claims against it.
  */
 
 export type NovaVoiceFallbackReason =
@@ -69,8 +67,6 @@ export type NovaVoiceOutcome = {
   source: "voice" | "template";
   /** Why the template was used. Null when the model's words were kept. */
   fallbackReason: NovaVoiceFallbackReason | null;
-  /** The reuse key. The same payload and prompt must never be paid for twice. */
-  identity: string;
   /** Present when a billable call was made, successful or not (rule 47). */
   usage: AIUsage | null;
   /** What the validator said, when it ran. Null when nothing reached it. */
@@ -118,18 +114,10 @@ export async function speakNovaMessage(params: {
   /** Off by default: this tier is opt-in, and its absence changes nothing. */
   enabled?: boolean;
 }): Promise<NovaVoiceOutcome> {
-  const identity = computeNovaVoiceIdentity({
-    payload: params.payload,
-    model: NOVA_PRESENTATION_CONFIG.model,
-    promptVersion: NOVA_VOICE_PROMPT_VERSION,
-    policyVersion: NOVA_VOICE_POLICY_VERSION,
-  });
-
   const fallback = (reason: NovaVoiceFallbackReason, extra?: Partial<NovaVoiceOutcome>) => ({
     message: params.template,
     source: "template" as const,
     fallbackReason: reason,
-    identity,
     usage: null,
     check: null,
     ...extra,
@@ -179,7 +167,6 @@ export async function speakNovaMessage(params: {
     message,
     source: "voice",
     fallbackReason: null,
-    identity,
     usage: result.usage,
     check,
   };

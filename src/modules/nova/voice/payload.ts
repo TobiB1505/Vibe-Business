@@ -47,6 +47,21 @@ export const NOVA_VOICE_SLOTS = [
 export type NovaVoiceSlot = (typeof NOVA_VOICE_SLOTS)[number];
 
 /**
+ * The languages Nova speaks. One, and that is why it is a type.
+ *
+ * A single-member union earns its place by being part of the reuse identity
+ * (ADR 0084). The failure it forecloses happens exactly once: a second locale
+ * ships, the identity does not move, and every founder in the new language is
+ * served the cached English sentence. Naming it now makes that a new identity
+ * rather than a support ticket.
+ */
+export const NOVA_VOICE_LOCALES = ["en"] as const;
+
+export type NovaVoiceLocale = (typeof NOVA_VOICE_LOCALES)[number];
+
+export const DEFAULT_NOVA_VOICE_LOCALE: NovaVoiceLocale = "en";
+
+/**
  * One already-decided fact.
  *
  * `label` is Vibe's own word for the fact and is safe. `value` is frequently
@@ -174,29 +189,48 @@ export function canonicalPayload(payload: NovaVoicePayload): string {
 }
 
 /**
- * What makes two Nova messages the same message (rule 48).
+ * What makes two Nova messages the same message (rule 48, ADR 0084).
  *
- * Four things, and the last three are the reason this is not just a payload
- * hash. The prompt version is in it so that improving Nova's personality does
- * not silently keep serving her old sentences; the policy version so that a
- * validator or payload change does the same; the model so that a model swap
- * is a new message rather than a reused one. Exactly the shape the audit and
- * the plan already hash their own inputs with — nothing new is being invented
- * here, it is the same rule applied to a cheaper call.
+ * Six inputs. The payload is the obvious one; the other five are each here for
+ * a reason that is not "more inputs is safer".
+ *
+ * **`projectId`** is in it for tenancy rather than for correctness. Two
+ * projects can produce a byte-identical payload — the generic slots make that
+ * likely rather than exotic — and a row keyed on content alone would let one
+ * customer's stored message be served to another. Scoping the identity to the
+ * project makes cross-tenant reuse unrepresentable rather than merely
+ * prevented.
+ *
+ * **`locale`** has one legal value today. See `NOVA_VOICE_LOCALES`.
+ *
+ * **`promptVersion`** so that improving Nova's personality does not silently
+ * keep serving her old sentences; **`policyVersion`** so that a validator or
+ * payload change does the same; **`model`** so that a model swap is a new
+ * message rather than a reused one — a future re-measurement must not inherit
+ * the losing arm's output.
+ *
+ * Note the slot is *not* a seventh argument: `canonicalPayload` already
+ * carries it, along with every fact, the numeric allowlist, the confidence and
+ * the next step. It is stored as its own column for legibility, never re-hashed
+ * here, so there is exactly one definition of what a payload is.
  *
  * A message stored under a superseded identity is history, not a cache miss:
  * it stays readable, and whether it is regenerated is a decision, not an
  * accident.
  */
 export function computeNovaVoiceIdentity(params: {
+  projectId: string;
   payload: NovaVoicePayload;
   model: string;
+  locale?: NovaVoiceLocale;
   promptVersion?: string;
   policyVersion?: string;
 }): string {
   return createHash("sha256")
     .update(
       JSON.stringify([
+        params.projectId,
+        params.locale ?? DEFAULT_NOVA_VOICE_LOCALE,
         canonicalPayload(params.payload),
         params.promptVersion ?? NOVA_VOICE_PROMPT_VERSION,
         params.policyVersion ?? NOVA_VOICE_POLICY_VERSION,

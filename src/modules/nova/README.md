@@ -25,10 +25,11 @@ feed.ts        the focus as entries on a screen — sentences, one control, prog
 first-run.ts   Nova's introduction, and the walkthrough she offers once
 onboarding.ts  the scan and the reveal, and what may ride along with "yes"
 voice/
-  payload.ts   what the model is given, what it may return, and the cache identity
+  payload.ts   what the model is given, what it may return, and the reuse identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
   checks.ts    what Vibe refuses to show a founder, whatever the model wrote
   service.ts   the call itself — and the template it returns instead, five ways
+  store.ts     one attempt per identity, and a read that cannot spend
   eval/
     cases.ts   fifty payloads, weighted toward the ones that make lying tempting
     rubric.ts  the six questions a regular expression cannot answer
@@ -164,13 +165,56 @@ returns the caller's own template unchanged. Its test suite is nothing but
 those five, because a happy-path suite would prove the opposite of what
 matters.
 
-**Nothing calls it yet, and that is deliberate.** §H.6 of the audit names "a
-call per message, per visit, per founder, with no reuse key" as a way to
-double-spend, and it is right: until a store exists to check
-`NovaVoiceOutcome.identity` against before calling, a render that spoke would
-be that objection (rule 48). So the function returns the reuse key and is
-reachable from tests and from nowhere else. The store is the next piece, not
-an afterthought.
+## One attempt per identity
+
+§M of the audit lists "a Nova copy LLM call per message" under **What NOT to
+build**, and [ADR 0084](../../../docs/decisions/0084-nova-presentation-is-claimed-stored-and-attempted-once.md)
+amends that to five conditions rather than to a yes, because what §M refuses
+is a _construction_: a provider call reached from a render, paid again on
+every refresh and every tab. The five are a deterministic reuse identity, a
+persisted result, an atomic claim, a deterministic fallback, and no provider
+call from the read path.
+
+The identity hashes **project, locale, canonical payload, prompt version,
+policy version and model**. Project is in it for tenancy rather than for cache
+correctness — two projects can produce a byte-identical payload, and a row
+keyed on content alone would serve one customer's stored message to another.
+Locale has one legal value today, which is exactly why it is hashed: the
+failure it forecloses happens once, when a second language ships and every
+founder in it is served the cached English sentence.
+
+`nova_voice_messages` stores **both** outcomes and stores them differently. An
+accepted sentence keeps its text, because the text is the model's. A fallback
+keeps its **reason and no text**, by CHECK constraint — the fallback text is
+Vibe's own template, which the reader already holds, and a stored copy would
+leave yesterday's wording on screen after a rewrite with nothing to reveal it
+(rule 83, one layer down). What the row exists to prevent is the second paid
+attempt after a failure, and it prevents that by existing.
+
+The claim is `insert … on conflict (identity) do nothing … returning` against
+the primary key: two tabs, two regions and one page rendered twice reduce to
+one winner, decided by Postgres rather than by a guard in one process. It is
+never withdrawn. A process that claims an identity and then dies leaves it on
+the template permanently, because the alternative's failure mode is a
+duplicate charge and its success mode is a marginally nicer sentence.
+
+`readNovaVoiceMessage(supabase, { identity, template })` takes no provider,
+and this module's only `@/modules/ai/provider` import is a type — a source
+contract asserts it stays one. A render that wanted to generate would have to
+be rewritten, not merely edited.
+
+**Nothing calls any of it.** `ensureNovaVoiceMessage` composes read → claim →
+speak → resolve and is reachable from tests only. The integration point, when
+it is built, is one call at the place a feed entry's text is chosen:
+
+```
+const { message } = await ensureNovaVoiceMessage({ … })   // not called yet
+```
+
+and it needs two things this slice deliberately did not decide — which caller
+holds the service-role client (rule 53: `operations/`, or an argued entry in
+`REVIEWED_SITES`), and where the usage event is written. Nothing has been
+billed, so nothing is recorded.
 
 ## What the voice may never do
 
