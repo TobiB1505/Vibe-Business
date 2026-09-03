@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -110,7 +110,7 @@ const OUT_DIR = join(process.cwd(), ".nova-eval");
  * have to be visible in the data, not only on the bill.
  */
 const JUDGE_RETRY_ON = new Set(["provider_overloaded", "provider_rate_limited", "provider_timeout"]);
-const JUDGE_MAX_ATTEMPTS = 2;
+const JUDGE_MAX_ATTEMPTS = Number(process.env.NOVA_JUDGE_ATTEMPTS ?? "2");
 
 type CaseResult = {
   id: string;
@@ -180,6 +180,65 @@ async function mapWithLimit<T, R>(
   );
 
   return results;
+}
+
+/**
+ * Judge one already-generated message.
+ *
+ * Extracted so the re-judge path below grades through exactly the same call,
+ * rubric and retry policy as a fresh run. A second implementation would make
+ * "we filled in the missing verdicts" a claim about two different graders.
+ */
+async function judgeMessage(
+  novaCase: NovaVoiceCase,
+  message: string,
+  base: CaseResult,
+): Promise<void> {
+  const provider = getAIProvider();
+  const judgeRequest = () =>
+    provider.generateStructured({
+      operation: "nova_presentation",
+      model: JUDGE.config.model,
+      system: NOVA_JUDGE_SYSTEM_PROMPT,
+      userContent: buildJudgeUserContent(novaCase, message),
+      outputSchema: NOVA_JUDGE_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
+      maxOutputTokens: JUDGE.config.maxOutputTokens,
+      reasoning: JUDGE.config.reasoning,
+      timeoutMs: JUDGE.config.timeoutMs,
+    });
+
+  let judged = await withCeiling(judgeRequest(), `${novaCase.id}:judge`);
+  base.judgeAttempts = 1;
+  while (
+    !judged.ok &&
+    JUDGE_RETRY_ON.has(judged.error) &&
+    base.judgeAttempts < JUDGE_MAX_ATTEMPTS
+  ) {
+    await new Promise((resolve) =>
+      setTimeout(resolve, base.judgeAttempts * 4_000 + Math.random() * 4_000),
+    );
+    judged = await withCeiling(judgeRequest(), `${novaCase.id}:judge`);
+    base.judgeAttempts += 1;
+  }
+
+  if (!judged.ok) {
+    base.errorClass = `judge:${judged.error}`;
+    return;
+  }
+
+  base.errorClass = null;
+  base.judgeUsage = { input: judged.usage.inputTokens, output: judged.usage.outputTokens };
+  const verdict = judged.data as Record<string, unknown>;
+  let passed = 0;
+  for (const criterion of NOVA_VOICE_CRITERIA) {
+    const value = verdict[criterion.id] === true;
+    base.judge[criterion.id] = value;
+    if (value) passed += 1;
+  }
+  base.voice = passed / NOVA_VOICE_CRITERIA.length;
+  const reasons = verdict.reasons;
+  base.judgeReasons =
+    typeof reasons === "object" && reasons !== null ? (reasons as Record<string, string>) : null;
 }
 
 async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult> {
@@ -252,55 +311,7 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
     base.failures = checked.failures.map((failure) => `${failure.code}:${failure.detail}`);
     base.warnings = checked.warnings.map((warning) => warning.code);
 
-    const judgeRequest = () =>
-      provider.generateStructured({
-        // A ledger key this probe never writes: the judge is an instrument,
-        // and `AIOperation` has no member for one.
-        operation: "nova_presentation",
-        model: JUDGE.config.model,
-        system: NOVA_JUDGE_SYSTEM_PROMPT,
-        userContent: buildJudgeUserContent(novaCase, message),
-        outputSchema: NOVA_JUDGE_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
-        maxOutputTokens: JUDGE.config.maxOutputTokens,
-        reasoning: JUDGE.config.reasoning,
-        timeoutMs: JUDGE.config.timeoutMs,
-      });
-
-    let judged = await withCeiling(judgeRequest(), `${novaCase.id}:judge`);
-    base.judgeAttempts = 1;
-    while (
-      !judged.ok &&
-      JUDGE_RETRY_ON.has(judged.error) &&
-      base.judgeAttempts < JUDGE_MAX_ATTEMPTS
-    ) {
-      // Jittered, so a batch that hit the same limit together does not return
-      // together and hit it again.
-      await new Promise((resolve) => setTimeout(resolve, 2_000 + Math.random() * 3_000));
-      judged = await withCeiling(judgeRequest(), `${novaCase.id}:judge`);
-      base.judgeAttempts += 1;
-    }
-
-    if (judged.ok) {
-      base.judgeUsage = {
-        input: judged.usage.inputTokens,
-        output: judged.usage.outputTokens,
-      };
-      const verdict = judged.data as Record<string, unknown>;
-      let passed = 0;
-      for (const criterion of NOVA_VOICE_CRITERIA) {
-        const value = verdict[criterion.id] === true;
-        base.judge[criterion.id] = value;
-        if (value) passed += 1;
-      }
-      base.voice = passed / NOVA_VOICE_CRITERIA.length;
-      const reasons = verdict.reasons;
-      base.judgeReasons =
-        typeof reasons === "object" && reasons !== null
-          ? (reasons as Record<string, string>)
-          : null;
-    } else {
-      base.errorClass = `judge:${judged.error}`;
-    }
+    await judgeMessage(novaCase, message, base);
 
     return base;
   } catch (error) {
@@ -317,8 +328,93 @@ function pct(numerator: number, denominator: number): string {
   return denominator === 0 ? "n/a" : `${((numerator / denominator) * 100).toFixed(1)}%`;
 }
 
+/**
+ * Fill in verdicts a previous run lost, without regenerating a single message.
+ *
+ * The candidate run lost 22 of 45 verdicts to provider capacity, which halved
+ * the comparable base. Regenerating the messages would have been cheap — the
+ * voice half of a whole arm is twenty cents — but it would replace the very
+ * outputs the surviving verdicts describe, so the two halves of the arm would
+ * no longer be about the same text. This judges what is stored and nothing
+ * else, through the same helper a fresh run uses.
+ *
+ * The one exception is a row whose *generation* failed: it has no message to
+ * grade, so a voice call runs first. Those ids are reported separately, because
+ * a regenerated message is genuinely a different sample from the ones beside it.
+ */
+async function rejudge(fileName: string): Promise<void> {
+  const path = join(OUT_DIR, fileName);
+  expect(existsSync(path), `${path} does not exist`).toBe(true);
+
+  const rows = readFileSync(path, "utf8")
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as CaseResult);
+
+  const byId = new Map(NOVA_VOICE_CASES.map((novaCase) => [novaCase.id, novaCase]));
+  const missing = rows.filter((row) => row.voice === null);
+  const regenerated: string[] = [];
+
+  await mapWithLimit(missing, CONCURRENCY, async (row) => {
+    const novaCase = byId.get(row.id);
+    if (!novaCase) return;
+
+    if (row.message === null) {
+      const fresh = await runOne(novaCase, row.rep);
+      regenerated.push(row.id);
+      Object.assign(row, fresh);
+      return;
+    }
+
+    row.status = "ok";
+    await judgeMessage(novaCase, row.message, row);
+  });
+
+  writeFileSync(path, rows.map((row) => JSON.stringify(row)).join("\n"), "utf8");
+
+  const graded = rows.filter((row) => row.voice !== null);
+  const stillMissing = rows.filter((row) => row.voice === null);
+  let judgeIn = 0;
+  let judgeOut = 0;
+  for (const row of rows) {
+    judgeIn += row.judgeUsage?.input ?? 0;
+    judgeOut += row.judgeUsage?.output ?? 0;
+  }
+
+  console.log(
+    [
+      "",
+      `re-judged ${fileName} with the ${JUDGE.name} judge (${JUDGE.config.model})`,
+      `attempted            ${missing.length}`,
+      `now graded           ${graded.length}/${rows.length}`,
+      `still missing        ${stillMissing.length}${
+        stillMissing.length > 0
+          ? ` (${[...new Set(stillMissing.map((row) => row.errorClass))].join(", ")})`
+          : ""
+      }`,
+      `regenerated messages ${regenerated.length}${
+        regenerated.length > 0 ? ` (${regenerated.join(", ")})` : ""
+      }`,
+      `judge retries        ${rows.reduce((sum, row) => sum + Math.max(0, row.judgeAttempts - 1), 0)}`,
+      `judge tokens (file)  in=${judgeIn} out=${judgeOut}`,
+      "",
+    ].join("\n"),
+  );
+}
+
 describe("Nova voice — paid eval", () => {
-  it(
+  const rejudgeFile = process.env.NOVA_REJUDGE;
+
+  it.runIf(Boolean(rejudgeFile))(
+    "fills in verdicts a previous run lost, reusing the stored messages",
+    async () => {
+      expect(process.env.ANTHROPIC_API_KEY, "ANTHROPIC_API_KEY is required.").toBeTruthy();
+      await rejudge(rejudgeFile!);
+    },
+    20 * 60 * 1000,
+  );
+
+  it.runIf(!rejudgeFile)(
     "grades every case, deterministically first and by judge second",
     async () => {
       expect(

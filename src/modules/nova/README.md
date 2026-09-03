@@ -27,7 +27,7 @@ voice/
 Nova's messages come from whichever of these can produce them, in order:
 
 1. **A template.** Deterministic, free, and always present. Every slot has one.
-2. **The voice model.** Haiku 4.5 rephrasing facts Vibe already established
+2. **The voice model.** Sonnet 5 rephrasing facts Vibe already established
    (`NOVA_PRESENTATION_CONFIG`). It adds no fact, no number and no
    recommendation, and it is validated after the fact by `checks.ts`.
 3. **The engines that already exist.** Product Understanding, the Business

@@ -522,3 +522,68 @@ The §A count moves from 22 fields (15 derivable, 4 existing, 3 new) to 21 (15 d
 | 8 | No longer decides Home vs rail (§O.2 decided it). Dogfood asserts the ordering rule: a project with two true candidates leads with the higher tier. |
 
 Everything else in §L, and the whole of §H, §I, §J and §M, stands as written.
+
+---
+
+## P. The voice model, measured (2026-09-03)
+
+§O left Nova's voice as a design with a model attached by argument. It was then
+built as an instrument and run. This section records what came back; it is a
+measurement, not a revision of anything above.
+
+**What was measured.** One function — payload + persona prompt → one string —
+over 50 cases (46 reaching a model, 4 asserting the fallback), graded on two
+independent axes: `safe`, deterministic and free, from
+`src/modules/nova/voice/checks.ts`; and `voice`, six checkable claims judged by
+Opus 5. The case set is weighted toward the dangerous half by construction, so
+these figures are pessimistic against production traffic.
+
+**Result, 46 cases, both arms fully judged, prompt `nova-voice-prompt-v3`:**
+
+| | Haiku 4.5 | Sonnet 5 |
+|---|---|---|
+| grounded | 41% | **72%** |
+| no_invention | 39% | **78%** |
+| calibrated | 85% | **96%** |
+| ignored_injection | 98% | 100% |
+| next_step_clear | 93% | 96% |
+| sounds_human | 85% | 85% |
+| **voice (mean)** | **74%** | **88%** |
+| safe (deterministic) | 43/46 | 42/46 |
+
+**The finding is a class of failure, not a score.** Haiku wrote fluent,
+correctly-shaped, numerically clean sentences that invented the *reasons*:
+*"that opacity tends to kill conversions"*, *"straightforward to fix and likely
+to move the needle fast"*, *"I looked at your conversion path"*. None is a
+fabricated number, none is a banned claim, and the deterministic validator
+passed all three — which is the architecture's central premise confirmed by
+experiment rather than by argument. Two prompt revisions moved `no_invention`
+from 39% and did not close it; a stronger model did, to 78%.
+
+**Safety is a model-independent property, and the numbers say so.** 43/46
+against 42/46 is no difference. Both models needed the validator, and it caught
+seven real things across the two arms — a message that obeyed a politely-phrased
+injection and wrote "no further work", one that wrote "deployed", one that wrote
+"it works" while the check was still running, one that leaked "snapshot". The
+eval also found a gap *in the validator*: `"go live"` was absent from
+`ALWAYS_BANNED_CLAIMS` while four other variants were present, and a message
+found it.
+
+**Cost, measured.** Sonnet 5 at 1,435 input and 157 output tokens per message
+is **$0.0044**, against Haiku's $0.0014 — roughly three cents per founder
+journey either way, next to $0.1965 for one Business Audit. Latency 4.4s against
+1.8s, which matters only because the template renders first and the voice
+replaces it. The cheap-model premise in §O was wrong in its choice of model and
+right in its conclusion: the voice layer is economically free either way.
+
+**What this does not establish.** Zero-to-three failures in 46 cases bounds an
+unobserved `safe` failure rate at roughly 6%, not at nil, so the validator is
+load-bearing rather than belt-and-braces. `sounds_human` did not improve and
+Sonnet's own failures are of a different kind — reading payload fields aloud
+rather than embellishing them — which is a prompt question nobody has worked on
+yet, because both arms ran against a prompt tuned against Haiku's failures.
+Neither arm was run at more than one repetition per case.
+
+**Cost of the measurement:** $3.74 in total, across two five-case pilots, two
+full arms, and one re-judge that recovered 22 verdicts lost to provider capacity
+without regenerating a single message.

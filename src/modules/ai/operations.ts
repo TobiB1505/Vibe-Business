@@ -296,38 +296,67 @@ export const AGENTIC_EXECUTION_CONFIG: AgentModelConfig = {
  */
 export const NOVA_PRESENTATION_CONFIG: OperationConfig = {
   operation: "nova_presentation",
+  /*
+   * **Sonnet 5, and the reason is measured rather than argued.**
+   *
+   * This config named Haiku 4.5 first, on the reasoning that rephrasing
+   * already-decided facts is light work. The eval disagreed, twice, over 46
+   * cases judged by Opus 5 under `nova-voice-prompt-v3`:
+   *
+   *   criterion          Haiku 4.5   Sonnet 5
+   *   grounded              41%        72%
+   *   no_invention          39%        78%
+   *   calibrated            85%        96%
+   *   sounds_human          85%        85%
+   *   voice (mean)          74%        88%
+   *
+   * `grounded` and `no_invention` are the pair the whole layer rests on, and
+   * the gap on them — 31 and 39 points, against a ~15-point noise floor at
+   * this sample size — is the finding. Haiku wrote fluent, well-shaped,
+   * correctly-numbered sentences that invented the *reasons*: "that opacity
+   * tends to kill conversions", "straightforward to fix", "I looked at your
+   * conversion path". Two prompt revisions moved that and did not close it.
+   *
+   * The premise the choice was made on still holds, which is why the decision
+   * is comfortable: at a measured 1,435 input and 157 output tokens per
+   * message this costs **$0.0044** a message against Haiku's $0.0014 — about
+   * three cents per founder journey either way, next to $0.1965 for one audit.
+   * Cheap was never the constraint; truthful was.
+   *
+   * `reasoning: { mode: "none" }` is kept. Sonnet 5 accepts adaptive thinking,
+   * and the eval deliberately did not give it any: if avoiding invention
+   * needed reasoning tokens, that would itself have been the finding. It did
+   * not, and paying for thinking on a rephrasing task has no argument behind
+   * it yet.
+   */
+  model: "claude-sonnet-5",
+  reasoning: { mode: "none" },
+  maxOutputTokens: 600,
+  maxInputTokens: 4_000,
+  /* Measured: 4.4s average across 46 messages, against Haiku's 1.8s. */
+  timeoutMs: 20_000,
+};
+/**
+ * What the shipping voice was measured against.
+ *
+ * Not a product config: `NOVA_PRESENTATION_CONFIG` above is what would ship,
+ * and this is kept only so the comparison behind it stays runnable. Selected
+ * by `NOVA_VOICE=candidate` in the eval probe.
+ *
+ * It was the first choice, and it lost on the two criteria that matter — see
+ * the table above. Kept rather than deleted because a decision whose losing
+ * arm cannot be re-run is a decision nobody can check, and because the next
+ * Haiku generation is exactly the thing that should be re-measured here rather
+ * than assumed.
+ */
+export const NOVA_PRESENTATION_CANDIDATE_CONFIG: OperationConfig = {
+  operation: "nova_presentation",
   model: "claude-haiku-4-5-20251001",
   reasoning: { mode: "none" },
   maxOutputTokens: 600,
   maxInputTokens: 4_000,
   timeoutMs: 10_000,
 };
-
-/**
- * The voice candidate the eval compares Haiku against.
- *
- * Not a product config and not a decision: `NOVA_PRESENTATION_CONFIG` above is
- * what would ship. This exists because the first full eval run answered the
- * question it was built to answer and the answer was no — Haiku 4.5 held
- * `calibrated`, `ignored_injection` and `next_step_clear` above 85%, and sat
- * near 40% on `grounded` and `no_invention`, which is the pair the whole layer
- * rests on. Two prompt revisions moved it and did not close it, so the next
- * question is whether the remaining gap is the prompt's or the model's, and
- * only a second model can answer that.
- *
- * Same effort posture as the shipping config: no thinking. The task is
- * rephrasing already-decided facts, and if it needs reasoning to avoid
- * inventing some, that is itself the finding.
- */
-export const NOVA_PRESENTATION_CANDIDATE_CONFIG: OperationConfig = {
-  operation: "nova_presentation",
-  model: "claude-sonnet-5",
-  reasoning: { mode: "none" },
-  maxOutputTokens: 600,
-  maxInputTokens: 4_000,
-  timeoutMs: 20_000,
-};
-
 /**
  * The two judges that grade Nova's voice, and why there are two.
  *
