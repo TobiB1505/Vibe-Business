@@ -63,7 +63,13 @@ export type AttentionItem = {
   action: { label: string; href: string };
 };
 
-const TIER_ORDER: Record<AttentionTier, number> = {
+/**
+ * Exported because Nova ranks its own candidates by the same rule
+ * (`src/modules/nova/focus.ts`). A second copy of these four numbers is two
+ * priority orders that eventually disagree about which one the founder is
+ * shown first.
+ */
+export const TIER_ORDER: Record<AttentionTier, number> = {
   blocked: 0,
   decision: 1,
   ready: 2,
