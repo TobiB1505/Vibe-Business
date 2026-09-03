@@ -52,6 +52,9 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { AgentWorkspaceChoice } from "./agent-workspace-choice";
+import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import { resolveBuildChain } from "@/modules/execution-contract/chain";
 import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
@@ -390,6 +393,33 @@ async function AgentWorkspaceBody({
   const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
 
   /*
+   * The one refusal that is a question rather than a dead end (Stufe 4).
+   *
+   * A repository with more than one independently installable application has
+   * no single answer to "which app did Vibe just build?", so nothing resolves
+   * agentic and there is no start control to render. Every other refusal in
+   * that position is something the founder fixes in their repository; this one
+   * they answer here, in a second, for free.
+   *
+   * Only asked when nothing else is on offer. A screen showing both a Build
+   * button and a question about which app to build would be asking about the
+   * run it was simultaneously offering to start.
+   */
+  const workspaceChoice =
+    agentRoutes?.available && !agenticStep && agentRoutes.snapshot
+      ? await resolveProjectValidationTarget(supabase, {
+          projectId,
+          snapshot: agentRoutes.snapshot,
+        })
+      : null;
+  const workspaceCandidates =
+    workspaceChoice &&
+    !workspaceChoice.supported &&
+    workspaceChoice.reason === "workspace_choice_required"
+      ? (workspaceChoice.candidates ?? [])
+      : [];
+
+  /*
    * The ready hero names the step the button would start, not just the Move.
    *
    * `agenticStep` is what `AgentStartAction` submits, and until this existed
@@ -526,7 +556,18 @@ async function AgentWorkspaceBody({
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
                 startAction={
-                  agenticStep ? (
+                  workspaceCandidates.length > 0 ? (
+                    <AgentWorkspaceChoice
+                      candidates={workspaceCandidates}
+                      action={(candidate) => (
+                        <AgentWorkspaceChoiceAction
+                          projectId={project.id}
+                          candidate={candidate}
+                          chosen={false}
+                        />
+                      )}
+                    />
+                  ) : agenticStep ? (
                     <div className="flex w-full flex-col gap-2">
                       {/*
                         The chain is offered, never imposed. Two controls rather
