@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import { findCausalClaims } from "../business-measurement/causality";
 import type { OperationView } from "../operations/view";
 import { NOVA_ACTION_META, isOfferable } from "./actions";
-import { buildNovaAuditEntry, buildNovaFeed } from "./feed";
+import type { AgentEconomicPolicy } from "../coding-agent/authorization";
+import { creditsToUnits } from "../credits/units";
+import { buildNovaAuditEntry, buildNovaExecutionOffer, buildNovaFeed } from "./feed";
 import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
 import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
@@ -387,5 +389,68 @@ describe("the audit as one entry", () => {
     );
 
     expect(entry.priority).toBeNull();
+  });
+});
+
+describe("the offer to build a step", () => {
+  const budget = { maxCredits: creditsToUnits(200) } as AgentEconomicPolicy["budget"];
+  const economics: AgentEconomicPolicy = {
+    budget,
+    nonProduction: false,
+    disclosure: "",
+  };
+
+  function offer(overrides: Partial<Parameters<typeof buildNovaExecutionOffer>[0]> = {}) {
+    return buildNovaExecutionOffer({
+      stepOrder: 3,
+      stepTitle: "Show the annual price",
+      memberCount: 1,
+      pricingClass: "standard",
+      economics,
+      ...overrides,
+    });
+  }
+
+  /**
+   * §L's invariant for this slice, and the reason the ceiling is handed in
+   * rather than recomputed: this has to be the number the run reserves, not a
+   * second calculation that agrees with it today.
+   */
+  it("shows the ceiling the economics resolved, and no other figure", () => {
+    expect(offer()?.maxCredits).toBe(economics.budget.maxCredits);
+  });
+
+  it("offers nothing when the economics do not resolve", () => {
+    expect(offer({ economics: null })).toBeNull();
+  });
+
+  it("binds the control to the step it would build", () => {
+    expect(offer()?.option).toMatchObject({
+      actionId: "nova.start_agent",
+      subject: { kind: "plan_step", stepOrder: 3 },
+    });
+  });
+
+  /** A run pushes a branch and spends. It asks again before it does either. */
+  it("keeps the confirmation the catalog requires", () => {
+    expect(offer()?.option.requiresConfirmation).toBe(true);
+    expect(offer()?.option.confirmationNote).toBe(
+      NOVA_ACTION_META["nova.start_agent"].confirmationNote,
+    );
+  });
+
+  /**
+   * §18 asks for a marker that is stated rather than derived: the dogfood
+   * policy prices differently, and a screen that inferred it from the ceiling
+   * would be guessing.
+   */
+  it("carries the non-production marker rather than inferring it", () => {
+    expect(offer()?.nonProduction).toBe(false);
+    expect(offer({ economics: { ...economics, nonProduction: true } })?.nonProduction).toBe(true);
+  });
+
+  /** A chain delivers several steps for one ceiling, and says how many. */
+  it("says how many steps one run would deliver", () => {
+    expect(offer({ memberCount: 3 })?.memberCount).toBe(3);
   });
 });

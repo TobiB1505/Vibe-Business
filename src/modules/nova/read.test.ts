@@ -16,6 +16,37 @@ const PROJECT = "project_1";
 const COMMIT = "a".repeat(40);
 const BASE_SHA = "b".repeat(40);
 
+/** A completed snapshot whose analyzer answered the build question. */
+function seedSnapshot(build: unknown) {
+  db.seed("repository_intelligence_snapshots", {
+    id: `snapshot_${(label += 1)}`,
+    project_id: PROJECT,
+    status: "completed",
+    source_commit_sha: COMMIT,
+    source_branch: "main",
+    analyzer_version: "v6",
+    completeness: "complete",
+    completeness_reasons: [],
+    failure_code: null,
+    result: { build },
+    created_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+    completed_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+  });
+}
+
+let label = 0;
+
+/** One installable application, in the shape the analyzer actually stores. */
+function buildTarget(directory: string) {
+  return {
+    directory,
+    buildScript: "next build",
+    frameworks: ["nextjs"],
+    moduleLinker: null,
+    lockfile: { inTargetDirectory: true, packageManager: "pnpm" },
+  };
+}
+
 /** Every table one prepared change makes Nova read. */
 const LIFECYCLE_TABLES = [
   "prepared_changes",
@@ -361,5 +392,100 @@ describe("what this module may never reach for", () => {
   it("has no await inside a loop", () => {
     const loops = source.match(/for\s*\(const[^)]*\)\s*\{[\s\S]*?\n {2}\}/g) ?? [];
     for (const loop of loops) expect(loop).not.toContain("await ");
+  });
+});
+
+/**
+ * The two facts Stage 4 made answerable.
+ *
+ * Both were fixed at false while `chooseWorkspaceRootAction` lived on a branch
+ * and the belief was that answering them needed the network. Their resolver is
+ * pure over a stored snapshot, so they are read now — and these assert the
+ * distinctions that matter more than the happy path.
+ */
+describe("what the repository read says", () => {
+  it("calls nothing outdated for a project Vibe has never read", async () => {
+    seedProject();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.repositoryReadOutdated).toBe(false);
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  /**
+   * A snapshot from before the build question existed cannot answer it. That
+   * is `repository_analysis_outdated`, and it is the state a founder has to be
+   * told about — their code moved on and Vibe's reading did not.
+   */
+  it("reports an outdated read when the snapshot predates the build question", async () => {
+    seedProject();
+    seedSnapshot(undefined);
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.repositoryReadOutdated).toBe(true);
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  it("asks nothing when one application answers for the whole repository", async () => {
+    seedProject();
+    seedSnapshot({ truncated: false, targets: [buildTarget(".")] });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.repositoryReadOutdated).toBe(false);
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  /**
+   * The discriminating case, and the reason the one above is not enough on its
+   * own: a malformed fixture resolves to a *different* refusal, whose two
+   * booleans are the same two falses. Only a repository that genuinely raises
+   * the question proves the resolver was reached at all — the first version of
+   * this test had a `lockfile` string where the code reads an object, and
+   * passed.
+   */
+  it("asks which application when the repository holds two", async () => {
+    seedProject();
+    seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.workspaceChoiceRequired).toBe(true);
+    expect(facts.repositoryReadOutdated).toBe(false);
+  });
+
+  /**
+   * And it stops asking once the founder has answered. `selectValidationTarget`
+   * applies their stored choice inside the resolver; re-deriving the question
+   * here would ignore an answer they already gave.
+   */
+  it("stops asking once the founder has chosen", async () => {
+    seedProject();
+    seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
+    db.seed("repository_connections", {
+      id: "connection_1",
+      project_id: PROJECT,
+      user_id: USER,
+      status: "active",
+      detached_at: null,
+      workspace_root: "frontend",
+    });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  /** A read model that writes is a render with a side effect — still true. */
+  it("writes nothing while answering either", async () => {
+    reset();
+    seedProject();
+    seedSnapshot(undefined);
+
+    await readNovaFocusFacts(client(), PROJECT);
+
+    expect(recorder.writes).toEqual([]);
   });
 });

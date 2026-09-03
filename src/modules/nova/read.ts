@@ -15,7 +15,9 @@ import { buildOperationView } from "../operations/view";
 import type { OperationView } from "../operations/view";
 import { getLatestOpportunities } from "../opportunities/service";
 import { getLatestVerificationsForPreparedChanges } from "../outcome-verification/store";
+import { getLatestSuccessfulSnapshot } from "../repository-intelligence/store";
 import { getLatestValidationsForPreparedChanges } from "../validation/store";
+import { resolveProjectValidationTarget } from "../validation/workspace-store";
 import { deriveNovaFocus } from "./focus";
 import type { NovaChangeFact, NovaFocus, NovaFocusFacts, NovaQuestionFact } from "./focus";
 
@@ -53,14 +55,16 @@ import type { NovaChangeFact, NovaFocus, NovaFocusFacts, NovaQuestionFact } from
  * option: the same precedence, over the rows that decide the stages Nova can
  * actually tell apart, and a documented list of the ones it never produces.
  *
- * ## What this slice does not yet read
+ * ## What this still does not read
  *
- * `executableStep`, `repositoryReadOutdated` and `workspaceChoiceRequired` are
- * fixed at their empty values here, and the three candidates that depend on
- * them cannot be raised yet. All three are answers only `resolvePlanExecutionRoutes`
- * can give, and it performs a live website preflight — a network call, which is
- * exactly what this module may not make. They arrive with the slices that
- * render them (§L 5–6), where the offer is being computed anyway.
+ * `executableStep` alone, and for the original reason: whether Vibe can build
+ * a plan step is `resolvePlanExecutionRoutes`'s answer, and it performs a live
+ * website preflight. The offer is computed where that call is already being
+ * made, and handed in rather than fetched here.
+ *
+ * The other two — `repositoryReadOutdated` and `workspaceChoiceRequired` —
+ * were fixed false on the same assumption and it turned out to be wrong for
+ * them: their resolver is pure over a stored snapshot. They are read below.
  */
 
 /**
@@ -194,6 +198,51 @@ async function readChangeFacts(
 }
 
 /**
+ * The two Stage-4 facts, from the resolver that owns them.
+ *
+ * Both were fixed at false until Stage 4 merged, on the belief that answering
+ * them needed the network. It does not: `resolveValidationProfile` is pure
+ * over a stored snapshot, and `resolveProjectValidationTarget` adds one
+ * conditional read of the founder's stored answer — and only when the question
+ * is choice-shaped, so a single-application project never pays for it. The
+ * website preflight that *does* reach the network belongs to
+ * `resolvePlanExecutionRoutes`, which is a different question and still not
+ * asked here.
+ *
+ * **No snapshot is not an outdated one.** A project Vibe has never read is not
+ * a project whose reading is stale, and telling that founder their code has
+ * moved on would be a sentence about a reading that does not exist. Onboarding
+ * owns the never-scanned case; this returns both facts false.
+ */
+async function readValidationTargetFacts(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<{ repositoryReadOutdated: boolean; workspaceChoiceRequired: boolean }> {
+  const snapshot = await getLatestSuccessfulSnapshot(supabase, projectId);
+  if (!snapshot?.result) {
+    return { repositoryReadOutdated: false, workspaceChoiceRequired: false };
+  }
+
+  const target = await resolveProjectValidationTarget(supabase, {
+    projectId,
+    snapshot: snapshot.result,
+  });
+  if (target.supported) {
+    return { repositoryReadOutdated: false, workspaceChoiceRequired: false };
+  }
+
+  return {
+    repositoryReadOutdated: target.reason === "repository_analysis_outdated",
+    /*
+     * After narrowing. A founder who has already answered is not asked again —
+     * `selectValidationTarget` applies their stored choice inside the resolver,
+     * and re-deriving the question here would ignore it.
+     */
+    workspaceChoiceRequired: target.reason === "workspace_choice_required",
+  };
+}
+
+/**
  * Every open question about this project, whoever is waiting on the answer.
  *
  * Read here rather than through `listFounderInputRequestsForPlan`, which
@@ -242,17 +291,19 @@ export async function readNovaFocusFacts(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<NovaFocusFacts> {
-  const [changes, opportunities, plan, auditCurrency, operations] = await Promise.all([
-    readChangeFacts(supabase, projectId),
-    getLatestOpportunities(supabase, projectId),
-    getLatestCompletedActionPlan(supabase, projectId),
-    getAuditCurrency(supabase, projectId),
-    Promise.all(
-      WATCHED_OPERATIONS.map((operationType) =>
-        findActiveOperation(supabase, { projectId, operationType }),
+  const [changes, opportunities, plan, auditCurrency, operations, validationTarget] =
+    await Promise.all([
+      readChangeFacts(supabase, projectId),
+      getLatestOpportunities(supabase, projectId),
+      getLatestCompletedActionPlan(supabase, projectId),
+      getAuditCurrency(supabase, projectId),
+      Promise.all(
+        WATCHED_OPERATIONS.map((operationType) =>
+          findActiveOperation(supabase, { projectId, operationType }),
+        ),
       ),
-    ),
-  ]);
+      readValidationTargetFacts(supabase, projectId),
+    ]);
 
   const stepOrderByKey = new Map((plan?.steps ?? []).map((step) => [step.id, step.order] as const));
   const questions = await readQuestionFacts(supabase, projectId, stepOrderByKey);
@@ -287,9 +338,8 @@ export async function readNovaFocusFacts(
      * rule 44 exists to keep out of a missing measurement.
      */
     auditOutdated: auditCurrency.hasAudit && !auditCurrency.upToDate,
-    /* Both are Stage-4 resolver answers, and the resolver reaches the network. */
-    repositoryReadOutdated: false,
-    workspaceChoiceRequired: false,
+    repositoryReadOutdated: validationTarget.repositoryReadOutdated,
+    workspaceChoiceRequired: validationTarget.workspaceChoiceRequired,
     working: running.length > 0 ? view(running[0]) : null,
   };
 }

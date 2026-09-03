@@ -1,4 +1,7 @@
+import type { AgentEconomicPolicy } from "../coding-agent/authorization";
 import type { RetailOperationKind } from "../credits/retail";
+import type { CreditUnits } from "../credits/units";
+import type { ExecutionPricingClass } from "../economy/execution-class";
 import type { OperationView } from "../operations/view";
 import type { BusinessBrainView, BusinessStrength } from "../projects/business-brain-view";
 import { strongestAreas } from "../projects/business-brain-view";
@@ -30,12 +33,12 @@ import type { FocusCandidate, FocusCandidateKind, NovaActionId, NovaFocus } from
  *
  * ## What is not here yet
  *
- * §F names eleven entry types. Five are built: a message, a choice, a
- * question, progress, and the audit reading. The other six — the Move card,
- * the product understanding, the execution offer, the agent's stages, the
- * review and the outcome — each render a view model that a later slice
- * assembles, and there is no caller for any of them today. Declaring them
- * ahead of their data would be six shapes nobody could fill (rule 15).
+ * §F names eleven entry types. Six are built: a message, a choice, a question,
+ * progress, the audit reading and the execution offer. The other five — the
+ * Move card, the product understanding, the agent's stages, the review and the
+ * outcome — each render a view model that a later slice assembles, and there
+ * is no caller for any of them today. Declaring them ahead of their data would
+ * be five shapes nobody could fill (rule 15).
  */
 
 /** What an action is about, so a control can be bound to the right thing. */
@@ -109,6 +112,30 @@ export type NovaEntry =
       /** How many more there are. A count, never a second list. */
       additionalPriorityCount: number;
       strengths: BusinessStrength[];
+    }
+  /**
+   * A plan step Vibe can build, with what it would cost at most.
+   *
+   * The ceiling is `AgentEconomicPolicy.budget.maxCredits` and nothing else —
+   * the same number `computeExecutionSpecIdentity` prices the run with. A
+   * screen that showed an estimate beside a button that reserves a ceiling
+   * would be showing a figure the founder is not charged, and a run that needs
+   * more pauses for their decision rather than spending past it.
+   *
+   * `nonProduction` travels because the internal dogfood policy prices
+   * differently, and §18 asks for a marker that is stated rather than derived.
+   */
+  | {
+      kind: "nova.execution_offer";
+      id: string;
+      stepOrder: number;
+      stepTitle: string;
+      /** Every step this one run would deliver, head first. Usually one. */
+      memberCount: number;
+      maxCredits: CreditUnits;
+      pricingClass: ExecutionPricingClass;
+      nonProduction: boolean;
+      option: NovaChoiceOption;
     };
 
 /**
@@ -292,6 +319,51 @@ export function buildNovaAuditEntry(
       : null,
     additionalPriorityCount: view.additionalPriorityCount,
     strengths: strongestAreas(synthesis),
+  };
+}
+
+/**
+ * The offer to build one step, priced by the function that will charge for it.
+ *
+ * §L\'s invariant for this slice, and the reason the ceiling is passed in
+ * rather than recomputed: `resolveRouteAgentEconomics` is what the spec
+ * builder uses, so taking `budget.maxCredits` from its result is the only way
+ * the number on the button and the number reserved are the same number. A
+ * second calculation here would be a second price.
+ *
+ * Returns null when the economics do not resolve — a step with no pricing
+ * class is one Vibe cannot price, and an offer with no ceiling is a button
+ * whose cost nobody can state (rule 60).
+ */
+export function buildNovaExecutionOffer(params: {
+  stepOrder: number;
+  stepTitle: string;
+  memberCount: number;
+  pricingClass: ExecutionPricingClass;
+  economics: AgentEconomicPolicy | null;
+}): Extract<NovaEntry, { kind: "nova.execution_offer" }> | null {
+  if (params.economics === null) return null;
+
+  const meta = NOVA_ACTION_META["nova.start_agent"];
+  return {
+    kind: "nova.execution_offer",
+    id: `execution-offer:${params.stepOrder}`,
+    stepOrder: params.stepOrder,
+    stepTitle: params.stepTitle,
+    memberCount: params.memberCount,
+    maxCredits: params.economics.budget.maxCredits,
+    pricingClass: params.pricingClass,
+    nonProduction: params.economics.nonProduction,
+    option: {
+      actionId: "nova.start_agent",
+      control: meta.control,
+      label: meta.label,
+      price: meta.price,
+      consequential: meta.consequential,
+      requiresConfirmation: meta.requiresConfirmation,
+      confirmationNote: meta.confirmationNote ?? null,
+      subject: { kind: "plan_step", stepOrder: params.stepOrder },
+    },
   };
 }
 

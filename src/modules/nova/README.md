@@ -51,10 +51,20 @@ of any kind** — which is why it derives a change's stage from rows rather than
 calling `deriveChangeProgress`, whose review evidence costs GitHub reads and a
 sandbox provider to distinguish four stages Nova says one sentence about.
 
-Three facts are therefore still empty here — `executableStep`,
-`repositoryReadOutdated`, `workspaceChoiceRequired` — because only the
-execution resolver can answer them and it performs a live website preflight.
-The candidates that depend on them arrive with the slices that render them.
+One fact is still empty here: `executableStep`, because whether Vibe can build
+a plan step is `resolvePlanExecutionRoutes`'s answer and it performs a live
+website preflight. The offer is built where that call already happens and
+handed in — `buildNovaExecutionOffer` takes the ceiling from
+`resolveRouteAgentEconomics` rather than recomputing it, so the number on the
+button is the number the run reserves.
+
+`repositoryReadOutdated` and `workspaceChoiceRequired` were empty for the same
+stated reason, and it turned out to be wrong for them: their resolver is pure
+over a stored snapshot. Both are read now, through
+`resolveProjectValidationTarget`, which also applies the founder's stored
+answer — so a founder who has chosen an application is not asked again. A
+project Vibe has never read is not one whose reading is outdated, and reports
+neither.
 
 ## Controls, and where the words live
 
@@ -95,7 +105,7 @@ gate Business Health already renders from, and `ProductConfirmation` reads the
 same answer — so the button drawn and the button Nova would have drawn cannot
 disagree.
 
-Five of §F's eleven entry types exist. The remaining six, and the `"feed"`
+Six of §F's eleven entry types exist. The remaining five, and the `"feed"`
 variants on the domain panels that render them, belong with the slices that
 assemble their view models — a variant on a panel nothing mounts would be dead
 code today.
