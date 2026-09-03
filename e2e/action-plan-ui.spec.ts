@@ -583,3 +583,50 @@ test.describe("a step the agent could build says so", () => {
     await expect(step.getByText("Needs your decision")).toBeVisible();
   });
 });
+
+/**
+ * And a step Vibe cannot build says which repository fact stands in the way.
+ *
+ * The counterpart of the suite above, and the half of its own argument that was
+ * never applied. The resolver is asked on this screen because the stored
+ * classification knows only the deterministic registry; when it answers *yes*
+ * the row says so, and when it answered **no** it also said why — which the
+ * screen dropped, so a founder one analyzer version behind read the same four
+ * words as one asking for something Vibe genuinely cannot do.
+ */
+test.describe("a step Vibe cannot build says why", () => {
+  test("names the repository fact instead of calling the work unautomated", async ({ page }) => {
+    await page.goto("/e2e/action_plan_repository_blocked");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    const step = plannedStep(page, "Build a dedicated pricing page");
+    await expect(step.getByText("predates this check")).toBeVisible();
+
+    // The sentence this replaces is not merely vague for a stale analysis — it
+    // is false. The work is automated; the read of the code is old.
+    await expect(step.getByText("Not automated yet")).toHaveCount(0);
+  });
+
+  test("says whose work it still is", async ({ page }) => {
+    // The headline does not move. Who owns the work is a different question
+    // from whether Vibe can currently start it, and only the second changed.
+    await page.goto("/e2e/action_plan_repository_blocked");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    const step = plannedStep(page, "Build a dedicated pricing page");
+    await expect(step.getByText("Vibe's work")).toBeVisible();
+  });
+
+  test("offers no control it cannot honour", async ({ page }) => {
+    await page.goto("/e2e/action_plan_repository_blocked");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    for (const label of FORBIDDEN_ACTION_LABELS) {
+      await expect(page.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+    }
+  });
+});
+

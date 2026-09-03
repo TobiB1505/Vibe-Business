@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ActionPlanBlockReason } from "./service";
+import type { ExecutionResolutionReason } from "@/modules/execution-contract/schema";
 import {
   EXECUTION_SUPPORT,
   type ActionPlanStep,
@@ -399,7 +400,11 @@ describe("planEvidenceSummary", () => {
  * same time, in the same product.
  */
 describe("stepResponsibility", () => {
-  const agentic = { intrinsicMode: "agentic" } as const;
+  const agentic = { intrinsicMode: "agentic", reason: "agentic_v1_eligible" } as const;
+
+  /** A resolution that refused, and said why. */
+  const refused = (reason: ExecutionResolutionReason) =>
+    ({ intrinsicMode: "unsupported", reason }) as const;
 
   function step(executionSupport: ExecutionSupport) {
     return { executionSupport };
@@ -436,10 +441,47 @@ describe("stepResponsibility", () => {
     });
   });
 
-  it("keeps today's answer when the resolver cannot build it either", () => {
+  it("keeps today's answer when the refusal is about the step, not the repository", () => {
+    // The row prints "Waiting for step N" from `stepSequenceStatus` right
+    // below, so saying it again here would say one thing twice.
+    const unchanged = { headline: "Vibe's work", sublabel: "Not automated yet" };
+    const notYet = step("not_yet_supported");
+
+    expect(stepResponsibility(notYet, refused("dependency_unsatisfied"))).toEqual(unchanged);
+    expect(stepResponsibility(notYet, refused("risk_class_prohibited"))).toEqual(unchanged);
+  });
+
+  /**
+   * The half of this screen's own argument that was never applied.
+   *
+   * The resolver is asked here because the stored classification knows only the
+   * deterministic registry. When it answers *yes*, the row says so. When it
+   * answered **no** it also said why — and that was thrown away, so a founder
+   * one analyzer version behind read the same four words as one asking for
+   * something Vibe genuinely cannot do.
+   */
+  it.each([
+    ["repository_analysis_outdated", "predates this check"],
+    ["no_lockfile", "no lockfile beside your app"],
+    ["no_build_script", "no build script"],
+    ["no_node_project", "no package.json"],
+    ["workspace_choice_required", "more than one app"],
+    ["package_manager_unsupported", "Yarn 3 or later"],
+  ] as const)("names the repository fact behind %s", (reason, fragment) => {
+    const responsibility = stepResponsibility(step("not_yet_supported"), refused(reason));
+
+    expect(responsibility.headline).toBe("Vibe's work");
+    expect(responsibility.sublabel).toContain(fragment);
+  });
+
+  it("never says a stale analysis is work Vibe has not automated", () => {
+    // The sentence this replaces was not merely vague here, it was false: the
+    // work is automated, and one free scan is the whole of what stands in the
+    // way.
     expect(
-      stepResponsibility(step("not_yet_supported"), { intrinsicMode: "unsupported" }),
-    ).toEqual({ headline: "Vibe's work", sublabel: "Not automated yet" });
+      stepResponsibility(step("not_yet_supported"), refused("repository_analysis_outdated"))
+        .sublabel,
+    ).not.toBe("Not automated yet");
   });
 
   /**
