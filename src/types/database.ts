@@ -4060,6 +4060,7 @@ export type Database = {
           failure_code: string | null
           failure_detail: string | null
           id: string
+          install_root: string
           operation_run_id: string
           package_manager: string
           prepared_change_id: string
@@ -4095,6 +4096,7 @@ export type Database = {
           failure_code?: string | null
           failure_detail?: string | null
           id?: string
+          install_root?: string
           operation_run_id: string
           package_manager: string
           prepared_change_id: string
@@ -4130,6 +4132,7 @@ export type Database = {
           failure_code?: string | null
           failure_detail?: string | null
           id?: string
+          install_root?: string
           operation_run_id?: string
           package_manager?: string
           prepared_change_id?: string

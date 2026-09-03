@@ -22,8 +22,22 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * Bumped whenever detection rules change materially, so a stored snapshot
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
+ *
+ * ## v6 → v7
+ *
+ * `declaresWorkspaces` changed meaning. It used to be true for any directory
+ * holding a `pnpm-workspace.yaml`, and that over-claims: pnpm 10 keeps
+ * `overrides`, `patchedDependencies` and `allowBuilds` in the same file, so a
+ * single-package repository pinning one transitive dependency declared a
+ * workspace it did not have — this repository among them. It is now the file's
+ * `packages:` key, or a `workspaces` field in the manifest.
+ *
+ * The bump is not optional hygiene. Under v6 nothing read the field; under v7
+ * it decides whether an ancestor lockfile may install an application below it,
+ * so a v6 answer read as a v7 one would put a sandbox to work in a directory
+ * chosen by a wrong fact.
  */
-export const ANALYZER_VERSION = "repo-intelligence-v6" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v7" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";
@@ -303,7 +317,16 @@ export type BuildTarget = {
   /** Framework ids from **this manifest's own** dependencies. */
   frameworks: string[];
   lockfile: BuildTargetLockfile | null;
-  /** A `workspaces` field here, or a `pnpm-workspace.yaml` beside it. */
+  /**
+   * A `workspaces` field in this manifest, or a `pnpm-workspace.yaml` beside
+   * it that declares `packages:`.
+   *
+   * The pnpm half is a read rather than an existence check, and that is the
+   * v6 → v7 change: the file also carries `overrides` and friends, so having
+   * one says nothing about being a workspace. What this field decides — since
+   * Stufe 8 — is whether an application with no lockfile of its own may be
+   * installed from an ancestor's, which is a sandbox working directory.
+   */
   declaresWorkspaces: boolean;
   /**
    * Yarn's module resolution, observed from `.pnp.cjs` rather than read.

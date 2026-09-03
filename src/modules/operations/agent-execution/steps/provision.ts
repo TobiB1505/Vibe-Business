@@ -110,6 +110,23 @@ export async function provisionAgentWorkspaceStep(
 
   const workdir = workspaceCwdFor(target.sourceRoot, spec.spec.repository.workspaceRoot ?? ".");
 
+  /*
+   * Where dependencies come from, which is not always where the agent works.
+   *
+   * An application inside a workspace installs from the workspace root: the
+   * lockfile is there, and `pnpm install --frozen-lockfile` run anywhere else
+   * either fails or produces a tree nobody committed. The agent's own working
+   * directory stays the application — it is the code it was asked to change.
+   *
+   * Both read from the spec rather than re-resolved (rule 67), and absent
+   * means the run installs where it works, which is what every run before
+   * workspaces did.
+   */
+  const installDir = workspaceCwdFor(
+    target.sourceRoot,
+    spec.spec.repository.installRoot ?? spec.spec.repository.workspaceRoot ?? ".",
+  );
+
   // Source identity, established by Vibe's own command. A provider-pinned
   // revision already carries the guarantee; observing it is free and turns an
   // assumption into a check (§8, §54).
@@ -181,7 +198,7 @@ export async function provisionAgentWorkspaceStep(
 
   const installed = await sandbox.run({
     command: installCommand(packageManager),
-    cwd: workdir,
+    cwd: installDir,
     timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
   });
 

@@ -191,6 +191,12 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // told only "cannot preview" would reasonably assume they had lost both.
   preview_not_supported:
     "Vibe does not know how to start a development server for this project's framework yet, so there is nothing to look at. Checking a change and merging it still work.",
+  // Neither the framework nor the scan is at fault here, so neither sentence
+  // would be true. What Vibe declines to do is guess where a workspace install
+  // put the framework's binary — and the founder can act on none of that,
+  // which is why the sentence spends its second half on what still works.
+  preview_workspace_unsupported:
+    "Vibe cannot preview an application that installs from a workspace root yet, so there is nothing to look at. Checking a change and merging it still work.",
   // The confirmation is a server-side requirement, not a UI courtesy, so this
   // is reachable and has to read as a sentence rather than an internal state.
   preview_exposure_not_confirmed:

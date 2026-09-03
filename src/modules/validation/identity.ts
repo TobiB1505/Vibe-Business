@@ -59,6 +59,17 @@ export function computeValidationIdentity(params: {
    * *here*" is.
    */
   workspaceRoot: string;
+  /**
+   * Which directory the install ran in (Stufe 8).
+   *
+   * Separate from `workspaceRoot` because it is a separate claim, and both are
+   * part of what a pass says. The same application can legitimately be a
+   * question twice — installed from its own directory, and installed from a
+   * workspace root above it — and those are different dependency trees, so a
+   * pass under one must not answer for the other. That difference is what the
+   * hash has to carry; a founder moving a lockfile is not a re-run request.
+   */
+  installRoot: string;
 }): string {
   // Fixed order rather than object key order, so a refactor cannot silently
   // rehash every stored identity.
@@ -71,6 +82,7 @@ export function computeValidationIdentity(params: {
     params.validationDepth,
     params.validationDepthPolicyVersion,
     params.workspaceRoot,
+    params.installRoot,
   ]);
 
   return createHash("sha256").update(canonical).digest("hex");

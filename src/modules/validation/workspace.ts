@@ -58,6 +58,7 @@ export function selectValidationTarget(
     profile: CURRENT_VALIDATION_PROFILE,
     packageManager: chosen.packageManager,
     workspaceRoot: chosen.workspaceRoot,
+    installRoot: chosen.installRoot,
     frameworks: chosen.frameworks,
     moduleLinker: chosen.moduleLinker,
   };

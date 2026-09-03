@@ -143,8 +143,29 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
  * checked to mean, so a pass recorded under v5 was checked against a narrower
  * set of installers than a v6 pass is — and must not be reused to answer for
  * one.
+ *
+ * ## v6 → v7
+ *
+ * Secret handling changed, which rule 65 names as part of what "validated"
+ * means. The source-acquisition credential is destroyed and its absence
+ * verified before any repository-controlled command runs — and both the
+ * removal and the verification used to be aimed at the *application's*
+ * directory. A clone puts `.git` at the clone root, so for an application in a
+ * subdirectory the removal cleared nothing and the check then confirmed the
+ * absence of a file that was never going to be there. Both roots are now
+ * cleared and both read back.
+ *
+ * Nothing stored is misrepresented: every run recorded to date is a
+ * single-application repository at the root, where the two paths are the same
+ * one. The bump keeps that true going forward rather than repairing the past —
+ * and it costs nothing extra, because `installRoot` joining the validation
+ * identity moves every hash in this release anyway.
+ *
+ * `policyDigest` does not cover this: it hashes budgets, hosts, resources and
+ * install commands, and the scrub is none of those. A known limit of the
+ * digest, not a reason to leave the version behind.
  */
-export const SANDBOX_POLICY_VERSION = "sandbox-policy-v6" as const;
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v7" as const;
 
 export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
 export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];

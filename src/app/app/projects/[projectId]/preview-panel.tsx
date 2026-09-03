@@ -537,6 +537,21 @@ export function PreviewPanel({
             {" "}— it is free. Checking a change and merging it still work.
           </p>
         </div>
+      ) : previewState === "workspace_not_previewable" ? (
+        /*
+         * The third reason, and the only one that is Vibe declining rather
+         * than Vibe lacking. Neither the framework sentence nor the scan
+         * sentence is true here, so neither is shown — and the founder has no
+         * move, which is why the copy spends itself on what still works
+         * instead of on an instruction they cannot follow.
+         */
+        <div className="space-y-2" data-testid="preview-workspace-not-previewable">
+          <p className="text-sm text-fg-secondary">Nothing to look at for this application</p>
+          <p className="text-xs text-fg-muted">
+            This application installs from a workspace root, and Vibe cannot start a development
+            server for it yet. Checking a change and merging it still work.
+          </p>
+        </div>
       ) : previewState === "failed" ? (
         <div className="space-y-2">
           <p className="text-sm text-coral">Preview failed</p>

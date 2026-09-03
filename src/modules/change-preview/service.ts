@@ -173,6 +173,16 @@ export async function startChangePreview(
         snapshot: snapshot.result,
       })
     : null;
+  /*
+   * Asked before the profile, because the two refusals are different sentences
+   * and the framework one would be false here (Stufe 8). Checked on the server
+   * as well as in the offer: the card is what a founder sees, and this is what
+   * a second caller reaching past it gets.
+   */
+  if (resolution?.supported && resolution.installRoot !== resolution.workspaceRoot) {
+    return { kind: "failed", error: "preview_workspace_unsupported" };
+  }
+
   const previewProfile = resolution?.supported
     ? previewProfileFor(resolution.profile, resolution.frameworks, {
         moduleLinker: resolution.moduleLinker,
@@ -438,6 +448,7 @@ export async function previewAvailability(
     snapshot: snapshot.result,
   });
   if (!resolution.supported) return "repository_not_ready";
+  if (resolution.installRoot !== resolution.workspaceRoot) return "workspace_not_previewable";
 
   return previewProfileFor(resolution.profile, resolution.frameworks, {
     moduleLinker: resolution.moduleLinker,

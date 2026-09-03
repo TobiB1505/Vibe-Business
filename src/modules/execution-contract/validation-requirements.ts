@@ -82,6 +82,8 @@ export type ExecutionValidationRequirement =
       sandboxSteps: readonly ValidationStepName[];
       /** Where those steps would run. `"."` for a single-application repository. */
       workspaceRoot: string;
+      /** Where the install would run. The same directory, or a workspace root. */
+      installRoot: string;
     }
   | {
       supported: false;
@@ -146,6 +148,7 @@ function requirementFor(resolution: ProfileResolution): ExecutionValidationRequi
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     sandboxSteps: PROFILE_STEPS[resolution.profile],
     workspaceRoot: resolution.workspaceRoot,
+    installRoot: resolution.installRoot,
   };
 }
 

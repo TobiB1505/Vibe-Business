@@ -149,6 +149,7 @@ async function resolveContext(
       validationDepth: depth.depth,
       validationDepthPolicyVersion: depth.policyVersion,
       workspaceRoot: profile.workspaceRoot,
+      installRoot: profile.installRoot,
     }),
   };
 }

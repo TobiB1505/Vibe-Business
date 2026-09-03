@@ -287,19 +287,54 @@ describe("what a target always is", () => {
     );
   });
 
-  it("declares workspaces from either the field or a pnpm-workspace.yaml beside it", () => {
+  it("declares workspaces from the manifest field", () => {
     const field = detectBuildTargets(
       contextFrom([{ path: "package.json", content: packageJson({ workspaces: ["apps/*"] }) }]),
     );
-    const file = detectBuildTargets(
+
+    expect(field.targets[0].declaresWorkspaces).toBe(true);
+  });
+
+  it("declares workspaces from pnpm's `packages:` key, not from the file existing", () => {
+    /*
+     * The v6 → v7 correction, and the case that forced it is this repository.
+     *
+     * pnpm 10 keeps `overrides`, `patchedDependencies` and `allowBuilds` in
+     * `pnpm-workspace.yaml`, so a single-package project that pins one
+     * transitive dependency has the file and no workspace. While nothing read
+     * the field that was inert; it now decides whether an ancestor's lockfile
+     * may install an application below it, which is a sandbox working
+     * directory.
+     */
+    const overridesOnly = detectBuildTargets(
       contextFrom([
         { path: "package.json", content: packageJson({ name: "app" }) },
-        { path: "pnpm-workspace.yaml" },
+        { path: "pnpm-workspace.yaml", content: "overrides:\n  undici: ^7.29.0\n" },
       ]),
     );
 
-    expect(field.targets[0].declaresWorkspaces).toBe(true);
-    expect(file.targets[0].declaresWorkspaces).toBe(true);
+    const members = detectBuildTargets(
+      contextFrom([
+        { path: "package.json", content: packageJson({ name: "app" }) },
+        { path: "pnpm-workspace.yaml", content: "packages:\n  - 'apps/*'\n" },
+      ]),
+    );
+
+    expect(overridesOnly.targets[0].declaresWorkspaces).toBe(false);
+    expect(members.targets[0].declaresWorkspaces).toBe(true);
+  });
+
+  it("does not read an indented `packages:` as the workspace declaration", () => {
+    // Anchored to the line start, because a `packages:` nested under another
+    // key is a different key that happens to share a name.
+    const nested = detectBuildTargets(
+      contextFrom([
+        { path: "package.json", content: packageJson({ name: "app" }) },
+        { path: "pnpm-workspace.yaml", content: "catalog:\n  packages:\n    - x\n" },
+      ]),
+    );
+
+    expect(nested.targets[0].declaresWorkspaces).toBe(false);
   });
 
   it("is empty for a repository with no Node manifest at all", () => {

@@ -110,6 +110,19 @@ describe("eligibility states", () => {
     expect(card({ availability: "repository_not_ready" }).state).toBe("repository_not_ready");
   });
 
+  it("names a workspace install as its own state", () => {
+    /*
+     * A third reason rather than a shade of the other two, because it is a
+     * fact about neither the framework nor the scan — both are fine. It is the
+     * one refusal here that is Vibe declining to guess: a preview invokes the
+     * framework binary by path, and where a workspace install puts that binary
+     * differs by package manager.
+     */
+    expect(card({ availability: "workspace_not_previewable" }).state).toBe(
+      "workspace_not_previewable",
+    );
+  });
+
   it("keeps that separate from having no commit", () => {
     // Different states because the founder can do different things about them:
     // a missing commit arrives when the agent finishes, and this one does not
