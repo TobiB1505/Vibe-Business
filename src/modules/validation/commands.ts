@@ -56,20 +56,42 @@ export type SandboxCommand = {
  * postinstall step to build will fail validation. In V0.1 that is the intended
  * trade — a false negative, not a weakened boundary (§10).
  */
+const INSTALL_COMMANDS: Record<SupportedPackageManager, SandboxCommand> = {
+  pnpm: { command: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"] },
+  npm: { command: "npm", args: ["ci", "--ignore-scripts"] },
+  // Berry's locked mode is `--immutable`; `--mode=skip-build` is its
+  // `--ignore-scripts`, and the flag names differ because the tools do.
+  yarn_berry: { command: "yarn", args: ["install", "--immutable", "--mode=skip-build"] },
+  bun: { command: "bun", args: ["install", "--frozen-lockfile", "--ignore-scripts"] },
+};
+
+/**
+ * Exhaustive by construction, and that is the point.
+ *
+ * The shape this replaced was a ternary whose `else` was npm. Adding a member
+ * to the union without touching it would have installed a bun repository with
+ * `npm ci` — silently, because a wrong installer usually succeeds at producing
+ * *some* dependency tree, and then a verdict is recorded about it. A `Record`
+ * over the union makes a new member a compile error instead.
+ */
 export function installCommand(packageManager: SupportedPackageManager): SandboxCommand {
-  return packageManager === "pnpm"
-    ? { command: "pnpm", args: ["install", "--frozen-lockfile", "--ignore-scripts"] }
-    : { command: "npm", args: ["ci", "--ignore-scripts"] };
+  return INSTALL_COMMANDS[packageManager];
 }
+
+/** The binary each package manager runs a `package.json` script through. */
+const SCRIPT_RUNNERS: Record<SupportedPackageManager, string> = {
+  pnpm: "pnpm",
+  npm: "npm",
+  yarn_berry: "yarn",
+  bun: "bun",
+};
 
 /** Runs a `package.json` script through the resolved package manager. */
 export function scriptCommand(
   packageManager: SupportedPackageManager,
   script: string,
 ): SandboxCommand {
-  return packageManager === "pnpm"
-    ? { command: "pnpm", args: ["run", script] }
-    : { command: "npm", args: ["run", script] };
+  return { command: SCRIPT_RUNNERS[packageManager], args: ["run", script] };
 }
 
 /** The scripts each optional step will use, in preference order. */

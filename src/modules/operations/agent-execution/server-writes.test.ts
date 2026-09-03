@@ -129,8 +129,16 @@ describe("persistAgentExecutionSpec", () => {
   it("records exactly one audit event for a spec, however many times it is written", async () => {
     const shared = spec();
 
-    await persistAgentExecutionSpec({ spec: shared, userId: USER, repositoryConnectionId: "conn-1" });
-    await persistAgentExecutionSpec({ spec: shared, userId: USER, repositoryConnectionId: "conn-1" });
+    await persistAgentExecutionSpec({
+      spec: shared,
+      userId: USER,
+      repositoryConnectionId: "conn-1",
+    });
+    await persistAgentExecutionSpec({
+      spec: shared,
+      userId: USER,
+      repositoryConnectionId: "conn-1",
+    });
 
     const created = db
       .rows("audit_events")
@@ -138,7 +146,6 @@ describe("persistAgentExecutionSpec", () => {
     expect(created).toHaveLength(1);
   });
 });
-
 
 /**
  * The two writes that made Run with Vibe throw.

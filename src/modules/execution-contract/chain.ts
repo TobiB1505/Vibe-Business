@@ -1,5 +1,8 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
-import { matchCapability, type CapabilityMatchContext } from "@/modules/action-plans/capability-registry";
+import {
+  matchCapability,
+  type CapabilityMatchContext,
+} from "@/modules/action-plans/capability-registry";
 import { findDependencyCycles } from "@/modules/action-plans/sequence";
 import { classifyExecutionRisk } from "./risk";
 import { MAX_AGENTIC_V1_RISK, riskExceeds } from "./schema";

@@ -143,7 +143,9 @@ export function classifyExecutionDependency(
    * consequence should be that the step stops being absorbable, not that this
    * file silently keeps folding it into an agent run.
    */
-  if (classifyExecutionRisk({ changeKind: step.changeKind, evidenceIds: step.evidenceIds }) !== "low") {
+  if (
+    classifyExecutionRisk({ changeKind: step.changeKind, evidenceIds: step.evidenceIds }) !== "low"
+  ) {
     return "hard";
   }
 

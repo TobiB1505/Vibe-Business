@@ -41,6 +41,7 @@
  */
 
 import type { ValidationProfile } from "@/modules/validation/schema";
+import { previewProfileForFrameworks } from "./dev-servers";
 
 /**
  * Preview profiles (§3).
@@ -54,49 +55,70 @@ import type { ValidationProfile } from "@/modules/validation/schema";
  * artifact — never from an Opportunity's prose, a repository's README, or any
  * other text a model or a customer wrote (CLAUDE.md rules 25, 57).
  */
-export const PREVIEW_PROFILES = ["nextjs_preview_v1", "nextjs_dev_preview_v1"] as const;
+export const PREVIEW_PROFILES = [
+  /** Historical — a production server on a restored validated artifact. */
+  "nextjs_preview_v1",
+  /** Historical — the single dev server, before there was a table of them. */
+  "nextjs_dev_preview_v1",
+  "next_dev_v1",
+  "nuxt_dev_v1",
+  "astro_dev_v1",
+] as const;
 export type PreviewProfile = (typeof PREVIEW_PROFILES)[number];
 
 /**
- * The profile every new preview uses (Sprint 0114).
+ * The two names no new session reaches.
  *
- * `nextjs_preview_v1` — a production server on a restored validated artifact —
- * remains in the union because sessions that ran under it are history and their
- * rows still say so. Nothing creates one any more.
+ * `nextjs_preview_v1` started a production server on a restored validated
+ * artifact; `nextjs_dev_preview_v1` was the single dev server that replaced it,
+ * back when one profile could mean one framework. Both remain in the union
+ * because sessions that ran under them are history and their rows still say so
+ * (rule 83). `next_dev_v1` starts the same server as the second and is a
+ * different name because it is now one row of a table rather than the whole of
+ * it — and because a stored row should say which of those two things it meant.
  */
-export const CURRENT_PREVIEW_PROFILE: PreviewProfile = "nextjs_dev_preview_v1";
+export const RETIRED_PREVIEW_PROFILES: readonly PreviewProfile[] = [
+  "nextjs_preview_v1",
+  "nextjs_dev_preview_v1",
+];
 
 /** Bumped when what a profile *starts* changes meaning. */
 export const PREVIEW_PROFILE_VERSIONS: Record<PreviewProfile, string> = {
   nextjs_preview_v1: "nextjs-preview-v1",
   nextjs_dev_preview_v1: "nextjs-dev-preview-v1",
+  next_dev_v1: "next-dev-v1",
+  nuxt_dev_v1: "nuxt-dev-v1",
+  astro_dev_v1: "astro-dev-v1",
 };
 
 /**
  * Which repositories a preview can be started for.
  *
- * Answered by `resolveValidationProfile`, not by a second detection of the same
- * facts. That resolver already decides — from the analyzer's snapshot, never
- * from an Opportunity's prose, a README, or any other text a model or customer
- * wrote (rules 25, 57) — whether this is a single-app Next.js repository with a
- * package manager Vibe supports. A preview needs exactly the same three things,
- * and it needs the package manager and workspace root the resolver returns
- * anyway.
+ * Answered by `resolveValidationProfile` plus the dev-server table, not by a
+ * second detection of the same facts. The resolver already decides — from the
+ * analyzer's snapshot, never from an Opportunity's prose, a README, or any
+ * other text a model or customer wrote (rules 25, 57) — which application Vibe
+ * would work on, which package manager installs it and which directory it lives
+ * in. A preview needs all three, plus one thing more: whether a server command
+ * exists for *that application's* frameworks.
  *
  * Keying it on the validation *profile* rather than on a completed validation
  * *run* is the change Sprint 0114 made: a preview no longer waits for a run.
- *
- * One entry, deliberately, for the same reason validation has one: a profile is
- * a promise about which runtime starts which server on which port. "Supports
- * everything" would mean "promises nothing", and a guessed start command
- * produces a URL nobody should trust.
+ * Keying the command on the application's frameworks rather than on the profile
+ * is Stufe 4's: one profile now admits every Node application, and they are not
+ * all startable by the same command.
  */
-export const PREVIEWABLE_VALIDATION_PROFILES: Record<ValidationProfile, PreviewProfile | null> = {
-  nextjs_node_v1: CURRENT_PREVIEW_PROFILE,
-};
-
-export function previewProfileFor(validationProfile: ValidationProfile): PreviewProfile | null {
-  return PREVIEWABLE_VALIDATION_PROFILES[validationProfile] ?? null;
+export function previewProfileFor(
+  validationProfile: ValidationProfile,
+  frameworks: readonly string[],
+  options: { moduleLinker?: "node_modules" | "pnp" | null } = {},
+): PreviewProfile | null {
+  // The validation profile is not consulted: every profile that admits an
+  // application admits it for preview too, and what decides is whether a server
+  // command exists. The parameter stays so a future profile that genuinely
+  // cannot be previewed — a Python contract, say — has somewhere to say so.
+  void validationProfile;
+  return previewProfileForFrameworks(frameworks, options);
 }
 
 /**
@@ -106,7 +128,10 @@ export function previewProfileFor(validationProfile: ValidationProfile): Preview
  *
  *  - the runtime it starts in (a fresh clone of the prepared commit);
  *  - the single Vibe-controlled port;
- *  - the server command strategy (a development server — see ADR 0064);
+ *  - the server command strategy (a development server — see ADR 0064 — chosen
+ *    from a table keyed on the application's own frameworks, which is the v2 → v3
+ *    change: what a preview *starts* stopped following from its validation
+ *    profile once one profile admitted every Node application);
  *  - the network policy at each phase (GitHub, then the registry, then
  *    `deny-all` before any repository code runs);
  *  - the TTL;
@@ -120,7 +145,7 @@ export function previewProfileFor(validationProfile: ValidationProfile): Preview
  * reason: a stored "this ran fine" must never be reinterpreted under rules it
  * was not checked against (CLAUDE.md rule 65).
  */
-export const PREVIEW_POLICY_VERSION = "preview-policy-v2" as const;
+export const PREVIEW_POLICY_VERSION = "preview-policy-v3" as const;
 
 export const PREVIEW_PROVIDERS = ["vercel_sandbox"] as const;
 export type PreviewProviderId = (typeof PREVIEW_PROVIDERS)[number];

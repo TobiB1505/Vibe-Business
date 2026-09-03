@@ -59,7 +59,7 @@ export type ReviewClassification = (typeof REVIEW_CLASSIFICATIONS)[number];
  * stored, so nothing can be reinterpreted under rules it was not decided by.
  * The version exists so a displayed recommendation can be traced to a policy.
  */
-export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v3" as const;
+export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v4" as const;
 
 /**
  * Files whose contents can only reach rendered output.
@@ -73,12 +73,31 @@ export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v3" as const
  * That is why this is a rule about *file kind and location*, not a list of
  * names. `api/` is excluded explicitly because a `.tsx` under an API route
  * would be a surprising thing to call presentational.
+ *
+ * ## Anchored at the application, not at the repository
+ *
+ * Every pattern is anchored, and until Stufe 4 it was anchored at the
+ * repository root — which was the same place while every validatable repository
+ * had its application there. It is not any more: an application in `frontend/`
+ * changes `frontend/src/app/page.tsx`, and against a root-anchored pattern that
+ * matches nothing. Nothing would have failed. Every change would have
+ * classified as `code`, no preview would ever have been recommended, and
+ * `render-impact.ts` would never have run — silently, with every test green.
+ *
+ * So the caller passes the workspace root and paths are made
+ * application-relative first. Stripping rather than loosening the patterns is
+ * deliberate: a pattern that tolerated any leading directory would also match
+ * `docs/app/page.tsx`, which is prose about a page rather than a page.
  */
 const RENDERABLE_PATTERNS: readonly RegExp[] = [
   /^src\/app\/(?!api\/).*\.tsx$/i,
   /^src\/components\/.*\.tsx$/i,
   /^app\/(?!api\/).*\.tsx$/i,
   /^components\/.*\.tsx$/i,
+  /* Vite and its family put routed views under `src/pages/` or `src/routes/`,
+     and neither has an `app/` directory to be recognised by. */
+  /^src\/pages\/.*\.[jt]sx$/i,
+  /^src\/routes\/.*\.[jt]sx$/i,
   /\.(css|scss|svg)$/i,
 ];
 
@@ -115,6 +134,14 @@ export type ClassifyReviewInput = {
    * input existed.
    */
   provenNonRendering?: readonly string[];
+  /**
+   * Where the application lives, so a path can be read relative to it.
+   *
+   * Absent means the repository root, which is what every change classified
+   * before a repository could hold its application anywhere — so an old caller
+   * and an old stored classification still mean the same thing.
+   */
+  workspaceRoot?: string;
 };
 
 export type ReviewClassificationResult = {
@@ -157,10 +184,28 @@ function routesOf(surface: ResolvedExecutionSurface | null) {
  * satisfies neither is not "unknown", it is code — and a code diff is a review
  * that always works.
  */
-function isVisual(path: string, routeSources: ReadonlySet<string>): boolean {
+function isVisual(path: string, routeSources: ReadonlySet<string>, workspaceRoot: string): boolean {
   if (TEST_FILE_PATTERN.test(path)) return false;
+  // The analyzer's route table is repository-relative, like `changedPaths`, so
+  // this comparison stays on the unstripped path.
   if (routeSources.has(path)) return true;
-  return RENDERABLE_PATTERNS.some((pattern) => pattern.test(path));
+
+  const relative = withinWorkspace(path, workspaceRoot);
+  return relative !== null && RENDERABLE_PATTERNS.some((pattern) => pattern.test(relative));
+}
+
+/**
+ * A repository path expressed relative to the application, or null.
+ *
+ * Null means the path is outside the application entirely — a sibling service,
+ * a shared `docs/` directory — which is not renderable by any pattern here and
+ * should not be made to look like one by trimming a prefix that never matched.
+ */
+function withinWorkspace(path: string, workspaceRoot: string): string | null {
+  if (workspaceRoot === "." || workspaceRoot === "") return path;
+
+  const prefix = `${workspaceRoot}/`;
+  return path.startsWith(prefix) ? path.slice(prefix.length) : null;
 }
 
 /**
@@ -181,6 +226,7 @@ function isVisual(path: string, routeSources: ReadonlySet<string>): boolean {
  * `visualPaths`, so a downgraded layout correctly stops naming a route too.
  */
 export function classifyReview(input: ClassifyReviewInput): ReviewClassificationResult {
+  const workspaceRoot = input.workspaceRoot ?? ".";
   const routes = routesOf(input.surface);
   const routeSources = new Set(routes.map((route) => route.sourcePath));
   const proven = new Set(input.provenNonRendering ?? []);
@@ -190,7 +236,7 @@ export function classifyReview(input: ClassifyReviewInput): ReviewClassification
   const downgradedPaths: string[] = [];
 
   for (const path of input.changedPaths) {
-    if (!isVisual(path, routeSources)) {
+    if (!isVisual(path, routeSources, workspaceRoot)) {
       codePaths.push(path);
       continue;
     }

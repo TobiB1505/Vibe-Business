@@ -5,6 +5,7 @@ import { isGeneratedPath, pathSegments } from "./path-policy";
 import { detectBrand } from "./detectors/brand";
 import { detectBusinessSurfaces } from "./detectors/business-surfaces";
 import { detectIntegrationSignals } from "./detectors/integrations";
+import { detectBuildTargets } from "./detectors/build-targets";
 import { detectMonorepo } from "./detectors/monorepo";
 import { detectRoutes } from "./detectors/routes";
 import {
@@ -92,7 +93,11 @@ export async function analyzeRepository(
   for (const candidate of selection.toFetch) {
     if (!tracker.canFetchFile()) break;
 
-    const content = await input.reader.getTextFile(candidate.path, head.commitSha, budgets.maxBytesPerFile);
+    const content = await input.reader.getTextFile(
+      candidate.path,
+      head.commitSha,
+      budgets.maxBytesPerFile,
+    );
     if (content === null) continue;
 
     tracker.recordFetch(Buffer.byteLength(content, "utf8"));
@@ -142,6 +147,7 @@ export async function analyzeRepository(
     frameworks,
     packageManager: detectPackageManager(context),
     scripts: detectProjectScripts(context),
+    build: detectBuildTargets(context, { manifestsTruncated: selection.truncatedByBudget }),
     runtime: detectRuntime(context),
     integrationSignals,
     routes,

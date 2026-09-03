@@ -11,12 +11,8 @@ import {
   type SandboxUsage,
 } from "@/modules/validation/sandbox-port";
 import { PREVIEW_BUDGETS, PREVIEW_RESOURCES } from "./budgets";
-import {
-  healthyStatusCode,
-  parseProbeStatus,
-  previewHealthProbeCommand,
-  previewServerCommand,
-} from "./commands";
+import { previewServerCommandFor } from "./dev-servers";
+import { healthyStatusCode, parseProbeStatus, previewHealthProbeCommand } from "./commands";
 import { previewSandboxNameFor } from "./identity";
 import type { SupportedPackageManager } from "@/modules/validation/schema";
 import type { PreviewCleanupStatus, PreviewFailureCode } from "./schema";
@@ -107,6 +103,15 @@ export type PreviewTarget = {
    */
   sourceRoot: string;
   workspaceRoot: string;
+  /**
+   * The frameworks the chosen application's own manifest declares.
+   *
+   * Decides which development server Vibe starts. The application's, never the
+   * repository's: a repository with a Next.js app in `frontend/` and a Python
+   * service in `backend/` reports `nextjs` either way, and only one of its
+   * directories can be started with `next dev`.
+   */
+  frameworks: readonly string[];
 };
 
 /**
@@ -174,8 +179,6 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /environment variable ["'`]?[A-Z][A-Z0-9_]{2,}["'`]? is (?:not set|required|missing)/i,
   /invalid environment variables/i,
 ];
-
-
 
 function detail(text: string | null): string | null {
   return text === null ? null : sanitizeCommandOutput(text).text;
@@ -344,7 +347,11 @@ export async function provisionPreviewWorkspace(
 
     return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
   } catch (error) {
-    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeThrown(error)) };
+    return {
+      ok: false,
+      failureCode: "preview_failed",
+      failureDetail: detail(describeThrown(error)),
+    };
   }
 }
 
@@ -353,7 +360,9 @@ async function create(
   provider: SandboxProvider,
   target: PreviewTarget,
   environment: Readonly<Record<string, string>>,
-): Promise<SandboxHandle | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null }> {
+): Promise<
+  SandboxHandle | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null }
+> {
   try {
     return await provider.create({
       name: previewSandboxNameFor(target.previewSessionId),
@@ -459,10 +468,27 @@ export async function startPreviewServer(
       return resolveOrigin(sandbox);
     }
 
+    /*
+     * No server command for this application's frameworks means no preview.
+     *
+     * Eligibility already answered this before the session existed, so reaching
+     * here would mean the two disagreed — and the safe direction is to stop
+     * rather than to start something. A guessed command on a public URL is the
+     * one outcome this module exists to prevent.
+     */
+    const serverCommand = previewServerCommandFor(target.frameworks);
+    if (!serverCommand) {
+      return {
+        ok: false,
+        failureCode: "preview_not_supported",
+        failureDetail: detail("no development server is known for this application"),
+      };
+    }
+
     let server: SandboxProcess;
     try {
       server = await sandbox.runBackground({
-        command: previewServerCommand(),
+        command: serverCommand,
         cwd: workdir,
         // No additional environment. The sandbox's own is the whole story, and
         // a per-command override would be a second place a secret could enter.
@@ -502,9 +528,11 @@ export async function startPreviewServer(
           // A deterministically identifiable missing-configuration failure is a
           // different thing from a crash, and the user can act on exactly one
           // of them.
-          failureCode: missingEnvironment ? "preview_missing_environment" : "preview_process_exited",
+          failureCode: missingEnvironment
+            ? "preview_missing_environment"
+            : "preview_process_exited",
           failureDetail: detail(
-            `${describeCommand(previewServerCommand())} exited with code ${exitCode}\n${output.text}`,
+            `${describeCommand(serverCommand)} exited with code ${exitCode}\n${output.text}`,
           ),
         };
       }
@@ -529,7 +557,11 @@ export async function startPreviewServer(
       ),
     };
   } catch (error) {
-    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeThrown(error)) };
+    return {
+      ok: false,
+      failureCode: "preview_failed",
+      failureDetail: detail(describeThrown(error)),
+    };
   }
 }
 

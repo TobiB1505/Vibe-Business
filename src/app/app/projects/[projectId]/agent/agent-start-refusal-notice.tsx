@@ -23,9 +23,10 @@ import {
  * alone. No provider prose, no model output, no internal identifier — §5 of the
  * execution contract, and the reason `execution-contract/view.ts` exists.
  *
- * The recovery link is a `Link`, never a form: re-reading a repository is a
- * paid operation and Vibe never starts one on the founder's behalf (Rule 60).
- * Where it leads is the route's business, handed in as `repositoryReadHref`.
+ * The recovery link is a `Link`, never a form: Vibe never re-reads a founder's
+ * code on their behalf (Rule 60). The scan itself is free — what the link
+ * protects is authorship, not a budget. Where it leads is the route's business,
+ * handed in as `repositoryReadHref`.
  */
 export function AgentStartRefusalNotice({
   detail,

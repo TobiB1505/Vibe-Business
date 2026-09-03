@@ -49,7 +49,9 @@ describe("detectRoutes — App Router", () => {
 
     const routes = detectRoutes(context, NEXT).routes;
     expect(routes.every((route) => route.dynamic)).toBe(true);
-    expect(pagePaths(routes)).toEqual(expect.arrayContaining(["/docs/[...slug]", "/shop/[[...filters]]"]));
+    expect(pagePaths(routes)).toEqual(
+      expect.arrayContaining(["/docs/[...slug]", "/shop/[[...filters]]"]),
+    );
   });
 
   it("classifies route.ts as an API route", () => {
@@ -77,7 +79,10 @@ describe("detectRoutes — App Router", () => {
   });
 
   it("ignores private _folders", () => {
-    const context = contextFrom([{ path: "src/app/_components/page.tsx" }, { path: "src/app/page.tsx" }]);
+    const context = contextFrom([
+      { path: "src/app/_components/page.tsx" },
+      { path: "src/app/page.tsx" },
+    ]);
     expect(pagePaths(detectRoutes(context, NEXT).routes)).toEqual(["/"]);
   });
 
@@ -132,7 +137,9 @@ describe("detectRoutes — Pages Router", () => {
 describe("detectRoutes — unsupported frameworks", () => {
   it("reports limited for code-configured routing", () => {
     const context = contextFrom([{ path: "main.py" }]);
-    const fastapi: Detection[] = [{ id: "fastapi", name: "FastAPI", confidence: "high", evidence: [] }];
+    const fastapi: Detection[] = [
+      { id: "fastapi", name: "FastAPI", confidence: "high", evidence: [] },
+    ];
 
     const result = detectRoutes(context, fastapi);
     expect(result.mode).toBe("limited");

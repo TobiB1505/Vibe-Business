@@ -5,18 +5,27 @@ import {
   recordLifecycle,
   loadRun,
   loadSpec,
+  workspaceCwdFor,
 } from "./shared";
 import { alertOperator } from "@/lib/observability/alert";
 import { redactCredentials } from "@/lib/security/credential-patterns";
 import { AGENT_SANDBOX_LIFETIME_MS } from "@/modules/coding-agent/budget";
 import { readAgentGatewayConfig } from "@/modules/coding-agent/gateway-config";
-import { AGENT_RUNTIME_DIRNAME, installAgentRuntime } from "@/modules/coding-agent/sandbox-runtime/provider";
+import {
+  AGENT_RUNTIME_DIRNAME,
+  installAgentRuntime,
+} from "@/modules/coding-agent/sandbox-runtime/provider";
 import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
 import type { AgentCheckName } from "@/modules/coding-agent/schema";
 import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { installCommand, planValidationSteps } from "@/modules/validation/commands";
-import { DEPENDENCY_HOSTS, SOURCE_HOSTS, type SandboxHandle } from "@/modules/validation/sandbox-port";
+import {
+  DEPENDENCY_HOSTS,
+  SOURCE_HOSTS,
+  type SandboxHandle,
+} from "@/modules/validation/sandbox-port";
 import { SANDBOX_ENVIRONMENT } from "@/modules/validation/orchestrator";
+import { supportedPackageManager } from "@/modules/validation/schema";
 import { setOperationStage } from "../../store";
 /**
  * Creates the sandbox at the exact pinned commit, installs, and closes the
@@ -86,17 +95,27 @@ export async function provisionAgentWorkspaceStep(
     }
   }
 
-  const workdir = [target.sourceRoot, target.workspaceRoot]
-    .map((segment) => segment.replace(/^\/+|\/+$/g, ""))
-    .filter((segment) => segment.length > 0)
-    .join("/");
+  /*
+   * Where the application lives, from the spec rather than from the target.
+   *
+   * `resolveTarget` knows the repository and nothing about which directory
+   * inside it holds the application — it used to hard-code the root, which was
+   * right only while every admitted repository had its app there. The spec
+   * pinned the answer when it was built, and pinning is the point: a founder
+   * naming a different application must not move a running run's working
+   * directory (rule 67).
+   */
+  const spec = await loadSpec(deps, run);
+  if (!spec) return { ok: false, failureCode: "missing_required_context" };
+
+  const workdir = workspaceCwdFor(target.sourceRoot, spec.spec.repository.workspaceRoot ?? ".");
 
   // Source identity, established by Vibe's own command. A provider-pinned
   // revision already carries the guarantee; observing it is free and turns an
   // assumption into a check (§8, §54).
   const head = await sandbox.run({
     command: { command: "git", args: ["rev-parse", "HEAD"] },
-    cwd: workdir.length > 0 ? workdir : ".",
+    cwd: workdir,
     timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
   });
   const observed = head.exitCode === 0 ? head.output.trim() : "";
@@ -107,7 +126,7 @@ export async function provisionAgentWorkspaceStep(
   // The credential stops existing before anything repository-controlled runs.
   await sandbox.run({
     command: { command: "rm", args: ["-rf", ".git"] },
-    cwd: workdir.length > 0 ? workdir : ".",
+    cwd: workdir,
     timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
   });
 
@@ -133,13 +152,21 @@ export async function provisionAgentWorkspaceStep(
     return { ok: false, failureCode: "validation_not_supported" };
   }
 
-  // The spec carries the package manager Vibe's own analyzer detected. Read
-  // from the spec rather than sniffed inside the sandbox: a lockfile the
-  // repository controls must not decide which install command Vibe runs.
-  const spec = await loadSpec(deps, run);
-  if (!spec) return { ok: false, failureCode: "missing_required_context" };
+  /*
+   * The install command comes from the spec's package manager, and from a
+   * closed set (§7.2).
+   *
+   * Read from the spec rather than sniffed inside the sandbox, because a
+   * lockfile the repository controls must not decide which install command
+   * Vibe runs. And parsed exhaustively rather than coerced: the old
+   * `=== "npm" ? "npm" : "pnpm"` was harmless only while admission excluded
+   * everything else, and the first repository admitted with a different
+   * lockfile would have been installed with the wrong tool — silently, because
+   * a wrong installer usually succeeds at producing *some* dependency tree.
+   */
+  const packageManager = supportedPackageManager(spec.spec.repository.packageManager);
+  if (packageManager === null) return { ok: false, failureCode: "validation_not_supported" };
 
-  const packageManager = spec.spec.repository.packageManager === "npm" ? "npm" : "pnpm";
   const plan = planValidationSteps({ packageManager, scripts });
 
   // GitHub is revoked here: the source is already on disk, so continued access
@@ -154,7 +181,7 @@ export async function provisionAgentWorkspaceStep(
 
   const installed = await sandbox.run({
     command: installCommand(packageManager),
-    cwd: workdir.length > 0 ? workdir : ".",
+    cwd: workdir,
     timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
   });
 

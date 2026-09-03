@@ -35,18 +35,15 @@ function repository(
   mode: RepositoryIntelligenceSnapshot["routes"]["mode"] = "app_router",
 ) {
   return {
-    businessSurfaces: [
-      "authentication",
-      "payments",
-      "pricing_page",
-      "checkout_billing",
-    ].map((id) => ({
-      id,
-      name: id,
-      detected: detected.includes(id),
-      confidence: "high",
-      evidence: [],
-    })),
+    businessSurfaces: ["authentication", "payments", "pricing_page", "checkout_billing"].map(
+      (id) => ({
+        id,
+        name: id,
+        detected: detected.includes(id),
+        confidence: "high",
+        evidence: [],
+      }),
+    ),
     routes: { mode, routes: [], truncated: false },
   } as unknown as RepositoryIntelligenceSnapshot;
 }
@@ -110,9 +107,9 @@ describe("it never contradicts an absence of evidence", () => {
   it("says nothing when the live check identified no pages", () => {
     // A site behind a bot wall reports every surface undetected. Comparing
     // against it would contradict every capability the repository has.
-    expect(buildIntelligenceCrossChecks(repository(["pricing_page", "payments"]), live([]))).toEqual(
-      [],
-    );
+    expect(
+      buildIntelligenceCrossChecks(repository(["pricing_page", "payments"]), live([])),
+    ).toEqual([]);
   });
 
   it("does not compare pages when repository routes were never readable", () => {

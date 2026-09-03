@@ -13,7 +13,7 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { resolveDepthForPreparedChange } from "./depth-inputs";
 import { computeValidationIdentity } from "./identity";
-import { resolveValidationProfile } from "./profile";
+import { resolveProjectValidationTarget } from "./workspace-store";
 import {
   SANDBOX_POLICY_VERSION,
   validationProfileVersionFor,
@@ -71,7 +71,10 @@ export type StartValidationOutcome =
   | { kind: "started"; operation: OperationView }
   | { kind: "running"; operation: OperationView }
   | { kind: "reused"; validationRunId: string; status: "passed" }
-  | { kind: "failed"; error: ValidationFailureCode | "project_not_found" | "execution_start_failed" };
+  | {
+      kind: "failed";
+      error: ValidationFailureCode | "project_not_found" | "execution_start_failed";
+    };
 
 function view(operation: StoredOperationRun): OperationView {
   return buildOperationView({
@@ -114,7 +117,10 @@ async function resolveContext(
   const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
   if (!snapshot?.result) return { ok: false, error: "validation_not_supported" };
 
-  const profile = resolveValidationProfile(snapshot.result);
+  const profile = await resolveProjectValidationTarget(supabase, {
+    projectId: params.projectId,
+    snapshot: snapshot.result,
+  });
   if (!profile.supported) return { ok: false, error: profile.reason };
 
   /*
@@ -142,6 +148,7 @@ async function resolveContext(
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       validationDepth: depth.depth,
       validationDepthPolicyVersion: depth.policyVersion,
+      workspaceRoot: profile.workspaceRoot,
     }),
   };
 }

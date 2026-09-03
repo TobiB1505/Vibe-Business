@@ -117,7 +117,9 @@ export type ExecutionBudgetPolicy = {
    * Every class must be present. A policy that omitted one would resolve
    * `undefined` at exactly the moment money moves.
    */
-  budgetsByClass: Readonly<Record<ExecutionPricingClass, Omit<ExecutionBudget, "budgetPolicyVersion">>>;
+  budgetsByClass: Readonly<
+    Record<ExecutionPricingClass, Omit<ExecutionBudget, "budgetPolicyVersion">>
+  >;
 };
 
 /**

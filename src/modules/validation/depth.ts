@@ -162,11 +162,16 @@ const SENSITIVE_PATH_RULES: readonly { domain: string; pattern: RegExp }[] = [
   { domain: "database", pattern: /\.sql$/i },
   {
     domain: "execution-core",
-    pattern: /(^|\/)(coding-agent|execution|execution-contract|execution-context|operations|validation)(\/|$)/i,
+    pattern:
+      /(^|\/)(coding-agent|execution|execution-contract|execution-context|operations|validation)(\/|$)/i,
   },
   { domain: "security", pattern: /(^|\/)(secrets?|credentials?|tokens?|middleware)(\/|\.|$)/i },
   /** Anything that changes what gets installed changes what everything else runs. */
-  { domain: "build-identity", pattern: /(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|next\.config\.[cm]?[jt]s|tsconfig\.json)$/i },
+  {
+    domain: "build-identity",
+    pattern:
+      /(^|\/)(package\.json|pnpm-lock\.yaml|package-lock\.json|next\.config\.[cm]?[jt]s|tsconfig\.json)$/i,
+  },
   /** Repository-controlled automation. A workflow change is a supply-chain change. */
   { domain: "ci", pattern: /(^|\/)\.github\/workflows(\/|$)/i },
 ];

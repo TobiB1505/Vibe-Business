@@ -27,9 +27,13 @@ describe("bounds (§14, §38)", () => {
   });
 
   it("caps the number of stored lines", () => {
-    const result = sanitizeCommandOutput(Array.from({ length: 900 }, (_, i) => `line ${i}`).join("\n"));
+    const result = sanitizeCommandOutput(
+      Array.from({ length: 900 }, (_, i) => `line ${i}`).join("\n"),
+    );
 
-    expect(result.text.split("\n").length).toBeLessThanOrEqual(SANDBOX_BUDGETS.maxStoredOutputLines);
+    expect(result.text.split("\n").length).toBeLessThanOrEqual(
+      SANDBOX_BUDGETS.maxStoredOutputLines,
+    );
     expect(result.truncated).toBe(true);
   });
 
@@ -116,7 +120,8 @@ describe("secret redaction (§15)", () => {
   });
 
   it("redacts a JWT-shaped value", () => {
-    const jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
+    const jwt =
+      "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N_XgL0n3I9PlFUP0THsR8U";
 
     expect(sanitizeCommandOutput(`token: ${jwt}`).text).not.toContain("eyJhbGciOiJIUzI1NiJ9");
   });

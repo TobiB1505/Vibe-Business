@@ -86,7 +86,9 @@ export function detectMonorepo(context: DetectionContext): MonorepoIntelligence 
   }
 
   if (hasMultiplePackages && !hasConventionalLayout) {
-    items.push(evidence("manifest_field", "package.json", `${packageManifestCount} package manifests`));
+    items.push(
+      evidence("manifest_field", "package.json", `${packageManifestCount} package manifests`),
+    );
   }
 
   // Structure says monorepo but no app/package directory could be

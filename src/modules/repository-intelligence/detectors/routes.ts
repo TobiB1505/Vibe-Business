@@ -125,9 +125,20 @@ function detectPagesRouterRoutes(context: DetectionContext, root: string): Route
 }
 
 /** Frameworks whose routes cannot be derived from paths without running code. */
-const CODE_ROUTED_FRAMEWORKS = new Set(["express", "nestjs", "fastapi", "django", "flask", "laravel", "rails"]);
+const CODE_ROUTED_FRAMEWORKS = new Set([
+  "express",
+  "nestjs",
+  "fastapi",
+  "django",
+  "flask",
+  "laravel",
+  "rails",
+]);
 
-export function detectRoutes(context: DetectionContext, frameworks: Detection[]): RouteIntelligence {
+export function detectRoutes(
+  context: DetectionContext,
+  frameworks: Detection[],
+): RouteIntelligence {
   const isNext = frameworks.some((framework) => framework.id === "nextjs");
 
   if (isNext) {

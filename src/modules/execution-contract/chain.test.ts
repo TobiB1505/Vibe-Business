@@ -63,11 +63,7 @@ const REAL_PLAN: ActionPlanStep[] = [
   }),
 ];
 
-function chainFrom(
-  head: ActionPlanStep,
-  steps: ActionPlanStep[],
-  completed: number[] = [],
-) {
+function chainFrom(head: ActionPlanStep, steps: ActionPlanStep[], completed: number[] = []) {
   return resolveBuildChain({
     head,
     steps,
@@ -124,7 +120,12 @@ describe("every boundary, by its own minimal fixture", () => {
   it("successor_not_agentic — the next step is Vibe's own thinking", () => {
     // `analysis` is absorbable *preparation*, never a chained delivery. The two
     // concepts stay apart, and this is where that is enforced.
-    const next = fakePlanStep({ id: "2-analyse", order: 2, changeKind: "analysis", dependsOn: [1] });
+    const next = fakePlanStep({
+      id: "2-analyse",
+      order: 2,
+      changeKind: "analysis",
+      dependsOn: [1],
+    });
 
     expect(chainFrom(head, [head, next]).boundary).toBe("successor_not_agentic");
   });

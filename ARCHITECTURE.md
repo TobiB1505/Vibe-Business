@@ -134,6 +134,8 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0015, ADR 0036]** "Tested" means the repository's **own** `install`, `typecheck`, `test` and `build`, resolved from the repository intelligence snapshot by `resolveValidationProfile`. No smoke tests are generated. Depth is risk-adaptive and is part of the validation identity, so a `fast` pass can never be reused to answer a `deep` question. A pass means those commands exited zero in an isolated VM — never that a change is safe, correct, reviewed or ready ([CLAUDE.md](CLAUDE.md) rule 66).
 
+**[Confirmed — ADR 0078]** The profile is a **build contract**, not a framework list. `node_build_v1` admits an application with a `build` script and a lockfile in its own directory that Vibe can install from exactly — which is what those commands need — rather than one whose manifest declares `next`. The framework check narrowed which repositories could be checked without sharpening what the check claimed, and because `resolveExecutionValidation` asks the same function, it decided which repositories could run an agent at all. Every refusal now names the missing thing, and the directory a run validated is recorded on the row and hashed into the identity, so a pass says *what* passed and where. `nextjs_node_v1` stays legal and is resolved by nothing: a stored pass was checked under the old rules and is not reinterpreted under today's. A repository holding more than one installable application is asked which, from a closed list Vibe computed — see [0078](docs/decisions/0078-the-validation-profile-is-a-build-contract.md) and [0079](docs/decisions/0079-the-founder-names-the-application.md).
+
 ### 3.9 Preview Layer
 
 **[Confirmed — ADR 0016, amended by ADR 0064]** A preview **clones the prepared commit** into its own fresh sandbox, installs, and serves it on a temporary URL under a development server. It is not a deploy: nothing enters the customer's hosting and the environment grants nothing. It is also not the checked build — it runs *alongside* validation rather than after it, so a person can look while the five-minute check is still going, and the product says so wherever a preview is offered. Implemented in `src/modules/change-preview/`. The `PreviewProvider` boundary from [ADR 0004](docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md) was left unimplemented deliberately — deploying needs authority this product does not have; see `src/modules/previews/README.md` for the comparison.
@@ -144,7 +146,9 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0065, completed by ADR 0075]** For a change that *does* alter a page, the preview **is** the review. Screenshot comparison ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)) photographed one route at one viewport, which is a poorer instrument than the running application it photographed, and Vibe paid a browser session for the reduction. 0065 made the path unreachable; [ADR 0075](docs/decisions/0075-the-photograph-nobody-took.md) deleted it once the last artifact passed its retention. Nothing in `review/` opens a browser any more. The read path stays, because one historical approval rests on a comparison and an approval nobody can audit is not one.
 
-**[Open decision]** Previewing a repository whose prepared commit cannot be served by a single detected dev command.
+**[Narrowed — ADR 0078]** The server command comes from a table keyed on the frameworks the chosen application's own manifest declares — `next dev`, `nuxt dev`, `astro dev` — rather than from its validation profile, which stopped implying a framework when one profile came to admit every Node application. An application with no row gets **no preview**, and the copy says what that means: checking a change and merging it still work; there is nothing to look at.
+
+**[Open decision]** Which servers earn a row. Vite and SvelteKit are the ones that matter and are held back deliberately: Vite ≥ 5.4.12 refuses requests whose `Host` is not in `server.allowedHosts`, and the health probe reaches the server over loopback — so it *passes* while the customer's public URL answers "Blocked request." That is settled by a real preview against a real project, not by an argument. Remix is open for a different reason: `remix dev` and the Vite plugin are two servers behind one framework id.
 
 ### 3.10 Approval Layer
 
@@ -246,7 +250,7 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 
 1. **The per-SKU consumption rate card** — `CREDIT_RATE_CARDS` in `src/modules/credits/rating.ts`, which rates measured provider usage into Credits for Vibe's own cost telemetry. Not the same question as what a customer pays: [ADR 0061](docs/decisions/0061-launch-v1-operation-rate-card.md) decided that and left this alone, because `economy/` already answers "what did this cost" in nanodollars and a card here would have to price cache tokens — 55–70% of agentic provider cost — to avoid returning `sku_not_priced`. It ships empty ([§3.11](#311-usagecredit-layer)).
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
-3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
+3. **Which development servers earn a row** in the preview table ([§3.9](#39-preview-layer)). Next.js, Nuxt and Astro have one; Vite and SvelteKit wait on a real preview settling their `allowedHosts` behaviour, and Remix on which of its two servers a repository means.
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
 6. **Whether retained audit history gets an operator read path** — once the owner column is null the surviving rows match no RLS policy, so they are readable by nobody ([ADR 0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) §Deferred). Retention without a reader is storage, not evidence; no admin surface exists to change that.
 
@@ -349,6 +353,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0075](docs/decisions/0075-the-photograph-nobody-took.md) | The visual review capture path is deleted (completes 0065; the read path stays for one historical approval) | §3.9 |
 | [0076](docs/decisions/0076-the-browser-we-own.md) | The Deep Scan browser is a sandbox Vibe owns (supersedes 0012's provider only) | §3.3 |
 | [0077](docs/decisions/0077-build-chains.md) | One run may deliver the contiguous build steps of a Move | §3.6 |
+| [0078](docs/decisions/0078-the-validation-profile-is-a-build-contract.md) | The validation profile is a build contract, not a framework list (supersedes Sprint 0010's profile section) | §3.8 |
+| [0079](docs/decisions/0079-the-founder-names-the-application.md) | The founder names the application, from a closed list Vibe computed (amends 0078) | §3.8 |
 
 ### Layers with no section above
 

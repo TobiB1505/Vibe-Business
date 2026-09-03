@@ -19,10 +19,7 @@ import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
 import { totalChangedLines } from "@/modules/execution/line-stats";
-import {
-  getPreparedChange,
-  listPreparedChangesForProject,
-} from "@/modules/execution/store";
+import { getPreparedChange, listPreparedChangesForProject } from "@/modules/execution/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import type { ChangeMerge } from "@/modules/merge/schema";
@@ -33,14 +30,12 @@ import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { getOpportunityById } from "@/modules/opportunities/store";
 import { getProjectWithRepository } from "@/modules/projects/queries";
-import {
-  getOutcomeCards,
-  unavailableOutcomeCard,
-} from "@/modules/outcome-verification/service";
+import { getOutcomeCards, unavailableOutcomeCard } from "@/modules/outcome-verification/service";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import {
   classifyReviewForPreparedChange,
   loadSurface,
+  loadWorkspaceRoot,
   type FileTextReader,
 } from "@/modules/review/classification-inputs";
 import type { ReviewClassificationResult } from "@/modules/review/classification";
@@ -101,9 +96,7 @@ import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurre
  */
 
 /** The union of everything a prepared change's panels need. */
-export type PreparedChangeWorkspaceItem = Awaited<
-  ReturnType<typeof buildPreparedChangeCard>
->;
+export type PreparedChangeWorkspaceItem = Awaited<ReturnType<typeof buildPreparedChangeCard>>;
 
 /**
  * The cheap read: what a list needs to say a change exists and roughly where
@@ -143,20 +136,20 @@ export async function listPreparedChangeSummaries(
   });
 
   return prepared.map((change) => {
-      const validation = validations.get(change.id) ?? null;
+    const validation = validations.get(change.id) ?? null;
 
-      return {
-        id: change.id,
-        branchName: change.branchName,
-        commitSha: change.commitSha,
-        baseBranch: change.baseBranch,
-        filePaths: change.files.map((file) => file.path),
-        createdAt: change.createdAt,
-        branchUrl: params.repositoryFullName
-          ? buildBranchUrl(params.repositoryFullName, change.branchName)
-          : null,
-        validationStatus: validation?.status ?? null,
-      };
+    return {
+      id: change.id,
+      branchName: change.branchName,
+      commitSha: change.commitSha,
+      baseBranch: change.baseBranch,
+      filePaths: change.files.map((file) => file.path),
+      createdAt: change.createdAt,
+      branchUrl: params.repositoryFullName
+        ? buildBranchUrl(params.repositoryFullName, change.branchName)
+        : null,
+      validationStatus: validation?.status ?? null,
+    };
   });
 }
 
@@ -234,26 +227,38 @@ async function readChangeLifecycles(
     preparedChangeIds: params.prepared.map((change) => change.id),
   };
 
-  const [validations, previews, reviews, approvals, merges, surface] = await Promise.all([
-    getLatestValidationsForPreparedChanges(supabase, scope),
-    getLatestPreviewsForPreparedChanges(supabase, scope),
-    getLatestReviewsForPreparedChanges(supabase, scope),
-    getLatestApprovalsForPreparedChanges(supabase, scope),
-    getLatestMergesForPreparedChanges(supabase, scope),
-    /*
-     * The analyzer's route table, once for the list rather than once per card.
-     *
-     * Every prepared change in a project is a change to the same repository at
-     * roughly the same commit, so they share one route table. Loading it inside
-     * the classifier — which is what a single-change caller does — would be the
-     * same snapshot read repeated for every card on the screen.
-     */
-    // Skipped entirely for an empty list, like every read beside it: a project
-    // with no prepared changes must ask the database nothing at all.
-    params.prepared.length > 0
-      ? loadSurface({ supabase, projectId: params.projectId })
-      : Promise.resolve(null),
-  ]);
+  const [validations, previews, reviews, approvals, merges, surface, workspaceRoot] =
+    await Promise.all([
+      getLatestValidationsForPreparedChanges(supabase, scope),
+      getLatestPreviewsForPreparedChanges(supabase, scope),
+      getLatestReviewsForPreparedChanges(supabase, scope),
+      getLatestApprovalsForPreparedChanges(supabase, scope),
+      getLatestMergesForPreparedChanges(supabase, scope),
+      /*
+       * The analyzer's route table, once for the list rather than once per card.
+       *
+       * Every prepared change in a project is a change to the same repository at
+       * roughly the same commit, so they share one route table. Loading it inside
+       * the classifier — which is what a single-change caller does — would be the
+       * same snapshot read repeated for every card on the screen.
+       */
+      // Skipped entirely for an empty list, like every read beside it: a project
+      // with no prepared changes must ask the database nothing at all.
+      params.prepared.length > 0
+        ? loadSurface({ supabase, projectId: params.projectId })
+        : Promise.resolve(null),
+      /*
+       * Where the application lives, once for the list and for the same reason.
+       *
+       * It reads the same snapshot the route table does, so resolving it inside
+       * the classifier would repeat that read per card — which is precisely
+       * what `does not grow with the number of prepared changes` measures, and
+       * what it caught when this was first written the other way.
+       */
+      params.prepared.length > 0
+        ? loadWorkspaceRoot({ supabase, projectId: params.projectId })
+        : Promise.resolve("."),
+    ]);
 
   /*
    * Which review each change deserves (ADR 0063).
@@ -283,6 +288,7 @@ async function readChangeLifecycles(
         // are four of them for a value nothing on this screen displays.
         prepared: change,
         requirement: null,
+        workspaceRoot,
       }),
     ]),
   );
@@ -735,7 +741,11 @@ export async function getPreparedChangeWorkspaceItem(
       projectId: params.projectId,
       prepared: [prepared],
       reader: mergeTarget
-        ? createGithubRepositoryReader(mergeTarget.installationId, mergeTarget.owner, mergeTarget.repo)
+        ? createGithubRepositoryReader(
+            mergeTarget.installationId,
+            mergeTarget.owner,
+            mergeTarget.repo,
+          )
         : null,
     }),
     getProjectWithRepository(supabase, params.projectId),

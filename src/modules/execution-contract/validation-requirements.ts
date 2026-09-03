@@ -1,5 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
-import { resolveValidationProfile } from "@/modules/validation/profile";
+import { resolveValidationProfile, type ProfileResolution } from "@/modules/validation/profile";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import {
   SANDBOX_POLICY_VERSION,
   validationProfileVersionFor,
@@ -78,6 +80,8 @@ export type ExecutionValidationRequirement =
       sandboxPolicyVersion: typeof SANDBOX_POLICY_VERSION;
       /** The profile's own steps. Reused, not redefined (§30). */
       sandboxSteps: readonly ValidationStepName[];
+      /** Where those steps would run. `"."` for a single-application repository. */
+      workspaceRoot: string;
     }
   | {
       supported: false;
@@ -87,7 +91,7 @@ export type ExecutionValidationRequirement =
     };
 
 /**
- * The steps the one existing profile runs.
+ * The steps both existing profiles run.
  *
  * Listed rather than imported from `VALIDATION_STEPS` so that the spec records
  * what was *required*, not what the constant happens to contain later. A stored
@@ -102,6 +106,10 @@ const NEXTJS_NODE_V1_STEPS: readonly ValidationStepName[] = [
 
 const PROFILE_STEPS: Record<ValidationProfile, readonly ValidationStepName[]> = {
   nextjs_node_v1: NEXTJS_NODE_V1_STEPS,
+  // The same four. The contract profile changed which repositories are
+  // admitted, not what is run once one is — `planValidationSteps` never took a
+  // profile, and these are the steps it plans.
+  node_build_v1: NEXTJS_NODE_V1_STEPS,
 };
 
 /**
@@ -115,8 +123,11 @@ const PROFILE_STEPS: Record<ValidationProfile, readonly ValidationStepName[]> = 
 export function resolveExecutionValidation(
   snapshot: RepositoryIntelligenceSnapshot,
 ): ExecutionValidationRequirement {
-  const resolution = resolveValidationProfile(snapshot);
+  return requirementFor(resolveValidationProfile(snapshot));
+}
 
+/** The requirement one resolution implies. Shared by both forms below. */
+function requirementFor(resolution: ProfileResolution): ExecutionValidationRequirement {
   if (!resolution.supported) {
     return {
       supported: false,
@@ -134,5 +145,27 @@ export function resolveExecutionValidation(
     profileVersion: validationProfileVersionFor(resolution.profile),
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     sandboxSteps: PROFILE_STEPS[resolution.profile],
+    workspaceRoot: resolution.workspaceRoot,
   };
+}
+
+/**
+ * The same requirement, with the founder's answer to "which application?" applied.
+ *
+ * `resolveExecutionValidation` reads the repository's shape and nothing else,
+ * which is right for a pure function and wrong for a decision: a repository with
+ * more than one application reports `workspace_choice_required` forever, even
+ * once its owner has said which one Vibe works on. This is the asynchronous
+ * form, for the callers that are deciding rather than describing.
+ *
+ * Separate rather than merged so the pure one stays pure — `resolver.ts` maps
+ * plan steps synchronously, and a database read per step is not a thing to
+ * introduce for a project-level fact.
+ */
+export async function resolveProjectExecutionValidation(
+  supabase: SupabaseClient,
+  params: { projectId: string; snapshot: RepositoryIntelligenceSnapshot },
+): Promise<ExecutionValidationRequirement> {
+  const resolution = await resolveProjectValidationTarget(supabase, params);
+  return requirementFor(resolution);
 }

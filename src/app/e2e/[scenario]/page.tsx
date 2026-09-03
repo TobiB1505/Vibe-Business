@@ -29,6 +29,14 @@ import {
 } from "../command-center-scenarios";
 import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
 import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
+import { AgentStaleReadNotice } from "@/app/app/projects/[projectId]/agent/agent-stale-read-notice";
+import { AgentWorkspaceChoice } from "@/app/app/projects/[projectId]/agent/agent-workspace-choice";
+import { Button } from "@/components/ui/button";
+import {
+  ANSWERED_WORKSPACE_ROOT,
+  E2E_WORKSPACE_CHOICE_SCENARIOS,
+  isE2eWorkspaceChoiceScenario,
+} from "../workspace-choice-scenarios";
 import { AppErrorPreview } from "../app-error-preview";
 import BillingLoading from "@/app/app/(account)/billing/loading";
 import {
@@ -545,6 +553,55 @@ export default async function E2eScenarioPage({
             question={E2E_NEEDS_USER_SCENARIOS.needs_user_first_customer()}
           />
         </div>
+      </main>
+    );
+  }
+
+  /*
+   * The refusal that renders no control at all (Stufe 4).
+   *
+   * Nothing to configure — the notice reads its own sentence and its own note
+   * from the shared tables, so a fixture that passed either in would be testing
+   * the fixture. The link target is the only thing the route decides.
+   */
+  if (scenario === "agent-stale-read") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AgentStaleReadNotice productHref="/app/projects/project_e2e/my-product#product-scan" />
+      </main>
+    );
+  }
+
+  if (isE2eWorkspaceChoiceScenario(scenario)) {
+    const candidates = E2E_WORKSPACE_CHOICE_SCENARIOS[scenario]();
+    const chosen = scenario === "workspace-choice-answered" ? ANSWERED_WORKSPACE_ROOT : null;
+
+    /*
+     * A plain button rather than the real submit control, for the same reason
+     * every fixture here stops short of a server action: a component bound to a
+     * real project cannot mount in this harness. What the browser has to prove
+     * is the shape of the question — two applications, told apart, and no field
+     * to type a third into — and that is entirely presentational.
+     */
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AgentWorkspaceChoice
+          candidates={candidates}
+          chosen={chosen}
+          action={(candidate) => (
+            <Button
+              type="button"
+              variant={candidate.workspaceRoot === chosen ? "secondary" : "primary"}
+              disabled={candidate.workspaceRoot === chosen}
+              data-testid="agent-workspace-choose"
+              data-workspace-root={candidate.workspaceRoot}
+            >
+              {candidate.workspaceRoot === chosen ? "Working on this" : "Work on this"}
+            </Button>
+          )}
+        />
       </main>
     );
   }

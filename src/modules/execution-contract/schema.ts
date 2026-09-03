@@ -121,7 +121,10 @@ export const EXECUTION_MODES = [
 export type ExecutionMode = (typeof EXECUTION_MODES)[number];
 
 /** Modes that describe work Vibe could carry out itself. */
-export const VIBE_EXECUTABLE_MODES: readonly ExecutionMode[] = ["deterministic", "agentic"] as const;
+export const VIBE_EXECUTABLE_MODES: readonly ExecutionMode[] = [
+  "deterministic",
+  "agentic",
+] as const;
 
 /* ---------------------------------------------------------------------------
  * Execution classes (§8)
@@ -265,8 +268,28 @@ export const EXECUTION_RESOLUTION_REASONS = [
   "repository_not_connected",
   /** No successful repository snapshot exists to reason from. */
   "repository_snapshot_missing",
-  /** No validation profile matches this repository, so nothing could prove a change (§30). */
+  /**
+   * No validation profile matches this repository, so nothing could prove a
+   * change (§30).
+   *
+   * Kept as the general answer for a refusal none of the specific ones below
+   * covers. It used to be the only one, which meant a founder was told Vibe
+   * could not prove a change to their project and nothing about why — true, and
+   * impossible to act on.
+   */
   "validation_profile_unsupported",
+  /** No `package.json` anywhere: there is no build to check a change against. */
+  "no_node_project",
+  /** A manifest, but no `build` script. */
+  "no_build_script",
+  /** No lockfile beside the application, so a locked install is impossible. */
+  "no_lockfile",
+  /** A lockfile Vibe has no locked install for — Yarn 1, above all. */
+  "package_manager_unsupported",
+  /** More than one application, and nobody has said which one Vibe works on. */
+  "workspace_choice_required",
+  /** The stored analysis predates the facts this check reads. */
+  "repository_analysis_outdated",
 ] as const;
 export type ExecutionResolutionReason = (typeof EXECUTION_RESOLUTION_REASONS)[number];
 

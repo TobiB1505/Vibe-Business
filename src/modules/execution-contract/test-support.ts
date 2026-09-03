@@ -1,6 +1,10 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { creditsToUnits } from "@/modules/credits/units";
-import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import { fakeBuildIntelligence } from "@/modules/repository-intelligence/test-support";
+import type {
+  BuildIntelligence,
+  RepositoryIntelligenceSnapshot,
+} from "@/modules/repository-intelligence/schema";
 import { uniformBudgetsByClass, type ExecutionBudget, type ExecutionBudgetPolicy } from "./budget";
 import type { ExecutionWriteScope } from "./policy";
 import type { PlanContext, RepositoryContext, ResolveExecutionInput } from "./resolver";
@@ -55,6 +59,8 @@ export function fakeSnapshot(
     monorepo?: boolean;
     robotsDetected?: boolean;
     sitemapDetected?: boolean;
+    /** The build targets, for tests about which application Vibe would build. */
+    build?: BuildIntelligence;
   } = {},
 ): RepositoryIntelligenceSnapshot {
   const frameworks = overrides.frameworks ?? [{ id: "nextjs", name: "Next.js" }];
@@ -115,6 +121,12 @@ export function fakeSnapshot(
       treeEntriesConsidered: 60,
     },
     completeness: { status: "complete", reasons: [] },
+    build:
+      overrides.build ??
+      fakeBuildIntelligence({
+        packageManager: overrides.packageManager,
+        frameworks: frameworks.map((framework) => framework.id),
+      }),
     warnings: [],
     // Cast for the same reason `execution/test-support.ts` casts: the snapshot
     // type carries detector sub-objects no test in this module reads, and

@@ -106,8 +106,9 @@ export default function Page({ children }: { children: ReactNode }) {
 }
 `;
 
-    expect(analyzeRenderImpact({ path: "src/app/pricing/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "no_render_impact", strippedExports: ["metadata"] });
+    expect(
+      analyzeRenderImpact({ path: "src/app/pricing/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "no_render_impact", strippedExports: ["metadata"] });
   });
 
   it("proves a removed metadata export", () => {
@@ -139,8 +140,9 @@ export default function Page() {
 }
 `;
 
-    expect(analyzeRenderImpact({ path: "src/app/x/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "no_render_impact", strippedExports: ["generateMetadata"] });
+    expect(
+      analyzeRenderImpact({ path: "src/app/x/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "no_render_impact", strippedExports: ["generateMetadata"] });
   });
 
   /**
@@ -161,8 +163,9 @@ export const metadata = { title: "Before" };
 
 export const metadata = { title: "After" };`;
 
-    expect(analyzeRenderImpact({ path: "src/app/x/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "no_render_impact", strippedExports: ["metadata"] });
+    expect(
+      analyzeRenderImpact({ path: "src/app/x/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "no_render_impact", strippedExports: ["metadata"] });
   });
 
   it("proves a route segment config change", () => {
@@ -174,8 +177,9 @@ export default function Page() {
 `;
     const head = base.replace("60", "3600");
 
-    expect(analyzeRenderImpact({ path: "src/app/x/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "no_render_impact", strippedExports: ["revalidate"] });
+    expect(
+      analyzeRenderImpact({ path: "src/app/x/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "no_render_impact", strippedExports: ["revalidate"] });
   });
 });
 
@@ -231,8 +235,9 @@ export default function Page() {
 `;
     const head = base.replace('"a"', '"b"');
 
-    expect(analyzeRenderImpact({ path: "src/app/[slug]/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "unproven", reason: "render_path_changed" });
+    expect(
+      analyzeRenderImpact({ path: "src/app/[slug]/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "unproven", reason: "render_path_changed" });
   });
 
   it("refuses a changed exported constant that is not in the set", () => {
@@ -244,8 +249,9 @@ export default function Page() {
 `;
     const head = base.replace("Ship faster", "Ship it now");
 
-    expect(analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "unproven", reason: "render_path_changed" });
+    expect(
+      analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "unproven", reason: "render_path_changed" });
   });
 
   /** One declaration list, one safe name and one unsafe. Neither is stripped. */
@@ -258,8 +264,9 @@ export default function Page() {
 `;
     const head = base.replace("Ship faster", "Ship it now");
 
-    expect(analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "unproven", reason: "render_path_changed" });
+    expect(
+      analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "unproven", reason: "render_path_changed" });
   });
 
   it("refuses a metadata object declared inside a function", () => {
@@ -270,8 +277,9 @@ export default function Page() {
 `;
     const head = base.replace('"T"', '"U"');
 
-    expect(analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "unproven", reason: "render_path_changed" });
+    expect(
+      analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "unproven", reason: "render_path_changed" });
   });
 
   /**
@@ -283,8 +291,8 @@ export default function Page() {
    */
   it("refuses a metadata edit that also reindents the JSX", () => {
     const head = HEAD_LAYOUT_METADATA_ONLY.replace(
-      "    <html lang=\"en\" className=\"h-full antialiased\">",
-      "      <html lang=\"en\" className=\"h-full antialiased\">",
+      '    <html lang="en" className="h-full antialiased">',
+      '      <html lang="en" className="h-full antialiased">',
     );
 
     expect(analyzeRenderImpact({ path: LAYOUT, baseText: BASE_LAYOUT, headText: head })).toEqual({
@@ -300,8 +308,9 @@ export default function Page() {
 `;
     const head = base.replace(">a<", ">b<");
 
-    expect(analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }))
-      .toEqual({ kind: "unproven", reason: "render_path_changed" });
+    expect(
+      analyzeRenderImpact({ path: "src/app/page.tsx", baseText: base, headText: head }),
+    ).toEqual({ kind: "unproven", reason: "render_path_changed" });
   });
 });
 

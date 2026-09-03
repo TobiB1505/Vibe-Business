@@ -129,7 +129,11 @@ describe("escalation outranks everything that could lower the answer", () => {
   it("escalates on a change to what gets installed", () => {
     for (const path of ["package.json", "pnpm-lock.yaml", "next.config.ts", "tsconfig.json"]) {
       const result = resolveValidationDepth(
-        input({ riskClass: "low", evidenceIds: ["live.seo.canonical_missing"], changedPaths: [path] }),
+        input({
+          riskClass: "low",
+          evidenceIds: ["live.seo.canonical_missing"],
+          changedPaths: [path],
+        }),
       );
       expect(result.depth, path).toBe("deep");
       expect(result.escalatedBy, path).toContain("build-identity");

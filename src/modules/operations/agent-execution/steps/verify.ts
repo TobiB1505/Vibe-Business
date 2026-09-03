@@ -1,11 +1,5 @@
 import "server-only";
-import {
-  AgentExecutionDeps,
-  StepOutcome,
-  recordLifecycle,
-  loadRun,
-  loadSpec,
-} from "./shared";
+import { AgentExecutionDeps, StepOutcome, recordLifecycle, loadRun, loadSpec } from "./shared";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { deriveAgentLimits } from "@/modules/coding-agent/budget";
 import { extractCandidateChange, verifyCandidateChange } from "@/modules/coding-agent/candidate";
@@ -17,7 +11,10 @@ import {
 import { createBaseIgnorePort } from "@/modules/coding-agent/ignored-paths";
 import { agentSandboxNameFor, computeCandidateDigest } from "@/modules/coding-agent/identity";
 import { createSandboxWorkspaceReader } from "@/modules/coding-agent/sandbox-workspace";
-import { recordAgentRunObservations, type StoredAgentExecutionRun } from "@/modules/coding-agent/store";
+import {
+  recordAgentRunObservations,
+  type StoredAgentExecutionRun,
+} from "@/modules/coding-agent/store";
 import type { OperationFailureCode } from "../../failures";
 import { setOperationStage } from "../../store";
 /**
@@ -50,7 +47,6 @@ type RebuiltCandidate =
       skippedIgnoreFiles: { path: string; reason: string }[];
     }
   | { ok: false; failureCode: OperationFailureCode };
-
 
 /**
  * Reads the workspace and produces the verified candidate (VB-017).
@@ -90,7 +86,9 @@ export async function rebuildVerifiedCandidate(
   const workspace = createSandboxWorkspaceReader({
     sandbox,
     sourceRoot: target.sourceRoot,
-    workspaceRoot: target.workspaceRoot,
+    // The spec's directory, the same one provisioning installed in. Reading the
+    // target's here would compare a workspace nobody built (rule 67).
+    workspaceRoot: spec.spec.repository.workspaceRoot ?? target.workspaceRoot,
   });
 
   /*

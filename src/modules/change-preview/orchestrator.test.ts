@@ -3,7 +3,8 @@ import { describeCommand, installCommand } from "@/modules/validation/commands";
 import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "@/modules/validation/sandbox-port";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { PREVIEW_BUDGETS, PREVIEW_RESOURCES } from "./budgets";
-import { previewHealthProbeCommand, previewServerCommand } from "./commands";
+import { previewHealthProbeCommand } from "./commands";
+import { previewServerCommandFor } from "./dev-servers";
 import { previewSandboxNameFor } from "./identity";
 import {
   PREVIEW_ENVIRONMENT,
@@ -97,7 +98,9 @@ describe("acquiring the source", () => {
 
   it("refuses to continue when the credential store survived removal", async () => {
     const provider = fakeSandboxProvider({
-      files: clonedSandboxFiles({ "product/.git/config": "[remote]\n  url = https://x@github.com" }),
+      files: clonedSandboxFiles({
+        "product/.git/config": "[remote]\n  url = https://x@github.com",
+      }),
       // `rm -f` reports success whether or not it removed anything, which is
       // exactly why the orchestrator verifies rather than assumes.
       unremovablePaths: ["product/.git/config"],
@@ -133,7 +136,10 @@ describe("the network, at each phase", () => {
       files: clonedSandboxFiles(),
       results: {
         "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA },
-        [describeCommand(installCommand("pnpm"))]: { exitCode: 1, output: "ERR_PNPM_OUTDATED_LOCKFILE" },
+        [describeCommand(installCommand("pnpm"))]: {
+          exitCode: 1,
+          output: "ERR_PNPM_OUTDATED_LOCKFILE",
+        },
       },
     });
 
@@ -265,7 +271,9 @@ describe("starting the preview server", () => {
 
     await startPreviewServer(provider, target, { clock: frozenClock() });
 
-    expect(provider.backgroundCommands()).toEqual([describeCommand(previewServerCommand())]);
+    expect(provider.backgroundCommands()).toEqual([
+      describeCommand(previewServerCommandFor(["nextjs"])!),
+    ]);
     for (const command of provider.backgroundCommands()) {
       expect(command).not.toContain("pnpm");
       expect(command).not.toContain("npx");
@@ -273,22 +281,39 @@ describe("starting the preview server", () => {
   });
 
   it("binds all interfaces on Vibe's port", async () => {
-    const command = describeCommand(previewServerCommand());
+    const command = describeCommand(previewServerCommandFor(["nextjs"])!);
 
     expect(command).toContain("-H 0.0.0.0");
     expect(command).toContain(`-p ${PREVIEW_BUDGETS.port}`);
   });
 
-  it("never runs a repository-defined script to start the server", async () => {
-    const command = previewServerCommand();
+  it("refuses to start an application no server command can start", async () => {
+    // Eligibility answered this before the session existed, so reaching here
+    // means the two disagreed — and the safe direction is to start nothing. A
+    // guessed command on a public URL is what this module exists to prevent.
+    const provider = fakeSandboxProvider({ files: clonedSandboxFiles() });
+    const target = fakePreviewTarget({ frameworks: ["express"] });
+    await provisionPreviewWorkspace(provider, target);
 
-    // `pnpm start` would let a repository decide what Vibe serves on a public
-    // port by editing one line of JSON (§14).
-    expect(command.command).not.toBe("pnpm");
-    expect(command.command).not.toBe("npm");
-    expect(command.command).not.toBe("npx");
-    expect(command.args).not.toContain("run");
+    const outcome = await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_not_supported" });
+    expect(provider.backgroundCommands()).toEqual([]);
   });
+
+  it.each([["nextjs"], ["nuxt"], ["astro"]])(
+    "never runs a repository-defined script to start a %s application",
+    (framework) => {
+      const command = previewServerCommandFor([framework])!;
+
+      // `pnpm start` would let a repository decide what Vibe serves on a public
+      // port by editing one line of JSON (§14).
+      expect(command.command).not.toBe("pnpm");
+      expect(command.command).not.toBe("npm");
+      expect(command.command).not.toBe("npx");
+      expect(command.args).not.toContain("run");
+    },
+  );
 
   it("reports a process that exited instead of waiting out the budget", async () => {
     const provider = fakeSandboxProvider({

@@ -124,7 +124,7 @@ const SANDBOX_FILES = {
   // Deliberately different from the base commit's bytes: a file written back
   // identical is not a change, and this test needs one that is.
   "product/src/app/page.tsx": "export default function Page() { return <main />; }\n",
-  "product/tsconfig.tsbuildinfo": "{\"generated\":true}",
+  "product/tsconfig.tsbuildinfo": '{"generated":true}',
 };
 
 function seed() {
@@ -531,10 +531,7 @@ describe("observed and changed are two columns, not one", () => {
     const observed = afterCollect.observed_path_count as number;
     expect(afterCollect.changed_file_count).toBe(0);
 
-    await extractAndVerifyStep(shared, operation.id, [
-      "src/app/page.tsx",
-      "tsconfig.tsbuildinfo",
-    ]);
+    await extractAndVerifyStep(shared, operation.id, ["src/app/page.tsx", "tsconfig.tsbuildinfo"]);
 
     // Extract knows which of them survived comparison with the pinned base —
     // and does not touch the observation collect recorded.
@@ -553,7 +550,9 @@ describe("observed and changed are two columns, not one", () => {
     await pollAgentStep(shared, operation.id);
     await collectAgentStep(shared, operation.id);
 
-    expect((db.rows("agent_execution_runs")[0] as Record<string, unknown>).changed_file_count).toBe(0);
+    expect((db.rows("agent_execution_runs")[0] as Record<string, unknown>).changed_file_count).toBe(
+      0,
+    );
   });
 });
 
@@ -589,8 +588,9 @@ describe("the evidence for an accepted change", () => {
     expect(metadata.changedFileCount).toBe(1);
     expect(metadata.ignoredPathCount).toBe(1);
 
-    const withheld = (metadata.changedPaths as { path: string; status: string; ignoredBy?: unknown }[])
-      .filter((entry) => entry.status === "observed_ignored");
+    const withheld = (
+      metadata.changedPaths as { path: string; status: string; ignoredBy?: unknown }[]
+    ).filter((entry) => entry.status === "observed_ignored");
     expect(withheld.map((entry) => entry.path)).toEqual(["tsconfig.tsbuildinfo"]);
     expect(withheld[0].ignoredBy).toMatchObject({ reason: "base_gitignore" });
 
@@ -611,10 +611,7 @@ describe("candidate metrics are never inflated by generated output", () => {
     await toRunningAgent(shared, operation.id);
     await pollAgentStep(shared, operation.id);
     await collectAgentStep(shared, operation.id);
-    await extractAndVerifyStep(shared, operation.id, [
-      "src/app/page.tsx",
-      "tsconfig.tsbuildinfo",
-    ]);
+    await extractAndVerifyStep(shared, operation.id, ["src/app/page.tsx", "tsconfig.tsbuildinfo"]);
 
     const events = await listExecutionEvents(fakeSupabase(db), {
       runId: run.id,

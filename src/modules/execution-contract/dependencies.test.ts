@@ -387,10 +387,7 @@ describe("§32 — a dependency loop fails safely", () => {
   });
 
   it("does not refuse work that cannot reach the loop", () => {
-    const steps = [
-      ...STEPS,
-      implementationStep({ id: "4-unrelated", order: 4, dependsOn: [] }),
-    ];
+    const steps = [...STEPS, implementationStep({ id: "4-unrelated", order: 4, dependsOn: [] })];
 
     expect(resolve(steps, 4).mode).toBe("agentic");
   });
@@ -442,12 +439,10 @@ describe("§33 — absorbed preparation grants no authority", () => {
     "database_write",
     "git_push_branch",
     "git_merge",
-  ] as const)("still forbids %s",
-    (capability) => {
-      expect(isToolAllowed(spec.policy, capability)).toBe(false);
-      expect(spec.policy.forbiddenCapabilities).toContain(capability);
-    },
-  );
+  ] as const)("still forbids %s", (capability) => {
+    expect(isToolAllowed(spec.policy, capability)).toBe(false);
+    expect(spec.policy.forbiddenCapabilities).toContain(capability);
+  });
 
   it("does not widen the write scope or the risk ceiling", () => {
     const withoutPreparation = buildExecutionSpec({
@@ -533,10 +528,7 @@ describe("what is not preparation", () => {
     ["product_change", "a change to the product must actually exist first"],
     ["external_setup", "external setup happens outside the product"],
   ] as const)("keeps a vibe / %s dependency hard (%s)", (changeKind, _why) => {
-    const steps = [
-      preparationStep({ changeKind, evidenceIds: [] }),
-      implementationStep(),
-    ];
+    const steps = [preparationStep({ changeKind, evidenceIds: [] }), implementationStep()];
 
     expect(resolve(steps, 2).mode).toBe("blocked");
   });

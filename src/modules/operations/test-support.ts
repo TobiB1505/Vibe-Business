@@ -1026,6 +1026,22 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     this.limitCount = count;
     return this;
   }
+  /**
+   * PostgREST's `count` on a **write**, which `.update(values, { count: "exact" })`
+   * asks for and which the real client answers with the number of rows the
+   * statement actually touched.
+   *
+   * Modelled because a caller reads that number to tell "updated nothing" from
+   * "updated a row" — a distinction that carries ownership and lifecycle gates
+   * (a detached repository matches no row). A double that returned `undefined`
+   * there would report every such refusal as a success, which is the wrong way
+   * round for a gate to fail.
+   */
+  counting(options?: { count?: "exact" }): this {
+    if (options?.count === "exact") this.countMode = true;
+    return this;
+  }
+
   select(_columns?: string, options?: { count?: "exact"; head?: boolean }): this {
     // The entitlement's abuse window counts rows rather than reading them, so
     // the double has to answer `count` too — otherwise the gate is untestable
@@ -1136,7 +1152,12 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         if (violation) return { data: null, error: violation };
         Object.assign(target, candidate);
       }
-      return { data: targets, error: null };
+      return this.countMode
+        ? ({ data: targets, error: null, count: targets.length } as {
+            data: unknown;
+            error: QueryError;
+          })
+        : { data: targets, error: null };
     }
 
     if (this.mode === "delete") {
@@ -1663,7 +1684,8 @@ export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): Supaba
           read(table, columns, options),
         insert: (payload: Row | Row[]) =>
           write(table, () => new FakeQuery(db, table, "insert", payload)),
-        update: (payload: Row) => write(table, () => new FakeQuery(db, table, "update", payload)),
+        update: (payload: Row, options?: { count?: "exact" }) =>
+          write(table, () => new FakeQuery(db, table, "update", payload).counting(options)),
         delete: () => write(table, () => new FakeQuery(db, table, "delete")),
         upsert: (
           payload: Row | Row[],

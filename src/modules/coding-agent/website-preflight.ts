@@ -18,7 +18,7 @@ import {
 import { inspectLiveProduct } from "@/modules/live-product-intelligence/service";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import type { ExecutionResolution, ExecutionRiskClass } from "@/modules/execution-contract/schema";
-import { resolveExecutionValidation } from "@/modules/execution-contract/validation-requirements";
+import { resolveProjectExecutionValidation } from "@/modules/execution-contract/validation-requirements";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { GithubDomainError } from "@/modules/github/errors";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
@@ -824,7 +824,18 @@ export async function resolveExecutableStep(
     return { eligible: false, reason: "plan_incomplete", resolution };
   }
 
-  const validation = resolveExecutionValidation(snapshot.result);
+  /*
+   * The founder's answer applied, not just the repository's shape (Stufe 4).
+   *
+   * `resolveExecutionValidation` alone reports `workspace_choice_required`
+   * forever for a repository with more than one application — including one
+   * whose owner has already said which. The answer narrows the resolution, and
+   * without it the Agent screen would ask a question that changes nothing.
+   */
+  const validation = await resolveProjectExecutionValidation(supabase, {
+    projectId: params.projectId,
+    snapshot: snapshot.result,
+  });
   const budget = economics?.budget ?? null;
 
   const writeScope = {
@@ -869,6 +880,9 @@ export async function resolveExecutableStep(
       repositorySnapshotId: snapshot.id,
       frameworks: snapshot.result.frameworks.map((framework) => framework.id),
       packageManager: snapshot.result.packageManager ?? "unknown",
+      // The directory the resolved application lives in, pinned onto the spec
+      // so the run's working directory cannot move underneath it (rule 67).
+      workspaceRoot: validation.supported ? validation.workspaceRoot : ".",
     },
     approvedDecisions: founderResolutions
       .map((founderResolution) => {

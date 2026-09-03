@@ -45,6 +45,7 @@ export function fakePreviewTarget(overrides: Partial<PreviewTarget> = {}): Previ
     packageManager: "pnpm",
     sourceRoot: "product",
     workspaceRoot: ".",
+    frameworks: ["nextjs"],
     ...overrides,
   };
 }

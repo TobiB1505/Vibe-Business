@@ -101,11 +101,13 @@ export function sanitizeCommandOutput(raw: string): SanitizedOutput {
   let text = bounded.replace(ANSI_SEQUENCES, "").replace(CONTROL_CHARACTERS, "");
   for (const pattern of SECRET_PATTERNS) text = text.replace(pattern, REDACTED);
 
-  const lines = text.split("\n").map((line) =>
-    line.length > SANDBOX_BUDGETS.maxLineChars
-      ? `${line.slice(0, SANDBOX_BUDGETS.maxLineChars)}…[truncated]`
-      : line,
-  );
+  const lines = text
+    .split("\n")
+    .map((line) =>
+      line.length > SANDBOX_BUDGETS.maxLineChars
+        ? `${line.slice(0, SANDBOX_BUDGETS.maxLineChars)}…[truncated]`
+        : line,
+    );
 
   const droppedLines = lines.length > SANDBOX_BUDGETS.maxStoredOutputLines;
   const tailLines = droppedLines ? lines.slice(-SANDBOX_BUDGETS.maxStoredOutputLines) : lines;
