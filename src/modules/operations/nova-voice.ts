@@ -8,6 +8,8 @@ import { recordAIUsage } from "@/modules/ai/usage";
 import { computeNovaVoiceIdentity } from "@/modules/nova/voice/payload";
 import type { NovaVoiceLocale, NovaVoicePayload } from "@/modules/nova/voice/payload";
 import { ensureNovaVoiceMessage } from "@/modules/nova/voice/store";
+
+import { arePaidOperationsDisabled } from "./kill-switch";
 import type { NovaVoiceOutcome } from "@/modules/nova/voice/service";
 
 /**
@@ -58,6 +60,24 @@ import type { NovaVoiceOutcome } from "@/modules/nova/voice/service";
  * sentences no screen can display.
  */
 
+/**
+ * Whether Nova may spend on a presentation right now.
+ *
+ * Two levers, and both must allow it. `NOVA_VOICE_ENABLED=1` is the tier's own
+ * switch, off by default so that shipping this code changes no bill until
+ * somebody decides it should. `PAID_OPERATIONS_DISABLED=1` is the existing
+ * spend-incident lever (VB-032), and presentation is paid inference like any
+ * other — a switch thrown to stop money leaving must stop this too, or it is
+ * not the switch it says it is.
+ *
+ * Exact `"1"` on both, for the reason `arePaidOperationsDisabled` gives: a
+ * lever read from a loose truthiness check is one a stray `=false` turns on,
+ * and finding that out during an incident is the worst possible time.
+ */
+export function isNovaVoiceEnabled(env: Record<string, string | undefined> = process.env): boolean {
+  return env.NOVA_VOICE_ENABLED === "1" && !arePaidOperationsDisabled(env);
+}
+
 export type NovaVoiceOperation = {
   /**
    * Identifiers from a **loaded operation row**, never from a caller's
@@ -93,8 +113,11 @@ export async function speakAfterOperation(params: {
   template: string;
   locale?: NovaVoiceLocale;
   forbiddenSubstrings?: readonly string[];
+  /** Defaults to the two operational levers. Passed explicitly only by tests. */
   enabled?: boolean;
 }): Promise<void> {
+  const enabled = params.enabled ?? isNovaVoiceEnabled();
+
   try {
     const identity = computeNovaVoiceIdentity({
       projectId: params.operation.projectId,
@@ -116,7 +139,7 @@ export async function speakAfterOperation(params: {
       payload: params.payload,
       template: params.template,
       forbiddenSubstrings: params.forbiddenSubstrings,
-      enabled: params.enabled,
+      enabled,
     });
 
     if (!shouldRecord(attempt)) return;

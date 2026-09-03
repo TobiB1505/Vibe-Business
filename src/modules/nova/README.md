@@ -226,9 +226,40 @@ ledger as `nova_presentation`, with the operation run's id as `job_id`; there
 is no Credit hold and no retail price, because presentation is Vibe's
 infrastructure cost rather than something a founder buys.
 
-**No operation calls it yet.** Which slot speaks first is a product decision
-belonging to the slice that renders it, and attaching this now would spend
-money generating sentences no screen can display.
+## One slot is live: `audit_result`
+
+`voice/audit-slot.ts` is the whole of it, and it is deliberately small. Both
+the template and the payload are derived from the **`nova.audit` entry
+`feed.ts` already builds** — never from a `BusinessReadinessAudit`, never from
+a synthesis. `feed.ts` decides what an audit means to Nova; this file decides
+only how to say it. A payload built from raw audit rows would be a second
+reading of the same document, free to disagree with the panel beside it.
+
+Two consequences worth stating. **The score is not in the payload** —
+`allowedNumericFacts` is empty, so `checks.ts` rejects any digit the model
+writes; the entry carries `score` for the component to render beside the
+prose. **The payload names no product**, because the identity is a hash of it
+and the render has to recompute it from persisted state: a profile can be
+corrected after an audit runs, and the audit cannot, so leaving the name out
+keeps the identity a function of one immutable document.
+
+Generation happens in `speakAboutTheAudit`, at the end of
+`completeOperationStep` in `operations/business-audit/execution.ts` — after
+`completeOperationRun` returned `transitioned`. That guard is what makes "at
+most one presentation per operation" a property of the state machine rather
+than a collision the ledger absorbs, which matters because
+`ai_usage_events_job_idx` is unique on `job_id` and Nova's row uses the
+operation run's id.
+
+It is off until `NOVA_VOICE_ENABLED=1`, and `PAID_OPERATIONS_DISABLED=1` stops
+it like any other paid inference. A component reads it with one call —
+`readNovaAuditVoice(supabase, { projectId, entry })` — which resolves the
+stored sentence or the template, and takes no provider.
+
+**No other slot is wired.** `product_reveal`, `move_recommendation`,
+`execution_result` and `outcome_result` each need their own payload and their
+own template, and each is worth doing only once this one has been read by a
+real founder.
 
 ## What the voice may never do
 
