@@ -102,9 +102,16 @@ export type NovaPresentation = { message: string };
  *   self-reference ("the move Vibe has identified"), citing the payload as a
  *   source ("the reason given is"), restating one point three ways to fill
  *   space, a bare trailing next-step sentence exposing the slot underneath
- *   it, and implying an ordering between options the payload never ranked.
- *   Not yet measured — see `eval/cases.ts`'s `NOVA_VOICE_CRITICAL_CASE_IDS`
- *   for the subset this version should be re-run against first.
+ *   it, and implying an ordering between options the payload never ranked —
+ *   the last of which was also, separately, a contradiction in this file:
+ *   `SLOT_BRIEFS.move_recommendation` told the model to explain "why this one
+ *   comes first" in the same breath the rule now forbids that exact framing.
+ *   Refined once more before its first full measurement, from a five-case
+ *   pilot: "so I'd start by seeing where I would start" echoed NEXT STEP's own
+ *   wording back into the sentence and produced a circular one — the fix is
+ *   to paraphrase the next step rather than splice it in verbatim. See
+ *   `eval/cases.ts`'s `NOVA_VOICE_CRITICAL_CASE_IDS` for the subset this
+ *   version is measured against.
  */
 export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v4";
 
