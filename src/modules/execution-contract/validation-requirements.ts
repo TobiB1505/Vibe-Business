@@ -1,5 +1,7 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
-import { resolveValidationProfile } from "@/modules/validation/profile";
+import { resolveValidationProfile, type ProfileResolution } from "@/modules/validation/profile";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import {
   SANDBOX_POLICY_VERSION,
   validationProfileVersionFor,
@@ -121,8 +123,11 @@ const PROFILE_STEPS: Record<ValidationProfile, readonly ValidationStepName[]> = 
 export function resolveExecutionValidation(
   snapshot: RepositoryIntelligenceSnapshot,
 ): ExecutionValidationRequirement {
-  const resolution = resolveValidationProfile(snapshot);
+  return requirementFor(resolveValidationProfile(snapshot));
+}
 
+/** The requirement one resolution implies. Shared by both forms below. */
+function requirementFor(resolution: ProfileResolution): ExecutionValidationRequirement {
   if (!resolution.supported) {
     return {
       supported: false,
@@ -142,4 +147,25 @@ export function resolveExecutionValidation(
     sandboxSteps: PROFILE_STEPS[resolution.profile],
     workspaceRoot: resolution.workspaceRoot,
   };
+}
+
+/**
+ * The same requirement, with the founder's answer to "which application?" applied.
+ *
+ * `resolveExecutionValidation` reads the repository's shape and nothing else,
+ * which is right for a pure function and wrong for a decision: a repository with
+ * more than one application reports `workspace_choice_required` forever, even
+ * once its owner has said which one Vibe works on. This is the asynchronous
+ * form, for the callers that are deciding rather than describing.
+ *
+ * Separate rather than merged so the pure one stays pure — `resolver.ts` maps
+ * plan steps synchronously, and a database read per step is not a thing to
+ * introduce for a project-level fact.
+ */
+export async function resolveProjectExecutionValidation(
+  supabase: SupabaseClient,
+  params: { projectId: string; snapshot: RepositoryIntelligenceSnapshot },
+): Promise<ExecutionValidationRequirement> {
+  const resolution = await resolveProjectValidationTarget(supabase, params);
+  return requirementFor(resolution);
 }
