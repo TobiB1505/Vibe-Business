@@ -16,6 +16,8 @@ the read model that decides what she would be talking about.
 ```
 focus.ts       what needs attention now, ranked — pure, and the whole of the decision
 read.ts        the facts behind it, gathered in a bounded number of queries
+actions.ts     what each control says, costs, and does to the world
+feed.ts        the focus as entries on a screen — sentences, one control, progress
 voice/
   payload.ts   what the model is given, what it may return, and the cache identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
@@ -47,6 +49,31 @@ Three facts are therefore still empty here — `executableStep`,
 `repositoryReadOutdated`, `workspaceChoiceRequired` — because only the
 execution resolver can answer them and it performs a live website preflight.
 The candidates that depend on them arrive with the slices that render them.
+
+## Controls, and where the words live
+
+`actions.ts` is the catalog: for each control, its label, the retail kind it
+charges under, whether it is consequential, and whether a person confirms
+first. It holds no function — every Server Action in this codebase lives under
+`src/app/`, so the binding lives beside them in
+`src/app/app/projects/[projectId]/nova-actions.ts` as a total Record of real
+references, which makes a renamed or deleted action a build failure.
+
+Two ids are addresses rather than actions (`review_change`, `view_move`), and
+one has nothing behind it at HEAD (`choose_workspace`), recorded as `unbound`
+so nothing offers it.
+
+All of Nova's copy — the sentences in `feed.ts`, the labels and confirmation
+notes in `actions.ts` — is data rather than JSX. That is what makes the
+product's language rules unit tests over values instead of regexes over
+markup: no cause claimed, nothing deployed or shipped, nothing called safe,
+no figures. `src/components/nova/` renders those values and holds no prose of
+its own, which a source contract enforces.
+
+Four of §F's eleven entry types exist. The remaining seven, and the `"feed"`
+variants on the domain panels that render them, belong with the slices that
+assemble their view models — a variant on a panel nothing mounts would be dead
+code today.
 
 ## The three tiers
 

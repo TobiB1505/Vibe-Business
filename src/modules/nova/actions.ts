@@ -87,6 +87,17 @@ export type NovaActionMeta = {
    * that write to a customer's repository.
    */
   requiresConfirmation: boolean;
+  /**
+   * What the founder is agreeing to, shown at the moment they confirm.
+   *
+   * Required for a confirmed control and absent on every other, because the
+   * two confirmed controls do entirely different things and one sentence
+   * cannot cover both: a merge moves a branch, a run spends Credits and pushes
+   * one. Held here rather than written into the confirmation component for the
+   * reason all of Nova's copy is — a sentence in JSX is a sentence no test
+   * reads.
+   */
+  confirmationNote?: string;
   /** Set only on an `unbound` control: what is missing, and what lands it. */
   unboundReason?: string;
 };
@@ -118,6 +129,13 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
     price: null,
     consequential: true,
     requiresConfirmation: true,
+    /*
+     * What a founder must know before the click, not after (rule 74): moving a
+     * default branch can set their own CI running. It never means deployed or
+     * released, and this sentence does not say it does.
+     */
+    confirmationNote:
+      "This moves your default branch to the commit you approved. Anything you have set up to run on that branch will run.",
   },
   "nova.answer_plan_question": {
     control: "server_action",
@@ -160,6 +178,8 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
     price: "agent_execution",
     consequential: true,
     requiresConfirmation: true,
+    confirmationNote:
+      "This spends Credits and puts the work on a branch of its own. Your default branch is untouched until you approve what comes back.",
   },
   "nova.verify_outcome": {
     /*

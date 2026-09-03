@@ -155,6 +155,54 @@ describe("the two controls that touch a repository", () => {
       expect(meta.consequential, id).toBe(true);
     }
   });
+
+  /**
+   * A confirmation with nothing to read is a speed bump, not a disclosure.
+   * The founder is agreeing to something specific, and it has to be on screen
+   * at the moment they agree.
+   */
+  it("says what is being agreed to, on both of them", () => {
+    for (const id of NOVA_ACTION_IDS) {
+      const meta = novaActionMeta(id);
+      if (!meta.requiresConfirmation) continue;
+      expect(meta.confirmationNote, id).toBeTruthy();
+      expect(meta.confirmationNote!.length, id).toBeGreaterThan(40);
+    }
+  });
+
+  it("explains nothing it does not ask about", () => {
+    for (const id of NOVA_ACTION_IDS) {
+      const meta = novaActionMeta(id);
+      if (meta.requiresConfirmation) continue;
+      expect(meta.confirmationNote, id).toBeUndefined();
+    }
+  });
+
+  /**
+   * The two notes must not be interchangeable, which is the whole reason they
+   * are data rather than a sentence in the confirmation component: a build
+   * does not move a default branch, and a merge does not spend Credits.
+   */
+  it("tells the two apart", () => {
+    const merge = novaActionMeta("nova.merge_change").confirmationNote!;
+    const build = novaActionMeta("nova.start_agent").confirmationNote!;
+
+    expect(merge).toMatch(/default branch/i);
+    expect(merge).not.toMatch(/credits/i);
+    expect(build).toMatch(/credits/i);
+    expect(build).toMatch(/untouched/i);
+  });
+
+  /** Moving a branch is not deploying, and the sentence may not imply it is. */
+  it("promises no deployment in either note", () => {
+    for (const id of NOVA_ACTION_IDS) {
+      const note = novaActionMeta(id).confirmationNote;
+      if (note === undefined) continue;
+      expect(note, id).not.toMatch(
+        /\b(deploy|deployed|ship|shipped|publish|published|release|released|go live|live|safe)\b/i,
+      );
+    }
+  });
 });
 
 describe("the control with nothing behind it", () => {

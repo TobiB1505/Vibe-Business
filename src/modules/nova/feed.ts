@@ -1,6 +1,7 @@
 import type { RetailOperationKind } from "../credits/retail";
 import type { OperationView } from "../operations/view";
 import { NOVA_ACTION_META, isOfferable } from "./actions";
+import type { NovaActionControl } from "./actions";
 import { novaCandidateAction } from "./focus";
 import type { FocusCandidate, FocusCandidateKind, NovaActionId, NovaFocus } from "./focus";
 
@@ -46,6 +47,15 @@ export type NovaActionSubject =
 
 export type NovaChoiceOption = {
   actionId: NovaActionId;
+  /**
+   * Whether pressing this runs something or goes somewhere.
+   *
+   * Carried on the option because the renderer has to choose between a button
+   * and a link, and guessing from the id would be a second copy of the
+   * catalog's answer. `unbound` never reaches here — an option is not built
+   * for one.
+   */
+  control: NovaActionControl;
   /** The catalog's word, never a candidate's and never a model's. */
   label: string;
   /**
@@ -55,6 +65,8 @@ export type NovaChoiceOption = {
   price: RetailOperationKind | null;
   consequential: boolean;
   requiresConfirmation: boolean;
+  /** What the founder is agreeing to. Present exactly when they confirm. */
+  confirmationNote: string | null;
   subject: NovaActionSubject;
 };
 
@@ -159,10 +171,12 @@ function optionFor(candidate: FocusCandidate): NovaChoiceOption | null {
   const meta = NOVA_ACTION_META[actionId];
   return {
     actionId,
+    control: meta.control,
     label: meta.label,
     price: meta.price,
     consequential: meta.consequential,
     requiresConfirmation: meta.requiresConfirmation,
+    confirmationNote: meta.confirmationNote ?? null,
     subject: subjectFor(candidate),
   };
 }
