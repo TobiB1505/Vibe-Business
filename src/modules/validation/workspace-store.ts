@@ -30,7 +30,10 @@ import { selectValidationTarget } from "./workspace";
 
 export type ChooseWorkspaceRootResult =
   | { ok: true; workspaceRoot: string }
-  | { ok: false; reason: "not_a_candidate" | "no_repository" | "write_failed" };
+  | {
+      ok: false;
+      reason: "not_a_candidate" | "no_choice_to_make" | "no_repository" | "write_failed";
+    };
 
 /** The application this project's owner named, or null if they have not. */
 export async function getChosenWorkspaceRoot(
@@ -80,6 +83,20 @@ export async function chooseWorkspaceRoot(
   },
 ): Promise<ChooseWorkspaceRootResult> {
   const resolution = resolveValidationProfile(params.snapshot);
+
+  /*
+   * Only a question that was actually asked can be answered.
+   *
+   * A repository Vibe resolves on its own never posed a choice, so there is no
+   * answer to record — and recording one would not stay inert. A root stored
+   * for a single-application repository would silently answer the question the
+   * day a second application appears, and the screen would show a choice its
+   * founder was never offered as one they made.
+   */
+  if (resolution.supported || resolution.reason !== "workspace_choice_required") {
+    return { ok: false, reason: "no_choice_to_make" };
+  }
+
   const selected = selectValidationTarget(resolution, params.workspaceRoot);
 
   // Refused because it is not one of Vibe's candidates — never because a
