@@ -8,7 +8,10 @@ import {
   EXECUTION_MODE_LABELS,
   EXECUTION_REASON_LABELS,
 } from "@/modules/execution-contract/view";
-import type { ExecutionResolution } from "@/modules/execution-contract/schema";
+import type {
+  ExecutionResolution,
+  ExecutionResolutionReason,
+} from "@/modules/execution-contract/schema";
 import type { ActionPlanBlockReason } from "./service";
 import type {
   ActionPlanStep,
@@ -190,9 +193,37 @@ export const RESPONSIBILITY_SUBLABELS: Partial<Record<ExecutionSupport, string>>
  */
 export type StepResponsibility = { headline: string; sublabel: string | null };
 
+/**
+ * Why Vibe cannot work in this repository — as opposed to why it cannot do
+ * this step.
+ *
+ * The distinction is the whole of this set. A step waiting on an earlier one,
+ * or owed a founder decision, or refused for touching payments, is a fact about
+ * *the step*, and the row already prints its own sequence status beneath —
+ * repeating it in the responsibility line would say one thing twice. Every
+ * reason here is a fact about *the repository*, which the row says nowhere
+ * else, and which is the same for every step in the plan.
+ *
+ * Each is also actionable, which is why naming it beats "Not automated yet":
+ * a missing lockfile, a missing build script, an unanswered question about
+ * which app, or — the one with a free fix — an analysis older than the check
+ * that reads it.
+ */
+const REPOSITORY_CAPABILITY_REASONS: readonly ExecutionResolutionReason[] = [
+  "repository_not_connected",
+  "repository_snapshot_missing",
+  "repository_analysis_outdated",
+  "no_node_project",
+  "no_build_script",
+  "no_lockfile",
+  "package_manager_unsupported",
+  "workspace_choice_required",
+  "validation_profile_unsupported",
+];
+
 export function stepResponsibility(
   step: Pick<ActionPlanStep, "executionSupport">,
-  resolution: Pick<ExecutionResolution, "intrinsicMode"> | null,
+  resolution: Pick<ExecutionResolution, "intrinsicMode" | "reason"> | null,
 ): StepResponsibility {
   const stored: StepResponsibility = {
     headline: RESPONSIBILITY_HEADLINES[step.executionSupport],
@@ -200,12 +231,33 @@ export function stepResponsibility(
   };
 
   if (step.executionSupport !== "not_yet_supported") return stored;
-  if (resolution?.intrinsicMode !== "agentic") return stored;
 
-  return {
-    headline: EXECUTION_MODE_LABELS.agentic,
-    sublabel: EXECUTION_REASON_LABELS.agentic_v1_eligible,
-  };
+  if (resolution?.intrinsicMode === "agentic") {
+    return {
+      headline: EXECUTION_MODE_LABELS.agentic,
+      sublabel: EXECUTION_REASON_LABELS.agentic_v1_eligible,
+    };
+  }
+
+  /*
+   * The other half of the argument above, which was only ever half-applied.
+   *
+   * The resolver is asked here because the stored classification knows only the
+   * deterministic registry — that is what made a step the agent could build
+   * read "Not automated yet". But when the resolver answers *no*, it also says
+   * why, and that answer was thrown away: a founder whose analysis is one
+   * version out of date, or whose app has no lockfile, read the same four words
+   * as a founder asking for something Vibe genuinely cannot do.
+   *
+   * "Not automated yet" is not merely vague there. For a stale analysis it is
+   * **false** — the work is automated, and one free scan is the whole of what
+   * stands in the way.
+   */
+  if (resolution !== null && REPOSITORY_CAPABILITY_REASONS.includes(resolution.reason)) {
+    return { headline: stored.headline, sublabel: EXECUTION_REASON_LABELS[resolution.reason] };
+  }
+
+  return stored;
 }
 
 /** Where a step's compact sequence status lands — three states, each a distinct visual weight. */
