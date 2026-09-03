@@ -7,6 +7,8 @@
 
 Vocabulary: **Confirmed** (read in code) · **Probable** (derived from code, not run) · **Open** (needs a decision or a measurement the code cannot give).
 
+> **Founder review, 2026-09-03 — read §O first.** The *observations* in this record stand unchanged and were not revisited. Four of its *design proposals* were amended and one open question decided, by the founder, after reading it. Where §D, §E, §F, §G, §K, §L or §14 conflict with [§O](#o-founder-review-and-amendments-2026-09-03), §O is the later decision; the original text is left standing because it is what was proposed at the time, and one of the amendments is only legible beside what it replaced.
+
 ---
 
 ## A. Executive verdict
@@ -394,3 +396,129 @@ Total incremental AI cost of the dogfood attributable to Nova: **0 `ai_usage_eve
 - **Whether `"Move"` stays user-visible.** It is already visible in nine places (plan workspace, stepper aria-labels, dashboard "Next move", billing "Next moves"). Nova can introduce it naturally ("This is where I'd start — your first Move") without renaming anything; renaming would touch `UX-CONTRACT.md` and ADR 0058. *Recommendation: keep.* 
 - **Feed cost per render.** `readNovaJourney`'s query count is estimable (≈ 9 onboarding reads + ≈ 8 loop reads) but not measured; the read-count test in Slice 1 and the PERF conventions (`health/content.tsx:84-97`) bound it. *Probable.*
 - **Stage 4 timing.** Slice 6 assumes `claude/agent-preview-diff-logic-sxj5uc` merges first and that its unproven dogfood ("Nothing has been dogfooded", *branch* sprint 0133) lands. If it does not, Slice 6 ships against `nextjs_node_v1` and adds the two Stage-4 entries later; nothing in Slices 1–5 depends on it.
+
+---
+
+## O. Founder review and amendments (2026-09-03)
+
+The founder read this record and made five decisions. Four amend proposals in §D–§L; one closes the open question in §D.6. Nothing here changes an observation, and nothing here weakens §H (cost), §I (sandbox) or §J (safety) — all three were accepted as written.
+
+### O.1 Two lanes, not one state machine — `deriveNovaFocus` after onboarding
+
+**Amends §E and §D.3.** §E proposed one linear cascade of 17 positions from `connect_source` to `outcome_observed`. That is right for onboarding and wrong afterwards, because a running project is not linear.
+
+**The schema proves it.** `prepared_changes_single_active_idx` is unique on `(project_id, execution_identity)`, not on `project_id` (`supabase/migrations/20260812060000_prepared_changes.sql:127-129`) — so a project may hold several live prepared changes at once, one per Move. The dashboard read already counts them rather than naming one (`preparedCount`, `failedValidationCount`, `src/modules/projects/dashboard.ts:142-144, 550-551`). A project can therefore truthfully be, at the same instant: one change awaiting review, a second Move planned, the audit stale, HEAD moved, and a founder question open. "The project is in state 14" is not a sentence that can be true about it.
+
+**So the experience layer has two lanes:**
+
+- **Onboarding — linear, unchanged.** `deriveOnboardingState` (`src/modules/onboarding/state.ts:50-65`) keeps its ten states, its reconciliation (`store.ts:248-394`) and its tests. §E positions 1–8 stand exactly as written.
+- **After onboarding — `deriveNovaFocus`, a ranking, not a position.** It answers "what needs your attention now, and what else is true" rather than "where is this project".
+
+```
+NovaFocus
+  primary:    one FocusCandidate            — what Nova leads with
+  secondary:  FocusCandidate[]              — true, but not what to do now
+  working:    OperationView | null          — what is running, if anything
+  nextAction: NovaActionId | null           — the one control the primary carries
+```
+
+`FocusCandidate` is a discriminated union whose members are the §E positions 9–17 demoted from states to candidates: `review_change`, `merge_ready`, `validation_failed`, `agent_question`, `founder_input_required`, `execution_offered`, `plan_offered`, `audit_outdated`, `repository_read_outdated`, `workspace_choice_required`, `next_move_available`, `outcome_pending`, `nothing_to_do`.
+
+**It composes what exists rather than re-deciding anything.** The four functions the founder named are exactly its inputs, and each keeps its own authority: `deriveChangeProgress` per prepared change (`src/modules/execution/change-progress.ts:245`), `buildAgentFocus` for the Move a surface is about (`src/modules/projects/agent-focus.ts:97-108`), `buildHomeView` for health / finding / next Move (`src/modules/projects/command-center.ts:169`), and the tier vocabulary and ordering from `buildAttentionItems` (`src/modules/projects/attention.ts:44-74, 175-220`) — whose `AttentionTier = "blocked" | "decision" | "ready" | "setup"` and `TIER_ORDER` are already the priority rule Nova needs and are already pure and tested. `deriveNovaFocus` sorts candidates by that tier order and picks the head; ties break by the domain's own rank (a Move's `rank`, a plan's step `order`).
+
+**Consequence for §L.** Slice 1 builds `deriveNovaFocus` beside `deriveOnboardingState`, not a single `deriveJourney`. Slices 5–7 render `primary` + `secondary` rather than one position. `readNovaJourney` becomes `readNovaFocus` and its read-count bound is unchanged. The three no-progress positions (`agent_working`, `validating`, a live scan) collapse into `working`, which is where §F's `nova.progress` entry already hangs.
+
+**What this preserves that a single cascade would have lost:** a founder with a change awaiting review *and* a stale audit is told both, in the order the existing tier vocabulary already ranks them, instead of one being silently unreachable because a cascade returned earlier.
+
+### O.2 Nova is Home — §D.6 decided
+
+**Closes the open question.** Home is Nova. There is no seventh rail item; adding one would re-ask "where do I go now?", which is the question Nova exists to remove. The rail becomes: **Home (Nova) · My Product · Business Health · Action Plan · Agent · Experiments · Settings**, and every non-Nova section is a drill-down from what Nova says.
+
+**This reverses ADR 0047, and that must be done in the open, not by drift.** ADR 0047 made Business Health *the* canonical project Home and deliberately removed it as a rail item. The decision above puts it back. Three concrete bindings have to move with it, all in `src/components/layout/project-shell.tsx`:
+
+- `PROJECT_SECTIONS[0]` is today `{ id: "home", label: "Business Health", icon: "business-health", segment: "" }` (`:53-56`). It becomes Nova, and a Business Health entry returns with a real segment.
+- `WORKSPACE_SECTION_HEADINGS["business-audit"]` is the Home heading, titled "Business Health" (`:134-137`). Home's heading becomes Nova's; the Business Health heading moves to its own route.
+- **`#business-audit` must keep resolving.** `projectSectionHref(projectId, "business-audit")` returns `${base}#business-audit` (`:177`), and that anchor is the only way out of a blocked opportunity set (`src/modules/opportunities/view.ts:33-53`). It has to point at wherever Business Health lands, and `/health` stays an alias. ADR 0047 kept the section id stable through a label and segment change precisely so this could happen without a migration; that affordance is now being spent.
+
+**Requires an ADR** amending 0045 and 0047, written with the sprint that lands Slice 2 or 3 — not after. Everything else in §L is unaffected: the onboarding route keeps its URL and its focused shell (a rail beside a setup flow is still an invitation to abandon it, ADR 0046).
+
+### O.3 Confirm and audit: two actions, one CTA while it is free
+
+**Amends §G step 6 and §K.** §G proposed splitting "Looks right" into two founder decisions. The split is right in the code and wrong on the screen: it would produce *"Sieht das richtig aus?" → Ja → "Soll ich jetzt den Business Audit starten?" → Ja*, which is friction Nova exists to remove.
+
+**So: two Server Actions, one button, and the button's label is derived from what the next audit costs.**
+
+- `confirmProductAction` / `correctProductAction` write `confirmed_at` (and corrections) and start nothing.
+- `startAuditAction` stays exactly as it is.
+- Nova composes them behind one control **only while the audit is free**, and says so: *"Ja, weiter zum Business Audit"*. Where the audit is priced, confirmation and the audit are two clicks and the second one carries its price: *"Audit aktualisieren · 35 Credits"*.
+
+**The branch is already derivable, with no new state.** `AuditAccessMode` distinguishes `included_first_audit` from `credits` (`src/modules/business-audit/entitlement.ts:45-84, 256`), and `AuditCreditGate` resolves to `not_applicable` when nothing is owed (`:380-397`). Nova reads the gate it already renders elsewhere and picks the label; the bundled path is available exactly when the gate says nothing is owed. That keeps rule 60 intact — a priced operation is never a side effect of a different question — while the free first run stays one click.
+
+### O.4 No deferral persistence in V1
+
+**Amends §D.2, §K and §14.** The proposed `project_onboarding.deferred_recommendation_key` + `deferred_at` is withdrawn. Two reasons, both correct: one column holds one deferral, and Nova outlives onboarding by design — *"pricing later"* is not an onboarding fact and does not belong in the row that records how a founder got through setup.
+
+**V1 therefore ships no deferral store and no "Do this later" control.** An affordance that cannot be honoured across a second deferral is worse than its absence (rule 15). What remains is real and already exists: a founder who does not want Nova's primary candidate can select a different Move (`?plan=`, ADR 0058 — navigation, never authority), and the un-chosen candidate stays visible in `NovaFocus.secondary` rather than disappearing.
+
+**If deferral is wanted later it is its own small table**, not a column: `nova_recommendation_deferrals (project_id, subject_type, subject_id, deferred_at, deferred_until?)`, one active row per `(project_id, subject_type, subject_id)` by partial unique index, RLS scoped through `projects.user_id` like every other project-scoped table. Named here so the shape is on record; **not built now**, and a slice of its own when a dogfood shows it is needed.
+
+### O.5 `nova_workflow_explained_at` is the wrong name
+
+**Amends §D.2 and §L Slice 3.** The field was to be set on *"Show me"* **and** on *"Start now"* — but nothing was explained in the second case, so the column would record something that did not happen. Long-lived domain columns do not get names that are false half the time.
+
+**Replaced by a status column with a closed vocabulary**, which is also the idiom this exact table already uses for founder intent (`live_site_status`, `supabase/migrations/20260817090000_project_onboarding.sql:22-28`):
+
+```sql
+nova_workflow_status text not null default 'unseen'
+  check (nova_workflow_status in ('unseen', 'explained', 'skipped'))
+```
+
+`skipped` is a real answer, not an absence — the same reasoning that made `no_live_site_yet` a value rather than a null.
+
+### O.6 Revised persistence total
+
+**Supersedes the last three rows of §14.** Nova's new persistence is **two columns on `project_onboarding`**, not three or four:
+
+| Field | Class | Where |
+|---|---|---|
+| Nova introduced | **NEW** | `project_onboarding.nova_introduced_at timestamptz` |
+| Workflow explained / skipped | **NEW** | `project_onboarding.nova_workflow_status` (`unseen` / `explained` / `skipped`) |
+| ~~"Do this later"~~ | **WITHDRAWN** | not stored in V1 (§O.4) |
+
+The §A count moves from 22 fields (15 derivable, 4 existing, 3 new) to 21 (15 derivable, 4 existing, **2 new**). The reuse estimate does not move materially; the direction it moves is up.
+
+### O.7 Revised target shape
+
+```
+                    NOVA
+             EXPERIENCE LAYER
+                    │
+        ┌───────────┴───────────┐
+  ONBOARDING FLOW           NOVA FOCUS
+  deriveOnboardingState     deriveNovaFocus
+  linear, 10 states         ranked candidates
+        └───────────┬───────────┘
+                    ↓
+              PRESENTATION
+        (feed entries, §F, unchanged)
+                    ↓
+ ┌────────┬─────────┬─────────┬──────────┐
+ │Product │ Business│ Moves / │Execution │
+ │ Intel  │ Audit   │ Plans   │ System   │
+ └────────┴─────────┴─────────┴──────────┘
+                    ↓
+        Existing Vibe authority (§J)
+```
+
+### O.8 What the amendments change in §L
+
+| Slice | Change |
+|---|---|
+| 1 | Builds `deriveNovaFocus` (+ `readNovaFocus`) beside the untouched `deriveOnboardingState`. No `deriveJourney`. Tests become one case per candidate **plus** ordering cases where several are true at once — which the single-cascade design could not have tested. |
+| 2 | Unchanged, except that the feed renders `primary` + `secondary` + `working`. |
+| 3 | Migration is two columns, not four; `nova_workflow_status` per §O.5; no deferral action, no `nova.recommendation_deferred` event. Gains the ADR amending 0045/0047 (§O.2) if Home moves in this slice. |
+| 4 | Confirm/correct split lands as two actions; the free-path CTA is composed per §O.3 and its label is asserted against `AuditCreditGate`. |
+| 5–7 | Render candidates rather than positions; §15's failure cases become candidates with the same recoveries. |
+| 8 | No longer decides Home vs rail (§O.2 decided it). Dogfood asserts the ordering rule: a project with two true candidates leads with the higher tier. |
+
+Everything else in §L, and the whole of §H, §I, §J and §M, stands as written.
