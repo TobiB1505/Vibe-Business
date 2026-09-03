@@ -64,6 +64,18 @@ All four migrations applied through the Supabase MCP and **verified by reading t
 
 Domain **7,668** across 445 files · SQL **311** across 23 · browser **484** · lint 0/0 · build green.
 
+## The screen the bump made empty
+
+Found by the founder asking a plain question — *"by a click, do you mean the repo scan?"* — and checking the answer rather than giving it from memory.
+
+Yes: **"Scan my product again"** on *My Product*, which is the only thing that writes a fresh snapshot (`inspectRepository(..., { force: true })`) and is free work. But it was offered nowhere that a founder would be sent to it, and the v5 bump is exactly what makes that state universal.
+
+`repository_analysis_outdated` refuses **before** a step resolves agentic. So `agenticStep` is null, `AgentReadyStage` gets no `startAction`, and its call-to-action block renders nothing at all — under a hero still reading *"Vibe understands your product, code and goals."* The recovery link existed and could not help: `startRefusalRecovery` did not cover this reason, and it renders inside `AgentStartAction`, which needs the button that is not there. *My Product* was no help either — a stale-but-successful snapshot renders "Your code" as **ready**.
+
+The same shape as the application question, one refusal over: a question rendered as a dead end. Fixed the same way — the sentence from `EXECUTION_REASON_LABELS`, the note from `startRefusalRecovery`, so the pre-click and post-click paths cannot drift, and a browser test for a state whose whole defect was that the screen was empty.
+
+**A false claim was corrected on the way.** `startRefusalRecovery`'s docblock said a scan *costs Credits*; `kill-switch.ts` files `product_scan` under free work, `start-limits.ts` under `FREE_WORK`, and `launch-v1` prices understanding at zero. Rule 60 still holds and the reason is better: Vibe does not re-read a founder's code on its own because it is theirs, not because of a bill. A note implying a charge makes a free way forward look like one nobody should take.
+
 ## What this does not prove
 
 **Nothing has been dogfooded.** That is the layer this stage exists for and none of the above substitutes for it. Urlaubsplanung should become validatable and is the first real agent run against a non-Next.js repository; `planner-agent` must show the application question or a concrete refusal and **must not provision a VM**; Jandia-Arena decides whether `execution-contract/README.md`'s "no validation profile matches" sentence is repaired or retired.
