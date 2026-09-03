@@ -8,12 +8,14 @@ and [ADR 0078](../../../docs/decisions/0078-nova-voice-is-measured-not-argued.md
 
 **Nothing in this module is wired into the product yet.** No route imports it,
 no Server Action calls it, and no usage event is written for it. What exists is
-the half that had to come first: the rules Nova's voice is held to, and the
-cases that measure whether a model can work inside them.
+the two halves that had to come first: the rules Nova's voice is held to, and
+the read model that decides what she would be talking about.
 
 ## What is here
 
 ```
+focus.ts       what needs attention now, ranked — pure, and the whole of the decision
+read.ts        the facts behind it, gathered in a bounded number of queries
 voice/
   payload.ts   what the model is given, what it may return, and the cache identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
@@ -23,6 +25,28 @@ voice/
     rubric.ts  the six questions a regular expression cannot answer
     nova-voice.probe.ts   the paid run — never part of `pnpm test`
 ```
+
+## Focus: a ranking, not a position
+
+After onboarding, a project is not in one state. It can hold a change awaiting
+review, a second Move planned, a stale audit and an open founder question at
+the same instant — the schema allows several live prepared changes per project,
+one per execution identity. So `deriveNovaFocus` returns a `primary` to lead
+with and keeps the rest in `secondary`, ordered by `attention.ts`'s existing
+tier vocabulary rather than a second copy of it. `deriveOnboardingState` is
+untouched and still owns the linear part.
+
+`focus.ts` is pure and decides only order; every candidate restates a fact
+another module already derived. `read.ts` is the I/O half: constant queries in
+the number of prepared changes, no service-role client, and **no network call
+of any kind** — which is why it derives a change's stage from rows rather than
+calling `deriveChangeProgress`, whose review evidence costs GitHub reads and a
+sandbox provider to distinguish four stages Nova says one sentence about.
+
+Three facts are therefore still empty here — `executableStep`,
+`repositoryReadOutdated`, `workspaceChoiceRequired` — because only the
+execution resolver can answer them and it performs a live website preflight.
+The candidates that depend on them arrive with the slices that render them.
 
 ## The three tiers
 
