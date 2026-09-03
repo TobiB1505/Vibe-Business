@@ -28,6 +28,7 @@ voice/
   payload.ts   what the model is given, what it may return, and the cache identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
   checks.ts    what Vibe refuses to show a founder, whatever the model wrote
+  service.ts   the call itself — and the template it returns instead, five ways
   eval/
     cases.ts   fifty payloads, weighted toward the ones that make lying tempting
     rubric.ts  the six questions a regular expression cannot answer
@@ -77,7 +78,7 @@ The three operation failures are three candidates rather than one, because
 "retry" is not one thing: re-reading a product is free, re-auditing costs 35
 Credits, and starting a run again costs between 150 and 350. A single
 candidate would have hidden that behind one word. `getLastFailedOperation`
-returns the latest run only when *that* run failed, so a founder who already
+returns the latest run only when _that_ run failed, so a founder who already
 recovered is told nothing.
 
 `source_disconnected` outranks everything, because a project Vibe cannot reach
@@ -145,6 +146,20 @@ Nova's messages come from whichever of these can produce them, in order:
 A validation failure, a provider outage and a disabled kill switch all resolve
 to tier 1. That is what makes tier 2 safe to ship: the product is complete
 without it.
+
+`speakNovaMessage` is tier 2, and it has five ways to fall back — off, over
+budget, provider failed, malformed response, validator refused — each of which
+returns the caller's own template unchanged. Its test suite is nothing but
+those five, because a happy-path suite would prove the opposite of what
+matters.
+
+**Nothing calls it yet, and that is deliberate.** §H.6 of the audit names "a
+call per message, per visit, per founder, with no reuse key" as a way to
+double-spend, and it is right: until a store exists to check
+`NovaVoiceOutcome.identity` against before calling, a render that spoke would
+be that objection (rule 48). So the function returns the reuse key and is
+reachable from tests and from nowhere else. The store is the next piece, not
+an afterthought.
 
 ## What the voice may never do
 
