@@ -49,12 +49,24 @@ price.
 ## Running the eval
 
 ```
-pnpm nova:probe-voice                       # gold judge (Opus 5)
-NOVA_JUDGE=regression pnpm nova:probe-voice # per-PR judge (Sonnet 5)
+pnpm nova:probe-voice                        # Sonnet 5, gold judge, tiered reps — ~$2.70
+NOVA_JUDGE=regression pnpm nova:probe-voice  # per-PR judge (Sonnet 5), cheaper
+NOVA_VOICE=candidate pnpm nova:probe-voice   # re-measure Haiku 4.5 instead
 ```
 
 Real, billable provider requests; requires `ANTHROPIC_API_KEY` (read from
-`.env.local` by the probe config). The four `offline` cases spend nothing.
+`.env.local` by the probe config, never committed, never logged). The four
+`offline` cases spend nothing.
+
+Reps are tiered rather than uniform: every case runs once by default
+(`NOVA_REPS`), and the fifteen ids in `NOVA_VOICE_CRITICAL_CASE_IDS`
+(`eval/cases.ts`) run three times (`NOVA_CRITICAL_REPS`) — the subset where
+prompt `v3`'s measured failures concentrated, so where a stochastic invention
+most needs a second draw to be caught. The console summary reports that
+subset against the v4 acceptance line — `grounded`/`no_invention` ≥ 85%,
+`calibrated` ≥ 95%, `sounds_human` ≥ 90% — agreed in advance; it reports the
+line, it does not enforce it.
+
 Per-case results land in `.nova-eval/results.jsonl`, which is not committed.
 
 `checks.test.ts` and `eval/cases.test.ts` are free, deterministic and part of

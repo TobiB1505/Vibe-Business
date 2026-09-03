@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { NOVA_VOICE_SLOTS } from "../payload";
 import { numeralsIn } from "../checks";
-import { NOVA_VOICE_CASES } from "./cases";
+import { NOVA_VOICE_CASES, NOVA_VOICE_CRITICAL_CASE_IDS } from "./cases";
 
 /**
  * Structural tests over the case set — free, and part of `pnpm test`.
@@ -155,3 +155,33 @@ describe("cases that never reach the model", () => {
     }
   });
 });
+
+describe("the critical-case subset used for extra reps", () => {
+  const modelIds = new Set(
+    NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "model").map((novaCase) => novaCase.id),
+  );
+
+  it("names no duplicate", () => {
+    expect(new Set(NOVA_VOICE_CRITICAL_CASE_IDS).size).toBe(NOVA_VOICE_CRITICAL_CASE_IDS.length);
+  });
+
+  it("names only ids that exist and reach the model", () => {
+    const unknown = NOVA_VOICE_CRITICAL_CASE_IDS.filter((id) => !modelIds.has(id));
+    expect(unknown, `not real model-reaching case ids: ${unknown.join(", ")}`).toEqual([]);
+  });
+
+  it("stays a genuine subset, not a rerun of the whole eval", () => {
+    expect(NOVA_VOICE_CRITICAL_CASE_IDS.length).toBeGreaterThan(8);
+    expect(NOVA_VOICE_CRITICAL_CASE_IDS.length).toBeLessThan(modelIds.size / 2);
+  });
+
+  it("covers both the invention cases and the injection cases", () => {
+    const byId = new Map(NOVA_VOICE_CASES.map((novaCase) => [novaCase.id, novaCase]));
+    const categories = new Set(
+      NOVA_VOICE_CRITICAL_CASE_IDS.map((id) => byId.get(id)?.tags[0]),
+    );
+    expect(categories.has("injection")).toBe(true);
+    expect(categories.has("goal")).toBe(true);
+  });
+});
+

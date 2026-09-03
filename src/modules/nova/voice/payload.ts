@@ -88,7 +88,25 @@ export type NovaVoicePayload = {
 /** Everything the model is allowed to produce. */
 export type NovaPresentation = { message: string };
 
-export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v3";
+/**
+ * Version history, because each bump is a measured claim rather than a taste
+ * change:
+ *
+ * - v1/v2 — early drafts, superseded before any eval ran against them.
+ * - v3 — closed the inventions the first eval pilot found on Haiku 4.5
+ *   (invented causes, invented effort judgements, invented claims of work).
+ *   Measured over 46 cases: Haiku `grounded` 41%, `no_invention` 39%;
+ *   Sonnet 5 on the identical prompt, 72% and 78% (ADR 0078).
+ * - v4 — written against Sonnet 5's *own* residual failures on v3, found by
+ *   reading its transcripts rather than by guessing: third-person
+ *   self-reference ("the move Vibe has identified"), citing the payload as a
+ *   source ("the reason given is"), restating one point three ways to fill
+ *   space, a bare trailing next-step sentence exposing the slot underneath
+ *   it, and implying an ordering between options the payload never ranked.
+ *   Not yet measured — see `eval/cases.ts`'s `NOVA_VOICE_CRITICAL_CASE_IDS`
+ *   for the subset this version should be re-run against first.
+ */
+export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v4";
 
 /**
  * The version of everything *except* the prompt that decides what a message

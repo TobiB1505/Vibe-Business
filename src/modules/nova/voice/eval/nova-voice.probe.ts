@@ -16,7 +16,7 @@ import {
   NOVA_VOICE_PROMPT_VERSION,
 } from "../payload";
 import { buildNovaVoiceSystemPrompt, renderNovaVoiceUserContent } from "../prompt";
-import { NOVA_VOICE_CASES, type NovaVoiceCase } from "./cases";
+import { NOVA_VOICE_CASES, NOVA_VOICE_CRITICAL_CASE_IDS, type NovaVoiceCase } from "./cases";
 import {
   NOVA_JUDGE_OUTPUT_SCHEMA,
   NOVA_JUDGE_SYSTEM_PROMPT,
@@ -30,16 +30,24 @@ import {
  * `.probe.ts` and `vitest.config.mts` includes only `*.test.ts`, so CI can
  * never reach the provider through it. Run explicitly:
  *
- *   pnpm nova:probe-voice                      # gold judge (Opus 5)
- *   NOVA_JUDGE=regression pnpm nova:probe-voice
- *   NOVA_REPS=1 pnpm nova:probe-voice          # cheaper, noisier
+ *   pnpm nova:probe-voice                        # Sonnet 5, gold judge, tiered reps
+ *   NOVA_JUDGE=regression pnpm nova:probe-voice  # cheaper per-PR judge
+ *   NOVA_VOICE=candidate pnpm nova:probe-voice   # re-measure Haiku 4.5 instead
  *
- * ## What one full run costs and what it buys
+ * ## Reps are tiered, not uniform
  *
- * 46 model cases × 2 reps = 92 voice calls on Haiku 4.5 at roughly a thousand
- * input and two hundred output tokens each, plus one judge call per result.
- * The four `offline` cases spend nothing: they assert the fallback, which is
- * the whole point of having one.
+ * Every case runs `NOVA_REPS` times (default 1); the fifteen ids in
+ * `NOVA_VOICE_CRITICAL_CASE_IDS` run `NOVA_CRITICAL_REPS` times instead
+ * (default 3) — the subset where v3's own measured failures concentrated, so
+ * where a stochastic invention is most likely to need a second draw to be
+ * caught. At the defaults that is 31 + 15×3 = 76 voice calls, not 46.
+ *
+ * ## What one default run costs and what it buys
+ *
+ * 76 voice calls at the measured Sonnet 5 rate (~$0.0044/message) plus 76
+ * judge calls at the measured Opus 5 rate (~$0.031/verdict, thinking included)
+ * comes to roughly **$2.70**. The four `offline` cases spend nothing: they
+ * assert the fallback, which is the whole point of having one.
  *
  * The voice half is priced from `ai/pricing.ts`, which carries an effective-
  * dated rate for this exact model string. The judge half is reported in tokens
@@ -57,15 +65,31 @@ import {
  * is a fine result for a quality metric and no guarantee at all for a safety
  * one.
  *
- * `voice` is the judge's mean over six criteria and is the number the model
- * choice rests on. At 46 cases × 2 reps the noise floor on a rate is about ten
- * points, so a four-point difference between two prompts is not a difference.
+ * `voice` is the judge's mean over six criteria and is the number a prompt or
+ * model choice rests on. Read the critical subset's own rate alongside the
+ * overall one — three reps on fifteen cases resolves a real swing on exactly
+ * the cases most likely to show one; one rep on the rest mainly rules out a
+ * gross regression there.
  *
  * Nothing is persisted to Supabase, no usage event is written, and no message,
  * payload or key is printed to the console — only ids, grades and counts.
  */
 
-const REPS = Number(process.env.NOVA_REPS ?? "2");
+const REPS = Number(process.env.NOVA_REPS ?? "1");
+/**
+ * Extra repetitions for the cases in `NOVA_VOICE_CRITICAL_CASE_IDS`.
+ *
+ * Uniform reps across all 46 cases would triple the eval's cost for no
+ * better reason than symmetry. The failure modes worth repeating are the
+ * stochastic ones — a model that invents a reason on one call and not the
+ * next needs more than one draw to be caught — and those concentrate in a
+ * known subset (ADR 0078's residual-failure list). Everything outside it
+ * still runs, just once, which is enough for a case that is safe or unsafe
+ * by construction rather than by chance.
+ */
+const CRITICAL_REPS = Number(process.env.NOVA_CRITICAL_REPS ?? "3");
+const CRITICAL_CASE_IDS = new Set(NOVA_VOICE_CRITICAL_CASE_IDS);
+const repsFor = (id: string): number => (CRITICAL_CASE_IDS.has(id) ? CRITICAL_REPS : REPS);
 /**
  * Run only the first N model cases.
  *
@@ -427,7 +451,7 @@ describe("Nova voice — paid eval", () => {
       const offlineCases = NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "offline");
 
       const work = modelCases.flatMap((novaCase) =>
-        Array.from({ length: REPS }, (_, rep) => ({ novaCase, rep })),
+        Array.from({ length: repsFor(novaCase.id) }, (_, rep) => ({ novaCase, rep })),
       );
 
       const results = await mapWithLimit(work, CONCURRENCY, ({ novaCase, rep }) =>
@@ -469,6 +493,31 @@ describe("Nova voice — paid eval", () => {
         return `  ${criterion.label.padEnd(16)} ${pct(passed, judged.length)}`;
       });
 
+      /**
+       * The v4 acceptance line, agreed before this run rather than fitted
+       * after it: grounded and no_invention above 85%, calibrated above 95%,
+       * sounds_human above 90% — measured on the critical subset, where three
+       * reps make a swing on these specific criteria readable. Reported, not
+       * enforced: whether Nova Voice is "nailed down" at these numbers is the
+       * ADR's call, not this script's.
+       */
+      const TARGETS: Partial<Record<NovaVoiceCriterionId, number>> = {
+        grounded: 0.85,
+        no_invention: 0.85,
+        calibrated: 0.95,
+        sounds_human: 0.9,
+      };
+      const judgedCritical = judged.filter((result) => CRITICAL_CASE_IDS.has(result.id));
+      const criticalByCriterion = NOVA_VOICE_CRITERIA.map((criterion) => {
+        const passed = judgedCritical.filter((result) => result.judge[criterion.id] === true).length;
+        const rate = judgedCritical.length === 0 ? null : passed / judgedCritical.length;
+        const target = TARGETS[criterion.id];
+        const mark =
+          target === undefined || rate === null ? "  " : rate >= target ? "✓ " : "✗ ";
+        const targetNote = target === undefined ? "" : ` (target ≥${(target * 100).toFixed(0)}%)`;
+        return `  ${mark}${criterion.label.padEnd(16)} ${pct(passed, judgedCritical.length)}${targetNote}`;
+      });
+
       const failuresByCode = new Map<string, number>();
       for (const result of scored) {
         for (const failure of result.failures) {
@@ -481,11 +530,14 @@ describe("Nova voice — paid eval", () => {
         [
           "",
           `voice model=${VOICE.model}  judge=${JUDGE.name} (${JUDGE.config.model})`,
-          `prompt=${NOVA_VOICE_PROMPT_VERSION}  policy=${NOVA_VOICE_POLICY_VERSION}  reps=${REPS}`,
+          `prompt=${NOVA_VOICE_PROMPT_VERSION}  policy=${NOVA_VOICE_POLICY_VERSION}  reps=${REPS} (critical: ${CRITICAL_REPS} on ${CRITICAL_CASE_IDS.size} cases)`,
           "",
           `safe (deterministic)   ${pct(safeCount, scored.length)}  (${safeCount}/${scored.length})`,
           `voice (judge mean)     ${(voiceMean * 100).toFixed(1)}%  over ${judged.length} graded`,
           ...byCriterion,
+          "",
+          `critical subset (${judgedCritical.length} graded, ${CRITICAL_REPS} reps each) — the v4 acceptance line:`,
+          ...criticalByCriterion,
           "",
           `errors                 ${results.filter((r) => r.status === "error").length}`,
           `served-model mismatch  ${results.filter((r) => r.servedModelMismatch).length}`,
