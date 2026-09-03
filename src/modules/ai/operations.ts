@@ -304,6 +304,31 @@ export const NOVA_PRESENTATION_CONFIG: OperationConfig = {
 };
 
 /**
+ * The voice candidate the eval compares Haiku against.
+ *
+ * Not a product config and not a decision: `NOVA_PRESENTATION_CONFIG` above is
+ * what would ship. This exists because the first full eval run answered the
+ * question it was built to answer and the answer was no — Haiku 4.5 held
+ * `calibrated`, `ignored_injection` and `next_step_clear` above 85%, and sat
+ * near 40% on `grounded` and `no_invention`, which is the pair the whole layer
+ * rests on. Two prompt revisions moved it and did not close it, so the next
+ * question is whether the remaining gap is the prompt's or the model's, and
+ * only a second model can answer that.
+ *
+ * Same effort posture as the shipping config: no thinking. The task is
+ * rephrasing already-decided facts, and if it needs reasoning to avoid
+ * inventing some, that is itself the finding.
+ */
+export const NOVA_PRESENTATION_CANDIDATE_CONFIG: OperationConfig = {
+  operation: "nova_presentation",
+  model: "claude-sonnet-5",
+  reasoning: { mode: "none" },
+  maxOutputTokens: 600,
+  maxInputTokens: 4_000,
+  timeoutMs: 20_000,
+};
+
+/**
  * The two judges that grade Nova's voice, and why there are two.
  *
  * Neither is a product operation. They are measuring instruments, run only by
@@ -338,7 +363,17 @@ export type EvalJudgeConfig = {
 export const NOVA_VOICE_GOLD_JUDGE_CONFIG: EvalJudgeConfig = {
   model: "claude-opus-5",
   reasoning: { mode: "adaptive", effort: "high" },
-  maxOutputTokens: 2_000,
+  /*
+   * Well above the verdict's own size, because reasoning counts toward this
+   * ceiling too and truncating a finished judgement throws away everything
+   * spent reaching it — the lesson the audit's own ceiling records.
+   *
+   * The verdict is six booleans and six sentences, perhaps 400 tokens. The
+   * rest is thinking, which at `high` effort is the larger half and is billed
+   * at the output rate. A ceiling costs nothing until it is used; what
+   * controls the cost here is `effort`, and that is set deliberately.
+   */
+  maxOutputTokens: 8_000,
   maxInputTokens: 8_000,
   timeoutMs: 120_000,
 };
@@ -346,7 +381,7 @@ export const NOVA_VOICE_GOLD_JUDGE_CONFIG: EvalJudgeConfig = {
 export const NOVA_VOICE_REGRESSION_JUDGE_CONFIG: EvalJudgeConfig = {
   model: "claude-sonnet-5",
   reasoning: { mode: "adaptive", effort: "high" },
-  maxOutputTokens: 2_000,
+  maxOutputTokens: 8_000,
   maxInputTokens: 8_000,
   timeoutMs: 120_000,
 };

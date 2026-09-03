@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { getAIProvider } from "@/modules/ai/anthropic/client";
 import {
+  NOVA_PRESENTATION_CANDIDATE_CONFIG,
   NOVA_PRESENTATION_CONFIG,
   NOVA_VOICE_GOLD_JUDGE_CONFIG,
   NOVA_VOICE_REGRESSION_JUDGE_CONFIG,
@@ -65,9 +66,28 @@ import {
  */
 
 const REPS = Number(process.env.NOVA_REPS ?? "2");
+/**
+ * Run only the first N model cases.
+ *
+ * For the pilot the eval guide asks for before the full run: a handful of
+ * graded examples a person reads, and — the reason it matters here — a
+ * *measured* judge token count. A judge that thinks before it answers bills
+ * its thinking at the output rate, so the cost of a full run is not knowable
+ * from the rubric's size. Five cases settle it for a few cents.
+ */
+const LIMIT = process.env.NOVA_LIMIT ? Number(process.env.NOVA_LIMIT) : null;
 const CONCURRENCY = Number(process.env.NOVA_CONCURRENCY ?? "4");
 /** A case that has not answered in this long has cost its slot, not its money. */
 const CASE_CEILING_MS = 90_000;
+
+/**
+ * Which voice config is under test. Selects a config; never names a model
+ * (rule 46).
+ */
+const VOICE =
+  process.env.NOVA_VOICE === "candidate"
+    ? NOVA_PRESENTATION_CANDIDATE_CONFIG
+    : NOVA_PRESENTATION_CONFIG;
 
 const JUDGE =
   process.env.NOVA_JUDGE === "regression"
@@ -75,6 +95,22 @@ const JUDGE =
     : { name: "gold", config: NOVA_VOICE_GOLD_JUDGE_CONFIG };
 
 const OUT_DIR = join(process.cwd(), ".nova-eval");
+
+/**
+ * One retry for a judge call the provider could not serve.
+ *
+ * Only the judge, and only on transient capacity. The voice call stays
+ * single-shot on purpose: it mirrors a production path that never retries a
+ * billable call, and retrying it here would measure something the product does
+ * not do. A judge, by contrast, is an instrument — losing four verdicts to a
+ * capacity blip (which is what the first candidate run did) costs comparability
+ * for no reason.
+ *
+ * Retries are recorded rather than absorbed: attempts run and attempts scored
+ * have to be visible in the data, not only on the bill.
+ */
+const JUDGE_RETRY_ON = new Set(["provider_overloaded", "provider_rate_limited", "provider_timeout"]);
+const JUDGE_MAX_ATTEMPTS = 2;
 
 type CaseResult = {
   id: string;
@@ -93,6 +129,17 @@ type CaseResult = {
   judgeUsage: { input: number; output: number } | null;
   latencyMs: number | null;
   errorClass: string | null;
+  /**
+   * What Nova actually wrote.
+   *
+   * Written to the local, git-ignored results file and never to the console:
+   * an eval nobody can read the outputs of is an eval nobody should trust,
+   * and reviewing them is the entire point of the pilot.
+   */
+  message: string | null;
+  judgeReasons: Record<string, string> | null;
+  /** How many judge attempts this verdict cost. */
+  judgeAttempts: number;
 };
 
 async function withCeiling<T>(work: Promise<T>, label: string): Promise<T> {
@@ -152,6 +199,9 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
     judgeUsage: null,
     latencyMs: null,
     errorClass: null,
+    message: null,
+    judgeReasons: null,
+    judgeAttempts: 0,
   };
 
   const provider = getAIProvider();
@@ -160,13 +210,13 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
     const generated = await withCeiling(
       provider.generateStructured({
         operation: "nova_presentation",
-        model: NOVA_PRESENTATION_CONFIG.model,
+        model: VOICE.model,
         system: buildNovaVoiceSystemPrompt(novaCase.payload.slot),
         userContent: renderNovaVoiceUserContent(novaCase.payload),
         outputSchema: NOVA_PRESENTATION_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
-        maxOutputTokens: NOVA_PRESENTATION_CONFIG.maxOutputTokens,
-        reasoning: NOVA_PRESENTATION_CONFIG.reasoning,
-        timeoutMs: NOVA_PRESENTATION_CONFIG.timeoutMs,
+        maxOutputTokens: VOICE.maxOutputTokens,
+        reasoning: VOICE.reasoning,
+        timeoutMs: VOICE.timeoutMs,
       }),
       novaCase.id,
     );
@@ -175,7 +225,7 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
     base.latencyMs = generated.latencyMs;
     // A silently substituted model invalidates the comparison the run exists
     // to make, so it is recorded rather than absorbed.
-    base.servedModelMismatch = generated.model !== NOVA_PRESENTATION_CONFIG.model;
+    base.servedModelMismatch = generated.model !== VOICE.model;
 
     if (!generated.ok) {
       return { ...base, status: "error", errorClass: generated.error, safe: false };
@@ -197,11 +247,12 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
       forbiddenSubstrings: novaCase.forbiddenSubstrings,
     });
 
+    base.message = message;
     base.safe = checked.ok;
     base.failures = checked.failures.map((failure) => `${failure.code}:${failure.detail}`);
     base.warnings = checked.warnings.map((warning) => warning.code);
 
-    const judged = await withCeiling(
+    const judgeRequest = () =>
       provider.generateStructured({
         // A ledger key this probe never writes: the judge is an instrument,
         // and `AIOperation` has no member for one.
@@ -213,9 +264,21 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
         maxOutputTokens: JUDGE.config.maxOutputTokens,
         reasoning: JUDGE.config.reasoning,
         timeoutMs: JUDGE.config.timeoutMs,
-      }),
-      `${novaCase.id}:judge`,
-    );
+      });
+
+    let judged = await withCeiling(judgeRequest(), `${novaCase.id}:judge`);
+    base.judgeAttempts = 1;
+    while (
+      !judged.ok &&
+      JUDGE_RETRY_ON.has(judged.error) &&
+      base.judgeAttempts < JUDGE_MAX_ATTEMPTS
+    ) {
+      // Jittered, so a batch that hit the same limit together does not return
+      // together and hit it again.
+      await new Promise((resolve) => setTimeout(resolve, 2_000 + Math.random() * 3_000));
+      judged = await withCeiling(judgeRequest(), `${novaCase.id}:judge`);
+      base.judgeAttempts += 1;
+    }
 
     if (judged.ok) {
       base.judgeUsage = {
@@ -230,6 +293,11 @@ async function runOne(novaCase: NovaVoiceCase, rep: number): Promise<CaseResult>
         if (value) passed += 1;
       }
       base.voice = passed / NOVA_VOICE_CRITERIA.length;
+      const reasons = verdict.reasons;
+      base.judgeReasons =
+        typeof reasons === "object" && reasons !== null
+          ? (reasons as Record<string, string>)
+          : null;
     } else {
       base.errorClass = `judge:${judged.error}`;
     }
@@ -258,7 +326,8 @@ describe("Nova voice — paid eval", () => {
         "ANTHROPIC_API_KEY is required. This probe makes real, billable provider requests.",
       ).toBeTruthy();
 
-      const modelCases = NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "model");
+      const allModelCases = NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "model");
+      const modelCases = LIMIT === null ? allModelCases : allModelCases.slice(0, LIMIT);
       const offlineCases = NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "offline");
 
       const work = modelCases.flatMap((novaCase) =>
@@ -315,7 +384,7 @@ describe("Nova voice — paid eval", () => {
       console.log(
         [
           "",
-          `voice model=${NOVA_PRESENTATION_CONFIG.model}  judge=${JUDGE.name} (${JUDGE.config.model})`,
+          `voice model=${VOICE.model}  judge=${JUDGE.name} (${JUDGE.config.model})`,
           `prompt=${NOVA_VOICE_PROMPT_VERSION}  policy=${NOVA_VOICE_POLICY_VERSION}  reps=${REPS}`,
           "",
           `safe (deterministic)   ${pct(safeCount, scored.length)}  (${safeCount}/${scored.length})`,

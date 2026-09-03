@@ -77,6 +77,8 @@ describe("claims this product may never make", () => {
     ["The change is safe to merge.", "is safe"],
     ["This is guaranteed to improve your conversion.", "guaranteed"],
     ["Everything works after this change.", "everything works"],
+    // The eval's own finding: the infinitive slipped past every other variant.
+    ["Review it and confirm it is ready to go live.", "go live"],
   ])("rejects %j", (message) => {
     expect(codes(message)).toContain("banned_claim");
   });

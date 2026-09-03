@@ -100,6 +100,12 @@ export const ALWAYS_BANNED_CLAIMS = [
   "now live",
   "went live",
   "goes live",
+  // Found by the eval, not by reading this list: a message wrote "confirm it's
+  // ready to go live", which every variant above walks past. The infinitive is
+  // the form a *suggestion* takes, and suggesting a launch Vibe cannot observe
+  // is the same falsehood as asserting one.
+  "go live",
+  "going live",
   "shipped",
   "released",
   "in production",

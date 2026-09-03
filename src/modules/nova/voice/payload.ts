@@ -88,7 +88,7 @@ export type NovaVoicePayload = {
 /** Everything the model is allowed to produce. */
 export type NovaPresentation = { message: string };
 
-export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v1";
+export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v3";
 
 /**
  * The version of everything *except* the prompt that decides what a message
