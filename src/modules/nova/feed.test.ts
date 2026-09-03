@@ -24,6 +24,7 @@ function quiet(): NovaFocusFacts {
   return {
     sourceDisconnected: false,
     failedOperations: { agent: false, scan: false, audit: false },
+    stalledOperations: { agent: false, scan: false, audit: false },
     changes: [],
     questions: [],
     moves: [],
@@ -64,6 +65,9 @@ const EVERY_CANDIDATE: FocusCandidate[] = [
   { kind: "agent_failed" },
   { kind: "scan_failed" },
   { kind: "audit_failed" },
+  { kind: "agent_stalled" },
+  { kind: "scan_stalled" },
+  { kind: "audit_stalled" },
   { kind: "validation_failed", preparedChangeId: "c1", headline: "h" },
   { kind: "merge_blocked", preparedChangeId: "c1", headline: "h" },
   { kind: "review_change", preparedChangeId: "c1", headline: "h" },

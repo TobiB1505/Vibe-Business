@@ -25,6 +25,7 @@ function quiet(): NovaFocusFacts {
   return {
     sourceDisconnected: false,
     failedOperations: { agent: false, scan: false, audit: false },
+    stalledOperations: { agent: false, scan: false, audit: false },
     changes: [],
     questions: [],
     moves: [],
@@ -417,6 +418,7 @@ describe("ordering when several things are true", () => {
     const facts: NovaFocusFacts = {
       sourceDisconnected: false,
       failedOperations: { agent: false, scan: false, audit: false },
+      stalledOperations: { agent: false, scan: false, audit: false },
       changes: [changeAt("validation_failed", "change-a"), changeAt("merged", "change-b")],
       questions: [
         { founderInputRequestId: "req-1", question: "Q", origin: "planner", stepOrder: 1 },
@@ -597,6 +599,52 @@ describe("the failures a founder has to be able to leave", () => {
     const focus = deriveNovaFocus(quiet());
 
     expect(focus.primary.kind).toBe("nothing_to_do");
+  });
+
+  it.each([
+    ["agent", "agent_stalled", "nova.start_agent"],
+    ["scan", "scan_stalled", "nova.rescan_product"],
+    ["audit", "audit_stalled", "nova.refresh_audit"],
+  ])("raises a stalled %s with the same restart as its failure", (kind, expected, action) => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      stalledOperations: { agent: false, scan: false, audit: false, [kind]: true },
+    });
+
+    expect(focus.primary.kind).toBe(expected);
+    expect(focus.nextAction).toBe(action);
+  });
+
+  /**
+   * Two runs, two sentences. Suppressing either would tell the founder about
+   * half of what is wrong, and the observed failure leads because a stall is
+   * inferred from a clock rather than reported by anything.
+   */
+  it("raises a failure and a stall of the same kind, failure first", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      failedOperations: { agent: false, scan: true, audit: false },
+      stalledOperations: { agent: false, scan: true, audit: false },
+    });
+
+    expect([focus.primary, ...focus.secondary].map((candidate) => candidate.kind)).toEqual([
+      "scan_failed",
+      "scan_stalled",
+    ]);
+  });
+
+  /**
+   * The defect this closes: a lost run left `nothing_to_do` on screen beside a
+   * progress bar that would never finish.
+   */
+  it("never calls a project with a stalled run settled", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      stalledOperations: { agent: true, scan: false, audit: false },
+    });
+
+    expect(focus.primary.kind).not.toBe("nothing_to_do");
+    expect(focus.nextAction).not.toBeNull();
   });
 
   /**

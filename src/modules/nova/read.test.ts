@@ -599,3 +599,110 @@ describe("the failures Nova reads", () => {
     expect(facts.failedOperations).toEqual({ agent: false, scan: true, audit: false });
   });
 });
+
+/**
+ * The hole Slice 7 left: a run past `OPERATION_STALL_THRESHOLD_MS` was still
+ * reported as `working`, so a founder watching a lost run saw a stage label
+ * forever — and, with nothing else outstanding, "nothing needs you right now"
+ * printed beside it. `buildOperationView` had already decided it was stalled;
+ * nothing downstream acted on the answer.
+ */
+describe("a run that stopped answering", () => {
+  const LONG_AGO = new Date(Date.UTC(2026, 0, 1)).toISOString();
+
+  function seedRunning(operationType: string, startedAt: string) {
+    db.seed("operation_runs", {
+      id: `op_${(label += 1)}`,
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: operationType,
+      status: "running",
+      stage: "queued",
+      failure_code: null,
+      result_id: null,
+      input_identity: `identity_${label}`,
+      started_at: startedAt,
+      completed_at: null,
+      created_at: startedAt,
+    });
+  }
+
+  it("raises the restart Nova owns rather than saying nothing needs you", async () => {
+    seedProject();
+    seedRunning("product_scan", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.primary.kind).toBe("scan_stalled");
+    expect(focus.nextAction).toBe("nova.rescan_product");
+  });
+
+  /** Stated once: as a candidate, and therefore no longer as work in flight. */
+  it("stops calling a stalled run work in flight", async () => {
+    seedProject();
+    seedRunning("business_audit", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.working).toBeNull();
+    expect(focus.primary.kind).toBe("audit_stalled");
+  });
+
+  /**
+   * The other half of "exactly once". Nova owns no control that restarts a
+   * merge, so the run stays in `working` carrying `stalled`, where the
+   * progress entry says so and the merge panel offers its own way forward.
+   * Dropping it here would have been the same silence in a new place.
+   */
+  it("keeps a stall it cannot restart in working, saying it is stalled", async () => {
+    seedProject();
+    seedRunning("change_merge", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.working?.stalled).toBe(true);
+    expect(focus.primary.kind).toBe("nothing_to_do");
+  });
+
+  /** A run that is merely running is untouched: this changes nothing normal. */
+  it("leaves a live run alone", async () => {
+    seedProject();
+    seedRunning("product_scan", new Date().toISOString());
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.working?.stalled).toBe(false);
+    expect(focus.primary.kind).toBe("nothing_to_do");
+  });
+
+  /**
+   * A failed run and a stalled one of the same kind are two runs, and the
+   * founder is told about both — the observed failure first, because a stall
+   * is inferred from a clock rather than reported by anything.
+   */
+  it("tells a founder about a failure and a stall separately", async () => {
+    seedProject();
+    db.seed("operation_runs", {
+      id: "op_failed",
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: "agent_execution",
+      status: "failed",
+      stage: "queued",
+      failure_code: "provider_unavailable",
+      result_id: null,
+      input_identity: "identity_failed",
+      started_at: null,
+      completed_at: null,
+      created_at: new Date(Date.UTC(2026, 0, 2)).toISOString(),
+    });
+    seedRunning("product_scan", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect([focus.primary.kind, ...focus.secondary.map((entry) => entry.kind)]).toEqual([
+      "agent_failed",
+      "scan_stalled",
+    ]);
+  });
+});

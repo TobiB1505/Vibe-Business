@@ -158,6 +158,15 @@ const MESSAGE_FOR_CANDIDATE: Record<FocusCandidateKind, string> = {
   agent_failed: "My last attempt at building something stopped before it finished.",
   scan_failed: "My last read of your product did not finish.",
   audit_failed: "My last audit did not finish.",
+  /*
+   * "Has been running for" rather than "is stuck" or "has crashed": the run
+   * is presumed lost from a clock, not observed to have died, and Nova says
+   * only what it knows. Starting again is offered because it is the only
+   * thing that can be offered — not because the first run is known to be over.
+   */
+  agent_stalled: "My attempt at building something has been running far longer than it should.",
+  scan_stalled: "My read of your product has been running far longer than it should.",
+  audit_stalled: "My audit has been running far longer than it should.",
   validation_failed: "A check on one of your changes did not pass.",
   merge_blocked: "One of your changes cannot go any further as it stands.",
   repository_read_outdated: "What I know about your code is older than your code.",
@@ -209,6 +218,9 @@ function subjectFor(candidate: FocusCandidate): NovaActionSubject {
     case "agent_failed":
     case "scan_failed":
     case "audit_failed":
+    case "agent_stalled":
+    case "scan_stalled":
+    case "audit_stalled":
     case "nothing_to_do":
       return { kind: "project" };
   }

@@ -22,6 +22,7 @@ function quiet(): NovaFocusFacts {
   return {
     sourceDisconnected: false,
     failedOperations: { agent: false, scan: false, audit: false },
+    stalledOperations: { agent: false, scan: false, audit: false },
     changes: [],
     questions: [],
     moves: [],

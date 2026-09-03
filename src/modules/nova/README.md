@@ -81,6 +81,17 @@ candidate would have hidden that behind one word. `getLastFailedOperation`
 returns the latest run only when _that_ run failed, so a founder who already
 recovered is told nothing.
 
+A stalled run — one past `OPERATION_STALL_THRESHOLD_MS`, presumed lost rather
+than observed to have died — is three more candidates for the same reason.
+`buildOperationView` had already decided `stalled`, and nothing acted on the
+answer: the run stayed in `working`, so a founder watched a stage label
+forever with "nothing needs you right now" printed beside it. Now a stalled
+run is stated **exactly once** — as a candidate where Nova owns the restart,
+and as stalled `working` where it does not, because the merge, planning and
+opportunity panels offer their own recovery and Nova does not invent one it
+lacks. A failure and a stall of the same kind are two runs and get two
+sentences, the observed one first.
+
 `source_disconnected` outranks everything, because a project Vibe cannot reach
 has one problem and it is not the audit. Account-level access revocation is a
 second way to lose the same thing and is deliberately not read here — it needs

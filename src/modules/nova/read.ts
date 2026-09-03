@@ -21,7 +21,13 @@ import { getLatestSuccessfulSnapshot } from "../repository-intelligence/store";
 import { getLatestValidationsForPreparedChanges } from "../validation/store";
 import { resolveProjectValidationTarget } from "../validation/workspace-store";
 import { deriveNovaFocus } from "./focus";
-import type { NovaChangeFact, NovaFocus, NovaFocusFacts, NovaQuestionFact } from "./focus";
+import type {
+  NovaChangeFact,
+  NovaFocus,
+  NovaFocusFacts,
+  NovaOperationFlags,
+  NovaQuestionFact,
+} from "./focus";
 
 /**
  * The I/O half of Nova's focus: gather the facts, then let `focus.ts` rank them.
@@ -338,6 +344,58 @@ async function readQuestionFacts(
   });
 }
 
+/**
+ * Which of Nova's three restartable operations is presumed lost.
+ *
+ * A stalled run is not work in flight, and reporting it as `working` was the
+ * failure this exists to close: a founder watching a run that stopped
+ * answering was shown a stage label forever, and — with nothing else
+ * outstanding — a Nova that said "nothing needs you right now" beside it.
+ *
+ * So each stalled run leaves `working` and becomes a candidate, **if** Nova
+ * owns a control that restarts it. The other three watched operations have no
+ * such control, so they stay in `working` carrying `stalled: true`, which the
+ * progress entry renders as a stall rather than a stage and the owning panel
+ * already offers its own recovery for. Either way a stalled run is stated
+ * exactly once: never twice, and never not at all.
+ */
+const RESTARTABLE_STALLS = {
+  agent_execution: "agent",
+  product_scan: "scan",
+  business_audit: "audit",
+} as const satisfies Partial<Record<OperationType, keyof NovaOperationFlags>>;
+
+function splitStalledFromRunning(
+  operations: readonly { operationType: OperationType; run: StoredOperationRun | null }[],
+): { stalled: NovaOperationFlags; running: StoredOperationRun[] } {
+  const stalled: NovaOperationFlags = { agent: false, scan: false, audit: false };
+  const running: StoredOperationRun[] = [];
+
+  for (const { operationType, run } of operations) {
+    if (run === null) continue;
+
+    const flag: keyof NovaOperationFlags | undefined =
+      operationType in RESTARTABLE_STALLS
+        ? RESTARTABLE_STALLS[operationType as keyof typeof RESTARTABLE_STALLS]
+        : undefined;
+
+    if (flag !== undefined && view(run).stalled) {
+      stalled[flag] = true;
+      continue;
+    }
+
+    running.push(run);
+  }
+
+  /*
+   * The freshest of whatever is left. A project can have a scan and a merge in
+   * flight at once; Nova reports one, and the newest is the one the founder
+   * just started.
+   */
+  running.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  return { stalled, running };
+}
+
 export async function readNovaFocusFacts(
   supabase: SupabaseClient,
   projectId: string,
@@ -357,9 +415,10 @@ export async function readNovaFocusFacts(
     getLatestCompletedActionPlan(supabase, projectId),
     getAuditCurrency(supabase, projectId),
     Promise.all(
-      WATCHED_OPERATIONS.map((operationType) =>
-        findActiveOperation(supabase, { projectId, operationType }),
-      ),
+      WATCHED_OPERATIONS.map(async (operationType) => ({
+        operationType,
+        run: await findActiveOperation(supabase, { projectId, operationType }),
+      })),
     ),
     readValidationTargetFacts(supabase, projectId),
     readSourceDisconnected(supabase, projectId),
@@ -375,18 +434,12 @@ export async function readNovaFocusFacts(
     title: move.title,
   }));
 
-  /*
-   * The freshest of whatever is running. A project can have a scan and a merge
-   * in flight at once; Nova reports one, and the newest is the one the founder
-   * just started.
-   */
-  const running = operations
-    .filter((operation): operation is StoredOperationRun => operation !== null)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const { stalled, running } = splitStalledFromRunning(operations);
 
   return {
     sourceDisconnected,
     failedOperations,
+    stalledOperations: stalled,
     changes,
     questions,
     moves,

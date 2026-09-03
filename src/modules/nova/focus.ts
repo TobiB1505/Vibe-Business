@@ -68,6 +68,17 @@ export const FOCUS_CANDIDATE_KINDS = [
   "scan_failed",
   /** The last audit failed. Retrying is priced, and says so. */
   "audit_failed",
+  /**
+   * A run has been going far longer than the work can take, so it is presumed
+   * lost (`OPERATION_STALL_THRESHOLD_MS`).
+   *
+   * After the failures, not before: a failure is something Vibe observed, and
+   * a stall is something it inferred from a clock. When both are true, the
+   * observed one leads.
+   */
+  "agent_stalled",
+  "scan_stalled",
+  "audit_stalled",
   /** A safety check ran and did not pass. Nothing downstream can start. */
   "validation_failed",
   /** The repository moved, or the merge was refused, so this cannot advance. */
@@ -117,6 +128,9 @@ const CANDIDATE_TIER: Record<FocusCandidateKind, NovaFocusTier> = {
   agent_failed: "blocked",
   scan_failed: "blocked",
   audit_failed: "blocked",
+  agent_stalled: "blocked",
+  scan_stalled: "blocked",
+  audit_stalled: "blocked",
   validation_failed: "blocked",
   merge_blocked: "blocked",
   repository_read_outdated: "blocked",
@@ -175,6 +189,16 @@ const CANDIDATE_ACTION: Record<FocusCandidateKind, NovaActionId | null> = {
   agent_failed: "nova.start_agent",
   scan_failed: "nova.rescan_product",
   audit_failed: "nova.refresh_audit",
+  /*
+   * A stalled run offers the same control as a failed one, because starting
+   * again is the same act. The sentence differs and the price does not: a
+   * presumed-lost audit costs the same 35 Credits to run again as a failed
+   * one, and hiding that behind the word "resume" would be charging for
+   * something the founder was told was already paid for.
+   */
+  agent_stalled: "nova.start_agent",
+  scan_stalled: "nova.rescan_product",
+  audit_stalled: "nova.refresh_audit",
   validation_failed: "nova.validate_again",
   merge_blocked: "nova.review_change",
   repository_read_outdated: "nova.rescan_product",
@@ -225,6 +249,20 @@ export type NovaQuestionFact = {
 /** A Move, narrowed to what an ordering needs. `rank` is the engine's own. */
 export type NovaMoveFact = { id: string; rank: number; title: string };
 
+/**
+ * The three operations Nova can say something about going wrong.
+ *
+ * One shape for both failures and stalls, because the split is the same one
+ * and for the same reason: the recovery differs by kind, and one of the three
+ * is free while another costs 35 Credits, so a single "something went wrong"
+ * would have had to hide that behind one word.
+ */
+export type NovaOperationFlags = {
+  agent: boolean;
+  scan: boolean;
+  audit: boolean;
+};
+
 export type NovaFocusFacts = {
   /**
    * No live repository connection: detached, or its access revoked.
@@ -238,11 +276,21 @@ export type NovaFocusFacts = {
    * since. Kept per kind because the recovery differs by kind — and one of the
    * three is free while another costs 35 Credits.
    */
-  failedOperations: {
-    agent: boolean;
-    scan: boolean;
-    audit: boolean;
-  };
+  failedOperations: NovaOperationFlags;
+  /**
+   * The runs that have been going far longer than the work can take.
+   *
+   * Three rather than six, and the gap is deliberate: these are the three
+   * whose restart Nova owns a control for. A stalled merge, planning run or
+   * opportunity generation stays in `working` instead, where the progress
+   * entry renders it as stalled and the panel that owns the operation offers
+   * its own recovery — Nova does not invent a way out it does not have.
+   *
+   * The pairing that makes that safe is `read.ts`'s: a stalled run is stated
+   * exactly once, as a candidate here or as `working`, never both and never
+   * neither.
+   */
+  stalledOperations: NovaOperationFlags;
   changes: readonly NovaChangeFact[];
   questions: readonly NovaQuestionFact[];
   /** The current Moves, with the ranks the opportunity engine persisted. */
@@ -292,7 +340,10 @@ type BareCandidateKind =
   | "source_disconnected"
   | "agent_failed"
   | "scan_failed"
-  | "audit_failed";
+  | "audit_failed"
+  | "agent_stalled"
+  | "scan_stalled"
+  | "audit_stalled";
 
 export type FocusCandidate =
   | { kind: ChangeCandidateKind; preparedChangeId: string; headline: string }
@@ -422,6 +473,17 @@ export function deriveNovaFocus(facts: NovaFocusFacts): NovaFocus {
   if (facts.failedOperations.agent) candidates.push({ kind: "agent_failed" });
   if (facts.failedOperations.scan) candidates.push({ kind: "scan_failed" });
   if (facts.failedOperations.audit) candidates.push({ kind: "audit_failed" });
+
+  /*
+   * A stall and a failure of the same kind can both be true — a run failed,
+   * the founder started another, and that one is now presumed lost. Both are
+   * raised: they are two different sentences about two different runs, and
+   * suppressing either would tell the founder about only half of what is
+   * wrong. Ordering puts the observed failure first.
+   */
+  if (facts.stalledOperations.agent) candidates.push({ kind: "agent_stalled" });
+  if (facts.stalledOperations.scan) candidates.push({ kind: "scan_stalled" });
+  if (facts.stalledOperations.audit) candidates.push({ kind: "audit_stalled" });
 
   for (const change of facts.changes) {
     const kind = candidateForStage(change.stage);
