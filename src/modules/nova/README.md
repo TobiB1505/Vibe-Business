@@ -2,7 +2,9 @@
 
 Nova is the guided experience layer over the systems Vibe already has. Its
 architecture, and the evidence for it, is [the Nova audit](../../../docs/audits/2026-09-03-nova-architecture-audit/README.md);
-its founder amendments are §O of the same record.
+its founder amendments are §O of the same record. The voice model and its
+prompt are decided by measurement, not argument — see §P and §Q of the audit,
+and [ADR 0078](../../../docs/decisions/0078-nova-voice-is-measured-not-argued.md).
 
 **Nothing in this module is wired into the product yet.** No route imports it,
 no Server Action calls it, and no usage event is written for it. What exists is
@@ -63,9 +65,14 @@ Reps are tiered rather than uniform: every case runs once by default
 (`eval/cases.ts`) run three times (`NOVA_CRITICAL_REPS`) — the subset where
 prompt `v3`'s measured failures concentrated, so where a stochastic invention
 most needs a second draw to be caught. The console summary reports that
-subset against the v4 acceptance line — `grounded`/`no_invention` ≥ 85%,
-`calibrated` ≥ 95%, `sounds_human` ≥ 90% — agreed in advance; it reports the
-line, it does not enforce it.
+subset against the founder's acceptance line — `grounded`/`no_invention` ≥
+85%, `calibrated` ≥ 95%, `sounds_human` ≥ 90% — agreed in advance; it reports
+the line, it does not enforce it.
+
+`nova-voice-prompt-v4` is the shipping prompt, closing the exclusivity and
+sequencing invention `v3` still had on Sonnet 5 (ADR 0078's amendment). Its
+last full measurement ran 60 of 76 cases before a temporary key was revoked
+mid-run; the founder accepted that partial result rather than completing it.
 
 Per-case results land in `.nova-eval/results.jsonl`, which is not committed.
 

@@ -51,3 +51,26 @@ Measured over 46 model-reaching cases, both fully judged, prompt `nova-voice-pro
 **What this does not establish.** Forty-six cases with zero-to-three `safe` failures per arm bounds an unobserved failure rate at roughly 6%, not at nil — `checks.ts` remains load-bearing, not a formality kept out of caution. `sounds_human` did not move between models (85% both arms); Sonnet's residual failures there are a different shape — reading payload fields aloud rather than embellishing them — and are a prompt question nobody has iterated on yet, because both prompt revisions were written against Haiku's failures specifically. Every case ran once; a second repetition would tighten the comparison for a future prompt change but was not needed to separate these two models at this margin.
 
 **Foreclosed for now.** Naming a third candidate model without running it through this same instrument first. The instrument exists precisely so that the next "surely the cheaper model is fine here" is a five-case pilot before it is a config.
+
+## Amendment (2026-09-03): the prompt question this ADR left open, closed
+
+The "what this does not establish" paragraph above named Sonnet's residual
+failures as a prompt question nobody had iterated on, because `nova-voice-
+prompt-v3` was tuned against Haiku's mistakes, not Sonnet's own. `nova-voice-
+prompt-v4` did that iteration, against transcripts read from `v3`'s own
+Sonnet run: see [the audit's §Q](../audits/2026-09-03-nova-architecture-audit/README.md#q-prompt-v4-measured-2026-09-03)
+for the full account — a systematic exclusivity/sequencing invention found and
+fixed, a case-authoring defect in the eval set itself found and fixed, and a
+second full run that measured the fix (`no_invention` on the critical subset:
+80% to 92.5%) before a temporary API key was revoked mid-run, at case 60 of
+76, in a manner consistent with the founder's own stated plan to delete it
+after use.
+
+Two of the founder's four acceptance criteria (`grounded`, `sounds_human`)
+landed exactly on the stated line rather than clearly above it, on the
+partial n. Offered a choice between finishing the run on a fresh key or
+accepting the partial result, the founder chose to accept it: **Sonnet 5 on
+`nova-voice-prompt-v4` is final.** `NOVA_VOICE_PROMPT_VERSION` in
+`src/modules/nova/voice/payload.ts` names it as the version in force; nothing
+in `operations.ts` changes, since the decision above about which model already
+covers it. A future prompt revision remains this same instrument, run again.

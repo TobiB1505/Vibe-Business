@@ -106,12 +106,22 @@ export type NovaPresentation = { message: string };
  *   the last of which was also, separately, a contradiction in this file:
  *   `SLOT_BRIEFS.move_recommendation` told the model to explain "why this one
  *   comes first" in the same breath the rule now forbids that exact framing.
- *   Refined once more before its first full measurement, from a five-case
- *   pilot: "so I'd start by seeing where I would start" echoed NEXT STEP's own
- *   wording back into the sentence and produced a circular one — the fix is
- *   to paraphrase the next step rather than splice it in verbatim. See
- *   `eval/cases.ts`'s `NOVA_VOICE_CRITICAL_CASE_IDS` for the subset this
- *   version is measured against.
+ *   Refined twice more before its first full measurement: a five-case pilot
+ *   found "so I'd start by seeing where I would start" echoing NEXT STEP's own
+ *   wording into the sentence, traced to nine cases sharing a filler next-step
+ *   text that baked the word "start" into any paraphrase — fixed in the case
+ *   data, not the prompt. The first full run then found a dominant, systematic
+ *   invention across the prompt's remaining failures: a singly-named fact
+ *   ("biggest blocker", "the move") upgraded into an exclusivity or sequencing
+ *   claim the payload never made ("the one blocker I found", "that's where I'd
+ *   start"), closed with a rule naming the exact phrases, alongside an
+ *   `outcome_result` slot brief that had been asserting an unstated "merged"
+ *   event as fact. Measured over the resulting prompt (ADR 0078's amendment):
+ *   `no_invention` on the critical subset rose from 80% to 92.5%; the run was
+ *   cut short at 60 of 76 cases by a revoked API key, and the founder accepted
+ *   the partial result rather than completing it. See `eval/cases.ts`'s
+ *   `NOVA_VOICE_CRITICAL_CASE_IDS` for the subset this version is measured
+ *   against.
  */
 export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v4";
 
