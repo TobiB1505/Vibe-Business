@@ -1,5 +1,7 @@
 import type { RetailOperationKind } from "../credits/retail";
 import type { OperationView } from "../operations/view";
+import type { BusinessBrainView, BusinessStrength } from "../projects/business-brain-view";
+import { strongestAreas } from "../projects/business-brain-view";
 import { NOVA_ACTION_META, isOfferable } from "./actions";
 import type { NovaActionControl } from "./actions";
 import { novaCandidateAction } from "./focus";
@@ -28,12 +30,12 @@ import type { FocusCandidate, FocusCandidateKind, NovaActionId, NovaFocus } from
  *
  * ## What is not here yet
  *
- * §F names eleven entry types. Four are built: a message, a choice, a
- * question, and progress. The other seven — the audit reading, the Move card,
+ * §F names eleven entry types. Five are built: a message, a choice, a
+ * question, progress, and the audit reading. The other six — the Move card,
  * the product understanding, the execution offer, the agent's stages, the
  * review and the outcome — each render a view model that a later slice
  * assembles, and there is no caller for any of them today. Declaring them
- * ahead of their data would be seven shapes nobody could fill (rule 15).
+ * ahead of their data would be six shapes nobody could fill (rule 15).
  */
 
 /** What an action is about, so a control can be bound to the right thing. */
@@ -86,7 +88,28 @@ export type NovaEntry =
       actionId: NovaActionId;
     }
   /** Work in flight. Named stages and no percentage, as everywhere else. */
-  | { kind: "nova.progress"; id: string; operation: OperationView };
+  | { kind: "nova.progress"; id: string; operation: OperationView }
+  /**
+   * What the audit found, as the Business Brain already reads it.
+   *
+   * Carries a view model rather than prose: the score, its label and the
+   * priority all come from `buildBusinessBrainView`, and Nova re-decides none
+   * of them. A `null` score is `unscored` and never a zero (rule 44) — the
+   * component renders it through `scoreDisplay`, which is the one function
+   * that knows the difference.
+   */
+  | {
+      kind: "nova.audit";
+      id: string;
+      score: number | null;
+      stateLabel: string;
+      summary: string | null;
+      /** The first blocker, already ordered by the model that wrote it. */
+      priority: { headline: string; whyItMatters: string | null } | null;
+      /** How many more there are. A count, never a second list. */
+      additionalPriorityCount: number;
+      strengths: BusinessStrength[];
+    };
 
 /**
  * One sentence per candidate, and the rules they are held to.
@@ -240,6 +263,36 @@ function leadEntries(candidate: FocusCandidate): NovaEntry[] {
       options: [option],
     },
   ];
+}
+
+/**
+ * The audit, as one entry.
+ *
+ * Every field is lifted from a view model that already exists. The one
+ * decision here is what to leave out: the nine lens nodes, the relationship
+ * graph and the evidence trails are the Business Health surface\'s job, and
+ * repeating them in a feed would make Nova a second, smaller version of the
+ * page she is supposed to send a founder to.
+ */
+export function buildNovaAuditEntry(
+  view: BusinessBrainView,
+  synthesis: Parameters<typeof strongestAreas>[0],
+): Extract<NovaEntry, { kind: "nova.audit" }> {
+  return {
+    kind: "nova.audit",
+    id: "audit",
+    score: view.overall.score,
+    stateLabel: view.overall.stateLabel,
+    summary: view.overall.summary,
+    priority: view.primaryPriority
+      ? {
+          headline: view.primaryPriority.headline,
+          whyItMatters: view.primaryPriority.whyItMatters,
+        }
+      : null,
+    additionalPriorityCount: view.additionalPriorityCount,
+    strengths: strongestAreas(synthesis),
+  };
 }
 
 /**

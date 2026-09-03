@@ -95,7 +95,7 @@ gate Business Health already renders from, and `ProductConfirmation` reads the
 same answer — so the button drawn and the button Nova would have drawn cannot
 disagree.
 
-Four of §F's eleven entry types exist. The remaining seven, and the `"feed"`
+Five of §F's eleven entry types exist. The remaining six, and the `"feed"`
 variants on the domain panels that render them, belong with the slices that
 assemble their view models — a variant on a panel nothing mounts would be dead
 code today.

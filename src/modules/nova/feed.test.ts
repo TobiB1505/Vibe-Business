@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { findCausalClaims } from "../business-measurement/causality";
 import type { OperationView } from "../operations/view";
 import { NOVA_ACTION_META, isOfferable } from "./actions";
-import { buildNovaFeed } from "./feed";
+import { buildNovaAuditEntry, buildNovaFeed } from "./feed";
 import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
 import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
@@ -304,5 +304,88 @@ describe("what Nova's sentences may say", () => {
 
     expect(merged?.text).toBeDefined();
     expect(merged?.text).not.toMatch(/\b(improved|working|succeeded|fixed|better)\b/i);
+  });
+});
+
+describe("the audit as one entry", () => {
+  const view = {
+    overall: {
+      score: 68,
+      state: "partial" as const,
+      stateLabel: "Taking shape",
+      summary: "Solid product, weakest on the commercial side",
+      scoredLenses: 7,
+      eligibleLenses: 9,
+    },
+    nodes: [],
+    relationships: [],
+    primaryPriority: {
+      headline: "Pricing clarity",
+      whyItMatters: "The annual plan's price is not stated before signup",
+    },
+    additionalPriorityCount: 2,
+    recentChanges: [],
+    recentChangesUnavailableReason: null,
+    sourceCount: 3,
+    signalCount: 12,
+    lastScanAt: null,
+    usedSignedInEvidence: false,
+  } as unknown as Parameters<typeof buildNovaAuditEntry>[0];
+
+  it("takes every reading from the view model rather than re-deciding one", () => {
+    const entry = buildNovaAuditEntry(view, { strengths: [] });
+
+    expect(entry).toMatchObject({
+      kind: "nova.audit",
+      score: 68,
+      stateLabel: "Taking shape",
+      summary: "Solid product, weakest on the commercial side",
+      priority: { headline: "Pricing clarity" },
+      additionalPriorityCount: 2,
+    });
+  });
+
+  /**
+   * Rule 44: an unassessable audit is not a bad one. A `null` score travels as
+   * null so the component can render "not enough evidence" — collapsing it to
+   * zero here would make a missing measurement look like a failing grade, on
+   * the surface a founder trusts most.
+   */
+  it("carries an unscored audit as unscored, never as zero", () => {
+    const unscored = { ...view, overall: { ...view.overall, score: null } };
+    const entry = buildNovaAuditEntry(
+      unscored as unknown as Parameters<typeof buildNovaAuditEntry>[0],
+      { strengths: [] },
+    );
+
+    expect(entry.score).toBeNull();
+  });
+
+  it("counts the remaining priorities rather than listing them", () => {
+    const entry = buildNovaAuditEntry(view, { strengths: [] });
+
+    expect(entry.additionalPriorityCount).toBe(2);
+    expect(Object.keys(entry)).not.toContain("priorities");
+  });
+
+  it("reads its strengths through the one helper that knows the rules", () => {
+    const entry = buildNovaAuditEntry(view, {
+      strengths: [
+        { headline: "", whyItMatters: null },
+        { headline: "Offer is clear", whyItMatters: null },
+      ],
+    });
+
+    expect(entry.strengths.map((strength) => strength.headline)).toEqual(["Offer is clear"]);
+  });
+
+  it("says nothing about a priority the audit did not name", () => {
+    const none = { ...view, primaryPriority: null };
+    const entry = buildNovaAuditEntry(
+      none as unknown as Parameters<typeof buildNovaAuditEntry>[0],
+      { strengths: [] },
+    );
+
+    expect(entry.priority).toBeNull();
   });
 });
