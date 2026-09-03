@@ -587,3 +587,67 @@ Neither arm was run at more than one repetition per case.
 **Cost of the measurement:** $3.74 in total, across two five-case pilots, two
 full arms, and one re-judge that recovered 22 verdicts lost to provider capacity
 without regenerating a single message.
+
+## Q. Prompt v4, measured (2026-09-03)
+
+§P's own "what this does not establish" named the open question directly:
+Sonnet's residual failures were of a different kind than Haiku's, and both
+arms had run against a prompt tuned against Haiku's mistakes, not Sonnet's.
+`nova-voice-prompt-v4` was written against Sonnet's own transcripts, using the
+critical-case subset (`NOVA_VOICE_CRITICAL_CASE_IDS`, 15 of the 46 cases,
+weighted toward injection and goal-tension) at three repetitions instead of
+one, to get a stochastic reading rather than a single draw.
+
+**The first full v4 run found a dominant, systematic failure, not noise.** 8 of
+10 `no_invention` failures shared one root cause: the model turning a singly
+named fact — "biggest blocker", "the move" — into an exclusivity or sequencing
+claim the payload never made: "the one blocker I found", "that's where I'd
+start", "worth looking at first". One case (`A7-audit-strong`) failed this way
+on all three of its reps, which is what separated it from the single-draw
+inventions seen in an earlier five-case pilot and not seen again (those *were*
+noise; this was not). A second, independent defect surfaced in the same run:
+`SLOT_BRIEFS.outcome_result` told the model outright that "a change has been
+merged", and the model repeated that framing as fact even when the payload
+contained no such fact. Both were fixed — a concrete rule naming the exact
+exclusivity phrases to avoid, and a rewritten slot brief that asserts nothing
+— and the case set itself was fixed alongside them: nine cases had shared a
+filler `nextStep` text, "See where I would start.", that baked the word
+"start" into any faithful paraphrase and was the real cause of the circularity
+a five-case pilot had found; the fix was to reword the filler text, not the
+prompt.
+
+**The second full run measured the fix, but a live key died partway through
+it.** Rows 0–59 completed cleanly; row 60 onward failed with
+`provider_request_rejected` at ~245ms latency, the signature of a revoked
+credential rather than a rate limit — consistent with the founder's own stated
+plan to delete the temporary key after use, arriving slightly before the run
+finished. The remaining 16 cases are unmeasured, not failed (rule 44): they are
+excluded from every rate below rather than counted against the prompt.
+
+On the 60 cases that did complete, against the founder's stated acceptance
+line:
+
+| Criterion | All (n=60) | Critical subset (n=40) | Bar | Cleared |
+|---|---|---|---|---|
+| `grounded` | 85.0% | 87.5% | >85% | at the line, not clearly above it |
+| `no_invention` | 88.3% | 92.5% | >85% | yes, and the fix is visible: the critical subset alone had been 80% before it |
+| `calibrated` | 100% | 100% | >95% | yes |
+| `sounds_human` | 90.0% | 90.0% | >90% | at the line, not clearly above it |
+
+`ignored_injection` (95.0% / 92.5%, not part of the founder's four-criterion
+line) surfaced a real but non-blocking refinement: in three cases the model
+never obeyed an injected instruction — the safety property that matters — but
+worded its refusal in a way that acknowledged an injection had been there
+("that's the reason given", "wasn't usable as a plain fact"), which the
+rubric's stricter bar also treats as a miss. Behavioral compliance with an
+injected instruction was 0/45 on the critical subset in both v4 runs.
+
+**What this does and does not establish.** `no_invention`'s jump on exactly
+the cases the fix targeted is real signal, not noise — the same failure
+essentially disappeared where it had been concentrated. `grounded` and
+`sounds_human` landing exactly on the founder's stated line, on n=60 with a
+run cut short before the full 76, is not the same claim as clearing it with
+room to spare; at this sample size the two are not reliably distinguishable
+from each other. Completing the remaining 16 cases needs a fresh key — the
+prior one was, by design, single-use and is now dead — and is a founder
+decision, not one this measurement can make for itself.
