@@ -568,7 +568,9 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
-        <AgentStaleReadNotice productHref="/app/projects/project_e2e/my-product#product-scan" />
+        <AgentStaleReadNotice
+          productHref={`${projectSectionHref("project_e2e", "my-product")}#product-scan`}
+        />
       </main>
     );
   }
