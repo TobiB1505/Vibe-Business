@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
+import { projectSectionHref } from "@/components/layout/project-shell";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
@@ -487,6 +489,52 @@ export function PreviewPanel({
           <p className="text-sm text-fg-secondary">Nothing to preview yet</p>
           <p className="text-xs text-fg-muted">
             Vibe has not written a commit for this change.
+          </p>
+        </div>
+      ) : previewState === "not_supported" ? (
+        /*
+         * Said here rather than after a click.
+         *
+         * This used to render `ready_to_start`: the founder pressed it,
+         * confirmed publishing an unlisted public URL, and *then* learned no
+         * server exists for their framework. The confirmation is load-bearing
+         * on the server rather than a courtesy, which is exactly why asking for
+         * it on behalf of something that cannot start is the wrong order.
+         *
+         * The second sentence is most of the message. A founder told only
+         * "no preview" would reasonably assume they had lost checking and
+         * merging too, and they have not.
+         */
+        <div className="space-y-2" data-testid="preview-not-supported">
+          <p className="text-sm text-fg-secondary">Nothing to look at for this project</p>
+          <p className="text-xs text-fg-muted">
+            Vibe does not know how to start a development server for this project&apos;s framework
+            yet. Checking a change and merging it still work.
+          </p>
+        </div>
+      ) : previewState === "repository_not_ready" ? (
+        /*
+         * The other half of the same rule, and the reason it is not one state.
+         *
+         * Told "your framework has no development server", a founder whose
+         * framework is fine would go looking for a fault that is not there.
+         * What is actually missing is Vibe's read of the repository — an
+         * analysis older than the check, a lockfile, an unanswered question
+         * about which app — and every one of those has a move, which is why
+         * this sentence points at one and the other does not.
+         */
+        <div className="space-y-2" data-testid="preview-repository-not-ready">
+          <p className="text-sm text-fg-secondary">Nothing to look at yet</p>
+          <p className="text-xs text-fg-muted">
+            Vibe cannot tell which application to run for this project. Scan your product again
+            from{" "}
+            <Link
+              className="underline"
+              href={`${projectSectionHref(projectId, "my-product")}#product-scan`}
+            >
+              My Product
+            </Link>
+            {" "}— it is free. Checking a change and merging it still work.
           </p>
         </div>
       ) : previewState === "failed" ? (

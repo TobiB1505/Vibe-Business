@@ -52,6 +52,7 @@ import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activi
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
 import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
 import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
@@ -570,6 +571,41 @@ export default async function E2eScenarioPage({
         {label}
         <AgentStaleReadNotice
           productHref={`${projectSectionHref("project_e2e", "my-product")}#product-scan`}
+        />
+      </main>
+    );
+  }
+
+  /*
+   * The two ways a preview is not offered, side by side in the browser.
+   *
+   * They are one branch apart in the panel and one word apart in the card, and
+   * that is exactly why they are proved separately: the failure this state
+   * exists to prevent is a true sentence shown to the wrong founder. The
+   * browser is the only place that distinction is visible, because both states
+   * render the same shape — a heading, a sentence, and no control.
+   */
+  if (scenario === "preview-not-supported" || scenario === "preview-repository-not-ready") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <PreviewPanel
+          projectId="project_e2e"
+          preparedChangeId="prepared_e2e"
+          card={{
+            state: scenario === "preview-not-supported" ? "not_supported" : "repository_not_ready",
+            previewSessionId: null,
+            operationRunId: null,
+            stage: null,
+            failureCode: null,
+            failureMessage: null,
+            expiresAt: null,
+            readyAt: null,
+          }}
+          serverOrigin={null}
+          productionUrl={null}
+          approved={false}
+          merged={false}
         />
       </main>
     );

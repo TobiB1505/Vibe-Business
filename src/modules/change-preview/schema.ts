@@ -161,6 +161,23 @@ export function previewProfileFor(
  * reason: a stored "this ran fine" must never be reinterpreted under rules it
  * was not checked against (CLAUDE.md rule 65).
  */
+/**
+ * Whether a preview can be started for a project, and when not, which of the
+ * two reasons applies.
+ *
+ * ## Why two reasons and not a boolean
+ *
+ * They are true of different things and a founder can act on only one of them.
+ * `no_dev_server` is a fact about the framework, and waiting will not change
+ * it. `repository_not_ready` is a fact about Vibe's *read* of the repository —
+ * an analysis older than the check, a missing lockfile, an unanswered question
+ * about which app — and every one of those has a move that fixes it.
+ *
+ * Collapsing them would put the framework sentence in front of a founder whose
+ * framework is fine, which is the failure this whole area keeps repairing.
+ */
+export type PreviewAvailability = "available" | "no_dev_server" | "repository_not_ready";
+
 export const PREVIEW_POLICY_VERSION = "preview-policy-v4" as const;
 
 export const PREVIEW_PROVIDERS = ["vercel_sandbox"] as const;

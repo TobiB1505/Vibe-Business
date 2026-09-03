@@ -11,9 +11,13 @@ import {
   type BusinessImpactCard,
 } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
-import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
+import {
+  getPreviewCard,
+  getPreviewStatus,
+  previewAvailability as previewAvailabilityFor,
+} from "@/modules/change-preview/service";
 import { getLatestPreviewsForPreparedChanges } from "@/modules/change-preview/store";
-import type { PreviewSession } from "@/modules/change-preview/schema";
+import type { PreviewAvailability, PreviewSession } from "@/modules/change-preview/schema";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
@@ -356,6 +360,13 @@ async function buildPreparedChangeCard(
     mergeTarget: Awaited<ReturnType<typeof resolveMergeTarget>> | null;
     /** The verified public origin, for the "before" half of a comparison. */
     productionUrl: string | null;
+    /**
+     * Whether a preview can be started for this project, and when not, why.
+     *
+     * A project-level fact, so it arrives resolved rather than being asked per
+     * change — the same reason the workspace root does.
+     */
+    previewAvailability: PreviewAvailability;
     prepared: Awaited<ReturnType<typeof listPreparedChangesForProject>>[number];
     lifecycle: ChangeLifecycle;
   },
@@ -458,6 +469,10 @@ async function buildPreparedChangeCard(
     // A commit is the whole precondition now: a preview runs alongside
     // validation rather than after it (Sprint 0114).
     prepared: prepared.status === "prepared" && prepared.commitSha !== null,
+    // Offered only when there is something to offer. Without this the panel
+    // asked a founder to confirm publishing a public URL for a project whose
+    // framework has no server command, and refused after they agreed.
+    availability: params.previewAvailability,
     prefetched: { preview: lifecycle.preview },
     resolveFailureMessage: (code) =>
       OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
@@ -643,7 +658,7 @@ export async function getPreparedChangeWorkspace(
     ? createGithubRepositoryReader(mergeTarget.installationId, mergeTarget.owner, mergeTarget.repo)
     : null;
 
-  const [lifecycles, project] = await Promise.all([
+  const [lifecycles, project, availability] = await Promise.all([
     readChangeLifecycles(supabase, {
       projectId: params.projectId,
       prepared,
@@ -665,6 +680,17 @@ export async function getPreparedChangeWorkspace(
     prepared.length > 0
       ? getProjectWithRepository(supabase, params.projectId)
       : Promise.resolve(null),
+    /*
+     * Whether a preview can be offered at all, once for the list.
+     *
+     * A property of the repository rather than of a change, so asking per card
+     * would repeat a snapshot read the list already makes — which is what the
+     * read-count test measures, and what it caught the last time a
+     * project-level fact was resolved in the wrong place.
+     */
+    prepared.length > 0
+      ? previewAvailabilityFor(supabase, params.projectId)
+      : Promise.resolve<PreviewAvailability>("repository_not_ready"),
   ]);
 
   /*
@@ -685,6 +711,7 @@ export async function getPreparedChangeWorkspace(
       repositoryFullName: params.repositoryFullName,
       mergeTarget,
       productionUrl: project?.productionUrl ?? null,
+      previewAvailability: availability,
       prepared: change,
       lifecycle:
         lifecycles.get(change.id) ??
@@ -736,7 +763,7 @@ export async function getPreparedChangeWorkspaceItem(
    * `productionUrl` is the "before" half of a before/after, read once here for
    * the same reason (ADR 0065).
    */
-  const [lifecycles, project] = await Promise.all([
+  const [lifecycles, project, availability] = await Promise.all([
     readChangeLifecycles(supabase, {
       projectId: params.projectId,
       prepared: [prepared],
@@ -749,6 +776,7 @@ export async function getPreparedChangeWorkspaceItem(
         : null,
     }),
     getProjectWithRepository(supabase, params.projectId),
+    previewAvailabilityFor(supabase, params.projectId),
   ]);
 
   return await buildPreparedChangeCard(supabase, {
@@ -757,6 +785,7 @@ export async function getPreparedChangeWorkspaceItem(
     repositoryFullName: params.repositoryFullName,
     mergeTarget,
     productionUrl: project?.productionUrl ?? null,
+    previewAvailability: availability,
     prepared,
     lifecycle:
       lifecycles.get(prepared.id) ??
