@@ -189,14 +189,17 @@ describe("the preview profile a session records", () => {
     "next_dev_v1",
     "nuxt_dev_v1",
     "astro_dev_v1",
+    // Admitted by `20260903121244`, once the host gate that held it back became
+    // something the probe detects rather than something it could not see.
+    "vite_dev_v1",
   ])("accepts %s", (profile) => {
     expect(() => db.sql(insertSession(profile))).not.toThrow();
   });
 
   it("refuses a server Vibe has no row for", () => {
-    // `vite_dev_v1` specifically: it is the row this stage deliberately did not
-    // ship, and the database should refuse it until it exists in code.
-    expect(() => db.sql(insertSession("vite_dev_v1"))).toThrow(
+    // The constraint's whole job: a preview profile names a command Vibe wrote,
+    // so a value no row in `dev-servers.ts` produces must not be storable.
+    expect(() => db.sql(insertSession("svelte_dev_v1"))).toThrow(
       /preview_sessions_preview_profile_check/,
     );
   });

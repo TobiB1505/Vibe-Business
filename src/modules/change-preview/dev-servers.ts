@@ -51,6 +51,13 @@ type DevServer = {
   /** Where the install put the framework binary. */
   binary: string;
   args: (port: number) => readonly string[];
+  /**
+   * Whether this server refuses requests for a hostname it was not told about.
+   *
+   * True for every Vite-based server. Next.js has no such gate, and marking it
+   * anyway would set a variable its process ignores.
+   */
+  hostGated?: true;
 };
 
 /**
@@ -73,32 +80,103 @@ const DEV_SERVERS: readonly DevServer[] = [
     profile: "nuxt_dev_v1",
     binary: "node_modules/.bin/nuxt",
     args: (port) => ["dev", "--host", "0.0.0.0", "--port", String(port)],
+    hostGated: true,
   },
   {
     frameworkId: "astro",
     profile: "astro_dev_v1",
     binary: "node_modules/.bin/astro",
     args: (port) => ["dev", "--host", "0.0.0.0", "--port", String(port)],
+    hostGated: true,
+  },
+  // Last, deliberately. Astro, Nuxt and SvelteKit are Vite servers and declare
+  // `vite` alongside their own id, so any earlier position would start the bare
+  // Vite server for an application that has a framework-aware one.
+  {
+    frameworkId: "vite",
+    profile: "vite_dev_v1",
+    binary: "node_modules/.bin/vite",
+    args: (port) => ["--host", "0.0.0.0", "--port", String(port)],
+    hostGated: true,
   },
 ];
+
+/**
+ * The environment that lets a server answer for the hostname Vibe gave it.
+ *
+ * ## Why this exists at all
+ *
+ * Vite ≥ 5.4.12 refuses any request whose `Host` is not in
+ * `server.allowedHosts`, with `403 Blocked request.` — and a sandbox serves the
+ * application on a hostname the repository has never heard of. Astro, Nuxt and
+ * SvelteKit inherit it, because all of them *are* Vite servers.
+ *
+ * ## Why an environment variable and not a config edit
+ *
+ * Writing `allowedHosts` into the customer's `vite.config` would mean Vibe
+ * editing repository content to make its own preview work, on a tree it is
+ * about to serve publicly. Vite reads the value from the environment instead:
+ *
+ * ```js
+ * if (process.env.__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS && Array.isArray(server.allowedHosts))
+ * ```
+ *
+ * Comma-separated, and discarded only if it contains `\`, `"` or `'` — which a
+ * hostname does not. So Vibe names the host it issued itself, and the
+ * repository stays untouched.
+ *
+ * ## Why depending on a private variable is acceptable here
+ *
+ * The leading underscores say Vite does not promise it. The reason that is a
+ * tolerable dependency rather than a hidden one: if it ever stops working —
+ * removed upstream, an older Vite, an `allowedHosts` that is not an array — the
+ * health probe now carries the same hostname and the preview fails loudly as
+ * `preview_host_rejected`. The failure mode of this bet is a named refusal, not
+ * a silent lie, which is the property that made it worth taking.
+ *
+ * Empty for a server with no host gate: Next.js has none, and an environment
+ * variable set for a process that ignores it is noise in a diff.
+ */
+export function previewServerEnvironmentFor(
+  frameworks: readonly string[],
+  host: string,
+): Record<string, string> {
+  const server = DEV_SERVERS.find((candidate) => frameworks.includes(candidate.frameworkId));
+  if (!server || !server.hostGated) return {};
+
+  return { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: host };
+}
 
 /**
  * The preview profile for an application, or `null` when none can start it.
  *
  * Deliberately absent, and each for its own reason:
  *
- *  - **Vite and SvelteKit.** Vite ≥ 5.4.12 refuses requests whose `Host` is not
- *    in `server.allowedHosts`, and the sandbox serves the application on a
- *    public hostname. The health probe reaches the server over loopback, so it
- *    *passes* — and the customer's URL answers "Blocked request." A row that
- *    records `running` for a page nobody can open is the failure rule 69 names,
- *    so it waits for a real preview against a real Vite project rather than for
- *    an argument. Astro shares the mechanism and is shipped because the same
- *    dogfood settles both.
+ *  - **SvelteKit.** Its own binary is `vite`, so it matches the Vite row and
+ *    gets a working server; it has no row of its own because there is no
+ *    separate command to name.
  *  - **Remix.** `remix dev` and the Vite plugin are two different servers behind
  *    one framework id. Ambiguous is not a thing to resolve by picking.
  *  - **Express, NestJS, Angular, and every non-Node framework.** No development
  *    server Vibe can name without reading repository configuration.
+ *
+ * ## Why Vite is here now
+ *
+ * It was held back with this reasoning, which was right: Vite ≥ 5.4.12 refuses
+ * requests whose `Host` is not in `server.allowedHosts`, the health probe
+ * reached the server over loopback so it *passed*, and the customer's URL
+ * answered "Blocked request." — a row recording `running` for a page nobody can
+ * open, which is the failure rule 69 names.
+ *
+ * What was wrong was the plan for settling it: *dogfood a Vite preview and
+ * decide*. There was no Vite preview to dogfood, because there was no row. The
+ * question could not be asked until the thing being questioned existed.
+ *
+ * So it was settled by reading Vite's own source instead. Both halves are now
+ * closed — {@link previewServerEnvironmentFor} tells the server its hostname,
+ * and the probe asks under that hostname, so a preview that would have lied
+ * fails as `preview_host_rejected`. Astro shipped one sprint carrying this
+ * defect; the same two changes repair it.
  */
 export function previewProfileForFrameworks(
   frameworks: readonly string[],

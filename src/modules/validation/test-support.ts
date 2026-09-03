@@ -137,6 +137,17 @@ export type FakeSandboxOptions = {
   healthStatus?: number | null;
   /** Probes that fail before `healthStatus` starts being returned. */
   healthFailingProbes?: number;
+  /**
+   * Model a Vite-style host gate: 403 for a named host, `healthStatus` for none.
+   *
+   * Derived from what Vite actually does rather than stubbed to a code. Its
+   * check allows every IP literal unconditionally, so a probe with no `Host`
+   * override — one asking as `127.0.0.1` — is always let through, while one
+   * carrying the sandbox's public hostname is refused. That asymmetry *is* the
+   * defect the real probe exists to catch, so a fake that answered both alike
+   * could not test it.
+   */
+  healthHostGated?: true;
   /** Make `publicOrigin` throw, for the provider-has-no-route path. */
   failPublicOrigin?: boolean;
   /** Make `deleteArtifact` throw, for the cleanup-failure path. */
@@ -371,6 +382,14 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         if (stillWarming || status === null) {
           return { exitCode: 7, durationMs: 5, output: "", timedOut: false };
         }
+
+        // Read off the command, so a probe that stopped sending the header
+        // would stop seeing the gate — which is the regression this models.
+        const named = input.command.args.some((arg) => arg.startsWith("Host: "));
+        if (options.healthHostGated && named) {
+          return { exitCode: 0, durationMs: 5, output: "403", timedOut: false };
+        }
+
         return { exitCode: 0, durationMs: 5, output: String(status), timedOut: false };
       }
 

@@ -11,8 +11,13 @@ import {
   type SandboxUsage,
 } from "@/modules/validation/sandbox-port";
 import { PREVIEW_BUDGETS, PREVIEW_RESOURCES } from "./budgets";
-import { previewServerCommandFor } from "./dev-servers";
-import { healthyStatusCode, parseProbeStatus, previewHealthProbeCommand } from "./commands";
+import { previewServerCommandFor, previewServerEnvironmentFor } from "./dev-servers";
+import {
+  healthyStatusCode,
+  hostGateVerdict,
+  parseProbeStatus,
+  previewHealthProbeCommand,
+} from "./commands";
 import { previewSandboxNameFor } from "./identity";
 import type { SupportedPackageManager } from "@/modules/validation/schema";
 import type { PreviewCleanupStatus, PreviewFailureCode } from "./schema";
@@ -460,12 +465,34 @@ export async function startPreviewServer(
   const workdir = inSandbox(target.sourceRoot, target.workspaceRoot);
 
   try {
+    /*
+     * The public hostname, resolved before anything starts.
+     *
+     * It used to be asked for only after a healthy probe, when all it had to do
+     * was fill in a return value. Now two things need it earlier: the server has
+     * to be told which hostname to answer for, and the probe has to ask under
+     * that name. A provider with no route is still the provider's failure and
+     * still says so — it just says so before a server has been started for a URL
+     * that would never have existed.
+     */
+    let origin: string;
+    try {
+      origin = await sandbox.publicOrigin(PREVIEW_BUDGETS.port);
+    } catch (error) {
+      return {
+        ok: false,
+        failureCode: "preview_provider_unavailable",
+        failureDetail: detail(describeThrown(error)),
+      };
+    }
+    const host = hostnameOf(origin);
+
     // Re-entry check, and the reason no process handle needs to be persisted.
     // A previous attempt that started the server and then died leaves a port
     // that answers; starting a second server would race the first for the bind.
-    const already = await probe(sandbox, workdir);
+    const already = await probe(sandbox, workdir, host);
     if (already.kind === "healthy") {
-      return resolveOrigin(sandbox);
+      return { ok: true, origin, port: PREVIEW_BUDGETS.port, runtime: sandbox.runtime };
     }
 
     /*
@@ -490,8 +517,19 @@ export async function startPreviewServer(
       server = await sandbox.runBackground({
         command: serverCommand,
         cwd: workdir,
-        // No additional environment. The sandbox's own is the whole story, and
-        // a per-command override would be a second place a secret could enter.
+        /*
+         * One variable, and it is not a secret — it is the hostname Vibe issued
+         * for this sandbox, handed to a server that would otherwise refuse it.
+         *
+         * The rule this narrows was "no additional environment", and it existed
+         * so there is exactly one place a secret could enter. That reasoning is
+         * intact: this value is public by construction, of the same kind as the
+         * `--port` on the command line beside it, and it is derived here rather
+         * than passed in so no caller can substitute another. Everything else
+         * still comes from the sandbox's own environment, which is proven free
+         * of privilege before the sandbox exists.
+         */
+        env: previewServerEnvironmentFor(target.frameworks, host),
       });
     } catch (error) {
       return {
@@ -537,8 +575,17 @@ export async function startPreviewServer(
         };
       }
 
-      const attempt = await probe(sandbox, workdir);
-      if (attempt.kind === "healthy") return resolveOrigin(sandbox);
+      const attempt = await probe(sandbox, workdir, host);
+      if (attempt.kind === "healthy") {
+        return { ok: true, origin, port: PREVIEW_BUDGETS.port, runtime: sandbox.runtime };
+      }
+      if (attempt.kind === "host_rejected") {
+        return {
+          ok: false,
+          failureCode: "preview_host_rejected",
+          failureDetail: detail("the development server refuses the hostname it is served on"),
+        };
+      }
       if (attempt.kind === "application_error") {
         return {
           ok: false,
@@ -568,20 +615,49 @@ export async function startPreviewServer(
 type ProbeResult =
   | { kind: "healthy"; statusCode: number }
   | { kind: "application_error"; statusCode: number }
+  | { kind: "host_rejected" }
   | { kind: "no_answer" };
 
-/** One bounded loopback request. Never a crawl, never a body (§17). */
-async function probe(sandbox: SandboxHandle, cwd: string): Promise<ProbeResult> {
+/** One bounded loopback request's status code, or null when it did not answer. */
+async function probeStatus(
+  sandbox: SandboxHandle,
+  cwd: string,
+  host?: string,
+): Promise<number | null> {
   const result = await sandbox.run({
-    command: previewHealthProbeCommand(),
+    command: previewHealthProbeCommand(host),
     cwd,
     timeoutMs: PREVIEW_BUDGETS.healthProbeTimeoutMs,
   });
 
-  if (result.exitCode !== 0) return { kind: "no_answer" };
+  if (result.exitCode !== 0) return null;
 
-  const statusCode = parseProbeStatus(result.output);
+  return parseProbeStatus(result.output);
+}
+
+/**
+ * One bounded loopback request, asked as the public hostname (§17).
+ *
+ * Never a crawl, never a body. The `Host` header is what makes this the
+ * customer's question rather than one every Vite-based server answers yes to —
+ * see `commands.ts` for why a loopback probe could not fail.
+ *
+ * A 403 costs a second request, and only a 403: the two answers together are
+ * what distinguishes a server refusing this *hostname* from an application
+ * refusing *everyone*, and inventing that distinction from one response would
+ * mean reading the block page, which is untrusted text.
+ */
+async function probe(sandbox: SandboxHandle, cwd: string, host: string): Promise<ProbeResult> {
+  const statusCode = await probeStatus(sandbox, cwd, host);
   if (statusCode === null) return { kind: "no_answer" };
+
+  if (statusCode === 403) {
+    const verdict = hostGateVerdict({
+      withHost: statusCode,
+      withoutHost: await probeStatus(sandbox, cwd),
+    });
+    if (verdict === "host_rejected") return { kind: "host_rejected" };
+  }
 
   return healthyStatusCode(statusCode)
     ? { kind: "healthy", statusCode }
@@ -589,22 +665,19 @@ async function probe(sandbox: SandboxHandle, cwd: string): Promise<ProbeResult> 
 }
 
 /**
- * Asks the provider for the port's public origin.
+ * The hostname a browser will send, from the origin the provider issued.
  *
- * A failure here is the provider's, not the application's: the server is
- * demonstrably answering, and what is missing is the route. Classified as such
- * so the user is not told their change is broken.
+ * Parsed rather than assembled, and falling back to the whole string rather
+ * than to a guess: an origin this cannot parse is one Vibe should not be
+ * inventing a hostname from. A wrong value here is not a security problem — it
+ * is a preview that fails as `preview_host_rejected` instead of serving — which
+ * is the direction this whole change moves failures in.
  */
-async function resolveOrigin(sandbox: SandboxHandle): Promise<StartOutcome> {
+function hostnameOf(origin: string): string {
   try {
-    const origin = await sandbox.publicOrigin(PREVIEW_BUDGETS.port);
-    return { ok: true, origin, port: PREVIEW_BUDGETS.port, runtime: sandbox.runtime };
-  } catch (error) {
-    return {
-      ok: false,
-      failureCode: "preview_provider_unavailable",
-      failureDetail: detail(describeThrown(error)),
-    };
+    return new URL(origin).host;
+  } catch {
+    return origin;
   }
 }
 

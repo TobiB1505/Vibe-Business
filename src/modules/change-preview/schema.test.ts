@@ -167,9 +167,9 @@ describe("preview policy", () => {
 
   it("refuses an application no server command can start", () => {
     // Refusing is the feature: a guessed start command produces a public URL
-    // nobody should trust (§3). Vite is validated and merged like anything
-    // else — it simply has nothing to look at until its row is proven.
-    expect(previewProfileFor("node_build_v1", ["vite", "react"])).toBeNull();
+    // nobody should trust (§3). Vite now has a row, so the refusal is shown
+    // with a framework that genuinely has no server Vibe can name.
+    expect(previewProfileFor("node_build_v1", ["express"])).toBeNull();
     expect(previewProfileFor("node_build_v1", [])).toBeNull();
   });
 

@@ -42,11 +42,16 @@ function frozenClock() {
 
 /** A workspace whose HEAD is the prepared commit and whose install succeeds. */
 function readyProvider(
-  options: { files?: Record<string, string>; healthStatus?: number | null } = {},
+  options: {
+    files?: Record<string, string>;
+    healthStatus?: number | null;
+    healthHostGated?: true;
+  } = {},
 ) {
   return fakeSandboxProvider({
     files: options.files ?? clonedSandboxFiles(),
     ...(options.healthStatus !== undefined ? { healthStatus: options.healthStatus } : {}),
+    ...(options.healthHostGated ? { healthHostGated: options.healthHostGated } : {}),
     results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
   });
 }
@@ -579,5 +584,81 @@ describe("fixtures", () => {
 
     expect(teardown).toMatchObject({ cleanup: "stopped", artifactDeleted: false });
     expect(provider.deletedArtifacts()).toEqual([]);
+  });
+});
+
+/**
+ * A server that refuses the hostname it is served on.
+ *
+ * The failure this whole area exists for, and the one that used to be
+ * invisible: Vite allows every IP literal unconditionally, so a loopback probe
+ * passed while the customer's URL answered `403 Blocked request.` — a preview
+ * recorded as running for a page nobody could open.
+ */
+describe("a development server that refuses the preview's hostname", () => {
+  it("asks under the hostname a browser would send, not under loopback", async () => {
+    const provider = readyProvider();
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    // The assertion the old probe could not make. `sandbox-3000.example.invalid`
+    // is what the fake provider issues as the public origin.
+    const probes = provider.commands().filter((command) => command.startsWith("curl"));
+    expect(probes.some((probe) => probe.includes("Host: sandbox-3000.example.invalid"))).toBe(true);
+  });
+
+  it("tells the server which hostname to answer for, without touching the repository", async () => {
+    const provider = readyProvider({ healthHostGated: true });
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    // Through Vite's own environment variable, so no file in the customer's
+    // tree is edited to make Vibe's preview work.
+    const started = provider.events.find((event) => event.kind === "background");
+    expect(started).toMatchObject({
+      env: { __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS: "sandbox-3000.example.invalid" },
+    });
+  });
+
+  it("fails with its own reason rather than reporting a running preview", async () => {
+    const provider = readyProvider({ healthHostGated: true });
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
+      ok: false,
+      failureCode: "preview_host_rejected",
+    });
+  });
+
+  it("does not call an application that refuses everyone a host gate", async () => {
+    // A 403 at the root is ambiguous on its own: an application behind
+    // authentication answers it to every caller. Deciding from one response
+    // would mean reading the block page, which is untrusted text — so the two
+    // are told apart by asking twice, and this is the case that must not move.
+    const provider = readyProvider({ healthStatus: 403 });
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
+      ok: true,
+    });
+  });
+
+  it("costs a second probe only when one is needed", async () => {
+    const provider = readyProvider();
+    const target = fakePreviewTarget({ frameworks: ["vite", "react"] });
+    await provisionPreviewWorkspace(provider, target);
+
+    await startPreviewServer(provider, target, { clock: frozenClock() });
+
+    // One re-entry probe, one that answers. A healthy preview pays nothing for
+    // the ambiguity it never encountered.
+    const probes = provider.commands().filter((command) => command.startsWith("curl"));
+    expect(probes).toHaveLength(2);
   });
 });

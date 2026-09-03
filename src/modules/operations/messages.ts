@@ -212,6 +212,11 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   preview_start_failed: "The preview server could not be started.",
   preview_process_exited: "The application started and then stopped. See the output below.",
   preview_health_check_failed: "The preview started but never answered, so Vibe stopped it.",
+  // Names the fix, because there is one and it is a single line of config. The
+  // sentence avoids the framework's name: the same gate is Vite's, and Astro,
+  // Nuxt and SvelteKit all inherit it.
+  preview_host_rejected:
+    "Your app is running but refuses the preview's address. Add the preview host to `server.allowedHosts` in your Vite config, or set it to `true` for development.",
   preview_provider_unavailable:
     "The preview environment could not be reached. Try again in a moment.",
   preview_cleanup_failed: "Vibe could not confirm the preview environment was fully cleaned up.",
