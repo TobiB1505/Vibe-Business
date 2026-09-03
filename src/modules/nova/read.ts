@@ -8,6 +8,7 @@ import { getLatestApprovalsForPreparedChanges } from "../approvals/store";
 import type { ChangeStage } from "../execution/change-progress";
 import { listPreparedChangesForProject } from "../execution/store";
 import { getLatestMergesForPreparedChanges } from "../merge/store";
+import { getLastFailedOperation } from "../operations/service";
 import { findActiveOperation } from "../operations/store";
 import type { StoredOperationRun } from "../operations/store";
 import type { OperationType } from "../operations/schema";
@@ -15,6 +16,7 @@ import { buildOperationView } from "../operations/view";
 import type { OperationView } from "../operations/view";
 import { getLatestOpportunities } from "../opportunities/service";
 import { getLatestVerificationsForPreparedChanges } from "../outcome-verification/store";
+import { liveConnections } from "../projects/repository-connection";
 import { getLatestSuccessfulSnapshot } from "../repository-intelligence/store";
 import { getLatestValidationsForPreparedChanges } from "../validation/store";
 import { resolveProjectValidationTarget } from "../validation/workspace-store";
@@ -198,6 +200,55 @@ async function readChangeFacts(
 }
 
 /**
+ * Whether Vibe can still reach the repository at all.
+ *
+ * `liveConnections` filters `detached_at is null`, so an absent row is either
+ * a project whose connection was detached or one that never had one. Both
+ * mean the same thing for everything downstream — there is nothing to read,
+ * nothing to build and nothing to merge into — and the recovery is the same
+ * flow, so they are one candidate rather than two.
+ *
+ * Account-level access revocation (`github_installations.access_revoked_at`)
+ * is a second way to lose the same thing, and it is not read here: it needs a
+ * user id this function does not take, and adding one would widen a
+ * project-scoped read into an account-scoped one for a fact whose recovery is
+ * already offered. Named so the gap is deliberate rather than overlooked.
+ */
+async function readSourceDisconnected(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await liveConnections(supabase, "id")
+    .eq("project_id", projectId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data === null;
+}
+
+/**
+ * The last attempt of each kind, when it failed and nothing succeeded after.
+ *
+ * `getLastFailedOperation` returns the latest run only if that run failed, so
+ * a failure the founder already recovered from reports nothing. Three kinds
+ * rather than one flag, because the recovery differs by kind and one of them
+ * costs 35 Credits — a single "something failed" would have had to hide that.
+ */
+async function readFailedOperations(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<{ agent: boolean; scan: boolean; audit: boolean }> {
+  const [agent, scan, audit] = await Promise.all([
+    getLastFailedOperation(supabase, { projectId, operationType: "agent_execution" }),
+    getLastFailedOperation(supabase, { projectId, operationType: "product_scan" }),
+    getLastFailedOperation(supabase, { projectId, operationType: "business_audit" }),
+  ]);
+
+  return { agent: agent !== null, scan: scan !== null, audit: audit !== null };
+}
+
+/**
  * The two Stage-4 facts, from the resolver that owns them.
  *
  * Both were fixed at false until Stage 4 merged, on the belief that answering
@@ -291,19 +342,29 @@ export async function readNovaFocusFacts(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<NovaFocusFacts> {
-  const [changes, opportunities, plan, auditCurrency, operations, validationTarget] =
-    await Promise.all([
-      readChangeFacts(supabase, projectId),
-      getLatestOpportunities(supabase, projectId),
-      getLatestCompletedActionPlan(supabase, projectId),
-      getAuditCurrency(supabase, projectId),
-      Promise.all(
-        WATCHED_OPERATIONS.map((operationType) =>
-          findActiveOperation(supabase, { projectId, operationType }),
-        ),
+  const [
+    changes,
+    opportunities,
+    plan,
+    auditCurrency,
+    operations,
+    validationTarget,
+    sourceDisconnected,
+    failedOperations,
+  ] = await Promise.all([
+    readChangeFacts(supabase, projectId),
+    getLatestOpportunities(supabase, projectId),
+    getLatestCompletedActionPlan(supabase, projectId),
+    getAuditCurrency(supabase, projectId),
+    Promise.all(
+      WATCHED_OPERATIONS.map((operationType) =>
+        findActiveOperation(supabase, { projectId, operationType }),
       ),
-      readValidationTargetFacts(supabase, projectId),
-    ]);
+    ),
+    readValidationTargetFacts(supabase, projectId),
+    readSourceDisconnected(supabase, projectId),
+    readFailedOperations(supabase, projectId),
+  ]);
 
   const stepOrderByKey = new Map((plan?.steps ?? []).map((step) => [step.id, step.order] as const));
   const questions = await readQuestionFacts(supabase, projectId, stepOrderByKey);
@@ -324,6 +385,8 @@ export async function readNovaFocusFacts(
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
   return {
+    sourceDisconnected,
+    failedOperations,
     changes,
     questions,
     moves,

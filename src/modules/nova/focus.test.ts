@@ -23,6 +23,8 @@ import type { FocusCandidateKind, NovaFocusFacts, NovaMoveFact } from "./focus";
 /** Nothing waiting, nothing failed, nothing available. Every test starts here. */
 function quiet(): NovaFocusFacts {
   return {
+    sourceDisconnected: false,
+    failedOperations: { agent: false, scan: false, audit: false },
     changes: [],
     questions: [],
     moves: [],
@@ -65,8 +67,13 @@ describe("the candidate vocabulary", () => {
   });
 
   /**
-   * `nothing_to_do` is the one kind with no control, and that is the point: a
-   * button on it would be Nova inventing work to look busy.
+   * No position without a way out — the `BUSINESS_AUDIT_ANCHOR` principle, as
+   * a total assertion rather than a habit. A founder who reaches a state Nova
+   * can describe but not move them out of is stuck on a screen that explains
+   * their situation and offers nothing, which is worse than the state itself.
+   *
+   * `nothing_to_do` is the one exception and it is the point: a button there
+   * would be Nova inventing work to look busy.
    */
   it("gives every kind but one a control", () => {
     for (const kind of FOCUS_CANDIDATE_KINDS) {
@@ -408,6 +415,8 @@ describe("ordering when several things are true", () => {
 
   it("loses no candidate: everything true is either primary or secondary", () => {
     const facts: NovaFocusFacts = {
+      sourceDisconnected: false,
+      failedOperations: { agent: false, scan: false, audit: false },
       changes: [changeAt("validation_failed", "change-a"), changeAt("merged", "change-b")],
       questions: [
         { founderInputRequestId: "req-1", question: "Q", origin: "planner", stepOrder: 1 },
@@ -526,5 +535,81 @@ describe("what is running", () => {
 
     expect(focus.primary.kind).toBe("review_change");
     expect(focus.working).toBe(RUNNING);
+  });
+});
+
+describe("the failures a founder has to be able to leave", () => {
+  it("leads with a lost repository over everything else", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      sourceDisconnected: true,
+      changes: [changeAt("validation_failed")],
+      auditOutdated: true,
+      failedOperations: { agent: true, scan: true, audit: true },
+    });
+
+    expect(focus.primary.kind).toBe("source_disconnected");
+    expect(focus.nextAction).toBe("nova.reconnect_source");
+  });
+
+  it.each([
+    ["agent", "agent_failed", "nova.start_agent"],
+    ["scan", "scan_failed", "nova.rescan_product"],
+    ["audit", "audit_failed", "nova.refresh_audit"],
+  ])("raises %s failure with its own recovery", (kind, expected, action) => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      failedOperations: { agent: false, scan: false, audit: false, [kind]: true },
+    });
+
+    expect(focus.primary.kind).toBe(expected);
+    expect(focus.nextAction).toBe(action);
+  });
+
+  /**
+   * The reason these are three candidates rather than one: "retry" is not one
+   * thing. Re-reading a product is free, re-auditing costs 35 Credits, and a
+   * run costs between 150 and 350 — a single candidate would have had to put
+   * all three behind one word.
+   */
+  it("gives the three failures three different recoveries", () => {
+    const actions = (["agent_failed", "scan_failed", "audit_failed"] as const).map((kind) =>
+      novaCandidateAction(kind),
+    );
+
+    expect(new Set(actions).size).toBe(3);
+  });
+
+  it("keeps every failure visible when several are true at once", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      failedOperations: { agent: true, scan: true, audit: true },
+    });
+
+    expect([focus.primary, ...focus.secondary].map((candidate) => candidate.kind)).toEqual([
+      "agent_failed",
+      "scan_failed",
+      "audit_failed",
+    ]);
+  });
+
+  it("says nothing about a failure the founder already recovered from", () => {
+    const focus = deriveNovaFocus(quiet());
+
+    expect(focus.primary.kind).toBe("nothing_to_do");
+  });
+
+  /**
+   * A blocked project is not a working one with a note attached. Everything
+   * still true stays visible, and none of it leads.
+   */
+  it("keeps the rest of the truth as asides while the source is gone", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      sourceDisconnected: true,
+      auditOutdated: true,
+    });
+
+    expect(focus.secondary.map((candidate) => candidate.kind)).toEqual(["audit_outdated"]);
   });
 });

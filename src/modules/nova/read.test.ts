@@ -70,7 +70,28 @@ function reset() {
 
 beforeEach(reset);
 
+/**
+ * A project as one actually exists: with a live repository connection.
+ *
+ * Without one, `sourceDisconnected` is true and outranks every other
+ * candidate — correctly, because a project Vibe cannot reach has one problem
+ * and it is not the audit. The fixture said otherwise until Slice 7 made the
+ * question askable, and four tests failed the moment it did.
+ */
 function seedProject() {
+  seedProjectWithoutSource();
+  db.seed("repository_connections", {
+    id: "connection_1",
+    project_id: PROJECT,
+    user_id: USER,
+    status: "active",
+    detached_at: null,
+    workspace_root: null,
+  });
+}
+
+/** A project Vibe cannot reach. Only the disconnection tests want this. */
+function seedProjectWithoutSource() {
   db.seed("projects", { id: PROJECT, user_id: USER, production_url: "https://acme.test" });
 }
 
@@ -462,8 +483,12 @@ describe("what the repository read says", () => {
    * here would ignore an answer they already gave.
    */
   it("stops asking once the founder has chosen", async () => {
-    seedProject();
-    seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
+    /*
+     * One connection carrying the answer, not a second row beside the
+     * default fixture's — two live connections is not a state a project can
+     * be in, and the read would pick whichever came first.
+     */
+    seedProjectWithoutSource();
     db.seed("repository_connections", {
       id: "connection_1",
       project_id: PROJECT,
@@ -472,6 +497,7 @@ describe("what the repository read says", () => {
       detached_at: null,
       workspace_root: "frontend",
     });
+    seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
 
     const facts = await readNovaFocusFacts(client(), PROJECT);
 
@@ -487,5 +513,89 @@ describe("what the repository read says", () => {
     await readNovaFocusFacts(client(), PROJECT);
 
     expect(recorder.writes).toEqual([]);
+  });
+});
+
+describe("the failures Nova reads", () => {
+  function seedOperation(operationType: string, status: string) {
+    db.seed("operation_runs", {
+      id: `op_${(label += 1)}`,
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: operationType,
+      status,
+      stage: "queued",
+      failure_code: status === "failed" ? "provider_unavailable" : null,
+      result_id: null,
+      input_identity: `identity_${label}`,
+      started_at: null,
+      completed_at: null,
+      created_at: new Date(Date.UTC(2026, 0, label)).toISOString(),
+    });
+  }
+
+  it("reports a project with no live connection as disconnected", async () => {
+    seedProjectWithoutSource();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.sourceDisconnected).toBe(true);
+  });
+
+  it("reports a connected project as connected", async () => {
+    seedProject();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.sourceDisconnected).toBe(false);
+  });
+
+  it("reads a detached connection as disconnected", async () => {
+    seedProjectWithoutSource();
+    db.seed("repository_connections", {
+      id: "connection_1",
+      project_id: PROJECT,
+      user_id: USER,
+      status: "detached",
+      detached_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+      workspace_root: null,
+    });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.sourceDisconnected).toBe(true);
+  });
+
+  it("reports the last attempt of each kind when it failed", async () => {
+    seedProject();
+    seedOperation("business_audit", "failed");
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.failedOperations).toEqual({ agent: false, scan: false, audit: true });
+  });
+
+  /**
+   * The distinction that keeps a recovered founder from being told about a
+   * failure they already fixed: `getLastFailedOperation` returns the latest
+   * run only when *that* run failed, so a success after it reports nothing.
+   */
+  it("says nothing about a failure a later run recovered from", async () => {
+    seedProject();
+    seedOperation("business_audit", "failed");
+    seedOperation("business_audit", "succeeded");
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.failedOperations.audit).toBe(false);
+  });
+
+  it("keeps the three kinds apart", async () => {
+    seedProject();
+    seedOperation("product_scan", "failed");
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.failedOperations).toEqual({ agent: false, scan: true, audit: false });
   });
 });

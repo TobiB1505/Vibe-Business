@@ -66,6 +66,26 @@ answer — so a founder who has chosen an application is not asked again. A
 project Vibe has never read is not one whose reading is outdated, and reports
 neither.
 
+## Failures, and the way out of each
+
+Every candidate carries exactly one control, and a test asserts that over the
+whole vocabulary rather than trusting the habit — no position without a way
+out. `nothing_to_do` is the single exception, and that is the point: a button
+there would be Nova inventing work to look busy.
+
+The three operation failures are three candidates rather than one, because
+"retry" is not one thing: re-reading a product is free, re-auditing costs 35
+Credits, and starting a run again costs between 150 and 350. A single
+candidate would have hidden that behind one word. `getLastFailedOperation`
+returns the latest run only when *that* run failed, so a founder who already
+recovered is told nothing.
+
+`source_disconnected` outranks everything, because a project Vibe cannot reach
+has one problem and it is not the audit. Account-level access revocation is a
+second way to lose the same thing and is deliberately not read here — it needs
+a user id this project-scoped read does not take, and its recovery is already
+the control offered.
+
 ## Controls, and where the words live
 
 `actions.ts` is the catalog: for each control, its label, the retail kind it

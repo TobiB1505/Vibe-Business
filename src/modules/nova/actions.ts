@@ -57,6 +57,8 @@ export const NOVA_ACTION_IDS = [
   /* The product reveal: confirming what Vibe read, and what follows it. */
   "nova.confirm_product",
   "nova.confirm_product_and_audit",
+  /* Getting back to a working state. */
+  "nova.reconnect_source",
   /* Everything a focus candidate can carry. */
   "nova.validate_again",
   "nova.review_change",
@@ -184,6 +186,18 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
      */
     control: "server_action",
     label: "Yes, on to the Business Audit",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.reconnect_source": {
+    /*
+     * A place to go, not an action. Reconnecting is a GitHub App install flow
+     * that leaves the product entirely, and a button here would be a button
+     * that could not finish what it started.
+     */
+    control: "navigation",
+    label: "Reconnect your repository",
     price: null,
     consequential: false,
     requiresConfirmation: false,

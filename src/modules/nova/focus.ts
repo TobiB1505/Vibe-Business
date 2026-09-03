@@ -53,6 +53,21 @@ import { TIER_ORDER } from "../projects/attention";
 
 /** Everything a candidate can be. */
 export const FOCUS_CANDIDATE_KINDS = [
+  /**
+   * The repository connection is gone — detached, or its access revoked.
+   *
+   * First, because it is the precondition for everything else: with no source
+   * there is nothing to read, nothing to build and nothing to merge into. A
+   * founder in this state who is shown a stale audit instead has been told
+   * about the wrong problem.
+   */
+  "source_disconnected",
+  /** The last agent run failed and the founder has not been told. */
+  "agent_failed",
+  /** The last read of the product failed. */
+  "scan_failed",
+  /** The last audit failed. Retrying is priced, and says so. */
+  "audit_failed",
   /** A safety check ran and did not pass. Nothing downstream can start. */
   "validation_failed",
   /** The repository moved, or the merge was refused, so this cannot advance. */
@@ -98,6 +113,10 @@ export type NovaFocusTier = AttentionTier | "settled";
 export type { NovaActionId };
 
 const CANDIDATE_TIER: Record<FocusCandidateKind, NovaFocusTier> = {
+  source_disconnected: "blocked",
+  agent_failed: "blocked",
+  scan_failed: "blocked",
+  audit_failed: "blocked",
   validation_failed: "blocked",
   merge_blocked: "blocked",
   repository_read_outdated: "blocked",
@@ -145,6 +164,17 @@ const CANDIDATE_ORDER: Record<FocusCandidateKind, number> = Object.fromEntries(
  * screen where the founder decides.
  */
 const CANDIDATE_ACTION: Record<FocusCandidateKind, NovaActionId | null> = {
+  /*
+   * Four failures, four different recoveries — which is why these are four
+   * candidates rather than one carrying a variable action. "Retry" is not one
+   * thing here: re-reading a product is free, re-auditing costs 35 Credits,
+   * and starting a run again costs between 150 and 350. A single candidate
+   * would have had to hide that difference behind one word.
+   */
+  source_disconnected: "nova.reconnect_source",
+  agent_failed: "nova.start_agent",
+  scan_failed: "nova.rescan_product",
+  audit_failed: "nova.refresh_audit",
   validation_failed: "nova.validate_again",
   merge_blocked: "nova.review_change",
   repository_read_outdated: "nova.rescan_product",
@@ -196,6 +226,23 @@ export type NovaQuestionFact = {
 export type NovaMoveFact = { id: string; rank: number; title: string };
 
 export type NovaFocusFacts = {
+  /**
+   * No live repository connection: detached, or its access revoked.
+   *
+   * The precondition for everything else Nova could say, which is why it
+   * outranks every other candidate rather than joining the queue.
+   */
+  sourceDisconnected: boolean;
+  /**
+   * The last attempt of each kind, when it failed and nothing has succeeded
+   * since. Kept per kind because the recovery differs by kind — and one of the
+   * three is free while another costs 35 Credits.
+   */
+  failedOperations: {
+    agent: boolean;
+    scan: boolean;
+    audit: boolean;
+  };
   changes: readonly NovaChangeFact[];
   questions: readonly NovaQuestionFact[];
   /** The current Moves, with the ranks the opportunity engine persisted. */
@@ -241,7 +288,11 @@ type QuestionCandidateKind = "agent_question" | "founder_input_required";
 type BareCandidateKind =
   | "repository_read_outdated"
   | "workspace_choice_required"
-  | "audit_outdated";
+  | "audit_outdated"
+  | "source_disconnected"
+  | "agent_failed"
+  | "scan_failed"
+  | "audit_failed";
 
 export type FocusCandidate =
   | { kind: ChangeCandidateKind; preparedChangeId: string; headline: string }
@@ -366,6 +417,11 @@ function lowestRanked(moves: readonly NovaMoveFact[]): NovaMoveFact | null {
 
 export function deriveNovaFocus(facts: NovaFocusFacts): NovaFocus {
   const candidates: FocusCandidate[] = [];
+
+  if (facts.sourceDisconnected) candidates.push({ kind: "source_disconnected" });
+  if (facts.failedOperations.agent) candidates.push({ kind: "agent_failed" });
+  if (facts.failedOperations.scan) candidates.push({ kind: "scan_failed" });
+  if (facts.failedOperations.audit) candidates.push({ kind: "audit_failed" });
 
   for (const change of facts.changes) {
     const kind = candidateForStage(change.stage);

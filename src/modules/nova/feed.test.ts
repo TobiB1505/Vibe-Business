@@ -22,6 +22,8 @@ import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
 
 function quiet(): NovaFocusFacts {
   return {
+    sourceDisconnected: false,
+    failedOperations: { agent: false, scan: false, audit: false },
     changes: [],
     questions: [],
     moves: [],
@@ -58,6 +60,10 @@ const RUNNING: OperationView = {
 
 /** Every candidate, built directly, so the copy table can be swept. */
 const EVERY_CANDIDATE: FocusCandidate[] = [
+  { kind: "source_disconnected" },
+  { kind: "agent_failed" },
+  { kind: "scan_failed" },
+  { kind: "audit_failed" },
   { kind: "validation_failed", preparedChangeId: "c1", headline: "h" },
   { kind: "merge_blocked", preparedChangeId: "c1", headline: "h" },
   { kind: "review_change", preparedChangeId: "c1", headline: "h" },

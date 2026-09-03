@@ -62,6 +62,8 @@ type NovaServerAction = (...args: never[]) => unknown;
 
 export type NovaActionBinding =
   | { control: "server_action"; action: NovaServerAction }
+  /** An address that is not about one subject. Reconnecting leaves the app. */
+  | { control: "navigation"; subject: "account"; href: () => string }
   /** An address for one prepared change. Nothing runs. */
   | {
       control: "navigation";
@@ -113,6 +115,15 @@ export const NOVA_ACTIONS: Record<NovaActionId, NovaActionBinding> = {
   "nova.confirm_product_and_audit": {
     control: "server_action",
     action: confirmProductAndStartAuditAction,
+  },
+  /*
+   * The GitHub App install flow, which is account-level and leaves the
+   * product. A Server Action could not finish what it starts.
+   */
+  "nova.reconnect_source": {
+    control: "navigation",
+    subject: "account",
+    href: () => "/app/connect/github",
   },
   "nova.validate_again": { control: "server_action", action: rerunChangeValidationAction },
   "nova.review_change": { control: "navigation", subject: "prepared_change", href: changeHref },

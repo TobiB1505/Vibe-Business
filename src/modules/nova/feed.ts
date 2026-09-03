@@ -153,6 +153,11 @@ export type NovaEntry =
  * the two go out of step.
  */
 const MESSAGE_FOR_CANDIDATE: Record<FocusCandidateKind, string> = {
+  source_disconnected:
+    "I have lost access to your repository, so I cannot read or change anything.",
+  agent_failed: "My last attempt at building something stopped before it finished.",
+  scan_failed: "My last read of your product did not finish.",
+  audit_failed: "My last audit did not finish.",
   validation_failed: "A check on one of your changes did not pass.",
   merge_blocked: "One of your changes cannot go any further as it stands.",
   repository_read_outdated: "What I know about your code is older than your code.",
@@ -200,6 +205,10 @@ function subjectFor(candidate: FocusCandidate): NovaActionSubject {
     case "repository_read_outdated":
     case "workspace_choice_required":
     case "audit_outdated":
+    case "source_disconnected":
+    case "agent_failed":
+    case "scan_failed":
+    case "audit_failed":
     case "nothing_to_do":
       return { kind: "project" };
   }
