@@ -63,6 +63,7 @@ export const PREVIEW_PROFILES = [
   "next_dev_v1",
   "nuxt_dev_v1",
   "astro_dev_v1",
+  "vite_dev_v1",
 ] as const;
 export type PreviewProfile = (typeof PREVIEW_PROFILES)[number];
 
@@ -89,6 +90,7 @@ export const PREVIEW_PROFILE_VERSIONS: Record<PreviewProfile, string> = {
   next_dev_v1: "next-dev-v1",
   nuxt_dev_v1: "nuxt-dev-v1",
   astro_dev_v1: "astro-dev-v1",
+  vite_dev_v1: "vite-dev-v1",
 };
 
 /**
@@ -139,13 +141,27 @@ export function previewProfileFor(
  *  - the secret policy (none, and proven absent before the sandbox exists);
  *  - cleanup semantics.
  *
+ * ## v3 → v4
+ *
+ * Two of those entries moved, and together they change what a healthy preview
+ * asserts. **Health-check behaviour**: the probe now carries the public
+ * hostname, so "this answered" means "this answered for the name it is reached
+ * by" — a stronger claim than v3 could make, because a Vite-based server allows
+ * every IP literal unconditionally and therefore always answered the old
+ * probe. **The secret policy**: still none, and now stated as an exception
+ * rather than by silence — one variable is set on the server process,
+ * `__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS`, whose value is a hostname Vibe
+ * issued itself. It is no more privileged than the `-p` on the command line,
+ * and it is named here so that "no environment" never has to be read as
+ * approximately true.
+ *
  * It is part of the preview identity, so a policy change invalidates preview
  * reuse by construction rather than by anyone remembering to. That is the same
  * discipline `SANDBOX_POLICY_VERSION` applies to validation, and for the same
  * reason: a stored "this ran fine" must never be reinterpreted under rules it
  * was not checked against (CLAUDE.md rule 65).
  */
-export const PREVIEW_POLICY_VERSION = "preview-policy-v3" as const;
+export const PREVIEW_POLICY_VERSION = "preview-policy-v4" as const;
 
 export const PREVIEW_PROVIDERS = ["vercel_sandbox"] as const;
 export type PreviewProviderId = (typeof PREVIEW_PROVIDERS)[number];
@@ -252,6 +268,16 @@ export const PREVIEW_FAILURE_CODES = [
   "preview_process_exited",
   /** The server never answered within its budget. */
   "preview_health_check_failed",
+  /**
+   * The server is running and refuses the hostname it is served on.
+   *
+   * Its own failure code because the remediation is nothing like the others:
+   * the application is healthy, the port answers, and one header decides
+   * whether anybody can see it. Established by asking twice — under the public
+   * hostname and under none — so an application that refuses everyone is never
+   * reported as this.
+   */
+  "preview_host_rejected",
   /** The sandbox provider could not create, reconnect, or route. */
   "preview_provider_unavailable",
   /** Teardown did not verifiably complete. Never hides a result. */

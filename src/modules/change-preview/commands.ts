@@ -81,12 +81,33 @@ import { PREVIEW_BUDGETS } from "./budgets";
  * *leaving* the sandbox — and it is the one assumption in this file that a real
  * preview will confirm or refute (10B-3).
  *
+ * ## Why it carries the public hostname
+ *
+ * A loopback probe asks a question a whole class of development server always
+ * answers yes to, and that made this check structurally incapable of failing
+ * for the reason it most needed to. Vite's host gate — inherited by Astro,
+ * Nuxt and SvelteKit, since all four are Vite servers — reads:
+ *
+ * ```js
+ * if (extracted.type === "ipv4" || extracted.type === "ipv6") return true;
+ * if (hostname === "localhost" || hostname.endsWith(".localhost")) return true;
+ * ```
+ *
+ * Every IP literal is allowed unconditionally. So `http://127.0.0.1:3000/`
+ * passes while the customer's own URL answers `403 Blocked request.` — a
+ * preview recorded as `running` for a page nobody can open.
+ *
+ * Sending `Host:` makes the probe ask the browser's question instead. The
+ * request still never leaves the VM; only the header changed. That is the whole
+ * fix, and it is why the security argument above survives it word for word.
+ *
  * ## What it proves and what it does not
  *
- * It proves the server started, bound the port Vibe chose, and answered HTTP.
- * Combined with the provider issuing a route for that port, that is what
- * `preview_available` claims. It does **not** independently prove the public
- * edge is serving, and the product does not say it does.
+ * It proves the server started, bound the port Vibe chose, and answered HTTP
+ * **for the hostname it will actually be reached by**. Combined with the
+ * provider issuing a route for that port, that is what `preview_available`
+ * claims. It still does not independently prove the public edge is serving —
+ * nothing inside the sandbox can — and the product does not say it does.
  *
  * Under a development server it does one more thing, and the budget has to
  * allow for it: the first request is what compiles the route, so this probe is
@@ -94,9 +115,14 @@ import { PREVIEW_BUDGETS } from "./budgets";
  * failure.
  *
  * `-o /dev/null` discards the body: a status line is the entire signal, and
- * page content is untrusted data with no business entering a diagnostic.
+ * page content is untrusted data with no business entering a diagnostic. That
+ * holds for the block page too — the 403 is the signal, its text is not read.
+ *
+ * @param host the `Host` header to send. Omitted, the probe asks as loopback,
+ * which is the second half of {@link hostGateVerdict}: the two answers together
+ * tell a host gate apart from an application that refuses everyone.
  */
-export function previewHealthProbeCommand(): SandboxCommand {
+export function previewHealthProbeCommand(host?: string): SandboxCommand {
   const timeoutSeconds = Math.max(1, Math.ceil(PREVIEW_BUDGETS.healthProbeTimeoutMs / 1000));
 
   return {
@@ -108,6 +134,7 @@ export function previewHealthProbeCommand(): SandboxCommand {
       // following one would turn a probe into a small crawler.
       "--max-time",
       String(timeoutSeconds),
+      ...(host === undefined ? [] : ["--header", `Host: ${host}`]),
       "-o",
       "/dev/null",
       "--write-out",
@@ -115,6 +142,39 @@ export function previewHealthProbeCommand(): SandboxCommand {
       `http://127.0.0.1:${PREVIEW_BUDGETS.port}/`,
     ],
   };
+}
+
+/**
+ * Whether a 403 is the dev server refusing this *hostname*, or the application
+ * refusing *everyone*.
+ *
+ * A 403 at the root is genuinely ambiguous, and guessing either way is wrong in
+ * a different direction. An application behind authentication answers 403 to
+ * anyone, and failing its preview would be Vibe substituting its own opinion
+ * for a liveness check — the same mistake {@link healthyStatusCode} refuses to
+ * make about a 404. A host gate answers 403 to *one* hostname and serves every
+ * other caller happily.
+ *
+ * So the two are told apart by asking twice, which needs no body and no
+ * heuristic: the same server, the same port, one request presenting the public
+ * hostname and one presenting none. Different answers mean the hostname is what
+ * was rejected.
+ *
+ * Only reached on the failure path, so the ordinary preview still costs one
+ * probe.
+ */
+export function hostGateVerdict(input: {
+  withHost: number;
+  withoutHost: number | null;
+}): "host_rejected" | "application_refuses" {
+  if (input.withHost !== 403) return "application_refuses";
+  if (input.withoutHost === null) return "application_refuses";
+
+  // A server that answers the loopback caller and refuses the public one is
+  // gating on the name, whatever it happens to answer with.
+  return healthyStatusCode(input.withoutHost) && input.withoutHost !== 403
+    ? "host_rejected"
+    : "application_refuses";
 }
 
 /**
