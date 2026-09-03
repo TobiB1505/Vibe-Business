@@ -76,12 +76,33 @@ The same shape as the application question, one refusal over: a question rendere
 
 **A false claim was corrected on the way.** `startRefusalRecovery`'s docblock said a scan *costs Credits*; `kill-switch.ts` files `product_scan` under free work, `start-limits.ts` under `FREE_WORK`, and `launch-v1` prices understanding at zero. Rule 60 still holds and the reason is better: Vibe does not re-read a founder's code on its own because it is theirs, not because of a bill. A note implying a charge makes a free way forward look like one nobody should take.
 
+## The first half of the dogfood, read out of production
+
+Three of the four repositories were re-scanned on 2026-09-03 between 10:30 and 10:34, all on `repo-intelligence-v5`, all `complete`. What the build contract makes of them, from the stored `build.targets`:
+
+| Project | Target | Frameworks | Lockfile | Verdict |
+|---|---|---|---|---|
+| Urlaubsplanung | `.` | react, vite | `package-lock.json`, own directory | **supported** — `node_build_v1`, npm |
+| planner-agent | `frontend` | nextjs, react | `frontend/package-lock.json`, own directory | **supported** — `node_build_v1`, npm |
+| Jandia-Arena | `frontend` | react | **none**, and none at the root either | `lockfile_missing`, `detail.workspaceRoot: "frontend"` |
+| Vibe-Business | — | — | — | still `repo-intelligence-v4`; not re-scanned |
+
+**Urlaubsplanung moved from refused to validatable**, which is the outcome the whole stage was for. **The planner-agent false positive is gone**, and the answer is better than the plan predicted: not the application question, but exactly one installable target at `frontend` with its own lockfile — so it resolves supported at a directory, which is precisely what the old resolver claimed at `.` with no manifest there. **Jandia-Arena is still refused and the reason is now actionable**: it is not "no package manager detected, so no profile matches" but "there is a buildable application in `frontend` and no lockfile Vibe can install from exactly".
+
+**The application question has zero cases in production.** No repository holds more than one installable target, so `workspace_choice_required` is unreachable and `repository_connections.workspace_root` is null for all four — correctly, since nobody was asked. The screen is proven in a browser and unexercised. That is the honest reading, not a success.
+
+**And the stage's own repository is the one that was not scanned**, which makes Vibe-Business the first real instance of the stale-read notice above — reached by the founder rather than by a fixture.
+
 ## What this does not prove
 
-**Nothing has been dogfooded.** That is the layer this stage exists for and none of the above substitutes for it. Urlaubsplanung should become validatable and is the first real agent run against a non-Next.js repository; `planner-agent` must show the application question or a concrete refusal and **must not provision a VM**; Jandia-Arena decides whether `execution-contract/README.md`'s "no validation profile matches" sentence is repaired or retired.
+**No agent has run.** The scans above are the first half of the dogfood and they answer only what a *resolver* says; nothing has provisioned a VM, prepared a change or validated one against a repository that is not this one. Urlaubsplanung is the run that matters and it is still ahead: it needs Moves and an Action Plan first, because it has neither.
 
-**Every stored snapshot is stale exactly once.** `ANALYZER_VERSION` v5 means `repository_snapshot_stale` blocks admission until each project is re-analyzed, and rule 60 forbids Vibe from starting that itself. Four projects, four founder clicks, before anything runs.
+**Nor is any of it live.** The eight commits sit on `claude/agent-preview-diff-logic-sxj5uc`; `origin/main` is at `5ce16d5`, so the scans ran against a preview deployment of the branch and production still applies the old gate. Nothing is broken by that — a v4 resolver does not read `build`, and `snapshotIsLatest` compares no analyzer versions — but Urlaubsplanung and planner-agent are still refused in the product a customer would use.
 
-**Vite has no dev-server row**, deliberately. Vite ≥ 5.4.12 and Astro 5 refuse requests whose `Host` is not in `server.allowedHosts`, and the health probe reaches the server over loopback — so it *passes* while the customer's public URL answers "Blocked request." Astro ships anyway and is checked in the same dogfood; Vite waits for the answer rather than for an argument.
+**Every stored snapshot is stale exactly once.** `ANALYZER_VERSION` v5 means the contract cannot read a build target until each project is re-analyzed, and rule 60 forbids Vibe from starting that itself. Four projects, four founder clicks — three of which happened, and the fourth is this repository's own.
+
+**Vite has no dev-server row**, deliberately. Vite ≥ 5.4.12 and Astro 5 refuse requests whose `Host` is not in `server.allowedHosts`, and the health probe reaches the server over loopback — so it *passes* while the customer's public URL answers "Blocked request."
+
+The scans made the plan for settling that **impossible as written**. It said: dogfood Urlaubsplanung's preview, then decide. Urlaubsplanung is react + vite, so `previewProfileForFrameworks` returns null and there is no preview to run — the row has to exist before the question can be asked at all. The founder chose to run the agent without a preview first, so the row and its answer are a separate, later piece of work; what this sprint ships is a repository that validates and merges while showing nothing to look at, which is exactly what the copy promises.
 
 **A Vite repository is now agent-eligible with zero deterministic capabilities.** Those remain Next.js-only, so SEO work in such a repository goes to the paid agent rather than to the free generator. Named rather than discovered later.
