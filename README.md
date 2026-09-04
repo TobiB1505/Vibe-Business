@@ -44,7 +44,9 @@ pnpm db:push                # apply migrations to the linked project
 
 `pnpm atlas` writes `.atlas/index.html`: one page describing what this repository
 contains — every module with its size, dependencies, tables, decisions and findings;
-every tuneable limit, price and deadline in one register; and the gap headlines from
+every tuneable limit, price and deadline in one register; a dependency matrix with
+import-cycle detection at both module and file level; every database table against the
+modules that name it; and the gap headlines from
 [docs/ROADMAP.md](docs/ROADMAP.md). It is derived from the code, git and the documents
 on every run and is never committed, so it cannot go stale the way a hand-written
 overview would.
