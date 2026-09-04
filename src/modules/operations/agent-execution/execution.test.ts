@@ -1128,14 +1128,15 @@ describe("§20, §35 — cleanup and settlement", () => {
       userId: USER,
       sourceKind: "purchase",
       credits: creditsToUnits(500),
-      reason: "internal dogfood funding",
+      reason: "test funding",
       idempotencyKey: "fund-1",
     });
 
     const { authorizeOperationCredits } = await import("@/modules/credits/operation-billing");
     const authorized = await authorizeOperationCredits(fakeSupabase(db), {
       projectId: PROJECT,
-      operation: "agent_execution_dogfood",
+      operation: "agent_execution",
+      pricingClass: "standard",
       idempotencyKey: operation.id,
       operationRunId: operation.id,
     });

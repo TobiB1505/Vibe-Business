@@ -121,9 +121,6 @@ export type NovaEntry =
    * screen that showed an estimate beside a button that reserves a ceiling
    * would be showing a figure the founder is not charged, and a run that needs
    * more pauses for their decision rather than spending past it.
-   *
-   * `nonProduction` travels because the internal dogfood policy prices
-   * differently, and §18 asks for a marker that is stated rather than derived.
    */
   | {
       kind: "nova.execution_offer";
@@ -134,7 +131,6 @@ export type NovaEntry =
       memberCount: number;
       maxCredits: CreditUnits;
       pricingClass: ExecutionPricingClass;
-      nonProduction: boolean;
       option: NovaChoiceOption;
     };
 
@@ -374,7 +370,6 @@ export function buildNovaExecutionOffer(params: {
     memberCount: params.memberCount,
     maxCredits: params.economics.budget.maxCredits,
     pricingClass: params.pricingClass,
-    nonProduction: params.economics.nonProduction,
     option: {
       actionId: "nova.start_agent",
       control: meta.control,

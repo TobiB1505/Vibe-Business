@@ -189,7 +189,6 @@ describe("holdAgentExecutionCredits", () => {
       userId: USER,
       operationRunId: "operation_1",
       pricingClass: "standard",
-      nonProduction: true,
     });
 
     expect(held.ok).toBe(true);
@@ -198,12 +197,11 @@ describe("holdAgentExecutionCredits", () => {
     ).toHaveLength(1);
   });
 
-  it("charges the retail class price for a production run, not the dogfood ceiling", async () => {
-    // The two books, kept apart at the one call site that can reach both.
-    // `nonProduction` comes from the resolved economics; deciding it here would
-    // be a second answer to a question that already has one, and getting it
-    // wrong charges a customer out of the internal ceiling or bills a dogfood
-    // run at retail.
+  it("charges the retail class price for the class it was given", async () => {
+    // One book, and the class is what selects the price within it. There used
+    // to be a second — an internal dogfood ceiling this call site could also
+    // reach — and the risk was charging a customer out of it; ADR 0092 removed
+    // the choice rather than guarding it.
     await fund(500);
     db.seed("operation_runs", {
       id: "operation_1",
@@ -221,7 +219,6 @@ describe("holdAgentExecutionCredits", () => {
       userId: USER,
       operationRunId: "operation_1",
       pricingClass: "complex",
-      nonProduction: false,
       now: new Date("2026-09-01T00:00:00.000Z"),
     });
 
@@ -237,7 +234,6 @@ describe("holdAgentExecutionCredits", () => {
       userId: OTHER_USER,
       operationRunId: "operation_1",
       pricingClass: "standard",
-      nonProduction: true,
     });
 
     expect(held.ok).toBe(false);
@@ -258,9 +254,8 @@ describe("claimAgentExecutionRunRow", () => {
       model: "claude-sonnet-5",
       codingAgentPolicyVersion: "coding-agent-policy-v1",
       promptCompilerVersion: "agent-prompt-v1",
-      budgetPolicyVersion: "core4-dogfood-budget-v1",
+      budgetPolicyVersion: "launch-v1-budget",
       executionPolicyVersion: "execution-policy-v1",
-      nonProductionEconomics: true,
       baseSha: "c".repeat(40),
       creditReservationId: null,
       executionOrigin: "planner" as const,

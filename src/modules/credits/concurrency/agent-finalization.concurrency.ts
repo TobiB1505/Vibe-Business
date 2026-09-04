@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { finishAgentExecutionStep } from "@/modules/operations/agent-execution/execution";
 import { expireStaleAgentExecution } from "@/modules/operations/agent-execution/server-writes";
 import { grantCreditLot } from "../grants";
-import { internalChargeFor } from "../internal";
+import { retailChargeFor } from "../retail";
 import { creditUnits } from "../units";
 import { getReservation } from "../store";
 import {
@@ -62,7 +62,7 @@ import {
 /**
  * Funded for the whole suite, derived rather than guessed.
  *
- * Every iteration takes one `agent_execution_dogfood` hold, and a hold that is
+ * Every iteration takes one `agent_execution` hold, and a hold that is
  * not released is unavailable for good — a settled one is spent, and an open
  * one is still reserved. So the account has to cover the worst case where no
  * iteration returns its hold, and that total moves whenever `ITERATIONS` does.
@@ -85,11 +85,11 @@ import {
  * failing on rather than hiding under headroom.
  */
 const SCENARIOS = 3;
-const HOLD =
-  internalChargeFor("agent_execution_dogfood")?.creditUnits ??
-  (() => {
-    throw new Error("no internal price for agent_execution_dogfood");
-  })();
+const HOLD = (() => {
+  const charge = retailChargeFor("agent_execution", new Date(), { pricingClass: "standard" });
+  if (charge.kind !== "charge") throw new Error("no retail price for agent_execution");
+  return charge.creditUnits;
+})();
 const FUNDING = creditUnits(HOLD * SCENARIOS * ITERATIONS);
 
 /** Long before any deadline this suite computes, so staleness is unambiguous. */

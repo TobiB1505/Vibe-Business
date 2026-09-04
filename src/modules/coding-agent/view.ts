@@ -5,7 +5,7 @@ import {
 import type { ExecutionAdmission } from "@/modules/execution-contract/schema";
 import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
-import type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
+import type { AgentStartRefusalDetail, AgentStepReason } from "./start-refusal";
 import type { BuildChainBoundaryReason } from "@/modules/execution-contract/chain";
 import type { RunForecast, RunForecastDriver } from "./run-forecast";
 
@@ -54,7 +54,7 @@ export const AGENT_START_REFUSAL_LABELS: Record<AgentStartRefusal, string> = {
  * the kind of change Vibe can attempt", on a screen that had just said the
  * opposite in the sentence above it.
  */
-export const DOGFOOD_START_REFUSAL_LABELS = {
+export const AGENT_START_FAILURE_LABELS = {
   spec_not_persisted: "Vibe couldn't record what this run would do, so it didn't start one.",
   project_not_found: "That project couldn't be found.",
 } as const;
@@ -67,8 +67,7 @@ export const DOGFOOD_START_REFUSAL_LABELS = {
  * `preflight_refused` have their own, better sentences below and only fall back
  * here when the finer answer was not established.
  */
-export const DOGFOOD_STEP_REASON_LABELS: Record<DogfoodStepReason, string> = {
-  not_dogfood_eligible: "The coding agent isn't turned on for this project.",
+export const AGENT_STEP_REASON_LABELS: Record<AgentStepReason, string> = {
   no_action_plan: "There's no finished plan for Vibe to work from yet.",
   step_not_found: "That step isn't in your current plan any more.",
   repository_not_connected: "No code repository is connected to this project.",
@@ -116,7 +115,7 @@ export function startRefusalLabel(detail: AgentStartRefusalDetail): string {
     return EXECUTION_REASON_LABELS[detail.resolutionReason];
   }
 
-  return DOGFOOD_STEP_REASON_LABELS[detail.reason];
+  return AGENT_STEP_REASON_LABELS[detail.reason];
 }
 
 /** The one way forward a refused start can offer, when there is one. */

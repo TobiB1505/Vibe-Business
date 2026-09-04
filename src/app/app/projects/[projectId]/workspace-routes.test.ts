@@ -40,11 +40,10 @@ function layoutSource(): string {
  * ## Why this recurses
  *
  * It used to walk exactly one directory level, which was true of the route tree
- * when it was written and stopped being true twice over. `agent-dogfood/[stepKey]`
- * has always been a second level and has never been covered by a single
- * assertion below — it authorizes itself correctly, and nothing here knew that.
- * A nested route is not a special case; it is the shape a route tree takes as
- * soon as one section owns a child.
+ * when it was written and stopped being true twice over. The route that proved
+ * it — `agent-dogfood/[stepKey]` — has since been deleted (ADR 0092), and the
+ * recursion stays because a nested route is not a special case; it is the shape
+ * a route tree takes as soon as one section owns a child.
  *
  * The failure mode this closes is the quiet one: a route that is *not* walked
  * passes every rule in this file, because a rule applied to a list that does
@@ -80,9 +79,9 @@ describe("the walk itself", () => {
     const names = routeFiles().map((file) => file.name);
 
     expect(names).toContain("page.tsx");
-    // The route that proves recursion: it has always existed one level down and
-    // was never walked before.
-    expect(names).toContain("agent-dogfood/[stepKey]/page.tsx");
+    // Recursion, asserted without naming one route: a single-level walk would
+    // find no path with a separator in it.
+    expect(names.some((name) => name.includes("/"))).toBe(true);
     expect(names.length).toBeGreaterThanOrEqual(PROJECT_SECTIONS.length);
   });
 });

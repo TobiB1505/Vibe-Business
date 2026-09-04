@@ -66,7 +66,8 @@ const { fakeAgentSpec } = await import("@/modules/coding-agent/test-support");
 const USER = "user_1";
 const PROJECT = "project_1";
 const BASE_SHA = "1f4b0c9d7a2e5f8b3c6d9e0a1b2c3d4e5f607182";
-const HELD = 100;
+/** `agent_execution` at the `standard` class, under `launch-v1`. */
+const HELD = 200;
 
 /** Two hours before the fixture clock, so the staleness deadline is long past. */
 const LONG_AGO = "2026-08-18T00:00:00.000Z";
@@ -119,13 +120,14 @@ async function seedRunningExecution(runStatus = "running") {
     userId: USER,
     sourceKind: "purchase",
     credits: creditsToUnits(500),
-    reason: "internal dogfood funding",
+    reason: "test funding",
     idempotencyKey: "fund-1",
   });
 
   const authorized = await authorizeOperationCredits(supabase(), {
     projectId: PROJECT,
-    operation: "agent_execution_dogfood",
+    operation: "agent_execution",
+    pricingClass: "standard",
     idempotencyKey: String(operation.id),
     operationRunId: String(operation.id),
   });

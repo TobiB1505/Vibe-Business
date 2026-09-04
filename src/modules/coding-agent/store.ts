@@ -367,7 +367,6 @@ export async function claimAgentExecutionRun(
     promptCompilerVersion: string;
     budgetPolicyVersion: string;
     executionPolicyVersion: string;
-    nonProductionEconomics: boolean;
     baseSha: string;
     creditReservationId: string | null;
     /**
@@ -397,7 +396,16 @@ export async function claimAgentExecutionRun(
       prompt_compiler_version: params.promptCompilerVersion,
       budget_policy_version: params.budgetPolicyVersion,
       execution_policy_version: params.executionPolicyVersion,
-      non_production_economics: params.nonProductionEconomics,
+      /*
+       * Always false, and the column stays.
+       *
+       * Sixteen runs settled against the internal dogfood ceiling before
+       * `launch-v1` priced the agent, and this is how those rows say so. There
+       * is no second book any more (ADR 0092), so nothing can write `true`
+       * again — dropping the column would delete the only record that the ones
+       * already written mean something different from the ones written now.
+       */
+      non_production_economics: false,
       base_sha: params.baseSha,
       credit_reservation_id: params.creditReservationId,
       execution_origin: params.executionOrigin,

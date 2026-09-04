@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { startAgentExecution } from "@/modules/coding-agent/service";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import { grantCreditLot } from "../grants";
-import { internalChargeFor } from "../internal";
+import { retailChargeFor } from "../retail";
 import { creditUnits } from "../units";
 import { findOperationReservation } from "../operation-billing";
 import {
@@ -79,11 +79,11 @@ import {
  * why this is the exact worst case rather than a padded one.
  */
 const SCENARIOS = 2;
-const HOLD =
-  internalChargeFor("agent_execution_dogfood")?.creditUnits ??
-  (() => {
-    throw new Error("no internal price for agent_execution_dogfood");
-  })();
+const HOLD = (() => {
+  const charge = retailChargeFor("agent_execution", new Date(), { pricingClass: "standard" });
+  if (charge.kind !== "charge") throw new Error("no retail price for agent_execution");
+  return charge.creditUnits;
+})();
 const FUNDING = creditUnits(HOLD * SCENARIOS * ITERATIONS);
 
 const configured = isConfigured();
