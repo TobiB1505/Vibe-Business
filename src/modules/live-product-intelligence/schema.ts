@@ -45,6 +45,12 @@ export const LIVE_PRODUCT_INTELLIGENCE_SCHEMA_VERSION = "live-product-intelligen
  * reader — is a new analyzer, and shipping it without saying so is how a fixed
  * bug keeps being served. v4 covers that fix and the pricing-period reader
  * corrected alongside it.
+ *
+ * Which is why remembering is no longer the mechanism:
+ * `src/lib/versions/analyzer-versions.test.ts` hashes the normalized source of
+ * every detector a snapshot's content depends on and pins it here. Editing one
+ * fails that test until this constant is bumped, or until the new hash is
+ * recorded with a stated reason why the change cannot alter a stored snapshot.
  */
 export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v4" as const;
 
