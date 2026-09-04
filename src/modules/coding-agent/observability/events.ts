@@ -163,6 +163,19 @@ export const MAX_EVENT_STRING = 240;
 /** How many keys one event's metadata may carry. */
 export const MAX_METADATA_KEYS = 16;
 
+/**
+ * How many strings one metadata array may carry.
+ *
+ * Arrays exist here for exactly one reason: a list of repository paths is the
+ * difference between knowing that Vibe's briefing missed and knowing *what* it
+ * missed. That makes them the most repository-controlled value in the table, so
+ * they are bounded twice — every element through `boundString` like any other
+ * string, and the element count here. `MAX_METADATA_BYTES` still applies to the
+ * whole payload afterwards, so a long array simply loses its key rather than
+ * the event losing its write.
+ */
+export const MAX_METADATA_ARRAY = 40;
+
 /** How large one event's serialized metadata may be. */
 export const MAX_METADATA_BYTES = 4096;
 
@@ -205,7 +218,10 @@ export function isAdmissibleSequence(sequence: number): boolean {
   );
 }
 
-export type ExecutionEventMetadata = Record<string, string | number | boolean | null>;
+export type ExecutionEventMetadata = Record<
+  string,
+  string | number | boolean | null | readonly string[]
+>;
 
 export type ExecutionEventInput = {
   /** Monotonic within a run. The idempotency key for a re-entered poll. */
@@ -296,6 +312,11 @@ function boundString(value: string): string {
  * Every string bounded and redacted, every number finite, the key count capped,
  * and the whole payload capped again by serialized size — because sixteen keys
  * of two hundred characters is still four kilobytes a repository chose.
+ *
+ * A value of any other shape becomes `null` rather than being stored as it
+ * arrived. That mattered when arrays were added: before they were handled,
+ * a list of paths passed in here was silently written as `null` — the write
+ * succeeded, the event existed, and the thing it was added to record was gone.
  */
 export function boundEvent(input: ExecutionEventInput): StoredExecutionEvent {
   const metadata: ExecutionEventMetadata = {};
@@ -309,7 +330,15 @@ export function boundEvent(input: ExecutionEventInput): StoredExecutionEvent {
     if (typeof value === "string") metadata[safeKey] = boundString(value);
     else if (typeof value === "number") metadata[safeKey] = Number.isFinite(value) ? value : 0;
     else if (typeof value === "boolean") metadata[safeKey] = value;
-    else metadata[safeKey] = null;
+    // Every element through the same redaction and bound a lone string gets,
+    // and the count capped: an array is a repository-controlled value arriving
+    // in bulk, which is the shape a per-string rule quietly stops covering.
+    else if (Array.isArray(value)) {
+      metadata[safeKey] = value
+        .filter((entry): entry is string => typeof entry === "string")
+        .slice(0, MAX_METADATA_ARRAY)
+        .map(boundString);
+    } else metadata[safeKey] = null;
 
     if (Buffer.byteLength(JSON.stringify(metadata), "utf8") > MAX_METADATA_BYTES) {
       delete metadata[safeKey];
