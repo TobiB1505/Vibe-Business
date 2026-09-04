@@ -261,6 +261,27 @@ describe("what a component reads", () => {
   });
 
   /**
+   * The page this sits on is the founder's audit; the sentence above it is a
+   * rephrasing. A screen that failed because a nicety could not be looked up
+   * would have made the nicety load-bearing.
+   */
+  it("shows the template rather than throwing when the read fails", async () => {
+    db.failNextReadWith = {
+      table: "nova_voice_messages",
+      code: "42P01",
+      message: 'relation "nova_voice_messages" does not exist',
+    };
+
+    const read = await readNovaAuditVoice(fakeSupabase(db, recorder), {
+      projectId: PROJECT,
+      entry: entry(),
+    });
+
+    expect(read.message).toBe(buildNovaAuditTemplate(entry()));
+    expect(read).toMatchObject({ source: "template", resolved: false });
+  });
+
+  /**
    * The pairing that keeps a component honest: it cannot look up one message
    * and fall back to another's words, because both come from one entry.
    */

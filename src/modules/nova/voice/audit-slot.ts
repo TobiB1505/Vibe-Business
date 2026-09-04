@@ -133,20 +133,51 @@ export function novaAuditVoiceIdentity(projectId: string, entry: NovaAuditEntry)
 }
 
 /**
- * What to show above the audit. **Never calls a provider.**
+ * What to show above the audit. **Never calls a provider, and never throws.**
  *
  * The one function a component needs, and it is a read: it resolves the stored
  * message if the durable step produced one, and the template otherwise. Both
  * halves of the pair — the identity and the template — come from the same
  * entry, so a component cannot accidentally look up one message and fall back
  * to a different one's words.
+ *
+ * ## Why a failed lookup is not an error here
+ *
+ * Because the page it sits on is the founder's audit, and the sentence above
+ * it is a rephrasing. A screen that returned 500 because a nicety could not be
+ * looked up would have made the nicety load-bearing — the exact thing every
+ * other part of this tier is built to prevent. A table that does not exist
+ * yet, a policy that refuses, a network that drops: all of them resolve to the
+ * template, which is what Vibe would have said anyway.
+ *
+ * `readNovaVoiceMessage` still throws, and should: it is the primitive, and
+ * inside `ensureNovaVoiceMessage` a throw is caught by the boundary that owns
+ * the spend. This is the render-facing wrapper, and the render has nowhere to
+ * put an exception except on the founder's screen.
  */
 export async function readNovaAuditVoice(
   supabase: SupabaseClient,
   params: { projectId: string; entry: NovaAuditEntry },
 ): Promise<NovaVoiceRead> {
-  return readNovaVoiceMessage(supabase, {
-    identity: novaAuditVoiceIdentity(params.projectId, params.entry),
-    template: buildNovaAuditTemplate(params.entry),
-  });
+  const template = buildNovaAuditTemplate(params.entry);
+
+  try {
+    return await readNovaVoiceMessage(supabase, {
+      identity: novaAuditVoiceIdentity(params.projectId, params.entry),
+      template,
+    });
+  } catch (error) {
+    console.error("[nova-voice] could not read the stored audit message", {
+      projectId: params.projectId,
+      message: error instanceof Error ? error.message : "unknown",
+    });
+
+    return {
+      message: template,
+      source: "template",
+      fallbackReason: null,
+      resolved: false,
+      attempt: null,
+    };
+  }
 }

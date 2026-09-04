@@ -11,10 +11,7 @@ import {
   auditBlockedByCredits,
   resolveAuditCreditGate,
 } from "@/modules/business-audit/entitlement";
-import {
-  getPausedAudit,
-  getProjectAuditReadings,
-} from "@/modules/business-audit/store";
+import { getPausedAudit, getProjectAuditReadings } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
@@ -27,17 +24,16 @@ import { buildDeepScanViewModel } from "@/modules/authenticated-product-intellig
 import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
 import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/lineage";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { buildNovaAuditEntry } from "@/modules/nova/feed";
+import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { AuditCreditNotice } from "../audit-credit-notice";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditOverview } from "../audit-overview";
-import {
-  AuditAnalyzing,
-  AuditPreparing,
-  AuditWaitingHeader,
-} from "../audit-lifecycle";
+import { NovaAuditVoice } from "../nova-audit-voice";
+import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../audit-lifecycle";
 import { NeedsUserPanel } from "../needs-user-panel";
 import { RunAuditButton } from "../run-audit-button";
 
@@ -164,7 +160,9 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           ? [[key, { title: move.title, impact: move.impact, effort: move.effort }] as const]
           : [];
       })
-      .filter(([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index),
+      .filter(
+        ([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index,
+      ),
   );
 
   const usedSignedInEvidence =
@@ -179,6 +177,29 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
         usedSignedInEvidence,
       })
     : null;
+
+  /*
+   * What Nova says above the audit, if she has said anything about *this* one.
+   *
+   * A read and nothing else: `readNovaAuditVoice` takes no provider, and the
+   * message it resolves was written by the durable step that completed the
+   * audit (ADR 0084). A render that could generate would be the per-visit
+   * spend §M of the Nova audit refuses — so the only thing this page can do is
+   * look up an identity and find a sentence or not.
+   *
+   * The identity is a hash of the `nova.audit` entry, and this page builds
+   * that entry from the *full* view — history, moves, a scan timestamp —
+   * where the durable step built it from a bare one. They agree because none
+   * of those inputs reach the five fields `buildNovaAuditEntry` reads, which
+   * `audit-slot.test.ts` asserts against the real builder rather than assuming.
+   */
+  const novaAuditVoice =
+    businessBrainView && latestAudit?.result?.synthesis
+      ? await readNovaAuditVoice(supabase, {
+          projectId,
+          entry: buildNovaAuditEntry(businessBrainView, latestAudit.result.synthesis),
+        })
+      : null;
 
   const deepScanModel = deepScanAccess
     ? buildDeepScanViewModel({
@@ -290,9 +311,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
         />
       }
       headerStatus={
-        creditGate.kind === "not_applicable" ? undefined : (
-          <AuditCreditNotice gate={creditGate} />
-        )
+        creditGate.kind === "not_applicable" ? undefined : <AuditCreditNotice gate={creditGate} />
       }
     >
       <div className="flex flex-col gap-4">
@@ -334,8 +353,8 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
 
         {systemRefresh && (
           <Notice tone="info" label="Vibe has improved">
-            Vibe has since improved how it reads a business, so this check is out of date.
-            Updating it is on us — it won&rsquo;t use up anything of yours.
+            Vibe has since improved how it reads a business, so this check is out of date. Updating
+            it is on us — it won&rsquo;t use up anything of yours.
           </Notice>
         )}
 
@@ -348,6 +367,15 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
         */}
         {auditStage === "preparing" && <AuditPreparing />}
         {auditStage === "analyzing" && <AuditAnalyzing />}
+
+        {/*
+          Nova speaks only about an audit she was actually asked about.
+          `resolved` is false for every audit that completed before this
+          existed, and for every one completed with the switch off — and for
+          those the page is exactly what it was, rather than carrying a
+          sentence about a moment that never happened.
+        */}
+        {novaAuditVoice?.resolved && <NovaAuditVoice read={novaAuditVoice} />}
 
         {businessBrainView ? (
           <AuditOverview

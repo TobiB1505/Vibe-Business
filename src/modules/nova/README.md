@@ -252,9 +252,27 @@ than a collision the ledger absorbs, which matters because
 operation run's id.
 
 It is off until `NOVA_VOICE_ENABLED=1`, and `PAID_OPERATIONS_DISABLED=1` stops
-it like any other paid inference. A component reads it with one call —
-`readNovaAuditVoice(supabase, { projectId, entry })` — which resolves the
-stored sentence or the template, and takes no provider.
+it like any other paid inference.
+
+**Business Health displays it**, through `NovaAuditVoice` above `AuditOverview`.
+The page reads with one call — `readNovaAuditVoice(supabase, { projectId, entry })`
+— which takes no provider, never throws, and resolves the stored sentence or
+the template. It renders only when `resolved` is true, so an audit Nova was
+never asked about leaves the page exactly as it was rather than carrying a
+sentence about a moment that never happened.
+
+The page builds the entry from the _full_ Business Brain view — history, moves,
+a scan timestamp — where the durable step built it from a bare one. They agree
+because none of those inputs reach the five fields `buildNovaAuditEntry` reads,
+which `audit-slot.test.ts` asserts against the real builder. That agreement is
+what makes the identity computed at render match the one written at generation.
+
+The component chooses between nothing: it renders `read.message` and exposes
+`data-nova-voice-source` so a test can prove which path ran. Branching on the
+source would eventually treat one as better than the other, and the tier's
+claim is that a founder who only sees the template has lost a rephrasing and
+nothing else. `nova-audit-voice.test.ts` holds the render path to that, and to
+never importing the generator, a provider, or a service-role client.
 
 **No other slot is wired.** `product_reveal`, `move_recommendation`,
 `execution_result` and `outcome_result` each need their own payload and their
