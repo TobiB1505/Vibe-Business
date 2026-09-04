@@ -18,6 +18,7 @@ export function AgentReadyStage({
   liveUrl,
   caption,
   startAction,
+  notice,
   creditEstimate,
   forecastNotes,
 }: {
@@ -28,6 +29,19 @@ export function AgentReadyStage({
   caption: string;
   /** Canonical server-backed start, present only when policy exposes it. */
   startAction?: React.ReactNode;
+  /**
+   * A refusal that is a question, rendered beside the hero rather than inside
+   * the call to action.
+   *
+   * Separate from `startAction` because `AgentStartCta` is the *control*
+   * treatment: it clips its child to `rounded-full`, runs a highlight sweep
+   * across it and captions it with a lock line about what happens "before
+   * starting". Its own docblock says the sweep must never wrap something that
+   * cannot start — and three notices had been passed through it anyway, which
+   * clipped each one into an ellipse and cut its own sentence in half. Nobody
+   * saw it until a founder reached the first of those states in production.
+   */
+  notice?: React.ReactNode;
   /** Formatted server-owned ceiling for the exact run being offered. */
   creditEstimate?: string | null;
   /**
@@ -84,6 +98,7 @@ export function AgentReadyStage({
             caption={caption}
             size="hero"
           />
+          {notice}
           {(startAction !== undefined || task === null) && (
             <AgentStartCta
               creditEstimate={startAction ? creditEstimate : null}

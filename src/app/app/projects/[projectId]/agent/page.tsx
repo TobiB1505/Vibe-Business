@@ -54,7 +54,7 @@ import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions"
 import { AgentStartAction } from "./agent-start-action";
 import { isFounderAttestable } from "@/modules/action-plans/completion";
 import { firstActionableStep } from "@/modules/action-plans/sequence";
-import { EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
+import { EXECUTION_REASON_LABELS, REFUSAL_SHAPES } from "@/modules/execution-contract/view";
 import { AgentPlanNextNotice } from "./agent-plan-next-notice";
 import { AgentStaleReadNotice } from "./agent-stale-read-notice";
 import { AgentWorkspaceChoice } from "./agent-workspace-choice";
@@ -614,7 +614,9 @@ async function AgentWorkspaceBody({
                 planHref={planHref}
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
-                startAction={
+                /* Three refusals that are questions, and none of them starts
+                   anything — so none goes through the control treatment. */
+                notice={
                   staleRepositoryRead ? (
                     <AgentStaleReadNotice
                       /* Where a scan is started, anchored at the control that
@@ -633,7 +635,25 @@ async function AgentWorkspaceBody({
                         />
                       )}
                     />
-                  ) : agenticStep ? (
+                  ) : !agenticStep && planNextStep && planNextResolution ? (
+                    <AgentPlanNextNotice
+                      stepOrder={planNextStep.order}
+                      stepTitle={planNextStep.title}
+                      reasonLabel={EXECUTION_REASON_LABELS[planNextResolution.reason]}
+                      planHref={planHref}
+                      /* An attestable step is the founder's to close whatever
+                         the resolver said about it, so that answer wins over
+                         the reason's own shape (ADR 0090). */
+                      shape={
+                        isFounderAttestable(planNextStep)
+                          ? "capability"
+                          : REFUSAL_SHAPES[planNextResolution.reason]
+                      }
+                    />
+                  ) : undefined
+                }
+                startAction={
+                  agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0 ? (
                     <div className="flex w-full flex-col gap-2">
                       {/*
                         The chain is offered, never imposed. Two controls rather
@@ -677,14 +697,6 @@ async function AgentWorkspaceBody({
                         </p>
                       )}
                     </div>
-                  ) : planNextStep && planNextResolution ? (
-                    <AgentPlanNextNotice
-                      stepOrder={planNextStep.order}
-                      stepTitle={planNextStep.title}
-                      reasonLabel={EXECUTION_REASON_LABELS[planNextResolution.reason]}
-                      planHref={planHref}
-                      canConfirm={isFounderAttestable(planNextStep)}
-                    />
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
