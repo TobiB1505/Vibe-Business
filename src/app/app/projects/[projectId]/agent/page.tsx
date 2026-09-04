@@ -59,6 +59,7 @@ import { resolveProjectValidationTarget } from "@/modules/validation/workspace-s
 import { resolveBuildChain } from "@/modules/execution-contract/chain";
 import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
+import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 import type { Metadata } from "next";
@@ -289,7 +290,7 @@ async function AgentWorkspaceBody({
   /* The focus answer and start discoverability are independent. Keep them in
      one parallel read window so restoring the real start control does not
      reintroduce the old serial Agent-page latency. */
-  const [focusAction, agentRoutes] = await Promise.all([
+  const [focusAction, agentRoutes, measuredRuns] = await Promise.all([
     focusedMove
       ? (async () => {
           const [summaries, activeOperation, failedOperation] = await Promise.all(
@@ -326,6 +327,19 @@ async function AgentWorkspaceBody({
     !agentWorking
       ? resolveDogfoodPlanRoutes(supabase, { projectId, userId })
       : Promise.resolve(null),
+    /*
+     * The runs the forecast reasons from, read once and only when a forecast
+     * can exist.
+     *
+     * Inside the same window as everything else, so the sentence under the Run
+     * button costs no additional latency. Bounded and `.in()`-joined rather
+     * than walked, so it does not grow with how much a founder has used the
+     * product — the constraint `execution/workspace.test.ts` enforces one
+     * screen over.
+     */
+    readyTask !== null && !agentWorking
+      ? listMeasuredRunObservations(supabase)
+      : Promise.resolve([]),
   ]);
 
   const focus = requestedTaskMatchesRun
@@ -478,6 +492,10 @@ async function AgentWorkspaceBody({
           step: agenticStep,
           riskClass: agenticResolution.riskClass,
           snapshot: agentRoutes?.available ? agentRoutes.snapshot : null,
+          // This account's completed runs, raw. The forecast adds Vibe's own
+          // published ones and does the arithmetic — nothing that costs
+          // nanodollars is assembled on a page.
+          observations: measuredRuns,
         })
       : null;
 
