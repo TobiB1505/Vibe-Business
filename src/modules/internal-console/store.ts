@@ -15,7 +15,7 @@ import { FEED_LIMIT, SAMPLE_LIMIT } from "./schema";
 import type { OnboardingRow, OperationRunRow, ToolEventRow, UsageRow } from "./shape";
 
 /**
- * The console's reads. **This is the reviewed rule 53 exception** ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md) §2).
+ * The console's reads. **This is the reviewed rule 53 exception** ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) §2).
  *
  * ## Why there is no ownership filter, and why that is not the hole it looks like
  *

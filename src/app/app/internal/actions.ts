@@ -8,7 +8,7 @@ import {
 import { loadConsoleSnapshot } from "@/modules/internal-console/service";
 
 /**
- * One refresh of the operator console ([ADR 0084](../../../../docs/decisions/0084-the-internal-operator-console.md)).
+ * One refresh of the operator console ([ADR 0088](../../../../docs/decisions/0088-the-internal-operator-console.md)).
  *
  * ## Why the action re-authorizes rather than trusting the page
  *

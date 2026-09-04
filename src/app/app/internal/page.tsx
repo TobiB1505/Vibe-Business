@@ -3,7 +3,7 @@ import { loadConsoleSnapshot } from "@/modules/internal-console/service";
 import { OperatorConsole } from "./console";
 
 /**
- * The internal operator console ([ADR 0084](../../../../docs/decisions/0084-the-internal-operator-console.md)).
+ * The internal operator console ([ADR 0088](../../../../docs/decisions/0088-the-internal-operator-console.md)).
  *
  * ## Why `notFound()` rather than a refusal
  *

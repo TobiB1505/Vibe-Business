@@ -1,5 +1,5 @@
 /**
- * What the operator console is allowed to read, column by column ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md) §4).
+ * What the operator console is allowed to read, column by column ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) §4).
  *
  * ## Why this file exists rather than a `select("*")`
  *

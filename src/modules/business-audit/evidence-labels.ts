@@ -1,4 +1,4 @@
-import { EVIDENCE_PACK_V4_VERSION } from "./evidence-v3";
+import { EVIDENCE_PACK_V4_VERSION, EVIDENCE_PACK_V5_VERSION } from "./evidence-v3";
 import { AUTHENTICATED_SURFACE_LABELS } from "@/modules/authenticated-product-intelligence/schema";
 import type { AuthenticatedSurfaceId } from "@/modules/authenticated-product-intelligence/schema";
 import { PRODUCT_SURFACE_LABELS, SEO_LABELS } from "@/modules/live-product-intelligence/human-view";
@@ -261,9 +261,10 @@ function curated(source: string, detail: string): EvidenceIdDescription {
  */
 function presentSuffix(packVersion: string | null, where: "code" | "live site"): string {
   const preposition = where === "code" ? "in your code" : "on your live site";
-  return packVersion === EVIDENCE_PACK_V4_VERSION
-    ? `, ${preposition}`
-    : `, checked ${preposition}`;
+  const polarised =
+    packVersion === EVIDENCE_PACK_V4_VERSION || packVersion === EVIDENCE_PACK_V5_VERSION;
+
+  return polarised ? `, ${preposition}` : `, checked ${preposition}`;
 }
 
 function describeFamily(

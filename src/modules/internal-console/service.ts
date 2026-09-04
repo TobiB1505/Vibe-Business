@@ -26,7 +26,7 @@ import {
 } from "./store";
 
 /**
- * The console's one entry point ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md)).
+ * The console's one entry point ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md)).
  *
  * ## Authorization happens here, on every call
  *

@@ -264,11 +264,163 @@ export const AGENTIC_EXECUTION_CONFIG: AgentModelConfig = {
   effort: "high",
 };
 
+/**
+ * Nova's voice (Nova Slice 9).
+ *
+ * The cheapest operation in this file, and the only one that is allowed to be:
+ * it produces no conclusion. Every fact it may state has already been decided
+ * — by the audit, by the planner, by the resolver, or by deterministic code —
+ * and this call chooses the sentences that carry them to a founder. A
+ * validation failure, a provider outage or a disabled kill switch all resolve
+ * to the slot's template, so the product works with this operation switched
+ * off entirely.
+ *
+ * **Haiku 4.5, and the same model string Product Understanding already uses.**
+ * Not `claude-haiku-4-5`: `pricing.ts` keys its effective-dated rate on
+ * `claude-haiku-4-5-20251001`, and a model id that resolves to no rate makes
+ * the call unpriceable — which is the one thing an operation whose whole
+ * argument is cost may not be.
+ *
+ * `reasoning: { mode: "none" }` is a fact about the model before it is a
+ * preference: Haiku 4.5 rejects a request carrying `thinking` or `effort`
+ * outright, as `PRODUCT_UNDERSTANDING_CONFIG` records having learned the hard
+ * way. The task does not want them either — the judgement was made upstream.
+ *
+ * Budgets are the smallest in this file. Input is a bounded payload of a few
+ * hundred tokens plus this prompt; output is at most three short paragraphs,
+ * with `MAX_NOVA_MESSAGE_CHARS` (700) as the domain ceiling and this as the
+ * transport one. `timeoutMs` is set for a founder waiting on a screen rather
+ * than for a durable step: a voice that has not arrived in ten seconds should
+ * lose to the template, because the template was always going to be shown
+ * first.
+ */
+export const NOVA_PRESENTATION_CONFIG: OperationConfig = {
+  operation: "nova_presentation",
+  /*
+   * **Sonnet 5, and the reason is measured rather than argued.**
+   *
+   * This config named Haiku 4.5 first, on the reasoning that rephrasing
+   * already-decided facts is light work. The eval disagreed, twice, over 46
+   * cases judged by Opus 5 under `nova-voice-prompt-v3`:
+   *
+   *   criterion          Haiku 4.5   Sonnet 5
+   *   grounded              41%        72%
+   *   no_invention          39%        78%
+   *   calibrated            85%        96%
+   *   sounds_human          85%        85%
+   *   voice (mean)          74%        88%
+   *
+   * `grounded` and `no_invention` are the pair the whole layer rests on, and
+   * the gap on them — 31 and 39 points, against a ~15-point noise floor at
+   * this sample size — is the finding. Haiku wrote fluent, well-shaped,
+   * correctly-numbered sentences that invented the *reasons*: "that opacity
+   * tends to kill conversions", "straightforward to fix", "I looked at your
+   * conversion path". Two prompt revisions moved that and did not close it.
+   *
+   * The premise the choice was made on still holds, which is why the decision
+   * is comfortable: at a measured 1,435 input and 157 output tokens per
+   * message this costs **$0.0044** a message against Haiku's $0.0014 — about
+   * three cents per founder journey either way, next to $0.1965 for one audit.
+   * Cheap was never the constraint; truthful was.
+   *
+   * `reasoning: { mode: "none" }` is kept. Sonnet 5 accepts adaptive thinking,
+   * and the eval deliberately did not give it any: if avoiding invention
+   * needed reasoning tokens, that would itself have been the finding. It did
+   * not, and paying for thinking on a rephrasing task has no argument behind
+   * it yet.
+   */
+  model: "claude-sonnet-5",
+  reasoning: { mode: "none" },
+  maxOutputTokens: 600,
+  maxInputTokens: 4_000,
+  /* Measured: 4.4s average across 46 messages, against Haiku's 1.8s. */
+  timeoutMs: 20_000,
+};
+/**
+ * What the shipping voice was measured against.
+ *
+ * Not a product config: `NOVA_PRESENTATION_CONFIG` above is what would ship,
+ * and this is kept only so the comparison behind it stays runnable. Selected
+ * by `NOVA_VOICE=candidate` in the eval probe.
+ *
+ * It was the first choice, and it lost on the two criteria that matter — see
+ * the table above. Kept rather than deleted because a decision whose losing
+ * arm cannot be re-run is a decision nobody can check, and because the next
+ * Haiku generation is exactly the thing that should be re-measured here rather
+ * than assumed.
+ */
+export const NOVA_PRESENTATION_CANDIDATE_CONFIG: OperationConfig = {
+  operation: "nova_presentation",
+  model: "claude-haiku-4-5-20251001",
+  reasoning: { mode: "none" },
+  maxOutputTokens: 600,
+  maxInputTokens: 4_000,
+  timeoutMs: 10_000,
+};
+/**
+ * The two judges that grade Nova's voice, and why there are two.
+ *
+ * Neither is a product operation. They are measuring instruments, run only by
+ * `nova-voice.probe.ts`; nothing under `src/app` can reach them and no usage
+ * event is written for them. They live here because [rule 46](../../../CLAUDE.md)
+ * is about *where a model may be named*, not about which callers are paid — a
+ * probe that hard-coded a model string would be the same defect as a route
+ * that did.
+ *
+ * **Gold judge — Opus 5.** Used for the decision the ADR will rest on and for
+ * periodic recalibration of the cheaper one. The criterion that decides
+ * whether Nova is safe is also the subtlest: *did it invent a recommendation
+ * the payload did not carry?* A weaker judge passes that case, which is
+ * exactly the failure the eval exists to catch.
+ *
+ * **Regression judge — Sonnet 5.** Used per PR, where the question is only
+ * whether a prompt edit moved a number that Opus already established. Cheap
+ * enough to run often; calibrated against the gold judge rather than trusted
+ * on its own.
+ *
+ * Neither is Haiku: a model must never be its own judge, and the model under
+ * test is Haiku.
+ */
+export type EvalJudgeConfig = {
+  model: string;
+  reasoning: AIReasoning;
+  maxOutputTokens: number;
+  maxInputTokens: number;
+  timeoutMs: number;
+};
+
+export const NOVA_VOICE_GOLD_JUDGE_CONFIG: EvalJudgeConfig = {
+  model: "claude-opus-5",
+  reasoning: { mode: "adaptive", effort: "high" },
+  /*
+   * Well above the verdict's own size, because reasoning counts toward this
+   * ceiling too and truncating a finished judgement throws away everything
+   * spent reaching it — the lesson the audit's own ceiling records.
+   *
+   * The verdict is six booleans and six sentences, perhaps 400 tokens. The
+   * rest is thinking, which at `high` effort is the larger half and is billed
+   * at the output rate. A ceiling costs nothing until it is used; what
+   * controls the cost here is `effort`, and that is set deliberately.
+   */
+  maxOutputTokens: 8_000,
+  maxInputTokens: 8_000,
+  timeoutMs: 120_000,
+};
+
+export const NOVA_VOICE_REGRESSION_JUDGE_CONFIG: EvalJudgeConfig = {
+  model: "claude-sonnet-5",
+  reasoning: { mode: "adaptive", effort: "high" },
+  maxOutputTokens: 8_000,
+  maxInputTokens: 8_000,
+  timeoutMs: 120_000,
+};
+
 const CONFIGS: Record<Exclude<AIOperation, "agentic_execution">, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
   product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
   action_planning: ACTION_PLANNING_CONFIG,
+  nova_presentation: NOVA_PRESENTATION_CONFIG,
 };
 
 export function getOperationConfig(

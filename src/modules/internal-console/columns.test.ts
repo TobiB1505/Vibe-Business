@@ -13,7 +13,7 @@ function moduleSources(): { file: string; source: string }[] {
 }
 
 /**
- * The console has no tenant boundary underneath it ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md) §4).
+ * The console has no tenant boundary underneath it ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) §4).
  *
  * Every other read in this application is caught by RLS if it asks for too
  * much. This one is not, so what it may ask for is asserted here rather than

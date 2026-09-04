@@ -16,10 +16,7 @@ import {
   AuditPreparing,
   AuditWaitingHeader,
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
-import {
-  E2E_ACTION_PLAN_SCENARIOS,
-  isE2eActionPlanScenario,
-} from "../action-plan-scenarios";
+import { E2E_ACTION_PLAN_SCENARIOS, isE2eActionPlanScenario } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import {
   E2E_AGENT_SCENARIOS,
@@ -44,14 +41,10 @@ import {
 } from "../internal-console-scenarios";
 import { AppErrorPreview } from "../app-error-preview";
 import BillingLoading from "@/app/app/(account)/billing/loading";
-import {
-  E2E_AUDIT_CREDIT_SCENARIOS,
-  isE2eAuditCreditScenario,
-} from "../audit-credit-scenarios";
-import {
-  E2E_AGENT_STAGE_SCENARIOS,
-  isE2eAgentStageScenario,
-} from "../agent-stage-scenarios";
+import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
+import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
+import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
+import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
@@ -99,10 +92,7 @@ import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding
 import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
 import { UnderstandingProgress } from "@/app/app/projects/[projectId]/understanding-progress";
 import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
-import {
-  E2E_PRODUCT_SCAN_SCENARIOS,
-  isE2eProductScanScenario,
-} from "../product-scan-scenarios";
+import { E2E_PRODUCT_SCAN_SCENARIOS, isE2eProductScanScenario } from "../product-scan-scenarios";
 import { ProductScanRevealFixture } from "../product-scan-reveal-fixture";
 import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";
 import {
@@ -408,9 +398,7 @@ export default async function E2eScenarioPage({
       label: section.label,
       icon: section.icon,
       href:
-        section.id === "my-product"
-          ? currentHref
-          : projectSectionHref("project_e2e", section.id),
+        section.id === "my-product" ? currentHref : projectSectionHref("project_e2e", section.id),
       count: section.id === "action-plan" ? 3 : section.id === "agent" ? 13 : null,
       countTone: section.id === "action-plan" ? "accent" : "neutral",
     }));
@@ -473,54 +461,54 @@ export default async function E2eScenarioPage({
             }}
             founderContextHref="#founder-context"
             sources={[
-            {
-              id: "code",
-              label: "Your code",
-              state: fixture.view.sources.some(
-                (source) => source.label === "Your code" && source.used,
-              )
-                ? "ready"
-                : "none",
-              detail: fixture.view.sources.some(
-                (source) => source.label === "Your code" && source.used,
-              )
-                ? "Vibe has read what your repository builds."
-                : "Vibe hasn't read your code yet.",
-              href: "#product-evidence",
-              action: "See what it read",
-            },
-            {
-              id: "live",
-              label: "Your public product",
-              state: fixture.view.sources.some(
-                (source) => source.label === "Your public product" && source.used,
-              )
-                ? "ready"
-                : "none",
-              detail: fixture.view.sources.some(
-                (source) => source.label === "Your public product" && source.used,
-              )
-                ? "Vibe has visited what a first-time visitor reaches."
-                : "Your public product has not been checked yet.",
-              href: "#product-evidence",
-              action: "See what it saw",
-            },
-            {
-              id: "deep-scan",
-              label: "Your signed-in product",
-              detail: "Your signed-in product has not been checked yet.",
-              state: "none",
-              href: "#product-evidence",
-              action: "Deep Scan",
-            },
-            {
-              id: "intent",
-              label: "What you told Vibe",
-              detail: "Your stated stage, monetization intent and primary goal.",
-              state: "ready",
-              href: "#founder-context",
-              action: "View context",
-            },
+              {
+                id: "code",
+                label: "Your code",
+                state: fixture.view.sources.some(
+                  (source) => source.label === "Your code" && source.used,
+                )
+                  ? "ready"
+                  : "none",
+                detail: fixture.view.sources.some(
+                  (source) => source.label === "Your code" && source.used,
+                )
+                  ? "Vibe has read what your repository builds."
+                  : "Vibe hasn't read your code yet.",
+                href: "#product-evidence",
+                action: "See what it read",
+              },
+              {
+                id: "live",
+                label: "Your public product",
+                state: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? "ready"
+                  : "none",
+                detail: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? "Vibe has visited what a first-time visitor reaches."
+                  : "Your public product has not been checked yet.",
+                href: "#product-evidence",
+                action: "See what it saw",
+              },
+              {
+                id: "deep-scan",
+                label: "Your signed-in product",
+                detail: "Your signed-in product has not been checked yet.",
+                state: "none",
+                href: "#product-evidence",
+                action: "Deep Scan",
+              },
+              {
+                id: "intent",
+                label: "What you told Vibe",
+                detail: "Your stated stage, monetization intent and primary goal.",
+                state: "ready",
+                href: "#founder-context",
+                action: "View context",
+              },
             ]}
             actions={
               <UnderstandingConfirm
@@ -828,6 +816,19 @@ export default async function E2eScenarioPage({
             ),
           }}
         />
+      </main>
+    );
+  }
+
+  /*
+   * The provenance panel on its own, because what it has to get right is
+   * visual: an outdated link that is not visible is the incident again.
+   */
+  if (isE2eProvenanceScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <ProvenancePanel provenance={e2eProvenance(scenario)} projectId="project_e2e" />
       </main>
     );
   }
@@ -1142,7 +1143,7 @@ export default async function E2eScenarioPage({
           moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
           responsibilityByStepKey={fixture.responsibilityByStepKey ?? {}}
-            readiness={fixture.readiness}
+          readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}
           auditHref="/app/projects/project_e2e#business-audit"

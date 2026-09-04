@@ -1,6 +1,6 @@
 # modules/internal-console
 
-The internal operator console — see [ARCHITECTURE.md §3 "Layers with no section above"](../../../ARCHITECTURE.md#layers-with-no-section-above) and [ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md).
+The internal operator console — see [ARCHITECTURE.md §3 "Layers with no section above"](../../../ARCHITECTURE.md#layers-with-no-section-above) and [ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md).
 
 This product measures almost everything it does and, until this module, displayed none of it. Thirteen of fifty-six tables exist purely to record what happened, and the operator's only view of a running system was the Supabase SQL editor — which is an archaeology tool, not a view of a running system.
 
@@ -59,4 +59,4 @@ Every query is bounded. When one returns a full page the snapshot is marked `tru
 
 It performs **no action**: no refund, no cancel, no retry, no impersonation, no write of any kind. Moving money needs the authorization model [docs/ROADMAP.md](../../../docs/ROADMAP.md) names as still open, and a read-only surface is not a step towards one — a console that can act is a different decision with a different threat model.
 
-There is also no audit trail of operator _reads_. Every write in this product is recorded in `audit_events`; a read is not. For a single-operator deployment that is moot, and the first additional operator makes it real — named in [ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md) rather than discovered later.
+There is also no audit trail of operator _reads_. Every write in this product is recorded in `audit_events`; a read is not. For a single-operator deployment that is moot, and the first additional operator makes it real — named in [ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) rather than discovered later.

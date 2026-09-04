@@ -78,7 +78,7 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
   {
     file: join("modules", "internal-console", "store.ts"),
     why:
-      "ADR 0084. The operator console is cross-tenant by construction: 'what is failing right " +
+      "ADR 0088. The operator console is cross-tenant by construction: 'what is failing right " +
       "now' is not answerable inside one customer's rows, so RLS would answer a question nobody " +
       "asked. It cannot satisfy the ownership filter and satisfies the rule's purpose instead — " +
       "no function in the file accepts a project id, a user id or any other selector from its " +

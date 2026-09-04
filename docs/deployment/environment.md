@@ -103,7 +103,7 @@ Nothing here needed to change:
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | required | required | required |
 | `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/billing` |
 | `PAID_OPERATIONS_DISABLED` | unset | unset | **unset** — set to exactly `1` only to stop paid work during an incident (VB-032) |
-| `VIBE_INTERNAL_OPERATOR_USER_IDS` | your own Supabase user id, if you want the console locally | **unset** | the operator user ids, comma-separated ([ADR 0084](../decisions/0084-the-internal-operator-console.md)) |
+| `VIBE_INTERNAL_OPERATOR_USER_IDS` | your own Supabase user id, if you want the console locally | **unset** | the operator user ids, comma-separated ([ADR 0088](../decisions/0088-the-internal-operator-console.md)) |
 
 `VERCEL_URL`, `VERCEL_ENV` and `VERCEL_GIT_COMMIT_SHA` are injected
 automatically by Vercel on every build — never set them yourself. The last is

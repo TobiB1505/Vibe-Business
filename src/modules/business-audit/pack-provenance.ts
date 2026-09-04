@@ -69,7 +69,11 @@ export type PackProvenance =
  * `founder_intent_hash` all present. That constraint names v3 explicitly, so
  * adding a version here means widening the constraint in the same migration.
  */
-const HASH_VERIFIABLE_PACKS: readonly string[] = ["business-evidence.v3", "business-evidence.v4"];
+const HASH_VERIFIABLE_PACKS: readonly string[] = [
+  "business-evidence.v3",
+  "business-evidence.v4",
+  "business-evidence.v5",
+];
 
 /**
  * Compares what a rebuild just loaded against what the audit recorded.

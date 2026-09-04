@@ -11,7 +11,7 @@ import { formatMicroUsd } from "@/modules/internal-console/shape";
 import { refreshConsoleAction } from "./actions";
 
 /**
- * The live feed ([ADR 0084](../../../../docs/decisions/0084-the-internal-operator-console.md) §3).
+ * The live feed ([ADR 0088](../../../../docs/decisions/0088-the-internal-operator-console.md) §3).
  *
  * ## Polling, and why that is the design
  *

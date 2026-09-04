@@ -7,8 +7,11 @@ import { Field, Input, inputClassName } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MAX_CORRECTION_LENGTH } from "@/modules/product-understanding/schema";
+import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import {
+  confirmProductAction,
   confirmProductAndStartAuditAction,
+  correctProductAction,
   correctProductAndStartAuditAction,
   type ConfirmAndAuditState,
 } from "./actions";
@@ -38,7 +41,8 @@ function Failure({ state }: { state: ConfirmAndAuditState }) {
   if (state.error === "live_product_intelligence_missing") {
     return (
       <Notice tone="waiting" label="Product confirmed">
-        Your Product Profile is safe. The current Business Audit still needs a successful live-product check, so Vibe will help you add one next.
+        Your Product Profile is safe. The current Business Audit still needs a successful
+        live-product check, so Vibe will help you add one next.
       </Notice>
     );
   }
@@ -53,20 +57,37 @@ export function ProductConfirmation({
   projectId,
   profileId,
   values,
+  bundlesAudit,
 }: {
   projectId: string;
   profileId: string;
   values: ConfirmationValues;
+  /**
+   * Whether confirming also starts the audit (§O.3).
+   *
+   * True only where the audit costs nothing — the founder is answering one
+   * question and being carried on to the next thing for free, which is worth
+   * one press rather than two. Where it is priced the two come apart, because
+   * a paid operation is never the side effect of a question about whether Vibe
+   * read the product correctly (rule 60), and the audit is offered afterwards
+   * with its price beside it.
+   *
+   * Resolved by the caller from `AuditCreditGate`, the same gate Business
+   * Health already renders from. No new state answers this.
+   */
+  bundlesAudit: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [confirming, startTransition] = useTransition();
   const [confirmState, setConfirmState] = useState<ConfirmAndAuditState>(null);
-  const correct = correctProductAndStartAuditAction.bind(null, projectId, profileId);
-  const [correctionState, correctionAction, saving] = useActionState<ConfirmAndAuditState, FormData>(
-    correct,
-    null,
-  );
+  const correct = bundlesAudit
+    ? correctProductAndStartAuditAction.bind(null, projectId, profileId)
+    : correctProductAction.bind(null, projectId, profileId);
+  const [correctionState, correctionAction, saving] = useActionState<
+    ConfirmAndAuditState,
+    FormData
+  >(correct, null);
 
   useEffect(() => {
     if (correctionState?.ok) router.refresh();
@@ -81,13 +102,25 @@ export function ProductConfirmation({
             disabled={confirming}
             onClick={() =>
               startTransition(async () => {
-                const result = await confirmProductAndStartAuditAction(projectId, profileId);
+                const result = bundlesAudit
+                  ? await confirmProductAndStartAuditAction(projectId, profileId)
+                  : await confirmProductAction(projectId, profileId);
                 setConfirmState(result);
                 router.refresh();
               })
             }
           >
-            {confirming ? "Starting your Audit…" : "Looks right"}
+            {/*
+             * The label says where the press leads, so a founder pressing
+             * "yes" is never surprised by an audit starting. Both come from
+             * the catalog rather than being written here, which is what keeps
+             * the words and the action from drifting apart.
+             */}
+            {confirming
+              ? "Working…"
+              : bundlesAudit
+                ? NOVA_ACTION_META["nova.confirm_product_and_audit"].label
+                : NOVA_ACTION_META["nova.confirm_product"].label}
           </Button>
           <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
             Something&apos;s off

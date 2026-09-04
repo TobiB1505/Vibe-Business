@@ -1,17 +1,17 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
-import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
-import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
+import {
+  BUSINESS_AUDIT_SCHEMA_VERSION,
+  BUSINESS_AUDIT_VERSION,
+} from "@/modules/business-audit/schema";
 import { computeAuditInputHash } from "@/modules/business-audit/store";
 import { creditsToUnits } from "@/modules/credits/units";
-import {
-  FakeDatabase,
-  FakeExecutor,
-  fakeSupabase,
-  seedProductUnderstanding,
-} from "./test-support";
+import { FakeDatabase, FakeExecutor, fakeSupabase, seedProductUnderstanding } from "./test-support";
 
 /*
  * The credit hold is taken with the service-role client (§53, §64) — see the
@@ -29,11 +29,8 @@ vi.mock("@/lib/supabase/service", () => ({
   },
 }));
 
-const {
-  getActiveBusinessAuditOperation,
-  getOperationStatus,
-  startBusinessAuditOperation,
-} = await import("./service");
+const { getActiveBusinessAuditOperation, getOperationStatus, startBusinessAuditOperation } =
+  await import("./service");
 
 /**
  * Starting a durable audit (Sprint 7 §8, §9, §29).
@@ -58,6 +55,7 @@ function seedEvidence(
 ) {
   const projectId = options.projectId ?? PROJECT;
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: options.repositoryId ?? "repo_snapshot_1",
     project_id: projectId,
     status: "completed",
@@ -65,6 +63,7 @@ function seedEvidence(
     created_at: "2026-08-01T00:00:00.000Z",
   });
   db.seed("live_product_intelligence_snapshots", {
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     id: "live_snapshot_1",
     project_id: projectId,
     status: "completed",
@@ -88,7 +87,7 @@ function identityFor(options: { repositoryId?: string; contextHash?: string } = 
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+    evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
@@ -231,7 +230,9 @@ describe("the free audit entitlement", () => {
     // The property that matters: no provider work was enqueued.
     expect(executor.starts).toHaveLength(0);
     // And no hold was left behind.
-    expect(db.rows("billing_credit_reservations").filter((row) => row.status === "active")).toHaveLength(0);
+    expect(
+      db.rows("billing_credit_reservations").filter((row) => row.status === "active"),
+    ).toHaveLength(0);
   });
 
   it("refuses a paid run once the free audit is consumed and no Credits exist", async () => {
@@ -462,7 +463,11 @@ describe("prerequisites and ownership", () => {
   it("does not release a hold it did not win the right to release", async () => {
     // Consume the free entitlement and fund the wallet, so the run takes a real
     // Credit hold rather than riding the free audit — the hold is the subject.
-    db.seed("repository_connections", { id: "conn_1", project_id: PROJECT, github_repository_id: 12345 });
+    db.seed("repository_connections", {
+      id: "conn_1",
+      project_id: PROJECT,
+      github_repository_id: 12345,
+    });
     db.seed("free_audit_grants", { id: "grant_1", user_id: USER, github_repository_id: 12345 });
     const { grantCreditLot } = await import("@/modules/credits/grants");
     await grantCreditLot(fakeSupabase(db), {

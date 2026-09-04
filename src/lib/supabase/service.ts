@@ -17,7 +17,7 @@ import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded
  *     request body, not by presenting a Vibe session — there is no user agent
  *     and no cookie, by design. The endpoint is nonetheless the only funding
  *     path into the Credit ledger, so it needs to write.
- *  3. **The internal operator console** (ADR 0084). The first caller that has a
+ *  3. **The internal operator console** (ADR 0088). The first caller that has a
  *     session and still cannot use it: the console reads *across* tenants, so
  *     RLS would scope it to the operator's own projects and answer a question
  *     nobody asked. It is read-only.
@@ -54,7 +54,7 @@ import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded
  * filter is replaced by a prior gate — an operator id from verified claims,
  * checked against an environment allowlist that is unset by default and that
  * the application has no path to write. It reads and never writes, and every
- * query names its columns from a constant. See ADR 0084.
+ * query names its columns from a constant. See ADR 0088.
  *
  * The billing webhook satisfies (1) and (2) the same way a workflow step does:
  * it never accepts a `userId` from its caller. The owner is resolved from

@@ -1,0 +1,337 @@
+import type { RetailOperationKind } from "../credits/retail";
+
+/**
+ * What each of Nova's controls says, costs, and does to the world.
+ *
+ * ## Why the function is not here
+ *
+ * §K described this as a registry of `{ serverAction, price, consequential }`,
+ * and the middle two are here. The function reference is not, because every
+ * Server Action in this codebase lives under `src/app/` and nothing under
+ * `src/modules/` imports one — the single existing crossing is a `import type`
+ * (`coding-agent/agent-workspace.ts:11`). A runtime import the other way would
+ * make the domain layer depend on a route's file layout.
+ *
+ * So the binding lives beside the actions, in `src/app/app/projects/
+ * [projectId]/nova-actions.ts`, where the compiler proves each id names a real
+ * export. This file holds the half that is policy rather than plumbing, and
+ * stays pure — which is what lets the feed read a price without pulling a
+ * route's dependency graph behind it.
+ *
+ * ## Two ids are not actions at all
+ *
+ * `nova.review_change` and `nova.view_move` are addresses. Nothing starts; a
+ * founder goes and looks. Modelling them as actions would have meant inventing
+ * a Server Action whose only job was to navigate — and ADR 0065 removed the
+ * last "start a comparison" action deliberately, because a preview *is* the
+ * review now. A `navigation` control is the honest shape for both.
+ *
+ * ## Every id is bound
+ *
+ * `nova.choose_workspace` was `unbound` until Stage 4 merged and brought
+ * `chooseWorkspaceRootAction` to HEAD. The `unbound` variant stays in the type
+ * because the situation it names recurs — an id worth cataloguing before its
+ * action exists — and because recording the gap is what let a test catch the
+ * moment it closed.
+ *
+ * The candidate behind it still cannot be raised: `read.ts` fixes
+ * `workspaceChoiceRequired` at false until it can answer the question without
+ * a network call. A bound control nothing offers yet is the honest state.
+ */
+
+/**
+ * Every control Nova can offer, in either lane.
+ *
+ * The vocabulary lives with the catalog rather than with `focus.ts`, because
+ * the two lanes have different controls and only one of them is about
+ * candidates: the first three below belong to the first run, where Nova
+ * introduces herself and offers to explain the loop, and nothing there is a
+ * `FocusCandidate` at all. `focus.ts` maps its candidates onto this
+ * vocabulary; it does not own it.
+ */
+export const NOVA_ACTION_IDS = [
+  /* The first run: Nova's own two screens. */
+  "nova.continue_introduction",
+  "nova.explain_workflow",
+  "nova.skip_workflow",
+  /* The product reveal: confirming what Vibe read, and what follows it. */
+  "nova.confirm_product",
+  "nova.confirm_product_and_audit",
+  /* Getting back to a working state. */
+  "nova.reconnect_source",
+  /* Everything a focus candidate can carry. */
+  "nova.validate_again",
+  "nova.review_change",
+  "nova.merge_change",
+  "nova.answer_plan_question",
+  "nova.answer_agent_question",
+  "nova.choose_workspace",
+  "nova.rescan_product",
+  "nova.start_agent",
+  "nova.verify_outcome",
+  "nova.plan_move",
+  "nova.view_move",
+  "nova.refresh_audit",
+] as const;
+
+export type NovaActionId = (typeof NOVA_ACTION_IDS)[number];
+
+export type NovaActionControl =
+  /** A Server Action runs. The app layer holds the reference. */
+  | "server_action"
+  /** A place to go. Nothing runs, nothing is charged, nothing is written. */
+  | "navigation"
+  /** Named, and not buildable yet. Nothing may offer it. */
+  | "unbound";
+
+export type NovaActionMeta = {
+  control: NovaActionControl;
+  /**
+   * The words on the control.
+   *
+   * Static copy, held here rather than written per screen so that one control
+   * cannot come to say two different things in two places — and so the
+   * language rules below can be asserted over all of them at once.
+   */
+  label: string;
+  /**
+   * The retail operation the founder is charged under, or null when pressing
+   * this costs nothing at all.
+   *
+   * A kind rather than a number: prices are effective-dated in
+   * `credits/pricing.ts` and `CreditPrice` renders today's, so a number copied
+   * into a label here would be a second price that silently goes stale.
+   * `product_understanding` is free under the current policy and still named,
+   * because "free" is a fact about the policy, not about the control.
+   */
+  price: RetailOperationKind | null;
+  /**
+   * Reaches outside Vibe, spends Credits, or cannot be undone by doing
+   * something else.
+   *
+   * Answering a question is not consequential by this definition even though
+   * it writes an immutable row: a replan supersedes the answer, so the founder
+   * is never stuck with it. Moving a default branch is, and so is starting a
+   * run that pushes one.
+   */
+  consequential: boolean;
+  /**
+   * A person confirms before it fires.
+   *
+   * Deliberately narrower than `consequential`. Every confirmation added to a
+   * control that does not need one teaches the founder to click through the
+   * ones that do — which is the reason `outcome-actions.ts` gives for having
+   * no `confirmed` argument of its own. Reserved here for the two controls
+   * that write to a customer's repository.
+   */
+  requiresConfirmation: boolean;
+  /**
+   * What the founder is agreeing to, shown at the moment they confirm.
+   *
+   * Required for a confirmed control and absent on every other, because the
+   * two confirmed controls do entirely different things and one sentence
+   * cannot cover both: a merge moves a branch, a run spends Credits and pushes
+   * one. Held here rather than written into the confirmation component for the
+   * reason all of Nova's copy is — a sentence in JSX is a sentence no test
+   * reads.
+   */
+  confirmationNote?: string;
+  /** Set only on an `unbound` control: what is missing, and what lands it. */
+  unboundReason?: string;
+};
+
+export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
+  "nova.continue_introduction": {
+    control: "server_action",
+    label: "Continue",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.explain_workflow": {
+    control: "server_action",
+    label: "Show me how this works",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.skip_workflow": {
+    /*
+     * Pressing this records `skipped`, which is a real answer rather than an
+     * absence — the founder was asked and chose to get on with it. Recording
+     * it as "explained" would have been the column saying something that did
+     * not happen.
+     */
+    control: "server_action",
+    label: "Start now",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.confirm_product": {
+    control: "server_action",
+    label: "Yes, that is right",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.confirm_product_and_audit": {
+    /*
+     * Confirming and auditing behind one press, offered only where the audit
+     * costs nothing (§O.3). Asking a founder *"is this right?"* and then
+     * *"shall I audit it?"* is the friction Nova exists to remove — but
+     * bundling a priced operation into an unrelated question is what rule 60
+     * forbids, so the catalog carries the free-path label and
+     * `novaRevealControls` decides when it may be shown at all.
+     */
+    control: "server_action",
+    label: "Yes, on to the Business Audit",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.reconnect_source": {
+    /*
+     * A place to go, not an action. Reconnecting is a GitHub App install flow
+     * that leaves the product entirely, and a button here would be a button
+     * that could not finish what it started.
+     */
+    control: "navigation",
+    label: "Reconnect your repository",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.validate_again": {
+    control: "server_action",
+    label: "Check it again",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.review_change": {
+    control: "navigation",
+    label: "Look at the change",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.merge_change": {
+    /*
+     * The most consequential control in the product. `mergeApprovedChangeAction`
+     * takes `confirmed` as a required argument rather than opening a dialog of
+     * its own, so the confirmation is the caller's to hold — which is why it is
+     * recorded here as policy rather than left to whichever screen renders it.
+     */
+    control: "server_action",
+    label: "Merge it",
+    price: null,
+    consequential: true,
+    requiresConfirmation: true,
+    /*
+     * What a founder must know before the click, not after (rule 74): moving a
+     * default branch can set their own CI running. It never means deployed or
+     * released, and this sentence does not say it does.
+     */
+    confirmationNote:
+      "This moves your default branch to the commit you approved. Anything you have set up to run on that branch will run.",
+  },
+  "nova.answer_plan_question": {
+    control: "server_action",
+    label: "Answer",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.answer_agent_question": {
+    /*
+     * Answering does not restart the run, and the label must not suggest it
+     * does. `interrupt-actions.ts` separates the two on purpose: starting the
+     * next attempt is priced, and a price belongs where it is disclosed, not
+     * inside a question card.
+     */
+    control: "server_action",
+    label: "Answer",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.choose_workspace": {
+    /*
+     * Bound since Stage 4 merged. It was `unbound` while
+     * `chooseWorkspaceRootAction` lived only on a branch, and the pairing test
+     * that held that claim beside `read.ts`'s is what made the staleness
+     * visible the moment the branch landed rather than months later.
+     *
+     * Free and reversible: choosing which application Vibe works on starts
+     * nothing and can be chosen again.
+     */
+    control: "server_action",
+    label: "Choose which app",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.rescan_product": {
+    control: "server_action",
+    label: "Read my product again",
+    price: "product_understanding",
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.start_agent": {
+    control: "server_action",
+    label: "Build it",
+    price: "agent_execution",
+    consequential: true,
+    requiresConfirmation: true,
+    confirmationNote:
+      "This spends Credits and puts the work on a branch of its own. Your default branch is untouched until you approve what comes back.",
+  },
+  "nova.verify_outcome": {
+    /*
+     * Consequential because it makes read-only requests to the founder's own
+     * site through the safe-fetch boundary and opens a durable window — but not
+     * confirmed, for the reason `outcome-actions.ts` states: ceremony copied
+     * from the merge would devalue the merge's.
+     */
+    control: "server_action",
+    label: "Check what changed",
+    price: null,
+    consequential: true,
+    requiresConfirmation: false,
+  },
+  "nova.plan_move": {
+    control: "server_action",
+    label: "Plan this",
+    price: "action_plan",
+    consequential: true,
+    requiresConfirmation: false,
+  },
+  "nova.view_move": {
+    control: "navigation",
+    label: "Look at this move",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.refresh_audit": {
+    control: "server_action",
+    label: "Run the audit again",
+    price: "business_audit",
+    consequential: true,
+    requiresConfirmation: false,
+  },
+};
+
+export function novaActionMeta(id: NovaActionId): NovaActionMeta {
+  return NOVA_ACTION_META[id];
+}
+
+/** The ids a control may currently be offered for. */
+export function isOfferable(id: NovaActionId): boolean {
+  return NOVA_ACTION_META[id].control !== "unbound";
+}
+
+export const OFFERABLE_NOVA_ACTION_IDS: readonly NovaActionId[] =
+  NOVA_ACTION_IDS.filter(isOfferable);

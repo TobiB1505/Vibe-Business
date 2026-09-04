@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { internalOperatorUserIds, isInternalOperator } from "./operator";
 
 /**
- * The gate that replaces RLS for this surface ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md) §1, §2).
+ * The gate that replaces RLS for this surface ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) §1, §2).
  *
  * Every other read in the application is bounded by a tenant. This one is
  * bounded by this function and nothing else, so the permissive cases are

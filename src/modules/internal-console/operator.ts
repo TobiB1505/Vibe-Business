@@ -1,5 +1,5 @@
 /**
- * Who may open the operator console ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md) §1).
+ * Who may open the operator console ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) §1).
  *
  * ## Why an environment allowlist rather than a role
  *

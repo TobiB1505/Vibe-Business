@@ -1,7 +1,7 @@
 import type { ConsoleSnapshot } from "@/modules/internal-console/schema";
 
 /**
- * The operator console, in a browser ([ADR 0084](../../../docs/decisions/0084-the-internal-operator-console.md)).
+ * The operator console, in a browser ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md)).
  *
  * ## Why this exists rather than a unit test alone
  *

@@ -1,4 +1,4 @@
-# 0084 - The internal operator console reads across tenants, and shows shapes only
+# 0088 - The internal operator console reads across tenants, and shows shapes only
 
 Status: Accepted
 Date: 2026-09-04
