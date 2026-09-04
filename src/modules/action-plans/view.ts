@@ -321,6 +321,25 @@ export type AttestationPrompt = {
   pill: string;
   lead: string | null;
   footnote: string;
+  submitLabel: string;
+  /**
+   * The written answer this step is closed with, or null when it is closed by
+   * confirmation alone (ADR 0092).
+   *
+   * A `founder_action` step confirms that the world changed: the sitemap is
+   * submitted or it is not, and there is nothing to write down. A `vibe` step
+   * that no run can finish is the opposite — the finding **is** the step's
+   * output, and closing it with a tick records that the work happened while
+   * losing what it produced, which is what left the plan's later steps
+   * planning against the guess they started from.
+   *
+   * The prompt is Vibe's own wording and stays deliberately open. Vibe does
+   * not derive choices from the step's completion criterion: that criterion is
+   * model output, and turning model wording into a set of machine options is
+   * the mistake this codebase refuses everywhere else. The criterion is shown
+   * beside the field, in its own element, and the founder answers it.
+   */
+  finding: { label: string; help: string } | null;
 };
 
 export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): AttestationPrompt {
@@ -329,10 +348,15 @@ export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): Attestat
       pill: "Vibe can't run this one",
       lead:
         "This is Vibe's own work, but it isn't a change to your product — so there is no run " +
-        "that could finish it. If it's settled, say so and the plan moves on.",
+        "that could finish it. Write down what you found and the plan moves on with it.",
       footnote:
-        "This records your confirmation against this exact plan step. It does not claim Vibe " +
-        "did the work.",
+        "Your finding is recorded against this exact plan step and given to the next planning " +
+        "run. It does not claim Vibe did the work.",
+      submitLabel: "Record this finding",
+      finding: {
+        label: "What did you find?",
+        help: "In your own words. The next plan is written with this in front of it.",
+      },
     };
   }
 
@@ -340,6 +364,8 @@ export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): Attestat
     pill: "Your action",
     lead: null,
     footnote: "This records your confirmation against this exact plan step.",
+    submitLabel: "Confirm this is complete",
+    finding: null,
   };
 }
 

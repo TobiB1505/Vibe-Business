@@ -21,7 +21,14 @@ import { MAX_PLAN_STEPS, STEP_ACTORS, STEP_CHANGE_KINDS } from "./schema";
  *     is enforced by the schema; the prompt only explains why (§12).
  */
 
-export const ACTION_PLANNER_PROMPT_VERSION = "action-planner-prompt-v2" as const;
+/*
+ * v2 → v3: the user content gained a `<founder_findings>` block (ADR 0092).
+ *
+ * Versioned because what the model was given changed, and a plan built without
+ * the founder's own findings answered a different question from one built with
+ * them. The system prompt is unchanged; the version covers the request.
+ */
+export const ACTION_PLANNER_PROMPT_VERSION = "action-planner-prompt-v3" as const;
 
 export function buildActionPlannerSystemPrompt(): string {
   return `You are the Action Planner for Vibe Business, a product that helps people who

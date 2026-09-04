@@ -299,6 +299,10 @@ test.describe("ready plan — founder action attestation", () => {
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Confirm this is complete" })).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
+
+    // Real-world work reports nothing: the sitemap is submitted or it is not,
+    // and there is no finding to write down.
+    await expect(page.getByTestId("attestation-finding")).toHaveCount(0);
   });
 });
 
@@ -316,12 +320,40 @@ test.describe("ready plan — a step no execution can finish", () => {
     ).toBeVisible();
     await expect(page.getByText("Vibe can't run this one").first()).toBeVisible();
     await expect(page.getByText("isn't a change to your product").first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "Confirm this is complete" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Record this finding" })).toBeVisible();
 
     // The claim it must never make. The founder is confirming the step's own
     // completion criterion, not testifying that Vibe did the work.
     await expect(page.getByText("does not claim Vibe did the work").first()).toBeVisible();
     await expect(page.getByText("Your action")).toHaveCount(0);
+  });
+
+  /*
+   * The founder's objection, pinned (ADR 0092). The step asks whether billing
+   * is fully working, partially wired, or absent; a tick answers none of the
+   * three, and its successors are written to depend on which. So the step is
+   * closed with the answer, not with a boolean.
+   */
+  test("asks for the finding rather than a tick", async ({ page }) => {
+    await page.goto("/e2e/action_plan_vibe_no_executor");
+
+    const field = page.getByTestId("attestation-finding");
+    await expect(field).toBeVisible();
+    await expect(field).toHaveAttribute("required", "");
+    await expect(page.getByText("What did you find?")).toBeVisible();
+    await expect(page.getByText("The next plan is written with this in front of it.")).toBeVisible();
+
+    // No invented choices. The step's criterion is model-written prose and Vibe
+    // never turns it into options — it is shown, and the founder answers it.
+    await expect(page.getByRole("radio")).toHaveCount(0);
+    await expect(page.getByRole("combobox")).toHaveCount(0);
+    // The step's own criterion is shown beside the field — that is the
+    // question the founder is answering, in the plan's words rather than
+    // Vibe's.
+    await expect(page.getByText("Answer this")).toBeVisible();
+    await expect(
+      page.getByText("A drafted set of titles and descriptions exists.").first(),
+    ).toBeVisible();
   });
 });
 

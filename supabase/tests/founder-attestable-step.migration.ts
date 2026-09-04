@@ -67,10 +67,11 @@ function addStep(params: {
   return params.key;
 }
 
-function attest(stepKey: string): string {
+function attest(stepKey: string, finding: string | null = null): string {
+  const arg = finding === null ? "null" : `'${finding.replace(/'/g, "''")}'`;
   return db.sql(
     `select public.attest_founder_action_step('${fx.projectId}', '${planId}', '${stepKey}',
-       '${fx.userId}');`,
+       '${fx.userId}', ${arg});`,
   );
 }
 
@@ -122,12 +123,13 @@ describe("a founder may confirm work no execution can finish", () => {
       executionSupport: "not_yet_supported",
     });
 
-    expect(answerOf(attest(key))).toMatch(/^[0-9a-f-]{36}$/);
+    expect(answerOf(attest(key, "Billing is partially wired."))).toMatch(/^[0-9a-f-]{36}$/);
   });
 
   it("converges a retry on the one evidence row", () => {
     const key = "attest-vibe-research";
-    expect(answerOf(attest(key))).toBe(answerOf(attest(key)));
+    const finding = "Billing is partially wired.";
+    expect(answerOf(attest(key, finding))).toBe(answerOf(attest(key, finding)));
     expect(
       db.sql(
         `select count(*) from public.action_plan_founder_attestations
@@ -181,5 +183,80 @@ describe("a founder may never confirm away work Vibe would build", () => {
            'attest-vibe-analysis', '${other}');`,
       ),
     ).toThrow(/founder_action_step_not_attestable/);
+  });
+});
+
+/**
+ * A step whose output is a finding must record the finding (ADR 0092).
+ *
+ * The attestation ADR 0090 opened to Vibe steps closed them with a boolean,
+ * and for real-world work that is right — the sitemap is submitted or it is
+ * not. For Vibe's own research it loses the answer: a step asking whether
+ * billing is *fully working, partially wired, or not implemented* has three,
+ * its successors are written to depend on which, and a tick carries none.
+ *
+ * Both directions are enforced here rather than in the application, because
+ * the pairing is a property of the step kind and the database is the only
+ * writer that always sees it.
+ */
+describe("the finding a Vibe step is closed with", () => {
+  it("refuses to close a Vibe step without one", () => {
+    const key = addStep({
+      key: "finding-missing",
+      order: 9,
+      actor: "vibe",
+      changeKind: "research",
+      executionSupport: "not_yet_supported",
+    });
+
+    expect(() => attest(key)).toThrow(/founder_step_finding_required/);
+    expect(() => attest(key, "   ")).toThrow(/founder_step_finding_required/);
+  });
+
+  it("stores the founder's own words, unparsed", () => {
+    const key = addStep({
+      key: "finding-stored",
+      order: 9,
+      actor: "vibe",
+      changeKind: "analysis",
+      executionSupport: "vibe_prepares",
+    });
+    attest(key, "Stripe is wired but the route 404s.");
+
+    expect(
+      db.sql(
+        `select finding from public.action_plan_founder_attestations
+         where action_plan_id = '${planId}' and action_plan_step_key = '${key}';`,
+      ),
+    ).toBe("Stripe is wired but the route 404s.");
+  });
+
+  it("refuses a finding on real-world work, which reports nothing", () => {
+    // The other direction, and it matters: accepting one here would invent a
+    // second, weaker meaning for the same column.
+    const key = addStep({
+      key: "finding-not-accepted",
+      order: 9,
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+    });
+
+    expect(() => attest(key, "I did it")).toThrow(/founder_step_finding_not_accepted/);
+    expect(answerOf(attest(key))).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("refuses a finding longer than the column admits", () => {
+    const key = addStep({
+      key: "finding-too-long",
+      order: 9,
+      actor: "vibe",
+      changeKind: "research",
+      executionSupport: "not_yet_supported",
+    });
+
+    expect(() => attest(key, "x".repeat(1201))).toThrow(
+      /action_plan_founder_attestations_finding_shape/,
+    );
   });
 });

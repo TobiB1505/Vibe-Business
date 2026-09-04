@@ -84,6 +84,7 @@ function identity() {
     conclusionKey: CONCLUSION_KEY,
     productProfileId: PROFILE,
     founderIntentHash: INTENT_HASH,
+    findingIds: [],
     evidencePackVersion: fakePlannedAudit().evidencePackVersion,
     contractVersion: ACTION_PLANNER_CONTRACT_VERSION,
     plannerVersion: ACTION_PLANNER_VERSION,

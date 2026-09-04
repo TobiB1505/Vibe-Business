@@ -237,6 +237,15 @@ export function computeActionPlanInputHash(params: {
   conclusionKey: string;
   productProfileId: string;
   founderIntentHash: string;
+  /**
+   * Which findings this plan was written against, by immutable id (ADR 0092).
+   *
+   * Ids rather than the prose: a founder's own words are content, and a reuse
+   * key built from them would change on a typo fix while saying nothing about
+   * what the plan was actually given. A new finding is a genuinely different
+   * planning problem, so it must not reuse the plan written without it.
+   */
+  findingIds: readonly string[];
   evidencePackVersion: string;
   contractVersion: string;
   plannerVersion: string;
@@ -253,6 +262,7 @@ export function computeActionPlanInputHash(params: {
     params.opportunityId,
     params.conclusionKey,
     params.productProfileId,
+    [...params.findingIds].sort(),
     params.founderIntentHash,
     params.evidencePackVersion,
     params.contractVersion,

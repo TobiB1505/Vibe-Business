@@ -33,6 +33,7 @@ const IDENTITY = {
   conclusionKey: "blocker-1",
   productProfileId: "profile-1",
   founderIntentHash: "b".repeat(64),
+  findingIds: [],
   evidencePackVersion: "business-evidence.v3",
   contractVersion: ACTION_PLANNER_CONTRACT_VERSION,
   plannerVersion: ACTION_PLANNER_VERSION,
@@ -56,6 +57,7 @@ function runParams(inputHash: string) {
     lenses: ["audience" as const],
     productProfileId: IDENTITY.productProfileId,
     founderIntentHash: IDENTITY.founderIntentHash,
+    findingIds: [],
     schemaVersion: IDENTITY.schemaVersion,
     contractVersion: IDENTITY.contractVersion,
     plannerVersion: IDENTITY.plannerVersion,
@@ -314,5 +316,54 @@ describe("completing a run", () => {
     };
 
     await expect(completeActionPlanRun(supabase, created.planId, corrupted, [])).rejects.toThrow();
+  });
+});
+
+/**
+ * A new finding is a new planning problem (ADR 0092).
+ *
+ * Reuse is what makes this load-bearing: without the findings in the identity,
+ * a founder who answered "billing is partially wired" and asked for a new plan
+ * would be handed the plan written before they answered — the exact
+ * indifference this change exists to end.
+ */
+describe("plan identity and the founder's findings", () => {
+  const base = {
+    auditId: "audit-1",
+    auditInputHash: "a".repeat(64),
+    opportunitySetId: "set-1",
+    opportunityId: "opp-1",
+    conclusionKey: "monetization.no_checkout",
+    productProfileId: "profile-1",
+    founderIntentHash: "b".repeat(64),
+    findingIds: [] as readonly string[],
+    evidencePackVersion: "business-evidence.v5",
+    contractVersion: "c",
+    plannerVersion: "p",
+    promptVersion: "pr",
+    rubricVersion: "r",
+    schemaVersion: "s",
+    provider: "anthropic",
+    model: "m",
+  };
+
+  it("changes when a finding is recorded", () => {
+    expect(computeActionPlanInputHash({ ...base, findingIds: ["f1"] })).not.toBe(
+      computeActionPlanInputHash(base),
+    );
+  });
+
+  it("changes again when a second one is", () => {
+    expect(computeActionPlanInputHash({ ...base, findingIds: ["f1", "f2"] })).not.toBe(
+      computeActionPlanInputHash({ ...base, findingIds: ["f1"] }),
+    );
+  });
+
+  it("does not change with the order they are read in", () => {
+    // Ids, sorted: the same findings are the same planning problem however the
+    // rows came back.
+    expect(computeActionPlanInputHash({ ...base, findingIds: ["f2", "f1"] })).toBe(
+      computeActionPlanInputHash({ ...base, findingIds: ["f1", "f2"] })
+    );
   });
 });

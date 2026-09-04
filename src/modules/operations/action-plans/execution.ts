@@ -8,6 +8,11 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { ACTION_PLANNER_PROMPT_VERSION } from "@/modules/action-plans/prompt";
 import { ACTION_PLANNER_RUBRIC_VERSION } from "@/modules/action-plans/rubric";
 import {
+  listProjectFindings,
+  type ProjectFinding,
+} from "@/modules/action-plans/founder-action-store";
+import type { PlannerFinding } from "@/modules/action-plans/render";
+import {
   ACTION_PLANNER_CONTRACT_VERSION,
   ACTION_PLANNER_VERSION,
   ACTION_PLAN_SCHEMA_VERSION,
@@ -79,9 +84,25 @@ type PlanSources = {
   opportunitySetId: string;
   productProfileId: string;
   founderIntentHash: string;
+  /** What the founder established, oldest first (ADR 0092). */
+  findings: ProjectFinding[];
   evidencePackVersion: string;
   inputHash: string;
 };
+
+/*
+ * The findings, in the shape the renderer fences (ADR 0092).
+ *
+ * Derived at every call site from one place rather than stored twice: the
+ * token count and the paid call must render the same block, or the count is a
+ * measurement of a different prompt.
+ */
+function plannerFindings(sources: PlanSources): PlannerFinding[] {
+  return sources.findings.map((entry) => ({
+    stepTitle: entry.stepTitle,
+    finding: entry.finding,
+  }));
+}
 
 async function loadOperation(
   supabase: SupabaseClient,
@@ -118,7 +139,15 @@ async function loadSources(
   const audit = await getLatestSuccessfulAudit(supabase, operation.projectId);
   if (!audit?.result) return { ok: false, failureCode: "audit_missing" };
 
-  const [opportunitySet, repositorySnapshot, liveSnapshot, profile, founderIntent, authenticated] =
+  const [
+    opportunitySet,
+    repositorySnapshot,
+    liveSnapshot,
+    profile,
+    founderIntent,
+    authenticated,
+    findings,
+  ] =
     await Promise.all([
       getLatestCompletedOpportunitySet(supabase, operation.projectId),
       getLatestSuccessfulSnapshot(supabase, operation.projectId),
@@ -126,6 +155,7 @@ async function loadSources(
       getLatestProfile(supabase, operation.projectId),
       getFounderIntent(supabase, operation.projectId),
       getLatestSuccessfulAuthenticatedSnapshot(supabase, operation.projectId),
+      listProjectFindings(supabase, operation.projectId),
     ]);
 
   if (!opportunitySet) return { ok: false, failureCode: "move_missing" };
@@ -166,6 +196,7 @@ async function loadSources(
     conclusionKey: source.source.conclusionKey,
     productProfileId: profile.stored.id,
     founderIntentHash: founderIntent.intentHash,
+    findingIds: findings.map((entry) => entry.attestationId),
     evidencePackVersion: audit.result.evidencePackVersion,
     contractVersion: ACTION_PLANNER_CONTRACT_VERSION,
     plannerVersion: ACTION_PLANNER_VERSION,
@@ -235,6 +266,7 @@ async function loadSources(
     opportunitySetId: opportunitySet.id,
     productProfileId: profile.stored.id,
     founderIntentHash: founderIntent.intentHash,
+    findings,
     evidencePackVersion: audit.result.evidencePackVersion,
     inputHash,
   };
@@ -308,13 +340,18 @@ export async function countActionPlanTokensStep(
   const config = ACTION_PLANNING_CONFIG;
   const pack = buildPlannerPack({ source: resolved.source, pack: resolved.pack });
   const counted = await deps.provider.countInputTokens(
-    buildActionPlanRequest(resolved.source, pack, config),
+    buildActionPlanRequest(resolved.source, pack, config, plannerFindings(resolved)),
   );
   if (!counted.ok) return { ok: false, failureCode: counted.error };
 
   if (counted.inputTokens > config.maxInputTokens) {
     const floor = await deps.provider.countInputTokens(
-      buildActionPlanRequest(resolved.source, trimPlannerEvidence(pack), config),
+      buildActionPlanRequest(
+        resolved.source,
+        trimPlannerEvidence(pack),
+        config,
+        plannerFindings(resolved),
+      ),
     );
     if (!floor.ok) return { ok: false, failureCode: floor.error };
     if (floor.inputTokens > config.maxInputTokens) {
@@ -366,6 +403,7 @@ export async function runPlanningStep(
     source: resolved.source,
     pack: resolved.pack,
     repository: resolved.repository,
+    findings: plannerFindings(resolved),
   });
 
   await recordAIUsage(deps.supabase, {
