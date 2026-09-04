@@ -1,4 +1,4 @@
--- One Nova voice message per identity, attempted exactly once (ADR 0085).
+-- One Nova voice message per identity, attempted exactly once (ADR 0086).
 --
 -- ## What this table is for
 --
@@ -107,7 +107,7 @@ create table public.nova_voice_messages (
 );
 
 comment on table public.nova_voice_messages is
-  'One Nova voice message per reuse identity, attempted exactly once (ADR 0085). Claimed before the provider call; never retried. A fallback row stores its reason and no text, because the fallback text is the deterministic Vibe template the caller already holds.';
+  'One Nova voice message per reuse identity, attempted exactly once (ADR 0086). Claimed before the provider call; never retried. A fallback row stores its reason and no text, because the fallback text is the deterministic Vibe template the caller already holds.';
 
 comment on column public.nova_voice_messages.identity is
   'sha256 over project, locale, canonical payload, prompt version, policy version and model. Any output-relevant change is a different identity.';

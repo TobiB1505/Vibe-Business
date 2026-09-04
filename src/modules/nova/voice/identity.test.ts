@@ -13,7 +13,7 @@ import type { NovaVoicePayload } from "./payload";
 /**
  * What makes two Nova messages the same message.
  *
- * The identity is the whole reuse contract (ADR 0085), and it fails in one
+ * The identity is the whole reuse contract (ADR 0086), and it fails in one
  * direction quietly: an input that changes the output but not the hash serves
  * a stale sentence forever, and nothing errors. So every input is asserted to
  * move it, one at a time, rather than trusted to because it appears in the

@@ -24,7 +24,7 @@ import { setOperationStage } from "../../store";
  * the next step through the Vercel Workflow log, which is a third-party durable
  * store, and customer-repository bytes have no business being in one
  * ([CLAUDE.md](../../../../CLAUDE.md) rules 26 and 52). What travels is an
- * identifier and a hash — the two things [ADR 0013](../../../../docs/decisions/0013-durable-operation-execution.md)
+ * identifier and a hash — the two things [ADR 0013](../../../../../docs/decisions/0013-durable-operation-execution.md)
  * always claimed were the only things that did.
  *
  * `writeAgentBranchStep` rebuilds the bytes from the sandbox and refuses unless

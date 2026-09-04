@@ -50,7 +50,7 @@ export type NovaVoiceSlot = (typeof NOVA_VOICE_SLOTS)[number];
  * The languages Nova speaks. One, and that is why it is a type.
  *
  * A single-member union earns its place by being part of the reuse identity
- * (ADR 0085). The failure it forecloses happens exactly once: a second locale
+ * (ADR 0086). The failure it forecloses happens exactly once: a second locale
  * ships, the identity does not move, and every founder in the new language is
  * served the cached English sentence. Naming it now makes that a new identity
  * rather than a support ticket.
@@ -111,7 +111,7 @@ export type NovaPresentation = { message: string };
  * - v3 — closed the inventions the first eval pilot found on Haiku 4.5
  *   (invented causes, invented effort judgements, invented claims of work).
  *   Measured over 46 cases: Haiku `grounded` 41%, `no_invention` 39%;
- *   Sonnet 5 on the identical prompt, 72% and 78% (ADR 0083).
+ *   Sonnet 5 on the identical prompt, 72% and 78% (ADR 0084).
  * - v4 — written against Sonnet 5's *own* residual failures on v3, found by
  *   reading its transcripts rather than by guessing: third-person
  *   self-reference ("the move Vibe has identified"), citing the payload as a
@@ -131,7 +131,7 @@ export type NovaPresentation = { message: string };
  *   claim the payload never made ("the one blocker I found", "that's where I'd
  *   start"), closed with a rule naming the exact phrases, alongside an
  *   `outcome_result` slot brief that had been asserting an unstated "merged"
- *   event as fact. Measured over the resulting prompt (ADR 0083's amendment):
+ *   event as fact. Measured over the resulting prompt (ADR 0084's amendment):
  *   `no_invention` on the critical subset rose from 80% to 92.5%; the run was
  *   cut short at 60 of 76 cases by a revoked API key, and the founder accepted
  *   the partial result rather than completing it. See `eval/cases.ts`'s
@@ -189,7 +189,7 @@ export function canonicalPayload(payload: NovaVoicePayload): string {
 }
 
 /**
- * What makes two Nova messages the same message (rule 48, ADR 0085).
+ * What makes two Nova messages the same message (rule 48, ADR 0086).
  *
  * Six inputs. The payload is the obvious one; the other five are each here for
  * a reason that is not "more inputs is safer".

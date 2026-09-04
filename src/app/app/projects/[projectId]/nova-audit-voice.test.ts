@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 /**
  * The render path cannot spend, asserted against its source.
  *
- * ADR 0085's fifth condition is "no provider call from the read or render
+ * ADR 0086's fifth condition is "no provider call from the read or render
  * path", and every other condition is enforced by a type or a database
  * constraint. This one cannot be: a render that imported the generator would
  * compile, deploy, and bill a founder once per visit. So it is enforced here,
