@@ -6,15 +6,14 @@ import {
   getOpportunityExecutionSummaries,
 } from "@/modules/execution/service";
 import { buildOpportunityActionState } from "@/modules/execution/view";
-import {
-  MOVES_CONTEXT_PARAM,
-  resolveMovesContext,
-} from "@/modules/opportunities/lineage";
+import { MOVES_CONTEXT_PARAM, resolveMovesContext } from "@/modules/opportunities/lineage";
 import { getMoveLineage, opportunityReadinessFrom } from "@/modules/opportunities/service";
 import {
   getActiveActionPlanOperation,
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
+import { readNovaMoveVoice, topMove } from "@/modules/nova/voice/move-slot";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import {
   actionPlanReadinessFrom,
@@ -29,6 +28,7 @@ import {
 } from "@/modules/action-plans/source";
 import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-preflight";
 import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
+import { NovaMoveVoice } from "../nova-move-voice";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
 import { MovesRefreshBar } from "./moves-refresh-bar";
 import type { Metadata } from "next";
@@ -248,8 +248,27 @@ export default async function ProjectMovesPage({
         summary.branchName,
       );
     }
-
   }
+
+  /*
+   * What Nova says above the Moves, if she has said anything about *this* top
+   * Move. A read and nothing else: `readNovaMoveVoice` takes no provider, and
+   * the message it resolves was written by the durable step that generated the
+   * set (ADR 0085). A render that could generate would be the per-visit spend
+   * §M of the Nova audit refuses.
+   *
+   * Both inputs are the same ones the durable step used — the set's top-ranked
+   * Move and the founder's stored goal — so the identity computed here matches
+   * the one written there.
+   */
+  const topRankedMove = topMove(opportunities?.set.opportunities ?? []);
+  const novaMoveVoice = topRankedMove
+    ? await readNovaMoveVoice(supabase, {
+        projectId: project.id,
+        move: topRankedMove,
+        primaryGoal: (await getFounderIntent(supabase, project.id))?.intent.primaryGoal ?? null,
+      })
+    : null;
 
   return (
     <WorkspaceSection
@@ -265,6 +284,15 @@ export default async function ProjectMovesPage({
         />
       }
     >
+      {/*
+        Nova speaks only about a Move she was actually asked about. `resolved`
+        is false for every set generated before this existed, and for every one
+        generated with the switch off — and for those the page is exactly what
+        it was, rather than carrying a sentence about a moment that never
+        happened.
+      */}
+      {novaMoveVoice?.resolved && <NovaMoveVoice read={novaMoveVoice} />}
+
       <ActionPlanWorkspace
         projectId={project.id}
         opportunities={opportunities?.set.opportunities ?? []}

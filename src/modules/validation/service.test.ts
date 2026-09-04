@@ -1,3 +1,4 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import type { PackageManagerId } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
@@ -77,6 +78,7 @@ function seed(
   });
 
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -206,6 +208,7 @@ describe("artifact-centric eligibility (§28)", () => {
     seed();
     // A second, newer snapshot — the exact condition that blocks *preparation*.
     db.seed("repository_intelligence_snapshots", {
+      analyzer_version: REPOSITORY_ANALYZER_VERSION,
       id: "snapshot_2",
       project_id: PROJECT,
       status: "completed",

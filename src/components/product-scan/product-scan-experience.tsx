@@ -1,13 +1,7 @@
 "use client";
 
 import type { ComponentType, SVGProps } from "react";
-import {
-  useActionState,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useActionState, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { ProductLogo } from "@/components/brand/product-logo";
@@ -28,15 +22,9 @@ import { MonoLabel } from "@/components/ui/typography";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { formatTime } from "@/lib/utils/format-datetime";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import {
-  operationPollPhase,
-  type OperationView,
-} from "@/modules/operations/view";
+import { operationPollPhase, type OperationView } from "@/modules/operations/view";
 import type { ProductScanPresentation } from "@/modules/product-scan/presentation";
-import type {
-  ProductScanEvent,
-  ProductScanSource,
-} from "@/modules/product-scan/schema";
+import type { ProductScanEvent, ProductScanSource } from "@/modules/product-scan/schema";
 import {
   startUnderstandingAction,
   type StartUnderstandingState,
@@ -49,17 +37,9 @@ import {
 const POLL_INTERVAL_MS = 1_800;
 const EMPTY_SCAN_EVENTS: ProductScanEvent[] = [];
 
-type ScanIcon = ComponentType<
-  SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }
->;
+type ScanIcon = ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number }>;
 
-type FacetId =
-  | "product"
-  | "features"
-  | "live"
-  | "audience"
-  | "billing"
-  | "brand";
+type FacetId = "product" | "features" | "live" | "audience" | "billing" | "brand";
 
 type ScanFacet = {
   id: FacetId;
@@ -70,7 +50,8 @@ type ScanFacet = {
   icon: ScanIcon;
 };
 
-type ProductScanExperienceProps = {
+/** Exported so Nova can compose this component rather than restate it (§K). */
+export type ProductScanExperienceProps = {
   projectId: string;
   productName?: string;
   initialOperation: OperationView | null;
@@ -153,9 +134,7 @@ function firstFinding(
   key: string | ((event: ProductScanEvent) => boolean),
 ) {
   return events.find((event) =>
-    typeof key === "string"
-      ? event.findingKey?.startsWith(key)
-      : key(event),
+    typeof key === "string" ? event.findingKey?.startsWith(key) : key(event),
   );
 }
 
@@ -168,10 +147,7 @@ function eventFacet(event: ProductScanEvent): FacetId {
   ) {
     return "billing";
   }
-  if (
-    event.findingKey?.includes("audience") ||
-    event.findingKey?.includes("positioning")
-  ) {
+  if (event.findingKey?.includes("audience") || event.findingKey?.includes("positioning")) {
     return "audience";
   }
   if (event.source === "live_product") return "live";
@@ -186,9 +162,8 @@ function eventFacet(event: ProductScanEvent): FacetId {
 }
 
 function discoveryCount(events: ProductScanEvent[]) {
-  return events.filter(
-    (event) => event.type === "finding" || event.type === "profile_ready",
-  ).length;
+  return events.filter((event) => event.type === "finding" || event.type === "profile_ready")
+    .length;
 }
 
 function sourceLabel(source: ProductScanSource) {
@@ -206,28 +181,25 @@ function buildFacets(
   const productFinding = firstFinding(events, (event) =>
     Boolean(
       event.findingKey?.startsWith("framework.") ||
-        event.findingKey?.startsWith("technical.framework"),
+      event.findingKey?.startsWith("technical.framework"),
     ),
   );
   const featureFinding = firstFinding(events, (event) =>
     Boolean(
       event.findingKey?.startsWith("capability.") ||
-        event.findingKey?.startsWith("surface.") ||
-        event.findingKey?.startsWith("integration."),
+      event.findingKey?.startsWith("surface.") ||
+      event.findingKey?.startsWith("integration."),
     ),
   );
-  const liveFinding = firstFinding(
-    events,
-    (event) => event.source === "live_product",
-  );
+  const liveFinding = firstFinding(events, (event) => event.source === "live_product");
   const audienceFinding = firstFinding(events, (event) =>
     Boolean(event.findingKey?.includes("audience")),
   );
   const billingFinding = firstFinding(events, (event) =>
     Boolean(
       event.findingKey?.includes("pricing") ||
-        event.findingKey?.includes("payment") ||
-        event.findingKey?.includes("subscription"),
+      event.findingKey?.includes("payment") ||
+      event.findingKey?.includes("subscription"),
     ),
   );
   const brandFinding = firstFinding(events, "brand.");
@@ -242,15 +214,14 @@ function buildFacets(
       ? presentation.typeface
       : presentation?.colors.length
         ? `${presentation.colors.length} colors detected`
-        : brandFinding?.title ?? "Assets & positioning";
+        : (brandFinding?.title ?? "Assets & positioning");
 
   return [
     {
       id: "product",
       label: "Product type",
       detail: productFinding?.detail ?? "Repository structure",
-      summary:
-        presentation?.productType ?? productFinding?.title ?? "Detecting…",
+      summary: presentation?.productType ?? productFinding?.title ?? "Detecting…",
       ready: Boolean(productFinding || presentation?.productType),
       icon: ProductsIcon,
     },
@@ -258,8 +229,7 @@ function buildFacets(
       id: "features",
       label: "Core features",
       detail: featureFinding ? sourceLabel(featureFinding.source) : "Scanning",
-      summary:
-        capabilitySummary || featureFinding?.title || (active ? "Learning…" : "—"),
+      summary: capabilitySummary || featureFinding?.title || (active ? "Learning…" : "—"),
       ready: Boolean(featureFinding || capabilitySummary),
       icon: LayersIcon,
     },
@@ -275,8 +245,7 @@ function buildFacets(
       id: "audience",
       label: "Audience signals",
       detail: audienceFinding ? sourceLabel(audienceFinding.source) : "Learning",
-      summary:
-        presentation?.audience ?? audienceFinding?.title ?? (active ? "Learning…" : "—"),
+      summary: presentation?.audience ?? audienceFinding?.title ?? (active ? "Learning…" : "—"),
       ready: Boolean(audienceFinding || presentation?.audience),
       icon: TeamIcon,
     },
@@ -318,9 +287,7 @@ function ScanCore({
         className="absolute inset-[-2rem] rounded-full border border-mint/20"
         animate={motionEnabled ? { rotate: 360 } : { rotate: 0 }}
         transition={
-          motionEnabled
-            ? { duration: 22, ease: "linear", repeat: Infinity }
-            : { duration: 0 }
+          motionEnabled ? { duration: 22, ease: "linear", repeat: Infinity } : { duration: 0 }
         }
       >
         <span className="absolute left-1/2 top-[-0.2rem] size-1.5 -translate-x-1/2 rounded-full bg-mint shadow-[0_0_14px_var(--color-mint)]" />
@@ -330,9 +297,7 @@ function ScanCore({
         className="absolute inset-[-1rem] rounded-full border border-dashed border-mint/40"
         animate={motionEnabled ? { rotate: -360 } : { rotate: 0 }}
         transition={
-          motionEnabled
-            ? { duration: 16, ease: "linear", repeat: Infinity }
-            : { duration: 0 }
+          motionEnabled ? { duration: 16, ease: "linear", repeat: Infinity } : { duration: 0 }
         }
       />
       <div className="absolute inset-0 rounded-full border border-mint/70 bg-app shadow-[0_0_0_8px_color-mix(in_srgb,var(--color-mint)_8%,transparent),0_0_55px_color-mix(in_srgb,var(--color-mint)_38%,transparent)]" />
@@ -373,9 +338,7 @@ function ScanFacetCard({
     <motion.article
       data-facet={facet.id}
       className={`absolute z-30 flex h-[4.2rem] w-[10.75rem] items-center gap-3 rounded-xl border bg-app/95 px-3 shadow-lg backdrop-blur-md max-md:relative max-md:inset-auto max-md:h-[4.5rem] max-md:w-full max-md:translate-x-0 ${FACET_POSITIONS[facet.id]} ${
-        facet.ready
-          ? "border-mint/35 shadow-mint/5"
-          : "border-line-2"
+        facet.ready ? "border-mint/35 shadow-mint/5" : "border-line-2"
       }`}
       initial={false}
       animate={
@@ -387,9 +350,7 @@ function ScanFacetCard({
     >
       <div
         className={`grid size-8 shrink-0 place-items-center rounded-lg border ${
-          facet.ready
-            ? "border-mint/25 bg-mint/[0.07] text-mint"
-            : "border-line-1 text-fg-muted"
+          facet.ready ? "border-mint/25 bg-mint/[0.07] text-mint" : "border-line-1 text-fg-muted"
         }`}
       >
         <AnimatePresence initial={false} mode="wait">
@@ -416,9 +377,7 @@ function ScanFacetCard({
         </AnimatePresence>
       </div>
       <div className="min-w-0">
-        <p className="truncate text-[0.78rem] font-semibold text-fg">
-          {facet.label}
-        </p>
+        <p className="truncate text-[0.78rem] font-semibold text-fg">{facet.label}</p>
         <p className={`truncate text-[0.68rem] ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}>
           {facet.detail}
         </p>
@@ -426,9 +385,7 @@ function ScanFacetCard({
       <span
         aria-hidden="true"
         className={`absolute -left-1 top-1/2 size-2 -translate-y-1/2 rounded-full ${
-          facet.ready
-            ? "bg-mint shadow-[0_0_12px_var(--color-mint)]"
-            : "bg-line-track"
+          facet.ready ? "bg-mint shadow-[0_0_12px_var(--color-mint)]" : "bg-line-track"
         }`}
       />
     </motion.article>
@@ -454,7 +411,10 @@ function DiscoveryGraph({
       data-testid="product-scan-graph"
       className="relative h-[31rem] overflow-hidden rounded-2xl border border-line-2 bg-app/55 max-md:h-auto max-md:min-h-0 max-md:overflow-visible max-md:p-4"
     >
-      <div aria-hidden="true" className="absolute inset-0 bg-[radial-gradient(circle_at_center,color-mix(in_srgb,var(--color-mint)_10%,transparent),transparent_38%)]" />
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 bg-[radial-gradient(circle_at_center,color-mix(in_srgb,var(--color-mint)_10%,transparent),transparent_38%)]"
+      />
       <svg
         aria-hidden="true"
         viewBox="0 0 760 500"
@@ -467,23 +427,73 @@ function DiscoveryGraph({
             <stop offset="1" stopColor="var(--color-mint)" stopOpacity="0" />
           </radialGradient>
         </defs>
-        <ellipse cx="380" cy="250" rx="300" ry="188" fill="none" stroke="currentColor" strokeOpacity="0.08" />
-        <ellipse cx="380" cy="250" rx="262" ry="146" fill="none" stroke="currentColor" strokeDasharray="3 12" strokeOpacity="0.12" />
-        <ellipse cx="380" cy="250" rx="212" ry="204" fill="none" stroke="currentColor" strokeOpacity="0.08" />
+        <ellipse
+          cx="380"
+          cy="250"
+          rx="300"
+          ry="188"
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity="0.08"
+        />
+        <ellipse
+          cx="380"
+          cy="250"
+          rx="262"
+          ry="146"
+          fill="none"
+          stroke="currentColor"
+          strokeDasharray="3 12"
+          strokeOpacity="0.12"
+        />
+        <ellipse
+          cx="380"
+          cy="250"
+          rx="212"
+          ry="204"
+          fill="none"
+          stroke="currentColor"
+          strokeOpacity="0.08"
+        />
         <motion.g
           animate={motionEnabled ? { rotate: 360 } : { rotate: 0 }}
-          transition={motionEnabled ? { duration: 38, repeat: Infinity, ease: "linear" } : { duration: 0 }}
+          transition={
+            motionEnabled ? { duration: 38, repeat: Infinity, ease: "linear" } : { duration: 0 }
+          }
           style={{ transformOrigin: "380px 250px" }}
         >
-          <path d="M 82 250 C 175 165, 252 135, 380 135 C 512 135, 594 178, 680 250" fill="none" stroke="currentColor" strokeOpacity="0.08" />
-          <path d="M 93 271 C 176 354, 260 384, 380 384 C 505 384, 588 349, 667 271" fill="none" stroke="currentColor" strokeOpacity="0.08" />
+          <path
+            d="M 82 250 C 175 165, 252 135, 380 135 C 512 135, 594 178, 680 250"
+            fill="none"
+            stroke="currentColor"
+            strokeOpacity="0.08"
+          />
+          <path
+            d="M 93 271 C 176 354, 260 384, 380 384 C 505 384, 588 349, 667 271"
+            fill="none"
+            stroke="currentColor"
+            strokeOpacity="0.08"
+          />
         </motion.g>
         {ORBIT_POINTS.map(([x, y], index) => (
-          <circle key={`${x}-${y}`} cx={x} cy={y} r={index % 3 === 0 ? 2 : 1.25} fill="currentColor" opacity={index % 3 === 0 ? 0.75 : 0.35} />
+          <circle
+            key={`${x}-${y}`}
+            cx={x}
+            cy={y}
+            r={index % 3 === 0 ? 2 : 1.25}
+            fill="currentColor"
+            opacity={index % 3 === 0 ? 0.75 : 0.35}
+          />
         ))}
         {facets.map((facet) => (
           <g key={facet.id}>
-            <path d={CONNECTORS[facet.id]} fill="none" stroke="currentColor" strokeWidth="1.25" strokeOpacity={facet.ready ? 0.55 : 0.11} />
+            <path
+              d={CONNECTORS[facet.id]}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeOpacity={facet.ready ? 0.55 : 0.11}
+            />
             <motion.path
               d={CONNECTORS[facet.id]}
               fill="none"
@@ -493,8 +503,20 @@ function DiscoveryGraph({
               animate={{ pathLength: facet.ready ? 1 : 0, opacity: facet.ready ? 0.7 : 0 }}
               transition={{ duration: reduceMotion ? 0 : 0.65, ease: "easeOut" }}
             />
-            <circle cx={FACET_POINT[facet.id].x} cy={FACET_POINT[facet.id].y} r="12" fill="url(#scan-node-glow)" opacity={facet.ready ? 0.55 : 0} />
-            <circle cx={FACET_POINT[facet.id].x} cy={FACET_POINT[facet.id].y} r="2.5" fill="currentColor" opacity={facet.ready ? 1 : 0.2} />
+            <circle
+              cx={FACET_POINT[facet.id].x}
+              cy={FACET_POINT[facet.id].y}
+              r="12"
+              fill="url(#scan-node-glow)"
+              opacity={facet.ready ? 0.55 : 0}
+            />
+            <circle
+              cx={FACET_POINT[facet.id].x}
+              cy={FACET_POINT[facet.id].y}
+              r="2.5"
+              fill="currentColor"
+              opacity={facet.ready ? 1 : 0.2}
+            />
           </g>
         ))}
       </svg>
@@ -539,7 +561,9 @@ function DiscoveryStatusIcon({
           aria-hidden="true"
           className="size-2 rounded-full border border-mint border-t-transparent"
           animate={motionEnabled ? { rotate: 360 } : { rotate: 0 }}
-          transition={motionEnabled ? { duration: 0.9, ease: "linear", repeat: Infinity } : { duration: 0 }}
+          transition={
+            motionEnabled ? { duration: 0.9, ease: "linear", repeat: Infinity } : { duration: 0 }
+          }
         />
       ) : (
         <span className="size-1 rounded-full bg-fg-faint" />
@@ -621,7 +645,9 @@ function DiscoveringPanel({
                 />
               </motion.div>
             ) : (
-              <motion.span key="initials" initial={false}>{initials || "V"}</motion.span>
+              <motion.span key="initials" initial={false}>
+                {initials || "V"}
+              </motion.span>
             )}
           </AnimatePresence>
         </div>
@@ -635,13 +661,18 @@ function DiscoveringPanel({
 
       <div className="mt-3 grid flex-1 grid-rows-6 overflow-hidden rounded-xl border border-line-1">
         {rows.map(({ facet, icon: Icon }) => (
-          <div key={facet.label} className="grid min-h-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-line-1 px-3 last:border-b-0">
+          <div
+            key={facet.label}
+            className="grid min-h-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-line-1 px-3 last:border-b-0"
+          >
             <div className="flex min-w-0 items-center gap-2.5">
               <Icon size={16} className={facet.ready ? "text-fg-body" : "text-fg-muted"} />
               <span className="truncate text-xs text-fg-muted">{facet.label}</span>
             </div>
             <div className="flex min-w-0 max-w-[9.5rem] items-center gap-2">
-              <span className={`truncate text-right text-xs ${facet.ready ? "text-mint" : "text-fg-meta"}`}>
+              <span
+                className={`truncate text-right text-xs ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+              >
                 {facet.summary}
               </span>
               <DiscoveryStatusIcon
@@ -677,7 +708,9 @@ function LiveActivity({
   return (
     <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center gap-2">
-        <span className={`size-2 rounded-full ${active ? "bg-mint shadow-[0_0_10px_var(--color-mint)]" : "bg-mint/70"}`} />
+        <span
+          className={`size-2 rounded-full ${active ? "bg-mint shadow-[0_0_10px_var(--color-mint)]" : "bg-mint/70"}`}
+        />
         <h3 className="text-sm font-semibold text-fg">Live activity</h3>
       </div>
       <ol className="mt-3 grid flex-1 grid-rows-8 overflow-hidden">
@@ -700,7 +733,10 @@ function LiveActivity({
                 <CheckIcon size={10} strokeWidth={2.5} />
               </span>
               <span className="truncate">{event.title}</span>
-              <time className="font-mono text-[0.66rem] tabular-nums text-fg-meta" dateTime={event.occurredAt}>
+              <time
+                className="font-mono text-[0.66rem] tabular-nums text-fg-meta"
+                dateTime={event.occurredAt}
+              >
                 {formatTime(event.occurredAt)}
               </time>
             </motion.li>
@@ -747,10 +783,22 @@ function DiscoveriesGrid({
               key={facet.id}
               className={`flex min-h-0 items-center gap-3 rounded-xl border px-3 ${facet.ready ? "border-line-2 bg-app/65" : "border-line-1 bg-app/30"}`}
               initial={false}
-              animate={pulse && !reduceMotion ? { borderColor: ["var(--color-line-2)", "var(--color-mint)", "var(--color-line-2)"] } : undefined}
+              animate={
+                pulse && !reduceMotion
+                  ? {
+                      borderColor: [
+                        "var(--color-line-2)",
+                        "var(--color-mint)",
+                        "var(--color-line-2)",
+                      ],
+                    }
+                  : undefined
+              }
               transition={{ duration: reduceMotion ? 0 : 0.7 }}
             >
-              <div className={`grid size-8 shrink-0 place-items-center rounded-lg ${facet.ready ? "text-mint" : "text-fg-meta"}`}>
+              <div
+                className={`grid size-8 shrink-0 place-items-center rounded-lg ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+              >
                 {facet.id === "brand" && presentation?.logo ? (
                   <ProductLogo
                     src={presentation.logo.url}
@@ -764,7 +812,9 @@ function DiscoveriesGrid({
               </div>
               <div className="min-w-0">
                 <p className="truncate text-xs font-semibold text-fg">{facet.label}</p>
-                <p className={`mt-1 line-clamp-2 text-[0.68rem] leading-4 ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}>
+                <p
+                  className={`mt-1 line-clamp-2 text-[0.68rem] leading-4 ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}
+                >
                   {facet.summary}
                 </p>
               </div>
@@ -790,7 +840,9 @@ function ScanFooter({
 
   return (
     <footer className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-line-2 bg-surface-1 px-4 py-3">
-      <div className={`grid size-10 shrink-0 place-items-center rounded-full ${failed ? "bg-coral-tint-soft text-coral" : "bg-mint-tint-soft text-mint"}`}>
+      <div
+        className={`grid size-10 shrink-0 place-items-center rounded-full ${failed ? "bg-coral-tint-soft text-coral" : "bg-mint-tint-soft text-mint"}`}
+      >
         <SparklesIcon size={20} />
       </div>
       <div className="min-w-0">
@@ -846,9 +898,7 @@ export function ProductScanExperience({
     FormData
   >(start, null);
   const startedOperation =
-    startState?.ok && startState.kind === "running"
-      ? startState.operation
-      : null;
+    startState?.ok && startState.kind === "running" ? startState.operation : null;
   const startFailure = startState && !startState.ok ? startState.error : null;
   const watchedOperation = startedOperation ?? initialOperation;
   const initialScan = useMemo<ProductScanStatus | null>(
@@ -857,9 +907,7 @@ export function ProductScanExperience({
         ? {
             operation: watchedOperation,
             events:
-              watchedOperation.operationId === initialOperation?.operationId
-                ? initialEvents
-                : [],
+              watchedOperation.operationId === initialOperation?.operationId ? initialEvents : [],
             presentation:
               watchedOperation.operationId === initialOperation?.operationId
                 ? initialPresentation
@@ -874,16 +922,10 @@ export function ProductScanExperience({
     intervalMs: POLL_INTERVAL_MS,
     poll: async () => {
       if (!watchedOperation) return { kind: "unavailable" };
-      const result = await getProductScanStatusAction(
-        projectId,
-        watchedOperation.operationId,
-      );
-      return result.ok
-        ? { kind: "value", value: result.scan }
-        : { kind: "unavailable" };
+      const result = await getProductScanStatusAction(projectId, watchedOperation.operationId);
+      return result.ok ? { kind: "value", value: result.scan } : { kind: "unavailable" };
     },
-    continueAfter: (next) =>
-      operationPollPhase(next.operation) === "working",
+    continueAfter: (next) => operationPollPhase(next.operation) === "working",
   });
   const scan = latest ?? initialScan;
   const operation = scan?.operation ?? null;
@@ -905,21 +947,16 @@ export function ProductScanExperience({
   const revealedSequence = currentRevealState.sequence;
   const refreshedOperation = useRef<string | null>(
     initialOperation &&
-      (initialOperation.status === "completed" ||
-        initialOperation.status === "failed")
+      (initialOperation.status === "completed" || initialOperation.status === "failed")
       ? initialOperation.operationId
       : null,
   );
 
   useEffect(() => {
-    const pendingEvents = events.filter(
-      (event) => event.sequence > revealedSequence,
-    );
+    const pendingEvents = events.filter((event) => event.sequence > revealedSequence);
     if (!pendingEvents.length) return;
 
-    const nextEvent = reduceMotion
-      ? pendingEvents.at(-1) ?? null
-      : pendingEvents[0];
+    const nextEvent = reduceMotion ? (pendingEvents.at(-1) ?? null) : pendingEvents[0];
     if (!nextEvent) return;
 
     const reveal = () => {
@@ -928,9 +965,7 @@ export function ProductScanExperience({
         sequence: nextEvent.sequence,
       });
       setPulseEventId(nextEvent.id);
-      setAnnouncement(
-        `${nextEvent.title}${nextEvent.detail ? `. ${nextEvent.detail}` : ""}`,
-      );
+      setAnnouncement(`${nextEvent.title}${nextEvent.detail ? `. ${nextEvent.detail}` : ""}`);
     };
 
     const timeoutId = window.setTimeout(reveal, reduceMotion ? 0 : 440);
@@ -960,9 +995,7 @@ export function ProductScanExperience({
   }, [pulseEventId, reduceMotion]);
 
   const active = isActive(operation) || startPending;
-  const [expandedOperationId, setExpandedOperationId] = useState<string | null>(
-    null,
-  );
+  const [expandedOperationId, setExpandedOperationId] = useState<string | null>(null);
   const motionEnabled = active && documentVisible && !reduceMotion;
   const failure = operationError(operation);
   const revealedEvents = useMemo(
@@ -972,9 +1005,7 @@ export function ProductScanExperience({
   const scanFinished =
     operation?.status === "completed" &&
     revealedEvents.some((event) => event.type === "scan_completed");
-  const revealedPresentation = revealedEvents.some(
-    (event) => event.type === "profile_ready",
-  )
+  const revealedPresentation = revealedEvents.some((event) => event.type === "profile_ready")
     ? presentation
     : null;
   const pulseEvent = events.find((event) => event.id === pulseEventId) ?? null;
@@ -982,9 +1013,7 @@ export function ProductScanExperience({
     () => buildFacets(revealedEvents, revealedPresentation, active),
     [active, revealedEvents, revealedPresentation],
   );
-  const displayFailure = startFailure
-    ? OPERATION_FAILURE_MESSAGES[startFailure]
-    : failure;
+  const displayFailure = startFailure ? OPERATION_FAILURE_MESSAGES[startFailure] : failure;
 
   const detailsExpanded =
     variant !== "workspace" ||
@@ -1020,7 +1049,10 @@ export function ProductScanExperience({
               </span>
               <div className="min-w-0 flex-1">
                 <MonoLabel className="text-mint">Product scan · complete</MonoLabel>
-                <h2 id="product-scan-title" className="mt-1 text-lg font-semibold tracking-[-0.02em] text-fg">
+                <h2
+                  id="product-scan-title"
+                  className="mt-1 text-lg font-semibold tracking-[-0.02em] text-fg"
+                >
                   Your product picture is ready
                 </h2>
                 <p className="mt-1 text-xs text-fg-muted">
@@ -1049,13 +1081,21 @@ export function ProductScanExperience({
             >
               <header className="relative flex min-h-[8.25rem] flex-col items-center justify-center px-3 text-center">
                 <MonoLabel className={active ? "text-mint" : undefined}>
-                  {active ? "Product scan · live" : operation?.status === "completed" ? "Product scan · complete" : "Product scan"}
+                  {active
+                    ? "Product scan · live"
+                    : operation?.status === "completed"
+                      ? "Product scan · complete"
+                      : "Product scan"}
                 </MonoLabel>
-                <h2 id="product-scan-title" className="mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl">
+                <h2
+                  id="product-scan-title"
+                  className="mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl"
+                >
                   Understanding <span className="text-mint">your product</span>
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
-                  Vibe is learning what you built, how it works, and what kind of business it could become.
+                  Vibe is learning what you built, how it works, and what kind of business it could
+                  become.
                 </p>
 
                 {variant === "workspace" && !active ? (
@@ -1079,7 +1119,11 @@ export function ProductScanExperience({
                     ) : (
                       <form action={startDispatch} noValidate>
                         <input type="hidden" name="force" value="true" />
-                        <Button type="submit" disabled={startPending || !canStart} busy={startPending}>
+                        <Button
+                          type="submit"
+                          disabled={startPending || !canStart}
+                          busy={startPending}
+                        >
                           {startPending
                             ? "Starting Product Scan…"
                             : hasProfile
@@ -1093,7 +1137,10 @@ export function ProductScanExperience({
               </header>
 
               {displayFailure ? (
-                <div role="alert" className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-sm text-coral">
+                <div
+                  role="alert"
+                  className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-sm text-coral"
+                >
                   {displayFailure}
                 </div>
               ) : null}
@@ -1115,11 +1162,7 @@ export function ProductScanExperience({
               </div>
 
               <div className="mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1">
-                <LiveActivity
-                  events={revealedEvents}
-                  active={active}
-                  pulseEventId={pulseEventId}
-                />
+                <LiveActivity events={revealedEvents} active={active} pulseEventId={pulseEventId} />
                 <DiscoveriesGrid
                   facets={facets}
                   events={revealedEvents}
@@ -1134,7 +1177,10 @@ export function ProductScanExperience({
                 motionEnabled={motionEnabled}
               />
 
-              {variant === "onboarding" && !active && operation?.status === "failed" && operation.retryAllowed ? (
+              {variant === "onboarding" &&
+              !active &&
+              operation?.status === "failed" &&
+              operation.retryAllowed ? (
                 <form action={startDispatch} noValidate className="mt-4 flex justify-center">
                   <input type="hidden" name="force" value="true" />
                   <Button type="submit" variant="primary" disabled={startPending}>

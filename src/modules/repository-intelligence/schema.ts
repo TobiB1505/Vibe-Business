@@ -36,6 +36,11 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * it decides whether an ancestor lockfile may install an application below it,
  * so a v6 answer read as a v7 one would put a sandbox to work in a directory
  * chosen by a wrong fact.
+ *
+ * `src/lib/versions/analyzer-versions.test.ts` pins this constant to the
+ * detectors below it: their normalized source is hashed, so a changed detection
+ * rule fails until the version is bumped or the new hash is recorded with a
+ * stated reason why no stored snapshot can be affected.
  */
 export const ANALYZER_VERSION = "repo-intelligence-v7" as const;
 

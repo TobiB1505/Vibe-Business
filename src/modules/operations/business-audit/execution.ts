@@ -12,15 +12,26 @@ import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
-  EVIDENCE_PACK_V3_VERSION,
-  buildEvidencePackV4,
+  CURRENT_EVIDENCE_PACK_VERSION,
+  buildCurrentEvidencePack,
   trimEvidencePackV3,
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
+import { buildNovaAuditEntry } from "@/modules/nova/feed";
+import {
+  buildNovaAuditTemplate,
+  buildNovaAuditVoicePayload,
+} from "@/modules/nova/voice/audit-slot";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
+
+import { speakAfterOperation } from "../nova-voice";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
-import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
+import {
+  BUSINESS_AUDIT_SCHEMA_VERSION,
+  BUSINESS_AUDIT_VERSION,
+} from "@/modules/business-audit/schema";
 import {
   consumesIncludedEntitlement,
   type AuditAccessMode,
@@ -156,7 +167,8 @@ async function loadAuditSources(
       getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     ]);
 
-  if (!repositorySnapshot?.result) return { ok: false, failureCode: "repository_intelligence_missing" };
+  if (!repositorySnapshot?.result)
+    return { ok: false, failureCode: "repository_intelligence_missing" };
   if (!liveSnapshot?.result) return { ok: false, failureCode: "live_product_intelligence_missing" };
 
   // The CORE-2 contract, enforced where it cannot be routed around: no Product
@@ -194,7 +206,7 @@ async function loadAuditSources(
         authenticatedSnapshotId: authenticated?.id ?? null,
         schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
         auditVersion: BUSINESS_AUDIT_VERSION,
-        evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+        evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
         promptVersion: PROMPT_VERSION,
         rubricVersion: RUBRIC_VERSION,
         profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
@@ -340,7 +352,7 @@ export async function prepareEvidenceStep(
     inputHash: resolved.identity.inputHash,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+    evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
@@ -353,7 +365,10 @@ export async function prepareEvidenceStep(
   });
 
   if (!run.ok) {
-    return { ok: false, failureCode: run.error === "already_running" ? "already_running" : "audit_failed" };
+    return {
+      ok: false,
+      failureCode: run.error === "already_running" ? "already_running" : "audit_failed",
+    };
   }
 
   await claimResultForOperation(deps.supabase, { operationId, resultId: run.auditId });
@@ -469,7 +484,10 @@ export async function checkFounderQuestionStep(
    * operation is credits-funded and the resume finds none active.
    */
   if (paused) {
-    await releaseOperationBilling(deps.supabase, { operationRunId: operationId, reason: "cancelled_before_usage" });
+    await releaseOperationBilling(deps.supabase, {
+      operationRunId: operationId,
+      reason: "cancelled_before_usage",
+    });
   }
 
   await recordAuditEvent(deps.supabase, {
@@ -514,7 +532,7 @@ export async function countTokensStep(
   const config = BUSINESS_READINESS_AUDIT_CONFIG;
   // The newest pack, matching what `runBusinessReadinessAudit` will build --
   // this counts the request that will actually be billed (ADR 0044).
-  const pack = buildEvidencePackV4(sources.sources);
+  const pack = buildCurrentEvidencePack(sources.sources);
   const counted = await deps.provider.countInputTokens(buildAuditRequest(pack, config));
   if (!counted.ok) return { ok: false, failureCode: counted.error };
 
@@ -564,7 +582,10 @@ export async function runInferenceStep(
   // result rather than producing a second one.
   if (existing?.status === "completed") return { ok: true, auditId: existing.id };
   if (existing?.status === "failed") {
-    return { ok: false, failureCode: (existing.failureCode as OperationFailureCode) ?? "audit_failed" };
+    return {
+      ok: false,
+      failureCode: (existing.failureCode as OperationFailureCode) ?? "audit_failed",
+    };
   }
 
   // The ambiguous case, and the one this whole design exists for: a provider
@@ -717,7 +738,10 @@ export async function completeOperationStep(
   operationId: string,
   auditId: string,
 ): Promise<void> {
-  const transitioned = await completeOperationRun(deps.supabase, { operationId, resultId: auditId });
+  const transitioned = await completeOperationRun(deps.supabase, {
+    operationId,
+    resultId: auditId,
+  });
   if (!transitioned) return;
 
   /*
@@ -736,7 +760,72 @@ export async function completeOperationStep(
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
     eventType: "operation.completed",
-    metadata: { projectId: operation.projectId, operationId, operationType: operation.operationType },
+    metadata: {
+      projectId: operation.projectId,
+      operationId,
+      operationType: operation.operationType,
+    },
+  });
+
+  await speakAboutTheAudit(deps, operation, auditId);
+}
+
+/**
+ * Nova says one sentence about an audit that is already finished.
+ *
+ * ## Why this line and no other
+ *
+ * It is after `completeOperationRun` returned `transitioned`, which is guarded
+ * to happen at most once, so a workflow replay does not reach here twice. That
+ * matters for more than tidiness: `speakAfterOperation` records usage under
+ * `jobId = operation.id`, and `ai_usage_events_job_idx` is unique on `job_id`
+ * — the guard is what makes "at most one presentation per operation" a
+ * property of the state machine rather than a collision the ledger has to
+ * absorb. `ensureNovaVoiceMessage` refusing a resolved identity is the second
+ * of the two, and either alone would be enough.
+ *
+ * It is also after everything that decides whether the founder got what they
+ * paid for: the audit is committed, the entitlement is consumed, the billing
+ * is settled, the completion event is written. Nothing below this line can
+ * change any of it, which is the whole reason the tier is allowed to exist.
+ *
+ * ## Why the view is built from so little
+ *
+ * `buildBusinessBrainView` takes history, moves and a scan timestamp, and none
+ * of them reach the five fields `buildNovaAuditEntry` reads — moves decorate a
+ * problem's `move`/`moveCount`, readings decorate `recentChanges`. Passing
+ * empty ones is not a shortcut around a read; it is declining to perform four
+ * reads whose results are discarded on the next line. `audit-slot.test.ts`
+ * pins that by asserting the entry is identical with them supplied.
+ *
+ * Moves do not exist yet at this moment anyway: the opportunity engine runs
+ * after the audit it reads.
+ */
+async function speakAboutTheAudit(
+  deps: ExecutionDeps,
+  operation: { id: string; userId: string; projectId: string },
+  auditId: string,
+): Promise<void> {
+  const stored = await getAuditById(deps.supabase, auditId);
+  const audit = stored?.result ?? null;
+  if (audit === null || !audit.synthesis) return;
+
+  const view = buildBusinessBrainView({
+    audit,
+    lastScanAt: null,
+    auditReadings: [],
+    movesByConclusion: {},
+  });
+  if (view === null) return;
+
+  const entry = buildNovaAuditEntry(view, audit.synthesis);
+
+  await speakAfterOperation({
+    supabase: deps.supabase,
+    provider: deps.provider,
+    operation,
+    payload: buildNovaAuditVoicePayload(entry),
+    template: buildNovaAuditTemplate(entry),
   });
 }
 

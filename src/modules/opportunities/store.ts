@@ -236,6 +236,29 @@ export async function getLatestCompletedOpportunitySet(
   return mapSet(row, await loadOpportunities(supabase, row.id));
 }
 
+/**
+ * One set by id, **with its Moves**.
+ *
+ * `getOpportunitySetById` deliberately does not join them — both of its
+ * callers only need the row's status — and `mapSet` then defaults
+ * `opportunities` to `[]`. That default is a silent trap for anything that
+ * does need them: no error, no empty result, just a set that appears to have
+ * no Moves. It cost the `move_recommendation` voice slot a live run.
+ *
+ * Named separately rather than by adding a join to the existing read, so a
+ * caller that wants the Moves has to say so and a caller that does not keeps
+ * paying for one query instead of two.
+ */
+export async function getOpportunitySetWithMoves(
+  supabase: SupabaseClient,
+  setId: string,
+): Promise<StoredOpportunitySet | null> {
+  const set = await getOpportunitySetById(supabase, setId);
+  if (set === null) return null;
+
+  return { ...set, opportunities: await loadOpportunities(supabase, setId) };
+}
+
 /** Finds an existing successful set for identical inputs (§23). */
 export async function findReusableOpportunitySet(
   supabase: SupabaseClient,

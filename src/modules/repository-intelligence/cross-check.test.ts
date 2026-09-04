@@ -48,7 +48,7 @@ function repository(
   } as unknown as RepositoryIntelligenceSnapshot;
 }
 
-function live(detected: string[]) {
+function live(detected: string[], observedPrices: number[] = []) {
   return {
     productSurfaces: ["homepage", "pricing", "checkout_billing", "login", "signup"].map((id) => ({
       id,
@@ -57,6 +57,18 @@ function live(detected: string[]) {
       confidence: "high",
       evidence: [],
     })),
+    pricing: {
+      pricingPageReached: detected.includes("pricing"),
+      declaredPricePoints: [],
+      declaredCurrencies: [],
+      hasFreeDeclaredTier: false,
+      observedPricePoints: observedPrices.map((amount) => ({
+        path: "/",
+        amount,
+        period: null,
+        currencyToken: "€",
+      })),
+    },
   } as unknown as LiveProductIntelligenceSnapshot;
 }
 
@@ -210,5 +222,59 @@ describe("a layer that did not look contradicts nothing", () => {
     // finding is unchanged by its addition.
     const checks = buildIntelligenceCrossChecks(repository(["pricing_page"]), live(["homepage"]));
     expect(checks.map((check) => check.id)).toContain("pricing-not-reachable");
+  });
+});
+
+/**
+ * The incident this guard was written for.
+ *
+ * A contradiction says one of two inputs is wrong; it does not say which. These
+ * checks read "code has pricing, live does not" as a fact about the business
+ * and mint it at the highest evidence priority — so a detector that missed a
+ * pricing surface becomes the most heavily weighted finding in the audit.
+ *
+ * That happened to Vibe Business's own audit. An anchor-section pricing page
+ * went unclassified, `payments-not-reachable` fired, and the founder was told
+ * twice that nothing on their site leads to paying, on a page that was at that
+ * moment displaying €0, €19 and €49. The prices were in the same snapshot the
+ * whole time.
+ */
+describe("a reading Vibe disproved itself is not a finding", () => {
+  it("does not accuse the business when it read prices off the live product", () => {
+    const checks = buildIntelligenceCrossChecks(
+      repository(["payments", "pricing_page"]),
+      live(["homepage"], [0, 19, 49]),
+    );
+
+    expect(checks.map((check) => check.id)).not.toContain("payments-not-reachable");
+    expect(checks.map((check) => check.id)).not.toContain("pricing-not-reachable");
+  });
+
+  /** The guard must not silence the real finding it was built to report. */
+  it("still reports it when no price was read anywhere", () => {
+    const checks = buildIntelligenceCrossChecks(
+      repository(["payments", "pricing_page"]),
+      live(["homepage"], []),
+    );
+
+    expect(checks.map((check) => check.id)).toContain("payments-not-reachable");
+    expect(checks.map((check) => check.id)).toContain("pricing-not-reachable");
+  });
+
+  /** One observed price is enough to make "no pricing anywhere" not credible. */
+  it("is disproved by a single price", () => {
+    const checks = buildIntelligenceCrossChecks(repository(["payments"]), live(["homepage"], [19]));
+
+    expect(checks.map((check) => check.id)).not.toContain("payments-not-reachable");
+  });
+
+  /** A detected pricing surface was never the contradiction's trigger anyway. */
+  it("says nothing when the pricing surface was classified normally", () => {
+    const checks = buildIntelligenceCrossChecks(
+      repository(["payments", "pricing_page"]),
+      live(["homepage", "pricing"], [19]),
+    );
+
+    expect(checks.map((check) => check.id)).not.toContain("payments-not-reachable");
   });
 });

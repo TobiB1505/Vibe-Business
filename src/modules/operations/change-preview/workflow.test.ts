@@ -1,3 +1,4 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
 import {} from "@/modules/change-preview/schema";
@@ -93,6 +94,7 @@ function seed() {
   });
 
   db.current.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
