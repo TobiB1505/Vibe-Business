@@ -36,6 +36,19 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   audit_already_running: "An audit is already running for this project. Give it a moment.",
   start_attempts_exhausted:
     "That's been started several times in the last hour. Give it a little while before trying again.",
+  /*
+   * Vibe's fault, said as Vibe's fault. The customer changed nothing; a
+   * detector was corrected after their scan ran, so the evidence underneath
+   * is known to be wrong. Re-scanning is free, and the sentence says so
+   * before it asks for anything.
+   */
+  /* The denial reason that carries both scan cases to a start path. */
+  scan_outdated:
+    "Vibe has improved how it reads your product since the last scan. Scan again first — it won't use up anything of yours.",
+  repository_scan_outdated:
+    "Vibe has improved how it reads code since this scan. Scan again first — it won't use up anything of yours.",
+  live_scan_outdated:
+    "Vibe has improved how it reads websites since this scan. Scan again first — it won't use up anything of yours.",
   product_profile_stale:
     "Your code or site changed since Vibe last looked. Refresh what Vibe knows, then audit.",
   already_running: "This is already running for the project. Give it a moment.",

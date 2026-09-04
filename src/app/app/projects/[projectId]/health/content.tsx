@@ -45,6 +45,8 @@ import { RunAuditButton } from "../run-audit-button";
 const AUDIT_PREREQUISITE_LABELS: Record<AuditPrerequisite, string> = {
   repository_intelligence_missing: "a scan of your code",
   live_product_intelligence_missing: "a scan of your website",
+  repository_scan_outdated: "a fresh scan of your code",
+  live_scan_outdated: "a fresh scan of your website",
   product_profile_missing: "Vibe to understand your product",
   product_profile_stale: "an up-to-date understanding of your product",
 };

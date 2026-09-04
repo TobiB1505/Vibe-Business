@@ -1,8 +1,13 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { BUSINESS_READINESS_AUDIT_CONFIG, PRODUCT_UNDERSTANDING_CONFIG } from "@/modules/ai/operations";
+import {
+  BUSINESS_READINESS_AUDIT_CONFIG,
+  PRODUCT_UNDERSTANDING_CONFIG,
+} from "@/modules/ai/operations";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { UNDERSTANDING_EVIDENCE_VERSION } from "@/modules/product-understanding/evidence";
@@ -58,6 +63,15 @@ import {
 export type AuditPrerequisite =
   | "repository_intelligence_missing"
   | "live_product_intelligence_missing"
+  /**
+   * The newest scan was produced by an analyzer Vibe has since corrected.
+   *
+   * Not "missing" and not "old": present, readable, and known to have been
+   * made by a machine that got something wrong. Its own remedy is a re-scan,
+   * which costs the customer nothing.
+   */
+  | "repository_scan_outdated"
+  | "live_scan_outdated"
   | "product_profile_missing"
   | "product_profile_stale";
 
@@ -67,6 +81,8 @@ export type AuditReadiness = {
   hasProductProfile: boolean;
   /** The profile was built from the evidence that exists now. */
   productProfileCurrent: boolean;
+  /** Both scans were produced by the analyzers running now. */
+  scansCurrent: boolean;
   ready: boolean;
   /** Everything still standing between this project and an audit. */
   missing: AuditPrerequisite[];
@@ -134,6 +150,47 @@ export async function readAuditEvidence(
   return { repository, live, authenticated, profile, latestAudit, founderIntent };
 }
 
+/**
+ * The scans that were produced by an analyzer older than the one running now.
+ *
+ * ## Why this is a prerequisite and not a note
+ *
+ * Because everything downstream is derived from these two snapshots, and a
+ * correction to a detector does not reach into the answers it already gave.
+ * On 2026-09-02 the pricing classifier learned to see an anchor section; the
+ * snapshot taken hours earlier kept saying a page with three prices on it had
+ * no pricing surface, and two days later that produced an audit whose critical
+ * blocker, whose highest-priority contradiction and whose whole plan were
+ * false. Nothing warned anybody, because nothing was looking at this.
+ *
+ * ## Why the version and not the age
+ *
+ * A month-old scan of a site that has not changed is perfectly good evidence.
+ * A scan from this morning made by a detector corrected at lunchtime is not.
+ * Age is a proxy; the analyzer version is the fact.
+ *
+ * The analyzer version is also the only thing `findReusableLiveSnapshot` keys
+ * reuse on, so a stale snapshot cannot be noticed anywhere else — which is why
+ * `LIVE_PRODUCT_ANALYZER_VERSION` says at length what happens when somebody
+ * changes a detector and forgets to bump it.
+ */
+export function outdatedScans(evidence: AuditEvidence): AuditPrerequisite[] {
+  const outdated: AuditPrerequisite[] = [];
+
+  if (
+    evidence.repository?.result &&
+    evidence.repository.analyzerVersion !== REPOSITORY_ANALYZER_VERSION
+  ) {
+    outdated.push("repository_scan_outdated");
+  }
+
+  if (evidence.live?.result && evidence.live.analyzerVersion !== LIVE_PRODUCT_ANALYZER_VERSION) {
+    outdated.push("live_scan_outdated");
+  }
+
+  return outdated;
+}
+
 function isProfileCurrent(evidence: AuditEvidence, storedInputHash: string): boolean {
   const { repository, live, authenticated } = evidence;
 
@@ -169,9 +226,18 @@ export async function getAuditReadiness(
     ? isProfileCurrent(evidence, profile.stored.inputHash)
     : false;
 
+  /*
+   * Before the profile, deliberately. `isProfileCurrent` hashes the snapshot's
+   * *id*, not the analyzer that made it — so a profile built on an outdated
+   * scan reports itself current, and checking it first would wave the audit
+   * through onto evidence Vibe already knows is wrong.
+   */
+  const outdated = outdatedScans(evidence);
+
   const missing: AuditPrerequisite[] = [];
   if (!hasRepositoryIntelligence) missing.push("repository_intelligence_missing");
   if (!hasLiveProductIntelligence) missing.push("live_product_intelligence_missing");
+  missing.push(...outdated);
   if (!hasProductProfile) missing.push("product_profile_missing");
   else if (!productProfileCurrent) missing.push("product_profile_stale");
 
@@ -180,6 +246,7 @@ export async function getAuditReadiness(
     hasLiveProductIntelligence,
     hasProductProfile,
     productProfileCurrent,
+    scansCurrent: outdated.length === 0,
     ready: missing.length === 0,
     missing,
   };
@@ -220,7 +287,10 @@ export async function getAuditEntitlementFacts(
   const grant =
     repositoryId === null
       ? false
-      : await hasFreeAuditGrant(supabase, { userId: params.userId, githubRepositoryId: repositoryId });
+      : await hasFreeAuditGrant(supabase, {
+          userId: params.userId,
+          githubRepositoryId: repositoryId,
+        });
 
   return {
     hasCompletedIncludedAudit: completedIncluded,
@@ -229,7 +299,10 @@ export async function getAuditEntitlementFacts(
     recentStartCount: recentStarts,
     // Read from the stored payload rather than a column: the contract version
     // lives inside `result`, so no migration was needed (CORE-2a.2 §24, §42).
-    storedAudit: latestAudit ? { contractVersion: latestAudit.result?.contractVersion ?? null } : null,
+    storedAudit: latestAudit
+      ? { contractVersion: latestAudit.result?.contractVersion ?? null }
+      : null,
+    scansCurrent: readiness.scansCurrent,
     hasProductProfile: readiness.hasProductProfile,
     productProfileCurrent: readiness.productProfileCurrent,
   };
@@ -281,9 +354,7 @@ export async function getAuditAccessStatus(
    */
   prefetched?: AuditEvidence,
 ): Promise<AuditAccessStatus> {
-  const status = toAuditAccessStatus(
-    await getAuditEntitlementFacts(supabase, params, prefetched),
-  );
+  const status = toAuditAccessStatus(await getAuditEntitlementFacts(supabase, params, prefetched));
   if (status.blockedReason !== "credits_required") return status;
 
   const cost = await resolveOperationCreditCost(supabase, {
@@ -352,6 +423,29 @@ export async function getAuditCurrency(
 
   if (!latestAudit || !repositorySnapshot?.result || !liveSnapshot?.result || !profile) {
     return { hasAudit: latestAudit !== null, upToDate: false, newDeepScanEvidence: false };
+  }
+
+  /*
+   * The other end of the same chain.
+   *
+   * `computeAuditInputHash` takes each snapshot's *id*, so an audit built on a
+   * scan Vibe has since corrected still hashes identical — the id did not move,
+   * only the machine that produced it did. Reporting that audit as up to date
+   * lets everything downstream run on it: the Moves engine's only freshness
+   * gate is `audit_stale`, so a false `upToDate` is what let two Move sets be
+   * generated from a pricing surface that was never really missing.
+   *
+   * A re-scan writes a new snapshot with a new id, which moves the hash and
+   * makes this branch redundant again. Until then the honest answer is no.
+   */
+  if (
+    outdatedScans({
+      ...(prefetched ?? {}),
+      repository: repositorySnapshot,
+      live: liveSnapshot,
+    } as AuditEvidence).length > 0
+  ) {
+    return { hasAudit: true, upToDate: false, newDeepScanEvidence: false };
   }
 
   const authenticated = authenticatedSnapshot?.result ? authenticatedSnapshot : null;

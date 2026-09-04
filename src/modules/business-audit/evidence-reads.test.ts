@@ -1,4 +1,17 @@
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
+import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
+import {
+  PRODUCT_PROFILE_SCHEMA_VERSION,
+  PROFILE_BUILDER_VERSION,
+} from "@/modules/product-understanding/schema";
+import { EVIDENCE_PACK_V3_VERSION } from "./evidence-v3";
+import { PROMPT_VERSION } from "./prompt";
+import { RUBRIC_VERSION } from "./rubric";
+import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "./schema";
+import { computeAuditInputHash } from "./store";
 import {
   FakeDatabase,
   fakeSupabase,
@@ -55,6 +68,7 @@ function seed() {
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     result: { schemaVersion: "repository_intelligence.v1" },
     created_at: "2026-02-01T00:00:00.000Z",
   });
@@ -62,6 +76,7 @@ function seed() {
     id: "live_1",
     project_id: PROJECT,
     status: "completed",
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     result: { schemaVersion: "live_product_intelligence.v1" },
     created_at: "2026-02-01T00:00:00.000Z",
   });
@@ -234,5 +249,94 @@ describe("the evidence a caller already holds is not read again", () => {
     expect(actionPlanReadinessFrom(inputs, null)).toEqual(
       await getActionPlanReadiness(supabase, PROJECT, null),
     );
+  });
+});
+
+/**
+ * The chain, at the link that was missing.
+ *
+ * Everything downstream of a scan is derived from it, and none of those
+ * derivations can notice that the machine which produced it has since been
+ * corrected: the profile hashes the snapshot's id, the audit hashes the
+ * profile, the Moves engine gates on the audit. So a corrected detector
+ * reaches nobody until the scan itself is refused.
+ */
+describe("a scan from a corrected analyzer stops the chain", () => {
+  it("is ready when both scans come from the analyzers running now", async () => {
+    const readiness = await getAuditReadiness(client(), PROJECT);
+
+    expect(readiness.scansCurrent).toBe(true);
+    expect(readiness.missing).toEqual([]);
+  });
+
+  it.each([
+    ["live_product_intelligence_snapshots", "live_scan_outdated"],
+    ["repository_intelligence_snapshots", "repository_scan_outdated"],
+  ])("refuses when the %s snapshot predates its analyzer", async (table, expected) => {
+    const row = db.rows(table)[0] as unknown as { analyzer_version: string };
+    row.analyzer_version = "something-older";
+
+    const readiness = await getAuditReadiness(client(), PROJECT);
+
+    expect(readiness.scansCurrent).toBe(false);
+    expect(readiness.missing).toContain(expected);
+    expect(readiness.ready).toBe(false);
+  });
+
+  /**
+   * The half that let two Move sets be generated from a pricing surface that
+   * was never missing.
+   *
+   * `computeAuditInputHash` takes each snapshot's *id*, so an audit fed by a
+   * scan Vibe has since corrected hashes identical and reports itself current
+   * — and `audit_stale` is the Moves engine's only freshness gate. The audit
+   * seeded here carries exactly the hash the identity computes, so `upToDate`
+   * is genuinely true before the analyzer moves: without that, the assertion
+   * below would pass against a fixture that was never current for its own
+   * reasons, and prove nothing.
+   */
+  it("stops calling an audit current when the scan under it was corrected", async () => {
+    const profile = db.rows("product_profiles")[0] as unknown as { id: string };
+    const intent = await getFounderIntent(client(), PROJECT);
+
+    db.seed("business_readiness_audits", {
+      id: "audit_1",
+      project_id: PROJECT,
+      status: "completed",
+      access_mode: "credits",
+      overall_score: 50,
+      input_hash: computeAuditInputHash({
+        repositorySnapshotId: "snapshot_1",
+        liveSnapshotId: "live_1",
+        productProfileId: profile.id,
+        founderIntentHash: intent.intentHash,
+        authenticatedSnapshotId: null,
+        schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
+        auditVersion: BUSINESS_AUDIT_VERSION,
+        evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+        promptVersion: PROMPT_VERSION,
+        rubricVersion: RUBRIC_VERSION,
+        profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+        profileBuilderVersion: PROFILE_BUILDER_VERSION,
+        provider: "anthropic",
+        model: BUSINESS_READINESS_AUDIT_CONFIG.model,
+      }),
+      result: { schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION },
+      created_at: "2026-02-02T00:00:00.000Z",
+      completed_at: "2026-02-02T00:00:00.000Z",
+    });
+
+    const before = await getAuditCurrency(client(), PROJECT);
+
+    const row = db.rows("live_product_intelligence_snapshots")[0] as unknown as {
+      analyzer_version: string;
+    };
+    row.analyzer_version = "something-older";
+
+    const after = await getAuditCurrency(client(), PROJECT);
+
+    expect(before.upToDate).toBe(true);
+    expect(after.upToDate).toBe(false);
+    expect(after.hasAudit).toBe(true);
   });
 });

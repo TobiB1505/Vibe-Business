@@ -1,3 +1,5 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { BUSINESS_READINESS_AUDIT_CONFIG, NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
@@ -115,6 +117,7 @@ function deps(): ExecutionDeps {
 function seed() {
   db.seed("projects", { id: PROJECT, user_id: USER });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "repo_snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -122,6 +125,7 @@ function seed() {
     created_at: "2026-08-01T00:00:00.000Z",
   });
   db.seed("live_product_intelligence_snapshots", {
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     id: "live_snapshot_1",
     project_id: PROJECT,
     status: "completed",

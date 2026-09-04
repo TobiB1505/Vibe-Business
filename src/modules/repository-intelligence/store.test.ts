@@ -1,3 +1,4 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { describe, expect, it } from "vitest";
 import {
   FakeDatabase,
@@ -19,18 +20,21 @@ const PROJECT = "project_1";
 function seeded() {
   const db = new FakeDatabase();
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
     result: { routes: { mode: "app_router", truncated: false, routes: [] } },
   });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_other",
     project_id: "project_2",
     status: "completed",
     result: { routes: { mode: "app_router", truncated: false, routes: [] } },
   });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_running",
     project_id: PROJECT,
     status: "running",

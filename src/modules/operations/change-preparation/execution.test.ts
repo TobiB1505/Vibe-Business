@@ -1,9 +1,15 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { fakeAudit } from "@/modules/opportunities/test-support";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import { computeExecutionIdentity } from "@/modules/execution/identity";
 import { capabilityVersionFor } from "@/modules/execution/schema";
-import { FIXTURE_SNAPSHOT_SHA, fakeRepositorySnapshotFor, fakeRoute } from "@/modules/execution/test-support";
+import {
+  FIXTURE_SNAPSHOT_SHA,
+  fakeRepositorySnapshotFor,
+  fakeRoute,
+} from "@/modules/execution/test-support";
 import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
 import {
   completePreparationStep,
@@ -41,7 +47,9 @@ let probeState: {
 };
 let operationId: string;
 
-function fakeGit(seed: { refs?: Record<string, string>; files?: Record<string, Record<string, string>> } = {}) {
+function fakeGit(
+  seed: { refs?: Record<string, string>; files?: Record<string, Record<string, string>> } = {},
+) {
   const refs: Record<string, string> = { ...seed.refs };
   const files: Record<string, Record<string, string>> = { ...seed.files };
   const writes: string[] = [];
@@ -134,6 +142,7 @@ function seed() {
 
   const snapshot = fakeRepositorySnapshotFor();
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: SNAPSHOT,
     project_id: PROJECT,
     status: "completed",
@@ -148,6 +157,7 @@ function seed() {
     created_at: "2026-08-01T00:00:00.000Z",
   });
   db.seed("live_product_intelligence_snapshots", {
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     id: "live_1",
     project_id: PROJECT,
     status: "completed",
@@ -231,9 +241,8 @@ function seed() {
 /** The audit-currency check compares stored and computed hashes. */
 async function makeAuditCurrent() {
   const { computeAuditInputHash } = await import("@/modules/business-audit/store");
-  const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } = await import(
-    "@/modules/business-audit/schema"
-  );
+  const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } =
+    await import("@/modules/business-audit/schema");
   const { EVIDENCE_PACK_V3_VERSION } = await import("@/modules/business-audit/evidence-v3");
   const { PROMPT_VERSION } = await import("@/modules/business-audit/prompt");
   const { RUBRIC_VERSION } = await import("@/modules/business-audit/rubric");
@@ -563,7 +572,9 @@ describe("idempotency and recovery (§14, §15, §26)", () => {
 
     await completePreparationStep(deps(), operationId, outcome.preparedChangeId);
 
-    expect(db.rows("audit_events").filter((row) => row.event_type === "operation.completed")).toHaveLength(1);
+    expect(
+      db.rows("audit_events").filter((row) => row.event_type === "operation.completed"),
+    ).toHaveLength(1);
     expect(
       db.rows("audit_events").filter((row) => row.event_type === "change_preparation.completed"),
     ).toHaveLength(1);

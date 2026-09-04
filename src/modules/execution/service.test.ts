@@ -1,3 +1,5 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   FakeDatabase,
@@ -8,7 +10,11 @@ import {
 import { fakeAudit } from "@/modules/opportunities/test-support";
 import { computeExecutionIdentity } from "./identity";
 import { capabilityVersionFor } from "./schema";
-import { getChangePreparationStatus, getPreparedChangeView, startChangePreparation } from "./service";
+import {
+  getChangePreparationStatus,
+  getPreparedChangeView,
+  startChangePreparation,
+} from "./service";
 import { fakeRepositorySnapshotFor, FIXTURE_SNAPSHOT_SHA } from "./test-support";
 
 /**
@@ -28,7 +34,9 @@ const SET = "set_1";
 const OPPORTUNITY = "opportunity_1";
 const SNAPSHOT = "snapshot_1";
 
-function identityFor(overrides: { snapshotId?: string; baseSha?: string; opportunityId?: string } = {}) {
+function identityFor(
+  overrides: { snapshotId?: string; baseSha?: string; opportunityId?: string } = {},
+) {
   return computeExecutionIdentity({
     projectId: PROJECT,
     opportunitySetId: SET,
@@ -50,6 +58,7 @@ function seedProject(projectId = PROJECT, userId = USER, productionUrl = "https:
 function seedEvidence(options: { snapshotId?: string; commitSha?: string } = {}) {
   const snapshot = fakeRepositorySnapshotFor();
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: options.snapshotId ?? SNAPSHOT,
     project_id: PROJECT,
     status: "completed",
@@ -65,6 +74,7 @@ function seedEvidence(options: { snapshotId?: string; commitSha?: string } = {})
     created_at: "2026-08-01T00:00:00.000Z",
   });
   db.seed("live_product_intelligence_snapshots", {
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     id: "live_1",
     project_id: PROJECT,
     status: "completed",
@@ -135,9 +145,8 @@ async function alignAuditCurrency() {
     // honest rather than hard-coding a digest that would rot.
     const probe = db.rows("business_readiness_audits")[0];
     const { computeAuditInputHash } = await import("@/modules/business-audit/store");
-    const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } = await import(
-      "@/modules/business-audit/schema"
-    );
+    const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } =
+      await import("@/modules/business-audit/schema");
     const { EVIDENCE_PACK_V3_VERSION } = await import("@/modules/business-audit/evidence-v3");
     const { PROMPT_VERSION } = await import("@/modules/business-audit/prompt");
     const { RUBRIC_VERSION } = await import("@/modules/business-audit/rubric");

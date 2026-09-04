@@ -1,3 +1,4 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
@@ -76,6 +77,7 @@ function seed(
    * same detection validation uses, not a second one (Sprint 0114).
    */
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: options.projectId ?? PROJECT,
     status: "completed",
