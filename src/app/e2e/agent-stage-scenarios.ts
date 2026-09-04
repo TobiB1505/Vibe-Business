@@ -428,6 +428,7 @@ export function agentReadyForecastNotes(): readonly string[] {
     step: { changeKind: "product_change", evidenceIds: ["live.seo.robots_meta_missing"] },
     riskClass: "moderate",
     snapshot: null,
+    observations: [],
   });
 
   return forecast ? [forecastEvidenceNote(forecast), ...forecastDriverNotes(forecast)] : [];

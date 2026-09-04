@@ -268,6 +268,16 @@ export function forecastEvidenceNote(forecast: RunForecast): string {
     return "No comparable run has been completed yet, so this is Vibe's policy ceiling rather than a measured one.";
   }
 
+  /*
+   * The wording did not move and that is deliberate — what moved is whether it
+   * is true.
+   *
+   * "Runs Vibe has completed" was counted against a constant that a person read
+   * out of the database on 2026-08-20 and typed into the repository, so the
+   * sentence froze on that date while the runs kept accumulating. It now counts
+   * Vibe's own published measured runs plus the ones this account has
+   * completed since, which is what the sentence always claimed (ADR 0083).
+   */
   return forecast.comparableRuns === 1
     ? "Based on 1 comparable run Vibe has completed."
     : `Based on ${forecast.comparableRuns} comparable runs Vibe has completed.`;

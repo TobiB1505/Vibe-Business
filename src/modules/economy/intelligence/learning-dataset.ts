@@ -161,10 +161,21 @@ export function backtestRun(
   };
 }
 
-/** Every delivered run, each estimated without itself. Derived at module load; nothing is stored. */
-export const HISTORICAL_LEARNING_RECORDS: readonly LearningRecord[] = HISTORICAL_RUNS.map((run) =>
-  backtestRun(run),
-);
+/**
+ * Every run in a dataset, each estimated without itself (leave-one-out).
+ *
+ * Takes the dataset rather than closing over the transcribed constant, so a
+ * caller that has read the completed runs back out of the database measures
+ * bias on the same runs it forecasts from. A correction derived from one set
+ * and applied to another is a correction for somebody else's runs.
+ */
+export function learningRecordsFor(dataset: readonly HistoricalRun[]): readonly LearningRecord[] {
+  return dataset.map((run) => backtestRun(run, dataset));
+}
+
+/** Every delivered run in the transcribed seed. Derived at module load; nothing is stored. */
+export const HISTORICAL_LEARNING_RECORDS: readonly LearningRecord[] =
+  learningRecordsFor(HISTORICAL_RUNS);
 
 export type LearningSummary = {
   runs: number;

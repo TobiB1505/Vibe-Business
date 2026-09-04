@@ -174,6 +174,8 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0038]** `src/modules/economy/` reads those ledgers and estimates what a run will cost *before* it starts, then measures how wrong that estimate was. It writes nothing, activates nothing, and is forbidden by test from importing billing.
 
+**[Confirmed — ADR 0083]** That estimate's **sample is read, not transcribed.** `economy/historical-runs.ts` was copied out of Supabase by a person on 2026-08-20 and typed into the repository, so the "comparable runs" a founder is shown counted against that morning while the runs kept accumulating — 8 in the constant against 21 in the database. The forecast now reads the account's completed runs and adds them to the published seed, deduplicated by the second. Missing measurements are dropped rather than averaged in, and no amount crosses back out of the estimator: assembly happens inside `run-forecast.ts`, the one file [`sprint-0054-safety.test.ts`](src/modules/economy/sprint-0054-safety.test.ts) sanctions to reach it. See [0083](docs/decisions/0083-the-estimator-reads-the-runs.md).
+
 The one thing deliberately absent: **no consumption rate card is active.** `CREDIT_RATE_CARDS` ships empty, and unrated usage resolves to `rate_card_not_configured` with a null Credit amount rather than to zero (ADR 0024 §8).
 
 **[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
@@ -362,6 +364,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0080](docs/decisions/0080-the-probe-that-could-not-fail.md) | The health probe carries the preview's public hostname (amends 0078; Vite gets a row) | §3.9 |
 | [0081](docs/decisions/0081-routes-belong-to-an-application.md) | Routes are read relative to the application, and the router root is recorded (extends 0078) | §3.2 |
 | [0082](docs/decisions/0082-an-application-installs-from-its-workspace.md) | An application inside a declared workspace installs from the workspace root (amends 0078) | §3.8 |
+| [0083](docs/decisions/0083-the-estimator-reads-the-runs.md) | The estimator's sample is read from completed runs, not transcribed (extends 0072) | §3.11 |
 
 ### Layers with no section above
 
