@@ -365,6 +365,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0081](docs/decisions/0081-routes-belong-to-an-application.md) | Routes are read relative to the application, and the router root is recorded (extends 0078) | §3.2 |
 | [0082](docs/decisions/0082-an-application-installs-from-its-workspace.md) | An application inside a declared workspace installs from the workspace root (amends 0078) | §3.8 |
 | [0083](docs/decisions/0083-the-estimator-reads-the-runs.md) | The estimator's sample is read from completed runs, not transcribed (extends 0072) | §3.11 |
+| [0084](docs/decisions/0084-the-internal-operator-console.md) | The internal operator console reads across tenants, and shows shapes only | Internal operator console |
 
 ### Layers with no section above
 
@@ -382,6 +383,7 @@ These exist, are governed by the ADRs named, and are described in depth by their
 - **Outcome Verification / Business Measurement** — `src/modules/outcome-verification/`, `src/modules/business-measurement/` · ADRs 0020, 0021, 0071. Two profiles: what the SEO generators publish, and whether the public pages an agentic change touched are still being served.
 - **Durable Operations** — `src/modules/operations/` · ADRs 0013, 0030, 0037. Also the only module permitted to use the service-role client.
 - **Billing and Economy** — `src/modules/billing/`, `src/modules/economy/` · ADRs 0025, 0038.
+- **Internal operator console** — `src/modules/internal-console/` · ADR 0084. Read-only, cross-tenant, and reachable only by a user id named in `VIBE_INTERNAL_OPERATOR_USER_IDS` — unset means nobody. It performs no action and shows shapes rather than content: every read names its columns from a constant, and live means polling rather than a second liveness mechanism beside Vercel Workflows.
 
 ---
 
