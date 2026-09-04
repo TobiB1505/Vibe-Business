@@ -40,6 +40,17 @@ Every "database-level financial invariant" test runs against `FakeDatabase`'s ha
 
 ---
 
+**The usage projection does not reproduce the AI ledger, and the index that makes it idempotent is what stops it being repaired.**
+`credits/projection.ts`'s own docblock states the requirement: *"Summing `raw_cost_nano_usd` across billing usage reproduces the AI ledger exactly, which is what §69 requires."* Measured against production on 2026-09-04 it does not. `ai_usage_events` sums to **$10.9079** across 360 costed rows; the `anthropic_input_tokens` rows they project to sum to **$8.0194**. A gap of **$2.8885 — 26% of all inference spend ever recorded.**
+
+It is not spread out. Haiku matches to the cent across 25 rows; every Sonnet 5 row outside 19–21 August matches to the cent; and 2026-09-04's rows match at a ratio of exactly 1.0000. The whole gap sits in **250 rows over three days — 19, 20 and 21 August** — which are the only days in the ledger carrying cache tokens, and they are the CORE-4 agent dogfood days. The arithmetic closes: 6,623,638 cache-read tokens at Sonnet 5's 0.1× ($0.20/M) is $1.32, and 625,520 cache-write tokens at 1.25× ($2.50/M) is $1.56, together $2.88 against a measured $2.8885.
+
+Every one of those projections was written on **2026-08-22**, in one reconciliation pass, by a `calculateProviderCost` that did not yet price cache tokens. The arithmetic was corrected afterwards and the projections were not, because they cannot be: `billing_usage_events_source_sku_idx` makes one source row project to at most one event per SKU, and that is exactly the property `projection.ts` names as *"what lets reconciliation run twice"*. Re-running it is a no-op on a row that already exists, so the mechanism that makes repair safe is the mechanism that makes repair impossible.
+
+Two things this does **not** mean. No customer was mischarged: Credits are priced by `credits/retail.ts` per delivered operation, not from this ledger, and `ai_usage_events` — which is authoritative for provider cost and which `/app/internal` reads directly — carries the correct figure. And nothing here is evidence about margin, because [ADR 0061](decisions/0061-launch-v1-operation-rate-card.md)'s prices were derived from measured *operation* costs rather than from this projection. What it does mean is that any economics read from `billing_usage_events` understates inference by a quarter, and that a corrected cost model has no way to reach rows already written.
+
+Found by the operator console's first look at production ([ADR 0088](decisions/0088-the-internal-operator-console.md)) and traced with read-only SQL; nothing was repaired, because how a projection is superseded — a version column, a delete-and-reproject, or a correcting counter-entry — is a billing decision with its own consequences, not a fix to apply on the way past.
+
 ## Next — one shared evidence foundation
 
 **`settleOperationCredits` and `releaseOperationCredits` are not mutually exclusive against each other, and one caller pair that could reach both concurrently already existed.**
