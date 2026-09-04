@@ -327,8 +327,21 @@ function readModules(tables) {
     }
 
     const body = src.map((f) => readFileSync(f, "utf8")).join("\n");
-    const deps = new Set([...body.matchAll(/from "@\/modules\/([a-z-]+)/g)].map((m) => m[1]));
-    deps.delete(name);
+    // Typ-Importe getrennt zählen: ein Zyklus aus `import type` existiert zur
+    // Laufzeit nicht und ist beim Ändern deutlich billiger als ein echter.
+    // Das Anführungszeichen im Muster verhindert, dass ein Treffer über die
+    // `from`-Klausel eines anderen Imports hinweg greift.
+    const deps = new Set();
+    const typeDeps = new Set();
+    for (const match of body.matchAll(
+      /^import\s+(type\s+)?([^"]*?)from\s+"@\/modules\/([a-z-]+)/gm,
+    )) {
+      const [, typeOnly, , dep] = match;
+      if (dep === name) continue;
+      if (typeOnly) typeDeps.add(dep);
+      else deps.add(dep);
+    }
+    for (const dep of deps) typeDeps.delete(dep);
 
     const touched = tables.filter((t) => new RegExp(`["'\`]${t}["'\`]`).test(body));
 
@@ -347,6 +360,7 @@ function readModules(tables) {
       hasReadme,
       summary,
       deps: [...deps].sort(),
+      typeDeps: [...typeDeps].sort(),
       dependents: [],
       tables: touched,
       decisions: [],
@@ -362,6 +376,167 @@ function readModules(tables) {
   for (const m of modules.values()) m.dependents.sort();
 
   return modules;
+}
+
+// ------------------------------------------------------------------------- Graph
+
+/**
+ * Starke Zusammenhangskomponenten (Tarjan).
+ *
+ * Jede Komponente mit mehr als einem Modul ist ein Abhängigkeitszyklus: die
+ * Module darin lassen sich nicht mehr einzeln verstehen, ändern oder testen.
+ * Das ist der teuerste Wartbarkeitsbefund, den ein Importgraph hergibt.
+ */
+function components(modules) {
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const found = [];
+  let counter = 0;
+
+  function visit(name) {
+    index.set(name, counter);
+    low.set(name, counter);
+    counter += 1;
+    stack.push(name);
+    onStack.add(name);
+
+    for (const dep of modules.get(name)?.deps ?? []) {
+      if (!modules.has(dep)) continue;
+      if (!index.has(dep)) {
+        visit(dep);
+        low.set(name, Math.min(low.get(name), low.get(dep)));
+      } else if (onStack.has(dep)) {
+        low.set(name, Math.min(low.get(name), index.get(dep)));
+      }
+    }
+
+    if (low.get(name) === index.get(name)) {
+      const group = [];
+      let member;
+      do {
+        member = stack.pop();
+        onStack.delete(member);
+        group.push(member);
+      } while (member !== name);
+      found.push(group.sort());
+    }
+  }
+
+  for (const name of modules.keys()) if (!index.has(name)) visit(name);
+  return found;
+}
+
+/**
+ * Eine Reihenfolge, in der ein Modul nach allem steht, was es benutzt.
+ *
+ * Damit füllt sich die Matrix unterhalb der Diagonalen — und jeder Punkt
+ * oberhalb ist eine Rückwärtskante, also Teil eines Zyklus. Die Zeichnung
+ * beweist nichts, was die Komponenten nicht schon wissen; sie zeigt, wo es
+ * sitzt.
+ */
+function dependencyOrder(modules) {
+  const order = [];
+  const seen = new Set();
+
+  function visit(name, path) {
+    if (seen.has(name) || path.has(name)) return;
+    path.add(name);
+    for (const dep of modules.get(name)?.deps ?? []) {
+      if (modules.has(dep)) visit(dep, path);
+    }
+    path.delete(name);
+    if (!seen.has(name)) {
+      seen.add(name);
+      order.push(name);
+    }
+  }
+
+  for (const name of [...modules.keys()].sort()) visit(name, new Set());
+  return order;
+}
+
+/**
+ * Derselbe Test eine Ebene tiefer: liegen auch die *Dateien* im Kreis?
+ *
+ * Ein Zyklus zwischen zwei Modulen ist gewöhnlich und oft harmlos — `merge`
+ * benutzt den Speicher von `operations`, und `operations` ruft den Dienst von
+ * `merge`, ohne dass sich zwei Dateien gegenseitig brauchen. Erst ein Zyklus
+ * zwischen Dateien zwingt einen Leser, beide gleichzeitig im Kopf zu halten.
+ * Ohne diese Unterscheidung wäre die Zahl oben Alarm ohne Aussage.
+ */
+function fileCycles(root, files) {
+  const known = new Set(files.map((f) => relative(root, f).split("\\").join("/")));
+
+  function resolve(spec, fromFile) {
+    const base = spec.startsWith("@/")
+      ? join("src", spec.slice(2))
+      : spec.startsWith(".")
+        ? join(dirname(relative(root, fromFile)), spec)
+        : null;
+    if (base === null) return null;
+    const normalized = base.split("\\").join("/");
+    for (const candidate of [
+      `${normalized}.ts`,
+      `${normalized}.tsx`,
+      `${normalized}/index.ts`,
+      `${normalized}/index.tsx`,
+    ]) {
+      if (known.has(candidate)) return candidate;
+    }
+    return null;
+  }
+
+  const graph = new Map();
+  for (const file of files) {
+    const rel = relative(root, file).split("\\").join("/");
+    const edges = new Set();
+    const source = readFileSync(file, "utf8");
+    for (const match of source.matchAll(/^import\s+(type\s+)?([^"]*?)from\s+"([^"]+)"/gm)) {
+      if (match[1]) continue; // Typ-Import: zur Laufzeit keine Kante.
+      const target = resolve(match[3], file);
+      if (target && target !== rel) edges.add(target);
+    }
+    graph.set(rel, [...edges]);
+  }
+
+  const index = new Map();
+  const low = new Map();
+  const onStack = new Set();
+  const stack = [];
+  const found = [];
+  let counter = 0;
+
+  function visit(name) {
+    index.set(name, counter);
+    low.set(name, counter);
+    counter += 1;
+    stack.push(name);
+    onStack.add(name);
+    for (const dep of graph.get(name) ?? []) {
+      if (!graph.has(dep)) continue;
+      if (!index.has(dep)) {
+        visit(dep);
+        low.set(name, Math.min(low.get(name), low.get(dep)));
+      } else if (onStack.has(dep)) {
+        low.set(name, Math.min(low.get(name), index.get(dep)));
+      }
+    }
+    if (low.get(name) === index.get(name)) {
+      const group = [];
+      let member;
+      do {
+        member = stack.pop();
+        onStack.delete(member);
+        group.push(member);
+      } while (member !== name);
+      if (group.length > 1) found.push(group.sort());
+    }
+  }
+
+  for (const name of graph.keys()) if (!index.has(name)) visit(name);
+  return found.sort((a, b) => b.length - a.length);
 }
 
 // ------------------------------------------------------------------------ Befunde
@@ -393,8 +568,77 @@ function findings(m) {
 
 // -------------------------------------------------------------------- Seitenbau
 
+/** Die Abhängigkeitsmatrix als SVG. Keine Bibliothek, kein Nachladen. */
+function matrixSvg(modules, order) {
+  const CELL = 13;
+  const LABEL = 205;
+  const TOP = 200;
+  const n = order.length;
+  const width = LABEL + n * CELL + 10;
+  const height = TOP + n * CELL + 10;
+  const pos = new Map(order.map((name, i) => [name, i]));
+  const parts = [];
+
+  for (let i = 0; i < n; i += 1) {
+    const y = TOP + i * CELL;
+    const x = LABEL + i * CELL;
+    parts.push(
+      `<rect x="${LABEL}" y="${y}" width="${n * CELL}" height="${CELL}" class="band${i % 2 ? "" : " alt"}"/>`,
+    );
+    parts.push(
+      `<text class="rowlabel" x="${LABEL - 6}" y="${y + CELL - 3.5}" text-anchor="end">${esc(order[i])}</text>`,
+    );
+    parts.push(
+      `<text class="collabel" transform="rotate(-90 ${x + CELL - 3.5} ${TOP - 6})" x="${x + CELL - 3.5}" y="${TOP - 6}">${esc(order[i])}</text>`,
+    );
+    parts.push(`<rect class="diag" x="${x}" y="${y}" width="${CELL}" height="${CELL}"/>`);
+  }
+
+  let backEdges = 0;
+  for (const [name, m] of modules) {
+    const row = pos.get(name);
+    if (row === undefined) continue;
+    for (const dep of m.deps) {
+      const col = pos.get(dep);
+      if (col === undefined) continue;
+      const back = col > row;
+      if (back) backEdges += 1;
+      parts.push(
+        `<rect class="cell${back ? " back" : ""}" x="${LABEL + col * CELL + 2}" y="${TOP + row * CELL + 2}" ` +
+          `width="${CELL - 4}" height="${CELL - 4}"><title>${esc(name)} benutzt ${esc(dep)}</title></rect>`,
+      );
+    }
+  }
+
+  return {
+    backEdges,
+    svg:
+      `<svg viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" ` +
+      `aria-label="Abhängigkeitsmatrix der Module">${parts.join("")}</svg>`,
+  };
+}
+
+/** Welches Modul fasst welche Tabelle an — und welche Tabelle fasst niemand an. */
+function tableRegister(tables, modules) {
+  const owners = new Map(tables.map((t) => [t, []]));
+  for (const m of modules.values()) {
+    for (const t of m.tables) owners.get(t)?.push(m.name);
+  }
+  const rows = [...owners.entries()].map(([table, names]) => ({ table, names: names.sort() }));
+  return {
+    rows: rows.sort((a, b) => b.names.length - a.names.length || a.table.localeCompare(b.table)),
+    orphans: rows.filter((r) => r.names.length === 0).map((r) => r.table),
+  };
+}
+
 function render(data) {
-  const { modules, knobs, roadmap, totals, stamp } = data;
+  const { modules, knobs, roadmap, totals, stamp, tables } = data;
+  const order = dependencyOrder(modules);
+  const matrix = matrixSvg(modules, order);
+  const kanten = [...modules.values()].reduce((n, m) => n + m.deps.length, 0);
+  const cycles = components(modules).filter((c) => c.length > 1);
+  const register = tableRegister(tables, modules);
+  const fileLoops = data.fileLoops;
   const list = [...modules.values()];
 
   const ampel = (m) => {
@@ -577,6 +821,21 @@ function render(data) {
   .mark { font-size:11px; text-transform:uppercase; letter-spacing:0.04em; margin-right:8px; }
   li.open .mark { color:var(--gelb); } li.done .mark { color:var(--gruen); }
   footer { margin-top:56px; color:var(--mute); font-size:12.5px; border-top:1px solid var(--line); padding-top:14px; }
+  .matrixwrap { overflow-x:auto; background:var(--card); border:1px solid var(--line);
+                border-radius:10px; padding:12px 12px 4px; }
+  svg text.rowlabel, svg text.collabel { font:9px ui-monospace,SFMono-Regular,Menlo,monospace; fill:var(--mute); }
+  svg rect.band { fill:transparent; }
+  svg rect.band.alt { fill:color-mix(in srgb, var(--ink) 4%, transparent); }
+  svg rect.diag { fill:color-mix(in srgb, var(--ink) 12%, transparent); }
+  svg rect.cell { fill:var(--accent); }
+  svg rect.cell.back { fill:var(--rot); }
+  .legend { display:flex; gap:18px; flex-wrap:wrap; font-size:12.5px; color:var(--mute); margin:10px 0 0; }
+  .swatch { width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:6px; }
+  ul.cycles { list-style:none; margin:0; padding:0; }
+  ul.cycles li { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--rot);
+                 border-radius:8px; padding:9px 12px; margin-bottom:6px; }
+  .ok-note { background:var(--card); border:1px solid var(--line); border-left:3px solid var(--gruen);
+             border-radius:8px; padding:9px 12px; }
   .hidden { display:none !important; }
 </style>
 </head>
@@ -625,6 +884,84 @@ Spalte: je höher, desto mehr bricht, wenn du dieses Modul änderst.</p>
 <table>
   <thead><tr><th>Modul</th><th>Commits (90 Tage)</th><th>Zuletzt</th></tr></thead>
   <tbody>${aktiv}</tbody>
+</table>
+
+<h2>Abhängigkeitskarte</h2>
+<p class="hint">Eine Zeile pro Modul, eine Spalte pro Modul. Ein Punkt heisst: die Zeile
+benutzt die Spalte. Die Reihenfolge ist so gewählt, dass jedes Modul <em>nach</em> allem
+steht, was es benutzt — deshalb liegen normale Abhängigkeiten unterhalb der grauen
+Diagonalen. Jeder <b style="color:var(--rot)">rote</b> Punkt oberhalb ist eine
+Rückwärtskante und damit Teil eines Zyklus. Punkt anfassen zeigt, wer wen benutzt.</p>
+<div class="matrixwrap">${matrix.svg}</div>
+<div class="legend">
+  <span><span class="swatch" style="background:var(--accent)"></span>benutzt (${de(kanten)} Kanten)</span>
+  <span><span class="swatch" style="background:var(--rot)"></span>Rückwärtskante (${de(matrix.backEdges)})</span>
+  <span><span class="swatch" style="background:color-mix(in srgb, var(--ink) 12%, transparent)"></span>das Modul selbst</span>
+</div>
+
+<h2>Kreisabhängigkeiten</h2>
+<p class="hint">Zwei Ebenen, und die zweite ist die wichtige. Ein Kreis zwischen <em>Modulen</em>
+ist gewöhnlich: <code>merge</code> benutzt den Speicher von <code>operations</code>, und
+<code>operations</code> ruft den Dienst von <code>merge</code> — ohne dass sich je zwei Dateien
+gegenseitig brauchen. Erst ein Kreis zwischen <em>Dateien</em> zwingt einen Leser, beide
+gleichzeitig im Kopf zu halten. Typ-Importe zählen in beiden Ebenen nicht mit, weil sie zur
+Laufzeit keine Kante sind.</p>
+
+<h3>Auf Modulebene</h3>
+${
+  cycles.length === 0
+    ? `<div class="ok-note">Keine.</div>`
+    : `<ul class="cycles">${cycles
+        .map(
+          (c) =>
+            `<li><b>${c.length} von ${list.length} Modulen</b> hängen gegenseitig zusammen — ${c
+              .map((n) => `<code>${esc(n)}</code>`)
+              .join(" ")}</li>`,
+        )
+        .join("")}</ul>`
+}
+
+<h3>Auf Dateiebene</h3>
+${
+  fileLoops.length === 0
+    ? `<div class="ok-note">Keine. Keine zwei Dateien in <code>src/</code> brauchen sich gegenseitig — der Kreis oben entsteht allein daraus, dass verschiedene Dateien zweier Module in verschiedene Richtungen zeigen. Das ist der gutartige Fall.</div>`
+    : `<ul class="cycles">${fileLoops
+        .slice(0, 10)
+        .map(
+          (c) =>
+            `<li><b>${c.length} Dateien</b> — ${c
+              .slice(0, 12)
+              .map((n) => `<code>${esc(n)}</code>`)
+              .join(" ")}${c.length > 12 ? ` … (+${c.length - 12})` : ""}</li>`,
+        )
+        .join(
+          "",
+        )}${fileLoops.length > 10 ? `<li>… und ${fileLoops.length - 10} weitere</li>` : ""}</ul>`
+}
+
+<h2>Datenbanktabellen</h2>
+<p class="hint">Alle ${register.rows.length} Tabellen und die Module, die sie anfassen. Ermittelt
+durch Textsuche nach dem Tabellennamen im Modulcode — gut genug zum Orientieren, kein Beweis.
+Eine Tabelle ohne Modul wird entweder nur über SQL, nur ausserhalb der Module oder gar nicht mehr
+benutzt.</p>
+${
+  register.orphans.length > 0
+    ? `<p class="hint"><b>${register.orphans.length === 1 ? "Eine Tabelle fasst" : `${register.orphans.length} Tabellen fasst`} kein Modul an:</b> ${register.orphans
+        .map((t) => `<code>${esc(t)}</code>`)
+        .join(" ")}</p>`
+    : ""
+}
+<table>
+  <thead><tr><th>Tabelle</th><th>Module</th></tr></thead>
+  <tbody>
+    ${register.rows
+      .map(
+        (r) =>
+          `<tr data-such="${esc(r.table + " " + r.names.join(" "))}"><td><code>${esc(r.table)}</code></td>` +
+          `<td>${r.names.length ? r.names.map((n) => `<code>${esc(n)}</code>`).join(" ") : "<em>keines</em>"}</td></tr>`,
+      )
+      .join("")}
+  </tbody>
 </table>
 
 <h2 id="schrauben">Stellschrauben</h2>
@@ -688,6 +1025,8 @@ const totals = {
     : 0,
 };
 
+const fileLoops = fileCycles(ROOT, allFiles);
+
 const stamp = {
   when: new Date().toLocaleString("de-DE", { dateStyle: "long", timeStyle: "short" }),
   commit: git(["rev-parse", "--short", "HEAD"], "unbekannt"),
@@ -696,7 +1035,11 @@ const stamp = {
 
 mkdirSync(OUT_DIR, { recursive: true });
 const out = join(OUT_DIR, "index.html");
-writeFileSync(out, render({ modules, knobs, decisions, roadmap, totals, stamp }), "utf8");
+writeFileSync(
+  out,
+  render({ modules, knobs, decisions, roadmap, totals, stamp, tables, fileLoops }),
+  "utf8",
+);
 
 console.log(`Projekt-Atlas gebaut: ${relative(ROOT, out)}`);
 console.log(
