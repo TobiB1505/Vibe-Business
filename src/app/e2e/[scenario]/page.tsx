@@ -26,6 +26,8 @@ import {
 } from "../command-center-scenarios";
 import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
 import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
+import { EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
+import { AgentPlanNextNotice } from "@/app/app/projects/[projectId]/agent/agent-plan-next-notice";
 import { AgentStaleReadNotice } from "@/app/app/projects/[projectId]/agent/agent-stale-read-notice";
 import { AgentWorkspaceChoice } from "@/app/app/projects/[projectId]/agent/agent-workspace-choice";
 import { Button } from "@/components/ui/button";
@@ -559,6 +561,36 @@ export default async function E2eScenarioPage({
         {label}
         <AgentStaleReadNotice
           productHref={`${projectSectionHref("project_e2e", "my-product")}#product-scan`}
+        />
+      </main>
+    );
+  }
+
+  /*
+   * The refusal a founder actually hit, in both of its shapes (Sprint 0141).
+   *
+   * Same failure mode as the notice above and a different cause: the plan's
+   * next step is not one Vibe can run, so nothing resolves agentic and the
+   * screen drew an empty call-to-action block. The two scenes differ only in
+   * whether the founder can clear the step themselves, and that single word is
+   * the whole value of the notice — so it is proved in a browser rather than
+   * asserted about a prop.
+   */
+  if (scenario === "agent-plan-next-confirm" || scenario === "agent-plan-next-waiting") {
+    const confirmable = scenario === "agent-plan-next-confirm";
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AgentPlanNextNotice
+          stepOrder={1}
+          stepTitle="Establish what the existing billing route actually does"
+          reasonLabel={
+            confirmable
+              ? EXECUTION_REASON_LABELS.change_kind_not_executable
+              : EXECUTION_REASON_LABELS.founder_decision_required
+          }
+          planHref={projectSectionHref("project_e2e", "action-plan")}
+          canConfirm={confirmable}
         />
       </main>
     );
