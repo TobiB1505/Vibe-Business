@@ -62,6 +62,65 @@ export const EXECUTION_RISK_LABELS: Record<ExecutionRiskClass, string> = {
   prohibited: "Touches payments — always yours to change",
 };
 
+/**
+ * What kind of answer a refusal is — and specifically, whether it has an end.
+ *
+ * Written because a screen got it wrong in production. The Agent workspace told
+ * a founder *"an earlier step comes first"* and *"Vibe's part of this Move
+ * becomes available once that step is done"* about a step that **was** Vibe's
+ * part and would never become available: a checkout build, refused by policy
+ * because it touches payments. Both sentences were false, and the second one
+ * promised something that cannot happen.
+ *
+ * The distinction a screen actually needs is not the reason but its shape:
+ *
+ *  * `policy` — Vibe will not do this, and nothing about the project changes
+ *    that. Never say "yet", never say "once".
+ *  * `repairable` — something about this project or its repository can be
+ *    fixed, and then Vibe can. Name the missing thing.
+ *  * `sequencing` — nothing is wrong; something else has to happen first.
+ *  * `capability` — Vibe's own work with no executor, which a founder may
+ *    close themselves (ADR 0090).
+ *  * `not_vibes` — the step belongs to a person or a third party.
+ *
+ * An exhaustive `Record` rather than a list, so a new reason is a compiler
+ * error here rather than a sentence that quietly reads as one of these.
+ */
+export type RefusalShape = "policy" | "repairable" | "sequencing" | "capability" | "not_vibes";
+
+export const REFUSAL_SHAPES: Record<ExecutionResolutionReason, RefusalShape> = {
+  // Not refusals at all — a step that resolved is never described by one.
+  deterministic_capability_matched: "sequencing",
+  agentic_v1_eligible: "sequencing",
+
+  founder_decision_required: "not_vibes",
+  founder_input_required: "not_vibes",
+  founder_action_required: "not_vibes",
+  external_party_required: "not_vibes",
+
+  dependency_unsatisfied: "sequencing",
+  dependency_cycle_detected: "sequencing",
+
+  no_executor_for_vibe_work: "capability",
+  change_kind_not_executable: "capability",
+
+  // The two that have no end. `risk_class_not_permitted` carries a "yet" in its
+  // own sentence, which is honest — it is Vibe's ceiling and Vibe may raise it
+  // — but it is still not something this founder can act on today.
+  risk_class_not_permitted: "policy",
+  risk_class_prohibited: "policy",
+
+  repository_not_connected: "repairable",
+  repository_snapshot_missing: "repairable",
+  validation_profile_unsupported: "repairable",
+  no_node_project: "repairable",
+  no_build_script: "repairable",
+  no_lockfile: "repairable",
+  package_manager_unsupported: "repairable",
+  workspace_choice_required: "repairable",
+  repository_analysis_outdated: "repairable",
+};
+
 /** Why a step resolved the way it did, without naming an internal concept. */
 export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> = {
   deterministic_capability_matched: "Vibe already knows how to make this exact change.",

@@ -49,6 +49,25 @@ test.describe("a Move whose next step Vibe cannot run", () => {
     await expect(notice).not.toContainText("costs nothing");
   });
 
+  test("promises no end to a refusal that has none", async ({ page }) => {
+    /*
+     * The production defect, pinned. A checkout build is Vibe's own part of the
+     * Move and Vibe refuses it because it touches payments — so the two
+     * sentences this notice shipped with were both false: nothing was earlier,
+     * and nothing would become available. A founder read them and waited.
+     */
+    await page.goto("/e2e/agent-plan-next-refused");
+
+    const notice = page.getByTestId("agent-plan-next");
+    await expect(notice).toContainText("Vibe will not do this one");
+    await expect(notice).toContainText("Nothing you change here will unlock it");
+
+    for (const promise of ["becomes available", "comes first", "once that step is done"]) {
+      await expect(notice).not.toContainText(promise);
+    }
+    await expect(page.getByTestId("agent-plan-next-link")).toHaveText("Choose a different Move");
+  });
+
   test("starts nothing from here", async ({ page }) => {
     // The way on is a link to the screen that owns the step's completion
     // criterion. A control here would separate the click from the sentence it
@@ -68,5 +87,37 @@ test.describe("a Move whose next step Vibe cannot run", () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  /*
+   * The defect a founder photographed, and the one the scenes above cannot see.
+   *
+   * Passed as `startAction`, this notice went through `AgentStartCta` — a
+   * control treatment that clips its child to `rounded-full` under
+   * `overflow-hidden` and sweeps a highlight across it. The notice rendered as
+   * an ellipse with its own footnote cut in half, captioned by a lock line
+   * about what Vibe checks "before starting". Nothing was starting.
+   *
+   * `AgentStartCta`'s own docblock already forbade it: "the sweep and the lock
+   * line never wrap something that cannot actually start."
+   */
+  test("brings no start treatment with it onto the stage", async ({ page }) => {
+    await page.goto("/e2e/agent-stage-notice");
+
+    const notice = page.getByTestId("agent-plan-next");
+    await expect(notice).toBeVisible();
+    await expect(page.getByTestId("agent-start")).toHaveCount(0);
+    await expect(page.getByText("before starting")).toHaveCount(0);
+
+    // Not clipped: the whole footnote is on screen, not an ellipse's worth.
+    await expect(notice).toContainText("Nothing you change here will unlock it");
+    const clipped = await notice.evaluate((el) => {
+      for (let n: Element | null = el; n; n = n.parentElement) {
+        const s = getComputedStyle(n);
+        if (s.overflow === "hidden" && parseFloat(s.borderTopLeftRadius) > 100) return true;
+      }
+      return false;
+    });
+    expect(clipped).toBe(false);
   });
 });

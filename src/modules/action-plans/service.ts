@@ -36,7 +36,7 @@ import {
   satisfiedStepsFromEvidence,
 } from "./completion";
 import { listAgentStepCompletionEvidence, listStepExecutionEvidence } from "./completion-store";
-import { listFounderActionCompletionEvidence } from "./founder-action-store";
+import { listFounderActionCompletionEvidence, listProjectFindings } from "./founder-action-store";
 import {
   listActiveFounderResolutions,
   listFounderInputRequestsForPlan,
@@ -268,11 +268,14 @@ export async function resolveActionPlanIdentity(
   const readiness = await getActionPlanReadiness(supabase, projectId, requestedOpportunityId);
   if (!readiness.ready) return { ok: false, error: readiness.blockedReason ?? "audit_missing" };
 
-  const [audit, opportunities, profile, founderIntent] = await Promise.all([
+  const [audit, opportunities, profile, founderIntent, findings] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
     getLatestProfile(supabase, projectId),
     getFounderIntent(supabase, projectId),
+    // Part of the identity, so the button that starts a plan and the step that
+    // builds one agree about which findings it will be written against.
+    listProjectFindings(supabase, projectId),
   ]);
 
   if (!audit?.result) return { ok: false, error: "audit_missing" };
@@ -306,6 +309,7 @@ export async function resolveActionPlanIdentity(
       conclusionKey: source.source.conclusionKey,
       productProfileId: profile.stored.id,
       founderIntentHash: founderIntent.intentHash,
+      findingIds: findings.map((entry) => entry.attestationId),
       evidencePackVersion: audit.result.evidencePackVersion,
       contractVersion: ACTION_PLANNER_CONTRACT_VERSION,
       plannerVersion: ACTION_PLANNER_VERSION,

@@ -29,6 +29,7 @@ describe("Founder Action service-role write", () => {
         userId: "user-2",
         actionPlanId: "plan-1",
         stepKey: "3-connect-stripe",
+        finding: null,
       }),
     ).resolves.toEqual({ ok: false, error: "project_not_found" });
     expect(attestRpc).not.toHaveBeenCalled();
@@ -41,6 +42,7 @@ describe("Founder Action service-role write", () => {
         userId: "user-1",
         actionPlanId: "plan-1",
         stepKey: "3-connect-stripe",
+        finding: null,
       }),
     ).resolves.toEqual({ ok: true, attestationId: "attestation-1" });
 
@@ -51,6 +53,9 @@ describe("Founder Action service-role write", () => {
         userId: "user-1",
         actionPlanId: "plan-1",
         stepKey: "3-connect-stripe",
+        // Passed through rather than decided here: the database owns which
+        // step kind must carry a finding and which must not (ADR 0093).
+        finding: null,
       },
     );
   });
@@ -64,6 +69,7 @@ describe("Founder Action service-role write", () => {
         userId: "user-1",
         actionPlanId: "plan-1",
         stepKey: "agent-step",
+        finding: null,
       }),
     ).resolves.toEqual({ ok: false, error: "step_not_attestable" });
   });

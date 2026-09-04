@@ -34,6 +34,7 @@ function founderActionEvidence(
     attestationVersion: "founder-action-attestation.v1",
     stepKey: "3-connect-stripe",
     stepOrder: 3,
+    finding: null,
     ...overrides,
   };
 }

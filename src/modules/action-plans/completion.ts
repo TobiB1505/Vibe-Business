@@ -26,6 +26,14 @@ export type FounderActionCompletionEvidence = {
   attestationVersion: string;
   stepKey: string;
   stepOrder: number;
+  /**
+   * What the founder established, for a Vibe step whose output is the finding.
+   *
+   * Null for `founder_action` work, which confirms the world changed rather
+   * than reporting anything — the database refuses the other pairings, so this
+   * being null is a fact about the step kind and never a missing value.
+   */
+  finding: string | null;
 };
 
 /**

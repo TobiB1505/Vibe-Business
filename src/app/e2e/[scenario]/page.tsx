@@ -597,21 +597,94 @@ export default async function E2eScenarioPage({
    * the whole value of the notice — so it is proved in a browser rather than
    * asserted about a prop.
    */
-  if (scenario === "agent-plan-next-confirm" || scenario === "agent-plan-next-waiting") {
-    const confirmable = scenario === "agent-plan-next-confirm";
+  /*
+   * The notice on the real stage, which is where it was actually broken.
+   *
+   * The three refusal scenes above render the notice on its own and cannot see
+   * the defect a founder photographed: passed as `startAction`, it went through
+   * `AgentStartCta` — a control treatment that clips its child to
+   * `rounded-full` under `overflow-hidden` and runs a highlight sweep across
+   * it. The notice was clipped into an ellipse with its own sentence cut in
+   * half, under a lock line promising what happens "before starting".
+   *
+   * So this scene asserts the structure rather than the words: a notice brings
+   * no start treatment with it.
+   */
+  if (scenario === "agent-stage-notice") {
+    return (
+      <main className="mx-auto max-w-[90rem] p-8">
+        {label}
+        <AgentReadyStage
+          task={{
+            title: "Give a visitor a working path to pay",
+            problem: "Three prices are published and none of them can be paid.",
+            whyNow: null,
+            impact: null,
+            effort: null,
+            lens: null,
+            step: null,
+            steps: [],
+          }}
+          planHref="/e2e/action-plan-ranked"
+          repository="TobiB1505/Vibe-Business"
+          liveUrl="https://vibebusiness.de"
+          caption="This Move is selected. Its next step is not one Vibe can run, so nothing starts here yet."
+          notice={
+            <AgentPlanNextNotice
+              stepOrder={3}
+              stepTitle="Build or complete the checkout and subscription flow"
+              reasonLabel={EXECUTION_REASON_LABELS.risk_class_prohibited}
+              planHref={projectSectionHref("project_e2e", "action-plan")}
+              shape="policy"
+            />
+          }
+        />
+      </main>
+    );
+  }
+
+  if (
+    scenario === "agent-plan-next-confirm" ||
+    scenario === "agent-plan-next-waiting" ||
+    scenario === "agent-plan-next-refused"
+  ) {
+    /*
+     * Three outlooks, because the third one is what a founder actually hit and
+     * the first version of this notice got wrong: a step Vibe refuses by policy
+     * was rendered with "an earlier step comes first" over "becomes available
+     * once that step is done". Both false, and the second one made the founder
+     * wait for something that was never coming.
+     */
+    const scene = {
+      "agent-plan-next-confirm": {
+        shape: "capability" as const,
+        stepOrder: 1,
+        stepTitle: "Establish what the existing billing route actually does",
+        reason: EXECUTION_REASON_LABELS.change_kind_not_executable,
+      },
+      "agent-plan-next-waiting": {
+        shape: "not_vibes" as const,
+        stepOrder: 2,
+        stepTitle: "Confirm the plan structure checkout should charge",
+        reason: EXECUTION_REASON_LABELS.founder_decision_required,
+      },
+      "agent-plan-next-refused": {
+        shape: "policy" as const,
+        stepOrder: 3,
+        stepTitle: "Build or complete the checkout and subscription flow",
+        reason: EXECUTION_REASON_LABELS.risk_class_prohibited,
+      },
+    }[scenario];
+
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
         <AgentPlanNextNotice
-          stepOrder={1}
-          stepTitle="Establish what the existing billing route actually does"
-          reasonLabel={
-            confirmable
-              ? EXECUTION_REASON_LABELS.change_kind_not_executable
-              : EXECUTION_REASON_LABELS.founder_decision_required
-          }
+          stepOrder={scene.stepOrder}
+          stepTitle={scene.stepTitle}
+          reasonLabel={scene.reason}
           planHref={projectSectionHref("project_e2e", "action-plan")}
-          canConfirm={confirmable}
+          shape={scene.shape}
         />
       </main>
     );
