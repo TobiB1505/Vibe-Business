@@ -274,10 +274,49 @@ claim is that a founder who only sees the template has lost a rephrasing and
 nothing else. `nova-audit-voice.test.ts` holds the render path to that, and to
 never importing the generator, a provider, or a service-role client.
 
-**No other slot is wired.** `product_reveal`, `move_recommendation`,
-`execution_result` and `outcome_result` each need their own payload and their
-own template, and each is worth doing only once this one has been read by a
-real founder.
+## A second slot: `move_recommendation`
+
+`voice/move-slot.ts`, generated at the end of `completeOpportunityOperationStep`
+and read on the plan page above the Moves.
+
+It exists because `audit_result` is the _weakest_ case for this tier and the
+dogfood run showed it: an audit's facts are already polished prose written by
+the audit's own inference, so a second model pass mostly recombines sentences
+that were fine already. A Move is the opposite — structured state (title,
+problem, whyNow, rank, impact, effort) plus a closed-vocabulary goal label —
+and turning that into one sentence is work a template genuinely cannot do.
+It is also the case the eval named as the point of the whole tier (`B1`:
+"Connecting goal and priority is the whole point of the voice layer").
+
+Differences from the audit slot, each deliberate:
+
+- **There is no intermediate Nova view to derive from.** `feed.ts`'s
+  `NovaMoveFact` carries `id`, `rank` and `title` — enough to order candidates,
+  not enough to say anything. So the canonical Move is read directly and
+  narrowed in one place (`novaMoveSubject`), so a caller cannot widen what
+  reaches the identity.
+- **The fact labels mirror the eval** (`move`, `problem`, `why now`). Different
+  labels would put this slot outside the measurement ADR 0083 rests on.
+- **The goal is stated, never connected.** "Your goal is X, so do Y" is a
+  prioritisation Vibe never made — the ranking comes from the audit. The goal
+  is also the one _mutable_ input in the identity: changing it is a new
+  identity and therefore one new generation, which is correct rather than
+  wasteful.
+- **`medium` confidence hedges.** The Move's own confidence passes through as
+  `high` only when it is high; overstating certainty is the one direction this
+  product may not err in.
+- **`nextStep` is state-independent.** "Turn this into a plan" is false once a
+  plan exists, and a next step that moved with plan state would turn every plan
+  a founder makes into a second paid generation of a sentence that did not need
+  to move.
+- **The language sweeps cover the scaffold, not the quotation.** `whyNow` is
+  the Move's own prose, rendered verbatim on the card below; a sweep over it
+  would be claiming to validate a document that has its own validation.
+
+**Two slots are wired.** `product_reveal`, `execution_result`,
+`founder_question` and `outcome_result` each need their own payload and
+template, and none is worth building until these two have been read by a real
+founder.
 
 ## What the voice may never do
 

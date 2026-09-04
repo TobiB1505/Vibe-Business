@@ -19,10 +19,7 @@ import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { OPPORTUNITY_PROMPT_VERSION } from "@/modules/opportunities/prompt";
 import { OPPORTUNITY_RUBRIC_VERSION } from "@/modules/opportunities/rubric";
-import {
-  buildOpportunityRequest,
-  runOpportunityGeneration,
-} from "@/modules/opportunities/runner";
+import { buildOpportunityRequest, runOpportunityGeneration } from "@/modules/opportunities/runner";
 import {
   OPPORTUNITY_ENGINE_VERSION,
   OPPORTUNITY_SET_SCHEMA_VERSION,
@@ -34,7 +31,15 @@ import {
   failOpportunitySetRun,
   getOpportunitySetById,
 } from "@/modules/opportunities/store";
+import {
+  buildNovaMoveTemplate,
+  buildNovaMoveVoicePayload,
+  novaFounderGoal,
+  novaMoveSubject,
+  topMove,
+} from "@/modules/nova/voice/move-slot";
 import type { ExecutionDeps, StepOutcome } from "../business-audit/execution";
+import { speakAfterOperation } from "../nova-voice";
 import type { OperationFailureCode } from "../failures";
 import {
   claimResultForOperation,
@@ -113,7 +118,8 @@ async function loadSources(
       getLatestSuccessfulAuthenticatedSnapshot(supabase, operation.projectId),
     ]);
 
-  if (!repositorySnapshot?.result) return { ok: false, failureCode: "repository_intelligence_missing" };
+  if (!repositorySnapshot?.result)
+    return { ok: false, failureCode: "repository_intelligence_missing" };
   if (!liveSnapshot?.result) return { ok: false, failureCode: "live_product_intelligence_missing" };
   // The same profile requirement as the audit, and for a sharper reason: this
   // rebuilds the audit's evidence pack so citations resolve against the same
@@ -208,7 +214,8 @@ export async function prepareOpportunitiesStep(
   if (!run.ok) {
     return {
       ok: false,
-      failureCode: run.error === "already_running" ? "already_running" : "opportunity_generation_failed",
+      failureCode:
+        run.error === "already_running" ? "already_running" : "opportunity_generation_failed",
     };
   }
 
@@ -269,7 +276,8 @@ export async function runPrioritizationStep(
   if (existing?.status === "failed") {
     return {
       ok: false,
-      failureCode: (existing.failureCode as OperationFailureCode) ?? "opportunity_generation_failed",
+      failureCode:
+        (existing.failureCode as OperationFailureCode) ?? "opportunity_generation_failed",
     };
   }
 
@@ -371,7 +379,53 @@ export async function completeOpportunityOperationStep(
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
     eventType: "operation.completed",
-    metadata: { projectId: operation.projectId, operationId, operationType: operation.operationType },
+    metadata: {
+      projectId: operation.projectId,
+      operationId,
+      operationType: operation.operationType,
+    },
+  });
+
+  await speakAboutTheTopMove(deps, operation, setId);
+}
+
+/**
+ * Nova says one sentence about the Move she would start with.
+ *
+ * Placed exactly where `speakAboutTheAudit` is, and for the same reasons: past
+ * the `transitioned` guard, so a workflow replay cannot reach it twice and
+ * "at most one presentation per operation" stays a property of the state
+ * machine rather than a collision `ai_usage_events_job_idx` has to absorb; and
+ * past the settle, so nothing the founder paid for depends on what happens
+ * next. `speakAfterOperation` returns void and never throws.
+ *
+ * Two reads, both cheap and both of already-persisted state: the set this
+ * operation just wrote, and the founder's stored goal. The goal is the reason
+ * this slot is worth a model at all — connecting it to a priority Vibe set is
+ * the one thing the deterministic template cannot do — and it is also the one
+ * mutable input in the identity: a founder who changes their goal gets a new
+ * identity and therefore one new generation, which is correct rather than
+ * wasteful, and bounded by the store either way.
+ */
+async function speakAboutTheTopMove(
+  deps: ExecutionDeps,
+  operation: { id: string; userId: string; projectId: string },
+  setId: string,
+): Promise<void> {
+  const stored = await getOpportunitySetById(deps.supabase, setId);
+  const move = topMove(stored?.opportunities ?? []);
+  if (move === null) return;
+
+  const storedIntent = await getFounderIntent(deps.supabase, operation.projectId);
+  const subject = novaMoveSubject(move);
+  const founderGoal = novaFounderGoal(storedIntent?.intent.primaryGoal ?? null);
+
+  await speakAfterOperation({
+    supabase: deps.supabase,
+    provider: deps.provider,
+    operation,
+    payload: buildNovaMoveVoicePayload({ subject, founderGoal }),
+    template: buildNovaMoveTemplate(subject, founderGoal),
   });
 }
 
