@@ -179,6 +179,18 @@ Visual ambition is encouraged. False state is forbidden. Never animate fabricate
 
 This is the boundary that the rest of this section spends its freedom against: the design may be experimental, the state model may not. External UI never changes domain truth. An approval surface cannot alter what is actually approved; a diff surface cannot introduce partial approval where the product approves one immutable commit; a progress surface cannot invent a fraction; a question component cannot invent choices; an execution control cannot bypass Credit, risk or resolver checks; and model prose never becomes authority because it was rendered beautifully.
 
+### Ambience around a working state, never evidence of one
+
+Decorative "thinking" motion — a shimmering label, a drifting field, an ambient pulse around work in flight — is admissible as a visual treatment **around** a state Vibe has genuinely observed. It is never admissible as the thing that tells a founder work is happening.
+
+Three properties separate the two, and they belong in the code rather than in a comment:
+
+- **Bound to an observed state.** The treatment is keyed to a stage the product recorded as running. It must be unreachable on a pending, paused, failed or skipped one — a shimmer over a paused run is the animated form of "activity while a process is in fact waiting".
+- **Removable without loss.** Every word the treatment decorates stays present and legible with the motion gone. If turning it off changes what the founder knows, it was carrying information and is not ambience.
+- **Carrying no timing.** Its period is fixed and unrelated to how long the work has run or has left. A treatment that accelerates with apparent progress is a percentage nobody measured.
+
+Model reasoning stays out of bounds regardless (rule 43). A trace beside such a treatment may show what Vibe recorded itself doing — files read, files written, stages entered — and never a model's account of its own thinking, streamed or otherwise.
+
 ## Signature Surfaces
 
 A signature surface is one where the product's understanding is the thing being shown, and where choreography carries meaning rather than decorating it. Three exist today — Business Brain, Product Scan and Agent — and they are described below.
