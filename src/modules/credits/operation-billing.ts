@@ -227,6 +227,17 @@ export async function authorizeOperationCredits(
     projectId: params.projectId,
     operationRunId: params.operationRunId ?? null,
     quoteId: params.quoteId ?? null,
+    /*
+     * The policy that produced `price`, written onto the hold that carries it.
+     *
+     * `billing_credit_reservations` has had a `rate_card_version` column since
+     * the table did and nothing ever passed one, so every reservation carried
+     * null and the settlement had nothing to read — which is how a literal
+     * `"retail-v1"` came to be its fallback, and why eleven production charges
+     * name a card that cannot explain their amount. The version was already
+     * resolved and audit-logged one call below; only the row never got it.
+     */
+    rateCardVersion: price.policyVersion,
   });
 
   if (!claim.ok) {
@@ -373,7 +384,7 @@ export async function availableSpendableCredits(
  */
 export async function settleOperationCredits(
   supabase: SupabaseClient,
-  params: { reservationId: string; policyVersion: string },
+  params: { reservationId: string; policyVersion: string | null },
 ): Promise<{ ok: true; chargedCredits: CreditUnits; alreadySettled: boolean } | { ok: false; refusal: string }> {
   const reservation = await getReservation(supabase, params.reservationId);
   if (!reservation) return { ok: false, refusal: "reservation_not_found" };
@@ -480,10 +491,16 @@ export async function releaseOperationCredits(
 export async function findOperationReservation(
   supabase: SupabaseClient,
   operationRunId: string,
-): Promise<{ id: string; reservedCredits: CreditUnits; status: string } | null> {
+): Promise<{
+  id: string;
+  reservedCredits: CreditUnits;
+  status: string;
+  /** The policy that priced this hold, so the charge can be stamped with it. */
+  rateCardVersion: string | null;
+} | null> {
   const { data, error } = await supabase
     .from("billing_credit_reservations")
-    .select("id, reserved_credits, status")
+    .select("id, reserved_credits, status, rate_card_version")
     .eq("operation_run_id", operationRunId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -492,6 +509,16 @@ export async function findOperationReservation(
   if (error) throw error;
   if (!data) return null;
 
-  const row = data as { id: string; reserved_credits: number; status: string };
-  return { id: row.id, reservedCredits: creditUnits(row.reserved_credits), status: row.status };
+  const row = data as {
+    id: string;
+    reserved_credits: number;
+    status: string;
+    rate_card_version: string | null;
+  };
+  return {
+    id: row.id,
+    reservedCredits: creditUnits(row.reserved_credits),
+    status: row.status,
+    rateCardVersion: row.rate_card_version,
+  };
 }
