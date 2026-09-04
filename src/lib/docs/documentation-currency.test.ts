@@ -72,6 +72,24 @@ function markdownFiles(dir: string): string[] {
 }
 
 /** Markdown link targets, minus the anchor, minus anything not a local path. */
+/**
+ * Every module README, as a repo-relative path.
+ *
+ * Section C used to read the repository root and `docs/` only, so a broken
+ * link inside a module README resolved to nothing and failed nothing — while
+ * section F, checking the same files, caught a wrong *filename* in the very
+ * same sentence. The asymmetry was not a decision; the module READMEs simply
+ * were not in the list.
+ */
+function moduleReadmes(): string[] {
+  const modules = join(ROOT, "src/modules");
+  return readdirSync(modules, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(modules, entry.name, "README.md"))
+    .filter((path) => existsSync(path))
+    .map((path) => relative(ROOT, path));
+}
+
 function relativeLinkTargets(source: string): string[] {
   return [...source.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)]
     .map((match) => match[1].split("#")[0])
@@ -178,10 +196,15 @@ describe("every relative link in the documentation resolves", () => {
   const files = [
     ...readdirSync(ROOT).filter((f) => f.endsWith(".md")),
     ...markdownFiles(DOCS),
+    ...moduleReadmes(),
   ];
 
   it("finds the documents it is supposed to be checking", () => {
     expect(files.length).toBeGreaterThan(60);
+  });
+
+  it("includes the module READMEs", () => {
+    expect(files.filter((f) => f.startsWith("src/modules/")).length).toBeGreaterThan(20);
   });
 
   it("resolves every target", () => {
