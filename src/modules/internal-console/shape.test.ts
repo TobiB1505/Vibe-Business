@@ -7,8 +7,9 @@ import {
   buildInFlight,
   buildOutcomes,
   buildSpend,
-  buildTools,
+  buildAgentSummary,
   formatMicroUsd,
+  nanoToMicroUsd,
   projectRef,
   toMicroUsd,
   windowStart,
@@ -211,8 +212,8 @@ describe("money is integer micro-USD", () => {
     }));
 
     const [spend] = buildSpend([{ source: "inference", rows }]);
-    expect(spend.microUsd).toBe(30_000_000);
-    expect(formatMicroUsd(spend.microUsd)).toBe("$30.00");
+    expect(spend.measuredMicroUsd).toBe(30_000_000);
+    expect(formatMicroUsd(spend.measuredMicroUsd)).toBe("$30.00");
   });
 
   it("reports each source separately, including an empty one", () => {
@@ -225,9 +226,53 @@ describe("money is integer micro-USD", () => {
         { source: "sandbox", rows: [] },
       ]),
     ).toEqual([
-      { source: "inference", events: 1, microUsd: 1_500_000 },
-      { source: "sandbox", events: 0, microUsd: 0 },
+      { source: "inference", events: 1, measuredMicroUsd: 1_500_000, estimatedMicroUsd: 0 },
+      { source: "sandbox", events: 0, measuredMicroUsd: 0, estimatedMicroUsd: 0 },
     ]);
+  });
+
+  /*
+   * The defect this pins, found on the console's first look at production.
+   *
+   * `sandbox_usage_events.provider_cost_usd` is null in every row ever written
+   * — Vercel reports no per-sandbox figure — so a panel summing only that
+   * column showed "sandbox · 4 events · $0.00" and called it what the provider
+   * billed. A confident zero is worse than no number.
+   */
+  it("keeps a provider's estimate apart from a provider's measurement", () => {
+    const [sandbox] = buildSpend([
+      {
+        source: "sandbox",
+        rows: [
+          {
+            created_at: ago(1),
+            status: "succeeded",
+            provider_cost_usd: null,
+            estimated_cost_nano_usd: 1_400_000_000,
+          },
+          {
+            created_at: ago(2),
+            status: "succeeded",
+            provider_cost_usd: null,
+            estimated_cost_nano_usd: 600_000_000,
+          },
+        ],
+      },
+    ]);
+
+    // Two rows the provider priced at nothing, and Vibe derived $2.00 for.
+    expect(sandbox.measuredMicroUsd).toBe(0);
+    expect(sandbox.estimatedMicroUsd).toBe(2_000_000);
+    expect(formatMicroUsd(sandbox.estimatedMicroUsd)).toBe("$2.00");
+    expect(sandbox).not.toHaveProperty("microUsd");
+  });
+
+  it("ignores a negative or non-finite estimate", () => {
+    expect(nanoToMicroUsd(-1)).toBe(0);
+    expect(nanoToMicroUsd(Number.NaN)).toBe(0);
+    expect(nanoToMicroUsd(null)).toBe(0);
+    expect(nanoToMicroUsd(undefined)).toBe(0);
+    expect(nanoToMicroUsd(1_500)).toBe(2);
   });
 });
 
@@ -247,24 +292,63 @@ describe("the funnel", () => {
   });
 });
 
-describe("agent tool usage", () => {
-  it("separates denial from failure, and ranks denials first", () => {
-    const tools = buildTools([
-      { tool: "Bash", decision: "allowed", success: true },
-      { tool: "Bash", decision: "allowed", success: false },
-      { tool: "WebFetch", decision: "denied", success: null },
-      { tool: "Read", decision: "allowed", success: null },
+describe("agent runs", () => {
+  /*
+   * This panel used to read `agent_tool_events`, which has zero rows and no
+   * writer: it belongs to the tool-gateway topology ADR 0029 replaced. The
+   * numbers that survived the move live on the run row.
+   */
+  it("counts outcomes and sums the files that changed", () => {
+    const summary = buildAgentSummary([
+      { status: "succeeded", failure_code: null, duration_ms: 200_000, changed_file_count: 3 },
+      { status: "succeeded", failure_code: null, duration_ms: 300_000, changed_file_count: 5 },
+      {
+        status: "failed",
+        failure_code: "agent_workspace_unavailable",
+        duration_ms: 100_000,
+        changed_file_count: 0,
+      },
     ]);
 
-    expect(tools).toEqual([
-      { tool: "WebFetch", allowed: 0, denied: 1, failed: 0 },
-      { tool: "Bash", allowed: 2, denied: 0, failed: 1 },
-      { tool: "Read", allowed: 1, denied: 0, failed: 0 },
-    ]);
+    expect(summary).toEqual({
+      runs: 3,
+      succeeded: 2,
+      failed: 1,
+      filesChanged: 8,
+      avgDurationMs: 200_000,
+      failures: [{ failureCode: "agent_workspace_unavailable", count: 1 }],
+    });
   });
 
-  it("treats an unrecorded outcome as not a failure", () => {
-    expect(buildTools([{ tool: "Read", decision: "allowed", success: null }])[0].failed).toBe(0);
+  it("averages over the runs that recorded a duration, not over all of them", () => {
+    // A null counted as zero drags the mean towards a number nothing measured.
+    const summary = buildAgentSummary([
+      { status: "succeeded", failure_code: null, duration_ms: 300_000, changed_file_count: 1 },
+      { status: "succeeded", failure_code: null, duration_ms: null, changed_file_count: 1 },
+    ]);
+
+    expect(summary.avgDurationMs).toBe(300_000);
+  });
+
+  it("reports no average when nothing recorded one", () => {
+    expect(
+      buildAgentSummary([
+        {
+          status: "failed",
+          failure_code: "agent_provider_failed",
+          duration_ms: null,
+          changed_file_count: null,
+        },
+      ]).avgDurationMs,
+    ).toBeNull();
+  });
+
+  it("counts a failure with no code rather than dropping it", () => {
+    expect(
+      buildAgentSummary([
+        { status: "failed", failure_code: null, duration_ms: 1, changed_file_count: 0 },
+      ]).failures,
+    ).toEqual([{ failureCode: "(unclassified)", count: 1 }]);
   });
 });
 

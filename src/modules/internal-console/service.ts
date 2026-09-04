@@ -11,7 +11,7 @@ import {
   buildInFlight,
   buildOutcomes,
   buildSpend,
-  buildTools,
+  buildAgentSummary,
   windowStart,
 } from "./shape";
 import {
@@ -21,7 +21,7 @@ import {
   readOnboarding,
   readOperationRuns,
   readSandboxUsage,
-  readToolEvents,
+  readAgentRuns,
   readUnfinishedOperations,
 } from "./store";
 
@@ -51,14 +51,14 @@ export async function loadConsoleSnapshot(
   const client = deps.client ?? consoleClient();
   const since = windowStart(window, now);
 
-  const [runs, unfinished, inference, sandbox, browser, onboarding, tools] = await Promise.all([
+  const [runs, unfinished, inference, sandbox, browser, onboarding, agentRuns] = await Promise.all([
     readOperationRuns(client, since),
     readUnfinishedOperations(client),
     readInferenceUsage(client, since),
     readSandboxUsage(client, since),
     readBrowserUsage(client, since),
     readOnboarding(client),
-    readToolEvents(client, since),
+    readAgentRuns(client, since),
   ]);
 
   /*
@@ -67,7 +67,7 @@ export async function loadConsoleSnapshot(
    * is told "at least this much" can act on it; one shown a quiet undercount
    * cannot.
    */
-  const truncated = [runs, inference, sandbox, browser, onboarding, tools].some(
+  const truncated = [runs, inference, sandbox, browser, onboarding, agentRuns].some(
     (rows) => rows.length >= SAMPLE_LIMIT,
   );
 
@@ -86,7 +86,7 @@ export async function loadConsoleSnapshot(
         { source: "browser", rows: browser },
       ]),
       funnel: buildFunnel(onboarding),
-      tools: buildTools(tools),
+      agents: buildAgentSummary(agentRuns),
       truncated,
     },
   };
