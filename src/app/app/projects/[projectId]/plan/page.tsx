@@ -254,7 +254,7 @@ export default async function ProjectMovesPage({
    * What Nova says above the Moves, if she has said anything about *this* top
    * Move. A read and nothing else: `readNovaMoveVoice` takes no provider, and
    * the message it resolves was written by the durable step that generated the
-   * set (ADR 0085). A render that could generate would be the per-visit spend
+   * set (ADR 0086). A render that could generate would be the per-visit spend
    * §M of the Nova audit refuses.
    *
    * Both inputs are the same ones the durable step used — the set's top-ranked

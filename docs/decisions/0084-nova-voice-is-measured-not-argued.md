@@ -1,6 +1,6 @@
-# 0083 - Nova's voice model is chosen by eval, not by cost intuition
+# 0084 - Nova's voice model is chosen by eval, not by cost intuition
 
-Status: Accepted; extended by [0085](0085-nova-presentation-is-claimed-stored-and-attempted-once.md), which decides *when* a call may be made at all — this ADR chose the model and the prompt and left that open. Nothing measured here changes
+Status: Accepted; extended by [0086](0086-nova-presentation-is-claimed-stored-and-attempted-once.md), which decides *when* a call may be made at all — this ADR chose the model and the prompt and left that open. Nothing measured here changes
 Date: 2026-09-03
 
 Amends nothing built; records the first decision inside the Nova experience layer described in [the Nova architecture audit](../audits/2026-09-03-nova-architecture-audit/README.md) and its §O amendments. Introduces one new AI operation, `nova_presentation`, on the boundary [ADR 0005](0005-ai-provider-abstraction.md) and [ADR 0011](0011-ai-inference-and-evidence-trust-boundary.md) already define. Changes no risk class, no execution authority, and nothing about how the four existing reasoning operations run.

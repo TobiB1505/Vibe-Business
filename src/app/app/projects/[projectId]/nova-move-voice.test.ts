@@ -6,7 +6,7 @@ import { describe, expect, it } from "vitest";
  * The Move render path cannot spend, asserted against its source.
  *
  * The same contract `nova-audit-voice.test.ts` holds the audit screen to, and
- * it exists for the same reason: ADR 0085's fifth condition — no provider call
+ * it exists for the same reason: ADR 0086's fifth condition — no provider call
  * from the read or render path — is the only one of the five that no type or
  * database constraint can enforce. A render that imported the generator would
  * compile, deploy, and bill a founder once per visit.

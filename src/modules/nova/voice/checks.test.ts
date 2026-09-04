@@ -173,7 +173,7 @@ describe("spelled-out quantities", () => {
  * customers", "that tends to kill conversions" — is fluent, numerically clean,
  * uses no banned claim, names no module, and contains no causal connective, so
  * every rule here passes it. That is not a hole to plug: it is the boundary
- * ADR 0083 drew when it chose the model by measurement rather than by adding
+ * ADR 0084 drew when it chose the model by measurement rather than by adding
  * regular expressions. `causal_claim` catches *stated* causation ("caused",
  * "led to", "thanks to"); an implied outcome has no token to match on, and a
  * pattern loose enough to catch one would reject ordinary grounded English.

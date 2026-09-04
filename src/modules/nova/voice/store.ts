@@ -20,7 +20,7 @@ import type { NovaVoiceFallbackReason, NovaVoiceOutcome } from "./service";
  *
  * §M of the Nova audit refuses "a Nova copy LLM call per message, per visit,
  * per founder, with no reuse key and no ledger row that means anything".
- * [ADR 0085](../../../../docs/decisions/0085-nova-presentation-is-claimed-stored-and-attempted-once.md)
+ * [ADR 0086](../../../../docs/decisions/0086-nova-presentation-is-claimed-stored-and-attempted-once.md)
  * amends that to five conditions, and this module is four of them: the
  * persisted result, the atomic claim, the deterministic fallback, and a read
  * path with no way to reach a provider. The fifth — the identity — is
@@ -95,7 +95,7 @@ type StoredRow = {
  * fallback row records *that* this identity resolved to the template and why,
  * never a copy of its text. So a reworded template takes effect immediately
  * instead of leaving yesterday's sentence in a row nobody would think to look
- * at (ADR 0085).
+ * at (ADR 0086).
  *
  * A stored `voice` row whose message is somehow null resolves to the template
  * as well. The database forbids that combination; this does not trust it to,
@@ -226,7 +226,7 @@ export async function resolveNovaVoiceGeneration(
  * one query and no claim; the claim comes before the provider so a loser never
  * spends; and the resolve comes after the outcome so a crash between them
  * leaves the identity permanently on the template rather than open to a second
- * attempt (ADR 0085).
+ * attempt (ADR 0086).
  */
 export async function ensureNovaVoiceMessage(params: {
   supabase: SupabaseClient;

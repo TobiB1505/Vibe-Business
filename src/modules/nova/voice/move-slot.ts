@@ -140,7 +140,7 @@ function lowerFirst(text: string): string {
  *
  * The fact labels mirror the ones the prompt was measured against — `move`,
  * `problem`, `why now` in `eval/cases.ts`'s `A3` and `B1`. Using different
- * labels would put this slot outside the measurement ADR 0083 rests on.
+ * labels would put this slot outside the measurement ADR 0084 rests on.
  *
  * No `position` fact: that one exists in the eval for a Move that is *not*
  * first (`A8`), where Nova must not imply it is the most important thing.

@@ -83,7 +83,7 @@ const REPS = Number(process.env.NOVA_REPS ?? "1");
  * better reason than symmetry. The failure modes worth repeating are the
  * stochastic ones — a model that invents a reason on one call and not the
  * next needs more than one draw to be caught — and those concentrate in a
- * known subset (ADR 0083's residual-failure list). Everything outside it
+ * known subset (ADR 0084's residual-failure list). Everything outside it
  * still runs, just once, which is enough for a case that is safe or unsafe
  * by construction rather than by chance.
  */
