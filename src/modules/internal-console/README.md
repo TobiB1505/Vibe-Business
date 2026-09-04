@@ -40,6 +40,12 @@ Identifiers are truncated to eight characters. The console never joins `auth.use
 
 Provider costs arrive as decimal USD. Summing floats drifts, and this repository already refuses to do that for Credits, so costs are converted once at the boundary and summed as integers. A negative or non-finite cost is ignored rather than subtracted: a total that silently shrinks is worse than one that skips a bad row.
 
+## A measurement and an estimate are two numbers, never one
+
+`provider_cost_usd` is **null in every sandbox row and every browser row ever written** — neither provider reports a per-run price. Vibe's own derivation lives in `estimated_cost_nano_usd` under its own pricing version, and `economy/sandbox-usage-estimate.ts` keeps the columns apart precisely so an assumption is never summed as a measurement.
+
+The console's first look at production showed _"sandbox · 4 events · $0.00"_ under a heading that said what the providers billed. The zero was structural, not empty. Both figures are now read and kept apart: a measured total, or an estimate rendered with a `~`. They are never added together.
+
 ## A reached bound is reported, not hidden
 
 Every query is bounded. When one returns a full page the snapshot is marked `truncated`, and the console says the totals are a floor. An operator told "at least this much" can act on it; one shown a quiet undercount cannot.

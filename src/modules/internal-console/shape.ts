@@ -41,6 +41,8 @@ export type UsageRow = {
   created_at: string;
   status: string;
   provider_cost_usd: number | null;
+  /** Absent on `ai_usage_events`, which has a real provider price. */
+  estimated_cost_nano_usd?: number | null;
 };
 
 export type OnboardingRow = { state: string; completed_at: string | null };
@@ -183,13 +185,23 @@ export function toMicroUsd(usd: number | null | undefined): MicroUsd {
   return Math.round(usd * 1_000_000);
 }
 
+/** Nano-USD to micro-USD. Integers throughout; a bad row contributes nothing. */
+export function nanoToMicroUsd(nano: number | null | undefined): MicroUsd {
+  if (typeof nano !== "number" || !Number.isFinite(nano) || nano < 0) return 0;
+  return Math.round(nano / 1_000);
+}
+
 export function buildSpend(
   sources: readonly { source: SpendSource; rows: readonly UsageRow[] }[],
 ): readonly SpendRow[] {
   return sources.map(({ source, rows }) => ({
     source,
     events: rows.length,
-    microUsd: rows.reduce((total, row) => total + toMicroUsd(row.provider_cost_usd), 0),
+    measuredMicroUsd: rows.reduce((total, row) => total + toMicroUsd(row.provider_cost_usd), 0),
+    estimatedMicroUsd: rows.reduce(
+      (total, row) => total + nanoToMicroUsd(row.estimated_cost_nano_usd),
+      0,
+    ),
   }));
 }
 

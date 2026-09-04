@@ -9,6 +9,7 @@ import {
   buildSpend,
   buildTools,
   formatMicroUsd,
+  nanoToMicroUsd,
   projectRef,
   toMicroUsd,
   windowStart,
@@ -211,8 +212,8 @@ describe("money is integer micro-USD", () => {
     }));
 
     const [spend] = buildSpend([{ source: "inference", rows }]);
-    expect(spend.microUsd).toBe(30_000_000);
-    expect(formatMicroUsd(spend.microUsd)).toBe("$30.00");
+    expect(spend.measuredMicroUsd).toBe(30_000_000);
+    expect(formatMicroUsd(spend.measuredMicroUsd)).toBe("$30.00");
   });
 
   it("reports each source separately, including an empty one", () => {
@@ -225,9 +226,53 @@ describe("money is integer micro-USD", () => {
         { source: "sandbox", rows: [] },
       ]),
     ).toEqual([
-      { source: "inference", events: 1, microUsd: 1_500_000 },
-      { source: "sandbox", events: 0, microUsd: 0 },
+      { source: "inference", events: 1, measuredMicroUsd: 1_500_000, estimatedMicroUsd: 0 },
+      { source: "sandbox", events: 0, measuredMicroUsd: 0, estimatedMicroUsd: 0 },
     ]);
+  });
+
+  /*
+   * The defect this pins, found on the console's first look at production.
+   *
+   * `sandbox_usage_events.provider_cost_usd` is null in every row ever written
+   * — Vercel reports no per-sandbox figure — so a panel summing only that
+   * column showed "sandbox · 4 events · $0.00" and called it what the provider
+   * billed. A confident zero is worse than no number.
+   */
+  it("keeps a provider's estimate apart from a provider's measurement", () => {
+    const [sandbox] = buildSpend([
+      {
+        source: "sandbox",
+        rows: [
+          {
+            created_at: ago(1),
+            status: "succeeded",
+            provider_cost_usd: null,
+            estimated_cost_nano_usd: 1_400_000_000,
+          },
+          {
+            created_at: ago(2),
+            status: "succeeded",
+            provider_cost_usd: null,
+            estimated_cost_nano_usd: 600_000_000,
+          },
+        ],
+      },
+    ]);
+
+    // Two rows the provider priced at nothing, and Vibe derived $2.00 for.
+    expect(sandbox.measuredMicroUsd).toBe(0);
+    expect(sandbox.estimatedMicroUsd).toBe(2_000_000);
+    expect(formatMicroUsd(sandbox.estimatedMicroUsd)).toBe("$2.00");
+    expect(sandbox).not.toHaveProperty("microUsd");
+  });
+
+  it("ignores a negative or non-finite estimate", () => {
+    expect(nanoToMicroUsd(-1)).toBe(0);
+    expect(nanoToMicroUsd(Number.NaN)).toBe(0);
+    expect(nanoToMicroUsd(null)).toBe(0);
+    expect(nanoToMicroUsd(undefined)).toBe(0);
+    expect(nanoToMicroUsd(1_500)).toBe(2);
   });
 });
 

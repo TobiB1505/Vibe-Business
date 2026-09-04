@@ -86,10 +86,21 @@ export type MicroUsd = number;
 
 export type SpendSource = "inference" | "sandbox" | "browser";
 
+/**
+ * One provider's spend, as two separate figures.
+ *
+ * They are not added together anywhere, and that is the point.
+ * `measuredMicroUsd` is what a provider reported. `estimatedMicroUsd` is
+ * Vibe's own derivation from quantities a provider reported without a price —
+ * which is every sandbox row and every browser row, by design. Summing them
+ * into one number would let an assumption be read as a measurement, which is
+ * the one thing `economy/cost.ts` exists to prevent.
+ */
 export type SpendRow = {
   source: SpendSource;
   events: number;
-  microUsd: MicroUsd;
+  measuredMicroUsd: MicroUsd;
+  estimatedMicroUsd: MicroUsd;
 };
 
 /** Where projects currently stand. Counts of states, never names. */

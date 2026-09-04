@@ -58,7 +58,16 @@ export const AI_USAGE_COLUMNS = [
   "latency_ms",
 ] as const;
 
-/** `sandbox_usage_events` — sandbox spend. */
+/**
+ * `sandbox_usage_events` — sandbox spend.
+ *
+ * Both cost columns, because they are different kinds of claim.
+ * `provider_cost_usd` is null in every row ever written — Vercel reports no
+ * per-sandbox figure — and `estimated_cost_nano_usd` is Vibe's own derivation
+ * from quantities the provider did report, under its own pricing version.
+ * `economy/sandbox-usage-estimate.ts` keeps them apart so an assumption is
+ * never summed as a measurement; the console has to keep them apart too.
+ */
 export const SANDBOX_USAGE_COLUMNS = [
   "id",
   "created_at",
@@ -68,9 +77,10 @@ export const SANDBOX_USAGE_COLUMNS = [
   "failure_code",
   "sandbox_duration_ms",
   "provider_cost_usd",
+  "estimated_cost_nano_usd",
 ] as const;
 
-/** `deep_scan_provider_usage` — browser spend. */
+/** `deep_scan_provider_usage` — browser spend. Same two columns, same reason. */
 export const DEEP_SCAN_USAGE_COLUMNS = [
   "id",
   "created_at",
@@ -79,6 +89,7 @@ export const DEEP_SCAN_USAGE_COLUMNS = [
   "status",
   "duration_ms",
   "provider_cost_usd",
+  "estimated_cost_nano_usd",
 ] as const;
 
 /**

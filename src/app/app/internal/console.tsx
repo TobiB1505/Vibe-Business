@@ -255,12 +255,24 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
             </p>
           </Panel>
 
-          <Panel title="Provider spend" note="What the providers billed, not what a customer paid.">
+          <Panel
+            title="Provider spend"
+            note="What a provider billed. A ~ figure is Vibe's own estimate, because that provider reports no price — the two are never added together."
+          >
             <Rows
               rows={snapshot.spend.map((row) => ({
                 key: row.source,
                 label: `${row.source} · ${row.events} events`,
-                value: formatMicroUsd(row.microUsd),
+                /*
+                 * A provider that reports nothing gets the estimate shown as an
+                 * estimate, never a confident $0.00 under a heading that says
+                 * "billed" — the mistake this panel shipped with, and the same
+                 * separation economy/cost.ts keeps in the ledger.
+                 */
+                value:
+                  row.measuredMicroUsd > 0 || row.estimatedMicroUsd === 0
+                    ? formatMicroUsd(row.measuredMicroUsd)
+                    : `~${formatMicroUsd(row.estimatedMicroUsd)}`,
               }))}
             />
           </Panel>
