@@ -50,6 +50,30 @@ The console's first look at production showed _"sandbox · 4 events · $0.00"_ u
 
 Every query is bounded. When one returns a full page the snapshot is marked `truncated`, and the console says the totals are a floor. An operator told "at least this much" can act on it; one shown a quiet undercount cannot.
 
+## Two panels the first production look corrected
+
+Both were the same mistake in different clothes: a number that looked like an
+observation and was an artefact of reading the wrong place.
+
+**Provider spend.** `provider_cost_usd` is null in every sandbox row and every
+browser row ever written — neither provider reports a per-run price — so the
+panel showed `sandbox · 4 events · $0.00` under a heading that said what the
+providers billed. Both cost columns are now read and kept apart, and a source
+with events but no figure at all says **not recorded**. In production today
+that is every sandbox row: 63 of them, none carrying a provider price, an
+estimate, a `cost_pricing_version` or a `vcpus` count, so the derivation
+[ADR 0073](../../../docs/decisions/0073-the-charge-lands-on-what-was-sold.md) describes has never once been written. The console reports that rather
+than papering over it.
+
+**Agent runs.** The panel first read `agent_tool_events`, which has **zero rows
+and no writer**: it belongs to the tool-gateway topology of [ADR 0027](../../../docs/decisions/0027-coding-agent-provider-and-tool-gateway.md), and
+[ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md) moved the harness inside the sandbox where the gateway brokers
+sampling alone. `agent_activity_events` is empty for the same reason, and
+`agent_execution_runs.tool_calls_allowed` / `.tool_calls_denied` / `.files_read`
+are zero in all 21 production rows. What survived the move — status, failure
+code, duration, changed files — is on the run row, and that is what the panel
+reads now.
+
 ## What lives here
 
 | File          | Purpose                                                                 |

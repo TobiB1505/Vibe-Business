@@ -93,19 +93,36 @@ export const DEEP_SCAN_USAGE_COLUMNS = [
 ] as const;
 
 /**
- * `agent_tool_events` — what the agent asked for and what the gateway decided.
+ * `agent_execution_runs` — one row per agent run.
  *
- * `command` and `path` are the two columns this table has that carry a
- * customer's repository, and they are the two this list does not name.
+ * ## Why not `agent_tool_events`, which this panel read first
+ *
+ * That table has **zero rows and no writer**. It belongs to the tool-gateway
+ * topology of [ADR 0027](../../../docs/decisions/0027-coding-agent-provider-and-tool-gateway.md), where every tool call was brokered by Vibe;
+ * [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md) moved the harness inside the sandbox, where it uses its own
+ * tools directly and the gateway brokers sampling alone. `harness-metrics.ts`
+ * says so in its own docblock: *"the gateway brokers nothing under the sandbox
+ * topology"*. A panel reading it can only ever say "nothing in this window".
+ *
+ * `agent_execution_runs` is where the surviving observations are: status,
+ * failure code, duration, and how many files a run changed.
+ *
+ * ## What this list deliberately leaves out
+ *
+ * `base_sha`, `run_identity` and `provider_session_id` identify a customer's
+ * exact commit and provider session and answer none of the console's three
+ * questions. `tool_calls_allowed`, `tool_calls_denied` and `files_read` are
+ * left out for a different reason: they are **zero in all 21 production rows**,
+ * so rendering them would repeat the confident-zero mistake this file exists to
+ * prevent, one column over.
  */
-export const AGENT_TOOL_COLUMNS = [
+export const AGENT_RUN_COLUMNS = [
   "id",
   "created_at",
-  "tool",
-  "decision",
-  "denial_reason",
+  "status",
+  "failure_code",
   "duration_ms",
-  "success",
+  "changed_file_count",
 ] as const;
 
 /** `project_onboarding` — where projects stop, as states rather than names. */
@@ -117,7 +134,7 @@ export const ALL_CONSOLE_COLUMNS: readonly string[] = [
   ...AI_USAGE_COLUMNS,
   ...SANDBOX_USAGE_COLUMNS,
   ...DEEP_SCAN_USAGE_COLUMNS,
-  ...AGENT_TOOL_COLUMNS,
+  ...AGENT_RUN_COLUMNS,
   ...ONBOARDING_COLUMNS,
 ];
 

@@ -130,7 +130,8 @@ export const E2E_INTERNAL_CONSOLE_SCENARIOS = {
       // Inference is the only one a provider prices; the other two are Vibe's
       // own derivation, and the screen has to say so.
       { source: "inference", events: 214, measuredMicroUsd: 8_412_000, estimatedMicroUsd: 0 },
-      { source: "sandbox", events: 26, measuredMicroUsd: 0, estimatedMicroUsd: 3_105_000 },
+      // Production's real shape: rows exist, neither column was ever filled.
+      { source: "sandbox", events: 26, measuredMicroUsd: 0, estimatedMicroUsd: 0 },
       { source: "browser", events: 4, measuredMicroUsd: 0, estimatedMicroUsd: 610_000 },
     ],
     funnel: [
@@ -138,12 +139,17 @@ export const E2E_INTERNAL_CONSOLE_SCENARIOS = {
       { state: "audit", count: 3 },
       { state: "product", count: 2 },
     ],
-    tools: [
-      { tool: "WebFetch", allowed: 0, denied: 3, failed: 0 },
-      { tool: "Bash", allowed: 61, denied: 0, failed: 4 },
-      { tool: "Read", allowed: 188, denied: 0, failed: 0 },
-      { tool: "Edit", allowed: 22, denied: 0, failed: 1 },
-    ],
+    agents: {
+      runs: 5,
+      succeeded: 3,
+      failed: 2,
+      filesChanged: 11,
+      avgDurationMs: 253_000,
+      failures: [
+        { failureCode: "agent_workspace_unavailable", count: 1 },
+        { failureCode: "agent_produced_no_change", count: 1 },
+      ],
+    },
     truncated: false,
   },
 } as const satisfies Record<string, ConsoleSnapshot>;

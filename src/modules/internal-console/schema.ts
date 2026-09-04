@@ -106,12 +106,15 @@ export type SpendRow = {
 /** Where projects currently stand. Counts of states, never names. */
 export type FunnelRow = { state: string; count: number };
 
-/** What the agent asked its gateway for, and what the gateway said. */
-export type ToolRow = {
-  tool: string;
-  allowed: number;
-  denied: number;
+/** How the agent runs in this window went. */
+export type AgentSummary = {
+  runs: number;
+  succeeded: number;
   failed: number;
+  filesChanged: number;
+  /** Mean of the runs that recorded one, or null when none did. */
+  avgDurationMs: number | null;
+  failures: readonly FailureRow[];
 };
 
 /** Everything one refresh returns. */
@@ -125,7 +128,7 @@ export type ConsoleSnapshot = {
   failures: readonly FailureRow[];
   spend: readonly SpendRow[];
   funnel: readonly FunnelRow[];
-  tools: readonly ToolRow[];
+  agents: AgentSummary;
   /** True when a query hit its bound, so a total is a floor rather than a total. */
   truncated: boolean;
 };

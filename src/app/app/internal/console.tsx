@@ -76,6 +76,26 @@ function Panel({
   );
 }
 
+/**
+ * What one provider's spend line says.
+ *
+ * Three cases, because two of them used to render the same and one of those
+ * was a lie: a measured total, Vibe's own estimate marked with a `~`, and
+ * **events with no figure at all** — every sandbox and browser row in
+ * production, where the provider reports no price and the estimate was never
+ * derived either. That last case says so rather than showing `$0.00` under a
+ * heading about what a provider billed.
+ */
+function spendValue(row: {
+  events: number;
+  measuredMicroUsd: number;
+  estimatedMicroUsd: number;
+}): string {
+  if (row.measuredMicroUsd > 0) return formatMicroUsd(row.measuredMicroUsd);
+  if (row.estimatedMicroUsd > 0) return `~${formatMicroUsd(row.estimatedMicroUsd)}`;
+  return row.events > 0 ? "not recorded" : formatMicroUsd(0);
+}
+
 function Rows({ rows }: { rows: readonly { key: string; label: string; value: string }[] }) {
   if (rows.length === 0) {
     return <p className="font-mono text-[12px] text-fg-disabled">nothing in this window</p>;
@@ -269,10 +289,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
                  * "billed" — the mistake this panel shipped with, and the same
                  * separation economy/cost.ts keeps in the ledger.
                  */
-                value:
-                  row.measuredMicroUsd > 0 || row.estimatedMicroUsd === 0
-                    ? formatMicroUsd(row.measuredMicroUsd)
-                    : `~${formatMicroUsd(row.estimatedMicroUsd)}`,
+                value: spendValue(row),
               }))}
             />
           </Panel>
@@ -310,15 +327,26 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
           />
         </Panel>
 
-        <Panel title="Agent tools" note="What the gateway allowed and refused in this window.">
+        <Panel title="Agent runs" note="How the agent runs in this window went.">
           <Rows
-            rows={snapshot.tools.map((row) => ({
-              key: row.tool,
-              label: row.tool,
-              value: `${row.allowed} ok${row.denied > 0 ? ` · ${row.denied} denied` : ""}${
-                row.failed > 0 ? ` · ${row.failed} failed` : ""
-              }`,
-            }))}
+            rows={[
+              { key: "succeeded", label: "succeeded", value: String(snapshot.agents.succeeded) },
+              { key: "failed", label: "failed", value: String(snapshot.agents.failed) },
+              { key: "files", label: "files changed", value: String(snapshot.agents.filesChanged) },
+              {
+                key: "duration",
+                label: "average duration",
+                value:
+                  snapshot.agents.avgDurationMs === null
+                    ? "—"
+                    : duration(snapshot.agents.avgDurationMs),
+              },
+              ...snapshot.agents.failures.map((row) => ({
+                key: row.failureCode,
+                label: row.failureCode,
+                value: String(row.count),
+              })),
+            ]}
           />
         </Panel>
       </div>

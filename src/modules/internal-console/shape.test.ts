@@ -7,7 +7,7 @@ import {
   buildInFlight,
   buildOutcomes,
   buildSpend,
-  buildTools,
+  buildAgentSummary,
   formatMicroUsd,
   nanoToMicroUsd,
   projectRef,
@@ -292,24 +292,63 @@ describe("the funnel", () => {
   });
 });
 
-describe("agent tool usage", () => {
-  it("separates denial from failure, and ranks denials first", () => {
-    const tools = buildTools([
-      { tool: "Bash", decision: "allowed", success: true },
-      { tool: "Bash", decision: "allowed", success: false },
-      { tool: "WebFetch", decision: "denied", success: null },
-      { tool: "Read", decision: "allowed", success: null },
+describe("agent runs", () => {
+  /*
+   * This panel used to read `agent_tool_events`, which has zero rows and no
+   * writer: it belongs to the tool-gateway topology ADR 0029 replaced. The
+   * numbers that survived the move live on the run row.
+   */
+  it("counts outcomes and sums the files that changed", () => {
+    const summary = buildAgentSummary([
+      { status: "succeeded", failure_code: null, duration_ms: 200_000, changed_file_count: 3 },
+      { status: "succeeded", failure_code: null, duration_ms: 300_000, changed_file_count: 5 },
+      {
+        status: "failed",
+        failure_code: "agent_workspace_unavailable",
+        duration_ms: 100_000,
+        changed_file_count: 0,
+      },
     ]);
 
-    expect(tools).toEqual([
-      { tool: "WebFetch", allowed: 0, denied: 1, failed: 0 },
-      { tool: "Bash", allowed: 2, denied: 0, failed: 1 },
-      { tool: "Read", allowed: 1, denied: 0, failed: 0 },
-    ]);
+    expect(summary).toEqual({
+      runs: 3,
+      succeeded: 2,
+      failed: 1,
+      filesChanged: 8,
+      avgDurationMs: 200_000,
+      failures: [{ failureCode: "agent_workspace_unavailable", count: 1 }],
+    });
   });
 
-  it("treats an unrecorded outcome as not a failure", () => {
-    expect(buildTools([{ tool: "Read", decision: "allowed", success: null }])[0].failed).toBe(0);
+  it("averages over the runs that recorded a duration, not over all of them", () => {
+    // A null counted as zero drags the mean towards a number nothing measured.
+    const summary = buildAgentSummary([
+      { status: "succeeded", failure_code: null, duration_ms: 300_000, changed_file_count: 1 },
+      { status: "succeeded", failure_code: null, duration_ms: null, changed_file_count: 1 },
+    ]);
+
+    expect(summary.avgDurationMs).toBe(300_000);
+  });
+
+  it("reports no average when nothing recorded one", () => {
+    expect(
+      buildAgentSummary([
+        {
+          status: "failed",
+          failure_code: "agent_provider_failed",
+          duration_ms: null,
+          changed_file_count: null,
+        },
+      ]).avgDurationMs,
+    ).toBeNull();
+  });
+
+  it("counts a failure with no code rather than dropping it", () => {
+    expect(
+      buildAgentSummary([
+        { status: "failed", failure_code: null, duration_ms: 1, changed_file_count: 0 },
+      ]).failures,
+    ).toEqual([{ failureCode: "(unclassified)", count: 1 }]);
   });
 });
 
