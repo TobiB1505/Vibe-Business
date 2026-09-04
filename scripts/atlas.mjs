@@ -77,7 +77,7 @@ function ohneMarkdown(text) {
 }
 
 function kurz(text, max = 180) {
-  const clean = String(text ?? "")
+  const clean = ohneMarkdown(text)
     .split(/\s#{2,}\s|\s```/)[0]
     .trim();
   if (clean.length <= max) return clean;
@@ -187,7 +187,7 @@ function listEntries(text, start) {
 function readListKnobs(rel, text) {
   const out = [];
   for (const m of text.matchAll(
-    /(?:\/\*\*([\s\S]*?)\*\/\s*)?^export const ([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=]+)?=\s*\[/gm,
+    /(?:\/\*\*((?:(?!\*\/)[\s\S])*?)\*\/\s*)?^export const ([A-Za-z_][A-Za-z0-9_]*)\s*(?::[^=]+)?=\s*\[/gm,
   )) {
     const count = listEntries(text, m.index + m[0].length - 1);
     if (count === 0) continue;
@@ -455,7 +455,7 @@ function render(data) {
                   k,
                 ) => `<tr><td><code>${esc(k.name)}</code><div class="path">${esc(k.file)}</div></td>
                         <td class="val"><code>${esc(k.value)}</code></td>
-                        <td title="${esc(k.doc)}">${esc(kurz(k.doc)) || "<em>nicht beschrieben</em>"}</td></tr>`,
+                        <td title="${esc(kurz(k.doc, 700))}">${esc(kurz(k.doc)) || "<em>nicht beschrieben</em>"}</td></tr>`,
               )
               .join("")}
           </tbody>
