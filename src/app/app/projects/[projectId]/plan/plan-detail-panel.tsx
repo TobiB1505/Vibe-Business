@@ -24,6 +24,7 @@ import {
   OPERATION_STAGE_LABELS,
   type OperationView,
 } from "@/modules/operations/view";
+import { isFounderAttestable } from "@/modules/action-plans/completion";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import { agentMoveHref, PLANNED_WORK_ANCHOR } from "@/modules/action-plans/source";
@@ -32,6 +33,7 @@ import type {
   OpportunityActionState,
 } from "@/modules/execution/view";
 import {
+  attestationPrompt,
   PLAN_PROGRESS_LABELS,
   PLAN_STALENESS_LABELS,
   stepResponsibility,
@@ -366,8 +368,7 @@ function PlanBody({
             <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
           </div>
 
-          {firstActionableStep?.actor === "founder_action" &&
-          firstActionableStep.executionSupport === "founder_acts" ? (
+          {firstActionableStep !== null && isFounderAttestable(firstActionableStep) ? (
             <FounderActionCard
               projectId={projectId}
               actionPlanId={plan.id}
@@ -520,6 +521,7 @@ function FounderActionCard({
   actionPlanId: string;
   step: ActionPlanStep;
 }) {
+  const prompt = attestationPrompt(step);
   const action = attestFounderActionStepAction.bind(null, projectId, actionPlanId, step.id);
   const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
     action,
@@ -530,7 +532,7 @@ function FounderActionCard({
     <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusPill tone="waiting" dot>
-          Your action
+          {prompt.pill}
         </StatusPill>
         <span className="text-fg-muted text-xs">Step {step.order}</span>
       </div>
@@ -538,6 +540,9 @@ function FounderActionCard({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
         <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+        {prompt.lead && (
+          <p className="text-fg-muted text-sm leading-relaxed">{prompt.lead}</p>
+        )}
       </div>
 
       <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
@@ -553,9 +558,7 @@ function FounderActionCard({
               ? "Completion confirmed"
               : "Confirm this is complete"}
         </Button>
-        <p className="text-fg-muted text-xs">
-          This records your confirmation against this exact plan step.
-        </p>
+        <p className="text-fg-muted text-xs">{prompt.footnote}</p>
       </form>
 
       {state && !state.ok && (

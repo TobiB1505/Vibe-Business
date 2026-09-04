@@ -221,6 +221,18 @@ const REPOSITORY_CAPABILITY_REASONS: readonly ExecutionResolutionReason[] = [
   "validation_profile_unsupported",
 ];
 
+/**
+ * Reasons that mean "there is nothing here for Vibe to build", not "not yet".
+ *
+ * Both come from `classifyIntrinsic` refusing a `vibe` step whose change kind
+ * is not `product_change`. Naming them is what lets the plan screen offer a
+ * confirmation instead of a dead end (ADR 0088).
+ */
+const NO_EXECUTOR_REASONS: readonly ExecutionResolutionReason[] = [
+  "no_executor_for_vibe_work",
+  "change_kind_not_executable",
+];
+
 export function stepResponsibility(
   step: Pick<ActionPlanStep, "executionSupport">,
   resolution: Pick<ExecutionResolution, "intrinsicMode" | "reason"> | null,
@@ -257,7 +269,62 @@ export function stepResponsibility(
     return { headline: stored.headline, sublabel: EXECUTION_REASON_LABELS[resolution.reason] };
   }
 
+  /*
+   * The class the argument above left out, found by a founder getting stuck.
+   *
+   * These two are not a missing prerequisite the founder could go and fix —
+   * they say the step is not a change to the product at all, so no executor
+   * can exist for it. That is a different sentence from a repository reason,
+   * and it is a far better one than "Not automated yet", which reads as a
+   * feature Vibe has not shipped yet and leaves the founder waiting for it.
+   *
+   * Kept as its own list rather than folded into the one above so each keeps
+   * its own argument: those name something to repair, these name something to
+   * confirm.
+   */
+  if (resolution !== null && NO_EXECUTOR_REASONS.includes(resolution.reason)) {
+    return { headline: stored.headline, sublabel: EXECUTION_REASON_LABELS[resolution.reason] };
+  }
+
   return stored;
+}
+
+/**
+ * What the confirmation card says, given why this step needs confirming.
+ *
+ * Two shapes behind one control, and they must not read alike. A
+ * `founder_action` step is the founder's own work and always was. A `vibe`
+ * step reaching this card means Vibe has no executor for it — and a founder
+ * who is told "Your action" about work the plan attributes to Vibe would be
+ * right to think the product had changed its mind about who does what.
+ *
+ * The actor is read here rather than interpolated into JSX, which is the rule
+ * this file exists to enforce.
+ */
+export type AttestationPrompt = {
+  pill: string;
+  lead: string | null;
+  footnote: string;
+};
+
+export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): AttestationPrompt {
+  if (step.actor === "vibe") {
+    return {
+      pill: "Vibe can't run this one",
+      lead:
+        "This is Vibe's own work, but it isn't a change to your product — so there is no run " +
+        "that could finish it. If it's settled, say so and the plan moves on.",
+      footnote:
+        "This records your confirmation against this exact plan step. It does not claim Vibe " +
+        "did the work.",
+    };
+  }
+
+  return {
+    pill: "Your action",
+    lead: null,
+    footnote: "This records your confirmation against this exact plan step.",
+  };
 }
 
 /** Where a step's compact sequence status lands — three states, each a distinct visual weight. */

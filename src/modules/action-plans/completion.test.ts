@@ -3,6 +3,7 @@ import { fakePlanStep } from "@/modules/execution-contract/test-support";
 import {
   completedStepsForExecutionRouting,
   completedStepsFromEvidence,
+  isFounderAttestable,
   type AgentStepCompletionEvidence,
   type FounderActionCompletionEvidence,
 } from "./completion";
@@ -205,6 +206,92 @@ describe("Action Plan completion authorities", () => {
         [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
       ).toEqual([]);
     }
+  });
+});
+
+/**
+ * Which steps a founder may close, and the one this must never grow into.
+ *
+ * The widening exists because a founder's real plan deadlocked on its own
+ * first step: `vibe` + `research`, which `resolveStepExecution` refuses, no
+ * run produces, no founder resolution covers and no attestation reached. It
+ * could be completed by nothing, so `firstActionableStep` returned it forever
+ * and the four steps behind it were unreachable.
+ *
+ * The dangerous direction is the other one, so it gets the most tests: if this
+ * ever admitted a `product_change`, a founder could confirm away the work Vibe
+ * exists to build.
+ */
+describe("which steps a founder may confirm", () => {
+  it("admits real-world work, as it always did", () => {
+    const step = fakePlanStep({
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+    });
+
+    expect(isFounderAttestable(step)).toBe(true);
+  });
+
+  it("admits Vibe's own work that no run could produce", () => {
+    for (const changeKind of ["research", "decision", "analysis", "measurement"] as const) {
+      expect(isFounderAttestable(fakePlanStep({ actor: "vibe", changeKind }))).toBe(true);
+    }
+  });
+
+  it("never admits a product change, whatever the Planner stored about it", () => {
+    /*
+     * The reason the predicate reads `changeKind` and not `executionSupport`.
+     *
+     * `not_yet_supported` is what every agentic step carries too — the registry
+     * has one entry, so it misses nearly all of them. Keying on the stored
+     * support value would have handed the founder a button that closes the
+     * work Vibe was about to do.
+     */
+    for (const executionSupport of [
+      "not_yet_supported",
+      "vibe_executes_now",
+      "vibe_prepares",
+    ] as const) {
+      const step = fakePlanStep({ actor: "vibe", changeKind: "product_change", executionSupport });
+      expect(isFounderAttestable(step)).toBe(false);
+    }
+  });
+
+  it("never admits work that belongs to somebody else", () => {
+    for (const actor of ["founder_decision", "founder_input", "external_party"] as const) {
+      expect(isFounderAttestable(fakePlanStep({ actor, changeKind: "decision" }))).toBe(false);
+    }
+  });
+
+  it("never admits a founder_action the Planner did not classify as one", () => {
+    const step = fakePlanStep({
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "not_yet_supported",
+    });
+
+    expect(isFounderAttestable(step)).toBe(false);
+  });
+
+  it("completes the Vibe step no execution could reach", () => {
+    const step = fakePlanStep({
+      id: "1-research-establish-what-the-billing-route-does",
+      order: 1,
+      actor: "vibe",
+      changeKind: "research",
+      executionSupport: "not_yet_supported",
+    });
+
+    expect([...completedStepsFromEvidence([step], [], [], [])]).toEqual([]);
+    expect([
+      ...completedStepsFromEvidence(
+        [step],
+        [],
+        [],
+        [founderActionEvidence({ stepKey: step.id, stepOrder: step.order })],
+      ),
+    ]).toEqual([1]);
   });
 });
 

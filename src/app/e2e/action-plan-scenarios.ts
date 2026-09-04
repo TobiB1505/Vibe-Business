@@ -385,6 +385,36 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
+   * The step that could be completed by nothing at all (Sprint 0141).
+   *
+   * "Draft the search-facing copy" is `vibe` + `analysis`: Vibe's own work,
+   * which `resolveStepExecution` refuses because it is not a `product_change`.
+   * No run produces it, no founder resolution covers it, and until ADR 0088 no
+   * attestation reached it — so once the decision in front of it was answered,
+   * the plan stopped here permanently and every later step went with it.
+   *
+   * The scene exists because that is invisible in the domain: every unit test
+   * passed while the screen showed a step marked "Start here" with nothing
+   * under it to start.
+   */
+  action_plan_vibe_no_executor: (): ActionPlanFixture => {
+    const completed = new Set([2]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
    * The step the agent could build, said honestly.
    *
    * "Build a dedicated pricing page" is `vibe` + `product_change` with no

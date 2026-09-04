@@ -18,7 +18,7 @@ export type AgentStepCompletionEvidence = {
   stepOrder: number;
 };
 
-/** Immutable founder testimony bound to one exact founder_action step. */
+/** Immutable founder testimony bound to one exact attestable step. */
 export type FounderActionCompletionEvidence = {
   attestationId: string;
   attestedByUserId: string;
@@ -65,13 +65,53 @@ function completedByAgentExecution(
   );
 }
 
+/**
+ * Which steps a founder may close with their own confirmation (ADR 0088).
+ *
+ * Two disjoint sets, and the second one is what this function was widened for.
+ *
+ * A `founder_action` step is the original case, unchanged: real-world work
+ * only a person can carry out, so only a person can say it happened.
+ *
+ * The second is a step whose actor is **Vibe** and which Vibe has no executor
+ * for. `resolver.ts` refuses every `vibe` step that is not a `product_change`
+ * — `research`, `decision`, `analysis`, `measurement`, `external_setup` — and
+ * that refusal was total. No run could produce such a step, no founder
+ * resolution covered it, and no attestation reached it, so it could not be
+ * completed by anything at all; `firstActionableStep` returned it forever and
+ * every step behind it in the plan was dead with it. That is not a refusal.
+ * It is a plan that cannot be worked.
+ *
+ * Absorption is not the missing authority either, though it looks like it.
+ * `dependencies.ts` folds an `analysis` prerequisite into a downstream agent
+ * run, but `listAgentStepCompletionEvidence` reads the run's *chain*, never
+ * its absorbed preparation — so an absorbed step is routed past, not finished,
+ * and it deadlocks the plan screen exactly as the others do.
+ *
+ * `changeKind` is the discriminator rather than `executionSupport`, and that
+ * is the load-bearing part. `not_yet_supported` is also what a `product_change`
+ * step carries whenever the deterministic registry misses it — which is most
+ * of them, and precisely the work the agent exists to do. Keying on the change
+ * kind mirrors the resolver's own rule, so the set admitted here is exactly
+ * the set with no executor: a founder can never confirm away a change Vibe
+ * would have built.
+ *
+ * What an attestation still does not claim is that *Vibe* did the work. The
+ * founder is saying the step's own immutable completion criterion is true,
+ * which is the same sentence a `founder_action` attestation has always meant.
+ */
+export function isFounderAttestable(
+  step: Pick<ActionPlanStep, "actor" | "changeKind" | "executionSupport">,
+): boolean {
+  if (step.actor === "founder_action") return step.executionSupport === "founder_acts";
+  return step.actor === "vibe" && step.changeKind !== "product_change";
+}
+
 function completedByFounderAttestation(
   step: ActionPlanStep,
   evidence: readonly FounderActionCompletionEvidence[],
 ): boolean {
-  if (step.actor !== "founder_action" || step.executionSupport !== "founder_acts") {
-    return false;
-  }
+  if (!isFounderAttestable(step)) return false;
 
   return evidence.some(
     (item) => item.stepKey === step.id && item.stepOrder === step.order,
@@ -83,8 +123,10 @@ function completedByFounderAttestation(
  *
  * Founder-owned information is complete from an active resolution. Agent work
  * is complete only from the independently assembled execution evidence above.
- * Founder actions and external dependencies deliberately contribute nothing
- * until their own authority exists.
+ * A founder attestation closes the two kinds of step no execution can reach:
+ * real-world work, and Vibe's own work that Vibe has no executor for. An
+ * external dependency deliberately contributes nothing until its own
+ * authority exists.
  */
 export function completedStepsFromEvidence(
   steps: readonly ActionPlanStep[],
