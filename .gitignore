@@ -69,3 +69,7 @@ src/app/.well-known/workflow/
 
 # Paid Nova voice eval output — per-case results, never committed.
 .nova-eval/
+
+# Projekt-Atlas: aus dem Repository generierte Uebersichtsseite (pnpm atlas).
+# Wird neu gebaut statt nachgefuehrt, gehoert deshalb nicht in die Historie.
+/.atlas/

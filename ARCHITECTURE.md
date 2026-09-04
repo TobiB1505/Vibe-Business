@@ -369,6 +369,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0085](docs/decisions/0085-nova-is-the-project-home.md) | Nova is the project Home, reversing 0047's navigation | §3.6 |
 | [0086](docs/decisions/0086-nova-presentation-is-claimed-stored-and-attempted-once.md) | Nova presentation inference is claimed, stored, and attempted once | §3.6 |
 | [0087](docs/decisions/0087-one-evidence-pack-version.md) | What production builds, stamps and hashes is one constant | §3.4 |
+| [0088](docs/decisions/0088-the-internal-operator-console.md) | The internal operator console reads across tenants, and shows shapes only | Internal operator console |
 
 ### Layers with no section above
 
@@ -387,6 +388,7 @@ These exist, are governed by the ADRs named, and are described in depth by their
 - **Outcome Verification / Business Measurement** — `src/modules/outcome-verification/`, `src/modules/business-measurement/` · ADRs 0020, 0021, 0071. Two profiles: what the SEO generators publish, and whether the public pages an agentic change touched are still being served.
 - **Durable Operations** — `src/modules/operations/` · ADRs 0013, 0030, 0037. Also the only module permitted to use the service-role client.
 - **Billing and Economy** — `src/modules/billing/`, `src/modules/economy/` · ADRs 0025, 0038.
+- **Internal operator console** — `src/modules/internal-console/` · ADR 0084. Read-only, cross-tenant, and reachable only by a user id named in `VIBE_INTERNAL_OPERATOR_USER_IDS` — unset means nobody. It performs no action and shows shapes rather than content: every read names its columns from a constant, and live means polling rather than a second liveness mechanism beside Vercel Workflows.
 
 ---
 

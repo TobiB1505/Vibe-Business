@@ -76,6 +76,18 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
       "through it, and it refuses to write without VIBE_REFUND_CONFIRM=yes.",
   },
   {
+    file: join("modules", "internal-console", "store.ts"),
+    why:
+      "ADR 0088. The operator console is cross-tenant by construction: 'what is failing right " +
+      "now' is not answerable inside one customer's rows, so RLS would answer a question nobody " +
+      "asked. It cannot satisfy the ownership filter and satisfies the rule's purpose instead — " +
+      "no function in the file accepts a project id, a user id or any other selector from its " +
+      "caller, so there is no argument to forge; the only inputs are a time window and a bound. " +
+      "The filter is replaced by a prior gate: an operator id taken from verified claims and " +
+      "checked against VIBE_INTERNAL_OPERATOR_USER_IDS, which is unset by default and which the " +
+      "application cannot write. Reads only, columns named from a constant, no select(*).",
+  },
+  {
     file: join("modules", "authenticated-product-intelligence", "sandbox-browser", "client.ts"),
     why:
       "ADR 0076. `browser_runtime_images` is Vibe's own infrastructure rather than customer " +

@@ -34,6 +34,11 @@ import {
   E2E_WORKSPACE_CHOICE_SCENARIOS,
   isE2eWorkspaceChoiceScenario,
 } from "../workspace-choice-scenarios";
+import { OperatorConsole } from "@/app/app/internal/console";
+import {
+  E2E_INTERNAL_CONSOLE_SCENARIOS,
+  isE2eInternalConsoleScenario,
+} from "../internal-console-scenarios";
 import { AppErrorPreview } from "../app-error-preview";
 import BillingLoading from "@/app/app/(account)/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
@@ -233,6 +238,22 @@ export default async function E2eScenarioPage({
    * route renders, given a complete `BillingOverview` written by hand from the
    * read model's own types — no database, no Stripe request, no AI call.
    */
+  /*
+   * The operator console renders from a complete snapshot, so the component
+   * cannot tell this from production. Its own polling still runs and its
+   * action still refuses — an unauthenticated fixture is not an operator — so
+   * what this proves is the first frame, which is what a person opens during
+   * an incident.
+   */
+  if (isE2eInternalConsoleScenario(scenario)) {
+    return (
+      <>
+        {label}
+        <OperatorConsole initial={E2E_INTERNAL_CONSOLE_SCENARIOS[scenario]} />
+      </>
+    );
+  }
+
   if (isE2eBillingScenario(scenario)) {
     const fixture = E2E_BILLING_SCENARIOS[scenario];
     return (
