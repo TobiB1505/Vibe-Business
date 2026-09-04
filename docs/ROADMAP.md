@@ -49,6 +49,8 @@ Every one of those projections was written on **2026-08-22**, in one reconciliat
 
 Two things this does **not** mean. No customer was mischarged: Credits are priced by `credits/retail.ts` per delivered operation, not from this ledger, and `ai_usage_events` — which is authoritative for provider cost and which `/app/internal` reads directly — carries the correct figure. And nothing here is evidence about margin, because [ADR 0061](decisions/0061-launch-v1-operation-rate-card.md)'s prices were derived from measured *operation* costs rather than from this projection. What it does mean is that any economics read from `billing_usage_events` understates inference by a quarter, and that a corrected cost model has no way to reach rows already written.
 
+**Nothing reads them yet, and that is the whole of the priority.** `listUsageForOperation` is the table's only reader and has no caller anywhere; all 1,621 rows carry `rating_status = rate_card_not_configured` because `CREDIT_RATE_CARDS` is `[]` by [ADR 0061](decisions/0061-launch-v1-operation-rate-card.md)'s own decision. The wrong rows are inert today and stop being inert the moment per-operation rating ships against them — a trap with a known trigger rather than a live defect. `projection.ts`'s docblock said the property held; it now says where it does not.
+
 Found by the operator console's first look at production ([ADR 0088](decisions/0088-the-internal-operator-console.md)) and traced with read-only SQL; nothing was repaired, because how a projection is superseded — a version column, a delete-and-reproject, or a correcting counter-entry — is a billing decision with its own consequences, not a fix to apply on the way past.
 
 ## Next — one shared evidence foundation

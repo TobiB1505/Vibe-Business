@@ -125,8 +125,33 @@ function costForAiRow(row: AiUsageRow): {
  * would be inventing a split the pricing module does not expose. So the whole
  * cost is attached to the **input** row and the others carry `not_billable` —
  * the total per source row is therefore exactly the provider cost, never a
- * multiple of it. Summing `raw_cost_nano_usd` across billing usage reproduces
- * the AI ledger exactly, which is what §69 requires.
+ * multiple of it.
+ *
+ * ## What §69 requires, and where it is currently untrue
+ *
+ * §69 asks that summing `raw_cost_nano_usd` across billing usage reproduce the
+ * AI ledger exactly. **It does not, at HEAD.** Measured against production on
+ * 2026-09-04: `ai_usage_events` sums to $10.9079 and its `input_tokens`
+ * projections to $8.0194 — a gap of $2.8885, 26% of all inference recorded.
+ *
+ * The arithmetic here is not the problem: Haiku matches to the cent, and so
+ * does every Sonnet 5 row outside 19–21 August 2026. The whole gap is 250 rows
+ * from those three days — the only ones carrying cache tokens — projected in a
+ * single reconciliation pass on 2026-08-22 by a `calculateProviderCost` that
+ * did not price cache yet. 6,623,638 cache-read tokens at 0.1× and 625,520
+ * cache-write at 1.25× come to $2.88, which is the gap.
+ *
+ * Those rows cannot be corrected in place. `projectUsageEvents` upserts with
+ * `ignoreDuplicates: true` on `(source_kind, source_id, sku)`, so re-projection
+ * is a no-op on a row that exists — the same property described above as what
+ * lets reconciliation run twice.
+ *
+ * Nothing reads them yet: `listUsageForOperation` is this table's only reader
+ * and has no caller, and every row is `rate_card_not_configured` because
+ * `CREDIT_RATE_CARDS` is empty. So the discrepancy is inert **until per-operation
+ * rating ships**, and that is the moment it stops being inert. Recorded in
+ * `docs/ROADMAP.md` rather than repaired, because how a projection is superseded
+ * belongs with the decision that first depends on one.
  */
 export function projectAiUsage(
   row: AiUsageRow,
@@ -369,7 +394,8 @@ export function projectSandboxUsage(row: SandboxUsageRow): BillableUsage[] {
     // Names the rate card an estimate was computed under, so a later price
     // change cannot silently restate a historical row. Null for a provider
     // figure, which carries its own provenance by being the provider's.
-    providerPricingVersion: index === 0 ? (estimated === null ? null : (row.cost_pricing_version ?? null)) : null,
+    providerPricingVersion:
+      index === 0 ? (estimated === null ? null : (row.cost_pricing_version ?? null)) : null,
   }));
 }
 
