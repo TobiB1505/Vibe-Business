@@ -25,8 +25,28 @@ import type { PageRendering } from "./rendering";
 
 export const LIVE_PRODUCT_INTELLIGENCE_SCHEMA_VERSION = "live-product-intelligence.v1" as const;
 
-/** Bumped whenever detection rules change materially, invalidating reuse. */
-export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v3" as const;
+/**
+ * Bumped whenever detection rules change materially, invalidating reuse.
+ *
+ * ## v4 — and the incident that named it
+ *
+ * `findReusableLiveSnapshot` keys reuse on this string, and it is the **only**
+ * thing standing between a corrected detector and every audit downstream of a
+ * snapshot the old one produced. On 2026-09-02 a fix landed that taught the
+ * classifier to see a pricing surface that is an anchor section rather than a
+ * route (`b29f3ce`) — and this constant was not bumped. So the snapshot taken
+ * eight hours earlier, which had recorded "no pricing surface" about a page
+ * displaying three prices, stayed reusable. Two days later it produced an
+ * audit whose highest-priority contradiction, its critical rank-1 blocker and
+ * the founder's whole plan all rested on it.
+ *
+ * The lesson is not "remember to bump". A behaviour change to any detector
+ * this snapshot carries — the classifier, the surface rules, the pricing text
+ * reader — is a new analyzer, and shipping it without saying so is how a fixed
+ * bug keeps being served. v4 covers that fix and the pricing-period reader
+ * corrected alongside it.
+ */
+export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v4" as const;
 
 /** Deliberately coarse — no fake numeric precision (Sprint 3 §14). */
 export type Confidence = "high" | "medium" | "low";
@@ -36,7 +56,15 @@ export type Confidence = "high" | "medium" | "low";
  * a URL path is a weaker signal than a password field in a form.
  */
 export type LiveEvidence = {
-  kind: "url_path" | "page_title" | "heading" | "nav_label" | "link_text" | "form_structure" | "redirect" | "http_header";
+  kind:
+    | "url_path"
+    | "page_title"
+    | "heading"
+    | "nav_label"
+    | "link_text"
+    | "form_structure"
+    | "redirect"
+    | "http_header";
   /** Origin-relative pathname the evidence came from — never a full URL with query. */
   path: string;
   /** A short label, e.g. a heading or CTA text. Never a page body. */
@@ -86,7 +114,13 @@ export type CtaSignal = {
   inNav: boolean;
 };
 
-export type FormKind = "login_like" | "signup_like" | "contact_like" | "newsletter_like" | "search_like" | "unknown";
+export type FormKind =
+  | "login_like"
+  | "signup_like"
+  | "contact_like"
+  | "newsletter_like"
+  | "search_like"
+  | "unknown";
 
 export type FormSignal = {
   kind: FormKind;
