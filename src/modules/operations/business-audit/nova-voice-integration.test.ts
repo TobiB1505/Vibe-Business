@@ -43,8 +43,18 @@ const USER = "user_1";
 const PROJECT = "project_1";
 const CONTEXT_HASH = "c".repeat(64);
 
-/** A message that passes `checks.ts`: plain, grounded, no digits. */
-const SPOKEN = "Pricing clarity is the thing standing between you and more signups right now.";
+/**
+ * A message that is grounded in the payload, not merely accepted by it.
+ *
+ * It restates the audit's own blocker — "People still don't have a clear way
+ * to pay you" — and adds nothing. The first version of this fixture said
+ * "standing between you and more signups", which `checks.ts` accepts and which
+ * is exactly the failure the tier exists to prevent: an invented business
+ * outcome, and the wrong one, since the audit found people cannot work out how
+ * to *pay*, not that they do not sign up. A fixture is a specification of what
+ * good looks like, and that one specified invention.
+ */
+const SPOKEN = "The thing in your way is that people cannot work out how to pay you.";
 
 let db: FakeDatabase;
 let provider: SlotAwareProvider;

@@ -165,3 +165,51 @@ describe("spelled-out quantities", () => {
     expect(check("There is one thing I would like you to confirm first.").warnings).toEqual([]);
   });
 });
+
+/**
+ * The failure this validator is **not** for, recorded so nobody assumes it is.
+ *
+ * An invented business outcome — "and more signups", "which is costing you
+ * customers", "that tends to kill conversions" — is fluent, numerically clean,
+ * uses no banned claim, names no module, and contains no causal connective, so
+ * every rule here passes it. That is not a hole to plug: it is the boundary
+ * ADR 0082 drew when it chose the model by measurement rather than by adding
+ * regular expressions. `causal_claim` catches *stated* causation ("caused",
+ * "led to", "thanks to"); an implied outcome has no token to match on, and a
+ * pattern loose enough to catch one would reject ordinary grounded English.
+ *
+ * The layers that do catch it are the prompt (v4's exclusivity and sequencing
+ * rules) and the eval's `no_invention` criterion, judged by Opus — "does the
+ * message avoid adding anything the payload did not already say".
+ *
+ * This test exists because a fixture in this repository was once exactly this
+ * failure, presented as an example of success, and every deterministic test
+ * around it passed.
+ */
+describe("what this validator deliberately does not catch", () => {
+  const GROUNDED_PAYLOAD_NUMERALS: string[] = [];
+
+  it.each([
+    "Pricing clarity is the thing standing between you and more signups right now.",
+    "People cannot work out how to pay you, which is costing you customers.",
+    "That opacity tends to keep people from converting.",
+  ])("accepts an invented business outcome: %j", (message) => {
+    const result = checkNovaMessage({
+      message,
+      allowedNumericFacts: GROUNDED_PAYLOAD_NUMERALS,
+    });
+
+    expect(result.ok, "if this now fails, the boundary moved — update the docblock").toBe(true);
+  });
+
+  /** The half it does catch, so the distinction is visible rather than asserted. */
+  it.each([
+    "The missing price caused fewer signups.",
+    "Pricing clarity led to more signups.",
+    "You are held back thanks to the missing price.",
+  ])("still refuses %j, where causation is stated outright", (message) => {
+    const result = checkNovaMessage({ message, allowedNumericFacts: [] });
+
+    expect(result.failures.map((failure) => failure.code)).toContain("causal_claim");
+  });
+});
