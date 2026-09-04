@@ -7,7 +7,7 @@ import {
   PRODUCT_PROFILE_SCHEMA_VERSION,
   PROFILE_BUILDER_VERSION,
 } from "@/modules/product-understanding/schema";
-import { EVIDENCE_PACK_V3_VERSION } from "./evidence-v3";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "./evidence-v3";
 import { PROMPT_VERSION } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "./schema";
@@ -313,7 +313,7 @@ describe("a scan from a corrected analyzer stops the chain", () => {
         authenticatedSnapshotId: null,
         schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
         auditVersion: BUSINESS_AUDIT_VERSION,
-        evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+        evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
         promptVersion: PROMPT_VERSION,
         rubricVersion: RUBRIC_VERSION,
         profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,

@@ -243,7 +243,7 @@ async function makeAuditCurrent() {
   const { computeAuditInputHash } = await import("@/modules/business-audit/store");
   const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } =
     await import("@/modules/business-audit/schema");
-  const { EVIDENCE_PACK_V3_VERSION } = await import("@/modules/business-audit/evidence-v3");
+  const { CURRENT_EVIDENCE_PACK_VERSION } = await import("@/modules/business-audit/evidence-v3");
   const { PROMPT_VERSION } = await import("@/modules/business-audit/prompt");
   const { RUBRIC_VERSION } = await import("@/modules/business-audit/rubric");
   const { BUSINESS_READINESS_AUDIT_CONFIG } = await import("@/modules/ai/operations");
@@ -258,7 +258,7 @@ async function makeAuditCurrent() {
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+    evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",

@@ -12,8 +12,8 @@ import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
-  EVIDENCE_PACK_V3_VERSION,
-  buildEvidencePackV4,
+  CURRENT_EVIDENCE_PACK_VERSION,
+  buildCurrentEvidencePack,
   trimEvidencePackV3,
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
@@ -206,7 +206,7 @@ async function loadAuditSources(
         authenticatedSnapshotId: authenticated?.id ?? null,
         schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
         auditVersion: BUSINESS_AUDIT_VERSION,
-        evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+        evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
         promptVersion: PROMPT_VERSION,
         rubricVersion: RUBRIC_VERSION,
         profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
@@ -352,7 +352,7 @@ export async function prepareEvidenceStep(
     inputHash: resolved.identity.inputHash,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+    evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
@@ -532,7 +532,7 @@ export async function countTokensStep(
   const config = BUSINESS_READINESS_AUDIT_CONFIG;
   // The newest pack, matching what `runBusinessReadinessAudit` will build --
   // this counts the request that will actually be billed (ADR 0044).
-  const pack = buildEvidencePackV4(sources.sources);
+  const pack = buildCurrentEvidencePack(sources.sources);
   const counted = await deps.provider.countInputTokens(buildAuditRequest(pack, config));
   if (!counted.ok) return { ok: false, failureCode: counted.error };
 

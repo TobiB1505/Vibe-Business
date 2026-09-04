@@ -216,8 +216,20 @@ async function loadSources(
   return {
     ok: true,
     source: source.source,
-    // The audit's own version, so its citations resolve. See `evidence-v3.ts`.
-    pack: buildEvidencePackForVersion(sources, audit.evidencePackVersion),
+    /*
+     * The audit's own version, so its citations resolve — read from the
+     * **document**, exactly as the two lines below it and the Opportunity
+     * engine do.
+     *
+     * This read `audit.evidencePackVersion`, the row column, while
+     * `evidencePackVersion` three lines down recorded `audit.result`'s. The two
+     * disagreed from 2026-08-24: the column said v3 while the pack the model
+     * had seen was v4. So the planner rebuilt a pack with no contradictions and
+     * polarity-free surface ids for an audit that cited one contradiction id
+     * and seven absence ids, and then stamped the plan v4. Both stored plans
+     * cite zero ids from either namespace, across twenty-six citations.
+     */
+    pack: buildEvidencePackForVersion(sources, audit.result.evidencePackVersion),
     repository: repositorySnapshot.result,
     auditId: audit.id,
     opportunitySetId: opportunitySet.id,

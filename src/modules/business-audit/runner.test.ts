@@ -3,6 +3,7 @@ import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { runBusinessReadinessAudit } from "./runner";
 import { PROMPT_VERSION } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "./evidence-v3";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "./schema";
 import {
   FakeProvider,
@@ -37,10 +38,14 @@ describe("runBusinessReadinessAudit — happy path", () => {
 
     expect(outcome.audit.schemaVersion).toBe(BUSINESS_AUDIT_SCHEMA_VERSION);
     expect(outcome.audit.auditVersion).toBe(BUSINESS_AUDIT_VERSION);
-    // The bump (ADR 0044). A fresh audit is written under the newest pack, so
-    // its surface citations carry their own polarity. Stored v3 audits keep
-    // recording v3 and are read under v3 rules — see `evidence-ids.ts`.
-    expect(outcome.audit.evidencePackVersion).toBe("business-evidence.v4");
+    /*
+     * The constant, never the literal it happens to equal today. This read
+     * `"business-evidence.v4"` and passed for eleven days while production
+     * stamped v3 on the row — the test asserted the runner's half of a
+     * disagreement it could not see. `current-pack-version.test.ts` is where
+     * the two halves are held together.
+     */
+    expect(outcome.audit.evidencePackVersion).toBe(CURRENT_EVIDENCE_PACK_VERSION);
     expect(outcome.audit.promptVersion).toBe(PROMPT_VERSION);
     expect(outcome.audit.rubricVersion).toBe(RUBRIC_VERSION);
     expect(outcome.audit.provider).toBe("fake");

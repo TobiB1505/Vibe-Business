@@ -2,7 +2,7 @@ import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repos
 import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
-import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import {
@@ -87,7 +87,7 @@ function identityFor(options: { repositoryId?: string; contextHash?: string } = 
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+    evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",

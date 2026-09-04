@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { BUSINESS_READINESS_AUDIT_CONFIG, NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
 import type { AIProvider, StructuredRequest, StructuredResult } from "@/modules/ai/provider";
-import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import {
@@ -152,7 +152,7 @@ function seed() {
       authenticatedSnapshotId: null,
       schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
       auditVersion: BUSINESS_AUDIT_VERSION,
-      evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+      evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
       promptVersion: PROMPT_VERSION,
       rubricVersion: RUBRIC_VERSION,
       provider: "anthropic",
