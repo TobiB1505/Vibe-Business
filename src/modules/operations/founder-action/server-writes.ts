@@ -34,7 +34,7 @@ export async function attestFounderAction(params: {
    *
    * Passed through rather than validated here: the database decides which step
    * kind must carry one and which must not, and a second opinion in TypeScript
-   * could only disagree with it (ADR 0092).
+   * could only disagree with it (ADR 0093).
    */
   finding: string | null;
 }): Promise<AttestFounderActionResult> {

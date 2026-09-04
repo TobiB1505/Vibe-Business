@@ -187,7 +187,7 @@ describe("a founder may never confirm away work Vibe would build", () => {
 });
 
 /**
- * A step whose output is a finding must record the finding (ADR 0092).
+ * A step whose output is a finding must record the finding (ADR 0093).
  *
  * The attestation ADR 0090 opened to Vibe steps closed them with a boolean,
  * and for real-world work that is right — the sitemap is submitted or it is

@@ -51,7 +51,7 @@ export async function attestFounderActionStepAction(
    * Read from the form, trimmed, and empty means absent.
    *
    * Which step kinds must carry one is not decided here — the database owns
-   * that, and it re-derives the step's actor to enforce it (ADR 0092). This
+   * that, and it re-derives the step's actor to enforce it (ADR 0093). This
    * only turns "the field was left blank" into "there is no finding", so the
    * two shapes reaching the database are the two it distinguishes.
    */

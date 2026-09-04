@@ -25,7 +25,7 @@ import { buildAgentFocus } from "@/modules/projects/agent-focus";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
 import {
-  resolveDogfoodPlanRoutes,
+  resolveAgentPlanRoutes,
   resolveRouteAgentEconomics,
 } from "@/modules/coding-agent/website-preflight";
 import {
@@ -329,7 +329,7 @@ async function AgentWorkspaceBody({
     readyTask !== null &&
     taskOpportunityId !== null &&
     !agentWorking
-      ? resolveDogfoodPlanRoutes(supabase, { projectId, userId })
+      ? resolveAgentPlanRoutes(supabase, { projectId, userId })
       : Promise.resolve(null),
     /*
      * The runs the forecast reasons from, read once and only when a forecast

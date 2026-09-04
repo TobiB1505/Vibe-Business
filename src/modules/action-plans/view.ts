@@ -324,7 +324,7 @@ export type AttestationPrompt = {
   submitLabel: string;
   /**
    * The written answer this step is closed with, or null when it is closed by
-   * confirmation alone (ADR 0092).
+   * confirmation alone (ADR 0093).
    *
    * A `founder_action` step confirms that the world changed: the sitemap is
    * submitted or it is not, and there is nothing to write down. A `vibe` step

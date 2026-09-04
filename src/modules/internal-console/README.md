@@ -20,7 +20,7 @@ What replaces the ownership filter is a gate that runs first, in `service.ts`.
 
 `VIBE_INTERNAL_OPERATOR_USER_IDS`, comma-separated. **Absent or empty means nobody** — a missing variable must never be the permissive case for a surface that bypasses RLS.
 
-Not a `role` column, because application state has a write path and a write path is a way to grant yourself the console. Not a feature flag, because a flag is one switch somebody flips for everyone while an allowlist has to _name_ what it admits. The same shape `coding-agent/authorization.ts` already uses for the dogfood allowlist.
+Not a `role` column, because application state has a write path and a write path is a way to grant yourself the console. Not a feature flag, because a flag is one switch somebody flips for everyone while an allowlist has to _name_ what it admits. It is the shape `coding-agent/authorization.ts` used for the agent dogfood until [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md) removed it — and that removal is the warning this one is kept honest by: there, the same mechanism quietly gated a *customer* capability. This gates an operator surface, which is the only thing an environment allowlist should ever stand in front of.
 
 The identity comes from `getSession()`, which verifies the JWT signature. It is re-checked on **every** call, including every poll — an operator removed from the allowlist stops being one at their next refresh, not at their next sign-in. A non-operator gets `notFound()` rather than a refusal, because a 403 confirms the route exists.
 

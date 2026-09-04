@@ -144,7 +144,7 @@ describe("the request", () => {
   });
 
   /**
-   * The founder's own findings reach the plan that is written next (ADR 0092).
+   * The founder's own findings reach the plan that is written next (ADR 0093).
    *
    * Without this the feature is storage with no reader — the founder answers
    * "billing is partially wired", and the next plan is written against the

@@ -372,7 +372,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0088](docs/decisions/0088-the-internal-operator-console.md) | The internal operator console reads across tenants, and shows shapes only | Internal operator console |
 | [0090](docs/decisions/0090-a-founder-closes-what-vibe-cannot-run.md) | A founder closes the step Vibe has no executor for | §3.5 |
 | [0091](docs/decisions/0091-absorbed-is-satisfied-not-completed.md) | Absorbed is satisfied, not completed | §3.5 |
-| [0092](docs/decisions/0092-the-step-records-what-it-found.md) | The step records what it found | §3.5 |
+| [0092](docs/decisions/0092-the-agent-runs-as-the-product.md) | The agent runs as the product: one book, no allowlist | §3.5 |
+| [0093](docs/decisions/0093-the-step-records-what-it-found.md) | The step records what it found | §3.5 |
 
 ### Layers with no section above
 

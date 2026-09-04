@@ -5,19 +5,16 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import {
+  AGENT_START_FAILURE_LABELS,
   AGENT_START_REFUSAL_LABELS,
-  DOGFOOD_START_REFUSAL_LABELS,
 } from "@/modules/coding-agent/view";
-import {
-  startAgentRunAction,
-  type StartAgentRunState,
-} from "../agent-dogfood/[stepKey]/actions";
+import { startAgentRunAction, type StartAgentRunState } from "./agent-run-actions";
 import { AgentStartRefusalNotice } from "./agent-start-refusal-notice";
 
 const initialState: StartAgentRunState = null;
 
 /**
- * The real, allowlisted Agent start inside the new workspace.
+ * The Agent start control inside the workspace.
  *
  * The server action owns fresh admission, immutable spec persistence, Credit
  * reservation and idempotency. This component submits the plan step key and one
@@ -64,9 +61,9 @@ export function AgentStartAction({
       )}
       {state && !state.ok && state.error !== "not_eligible" && (
         <Notice tone="problem" label="couldn't start">
-          {state.error in DOGFOOD_START_REFUSAL_LABELS
-            ? DOGFOOD_START_REFUSAL_LABELS[
-                state.error as keyof typeof DOGFOOD_START_REFUSAL_LABELS
+          {state.error in AGENT_START_FAILURE_LABELS
+            ? AGENT_START_FAILURE_LABELS[
+                state.error as keyof typeof AGENT_START_FAILURE_LABELS
               ]
             : AGENT_START_REFUSAL_LABELS[state.error as AgentStartRefusal]}
         </Notice>

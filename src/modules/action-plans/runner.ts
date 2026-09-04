@@ -106,7 +106,7 @@ export type RunActionPlanInput = {
   provider: AIProvider;
   config: OperationConfig;
   /**
-   * What the founder established on steps no run could finish (ADR 0092).
+   * What the founder established on steps no run could finish (ADR 0093).
    *
    * Passed in rather than read here for the same reason the pack is: the runner
    * makes a request, it does not decide what this project knows.

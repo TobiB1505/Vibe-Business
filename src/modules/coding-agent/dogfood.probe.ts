@@ -6,7 +6,7 @@ import { resolvePlanExecution } from "@/modules/execution-contract/resolver";
 import { buildExecutionSpec } from "@/modules/execution-contract/spec";
 import { resolveExecutionValidation } from "@/modules/execution-contract/validation-requirements";
 import { compileExecutionPolicy } from "@/modules/execution-contract/policy";
-import { CORE4_DOGFOOD_DISCOVERY, deriveAgentLimits } from "./budget";
+import { AGENT_DISCOVERY_SCOPE, deriveAgentLimits } from "./budget";
 import { resolveAgentEconomics } from "./authorization";
 import { compileAgentInstruction } from "./prompt";
 import { renderAgentPreflight, runAgentPreflight } from "./preflight";
@@ -86,7 +86,7 @@ describe("EXECUTION CORE-4 — agent preflight against a real project", () => {
     console.log(`analyzed commit      ${snapshot!.result!.source.commitSha}`);
     console.log(`model                ${AGENTIC_EXECUTION_CONFIG.model} (${AGENTIC_EXECUTION_CONFIG.effort})`);
     console.log(
-      `economics            ${economics ? `${economics.budget.budgetPolicyVersion}${economics.nonProduction ? " (INTERNAL DOGFOOD)" : ""}` : "not authorized"}`,
+      `economics            ${economics?.budget.budgetPolicyVersion ?? "not authorized"}`,
     );
     console.log("");
 
@@ -132,7 +132,7 @@ describe("EXECUTION CORE-4 — agent preflight against a real project", () => {
     const budget = economics?.budget ?? null;
 
     const writeScope = {
-      discovery: { ...CORE4_DOGFOOD_DISCOVERY },
+      discovery: { ...AGENT_DISCOVERY_SCOPE },
       mutation: {
         maxChangedFiles: budget?.maxChangedFiles ?? 0,
         maxChangedBytes: budget?.maxChangedBytes ?? 0,

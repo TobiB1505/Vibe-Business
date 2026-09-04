@@ -8,9 +8,8 @@ const createGithubRepositoryReader = vi.fn(() => ({ getHead }));
 vi.mock("@/modules/github/repository-reader", () => ({ createGithubRepositoryReader }));
 
 const {
-  previewDogfoodStep,
-  isDogfoodEligibleProject,
-  resolveDogfoodPlanRoutes,
+  previewAgentStep,
+  resolveAgentPlanRoutes,
   resolveRouteAgentEconomics,
 } = await import("./website-preflight");
 const { GithubDomainError } = await import("@/modules/github/errors");
@@ -28,7 +27,6 @@ const PROJECT = "project-1";
 const USER = "user-1";
 const OTHER_USER = "user-2";
 const SNAPSHOT_SHA = "5b76b2a331f718ab6808dac1fd1c0746922d17df";
-const ALLOWLIST = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: PROJECT };
 
 let db: FakeDatabase;
 
@@ -130,29 +128,53 @@ beforeEach(() => {
   getHead.mockResolvedValue({ defaultBranch: "main", commitSha: SNAPSHOT_SHA });
 });
 
-describe("isDogfoodEligibleProject (§26, §27)", () => {
-  it("is false for an unlisted project", () => {
-    expect(isDogfoodEligibleProject(PROJECT, {})).toBe(false);
-  });
-
-  it("is true only for an allowlisted project", () => {
-    expect(isDogfoodEligibleProject(PROJECT, ALLOWLIST)).toBe(true);
-    expect(isDogfoodEligibleProject("some-other-project", ALLOWLIST)).toBe(false);
-  });
-});
-
-describe("previewDogfoodStep — the gate runs before anything else is read (§26, §27)", () => {
-  it("refuses a project that is not on the allowlist without reading the database", async () => {
-    // Nothing seeded at all. If the gate ran after a query, this would throw
-    // on a missing table row instead of returning the refusal.
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+/**
+ * The allowlist is gone, and every test below passes `env: {}` because of it
+ * (ADR 0092).
+ *
+ * There used to be a gate here: `isDogfoodEligibleProject` refused any project
+ * not named in `VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS` before a single row
+ * was read, and every test in this file had to hand it an allowlist to get
+ * past. So the whole rest of the file is now the proof that a project nobody
+ * named reaches the real chain, builds a real spec, and is refused only by the
+ * things that are genuinely about this project's own state.
+ */
+describe("previewAgentStep — nothing in the environment decides who may start", () => {
+  it("answers a project nobody named with its own first missing prerequisite", async () => {
+    // Nothing seeded. Under the allowlist this returned `not_dogfood_eligible`
+    // before touching the database; the honest answer is that there is no plan.
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
       env: {},
     });
 
-    expect(preview).toEqual({ eligible: false, reason: "not_dogfood_eligible" });
+    expect(preview).toEqual({ eligible: false, reason: "no_action_plan" });
+  });
+
+  /**
+   * A benchmark fixture is no longer reachable through the start path.
+   *
+   * It used to be: a namespaced step key resolved against Vibe's own fixture
+   * registry, which was safe only because the allowlist stood in front of it.
+   * Without that, the branch would let any customer start a Vibe-authored task
+   * against their repository — and pay for it — by typing a key their plan does
+   * not contain.
+   */
+  it("treats a benchmark fixture key as a step this plan does not have", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([AGENTIC_STEP]);
+
+    const preview = await previewAgentStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "dogfood-fixture--low-ui-primary-cta",
+      env: {},
+    });
+
+    expect(preview).toEqual({ eligible: false, reason: "step_not_found" });
   });
 });
 
@@ -171,17 +193,17 @@ describe("previewDogfoodStep — the gate runs before anything else is read (§2
  * The behaviour is now what it should always have been — building is a read,
  * and only a click writes.
  */
-describe("previewDogfoodStep — the real chain", () => {
+describe("previewAgentStep — the real chain", () => {
   it("resolves a real agentic step and builds its instruction package", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(true);
@@ -200,11 +222,11 @@ describe("previewDogfoodStep — the real chain", () => {
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    await previewDogfoodStep(fakeSupabase(db), {
+    await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(db.rows("execution_specs")).toHaveLength(0);
@@ -222,11 +244,11 @@ describe("previewDogfoodStep — the real chain", () => {
     seedCompletedPlan([AGENTIC_STEP]);
 
     const call = () =>
-      previewDogfoodStep(fakeSupabase(db), {
+      previewAgentStep(fakeSupabase(db), {
         projectId: PROJECT,
         userId: USER,
         stepKey: "1-ship-it",
-        env: ALLOWLIST,
+        env: {},
       });
 
     const first = await call();
@@ -278,11 +300,11 @@ describe("previewDogfoodStep — the real chain", () => {
       created_at: "2026-08-25T00:00:00.000Z",
     });
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "2-build",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(true);
@@ -302,11 +324,11 @@ describe("previewDogfoodStep — the real chain", () => {
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const before = await previewDogfoodStep(fakeSupabase(db), {
+    const before = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
     expect(before.eligible).toBe(true);
     if (!before.eligible) return;
@@ -327,11 +349,11 @@ describe("previewDogfoodStep — the real chain", () => {
       created_at: "2026-08-25T00:00:00.000Z",
     });
 
-    const after = await previewDogfoodStep(fakeSupabase(db), {
+    const after = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
     expect(after.eligible).toBe(true);
     if (!after.eligible) return;
@@ -345,7 +367,7 @@ describe("previewDogfoodStep — the real chain", () => {
   });
 });
 
-describe("previewDogfoodStep — cross-project and cross-user isolation (§25, §53)", () => {
+describe("previewAgentStep — cross-project and cross-user isolation (§25, §53)", () => {
   it("refuses a step key belonging to another project's plan", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
@@ -364,11 +386,11 @@ describe("previewDogfoodStep — cross-project and cross-user isolation (§25, �
     });
     db.seed("action_plan_steps", { action_plan_id: "plan-2", ...AGENTIC_STEP, step_key: "only-on-project-2" });
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "only-on-project-2",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview).toEqual({ eligible: false, reason: "step_not_found" });
@@ -381,27 +403,27 @@ describe("previewDogfoodStep — cross-project and cross-user isolation (§25, �
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview).toEqual({ eligible: false, reason: "repository_not_connected" });
   });
 });
 
-describe("previewDogfoodStep — honest refusals for missing prerequisites", () => {
+describe("previewAgentStep — honest refusals for missing prerequisites", () => {
   it("refuses when the project has no completed Action Plan", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "anything",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview).toEqual({ eligible: false, reason: "no_action_plan" });
@@ -411,11 +433,11 @@ describe("previewDogfoodStep — honest refusals for missing prerequisites", () 
     db.seed("projects", { id: PROJECT, user_id: USER });
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview).toEqual({ eligible: false, reason: "repository_not_connected" });
@@ -425,11 +447,11 @@ describe("previewDogfoodStep — honest refusals for missing prerequisites", () 
     seedOwnedRepository();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview).toEqual({ eligible: false, reason: "repository_snapshot_missing" });
@@ -441,11 +463,11 @@ describe("previewDogfoodStep — honest refusals for missing prerequisites", () 
     seedCompletedPlan([AGENTIC_STEP]);
     getHead.mockRejectedValueOnce(new GithubDomainError("github_api_error"));
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -458,7 +480,7 @@ describe("previewDogfoodStep — honest refusals for missing prerequisites", () 
   });
 });
 
-describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)", () => {
+describe("previewAgentStep — non-agentic routes never produce a spec (§6)", () => {
   it("reports why, without building a spec, for a founder-decision step", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
@@ -466,11 +488,11 @@ describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)",
       { ...AGENTIC_STEP, actor: "founder_decision", change_kind: "decision", requires_approval: false },
     ]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -488,11 +510,11 @@ describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)",
       { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
     ]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "2-build",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -522,7 +544,7 @@ describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)",
  *
  * These assert the list routes against what the project actually has.
  */
-describe("resolveDogfoodPlanRoutes — the list routes against real repository state", () => {
+describe("resolveAgentPlanRoutes — the list routes against real repository state", () => {
   const PREPARATION = {
     ...AGENTIC_STEP,
     step_key: "1-work-out-the-approach",
@@ -541,10 +563,10 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
     seedSuccessfulSnapshot();
     seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
 
-    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+    const routes = await resolveAgentPlanRoutes(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(routes.available).toBe(true);
@@ -568,7 +590,7 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
       projectId: PROJECT,
       members: [routes.plan.steps[1]],
       headRiskClass: implementation.riskClass,
-      env: ALLOWLIST,
+      env: {},
     });
     expect(economics?.budget.maxCredits).toBeGreaterThan(0);
   });
@@ -614,10 +636,10 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
       created_at: "2026-08-25T00:00:00.000Z",
     });
 
-    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+    const routes = await resolveAgentPlanRoutes(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(routes.available).toBe(true);
@@ -635,10 +657,10 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
   it("says the repository is missing rather than inventing a route for one", async () => {
     seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
 
-    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+    const routes = await resolveAgentPlanRoutes(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(routes.available).toBe(true);
@@ -653,28 +675,14 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
     expect(implementation.unmetRequirements).toContain("repository_snapshot_missing");
   });
 
-  it("refuses a project that is not on the allowlist, before reading a plan", async () => {
-    seedOwnedRepository();
-    seedSuccessfulSnapshot();
-    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
-
-    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
-      projectId: PROJECT,
-      userId: USER,
-      env: {},
-    });
-
-    expect(routes).toEqual({ available: false, reason: "not_dogfood_eligible" });
-  });
-
   it("reports an absent plan as its own state rather than an empty list", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
 
-    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+    const routes = await resolveAgentPlanRoutes(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(routes).toEqual({ available: false, reason: "no_action_plan" });
@@ -689,17 +697,17 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
     seedSuccessfulSnapshot();
     seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
 
-    await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+    await resolveAgentPlanRoutes(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(getHead).not.toHaveBeenCalled();
   });
 });
 
-describe("previewDogfoodStep — Vibe's own preparation does not gate the click", () => {
+describe("previewAgentStep — Vibe's own preparation does not gate the click", () => {
   const PREPARATION_STEP = {
     ...AGENTIC_STEP,
     step_key: "1-work-out-the-approach",
@@ -721,11 +729,11 @@ describe("previewDogfoodStep — Vibe's own preparation does not gate the click"
       { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
     ]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "2-build",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(true);
@@ -759,11 +767,11 @@ describe("previewDogfoodStep — Vibe's own preparation does not gate the click"
       { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
     ]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-work-out-the-approach",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -785,7 +793,7 @@ describe("previewDogfoodStep — Vibe's own preparation does not gate the click"
  * These tests are that failure at the gate that spends: the refusal has to
  * land in the preview, before `startAgentExecution` is ever reached.
  */
-describe("previewDogfoodStep — a fixed defect does not buy a run", () => {
+describe("previewAgentStep — a fixed defect does not buy a run", () => {
   /** Cites a defect the seeded live snapshot still finds. */
   const CITES_CANONICAL = {
     ...AGENTIC_STEP,
@@ -805,11 +813,11 @@ describe("previewDogfoodStep — a fixed defect does not buy a run", () => {
       ],
     });
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -827,11 +835,11 @@ describe("previewDogfoodStep — a fixed defect does not buy a run", () => {
     seedSuccessfulSnapshot();
     seedCompletedPlan([CITES_CANONICAL]);
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(true);
@@ -854,11 +862,11 @@ describe("previewDogfoodStep — a fixed defect does not buy a run", () => {
       seoSignals: [{ id: "title", name: "Title", present: true, evidence: [] }],
     });
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -945,11 +953,11 @@ describe("a build step whose prerequisite is another build step", () => {
     seedTwoBuildSteps();
     seedDeliveredPredecessor({ merged: true });
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "3-link",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(true);
@@ -967,11 +975,11 @@ describe("a build step whose prerequisite is another build step", () => {
     seedTwoBuildSteps();
     seedDeliveredPredecessor({ merged: false });
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "3-link",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);
@@ -982,11 +990,11 @@ describe("a build step whose prerequisite is another build step", () => {
   it("blocks it when the earlier build never ran at all", async () => {
     seedTwoBuildSteps();
 
-    const preview = await previewDogfoodStep(fakeSupabase(db), {
+    const preview = await previewAgentStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "3-link",
-      env: ALLOWLIST,
+      env: {},
     });
 
     expect(preview.eligible).toBe(false);

@@ -30,9 +30,7 @@ import type { PreflightRefusal } from "./preflight";
  * `view.ts` from these values alone.
  */
 
-export const DOGFOOD_STEP_REASONS = [
-  /** The project is not on the operator-managed allowlist. Checked first (§26, §27). */
-  "not_dogfood_eligible",
+export const AGENT_STEP_REASONS = [
   /** No completed Action Plan exists for this project yet — a founder action. */
   "no_action_plan",
   /** The step key does not name a step in the project's current plan. */
@@ -48,7 +46,7 @@ export const DOGFOOD_STEP_REASONS = [
   /** Resolved agentic, but the preflight itself refused (see `preflight`). */
   "preflight_refused",
 ] as const;
-export type DogfoodStepReason = (typeof DOGFOOD_STEP_REASONS)[number];
+export type AgentStepReason = (typeof AGENT_STEP_REASONS)[number];
 
 /**
  * One refusal, carried at the finest grain that was actually established.
@@ -58,7 +56,7 @@ export type DogfoodStepReason = (typeof DOGFOOD_STEP_REASONS)[number];
  * decided", never "it passed".
  */
 export type AgentStartRefusalDetail = {
-  reason: DogfoodStepReason;
+  reason: AgentStepReason;
   /**
    * Why the step classified the way it did, when a resolution exists.
    *

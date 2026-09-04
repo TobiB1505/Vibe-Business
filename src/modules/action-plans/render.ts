@@ -106,7 +106,7 @@ function renderAudit(source: PlannerSource): string {
 }
 
 /**
- * What the founder established on steps no run could finish (ADR 0092).
+ * What the founder established on steps no run could finish (ADR 0093).
  *
  * Bounded and ordered here rather than at the call site so the block is a
  * function of its input and nothing else. The cap exists because this grows
@@ -140,7 +140,7 @@ function renderFindings(findings: readonly PlannerFinding[]): string[] {
 export function renderActionPlanInput(input: {
   source: PlannerSource;
   pack: EvidencePackV3;
-  /** Absent for a first plan, and for every plan written before ADR 0092. */
+  /** Absent for a first plan, and for every plan written before ADR 0093. */
   findings?: readonly PlannerFinding[];
 }): string {
   return [

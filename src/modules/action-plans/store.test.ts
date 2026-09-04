@@ -320,7 +320,7 @@ describe("completing a run", () => {
 });
 
 /**
- * A new finding is a new planning problem (ADR 0092).
+ * A new finding is a new planning problem (ADR 0093).
  *
  * Reuse is what makes this load-bearing: without the findings in the identity,
  * a founder who answered "billing is partially wired" and asked for a new plan

@@ -22,7 +22,7 @@ import { MAX_PLAN_STEPS, STEP_ACTORS, STEP_CHANGE_KINDS } from "./schema";
  */
 
 /*
- * v2 → v3: the user content gained a `<founder_findings>` block (ADR 0092).
+ * v2 → v3: the user content gained a `<founder_findings>` block (ADR 0093).
  *
  * Versioned because what the model was given changed, and a plan built without
  * the founder's own findings answered a different question from one built with

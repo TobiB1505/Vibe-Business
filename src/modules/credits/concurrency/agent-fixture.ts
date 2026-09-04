@@ -310,7 +310,11 @@ export async function createRunningAgentRun(
   // the ledger genuinely agrees exists.
   const authorized = await authorizeOperationCredits(supabase, {
     projectId: scaffolding.projectId,
-    operation: "agent_execution_dogfood",
+    operation: "agent_execution",
+    // `launch-v1` prices the Agent by execution pricing class, so a hold cannot
+    // be taken without naming one. `standard` is the tier the fixture's own
+    // funding is sized against.
+    pricingClass: "standard",
     idempotencyKey: `e2b:${params.identity}`,
     operationRunId,
   });

@@ -238,7 +238,7 @@ export function computeActionPlanInputHash(params: {
   productProfileId: string;
   founderIntentHash: string;
   /**
-   * Which findings this plan was written against, by immutable id (ADR 0092).
+   * Which findings this plan was written against, by immutable id (ADR 0093).
    *
    * Ids rather than the prose: a founder's own words are content, and a reuse
    * key built from them would change on a typo fix while saying nothing about

@@ -1,7 +1,7 @@
 # 0144 — The answer that went nowhere
 
 **Date:** 2026-09-04
-**Decision:** [ADR 0092](../decisions/0092-the-step-records-what-it-found.md)
+**Decision:** [ADR 0093](../decisions/0093-the-step-records-what-it-found.md)
 
 ## The founder's objection
 

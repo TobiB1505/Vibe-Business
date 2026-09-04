@@ -65,7 +65,7 @@ export async function callAttestFounderActionStep(
 }
 
 /**
- * Every finding this founder has recorded, oldest first (ADR 0092).
+ * Every finding this founder has recorded, oldest first (ADR 0093).
  *
  * Across the project rather than one plan, because a finding outlives the plan
  * it was recorded on — that is the whole point of storing it. A replan is a new

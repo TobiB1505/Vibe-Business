@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -51,12 +51,16 @@ const VALIDATE_ACTION = read(
   "src/app/app/projects/[projectId]/validate-change-action.ts",
 );
 const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts");
-const DOGFOOD_ACTIONS = read(
-  "src/app/app/projects/[projectId]/agent-dogfood/[stepKey]/actions.ts",
-);
-const DOGFOOD_PAGE = read("src/app/app/projects/[projectId]/agent-dogfood/page.tsx");
-const DOGFOOD_STEP_PAGE = read(
-  "src/app/app/projects/[projectId]/agent-dogfood/[stepKey]/page.tsx",
+/**
+ * The Agent workspace's server actions.
+ *
+ * They lived under `agent-dogfood/[stepKey]/` until ADR 0092 — the live start
+ * path in a folder named after the internal harness that no longer exists. The
+ * two redirect pages beside them are gone; there is one Agent screen and this
+ * is what it submits to.
+ */
+const AGENT_ACTIONS = read(
+  "src/app/app/projects/[projectId]/agent/agent-run-actions.ts",
 );
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
@@ -325,7 +329,7 @@ describe("the plan screen believes the resolver about what Vibe could build", ()
    */
   it("resolves each step's route on the route, with no allowlist in front of it", () => {
     expect(MOVES_PAGE).toContain("resolvePlanExecutionRoutes");
-    expect(MOVES_PAGE).not.toContain("resolveDogfoodPlanRoutes");
+    expect(MOVES_PAGE).not.toContain("resolveAgentPlanRoutes");
     // State only. A screen that classifies a whole plan must spend nothing.
     expect(MOVES_PAGE).not.toContain("liveHead");
     expect(MOVES_PAGE).not.toContain("establishLivePremise");
@@ -347,12 +351,12 @@ describe("a refused run says which gate stopped it", () => {
    * repository read and the click.
    */
   it("carries the reason the fresh chain established, as closed enums", () => {
-    expect(DOGFOOD_ACTIONS).toContain("preview.resolution.reason");
-    expect(DOGFOOD_ACTIONS).toContain("preview.resolution.admission");
-    expect(DOGFOOD_ACTIONS).toContain("preview.preflight.refusals[0]");
+    expect(AGENT_ACTIONS).toContain("preview.resolution.reason");
+    expect(AGENT_ACTIONS).toContain("preview.resolution.admission");
+    expect(AGENT_ACTIONS).toContain("preview.preflight.refusals[0]");
     // Never the resolution object itself: it carries capability ids and
     // version strings that must not cross into a component.
-    expect(DOGFOOD_ACTIONS).not.toContain("resolution: preview.resolution");
+    expect(AGENT_ACTIONS).not.toContain("resolution: preview.resolution");
   });
 
   it("renders it, and never claims the page explains it", () => {
@@ -483,11 +487,11 @@ describe("the plan hands off to the agent, and the agent points back", () => {
   });
 
   it("starts only through the existing freshly admitted server action", () => {
-    expect(AGENT_PAGE).toContain("resolveDogfoodPlanRoutes");
+    expect(AGENT_PAGE).toContain("resolveAgentPlanRoutes");
     expect(AGENT_READY).toContain("startAction");
     expect(AGENT_START).toContain("startAgentRunAction");
-    expect(DOGFOOD_ACTIONS).toContain("previewDogfoodStep");
-    expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
+    expect(AGENT_ACTIONS).toContain("previewAgentStep");
+    expect(AGENT_ACTIONS).toContain("startAgentExecution");
     expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");
     expect(AGENT_START).toContain("Run with Vibe");
     /*
@@ -537,13 +541,12 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(AGENT_PAGE).not.toContain("ChangeGates");
   });
 
-  it("leaves no legacy Agent run screen visible", () => {
-    for (const source of [DOGFOOD_PAGE, DOGFOOD_STEP_PAGE]) {
-      expect(source).toContain("redirect(projectSectionHref(projectId, \"agent\"))");
-      expect(source).not.toContain("RunPanel");
-      expect(source).not.toContain("StatusView");
-    }
-    expect(DOGFOOD_ACTIONS).toContain("redirect(agentHref)");
+  it("leaves no legacy Agent run screen at all", () => {
+    // The two redirect pages and the panels they once rendered are deleted
+    // rather than emptied (ADR 0092), so the assertion is that the directory
+    // is gone — an empty redirect is still a URL somebody can land on.
+    expect(existsSync("src/app/app/projects/[projectId]/agent-dogfood")).toBe(false);
+    expect(AGENT_ACTIONS).toContain("redirect(agentHref)");
   });
 
   it("keeps validation live until the durable operation settles", () => {

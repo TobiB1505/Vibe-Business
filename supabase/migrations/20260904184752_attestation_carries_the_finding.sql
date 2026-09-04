@@ -1,4 +1,4 @@
--- ADR 0092: a step whose whole output is a finding records the finding.
+-- ADR 0093: a step whose whole output is a finding records the finding.
 --
 -- The attestation ADR 0090 opened to Vibe steps closes them with a boolean,
 -- and for real-world work that is right: "the sitemap is submitted" is true or

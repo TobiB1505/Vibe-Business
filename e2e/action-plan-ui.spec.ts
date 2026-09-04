@@ -329,7 +329,7 @@ test.describe("ready plan — a step no execution can finish", () => {
   });
 
   /*
-   * The founder's objection, pinned (ADR 0092). The step asks whether billing
+   * The founder's objection, pinned (ADR 0093). The step asks whether billing
    * is fully working, partially wired, or absent; a tick answers none of the
    * three, and its successors are written to depend on which. So the step is
    * closed with the answer, not with a boolean.

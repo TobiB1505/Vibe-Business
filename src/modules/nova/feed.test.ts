@@ -404,11 +404,7 @@ describe("the audit as one entry", () => {
 
 describe("the offer to build a step", () => {
   const budget = { maxCredits: creditsToUnits(200) } as AgentEconomicPolicy["budget"];
-  const economics: AgentEconomicPolicy = {
-    budget,
-    nonProduction: false,
-    disclosure: "",
-  };
+  const economics: AgentEconomicPolicy = { budget };
 
   function offer(overrides: Partial<Parameters<typeof buildNovaExecutionOffer>[0]> = {}) {
     return buildNovaExecutionOffer({
@@ -447,16 +443,6 @@ describe("the offer to build a step", () => {
     expect(offer()?.option.confirmationNote).toBe(
       NOVA_ACTION_META["nova.start_agent"].confirmationNote,
     );
-  });
-
-  /**
-   * §18 asks for a marker that is stated rather than derived: the dogfood
-   * policy prices differently, and a screen that inferred it from the ceiling
-   * would be guessing.
-   */
-  it("carries the non-production marker rather than inferring it", () => {
-    expect(offer()?.nonProduction).toBe(false);
-    expect(offer({ economics: { ...economics, nonProduction: true } })?.nonProduction).toBe(true);
   });
 
   /** A chain delivers several steps for one ceiling, and says how many. */

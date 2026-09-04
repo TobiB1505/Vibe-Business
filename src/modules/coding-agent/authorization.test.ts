@@ -1,53 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
-  CORE4_DOGFOOD_BUDGET_POLICY,
   EXECUTION_BUDGET_POLICIES,
-  EXECUTION_DOGFOOD_BUDGET_POLICIES,
+  LAUNCH_V1_BUDGET_POLICY,
   resolveExecutionBudget,
 } from "@/modules/execution-contract/budget";
 import { compileExecutionPolicy } from "@/modules/execution-contract/policy";
 import { RETAIL_OPERATION_KINDS, retailChargeFor } from "@/modules/credits/retail";
 import { CREDIT_VALUE_NANO_USD } from "@/modules/credits/margin-guard";
 import { EXECUTION_PRICING_CLASSES } from "@/modules/economy/execution-class";
-import { internalChargeFor, INTERNAL_OPERATION_KINDS } from "@/modules/credits/internal";
 import { creditsToUnits } from "@/modules/credits/units";
-import {
-  internalDogfoodProjectIds,
-  isAgenticExecutionAuthorized,
-  resolveAgentEconomics,
-} from "./authorization";
-import {
-  CORE4_DOGFOOD_DISCOVERY,
-  checkBudgetMatchesScope,
-  deriveAgentLimits,
-} from "./budget";
+import { isAgenticExecutionAuthorized, resolveAgentEconomics } from "./authorization";
+import { AGENT_DISCOVERY_SCOPE, checkBudgetMatchesScope, deriveAgentLimits } from "./budget";
 
 /**
  * Who may run an agent, and on whose economics
  * (EXECUTION CORE-4 §17, §18, §55).
  *
- * §18 is unusually specific, and these tests are that paragraph as assertions:
+ * §18 was unusually specific, and this file used to be that paragraph as
+ * assertions:
  *
  * > designated dev/test billing account only · not reachable by normal customer
  * > paths · clearly marked non-production · no production Agent rate card ·
  * > no arbitrary free unlimited execution · hard spending ceiling
+ *
+ * Everything there was conditional on one thing: no measured cost existed yet,
+ * so no customer price could be activated. `launch-v1` produced the
+ * measurement and the price, and [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md) removed the second book the
+ * paragraph existed to keep separate. What survives §18 is the half that was
+ * never about the dogfood: **no arbitrary free unlimited execution, and a hard
+ * spending ceiling.** That is what the rest of this file asserts, against the
+ * only book there is.
  */
 
-const AT = new Date("2026-08-19T00:00:00.000Z");
 /** Inside `launch-v1-budget`. */
 const LAUNCH = new Date("2026-09-01T00:00:00.000Z");
 
-/**
- * §18 said: do not activate a customer-facing production Agent price without a
- * measured cost behind it. CLAUDE.md rule 78 says the same thing and is still
- * in force.
- *
- * `launch-v1` satisfied it rather than repealed it — sixteen delivered dogfood
- * runs are the measurement — so these tests changed from "nothing is priced" to
- * "the price and the ceiling agree, and the two books stay apart". The
- * separation §18 was protecting is the part that must not move, and it is what
- * the rest of this file now asserts.
- */
 describe("the production Agent price is activated, and bound to its ceiling", () => {
   it("ships exactly one production budget policy", () => {
     expect(EXECUTION_BUDGET_POLICIES.map((policy) => policy.version)).toEqual([
@@ -64,16 +51,14 @@ describe("the production Agent price is activated, and bound to its ceiling", ()
 
   it("prices Agentic Execution in the customer book, per class", () => {
     expect(RETAIL_OPERATION_KINDS).toContain("agent_execution");
-    // The internal ceiling never becomes a customer price. It is a different
-    // book and a different kind, and no customer path can name it.
+    // There is one book. The internal `agent_execution_dogfood` kind is gone
+    // rather than hidden, so nothing can be charged out of a second ceiling.
     expect(RETAIL_OPERATION_KINDS).not.toContain("agent_execution_dogfood");
   });
 
   it("charges exactly what the production budget authorizes, class for class", () => {
     // The two numbers must agree or `checkBudgetBinding` refuses admission for
-    // a configuration mistake rather than for a real shortfall. This is the
-    // same invariant the dogfood test below asserts, applied to the book a
-    // customer is actually charged from.
+    // a configuration mistake rather than for a real shortfall.
     for (const pricingClass of EXECUTION_PRICING_CLASSES) {
       const budget = resolveExecutionBudget(pricingClass, LAUNCH)!;
       const price = retailChargeFor("agent_execution", LAUNCH, { pricingClass });
@@ -95,108 +80,62 @@ describe("the production Agent price is activated, and bound to its ceiling", ()
       expect(budget.maxProviderSpendUsd).toBeLessThan(revenueUsd * 0.55);
     }
   });
+});
 
-  it("keeps the dogfood ceiling in its own book", () => {
-    expect(INTERNAL_OPERATION_KINDS).toEqual(["agent_execution_dogfood"]);
-    expect(internalChargeFor("agent_execution_dogfood", AT)?.policyVersion).toBe(
-      "internal-dogfood-v1",
-    );
+/**
+ * The allowlist is gone, and this is what that means (ADR 0092).
+ *
+ * It decided two different things at once and only ever described itself as
+ * deciding one. As economics it said "do not bill this project"; as the gate in
+ * `website-preflight.ts` it said "this project may not start an agent at all",
+ * which is what actually held for every customer. Both are removed, so the
+ * environment no longer has a say in either question.
+ */
+describe("no environment variable decides who may run an agent", () => {
+  const ONCE_ALLOWLISTED = "project-1";
+  const NEVER_ALLOWLISTED = "project-3";
+
+  it("authorizes every project, with the environment saying nothing", () => {
+    for (const projectId of [ONCE_ALLOWLISTED, NEVER_ALLOWLISTED]) {
+      const economics = resolveAgentEconomics({
+        projectId,
+        pricingClass: "standard",
+        at: LAUNCH,
+        env: {},
+      });
+
+      expect(economics?.budget.budgetPolicyVersion).toBe("launch-v1-budget");
+      expect(isAgenticExecutionAuthorized({ projectId, at: LAUNCH, env: {} })).toBe(true);
+    }
   });
 
-  /**
-   * The same invariant, in the internal book. Unchanged by `launch-v1`, and
-   * asserted separately on purpose: the dogfood ceiling and the customer price
-   * are two books, and a test that checked only one would let them merge.
-   */
-  it("reserves exactly the ceiling the dogfood budget authorizes", () => {
-    const reserved = internalChargeFor("agent_execution_dogfood", AT);
-    expect(reserved?.creditUnits).toBe(CORE4_DOGFOOD_BUDGET_POLICY.budgetsByClass.standard.maxCredits);
+  it("gives the project that used to be exempt the same economics as everyone", () => {
+    // The variable that used to name it is now an ordinary unread string.
+    const exempt = resolveAgentEconomics({
+      projectId: ONCE_ALLOWLISTED,
+      pricingClass: "standard",
+      at: LAUNCH,
+      env: { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: ONCE_ALLOWLISTED },
+    });
+    const customer = resolveAgentEconomics({
+      projectId: NEVER_ALLOWLISTED,
+      pricingClass: "standard",
+      at: LAUNCH,
+      env: {},
+    });
+
+    expect(exempt).toEqual(customer);
+  });
+
+  it("refuses everybody equally when no policy is in force", () => {
+    const at = new Date("2026-01-01T00:00:00.000Z");
+    expect(resolveAgentEconomics({ projectId: ONCE_ALLOWLISTED, pricingClass: "standard", at })).toBeNull();
+    expect(isAgenticExecutionAuthorized({ projectId: ONCE_ALLOWLISTED, at })).toBe(false);
   });
 });
 
-describe("the allowlist decides who is not billed, not who may run", () => {
-  const env = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1" };
-
-  it("keeps an allowlisted project on non-production economics after launch", () => {
-    // Production resolves for every project now. Checking it first would have
-    // silently converted the dogfood account into a paying customer — the same
-    // runs, the same allowlist, settling real Credits — and left the internal
-    // book as unreachable code describing itself as live.
-    const economics = resolveAgentEconomics({
-      projectId: "project-1",
-      pricingClass: "standard",
-      at: LAUNCH,
-      env,
-    });
-
-    expect(economics?.nonProduction).toBe(true);
-    expect(economics?.budget.budgetPolicyVersion).toBe("core4-dogfood-budget-v1");
-  });
-
-  it("gives every project that is not named the production economics", () => {
-    const economics = resolveAgentEconomics({
-      projectId: "project-2",
-      pricingClass: "standard",
-      at: LAUNCH,
-      env,
-    });
-
-    expect(economics?.nonProduction).toBe(false);
-    expect(economics?.budget.budgetPolicyVersion).toBe("launch-v1-budget");
-  });
-
-  it("never lets being on the list cost a project its access", () => {
-    // An allowlisted project whose dogfood policy had lapsed must fall through
-    // to production, not be refused. The list means "do not bill this one".
-    const economics = resolveAgentEconomics({
-      projectId: "project-1",
-      pricingClass: "standard",
-      at: LAUNCH,
-      env,
-    });
-
-    expect(economics).not.toBeNull();
-  });
-});
-
-describe("§18 — reachable only from an internal allowlist", () => {
-  it("authorizes nobody when the allowlist is unset", () => {
-    expect(internalDogfoodProjectIds({})).toEqual([]);
-    expect(resolveAgentEconomics({ projectId: "project-1", pricingClass: "standard", at: AT, env: {} })).toBeNull();
-    expect(isAgenticExecutionAuthorized({ projectId: "project-1", at: AT, env: {} })).toBe(false);
-  });
-
-  it("authorizes nobody when the allowlist is empty", () => {
-    const env = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "  ,  , " };
-    expect(internalDogfoodProjectIds(env)).toEqual([]);
-    expect(resolveAgentEconomics({ projectId: "project-1", pricingClass: "standard", at: AT, env })).toBeNull();
-  });
-
-  it("authorizes exactly the listed projects and nobody else", () => {
-    const env = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1, project-2" };
-
-    expect(resolveAgentEconomics({ projectId: "project-1", pricingClass: "standard", at: AT, env })).not.toBeNull();
-    expect(resolveAgentEconomics({ projectId: "project-2", pricingClass: "standard", at: AT, env })).not.toBeNull();
-    // A customer project, which is every project that is not on the list.
-    expect(resolveAgentEconomics({ projectId: "project-3", pricingClass: "standard", at: AT, env })).toBeNull();
-  });
-
-  it("marks the dogfood economics non-production, explicitly", () => {
-    const economics = resolveAgentEconomics({
-      projectId: "project-1",
-      pricingClass: "standard",
-      at: AT,
-      env: { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1" },
-    });
-
-    expect(economics?.nonProduction).toBe(true);
-    expect(economics?.disclosure).toContain("No production Agent Credit price is activated");
-    expect(economics?.budget.budgetPolicyVersion).toBe("core4-dogfood-budget-v1");
-  });
-});
-
-describe("§17 — the CORE-4 dogfood policy is conservative and complete", () => {
-  const budget = CORE4_DOGFOOD_BUDGET_POLICY.budgetsByClass.standard;
+describe("§17 — the production budget is conservative and complete", () => {
+  const budget = LAUNCH_V1_BUDGET_POLICY.budgetsByClass.standard;
 
   it("bounds every dimension §17 names", () => {
     // Agent turns, repair loops, wall clock, changed files, diff size, AI/provider
@@ -231,28 +170,30 @@ describe("§17 — the CORE-4 dogfood policy is conservative and complete", () =
     expect(budget.maxWallClockMs).toBeGreaterThanOrEqual(budget.maxSandboxMs);
   });
 
-  it("is a genuinely small first experiment", () => {
+  /**
+   * §18's surviving half, now that every customer can reach this.
+   *
+   * The dogfood ceiling was small because it was an experiment. This one is
+   * small because a founder is paying for it and a runaway agent is their bill,
+   * so the bound matters more than it did, not less.
+   */
+  it("is a genuinely bounded run", () => {
     expect(budget.maxChangedFiles).toBeLessThanOrEqual(10);
     expect(budget.maxChangedBytes).toBeLessThanOrEqual(100 * 1024);
-    expect(budget.maxCredits).toBeLessThanOrEqual(creditsToUnits(200));
+    expect(budget.maxCredits).toBeLessThanOrEqual(creditsToUnits(350));
     expect(budget.maxProviderSpendUsd).toBeLessThanOrEqual(5);
-  });
-
-  it("is the only dogfood policy, and is not in the production array", () => {
-    expect(EXECUTION_DOGFOOD_BUDGET_POLICIES).toEqual([CORE4_DOGFOOD_BUDGET_POLICY]);
-    expect(EXECUTION_BUDGET_POLICIES).not.toContain(CORE4_DOGFOOD_BUDGET_POLICY);
   });
 });
 
 describe("budget and write scope must describe the same blast radius", () => {
-  const budget = { budgetPolicyVersion: "x", ...CORE4_DOGFOOD_BUDGET_POLICY.budgetsByClass.standard };
+  const budget = { budgetPolicyVersion: "x", ...LAUNCH_V1_BUDGET_POLICY.budgetsByClass.standard };
 
   const policy = compileExecutionPolicy({
     mode: "agentic",
     executionClass: "application_code_change",
     riskClass: "moderate",
     writeScope: {
-      discovery: { ...CORE4_DOGFOOD_DISCOVERY },
+      discovery: { ...AGENT_DISCOVERY_SCOPE },
       mutation: {
         maxChangedFiles: budget.maxChangedFiles,
         maxChangedBytes: budget.maxChangedBytes,

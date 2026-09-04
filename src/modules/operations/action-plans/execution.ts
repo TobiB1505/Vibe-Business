@@ -84,14 +84,14 @@ type PlanSources = {
   opportunitySetId: string;
   productProfileId: string;
   founderIntentHash: string;
-  /** What the founder established, oldest first (ADR 0092). */
+  /** What the founder established, oldest first (ADR 0093). */
   findings: ProjectFinding[];
   evidencePackVersion: string;
   inputHash: string;
 };
 
 /*
- * The findings, in the shape the renderer fences (ADR 0092).
+ * The findings, in the shape the renderer fences (ADR 0093).
  *
  * Derived at every call site from one place rather than stored twice: the
  * token count and the paid call must render the same block, or the count is a
