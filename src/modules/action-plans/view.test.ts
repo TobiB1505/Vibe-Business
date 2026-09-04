@@ -19,6 +19,7 @@ import {
   stepDisplayState,
   stepSequenceStatus,
   stepResponsibility,
+  attestationPrompt,
 } from "./view";
 
 /**
@@ -474,6 +475,26 @@ describe("stepResponsibility", () => {
     expect(responsibility.sublabel).toContain(fragment);
   });
 
+  /**
+   * The refusal class the repository argument left out, found by a founder.
+   *
+   * A `vibe` step whose change kind is not `product_change` has no executor by
+   * construction. "Not automated yet" reads as a feature Vibe has not shipped,
+   * so the founder waits for it — and waits forever, because nothing was ever
+   * coming. Both reasons say the true thing instead: this is not a change to
+   * the product, so there is nothing to build.
+   */
+  it.each([
+    ["no_executor_for_vibe_work", "own thinking work"],
+    ["change_kind_not_executable", "nothing for Vibe to build"],
+  ] as const)("names why there is no executor for %s", (reason, fragment) => {
+    const responsibility = stepResponsibility(step("not_yet_supported"), refused(reason));
+
+    expect(responsibility.headline).toBe("Vibe's work");
+    expect(responsibility.sublabel).toContain(fragment);
+    expect(responsibility.sublabel).not.toBe("Not automated yet");
+  });
+
   it("never says a stale analysis is work Vibe has not automated", () => {
     // The sentence this replaces was not merely vague here, it was false: the
     // work is automated, and one free scan is the whole of what stands in the
@@ -506,5 +527,30 @@ describe("stepResponsibility", () => {
       headline,
       sublabel: null,
     });
+  });
+});
+
+/**
+ * One control, two sentences — and they must not be swapped.
+ *
+ * A founder told "Your action" about a step the plan attributes to Vibe would
+ * be right to think the product had changed its mind about who does what. And
+ * a confirmation must never read as a claim that Vibe did the work: it says
+ * the step's own completion criterion is true, which is all it has ever said.
+ */
+describe("attestationPrompt", () => {
+  it("keeps real-world work reading as the founder's own", () => {
+    const prompt = attestationPrompt({ actor: "founder_action" });
+
+    expect(prompt.pill).toBe("Your action");
+    expect(prompt.lead).toBeNull();
+  });
+
+  it("says Vibe cannot run it, and does not claim Vibe did", () => {
+    const prompt = attestationPrompt({ actor: "vibe" });
+
+    expect(prompt.pill).not.toBe("Your action");
+    expect(prompt.lead).toContain("isn't a change to your product");
+    expect(prompt.footnote).toContain("does not claim Vibe did the work");
   });
 });

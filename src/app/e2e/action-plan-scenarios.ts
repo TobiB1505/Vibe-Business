@@ -245,6 +245,7 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     progress: planProgress(storedPlan.steps),
     ...overrides,
     completedStepOrders: overrides.completedStepOrders ?? [],
+    absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
     founderInputRequest,
     // Derived from the request the fixture just built, so a scenario can never
     // claim open questions it does not carry.
@@ -369,6 +370,63 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   /** Prior authoritative evidence has advanced the plan to manual founder work. */
   action_plan_founder_action: (): ActionPlanFixture => {
     const completed = new Set([1, 2, 3]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * A step a successful run covered rather than carried out (ADR 0091).
+   *
+   * Step 1 is `vibe` + `analysis`, which `classifyExecutionDependency` folds
+   * into the run built for step 3. Once that run has succeeded, verified and
+   * validated, step 1 needs nobody to do it — but it was never executed on its
+   * own, and a row marked done would erase that. The scene exists to prove the
+   * row says which run covered it, and does not claim it was finished.
+   */
+  action_plan_absorbed_step: (): ActionPlanFixture => {
+    const completed = new Set([2, 3]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, new Set([1, 2, 3])),
+        progress: planProgress(STEPS, new Set([1, 2, 3])),
+        completedStepOrders: [...completed],
+        absorbedByStepOrder: { 1: 3 },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * The step that could be completed by nothing at all (Sprint 0141).
+   *
+   * "Draft the search-facing copy" is `vibe` + `analysis`: Vibe's own work,
+   * which `resolveStepExecution` refuses because it is not a `product_change`.
+   * No run produces it, no founder resolution covers it, and until ADR 0090 no
+   * attestation reached it — so once the decision in front of it was answered,
+   * the plan stopped here permanently and every later step went with it.
+   *
+   * The scene exists because that is invisible in the domain: every unit test
+   * passed while the screen showed a step marked "Start here" with nothing
+   * under it to start.
+   */
+  action_plan_vibe_no_executor: (): ActionPlanFixture => {
+    const completed = new Set([2]);
     return {
       opportunityId: "move_e2e",
       moveTitle: MOVE_TITLE,

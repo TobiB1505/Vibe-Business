@@ -24,6 +24,7 @@ import {
   OPERATION_STAGE_LABELS,
   type OperationView,
 } from "@/modules/operations/view";
+import { isFounderAttestable } from "@/modules/action-plans/completion";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import { agentMoveHref, PLANNED_WORK_ANCHOR } from "@/modules/action-plans/source";
@@ -32,6 +33,7 @@ import type {
   OpportunityActionState,
 } from "@/modules/execution/view";
 import {
+  attestationPrompt,
   PLAN_PROGRESS_LABELS,
   PLAN_STALENESS_LABELS,
   stepResponsibility,
@@ -131,6 +133,7 @@ function PlanStepRow({
   display,
   index,
   done,
+  coveredBy,
   responsibility,
 }: {
   step: ActionPlanStep;
@@ -138,9 +141,11 @@ function PlanStepRow({
   display: StepDisplayState;
   index: number;
   done: boolean;
+  /** The step whose run covered this one, when it was covered rather than done. */
+  coveredBy: number | null;
   responsibility: StepResponsibility;
 }) {
-  const sequence = stepSequenceStatus(step, allSteps, display);
+  const sequence = stepSequenceStatus(step, allSteps, display, coveredBy);
   const dependencyTitles = stepDependencyTitles(step, allSteps);
   const isCurrent = display === "start_here";
   const compactState = isCurrent
@@ -148,6 +153,9 @@ function PlanStepRow({
     : sequence.state === "waiting"
       ? "Waiting"
       : sequence.label;
+  /* A covered row is finished for the plan but was never carried out, so it
+     gets the muted mark rather than the tick a completion earns (ADR 0091). */
+  const covered = display === "covered";
 
   return (
     <li
@@ -176,7 +184,7 @@ function PlanStepRow({
                   : "border-line-3 bg-surface-2 text-fg-meta",
             )}
           >
-            {done ? <CheckIcon size={12} /> : String(index + 1).padStart(2, "0")}
+            {done && !covered ? <CheckIcon size={12} /> : String(index + 1).padStart(2, "0")}
           </span>
 
           <span className="text-fg min-w-0 flex-1 text-sm leading-snug font-medium">
@@ -276,6 +284,11 @@ function PlanBody({
   const { plan, firstActionableStep, completedStepOrders, founderInputRequest, progress } = planView;
   const steps = [...plan.steps].sort((a, b) => a.order - b.order);
   const completed = new Set(completedStepOrders);
+  /* Serialized as an object across the server boundary; a Map here because the
+     display functions ask it questions rather than iterate it. */
+  const absorbedBy = new Map(
+    Object.entries(planView.absorbedByStepOrder).map(([order, by]) => [Number(order), by]),
+  );
   const surfaces = planExpectedChange(steps);
   const demands = planFounderDemands(steps, completedStepOrders);
   const evidence = planEvidenceSummary(steps);
@@ -298,8 +311,14 @@ function PlanBody({
           step={step}
           allSteps={steps}
           index={index}
-          display={stepDisplayState(step, firstActionableStep?.order ?? null, completed)}
+          display={stepDisplayState(
+            step,
+            firstActionableStep?.order ?? null,
+            completed,
+            absorbedBy,
+          )}
           done={completed.has(step.order)}
+          coveredBy={absorbedBy.get(step.order) ?? null}
           /* Resolved by the route. Falling back to the stored answer keeps a
              step the route did not resolve reading exactly as it did before,
              rather than blank. */
@@ -366,8 +385,7 @@ function PlanBody({
             <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
           </div>
 
-          {firstActionableStep?.actor === "founder_action" &&
-          firstActionableStep.executionSupport === "founder_acts" ? (
+          {firstActionableStep !== null && isFounderAttestable(firstActionableStep) ? (
             <FounderActionCard
               projectId={projectId}
               actionPlanId={plan.id}
@@ -520,6 +538,7 @@ function FounderActionCard({
   actionPlanId: string;
   step: ActionPlanStep;
 }) {
+  const prompt = attestationPrompt(step);
   const action = attestFounderActionStepAction.bind(null, projectId, actionPlanId, step.id);
   const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
     action,
@@ -530,7 +549,7 @@ function FounderActionCard({
     <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusPill tone="waiting" dot>
-          Your action
+          {prompt.pill}
         </StatusPill>
         <span className="text-fg-muted text-xs">Step {step.order}</span>
       </div>
@@ -538,6 +557,9 @@ function FounderActionCard({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
         <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+        {prompt.lead && (
+          <p className="text-fg-muted text-sm leading-relaxed">{prompt.lead}</p>
+        )}
       </div>
 
       <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
@@ -553,9 +575,7 @@ function FounderActionCard({
               ? "Completion confirmed"
               : "Confirm this is complete"}
         </Button>
-        <p className="text-fg-muted text-xs">
-          This records your confirmation against this exact plan step.
-        </p>
+        <p className="text-fg-muted text-xs">{prompt.footnote}</p>
       </form>
 
       {state && !state.ok && (

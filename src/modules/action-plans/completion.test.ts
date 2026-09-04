@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { fakePlanStep } from "@/modules/execution-contract/test-support";
+import { firstActionableStep } from "./sequence";
 import {
   completedStepsForExecutionRouting,
   completedStepsFromEvidence,
+  isFounderAttestable,
+  satisfiedStepsFromEvidence,
+  absorptionByStepOrder,
+  type AbsorbedStepSatisfaction,
   type AgentStepCompletionEvidence,
   type FounderActionCompletionEvidence,
 } from "./completion";
@@ -32,6 +37,98 @@ function founderActionEvidence(
     ...overrides,
   };
 }
+
+function absorbedEvidence(
+  overrides: Partial<AbsorbedStepSatisfaction> = {},
+): AbsorbedStepSatisfaction {
+  return {
+    executionSpecId: "spec-1",
+    agentExecutionRunId: "run-1",
+    preparedChangeId: "change-1",
+    validationRunId: "validation-1",
+    stepKey: "1-analyse-the-market",
+    stepOrder: 1,
+    absorbedByStepKey: "2-build",
+    absorbedByStepOrder: 2,
+    ...overrides,
+  };
+}
+
+/**
+ * Absorbed is not completed, and the difference has to survive both ways.
+ *
+ * A step a successful run performed inside its own boundary needs nobody to do
+ * it again — offering it as the plan's entry point would be asking a founder to
+ * redo work the agent already did. But it was never carried out as a piece of
+ * work in its own right, and recording it as completed would throw away the
+ * answer to a question a founder can reasonably ask later: was this analysis
+ * done on its own, or did it come free with a build?
+ *
+ * So there are two sets, and these tests pin down that neither leaks into the
+ * other.
+ */
+describe("a step covered by the run that absorbed it", () => {
+  const analysis = fakePlanStep({
+    id: "1-analyse-the-market",
+    order: 1,
+    changeKind: "analysis",
+    executionSupport: "vibe_prepares",
+  });
+  const build = fakePlanStep({ id: "2-build", order: 2, dependsOn: [1] });
+
+  it("stays open while the absorbing step is only planned", () => {
+    // No evidence exists yet, which is the whole of "planned": the store emits
+    // an absorption record only once a run has succeeded, verified and passed
+    // validation. Nothing to filter, because nothing was written.
+    expect([...satisfiedStepsFromEvidence(new Set(), [])]).toEqual([]);
+  });
+
+  it("stays open while the absorbing step is unfinished", () => {
+    // The record exists — a run wrote it — but step 2 is not complete, so the
+    // work it was supposed to establish has not been established.
+    expect([...satisfiedStepsFromEvidence(new Set(), [absorbedEvidence()])]).toEqual([]);
+  });
+
+  it("is skipped once the absorbing step is complete", () => {
+    const satisfied = satisfiedStepsFromEvidence(new Set([2]), [absorbedEvidence()]);
+
+    expect([...satisfied].sort()).toEqual([1, 2]);
+    expect(firstActionableStep([analysis, build], satisfied)).toBeNull();
+  });
+
+  it("is never recorded as completed", () => {
+    // The audit trail is the point. `completedStepsFromEvidence` is asked the
+    // same question with the same evidence and answers only for what ran.
+    const completed = completedStepsFromEvidence(
+      [analysis, build],
+      [],
+      [agentEvidence({ stepKey: build.id, stepOrder: build.order })],
+      [],
+    );
+
+    expect([...completed]).toEqual([2]);
+    expect([...satisfiedStepsFromEvidence(completed, [absorbedEvidence()])].sort()).toEqual([1, 2]);
+  });
+
+  it("names what covered it, so a screen never has to say 'done'", () => {
+    expect([...absorptionByStepOrder(new Set([2]), [absorbedEvidence()])]).toEqual([[1, 2]]);
+  });
+
+  it("names nothing for a step that was genuinely executed as well", () => {
+    // Absorbed and later run on its own is not a contradiction, and the honest
+    // reading is the stronger one: it was executed.
+    expect([...absorptionByStepOrder(new Set([1, 2]), [absorbedEvidence()])]).toEqual([]);
+  });
+
+  it("blocks the plan again if the absorbing step is not complete", () => {
+    // The failure case, stated as sequencing rather than as a set: step 2
+    // depends on step 1, so an unsatisfied step 1 leaves step 1 itself as the
+    // entry point — exactly where the founder was before any run happened.
+    const satisfied = satisfiedStepsFromEvidence(new Set(), [absorbedEvidence()]);
+
+    expect(firstActionableStep([analysis, build], satisfied)?.order).toBe(1);
+  });
+});
 
 describe("Action Plan completion authorities", () => {
   it("combines founder resolution and verified Agent evidence", () => {
@@ -205,6 +302,92 @@ describe("Action Plan completion authorities", () => {
         [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
       ).toEqual([]);
     }
+  });
+});
+
+/**
+ * Which steps a founder may close, and the one this must never grow into.
+ *
+ * The widening exists because a founder's real plan deadlocked on its own
+ * first step: `vibe` + `research`, which `resolveStepExecution` refuses, no
+ * run produces, no founder resolution covers and no attestation reached. It
+ * could be completed by nothing, so `firstActionableStep` returned it forever
+ * and the four steps behind it were unreachable.
+ *
+ * The dangerous direction is the other one, so it gets the most tests: if this
+ * ever admitted a `product_change`, a founder could confirm away the work Vibe
+ * exists to build.
+ */
+describe("which steps a founder may confirm", () => {
+  it("admits real-world work, as it always did", () => {
+    const step = fakePlanStep({
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+    });
+
+    expect(isFounderAttestable(step)).toBe(true);
+  });
+
+  it("admits Vibe's own work that no run could produce", () => {
+    for (const changeKind of ["research", "decision", "analysis", "measurement"] as const) {
+      expect(isFounderAttestable(fakePlanStep({ actor: "vibe", changeKind }))).toBe(true);
+    }
+  });
+
+  it("never admits a product change, whatever the Planner stored about it", () => {
+    /*
+     * The reason the predicate reads `changeKind` and not `executionSupport`.
+     *
+     * `not_yet_supported` is what every agentic step carries too — the registry
+     * has one entry, so it misses nearly all of them. Keying on the stored
+     * support value would have handed the founder a button that closes the
+     * work Vibe was about to do.
+     */
+    for (const executionSupport of [
+      "not_yet_supported",
+      "vibe_executes_now",
+      "vibe_prepares",
+    ] as const) {
+      const step = fakePlanStep({ actor: "vibe", changeKind: "product_change", executionSupport });
+      expect(isFounderAttestable(step)).toBe(false);
+    }
+  });
+
+  it("never admits work that belongs to somebody else", () => {
+    for (const actor of ["founder_decision", "founder_input", "external_party"] as const) {
+      expect(isFounderAttestable(fakePlanStep({ actor, changeKind: "decision" }))).toBe(false);
+    }
+  });
+
+  it("never admits a founder_action the Planner did not classify as one", () => {
+    const step = fakePlanStep({
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "not_yet_supported",
+    });
+
+    expect(isFounderAttestable(step)).toBe(false);
+  });
+
+  it("completes the Vibe step no execution could reach", () => {
+    const step = fakePlanStep({
+      id: "1-research-establish-what-the-billing-route-does",
+      order: 1,
+      actor: "vibe",
+      changeKind: "research",
+      executionSupport: "not_yet_supported",
+    });
+
+    expect([...completedStepsFromEvidence([step], [], [], [])]).toEqual([]);
+    expect([
+      ...completedStepsFromEvidence(
+        [step],
+        [],
+        [],
+        [founderActionEvidence({ stepKey: step.id, stepOrder: step.order })],
+      ),
+    ]).toEqual([1]);
   });
 });
 
