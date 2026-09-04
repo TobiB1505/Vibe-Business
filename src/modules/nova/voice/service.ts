@@ -36,7 +36,7 @@ import { buildNovaVoiceSystemPrompt, renderNovaVoiceUserContent } from "./prompt
  *
  * Nobody, directly. §H.6 of the Nova audit rejects "a call per message, per
  * visit, per founder, with no reuse key and no ledger row that means
- * anything", and [ADR 0084](../../../../docs/decisions/0084-nova-presentation-is-claimed-stored-and-attempted-once.md)
+ * anything", and [ADR 0085](../../../../docs/decisions/0085-nova-presentation-is-claimed-stored-and-attempted-once.md)
  * amends that to five conditions rather than to a yes. This function satisfies
  * exactly one of them — the deterministic fallback. The other four are
  * `store.ts`'s: the identity, the persisted result, the atomic claim, and a

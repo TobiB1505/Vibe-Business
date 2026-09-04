@@ -58,6 +58,8 @@ export type StoredValidationRun = {
   packageManager: SupportedPackageManager;
   /** The directory the commands ran in. `.` for a single-application repository. */
   workspaceRoot: string;
+  /** Where the install ran. The same directory unless a workspace root above it. */
+  installRoot: string;
   preparedCommitSha: string;
   status: ValidationStatus;
   stage: ValidationStage;
@@ -80,7 +82,7 @@ export type StoredValidationRun = {
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
   "validation_depth, validation_depth_policy_version, validation_depth_reason, " +
-  "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, workspace_root, prepared_commit_sha, " +
+  "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, workspace_root, install_root, prepared_commit_sha, " +
   "status, stage, steps, failure_code, failure_detail, source_integrity, artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
@@ -116,6 +118,10 @@ function mapRow(row: Row): StoredValidationRun {
     // Rows written before Stufe 4 have no column value and validated the root,
     // which is what they would say if they could.
     workspaceRoot: (row.workspace_root as string | null) ?? ".",
+    // A row written before the column existed installed where it built, which
+    // is what the single-directory contract meant.
+    installRoot:
+      (row.install_root as string | null) ?? (row.workspace_root as string | null) ?? ".",
     preparedCommitSha: String(row.prepared_commit_sha),
     status: row.status as ValidationStatus,
     stage: row.stage as ValidationStage,
@@ -260,6 +266,7 @@ export async function claimValidationRun(
     packageManager: SupportedPackageManager;
     /** The directory the commands run in. Recorded so a pass says what passed. */
     workspaceRoot: string;
+    installRoot: string;
     preparedCommitSha: string;
     validationIdentity: string;
   },
@@ -280,6 +287,7 @@ export async function claimValidationRun(
       sandbox_provider: params.sandboxProvider,
       package_manager: params.packageManager,
       workspace_root: params.workspaceRoot,
+      install_root: params.installRoot,
       prepared_commit_sha: params.preparedCommitSha,
       validation_identity: params.validationIdentity,
       status: "running",

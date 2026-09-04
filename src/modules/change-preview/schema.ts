@@ -161,6 +161,30 @@ export function previewProfileFor(
  * reason: a stored "this ran fine" must never be reinterpreted under rules it
  * was not checked against (CLAUDE.md rule 65).
  */
+/**
+ * Whether a preview can be started for a project, and when not, which of the
+ * two reasons applies.
+ *
+ * ## Why two reasons and not a boolean
+ *
+ * They are true of different things and a founder can act on only one of them.
+ * `no_dev_server` is a fact about the framework, and waiting will not change
+ * it. `repository_not_ready` is a fact about Vibe's *read* of the repository —
+ * an analysis older than the check, a missing lockfile, an unanswered question
+ * about which app — and every one of those has a move that fixes it.
+ * `workspace_not_previewable` is a fact about neither: the framework is fine
+ * and the read is fine, and what Vibe will not do is guess where a workspace
+ * install put the binary.
+ *
+ * Collapsing them would put the framework sentence in front of a founder whose
+ * framework is fine, which is the failure this whole area keeps repairing.
+ */
+export type PreviewAvailability =
+  | "available"
+  | "no_dev_server"
+  | "repository_not_ready"
+  | "workspace_not_previewable";
+
 export const PREVIEW_POLICY_VERSION = "preview-policy-v4" as const;
 
 export const PREVIEW_PROVIDERS = ["vercel_sandbox"] as const;
@@ -228,6 +252,19 @@ export const PREVIEW_FAILURE_CODES = [
   "preview_change_not_prepared",
   /** This repository's framework has no preview profile. */
   "preview_not_supported",
+  /**
+   * The application is installed from a workspace root above it (Stufe 8).
+   *
+   * Held rather than attempted. A preview invokes the framework binary by
+   * path, and where a workspace install puts that binary differs by package
+   * manager — pnpm links it beside the application, npm and bun hoist it to
+   * the root. Vibe would be guessing, and a wrong guess is a founder who
+   * confirmed a public URL for a server that never starts.
+   *
+   * Validation and merge are unaffected: both go through the package manager,
+   * which resolves its own binaries.
+   */
+  "preview_workspace_unsupported",
   /**
    * The user did not explicitly confirm public exposure (§8).
    *

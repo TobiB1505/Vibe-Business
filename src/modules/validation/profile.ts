@@ -1,5 +1,6 @@
 import type {
   BuildTarget,
+  BuildTargetLockfile,
   RepositoryIntelligenceSnapshot,
 } from "@/modules/repository-intelligence/schema";
 import {
@@ -55,6 +56,15 @@ import {
 export type WorkspaceCandidate = {
   /** Repository-relative directory the commands would run in. */
   workspaceRoot: string;
+  /**
+   * Repository-relative directory the install would run in.
+   *
+   * Equal to `workspaceRoot` for an application with its own lockfile, and the
+   * workspace root above it otherwise. Carried on the candidate rather than
+   * re-derived after the choice, so the answer a founder gives resolves to the
+   * exact pair Vibe computed when it offered it.
+   */
+  installRoot: string;
   packageManager: SupportedPackageManager;
   /** Framework ids from this application's own manifest. */
   frameworks: readonly string[];
@@ -69,6 +79,16 @@ export type ProfileResolution =
       packageManager: SupportedPackageManager;
       /** Repository-relative directory the commands run in. `.` for a single-app repo. */
       workspaceRoot: string;
+      /**
+       * Repository-relative directory the install runs in.
+       *
+       * The same directory for an application with its own lockfile — every
+       * repository admitted before workspaces were — and an ancestor for an
+       * application installed from a workspace root. Separate from
+       * `workspaceRoot` because they are separate facts, and because a pass
+       * that does not record where it installed does not say what it checked.
+       */
+      installRoot: string;
       /** This application's own frameworks — never the repository-wide union. */
       frameworks: readonly string[];
       /**
@@ -95,25 +115,88 @@ export type ProfileResolution =
       detail?: { workspaceRoot: string };
     };
 
-/**
- * A directory is only installable if the lockfile is its own.
- *
- * An ancestor's lockfile means a workspace install, and that means something
- * different in every package manager: `npm ci` from a subdirectory fails
- * outright, and `pnpm install --frozen-lockfile` installs the *entire*
- * workspace — a larger promise than "this application builds", made without
- * saying so. Refusing is the honest answer until that promise is designed.
- */
-function installerFor(target: BuildTarget): SupportedPackageManager | null {
-  if (!target.lockfile?.inTargetDirectory) return null;
+/** The directory a repository-relative path sits in. `"."` for the root. */
+function directoryOf(path: string): string {
+  const index = path.lastIndexOf("/");
+  return index === -1 ? "." : path.slice(0, index);
+}
 
-  const { packageManager } = target.lockfile;
-  // `yarn_classic` is the one lockfile deliberately absent from the union: Yarn
-  // 1 shares the lockfile name with Berry and does not share
-  // `--frozen-lockfile`'s meaning. It is refused by name below rather than
-  // installed with a flag that means something weaker than it looks.
-  return (PACKAGE_MANAGERS as readonly string[]).includes(packageManager)
-    ? (packageManager as SupportedPackageManager)
+/** Whether `ancestor` contains `directory`, itself included. */
+function contains(ancestor: string, directory: string): boolean {
+  if (ancestor === ".") return true;
+  return directory === ancestor || directory.startsWith(`${ancestor}/`);
+}
+
+/**
+ * Which directories are workspace roots an install may run from.
+ *
+ * Just the declaration — and the reason that is enough is worth writing down,
+ * because a second condition was written here first and turned out to be dead.
+ * It required a further manifest below the declaring directory, on the
+ * argument that a declaration alone over-claims. It does over-claim, but not
+ * *here*: this set is consulted only for an application whose lockfile is an
+ * ancestor's, and such an application is itself a manifest below that
+ * ancestor. The condition was true every time it was evaluated.
+ *
+ * So the over-claim is fixed where it lives instead. `declaresWorkspaces` now
+ * reads `pnpm-workspace.yaml`'s `packages:` key rather than the file's
+ * existence (`ANALYZER_VERSION` v7), which is what makes this one line an
+ * honest test rather than a hopeful one.
+ */
+function workspaceRootsIn(targets: readonly BuildTarget[]): ReadonlySet<string> {
+  return new Set(
+    targets.filter((target) => target.declaresWorkspaces).map((target) => target.directory),
+  );
+}
+
+/**
+ * Where this application would be installed from, or null if nowhere.
+ *
+ * Two shapes resolve. A lockfile in the application's own directory installs
+ * there, which is every repository admitted before this existed. A lockfile at
+ * a **declared workspace root above it** installs there instead, and the
+ * application's own directory is where everything after install runs.
+ *
+ * ADR 0078 refused the second shape, on the argument that `npm ci` from a
+ * subdirectory fails and `pnpm install --frozen-lockfile` installs the whole
+ * workspace — a larger promise made without saying so. Both halves are still
+ * true; what changed is that the promise is now *said*, because the two
+ * directories are separate values that reach the transcript, the identity and
+ * the database. Install happens at the workspace root because that is where a
+ * workspace install happens; nothing pretends otherwise.
+ */
+function applicableLockfile(
+  target: BuildTarget,
+  workspaceRoots: ReadonlySet<string>,
+): { lockfile: BuildTargetLockfile; installRoot: string } | null {
+  const lockfile = target.lockfile;
+  if (!lockfile) return null;
+
+  if (lockfile.inTargetDirectory) return { lockfile, installRoot: target.directory };
+
+  const installRoot = directoryOf(lockfile.path);
+
+  // Checked here as well as on the target's own directory. `installRoot` is
+  // derived from a stored path and becomes a sandbox working directory, so it
+  // gets the same treatment `workspaceRoot` gets (rule 25).
+  if (!isSafeDirectory(installRoot)) return null;
+  if (!workspaceRoots.has(installRoot)) return null;
+  if (!contains(installRoot, target.directory)) return null;
+
+  return { lockfile, installRoot };
+}
+
+/**
+ * The installer for an applicable lockfile, or null when none can honour it.
+ *
+ * `yarn_classic` is the one lockfile deliberately absent from the union: Yarn 1
+ * shares the lockfile name with Berry and does not share `--frozen-lockfile`'s
+ * meaning. It is refused by name rather than installed with a flag that means
+ * something weaker than it looks.
+ */
+function installerFor(lockfile: BuildTargetLockfile): SupportedPackageManager | null {
+  return (PACKAGE_MANAGERS as readonly string[]).includes(lockfile.packageManager)
+    ? (lockfile.packageManager as SupportedPackageManager)
     : null;
 }
 
@@ -147,9 +230,16 @@ export function resolveValidationProfile(
   const buildable = targets.filter((target) => target.buildScript);
   if (buildable.length === 0) return { supported: false, reason: "no_build_script" };
 
-  const installable = buildable.flatMap((target) => {
-    const packageManager = installerFor(target);
-    return packageManager === null ? [] : [{ target, packageManager }];
+  const workspaceRoots = workspaceRootsIn(targets);
+
+  const applicable = buildable.flatMap((target) => {
+    const found = applicableLockfile(target, workspaceRoots);
+    return found === null ? [] : [{ target, ...found }];
+  });
+
+  const installable = applicable.flatMap(({ target, lockfile, installRoot }) => {
+    const packageManager = installerFor(lockfile);
+    return packageManager === null ? [] : [{ target, packageManager, installRoot }];
   });
 
   if (installable.length === 0) {
@@ -166,7 +256,15 @@ export function resolveValidationProfile(
      * The reason has to distinguish "commit a lockfile" from "this is Yarn 1,
      * and Yarn 3+ works".
      */
-    const unhonourable = buildable.some((target) => target.lockfile?.inTargetDirectory);
+    /*
+     * A lockfile that applies and cannot be honoured — Yarn 1 — is a different
+     * sentence from no lockfile at all, and `applicable` is what decides it now
+     * rather than `inTargetDirectory`. A workspace whose root carries a
+     * `yarn.lock` with no `.yarnrc.yml` is the case that made the difference
+     * visible: every application under it has a lockfile, none is its own, and
+     * "commit a lockfile" would be advice about a file already committed.
+     */
+    const unhonourable = applicable.length > 0;
     return {
       supported: false,
       reason: unhonourable ? "package_manager_unsupported" : "lockfile_missing",
@@ -185,8 +283,9 @@ export function resolveValidationProfile(
     return {
       supported: false,
       reason: "workspace_choice_required",
-      candidates: installable.map(({ target, packageManager }) => ({
+      candidates: installable.map(({ target, packageManager, installRoot }) => ({
         workspaceRoot: target.directory,
+        installRoot,
         packageManager,
         frameworks: target.frameworks,
         moduleLinker: target.moduleLinker,
@@ -194,13 +293,14 @@ export function resolveValidationProfile(
     };
   }
 
-  const [{ target, packageManager }] = installable;
+  const [{ target, packageManager, installRoot }] = installable;
 
   return {
     supported: true,
     profile: CURRENT_VALIDATION_PROFILE,
     packageManager,
     workspaceRoot: target.directory,
+    installRoot,
     frameworks: target.frameworks,
     moduleLinker: target.moduleLinker,
   };

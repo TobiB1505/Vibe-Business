@@ -183,7 +183,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
    *
    * A read and nothing else: `readNovaAuditVoice` takes no provider, and the
    * message it resolves was written by the durable step that completed the
-   * audit (ADR 0084). A render that could generate would be the per-visit
+   * audit (ADR 0085). A render that could generate would be the per-visit
    * spend §M of the Nova audit refuses — so the only thing this page can do is
    * look up an identity and find a sentence or not.
    *

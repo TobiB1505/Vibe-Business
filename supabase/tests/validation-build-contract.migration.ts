@@ -223,3 +223,68 @@ describe("the package manager a run records", () => {
     );
   });
 });
+
+/**
+ * `install_root` — where the dependencies came from (Stufe 8).
+ *
+ * A second directory on the same row, and the same class of value: it becomes
+ * a sandbox working directory, so the database holds the shape rule rather than
+ * trusting that the writer checked. Tested separately from `workspace_root`
+ * rather than by analogy, because "the other column has a constraint" is not
+ * evidence that this one does.
+ */
+describe("the directory a run installed from", () => {
+  /** One insert naming both directories. */
+  function insertWithInstallRoot(workspaceRoot: string, installRoot: string): string {
+    return `
+      insert into public.validation_runs
+        (project_id, user_id, prepared_change_id, operation_run_id, validation_profile,
+         validation_profile_version, sandbox_policy_version, sandbox_provider, package_manager,
+         prepared_commit_sha, status, stage, validation_identity, workspace_root, install_root)
+      values ('${projectId}', '${userId}', '${preparedChangeId}', '${operationRunId}',
+              'node_build_v1', 'v1', 'v1', 'vercel_sandbox', 'pnpm', '${SHA}', 'running',
+              'provisioning', md5(random()::text) || md5(random()::text),
+              '${workspaceRoot}', '${installRoot}');
+    `;
+  }
+
+  it("defaults to the root, which is what every row written before it did", () => {
+    // Not a placeholder. Under the single-directory contract install ran where
+    // the build ran, so `.` is the truth for the sixteen historical rows
+    // rather than a value chosen to satisfy `not null`.
+    db.sql(insertRun("node_build_v1", "."));
+    const roots = db.sql(
+      `select distinct install_root from public.validation_runs where install_root = '.';`,
+    );
+    expect(roots).toContain(".");
+  });
+
+  it("accepts a workspace root above the application", () => {
+    // The shape the whole change exists for: build in `apps/web`, install at
+    // the root, on one row that says both.
+    expect(() => db.sql(insertWithInstallRoot("apps/web", "."))).not.toThrow();
+  });
+
+  it.each(["..", "../etc", "apps/../..", "/etc", "apps//web", "", " ", "apps/"])(
+    "refuses %s",
+    (installRoot) => {
+      expect(() => db.sql(insertWithInstallRoot("apps/web", installRoot))).toThrow(
+        /validation_runs_install_root_shape/,
+      );
+    },
+  );
+
+  it("refuses null, so a row always says where it installed", () => {
+    expect(() =>
+      db.sql(`
+        insert into public.validation_runs
+          (project_id, user_id, prepared_change_id, operation_run_id, validation_profile,
+           validation_profile_version, sandbox_policy_version, sandbox_provider, package_manager,
+           prepared_commit_sha, status, stage, validation_identity, install_root)
+        values ('${projectId}', '${userId}', '${preparedChangeId}', '${operationRunId}',
+                'node_build_v1', 'v1', 'v1', 'vercel_sandbox', 'pnpm', '${SHA}', 'running',
+                'provisioning', md5(random()::text) || md5(random()::text), null);
+      `),
+    ).toThrow(/null value in column "install_root"/);
+  });
+});

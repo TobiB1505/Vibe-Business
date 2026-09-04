@@ -27,7 +27,7 @@ import type { NovaVoiceClaim } from "./store";
  *
  * Every test here is about the second time something happens: the second
  * render, the second tab, the refresh after a failure. The first call is
- * uninteresting — it is the one that is supposed to cost money. What ADR 0084
+ * uninteresting — it is the one that is supposed to cost money. What ADR 0085
  * is for is everything after it.
  */
 
@@ -132,7 +132,7 @@ describe("a read resolves an identity and never spends", () => {
   });
 
   /**
-   * The structural half of ADR 0084's fifth condition. A render cannot reach a
+   * The structural half of ADR 0085's fifth condition. A render cannot reach a
    * model from here because there is no model to reach: the read takes a
    * client and two strings, and this module's only provider import is a type.
    * Asserted against the source because a value import is the edit that would
@@ -166,7 +166,7 @@ describe("a read resolves an identity and never spends", () => {
   /**
    * A claim that was never resolved — a crash between the claim and the
    * outcome — falls through to the template forever rather than being paid for
-   * again. That is the trade ADR 0084 makes on purpose: the failure mode of
+   * again. That is the trade ADR 0085 makes on purpose: the failure mode of
    * releasing stale claims is a duplicate charge.
    */
   it("never regenerates an abandoned claim", async () => {

@@ -18,7 +18,7 @@ import type { NovaVoiceOutcome } from "@/modules/nova/voice/service";
  *
  * ## Why here and nowhere else
  *
- * [ADR 0084](../../../docs/decisions/0084-nova-presentation-is-claimed-stored-and-attempted-once.md)
+ * [ADR 0085](../../../docs/decisions/0085-nova-presentation-is-claimed-stored-and-attempted-once.md)
  * permits presentation inference under five conditions and deliberately left
  * open *which* caller satisfies them. This is that caller, and it is not a
  * free choice — every one of the five is already true at the tail of a durable

@@ -1,5 +1,6 @@
 import {
   isPreviewExpired,
+  type PreviewAvailability,
   type PreviewFailureCode,
   type PreviewSession,
   type PreviewStage,
@@ -40,6 +41,32 @@ import {
 export type PreviewCardState =
   /** The change has no commit to serve. */
   | "not_available"
+  /**
+   * No development server exists for this application's frameworks.
+   *
+   * Distinct from `not_available`, and the distinction is what a founder can do
+   * about it: a change with no commit gets one when the agent finishes, while
+   * this one is a property of the repository that will not change by waiting.
+   */
+  | "not_supported"
+  /**
+   * Vibe's read of the repository does not currently resolve an application to
+   * serve — an outdated analysis, a missing lockfile, an unanswered question
+   * about which app.
+   *
+   * Separate from `not_supported` because the founder's move is different and
+   * the framework sentence would be false: nothing is wrong with the framework,
+   * Vibe simply cannot say yet which directory it would run in.
+   */
+  | "repository_not_ready"
+  /**
+   * The application installs from a workspace root above it (Stufe 8).
+   *
+   * A third state rather than a shade of the other two, because it is a fact
+   * about neither the framework nor the scan: both are fine. It is the one
+   * refusal here that is Vibe declining to guess.
+   */
+  | "workspace_not_previewable"
   | "ready_to_start"
   | "starting"
   | "running"
@@ -92,6 +119,20 @@ export type PreviewCardInput = {
    * preview strictly later than a five-minute check (Sprint 0114).
    */
   prepared: boolean;
+  /**
+   * Whether a preview can start at all, and if not which of the two reasons.
+   *
+   * A project-level fact, resolved once by the caller rather than here: it
+   * reads the repository snapshot, and asking per card is what the read-count
+   * test on the workspace list measures.
+   *
+   * Without it this card offered `ready_to_start` for every prepared change in
+   * every project — the founder clicked, confirmed publishing an unlisted
+   * public URL, and only then learned no server exists. The confirmation is
+   * load-bearing rather than a courtesy, which is exactly why asking for it on
+   * behalf of something that cannot start is the wrong order.
+   */
+  availability: PreviewAvailability;
   /** The most recent preview session for this change, in any state. */
   session: PreviewSession | null;
   /** Safe copy for `session.failureCode`, resolved by the caller. */
@@ -158,6 +199,21 @@ export function buildPreviewCard(input: PreviewCardInput, now: Date = new Date()
 
   const terminal = terminalSession(input, now);
   if (terminal) return terminal;
+
+  /*
+   * Checked after the session states, deliberately.
+   *
+   * A session that ran is a fact, and a repository that later loses its server
+   * — a framework removed, an application restructured — does not make the
+   * session that already ran stop having run. Only the *offer* is withdrawn.
+   */
+  if (input.availability === "no_dev_server") return { ...empty, state: "not_supported" };
+  if (input.availability === "repository_not_ready") {
+    return { ...empty, state: "repository_not_ready" };
+  }
+  if (input.availability === "workspace_not_previewable") {
+    return { ...empty, state: "workspace_not_previewable" };
+  }
 
   return { ...empty, state: "ready_to_start" };
 }

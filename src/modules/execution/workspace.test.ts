@@ -3,7 +3,7 @@ import { approvalBlockMessage } from "@/modules/approvals/messages";
 import { getApprovalCard } from "@/modules/approvals/service";
 import { getBusinessImpactCard } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
-import { getPreviewCard } from "@/modules/change-preview/service";
+import { getPreviewCard, previewAvailability } from "@/modules/change-preview/service";
 import {
   FakeDatabase,
   fakeSupabase,
@@ -449,6 +449,10 @@ describe("batching did not change the answer", () => {
         await getPreviewCard(client(), {
           ...scope,
           prepared: true,
+          // Asked, not asserted. This test's whole claim is that the batched
+          // path and the direct one answer alike, and a hardcoded value here
+          // would compare one path against a constant instead.
+          availability: await previewAvailability(client(), PROJECT),
           resolveFailureMessage: (code) =>
             OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
         }),

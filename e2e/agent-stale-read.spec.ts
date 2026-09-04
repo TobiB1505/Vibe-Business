@@ -24,8 +24,12 @@ test.describe("a repository Vibe last read under an older analysis", () => {
     await expect(notice).toBeVisible();
     await expect(notice).toContainText("predates this check");
 
+    // Built by `projectSectionHref`, in the fixture as on the real page — so
+    // the segment is `product` rather than the section id, and this assertion
+    // fails if the canonical href ever moves. A literal typed here would have
+    // gone on passing against a route that no longer exists.
     const scan = page.getByTestId("agent-stale-read-scan");
-    await expect(scan).toHaveAttribute("href", /my-product#product-scan$/);
+    await expect(scan).toHaveAttribute("href", /\/product#product-scan$/);
   });
 
   test("says the founder starts it, and that it is free", async ({ page }) => {

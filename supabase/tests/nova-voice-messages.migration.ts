@@ -4,7 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startCluster, type Cluster } from "./harness";
 
 /**
- * The claim that makes Nova's voice attempted once (ADR 0084).
+ * The claim that makes Nova's voice attempted once (ADR 0085).
  *
  * ## Why this needs a real PostgreSQL
  *

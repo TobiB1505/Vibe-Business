@@ -191,7 +191,7 @@ export function detectBuildTargets(
       frameworks: frameworksForDependencies(parsed.allDependencies),
       lockfile,
       declaresWorkspaces:
-        parsed.workspaces.length > 0 || context.hasPath(within(directory, "pnpm-workspace.yaml")),
+        parsed.workspaces.length > 0 || context.pnpmWorkspacePackages.has(directory),
       moduleLinker: moduleLinkerFor(context, directory, lockfile),
     };
   });

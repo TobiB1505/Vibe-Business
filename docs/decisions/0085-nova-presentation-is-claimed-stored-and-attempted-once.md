@@ -1,9 +1,9 @@
-# 0084 - Nova presentation inference is claimed, stored, and attempted once
+# 0085 - Nova presentation inference is claimed, stored, and attempted once
 
 Status: Accepted
 Date: 2026-09-03
 
-Amends §M of [the Nova architecture audit](../audits/2026-09-03-nova-architecture-audit/README.md), which lists "a Nova copy LLM call per message" under **What NOT to build**. Builds on [ADR 0082](0082-nova-voice-is-measured-not-argued.md), which decided the model and the prompt but not when a call may be made. Introduces one table, `nova_voice_messages`. Changes no execution authority, no approval path, and nothing about the four reasoning operations.
+Amends §M of [the Nova architecture audit](../audits/2026-09-03-nova-architecture-audit/README.md), which lists "a Nova copy LLM call per message" under **What NOT to build**. Builds on [ADR 0083](0083-nova-voice-is-measured-not-argued.md), which decided the model and the prompt but not when a call may be made. Introduces one table, `nova_voice_messages`. Changes no execution authority, no approval path, and nothing about the four reasoning operations.
 
 ## Context
 

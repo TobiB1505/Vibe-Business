@@ -101,6 +101,15 @@ export type ValidationTarget = {
   sourceRoot: string;
   workspaceRoot: string;
   /**
+   * Where the install runs. `workspaceRoot` unless a workspace root above it.
+   *
+   * The two are separate because a workspace install happens where the lockfile
+   * is and everything after it happens where the application is. Both come
+   * from the claimed run rather than from a live resolution, so a founder
+   * answering "which app?" mid-run cannot move one without the other.
+   */
+  installRoot: string;
+  /**
    * Path + sha256 of every file Vibe prepared, for integrity checking (§29).
    *
    * A `null` hash is a *deletion*: the claim being checked is that the path
@@ -159,16 +168,34 @@ export const SANDBOX_ENVIRONMENT: Readonly<Record<string, string>> = Object.free
  */
 const BUILD_IDENTITY_FILES: readonly string[] = [
   "package.json",
+  "next.config.ts",
+  "next.config.js",
+  "next.config.mjs",
+  "tsconfig.json",
+];
+
+/**
+ * Build-identity files that live beside the **lockfile**, not beside the app.
+ *
+ * Split out in Stufe 8, and the split is the fix rather than tidying. These
+ * were checked relative to `workspaceRoot` along with everything above, which
+ * was right while the two directories were always the same one. For an
+ * application inside a workspace the lockfile is at the install root, so under
+ * the old list it was absent on both sides — and absent on both sides is
+ * treated as *agreement* and skipped, not as a gap.
+ *
+ * So the one file that decides which code gets installed would have gone
+ * unchecked, and nothing would have said so: not a failure, not
+ * `buildIdentityFilesUnverified`, nothing. That is the same hole the v1 → v2
+ * policy bump closed for an oversized lockfile, reopened by a directory.
+ */
+const INSTALL_IDENTITY_FILES: readonly string[] = [
   "pnpm-lock.yaml",
   "package-lock.json",
   "npm-shrinkwrap.json",
   "yarn.lock",
   "bun.lock",
   "bun.lockb",
-  "next.config.ts",
-  "next.config.js",
-  "next.config.mjs",
-  "tsconfig.json",
 ];
 
 /**
@@ -550,14 +577,21 @@ export async function verifySource(
     // without acquiring the source a second time (Sprint 10B §11).
     const digests: Record<string, string> = {};
 
-    for (const path of BUILD_IDENTITY_FILES) {
+    const identityFiles: readonly { path: string; root: string }[] = [
+      ...BUILD_IDENTITY_FILES.map((path) => ({ path, root: target.workspaceRoot })),
+      // Followed where they actually are. Equal to the above for an
+      // application with its own lockfile, which is why this stayed invisible.
+      ...INSTALL_IDENTITY_FILES.map((path) => ({ path, root: target.installRoot })),
+    ];
+
+    for (const { path, root } of identityFiles) {
       const onDisk = await readWhole(
         sandbox,
-        inSandbox(target.sourceRoot, target.workspaceRoot, path),
+        inSandbox(target.sourceRoot, root, path),
         SANDBOX_BUDGETS.maxBuildIdentityFileBytes,
       );
       const atCommit = await manifest.getTextFile(
-        inRepository(target.workspaceRoot, path),
+        inRepository(root, path),
         target.preparedCommitSha,
         SANDBOX_BUDGETS.maxBuildIdentityFileBytes,
       );
@@ -595,29 +629,59 @@ export async function verifySource(
       buildIdentityDigests: digests,
     };
 
-    // On this provider there is no `.git` to remove, so this is defence in
-    // depth rather than the primary control — and it is kept precisely because
-    // that is a fact about *this* provider and image, not a guarantee. A future
-    // provider that does leave a checkout would put a credential-bearing remote
-    // on disk, and this step is what stops it reaching repository code (§7).
-    await sandbox.run({
-      command: { command: "rm", args: ["-rf", ".git"] },
-      cwd: workdir,
-      timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
-    });
+    /*
+     * On this provider there is no `.git` to remove, so this is defence in
+     * depth rather than the primary control — and it is kept precisely because
+     * that is a fact about *this* provider and image, not a guarantee. A future
+     * provider that does leave a checkout would put a credential-bearing remote
+     * on disk, and this step is what stops it reaching repository code (§7).
+     *
+     * ## Both roots, since Stufe 8 — and this was already wrong
+     *
+     * A clone puts `.git` at the **clone root**, which is `sourceRoot`. This
+     * removed it from `workspaceRoot` and then read `workspaceRoot/.git/config`
+     * back, so for any application not at the repository root it deleted
+     * nothing and then confirmed the absence of a file that was never going to
+     * be there — while the real credential store sat one or more directories
+     * up. A control that verifies the wrong path reports success by
+     * construction, which is worse than not having it.
+     *
+     * That reached HEAD with Stufe 4, when `workspaceRoot` stopped always
+     * being `"."`. It has never been exercised: every stored run to date is a
+     * single-application repository at the root, where the two paths are the
+     * same one. Rule 63 asks for absence to be verified rather than assumed,
+     * and a verification aimed at the wrong directory is an assumption wearing
+     * a check's clothes.
+     *
+     * Both roots are now cleared and both are read back — the clone root
+     * because that is where a clone puts it, and the application because a
+     * nested checkout (a submodule) would put one there too. De-duplicated, so
+     * the ordinary single-application case still does exactly one of each.
+     */
+    const credentialRoots = [...new Set([".", target.workspaceRoot])];
 
-    // Verified, not assumed. If the credential store still exists, refuse to
-    // run repository code at all rather than hope.
-    const gitConfig = await sandbox.readFile({
-      path: inSandbox(target.sourceRoot, target.workspaceRoot, ".git/config"),
-      maxBytes: 4096,
-    });
-    if (gitConfig !== null) {
-      return fail(
-        "credential_scrub_failed",
-        "the git credential store survived removal",
-        sourceIntegrity,
-      );
+    for (const root of credentialRoots) {
+      await sandbox.run({
+        command: { command: "rm", args: ["-rf", ".git"] },
+        cwd: inSandbox(target.sourceRoot, root),
+        timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
+      });
+    }
+
+    // Verified, not assumed. If the credential store still exists anywhere it
+    // was cleared from, refuse to run repository code at all rather than hope.
+    for (const root of credentialRoots) {
+      const gitConfig = await sandbox.readFile({
+        path: inSandbox(target.sourceRoot, root, ".git/config"),
+        maxBytes: 4096,
+      });
+      if (gitConfig !== null) {
+        return fail(
+          "credential_scrub_failed",
+          "the git credential store survived removal",
+          sourceIntegrity,
+        );
+      }
     }
 
     return { ok: true, sourceIntegrity, runtime: sandbox.runtime };
@@ -734,11 +798,26 @@ export async function runCheckPhase(
     const workdir = inSandbox(target.sourceRoot, target.workspaceRoot);
 
     if (phase === "install") {
+      /*
+       * Install runs where the lockfile is, which is not always where the
+       * build runs (Stufe 8).
+       *
+       * For an application with its own lockfile the two are the same
+       * directory and nothing below changes. For one inside a workspace they
+       * differ by design: `pnpm install --frozen-lockfile` installs the
+       * workspace from its root, and running it in `apps/web` would either
+       * fail or install something nobody committed.
+       *
+       * Both values come from the claimed run, so this cannot drift from the
+       * identity the pass will claim.
+       */
+      const installDir = inSandbox(target.sourceRoot, target.installRoot);
+
       const expected = LOCKFILES[target.packageManager];
       const found = await Promise.all(
         expected.map((basename) =>
           sandbox.readFile({
-            path: inSandbox(target.sourceRoot, target.workspaceRoot, basename),
+            path: inSandbox(target.sourceRoot, target.installRoot, basename),
             maxBytes: 1024,
           }),
         ),
@@ -759,7 +838,7 @@ export async function runCheckPhase(
 
       const installResult = await sandbox.run({
         command: entry.command,
-        cwd: workdir,
+        cwd: installDir,
         timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
       });
       const recorded = stepResult(entry.command, installResult);

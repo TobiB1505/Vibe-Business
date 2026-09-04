@@ -9,6 +9,7 @@ import {
   healthySandboxFiles,
   runValidationPhases,
   type FakeSandboxOptions,
+  type FakeSandboxProvider,
 } from "./test-support";
 
 /**
@@ -1012,5 +1013,151 @@ describe("the timeout model after the durable-phase refactor (§8)", () => {
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_lost" });
     expect(outcome.cleanup).toBe("not_provisioned");
+  });
+});
+
+/*
+ * Where each command runs, once install and build stop sharing a directory.
+ *
+ * Under ADR 0078 this question could not be asked: a repository was admitted
+ * only when its lockfile sat beside the manifest declaring `build`, so there
+ * was one directory and `cwd` was one value. An application inside a workspace
+ * has two, and getting them the wrong way round is not a visible failure — it
+ * is an install that resolves nothing, or a build against a dependency tree
+ * nobody committed.
+ */
+describe("a workspace install runs where the lockfile is", () => {
+  function workspaceTarget() {
+    return fakeValidationTarget({ workspaceRoot: "apps/web", installRoot: "." });
+  }
+
+  /*
+   * The workspace laid out the way a provider checkout has it: the lockfile at
+   * the clone root, the manifest under the application. The application's
+   * manifest is the one `readPlan` reads, which is the point — the scripts
+   * belong to the app and the dependencies belong to the workspace.
+   */
+  function workspaceProvider() {
+    return setup({
+      files: healthySandboxFiles({
+        "product/package.json": null,
+        "product/apps/web/package.json": JSON.stringify({
+          name: "web",
+          scripts: { build: "next build", test: "vitest run", typecheck: "tsc --noEmit" },
+        }),
+      }),
+    });
+  }
+
+  function cwdOf(provider: FakeSandboxProvider, contains: string): string[] {
+    return provider.events
+      .filter((event) => event.kind === "command" && event.command.includes(contains))
+      .map((event) => (event.kind === "command" ? event.cwd : ""));
+  }
+
+  it("installs at the workspace root and builds in the application", async () => {
+    const provider = workspaceProvider();
+
+    await runValidationPhases(provider, noManifest, workspaceTarget());
+
+    // `sourceRoot` is `product`, so the root is `product` and the application
+    // is `product/apps/web`. Asserted as full paths rather than suffixes: half
+    // of this bug is a path that looks right and is one level off.
+    expect(cwdOf(provider, "install")).toEqual(["product"]);
+    expect(cwdOf(provider, "run build")).toEqual(["product/apps/web"]);
+  });
+
+  it("looks for the lockfile where it would install, not where it builds", async () => {
+    /*
+     * The check that refuses before the network opens. Reading it under the
+     * application would report `lockfile_missing` for a workspace whose
+     * lockfile is exactly where it belongs — a refusal aimed at a founder who
+     * has nothing to fix.
+     */
+    const provider = workspaceProvider();
+
+    await runValidationPhases(provider, noManifest, workspaceTarget());
+
+    const lockfileReads = provider.events
+      .filter((event) => event.kind === "read" && event.path.includes("lock"))
+      .map((event) => (event.kind === "read" ? event.path : ""));
+
+    // The directory, not the basename: every lockfile candidate is probed, and
+    // what matters is that all of them are probed at the install root.
+    expect(lockfileReads.length).toBeGreaterThan(0);
+    for (const path of lockfileReads) {
+      expect(path.startsWith("product/apps/web/")).toBe(false);
+      expect(path.split("/").slice(0, -1).join("/")).toBe("product");
+    }
+  });
+
+  it("keeps both in the same directory when the application owns its lockfile", async () => {
+    // The shape every repository admitted before workspaces had, asserted so a
+    // refactor cannot make the single-application case take the split path.
+    const provider = setup();
+
+    await runValidationPhases(provider, noManifest, fakeValidationTarget());
+
+    expect(cwdOf(provider, "install")).toEqual(["product"]);
+    expect(cwdOf(provider, "run build")).toEqual(["product"]);
+  });
+});
+
+/*
+ * Where the source-acquisition credential is destroyed, and where that is
+ * checked.
+ *
+ * Rule 63 asks for absence to be verified rather than assumed. A clone puts
+ * `.git` at the clone root; this removed it from the *application* and then
+ * read the application's path back, so for any application not at the
+ * repository root it deleted nothing and confirmed the absence of a file that
+ * was never going to be there. A control aimed at the wrong path reports
+ * success by construction.
+ *
+ * Reached HEAD with Stufe 4, when `workspaceRoot` stopped always being `"."`,
+ * and never exercised: every stored run is a root application, where the two
+ * paths coincide.
+ */
+describe("the credential store is cleared where a clone puts it", () => {
+  it("clears and verifies the clone root, not only the application", async () => {
+    const provider = setup({
+      files: healthySandboxFiles({
+        "product/package.json": null,
+        "product/frontend/package.json": JSON.stringify({
+          name: "web",
+          scripts: { build: "next build" },
+        }),
+      }),
+    });
+
+    await runValidationPhases(
+      provider,
+      noManifest,
+      fakeValidationTarget({ workspaceRoot: "frontend" }),
+    );
+
+    const scrubbed = provider.events
+      .filter((event) => event.kind === "command" && event.command === "rm -rf .git")
+      .map((event) => (event.kind === "command" ? event.cwd : ""));
+    const verified = provider.events
+      .filter((event) => event.kind === "read" && event.path.endsWith(".git/config"))
+      .map((event) => (event.kind === "read" ? event.path : ""));
+
+    expect(scrubbed).toContain("product");
+    expect(verified).toContain("product/.git/config");
+  });
+
+  it("still clears exactly one directory for an application at the root", async () => {
+    // De-duplicated rather than doubled: the ordinary case must not pay for
+    // the subdirectory case with a second removal of the same directory.
+    const provider = setup();
+
+    await runValidationPhases(provider, noManifest, fakeValidationTarget());
+
+    const scrubbed = provider.events.filter(
+      (event) => event.kind === "command" && event.command === "rm -rf .git",
+    );
+
+    expect(scrubbed).toHaveLength(1);
   });
 });

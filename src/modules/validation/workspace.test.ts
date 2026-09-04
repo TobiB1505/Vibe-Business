@@ -16,6 +16,9 @@ import { selectValidationTarget } from "./workspace";
 function candidate(overrides: Partial<WorkspaceCandidate> = {}): WorkspaceCandidate {
   return {
     workspaceRoot: "apps/web",
+    // The workspace shape, because it is the one the choice screen now has
+    // real cases for: the lockfile is the root's and the application is not.
+    installRoot: ".",
     packageManager: "pnpm",
     frameworks: ["nextjs"],
     moduleLinker: null,
@@ -39,6 +42,7 @@ describe("the answer picks from Vibe's list", () => {
       profile: "node_build_v1",
       packageManager: "npm",
       workspaceRoot: "apps/web",
+      installRoot: ".",
       frameworks: ["nextjs"],
       moduleLinker: null,
     });
@@ -112,6 +116,7 @@ describe("it can only ever narrow", () => {
     profile: "node_build_v1",
     packageManager: "pnpm",
     workspaceRoot: ".",
+    installRoot: ".",
     frameworks: ["nextjs"],
     moduleLinker: null,
   };

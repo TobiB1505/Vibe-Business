@@ -33,6 +33,21 @@ function build(targets: BuildTarget[], truncated = false): BuildIntelligence {
   return { targets, truncated };
 }
 
+/** An application inside a workspace: its lockfile is the root's, not its own. */
+function member(directory: string, overrides: Partial<BuildTarget> = {}): BuildTarget {
+  return target({
+    directory,
+    manifestPath: `${directory}/package.json`,
+    lockfile: { path: "pnpm-lock.yaml", packageManager: "pnpm", inTargetDirectory: false },
+    ...overrides,
+  });
+}
+
+/** The root of a declared workspace. Buildable only when it says so. */
+function workspaceRoot(overrides: Partial<BuildTarget> = {}): BuildTarget {
+  return target({ declaresWorkspaces: true, buildScript: false, ...overrides });
+}
+
 describe("a repository that can honour the contract", () => {
   it("accepts one application at the root, using pnpm", () => {
     expect(resolveValidationProfile(fakeValidatableSnapshot())).toEqual({
@@ -40,6 +55,9 @@ describe("a repository that can honour the contract", () => {
       profile: "node_build_v1",
       packageManager: "pnpm",
       workspaceRoot: ".",
+      // Its own lockfile, so the two directories are the same one — the shape
+      // every repository admitted before workspaces were.
+      installRoot: ".",
       // The fixture's own framework, carried through from its build target.
       frameworks: ["nextjs"],
       // No Yarn lockfile, so Yarn's module resolution is not a question here.
@@ -258,12 +276,14 @@ describe("more than one application", () => {
       candidates: [
         {
           workspaceRoot: "apps/api",
+          installRoot: "apps/api",
           packageManager: "pnpm",
           frameworks: ["express"],
           moduleLinker: null,
         },
         {
           workspaceRoot: "apps/web",
+          installRoot: "apps/web",
           packageManager: "pnpm",
           frameworks: ["vite"],
           moduleLinker: null,
@@ -359,5 +379,115 @@ describe("resolution reads structure only (§5)", () => {
     // no title, no evidence text and no client input to influence it — the
     // same property capability resolution has in Sprint 9.
     expect(resolveValidationProfile.length).toBe(1);
+  });
+});
+
+/*
+ * The narrowing ADR 0078 recorded, and the conditions under which it is lifted.
+ *
+ * It refused a workspace monorepo outright: one lockfile at the root,
+ * applications in `apps/*`, zero installable targets, `lockfile_missing`. The
+ * argument was that installing from an ancestor is a larger promise than "this
+ * application builds" — which is still true, and is now made explicitly by
+ * carrying the two directories separately rather than by refusing.
+ */
+describe("an application inside a workspace", () => {
+  it("installs from the workspace root and builds in its own directory", () => {
+    const snapshot = fakeValidatableSnapshot({
+      build: build([workspaceRoot(), member("apps/web", { frameworks: ["nextjs"] })]),
+    });
+
+    expect(resolveValidationProfile(snapshot)).toEqual({
+      supported: true,
+      profile: "node_build_v1",
+      packageManager: "pnpm",
+      workspaceRoot: "apps/web",
+      // The whole change in one field. Under ADR 0078 this repository was
+      // `lockfile_missing`, because the only lockfile was somebody else's.
+      installRoot: ".",
+      frameworks: ["nextjs"],
+      moduleLinker: null,
+    });
+  });
+
+  it("offers the workspace root beside its applications when the root builds too", () => {
+    /*
+     * Both are honest answers and they are different promises: the root's
+     * `build` orchestrates every package, an application's builds one. Vibe
+     * cannot know which the founder means, and a repository that silently
+     * validated the whole workspace now asks once instead — the first real
+     * cases the choice screen has ever had.
+     */
+    const snapshot = fakeValidatableSnapshot({
+      build: build([workspaceRoot({ buildScript: true }), member("apps/web")]),
+    });
+
+    const result = resolveValidationProfile(snapshot);
+
+    expect(result).toMatchObject({ supported: false, reason: "workspace_choice_required" });
+    expect(result.supported === false ? result.candidates : []).toEqual([
+      expect.objectContaining({ workspaceRoot: ".", installRoot: "." }),
+      expect.objectContaining({ workspaceRoot: "apps/web", installRoot: "." }),
+    ]);
+  });
+
+  it("refuses an ancestor lockfile that no declaration covers", () => {
+    // A lockfile above an application is not a workspace by itself. Without a
+    // declaration the install would be a guess, and a guessed install produces
+    // a dependency tree nobody committed.
+    const snapshot = fakeValidatableSnapshot({
+      build: build([workspaceRoot({ declaresWorkspaces: false }), member("apps/web")]),
+    });
+
+    expect(resolveValidationProfile(snapshot)).toMatchObject({
+      supported: false,
+      reason: "lockfile_missing",
+    });
+  });
+
+  it("says Yarn 1 rather than a missing lockfile when the root carries one", () => {
+    /*
+     * The refusal that had to change with this. `unhonourable` used to read
+     * `inTargetDirectory`, so a workspace whose root carries a `yarn.lock`
+     * reported `lockfile_missing` — advice about committing a file that is
+     * committed, to a founder looking straight at it.
+     */
+    const snapshot = fakeValidatableSnapshot({
+      build: build([
+        workspaceRoot(),
+        member("apps/web", {
+          lockfile: { path: "yarn.lock", packageManager: "yarn_classic", inTargetDirectory: false },
+        }),
+      ]),
+    });
+
+    expect(resolveValidationProfile(snapshot)).toMatchObject({
+      supported: false,
+      reason: "package_manager_unsupported",
+    });
+  });
+
+  it("never installs from a directory outside the repository", () => {
+    /*
+     * The snapshot is stored JSONB by the time it is read, so it is data of
+     * uncertain provenance (rule 25) even though Vibe wrote it. `installRoot`
+     * becomes a sandbox working directory, so it is checked with the same
+     * pattern `workspaceRoot` is — and the assertion is that the escape is not
+     * a candidate, not that it was sanitized into one.
+     */
+    const snapshot = fakeValidatableSnapshot({
+      build: build([
+        workspaceRoot({ directory: "../etc", manifestPath: "../etc/package.json" }),
+        member("apps/web", {
+          lockfile: {
+            path: "../etc/pnpm-lock.yaml",
+            packageManager: "pnpm",
+            inTargetDirectory: false,
+          },
+        }),
+      ]),
+    });
+
+    expect(resolveValidationProfile(snapshot)).toMatchObject({ supported: false });
   });
 });

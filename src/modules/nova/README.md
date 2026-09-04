@@ -4,12 +4,12 @@ Nova is the guided experience layer over the systems Vibe already has. Its
 architecture, and the evidence for it, is [the Nova audit](../../../docs/audits/2026-09-03-nova-architecture-audit/README.md);
 its founder amendments are §O of the same record. The voice model and its
 prompt are decided by measurement, not argument — see §P and §Q of the audit,
-and [ADR 0082](../../../docs/decisions/0082-nova-voice-is-measured-not-argued.md).
+and [ADR 0083](../../../docs/decisions/0083-nova-voice-is-measured-not-argued.md).
 
 **Nova speaks on the onboarding route and nowhere else yet.**
 `/app/onboarding/[projectId]` renders her introduction, the walkthrough she
 offers once, and the sentences above the scan and the reveal. The project Home
-is still Business Health — [ADR 0083](../../../docs/decisions/0083-nova-is-the-project-home.md)
+is still Business Health — [ADR 0084](../../../docs/decisions/0084-nova-is-the-project-home.md)
 records that it will not stay that way, and `deriveNovaFocus` is built and
 tested with nothing mounting it. No usage event is written for Nova at all:
 `nova_presentation` is on the operation union for ledger-key consistency and
@@ -168,7 +168,7 @@ matters.
 ## One attempt per identity
 
 §M of the audit lists "a Nova copy LLM call per message" under **What NOT to
-build**, and [ADR 0084](../../../docs/decisions/0084-nova-presentation-is-claimed-stored-and-attempted-once.md)
+build**, and [ADR 0085](../../../docs/decisions/0085-nova-presentation-is-claimed-stored-and-attempted-once.md)
 amends that to five conditions rather than to a yes, because what §M refuses
 is a _construction_: a provider call reached from a render, paid again on
 every refresh and every tab. The five are a deterministic reuse identity, a
@@ -209,7 +209,7 @@ only entry point that may generate. Its one permitted caller is
 [`src/modules/operations/nova-voice.ts`](../operations/nova-voice.ts) — the
 tail of a durable step, after its canonical result row is written.
 
-That placement is not a preference. Every one of ADR 0084's five conditions is
+That placement is not a preference. Every one of ADR 0085's five conditions is
 already true there and would have to be newly arranged anywhere else: the
 canonical state is persisted, there is no open HTTP request so a render cannot
 reach a provider through it, the client is already service-role (a Server
@@ -309,7 +309,7 @@ subset against the founder's acceptance line — `grounded`/`no_invention` ≥
 the line, it does not enforce it.
 
 `nova-voice-prompt-v4` is the shipping prompt, closing the exclusivity and
-sequencing invention `v3` still had on Sonnet 5 (ADR 0082's amendment). Its
+sequencing invention `v3` still had on Sonnet 5 (ADR 0083's amendment). Its
 last full measurement ran 60 of 76 cases before a temporary key was revoked
 mid-run; the founder accepted that partial result rather than completing it.
 
