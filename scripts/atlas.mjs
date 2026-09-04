@@ -541,8 +541,25 @@ function fileCycles(root, files) {
 
 // ------------------------------------------------------------------------ Befunde
 
+/**
+ * Befunde eines Moduls.
+ *
+ * Ein Verzeichnis ohne Code bekommt keine — es ist ein reservierter Name mit
+ * einer README, die auf die echte Umsetzung zeigt. „Keine Tests" wäre dort
+ * Fehlalarm: es gibt nichts zu testen, und ein Dashboard, das Unmögliches
+ * anmahnt, wird zu Recht ignoriert.
+ */
 function findings(m) {
   const out = [];
+  if (m.files === 0) {
+    out.push({
+      level: "grau",
+      text: m.hasReadme
+        ? "Kein Code — ein reservierter Name, dessen README auf die echte Umsetzung zeigt"
+        : "Kein Code und kein README — ein leeres Verzeichnis",
+    });
+    return out;
+  }
   if (!m.hasReadme)
     out.push({
       level: "rot",
@@ -643,6 +660,7 @@ function render(data) {
 
   const ampel = (m) => {
     const f = findings(m);
+    if (f.some((x) => x.level === "grau")) return "grau";
     if (f.some((x) => x.level === "rot")) return "rot";
     if (f.length > 0) return "gelb";
     return "gruen";
@@ -659,7 +677,7 @@ function render(data) {
           <span class="dot"></span>
           <span class="mname">${esc(m.name)}</span>
           <span class="meta">${de(m.srcLoc)} Zeilen · ${m.testFiles} Testdateien · ${m.recentCommits} Commits in 90 Tagen</span>
-          ${f.length ? `<span class="badge">${f.length} Befund${f.length === 1 ? "" : "e"}</span>` : `<span class="badge ok">in Ordnung</span>`}
+          ${ampel(m) === "grau" ? `<span class="badge">Platzhalter</span>` : f.length ? `<span class="badge">${f.length} Befund${f.length === 1 ? "" : "e"}</span>` : `<span class="badge ok">in Ordnung</span>`}
         </summary>
         <div class="body">
           ${m.summary ? `<p class="summary">${esc(m.summary)}</p>` : `<p class="summary missing">Kein README — es gibt keine Beschreibung dieses Moduls.</p>`}
@@ -748,7 +766,8 @@ function render(data) {
 
   const rot = list.filter((m) => ampel(m) === "rot").length;
   const gelb = list.filter((m) => ampel(m) === "gelb").length;
-  const gruen = list.length - rot - gelb;
+  const grau = list.filter((m) => ampel(m) === "grau").length;
+  const gruen = list.length - rot - gelb - grau;
   const offeneGaps = roadmap.reduce((n, s) => n + s.entries.filter((e) => !e.closed).length, 0);
 
   return `<!doctype html>
@@ -794,6 +813,8 @@ function render(data) {
   details.mod summary::-webkit-details-marker { display:none; }
   .dot { width:8px; height:8px; border-radius:50%; flex:none; }
   .rot .dot { background:var(--rot); } .gelb .dot { background:var(--gelb); } .gruen .dot { background:var(--gruen); }
+  .grau .dot { background:var(--mute); opacity:0.5; }
+  ul.findings li.grau { color:var(--mute); }
   .mname { font-weight:600; }
   .meta { color:var(--mute); font-size:12.5px; }
   .badge { margin-left:auto; font-size:12px; color:var(--mute);
@@ -859,7 +880,8 @@ Jede Zahl stammt aus dem Code, aus git oder aus den Dokumenten. Sie beantwortet 
 <div class="ampelbar">
   <span><b style="color:var(--gruen)">${gruen}</b> Module ohne Befund</span>·
   <span><b style="color:var(--gelb)">${gelb}</b> mit Hinweisen</span>·
-  <span><b style="color:var(--rot)">${rot}</b> mit ernstem Befund</span>
+  <span><b style="color:var(--rot)">${rot}</b> mit ernstem Befund</span>·
+  <span><b>${grau}</b> ohne Code (reservierte Namen)</span>
 </div>
 
 <input id="suche" type="search" placeholder="Suchen — Modulname, Tabelle, Regler …" autocomplete="off">
