@@ -30,6 +30,7 @@ import {
   createOpportunitySetRun,
   failOpportunitySetRun,
   getOpportunitySetById,
+  getOpportunitySetWithMoves,
 } from "@/modules/opportunities/store";
 import {
   buildNovaMoveTemplate,
@@ -412,7 +413,7 @@ async function speakAboutTheTopMove(
   operation: { id: string; userId: string; projectId: string },
   setId: string,
 ): Promise<void> {
-  const stored = await getOpportunitySetById(deps.supabase, setId);
+  const stored = await getOpportunitySetWithMoves(deps.supabase, setId);
   const move = topMove(stored?.opportunities ?? []);
   if (move === null) return;
 
