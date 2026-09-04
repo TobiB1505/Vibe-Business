@@ -3,7 +3,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
-import { benchmarkStep, fixtureForStepKey } from "./dogfood/fixtures";
 import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
 import {
   resolvePlanExecution,
@@ -24,14 +23,13 @@ import { GithubDomainError } from "@/modules/github/errors";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import {
-  internalDogfoodProjectIds,
   isAgenticExecutionAuthorized,
   resolveAgentEconomics,
   type AgentEconomicPolicy,
 } from "./authorization";
-import { CORE4_DOGFOOD_DISCOVERY } from "./budget";
+import { AGENT_DISCOVERY_SCOPE } from "./budget";
 import { runAgentPreflight, type AgentPreflight } from "./preflight";
-import type { DogfoodStepReason } from "./start-refusal";
+import type { AgentStepReason } from "./start-refusal";
 import {
   BUILD_CHAIN_POLICY_VERSION,
   resolveBuildChain,
@@ -48,8 +46,8 @@ import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
 import { liveConnections } from "@/modules/projects/repository-connection";
 /**
- * The step preflight the internal dogfood website surface calls
- * (EXECUTION CORE-4 website gate, §7, §8, §9, §14).
+ * The step preflight the Agent workspace calls (EXECUTION CORE-4 website gate,
+ * §7, §8, §9, §14).
  *
  * ## Why this exists, given `dogfood.probe.ts` already does almost this
  *
@@ -85,10 +83,10 @@ import { liveConnections } from "@/modules/projects/repository-connection";
  * loud is not. Moving the words rather than the whole chain is what lets the
  * browser render a reason without pulling a Supabase client behind it.
  */
-export { DOGFOOD_STEP_REASONS } from "./start-refusal";
-export type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
+export { AGENT_STEP_REASONS } from "./start-refusal";
+export type { AgentStartRefusalDetail, AgentStepReason } from "./start-refusal";
 
-export type DogfoodStepPreview =
+export type AgentStepPreview =
   | {
       eligible: true;
       stepTitle: string;
@@ -124,26 +122,11 @@ export type DogfoodStepPreview =
     }
   | {
       eligible: false;
-      reason: DogfoodStepReason;
+      reason: AgentStepReason;
       /** Present only when a step was found and resolved, for a fuller explanation. */
       resolution?: ExecutionResolution;
       preflight?: AgentPreflight;
     };
-
-/**
- * Whether this project may see the dogfood surface at all (§26, §27).
- *
- * Server-derived and checked before anything else is even read — an
- * unauthorized project gets `not_dogfood_eligible` whether or not it has a
- * plan, a snapshot or a repository, so the allowlist is the actual gate rather
- * than a label on a response nothing else respects.
- */
-export function isDogfoodEligibleProject(
-  projectId: string,
-  env: Record<string, string | undefined> = process.env,
-): boolean {
-  return internalDogfoodProjectIds(env).includes(projectId);
-}
 
 async function loadOwnedRepositoryConnection(
   supabase: SupabaseClient,
@@ -199,21 +182,21 @@ async function loadOwnedRepositoryConnection(
  *
  * The visible consequence was that no step could *ever* be offered. Every
  * implementation step read "waiting on an earlier step", the "Review this step"
- * link was unreachable by construction, and the whole dogfood surface was a
- * list of refusals for a project whose repository was connected, snapshotted
- * and supported.
+ * link was unreachable by construction, and the whole surface was a list of
+ * refusals for a project whose repository was connected, snapshotted and
+ * supported.
  *
  * ## What it deliberately does not read
  *
  * The live GitHub HEAD. That is one network call per page load to answer a
  * question this page does not ask — admission, not classification — and
- * `previewDogfoodStep` probes it for real on the step a founder actually
+ * `previewAgentStep` probes it for real on the step a founder actually
  * opens. An unread HEAD is modelled honestly as `null`, which refuses
  * admission; the index renders `mode` and `reason`, neither of which it
  * touches.
  */
-export type DogfoodPlanRoutes =
-  | { available: false; reason: Extract<DogfoodStepReason, "not_dogfood_eligible" | "no_action_plan"> }
+export type AgentPlanRoutes =
+  | { available: false; reason: Extract<AgentStepReason, "no_action_plan"> }
   | {
       available: true;
       plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
@@ -249,7 +232,7 @@ export type DogfoodPlanRoutes =
 /**
  * The Credit ceiling behind one offered Agent route (ADR 0061, launch-v1).
  *
- * Deliberately per step rather than per plan. `resolveDogfoodPlanRoutes` used
+ * Deliberately per step rather than per plan. `resolveAgentPlanRoutes` used
  * to carry a single `economics` for the whole plan, which was answerable while
  * one price covered every agent run. It is not any more: `launch-v1` prices an
  * improvement by execution pricing class, and the class reads a *step's* own
@@ -257,7 +240,7 @@ export type DogfoodPlanRoutes =
  * resolved, and defaulting low is a revenue leak that presents as a working
  * system (Sprint 0111).
  *
- * `null` where no class resolves, which is the same answer `previewDogfoodStep`
+ * `null` where no class resolves, which is the same answer `previewAgentStep`
  * gives, and the screen renders no ceiling rather than a guessed one.
  */
 export function resolveRouteAgentEconomics(params: {
@@ -334,7 +317,7 @@ async function routingCompletedSteps(
   },
 ): Promise<{
   completedSteps: ReadonlySet<number>;
-  /* Handed back rather than re-read: `previewDogfoodStep` compiles the same
+  /* Handed back rather than re-read: `previewAgentStep` compiles the same
      resolutions into the spec's `approvedDecisions`, and two reads of one
      table could disagree about what the founder has settled. */
   founderResolutions: Awaited<ReturnType<typeof listActiveFounderResolutions>>;
@@ -390,7 +373,7 @@ async function routingCompletedSteps(
  * stops the two ever disagreeing about a step's route.
  *
  * Reads state, never the network: no live HEAD, no site crawl. That is the same
- * decision `resolveDogfoodPlanRoutes` already made and for the same reason — a
+ * decision `resolveAgentPlanRoutes` already made and for the same reason — a
  * report-shaped caller classifies every step in a plan and must spend nothing.
  * `admission` on the results is therefore about stored state alone, and a
  * screen rendering these must not present it as permission.
@@ -450,15 +433,10 @@ export async function resolvePlanExecutionRoutes(
   };
 }
 
-export async function resolveDogfoodPlanRoutes(
+export async function resolveAgentPlanRoutes(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string; env?: Record<string, string | undefined> },
-): Promise<DogfoodPlanRoutes> {
-  // The allowlist gate first, before anything is read (§26, §27).
-  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
-    return { available: false, reason: "not_dogfood_eligible" };
-  }
-
+): Promise<AgentPlanRoutes> {
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { available: false, reason: "no_action_plan" };
 
@@ -476,7 +454,7 @@ export async function resolveDogfoodPlanRoutes(
   };
 }
 
-export async function previewDogfoodStep(
+export async function previewAgentStep(
   supabase: SupabaseClient,
   params: {
     projectId: string;
@@ -486,53 +464,25 @@ export async function previewDogfoodStep(
     chain?: boolean;
     env?: Record<string, string | undefined>;
   },
-): Promise<DogfoodStepPreview> {
-  // §26, §27: the gate, before anything else is even read.
-  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
-    return { eligible: false, reason: "not_dogfood_eligible" };
-  }
-
+): Promise<AgentStepPreview> {
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { eligible: false, reason: "no_action_plan" };
 
   /*
-   * An internal benchmark step is resolved from Vibe's own fixture registry
-   * (Sprint 0045).
+   * A step key names a step of *this project's own plan*, and nothing else.
    *
-   * Recognised by its namespaced key, which a Planner step id can never carry.
-   * This is what lets a controlled benchmark be started through the *existing*
-   * Run button — the same allowlist gate, the same ownership re-resolution, the
-   * same idempotent `startAgentExecution` — instead of through a second start
-   * path that would have to be audited again.
+   * It used to also resolve Vibe's internal benchmark fixtures by their
+   * namespaced key, so a controlled benchmark could be started through the same
+   * Run button. What made that safe was the operator allowlist standing in
+   * front of it: only a project somebody had named in an environment variable
+   * could reach this function at all.
+   *
+   * That allowlist is gone (ADR 0092), so the branch would now let any customer
+   * start a Vibe-authored task against their own repository by typing a step
+   * key their plan does not contain — and pay for it. The registry stays, for
+   * the dry-run harness and for classifying the runs it already produced;
+   * the *start* path resolves plan steps only.
    */
-  const fixture = fixtureForStepKey(params.stepKey);
-  if (fixture) {
-    const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
-    if (!snapshot?.result) return { eligible: false, reason: "repository_snapshot_missing" };
-
-    const step = benchmarkStep(fixture, snapshot.result);
-    return resolveExecutableStep(supabase, {
-      projectId: params.projectId,
-      userId: params.userId,
-      env: params.env,
-      step,
-      planSteps: [step],
-      lineage: {
-        id: plan.id,
-        goal: fixture.goal,
-        expectedOutcome: fixture.expectedChangedState,
-        assumptions: [],
-        opportunityId: plan.opportunityId,
-        businessAuditId: plan.businessAuditId,
-      },
-      // A benchmark step is its own one-step plan, so there is no successor to
-      // carry. Passed explicitly rather than left to a default, so a future
-      // benchmark with several steps has to decide rather than inherit.
-      chain: false,
-      planGeneratedAt: plan.createdAt,
-    });
-  }
-
   const step = plan.steps.find((candidate) => candidate.id === params.stepKey);
   if (!step) return { eligible: false, reason: "step_not_found" };
 
@@ -568,7 +518,7 @@ export async function previewDogfoodStep(
  * ## Why this is a seam
  *
  * Because it is the exact span the internal benchmark harness replaces, and
- * nothing else. `previewDogfoodStep` reaches it by reading the project's real
+ * nothing else. `previewAgentStep` reaches it by reading the project's real
  * Action Plan; `coding-agent/dogfood/benchmark.ts` reaches it with a
  * Vibe-authored fixture step. From here down the two are the same code —
  * the same live HEAD read, the same resolver, the same risk classification, the
@@ -715,12 +665,7 @@ export async function resolveExecutableStep(
      */
     resolveAgainstAnalysedCommit?: boolean;
   },
-): Promise<DogfoodStepPreview> {
-  // §26, §27: the gate, again, because this is now an entry point of its own.
-  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
-    return { eligible: false, reason: "not_dogfood_eligible" };
-  }
-
+): Promise<AgentStepPreview> {
   const { step, planSteps, lineage } = params;
   const plan = lineage;
 
@@ -828,7 +773,7 @@ export async function resolveExecutableStep(
 
   // A spec needs the plan's own lineage. Asserted rather than defaulted — a
   // spec built from a placeholder would tell the agent to work toward an
-  // empty string (dogfood.probe.ts states the same rule).
+  // empty string (`dogfood.probe.ts` states the same rule).
   if (!plan.goal || !plan.expectedOutcome || !plan.opportunityId || !plan.businessAuditId) {
     return { eligible: false, reason: "plan_incomplete", resolution };
   }
@@ -848,7 +793,7 @@ export async function resolveExecutableStep(
   const budget = economics?.budget ?? null;
 
   const writeScope = {
-    discovery: { ...CORE4_DOGFOOD_DISCOVERY },
+    discovery: { ...AGENT_DISCOVERY_SCOPE },
     mutation: {
       maxChangedFiles: budget?.maxChangedFiles ?? 0,
       maxChangedBytes: budget?.maxChangedBytes ?? 0,

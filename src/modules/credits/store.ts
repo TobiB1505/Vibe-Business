@@ -569,6 +569,14 @@ export async function claimReservation(
     operationRunId?: string | null;
     quoteId?: string | null;
     expiresAt?: string | null;
+    /**
+     * The retail policy that priced this hold.
+     *
+     * The column has existed since the table did and nothing ever wrote it, so
+     * every reservation carried null and the settlement had no provenance to
+     * read back — see `operations/billing.ts` for what filled that gap.
+     */
+    rateCardVersion?: string | null;
   },
 ): Promise<ClaimReservationResult> {
   if (params.reservedCredits <= 0) return { ok: false, refusal: "invalid_amount" };
@@ -590,6 +598,7 @@ export async function claimReservation(
       quote_id: params.quoteId ?? null,
       reserved_credits: params.reservedCredits,
       status: "active",
+      rate_card_version: params.rateCardVersion ?? null,
       idempotency_key: params.idempotencyKey,
       expires_at: params.expiresAt ?? null,
     })

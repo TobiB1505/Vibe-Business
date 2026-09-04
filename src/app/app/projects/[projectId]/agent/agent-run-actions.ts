@@ -24,7 +24,7 @@ import {
   startAgentExecution,
 } from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
-import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
+import { previewAgentStep } from "@/modules/coding-agent/website-preflight";
 import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
 import { startRefusalLabel } from "@/modules/coding-agent/view";
 import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
@@ -39,7 +39,7 @@ import {
 import { readAgentRunForLiveView } from "@/modules/coding-agent/observability/run-view";
 
 /**
- * The internal dogfood website actions (EXECUTION CORE-4 website gate, §7,
+ * The Agent workspace's server actions (EXECUTION CORE-4 website gate, §7,
  * §12, §13, §14, §18, §24).
  *
  * Every action here re-resolves ownership and eligibility from the session —
@@ -69,7 +69,7 @@ export type StartAgentRunState =
  * rather than "passed".
  */
 function refusalDetail(
-  preview: Extract<Awaited<ReturnType<typeof previewDogfoodStep>>, { eligible: false }>,
+  preview: Extract<Awaited<ReturnType<typeof previewAgentStep>>, { eligible: false }>,
 ): AgentStartRefusalDetail {
   return {
     reason: preview.reason,
@@ -116,7 +116,7 @@ export async function startAgentRunAction(
   const session = await requireSession();
   const supabase = await createClient();
 
-  const preview = await previewDogfoodStep(supabase, {
+  const preview = await previewAgentStep(supabase, {
     projectId,
     userId: session.userId,
     stepKey,
@@ -349,7 +349,7 @@ export async function resolveAgentFounderInputAction(
   // Fresh admission is deliberately after the resolution transaction closed
   // the old attempt. It re-reads current HEAD, plan state, permissions and
   // active founder resolutions; no field from the old spec is reused.
-  const preview = await previewDogfoodStep(supabase, {
+  const preview = await previewAgentStep(supabase, {
     projectId,
     userId: session.userId,
     stepKey: oldSpec.step_key,

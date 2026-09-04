@@ -12,7 +12,7 @@ import {
 
 import { resolveAgentInterruptAction } from "./agent/interrupt-actions";
 import { chooseWorkspaceRootAction } from "./agent/workspace-actions";
-import { startAgentRunAction } from "./agent-dogfood/[stepKey]/actions";
+import { startAgentRunAction } from "./agent/agent-run-actions";
 import { resolveFounderInputAction } from "./founder-input-action";
 import { mergeApprovedChangeAction } from "./merge-actions";
 import { checkProductionOutcomeAction } from "./outcome-actions";

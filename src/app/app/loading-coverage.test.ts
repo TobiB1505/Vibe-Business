@@ -27,16 +27,7 @@ const APP_DIR = join(process.cwd(), "src/app/app");
  * An exemption is a decision, so it is written down here rather than expressed
  * as the absence of a check. Anything not listed needs a first frame.
  */
-const WITHOUT_FIRST_FRAME: readonly { route: string; why: string }[] = [
-  {
-    route: "projects/[projectId]/agent-dogfood",
-    why: "Operator-only surface behind the internal allowlist (rule 78). It is not a customer screen, and its own index renders from the route segment alone.",
-  },
-  {
-    route: "projects/[projectId]/agent-dogfood/[stepKey]",
-    why: "The same operator-only surface, one level down: a step detail reached only from the index above it.",
-  },
-];
+const WITHOUT_FIRST_FRAME: readonly { route: string; why: string }[] = [];
 
 function routesWithAPage(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {

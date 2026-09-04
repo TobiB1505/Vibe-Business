@@ -256,7 +256,7 @@ export async function startAgentExecution(
     credits: economics.budget.maxCredits,
     pricingClass,
     pricingClassReason: stored.spec.pricingClassReason,
-    policyVersion: economics.nonProduction ? "internal-dogfood-v1" : "launch-v1",
+    policyVersion: "launch-v1",
     budgetPolicyVersion: economics.budget.budgetPolicyVersion,
   });
 
@@ -265,7 +265,6 @@ export async function startAgentExecution(
     userId: params.userId,
     operationRunId: operation.id,
     pricingClass,
-    nonProduction: economics.nonProduction,
     quoteId,
   });
 
@@ -332,7 +331,6 @@ export async function startAgentExecution(
     promptCompilerVersion: AGENT_PROMPT_COMPILER_VERSION,
     budgetPolicyVersion: economics.budget.budgetPolicyVersion,
     executionPolicyVersion: stored.policyVersion,
-    nonProductionEconomics: economics.nonProduction,
     baseSha: stored.baseSha,
     creditReservationId: reservationId,
     /*
@@ -398,8 +396,6 @@ export async function startAgentExecution(
       agentExecutionRunId: claim.run.id,
       executionSpecId: stored.id,
       model: AGENTIC_EXECUTION_CONFIG.model,
-      nonProductionEconomics: economics.nonProduction,
-      disclosure: economics.disclosure,
     },
   });
 

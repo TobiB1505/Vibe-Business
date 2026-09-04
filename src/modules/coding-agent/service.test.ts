@@ -30,7 +30,7 @@ const { startAgentExecution } = await import("./service");
  * paid, repository-writing operation could go wrong:
  *
  * ```
- * §18  a customer project cannot start one at all
+ * §18  a run is bounded by an authorized ceiling, and held for before it starts
  * §53  project A cannot operate on project B's spec
  * §55  no reservation → provider call count is zero
  * §56  a double click buys one agent, not two
@@ -93,12 +93,19 @@ async function fundWallet(userId: string, credits: number): Promise<void> {
     userId,
     sourceKind: "purchase",
     credits: creditsToUnits(credits),
-    reason: "internal dogfood funding",
-    idempotencyKey: `dogfood-fund:${userId}:${credits}`,
+    reason: "test funding",
+    idempotencyKey: `fund:${userId}:${credits}`,
   });
 }
 
-const ALLOWLISTED = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: PROJECT };
+/**
+ * No environment decides anything here any more (ADR 0092).
+ *
+ * The name is kept so every `withEnv` call below still reads as "start under a
+ * named environment"; what it names is now an environment that says nothing,
+ * which is the point.
+ */
+const ALLOWLISTED: Record<string, string> = {};
 
 /**
  * Runs `body` with the allowlist set, and restores the environment after it
@@ -135,21 +142,26 @@ beforeEach(async () => {
 });
 
 /**
- * §18 as it stands after `launch-v1` (ADR 0061).
+ * §18 as it stands after `launch-v1` (ADR 0061) and [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md).
  *
- * ## What this block used to assert, and why it stopped being true
+ * ## What this block used to assert, and why it stopped being true — twice
  *
- * *"refuses when the project is not on the internal allowlist"* — because
- * `EXECUTION_BUDGET_POLICIES` was `[]`, so `resolveAgentEconomics` returned
- * null for every project not named in an operator-managed environment
- * variable. ADR 0061 activated `launch-v1-budget`, which is the whole point of
- * selling the Agent: production economics now resolve for **any** project, and
- * the allowlist decides *who is not billed*, not who may run.
+ * First: *"refuses when the project is not on the internal allowlist"* —
+ * because `EXECUTION_BUDGET_POLICIES` was `[]`, so `resolveAgentEconomics`
+ * returned null for every project not named in an operator-managed environment
+ * variable. ADR 0061 activated `launch-v1-budget`, so production economics
+ * resolved for any project and the allowlist became a statement about *who is
+ * not billed*.
  *
- * The test did not fail when that shipped. It failed the following morning, on
- * the instant `launch-v1-budget` took effect — the same wall-clock coupling
- * that made thirty assertions in `operation-billing.test.ts` fall over, found
- * the same way and fixed the same way.
+ * That test did not fail when ADR 0061 shipped. It failed the following
+ * morning, on the instant `launch-v1-budget` took effect — the same wall-clock
+ * coupling that made thirty assertions in `operation-billing.test.ts` fall
+ * over, found the same way and fixed the same way.
+ *
+ * Then: *"keeps an allowlisted project on the internal ceiling"* — until ADR
+ * 0092 removed the internal ceiling altogether, because the same allowlist was
+ * still gating the start path in `website-preflight.ts` and no customer could
+ * reach the agent at all.
  *
  * ## Nothing is weakened by rewriting it
  *
@@ -158,16 +170,18 @@ beforeEach(async () => {
  * when no policy is in force at the instant asked"* is where that is decidable
  * — `startAgentExecution` takes no instant, so this layer cannot construct it.
  *
- * What this layer *can* prove is the property that replaced it, and it is a
- * money question rather than an access one: **which book a run is billed
- * against.** Getting that backwards does not refuse anybody, which is exactly
- * why it needs a test — the first version of `resolveAgentEconomics` checked
- * production before the allowlist and would have silently turned the dogfood
- * account into a paying customer.
+ * What this layer proves is the money question: **what a run is billed.** There
+ * is one book now, and a start that quietly reserved out of a second one would
+ * refuse nobody — which is exactly why it still needs a test.
  */
-describe("§18 — the allowlist decides who is billed, not who may run", () => {
-  it("lets a project that is not on the allowlist run, at the production price", async () => {
-    const outcome = await withEnv({ VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "" }, () =>
+describe("every project runs on the customer's book", () => {
+  it("holds the retail class price, whatever the environment says", async () => {
+    // The reservation is the assertion. `standard` is 200 Credits in the
+    // customer book; the internal ceiling it used to be able to land on was
+    // 100, so the amount held says which book authorized the run without
+    // reading a flag. There is only one book now, and this is what proves it
+    // for a project that was once named in the allowlist.
+    const outcome = await withEnv({ VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: PROJECT }, () =>
       startAgentExecution(fakeSupabase(db), executor, {
         projectId: PROJECT,
         userId: USER,
@@ -177,28 +191,9 @@ describe("§18 — the allowlist decides who is billed, not who may run", () => 
 
     expect((await outcome).kind).toBe("started");
 
-    // The reservation is the assertion: `standard` is 200 Credits in the
-    // customer book and 100 in the internal one, so the amount held says
-    // which book authorized the run without reading a flag.
     const reservations = db.rows("billing_credit_reservations");
     expect(reservations).toHaveLength(1);
     expect(reservations[0]!.reserved_credits).toBe(creditsToUnits(200));
-  });
-
-  it("keeps an allowlisted project on the internal ceiling, and charges no customer price", async () => {
-    const outcome = await withEnv(ALLOWLISTED, () =>
-      startAgentExecution(fakeSupabase(db), executor, {
-        projectId: PROJECT,
-        userId: USER,
-        executionSpecId: "spec-1",
-      }),
-    );
-
-    expect((await outcome).kind).toBe("started");
-
-    const reservations = db.rows("billing_credit_reservations");
-    expect(reservations).toHaveLength(1);
-    expect(reservations[0]!.reserved_credits).toBe(creditsToUnits(100));
   });
 });
 
@@ -295,8 +290,9 @@ describe("§55 — no reservation means no provider call", () => {
     const run = db.rows("agent_execution_runs")[0];
     expect(run.credit_reservation_id).toBe(reservation.id);
     expect(run.status).toBe("queued");
-    // Marked, never inferred (§18).
-    expect(run.non_production_economics).toBe(true);
+    // The column survives for the sixteen runs that settled against the
+    // internal ceiling; nothing can write `true` again (ADR 0092).
+    expect(run.non_production_economics).toBe(false);
     expect(run.model).toBe(AGENTIC_EXECUTION_CONFIG.model);
 
     expect(executor.starts).toHaveLength(1);

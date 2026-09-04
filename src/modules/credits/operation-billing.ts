@@ -11,11 +11,6 @@ import {
   settleReservationAllocations,
 } from "./lot-store";
 import { spendableCapacity } from "./lots";
-import {
-  internalChargeFor,
-  isInternalOperationKind,
-  type InternalOperationKind,
-} from "./internal";
 import { retailChargeFor, type RetailChargeResolution, type RetailOperationKind } from "./retail";
 import { releaseReservation, resolveBillingOwner, settleReservation } from "./service";
 import { claimReservation, ensureCreditAccount, getReservation } from "./store";
@@ -76,14 +71,13 @@ export type OperationCreditRefusal =
 /**
  * Operations that can hold a Credit reservation.
  *
- * A union of two books rather than one list, and the union is the point: a
- * reader at any call site can see which world an operation belongs to. The
- * retail book is the customer rate card; the internal book is the CORE-4
- * dogfood ceiling, reachable only through an operator-managed allowlist and
- * carrying no production price (§18). Merging them into one enum would make an
- * accidental customer-facing Agent price a one-line mistake.
+ * One book, the customer rate card. This used to be a union of two — retail
+ * plus an internal CORE-4 dogfood ceiling that carried no production price —
+ * and the union was the point while an Agent run had no approved price to
+ * charge. `launch-v1` gave it one and [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md) removed the second book,
+ * so there is nothing left to distinguish at a call site.
  */
-export type BillableOperationKind = RetailOperationKind | InternalOperationKind;
+export type BillableOperationKind = RetailOperationKind;
 
 /**
  * What one operation costs, from whichever book governs it.
@@ -94,23 +88,12 @@ export type BillableOperationKind = RetailOperationKind | InternalOperationKind;
  * `launch-v1` they can, so the difference has to be carried: `free` runs and
  * charges nothing, `not_priced` refuses. Conflating them would run the most
  * expensive operation Vibe has for nothing, under a policy that never sold it.
- *
- * The internal dogfood book has no unpriced case — it prices exactly the one
- * operation it names — so its `null` still means only "not in this book", which
- * for a `BillableOperationKind` cannot happen.
  */
 function chargeFor(
   operation: BillableOperationKind,
   now: Date,
   pricingClass: ExecutionPricingClass | null,
 ): RetailChargeResolution {
-  if (isInternalOperationKind(operation)) {
-    const internal = internalChargeFor(operation, now);
-    return internal
-      ? { kind: "charge", creditUnits: internal.creditUnits, policyVersion: internal.policyVersion }
-      : { kind: "not_priced", policyVersion: "internal-none" };
-  }
-
   return retailChargeFor(operation, now, { pricingClass });
 }
 
@@ -227,6 +210,17 @@ export async function authorizeOperationCredits(
     projectId: params.projectId,
     operationRunId: params.operationRunId ?? null,
     quoteId: params.quoteId ?? null,
+    /*
+     * The policy that produced `price`, written onto the hold that carries it.
+     *
+     * `billing_credit_reservations` has had a `rate_card_version` column since
+     * the table did and nothing ever passed one, so every reservation carried
+     * null and the settlement had nothing to read — which is how a literal
+     * `"retail-v1"` came to be its fallback, and why eleven production charges
+     * name a card that cannot explain their amount. The version was already
+     * resolved and audit-logged one call below; only the row never got it.
+     */
+    rateCardVersion: price.policyVersion,
   });
 
   if (!claim.ok) {
@@ -373,7 +367,7 @@ export async function availableSpendableCredits(
  */
 export async function settleOperationCredits(
   supabase: SupabaseClient,
-  params: { reservationId: string; policyVersion: string },
+  params: { reservationId: string; policyVersion: string | null },
 ): Promise<{ ok: true; chargedCredits: CreditUnits; alreadySettled: boolean } | { ok: false; refusal: string }> {
   const reservation = await getReservation(supabase, params.reservationId);
   if (!reservation) return { ok: false, refusal: "reservation_not_found" };
@@ -480,10 +474,16 @@ export async function releaseOperationCredits(
 export async function findOperationReservation(
   supabase: SupabaseClient,
   operationRunId: string,
-): Promise<{ id: string; reservedCredits: CreditUnits; status: string } | null> {
+): Promise<{
+  id: string;
+  reservedCredits: CreditUnits;
+  status: string;
+  /** The policy that priced this hold, so the charge can be stamped with it. */
+  rateCardVersion: string | null;
+} | null> {
   const { data, error } = await supabase
     .from("billing_credit_reservations")
-    .select("id, reserved_credits, status")
+    .select("id, reserved_credits, status, rate_card_version")
     .eq("operation_run_id", operationRunId)
     .order("created_at", { ascending: false })
     .limit(1)
@@ -492,6 +492,16 @@ export async function findOperationReservation(
   if (error) throw error;
   if (!data) return null;
 
-  const row = data as { id: string; reserved_credits: number; status: string };
-  return { id: row.id, reservedCredits: creditUnits(row.reserved_credits), status: row.status };
+  const row = data as {
+    id: string;
+    reserved_credits: number;
+    status: string;
+    rate_card_version: string | null;
+  };
+  return {
+    id: row.id,
+    reservedCredits: creditUnits(row.reserved_credits),
+    status: row.status,
+    rateCardVersion: row.rate_card_version,
+  };
 }

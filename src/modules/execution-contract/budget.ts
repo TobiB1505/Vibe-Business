@@ -125,9 +125,10 @@ export type ExecutionBudgetPolicy = {
 /**
  * Builds a policy whose three classes share one budget.
  *
- * For a policy that genuinely does not vary by class — the internal dogfood
- * ceiling, and every test fixture. Written once here so those callers do not
- * each repeat the same three-key object and risk them drifting apart.
+ * For a policy that genuinely does not vary by class — every test fixture, and
+ * the internal dogfood ceiling this used to serve before [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md) removed it.
+ * Written once here so those callers do not each repeat the same three-key
+ * object and risk them drifting apart.
  */
 export function uniformBudgetsByClass(
   budget: Omit<ExecutionBudget, "budgetPolicyVersion">,
@@ -248,89 +249,6 @@ export const EXECUTION_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [
   LAUNCH_V1_BUDGET_POLICY,
 ];
 
-/**
- * The CORE-4 internal dogfood budget (CORE-4 §17, §18).
- *
- * **Not a production policy, and structurally unable to become one by accident.**
- * It lives in its own array, `resolveExecutionBudget` never sees it, and
- * `coding-agent/authorization.ts` is the only thing that resolves it — for a
- * project on an explicit internal allowlist. A customer path reaching this
- * would have to add the project to that list first, which is a deployment
- * action with a person attached.
- *
- * ## Where the numbers come from
- *
- * They were chosen before Vibe had ever run an agent: every value below is a
- * *conservative ceiling chosen to bound the first experiment*, not a
- * measurement and not a price. §17 asks for exactly this — deliberately small
- * limits, versioned, labelled as dogfood.
- *
- * Runs #3–#8 have since happened, so the ceilings can now be checked against
- * observation rather than only against sibling budgets, and they held: the six
- * real runs cost **$0.1444–$0.3465** (mean $0.2507) against a $3.00 ceiling,
- * and the largest changed eight files — exactly `maxChangedFiles`. See
- * `docs/business/ECONOMY_MODEL.md`. They have deliberately **not** been retuned
- * to fit: a ceiling that tracks the observed maximum stops bounding anything,
- * and the one number the runs argue is wrong — that eight files was reached
- * rather than approached — is a reason to watch it, not to raise it.
- *
- * The original sizing, against what was already measured elsewhere in this
- * codebase:
- *
- *  - `maxWallClockMs` 20 minutes — the sandbox's own lifetime bound is 15
- *    minutes (`SANDBOX_BUDGETS.totalLifetimeMs`), so the agent cannot outlive
- *    its workspace; the extra five minutes cover provisioning and teardown.
- *  - `maxSandboxMs` matches that sandbox lifetime exactly, because the sandbox
- *    is the thing being bounded and two different numbers would mean one of
- *    them is decoration.
- *  - `maxChangedFiles` 8 and `maxChangedBytes` 60 KB — a *bounded* change to
- *    application source. The first real Vibe-prepared change was two files;
- *    eight is generous for one Planner step and small enough that a runaway
- *    rewrite stops rather than arriving at review.
- *  - `maxAgentTurns` 40 and `maxRepairAttempts` 3 — enough for inspect → edit →
- *    check → repair three times over, which is the loop §16 asks to be proven.
- *  - `maxProviderSpendUsd` 3.00 — roughly two orders of magnitude above a
- *    Business Audit's measured provider cost, and low enough that a stuck loop
- *    costs less than a coffee before the provider stops it.
- *  - `maxCredits` 0 in *effect*: see `credit.ts`. The dogfood account is
- *    internal, and §18 forbids inventing a customer-facing Agent price, so the
- *    ceiling exists to exercise reserve → settle → release rather than to
- *    price anything.
- */
-export const CORE4_DOGFOOD_BUDGET_POLICY: ExecutionBudgetPolicy = {
-  version: "core4-dogfood-budget-v1",
-  effectiveFrom: "2026-08-18T00:00:00.000Z",
-  effectiveTo: null,
-  // One budget for all three classes, unchanged from what the sixteen dogfood
-  // runs actually ran under. The dogfood is an experiment with a ceiling, not a
-  // rate card, so varying it by pricing class would be inventing a distinction
-  // this policy has never made — and would silently reinterpret what those runs
-  // were bounded by, which is the whole value of the dataset.
-  budgetsByClass: uniformBudgetsByClass({
-    // An internal test ceiling, priced by `credits/internal.ts`. Never shown to
-    // a customer and never charged to one.
-    maxCredits: creditsToUnits(100),
-    maxAiCalls: 60,
-    maxAgentTurns: 40,
-    maxRepairAttempts: 3,
-    maxWallClockMs: 20 * 60 * 1000,
-    maxSandboxMs: 15 * 60 * 1000,
-    maxChangedFiles: 8,
-    maxChangedBytes: 60 * 1024,
-    maxNetworkRequests: 0,
-    maxProviderSpendUsd: 3,
-  }),
-};
-
-/**
- * The dogfood policy set, kept apart from production (§18).
- *
- * A separate array rather than a flag on the policy, because a flag is one
- * `if` away from being ignored and a separate array has to be *reached for*.
- */
-export const EXECUTION_DOGFOOD_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [
-  CORE4_DOGFOOD_BUDGET_POLICY,
-];
 
 /**
  * The budget in force for one execution class at an instant, or null when none

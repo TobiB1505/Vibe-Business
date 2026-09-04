@@ -7,7 +7,7 @@ import {
 } from "./candidate";
 import { summarizeChangeEvidence } from "./change-evidence";
 import { createBaseIgnorePort } from "./ignored-paths";
-import { deriveAgentLimits, CORE4_DOGFOOD_DISCOVERY } from "./budget";
+import { deriveAgentLimits, AGENT_DISCOVERY_SCOPE } from "./budget";
 import { fakeAgentSpec, fakeWorkspace } from "./test-support";
 
 /**
@@ -30,7 +30,7 @@ import { fakeAgentSpec, fakeWorkspace } from "./test-support";
  * and no number in it moves in this sprint.
  */
 const DOGFOOD_SCOPE = {
-  discovery: CORE4_DOGFOOD_DISCOVERY,
+  discovery: AGENT_DISCOVERY_SCOPE,
   mutation: { maxChangedFiles: 8, maxChangedBytes: 61_440, forbiddenPathClasses: [] },
 } as const;
 
