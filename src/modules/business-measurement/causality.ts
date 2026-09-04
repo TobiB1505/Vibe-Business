@@ -102,8 +102,67 @@ const NEGATIONS = [
   "without",
 ];
 
-/** How far back a negation may sit and still govern the phrase. */
+/**
+ * How far back a negation may sit and still govern the phrase.
+ *
+ * An upper bound, not the bound. The clause the phrase sits in is the real one
+ * — see {@link clauseBefore} — and this caps how much of a very long clause is
+ * searched, so a negation twenty words upstream of an unrelated causal verb
+ * does not reach it.
+ */
 const NEGATION_WINDOW = 60;
+
+/**
+ * Everything from the start of the phrase's own clause up to the phrase.
+ *
+ * ## The false negative this closes
+ *
+ * `NEGATION_WINDOW` alone is a character count, and a character count does not
+ * know where a sentence ended. Sixty characters routinely spans one:
+ *
+ * > "We **cannot** measure the checkout yet. Pricing **caused** signups to rise."
+ *
+ * The "cannot" belongs to the first sentence and governs nothing in the second,
+ * but it sits inside the sixty characters before "caused" — so a genuine,
+ * unevidenced causal claim was read as a denial and never reported. The
+ * function's own contract already said otherwise: *"a phrase preceded by a
+ * negation within the same clause is a denial"*. This makes that true.
+ *
+ * ## Why both bounds, rather than the clause alone
+ *
+ * Because the clause alone would be *looser* in the shape with no punctuation
+ * at all: one long unpunctuated line whose "no" sits eighty characters upstream
+ * would start suppressing a causal verb that today is correctly reported.
+ * Taking the window first and the clause inside it is narrower than either, so
+ * nothing that is reported today stops being reported.
+ *
+ * ## What counts as a boundary
+ *
+ * `.` `!` `?` `;` `:` followed by a space. The trailing space is what keeps a
+ * decimal out of it — the copy is whitespace-collapsed before this runs, so a
+ * real terminator always carries a space and `9.8%` never does.
+ *
+ * An abbreviation does carry one, so "e.g. " **is** read as a boundary and a
+ * negation before it stops governing. That is a known false positive, left
+ * rather than patched with a list of abbreviations: it errs toward *reporting*
+ * a causal phrase, the cost is that somebody rewords one sentence, and a guard
+ * that fails loudly on honest copy is the right way round for this one.
+ *
+ * A comma is deliberately **not** a boundary. The disclaimer this module exists
+ * to enforce reads "it does not, by itself, prove that this change caused the
+ * difference", and cutting at a comma would flag the one sentence that keeps
+ * the product honest.
+ */
+function clauseBefore(preceding: string): string {
+  const boundary = /[.!?;:]\s/g;
+  let start = 0;
+
+  for (let match = boundary.exec(preceding); match !== null; match = boundary.exec(preceding)) {
+    start = match.index + match[0].length;
+  }
+
+  return preceding.slice(start);
+}
 
 /**
  * Finds causal *claims* in a piece of copy.
@@ -128,7 +187,7 @@ export function findCausalClaims(copy: string): string[] {
       const at = normalized.indexOf(phrase, from);
       if (at === -1) return false;
 
-      const preceding = normalized.slice(Math.max(0, at - NEGATION_WINDOW), at);
+      const preceding = clauseBefore(normalized.slice(Math.max(0, at - NEGATION_WINDOW), at));
       // One unnegated occurrence is enough to make the whole copy a claim.
       if (!NEGATIONS.some((negation) => preceding.includes(negation))) return true;
 
