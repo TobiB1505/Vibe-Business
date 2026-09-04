@@ -26,6 +26,9 @@ import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { buildNovaAuditEntry } from "@/modules/nova/feed";
 import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
+import { provenanceForAction } from "@/modules/provenance/actions";
+import { buildProvenanceChain } from "@/modules/provenance/chain";
+import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
@@ -35,6 +38,7 @@ import { AuditOverview } from "../audit-overview";
 import { NovaAuditVoice } from "../nova-audit-voice";
 import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../audit-lifecycle";
 import { NeedsUserPanel } from "../needs-user-panel";
+import { ProvenancePanel } from "../provenance-panel";
 import { RunAuditButton } from "../run-audit-button";
 
 /**
@@ -251,6 +255,30 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
   );
 
   /*
+   * What this audit would be built on, before it is bought (rule 47's spirit,
+   * applied to evidence rather than to tokens).
+   *
+   * Derived from what this page has already read — the same evidence, the same
+   * readiness and the same currency the button gate uses — so the panel and the
+   * button cannot disagree, and nothing is fetched twice for it (VB-022).
+   *
+   * Narrowed to `business_audit`: the Move set below is a real link in the
+   * chain and is not this button's business, and a wall built out of an
+   * unrelated fact is how a surface like this stops being read.
+   */
+  const auditProvenance = provenanceForAction(
+    buildProvenanceChain(
+      provenanceInputsFrom({
+        evidence,
+        readiness: auditReadiness,
+        currency: auditCurrency,
+        opportunities,
+      }),
+    ),
+    "business_audit",
+  );
+
+  /*
    * A spent entitlement is a price, not a wall (BILLING CORE-2 §39).
    *
    * This screen used to disable the button on `credits_required` and say the
@@ -340,6 +368,14 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
             A business audit needs {missingPrerequisites.join(", ")} first.
           </Notice>
         )}
+
+        {/*
+          The chain itself, under the sentence that summarises it. A founder who
+          has been handed a wrong answer once needs to see the dates and the
+          reader versions, not be told again that everything is fine — see
+          `provenance-panel.tsx` on why this is not a badge.
+        */}
+        <ProvenancePanel provenance={auditProvenance} projectId={project.id} />
 
         {/*
           CORE-2 §16: the first qualified audit is free, and the entitlement is
