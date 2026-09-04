@@ -102,14 +102,30 @@ export const PLAN_PROGRESS_LABELS: Record<PlanProgress, string> = {
  * as the plan's current entry point, but the others should not read as
  * blocked when they are not.
  */
-export type StepDisplayState = "start_here" | "also_ready" | "waiting_on_steps" | "done";
+export type StepDisplayState =
+  | "start_here"
+  | "also_ready"
+  | "waiting_on_steps"
+  | "done"
+  | "covered";
 
 export function stepDisplayState(
   step: ActionPlanStep,
   firstActionableOrder: number | null,
   completed: ReadonlySet<number> = new Set(),
+  /**
+   * Covered step order → the order of the step whose run covered it.
+   *
+   * A fifth state rather than a sixth flavour of `done`, because the two are
+   * different claims (ADR 0089). "Done" says somebody carried this out; this
+   * says a larger run performed it on the way to something else, and the row
+   * names which. Checked after `completed` so a step that is genuinely both —
+   * absorbed and later executed on its own — reads as executed.
+   */
+  absorbedByStepOrder: ReadonlyMap<number, number> = new Map(),
 ): StepDisplayState {
   if (completed.has(step.order)) return "done";
+  if (absorbedByStepOrder.has(step.order)) return "covered";
   if (firstActionableOrder !== null && step.order === firstActionableOrder) return "start_here";
   if (step.dependsOn.length === 0) return "also_ready";
   return "waiting_on_steps";
@@ -373,12 +389,28 @@ function stepCompletedStatus(step: ActionPlanStep): StepSequenceStatus {
  * distinction between "the" entry point and "an" unblocked step is carried
  * by `StepDisplayState`/highlighting, not by this label.
  */
+/**
+ * What a covered row says, and what it refuses to say.
+ *
+ * Never "done": the step was not carried out. It names the step whose run
+ * performed the work, so a founder reading the plan a month later can tell the
+ * difference between an analysis somebody did and one that came free with a
+ * build — which is the whole reason absorption is not completion.
+ */
+function coveredLabel(coveredByOrder: number | null): string {
+  return coveredByOrder === null
+    ? "Covered by an earlier run"
+    : `Covered by step ${String(coveredByOrder).padStart(2, "0")}`;
+}
+
 export function stepSequenceStatus(
   step: ActionPlanStep,
   allSteps: ActionPlanStep[],
   display: StepDisplayState,
+  coveredByOrder: number | null = null,
 ): StepSequenceStatus {
   if (display === "done") return stepCompletedStatus(step);
+  if (display === "covered") return { label: coveredLabel(coveredByOrder), state: "done" };
   if (display !== "waiting_on_steps") return { label: "Ready now", state: "ready" };
 
   const byOrder = new Map(allSteps.map((entry) => [entry.order, entry]));

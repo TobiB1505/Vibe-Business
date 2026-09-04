@@ -370,6 +370,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0086](docs/decisions/0086-nova-presentation-is-claimed-stored-and-attempted-once.md) | Nova presentation inference is claimed, stored, and attempted once | §3.6 |
 | [0087](docs/decisions/0087-one-evidence-pack-version.md) | What production builds, stamps and hashes is one constant | §3.4 |
 | [0088](docs/decisions/0088-a-founder-closes-what-vibe-cannot-run.md) | A founder closes the step Vibe has no executor for | §3.5 |
+| [0089](docs/decisions/0089-absorbed-is-satisfied-not-completed.md) | Absorbed is satisfied, not completed | §3.5 |
 
 ### Layers with no section above
 

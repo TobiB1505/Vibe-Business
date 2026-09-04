@@ -21,9 +21,21 @@ import type { ActionPlanStep, PlanProgress } from "./schema";
  */
 
 /** Steps whose type-specific authoritative completion evidence exists. */
-export type CompletedSteps = ReadonlySet<number>;
+/**
+ * Step orders that need nobody to do them — the sequencing input (ADR 0089).
+ *
+ * Wider than "completed" and deliberately so. A step completed by a founder
+ * resolution, an attestation or a verified run is in here; so is a step a
+ * successful run absorbed as preparation, which was never carried out on its
+ * own and must never be recorded as though it were. Sequencing asks *what is
+ * left to do*, and both answers to that are the same answer.
+ *
+ * `completedStepOrders` on the plan view stays the narrow set, because a screen
+ * marking an absorbed step "done" would lose what actually happened.
+ */
+export type SatisfiedSteps = ReadonlySet<number>;
 
-const NO_COMPLETIONS: CompletedSteps = new Set<number>();
+const NOTHING_SATISFIED: SatisfiedSteps = new Set<number>();
 
 /**
  * Dependency cycles, as the orders involved (§79).
@@ -131,26 +143,31 @@ export function repairDependencies(steps: ActionPlanStep[]): DependencyRepair {
   return { steps: cleaned, notes, removedDanglingEdge, brokeCycle: cycle.size > 0 };
 }
 
-/** True when every prerequisite of this step is finished. */
-export function isUnblocked(step: ActionPlanStep, completed: CompletedSteps): boolean {
-  return step.dependsOn.every((order) => completed.has(order));
+/** True when nothing this step depends on is still left to do. */
+export function isUnblocked(step: ActionPlanStep, satisfied: SatisfiedSteps): boolean {
+  return step.dependsOn.every((order) => satisfied.has(order));
 }
 
 /**
  * The step that could genuinely happen next, or null (§39).
  *
- * "Genuinely" is the whole content of this function: not done, and nothing
- * unfinished in front of it. A downstream step never wins over an open
- * prerequisite, whatever its position in the array (§78).
+ * "Genuinely" is the whole content of this function: nothing left to do on it,
+ * and nothing left to do in front of it. A downstream step never wins over an
+ * open prerequisite, whatever its position in the array (§78).
+ *
+ * It takes `SatisfiedSteps`, not completions, which is what stops the plan
+ * offering a founder work a successful run already performed inside its own
+ * boundary (ADR 0089). The step is skipped as an entry point; the plan still
+ * records that it was covered rather than carried out.
  */
 export function firstActionableStep(
   steps: ActionPlanStep[],
-  completed: CompletedSteps = NO_COMPLETIONS,
+  satisfied: SatisfiedSteps = NOTHING_SATISFIED,
 ): ActionPlanStep | null {
   const ordered = [...steps].sort((a, b) => a.order - b.order);
   for (const step of ordered) {
-    if (completed.has(step.order)) continue;
-    if (isUnblocked(step, completed)) return step;
+    if (satisfied.has(step.order)) continue;
+    if (isUnblocked(step, satisfied)) return step;
   }
   return null;
 }
@@ -164,11 +181,11 @@ export function firstActionableStep(
  */
 export function planProgress(
   steps: ActionPlanStep[],
-  completed: CompletedSteps = NO_COMPLETIONS,
+  satisfied: SatisfiedSteps = NOTHING_SATISFIED,
 ): PlanProgress {
-  if (steps.length > 0 && steps.every((step) => completed.has(step.order))) return "finished";
+  if (steps.length > 0 && steps.every((step) => satisfied.has(step.order))) return "finished";
 
-  const next = firstActionableStep(steps, completed);
+  const next = firstActionableStep(steps, satisfied);
   if (!next) return "blocked";
 
   switch (next.executionSupport) {

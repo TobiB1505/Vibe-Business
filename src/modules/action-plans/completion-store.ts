@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AgentStepCompletionEvidence } from "./completion";
+import type { AbsorbedStepSatisfaction, AgentStepCompletionEvidence } from "./completion";
 
 type CompletionSpecRow = {
   id: string;
@@ -10,6 +10,15 @@ type CompletionSpecRow = {
   /** Every step this run delivers, head first. Empty for a run of one. */
   chain_step_keys: string[] | null;
   chain_step_orders: number[] | null;
+  /** Every step this run performs rather than delivers. Never contains the head. */
+  absorbed_step_keys: string[] | null;
+  absorbed_step_orders: number[] | null;
+};
+
+/** Both projections one pass produces. See {@link listStepExecutionEvidence}. */
+export type StepExecutionEvidence = {
+  completion: AgentStepCompletionEvidence[];
+  absorbed: AbsorbedStepSatisfaction[];
 };
 
 type CompletionRunRow = {
@@ -68,20 +77,55 @@ function chainMembers(spec: CompletionSpecRow): { stepKey: string; stepOrder: nu
   return keys.map((stepKey, index) => ({ stepKey, stepOrder: orders[index] }));
 }
 
-export async function listAgentStepCompletionEvidence(
+/**
+ * The steps one spec absorbed: preparation it performed, never delivered.
+ *
+ * Paired by index like {@link chainMembers}, and constrained the same way —
+ * equal lengths, ascending orders, and the head *excluded* rather than
+ * required. Empty for every row written before ADR 0089, which is the honest
+ * value: those runs absorbed nothing this reader can see.
+ */
+function absorbedMembers(spec: CompletionSpecRow): { stepKey: string; stepOrder: number }[] {
+  const keys = spec.absorbed_step_keys ?? [];
+  const orders = spec.absorbed_step_orders ?? [];
+
+  if (keys.length === 0 || keys.length !== orders.length) return [];
+
+  return keys.map((stepKey, index) => ({ stepKey, stepOrder: orders[index] }));
+}
+
+/**
+ * Both projections a plan needs, from one pass over the same four records.
+ *
+ * They are read together rather than by two functions because they must agree
+ * about one thing: **whether the run succeeded.** A step is covered by
+ * absorption only once the run that absorbed it produced a verified change and
+ * passed independent validation — the same verdict, evaluated in the same
+ * place, that lets the run's own steps count as complete. Two readers could
+ * drift, and the drift would be a founder told an absorbed step was handled by
+ * a run that failed.
+ *
+ * What they are not is interchangeable. `completion` says a step was carried
+ * out; `absorbed` says a step no longer needs to be, and names what covered it.
+ * ADR 0089 turns on keeping those apart.
+ */
+export async function listStepExecutionEvidence(
   supabase: SupabaseClient,
   params: { projectId: string; actionPlanId: string },
-): Promise<AgentStepCompletionEvidence[]> {
+): Promise<StepExecutionEvidence> {
+  const empty: StepExecutionEvidence = { completion: [], absorbed: [] };
   const { data: specData, error: specError } = await supabase
     .from("execution_specs")
-    .select("id, step_key, step_order, chain_step_keys, chain_step_orders")
+    .select(
+      "id, step_key, step_order, chain_step_keys, chain_step_orders, absorbed_step_keys, absorbed_step_orders",
+    )
     .eq("project_id", params.projectId)
     .eq("action_plan_id", params.actionPlanId);
 
   if (specError) throw specError;
 
   const specs = (specData ?? []) as CompletionSpecRow[];
-  if (specs.length === 0) return [];
+  if (specs.length === 0) return empty;
 
   const { data: runData, error: runError } = await supabase
     .from("agent_execution_runs")
@@ -98,7 +142,7 @@ export async function listAgentStepCompletionEvidence(
   if (runError) throw runError;
 
   const runs = (runData ?? []) as CompletionRunRow[];
-  if (runs.length === 0) return [];
+  if (runs.length === 0) return empty;
 
   const [eventResult, validationResult] = await Promise.all([
     supabase
@@ -140,6 +184,7 @@ export async function listAgentStepCompletionEvidence(
 
   const specsById = new Map(specs.map((spec) => [spec.id, spec]));
   const evidence: AgentStepCompletionEvidence[] = [];
+  const absorbed: AbsorbedStepSatisfaction[] = [];
 
   for (const run of runs) {
     if (!verifiedRunIds.has(run.id)) continue;
@@ -171,7 +216,41 @@ export async function listAgentStepCompletionEvidence(
         stepOrder: member.stepOrder,
       });
     }
+
+    /*
+     * And one record per step the run *covered* rather than delivered.
+     *
+     * Same run, same verdict, deliberately a different list. These steps were
+     * never carried out on their own — the run performed the work inside its
+     * own boundary on the way to its delivery — so calling them complete would
+     * lose the one fact a founder may later want back: whether this analysis
+     * was done as its own piece of work or folded into something larger.
+     *
+     * `absorbedBy` is the head, not the chain: a chain is several deliveries of
+     * one run, and the step that *needed* the preparation is the one the run
+     * was built for.
+     */
+    for (const member of absorbedMembers(spec)) {
+      absorbed.push({
+        executionSpecId: spec.id,
+        agentExecutionRunId: run.id,
+        preparedChangeId: run.prepared_change_id,
+        validationRunId: validation.id,
+        stepKey: member.stepKey,
+        stepOrder: member.stepOrder,
+        absorbedByStepKey: spec.step_key,
+        absorbedByStepOrder: spec.step_order,
+      });
+    }
   }
 
-  return evidence;
+  return { completion: evidence, absorbed };
+}
+
+/** The audit-trail half alone, for callers that ask only "what is finished?". */
+export async function listAgentStepCompletionEvidence(
+  supabase: SupabaseClient,
+  params: { projectId: string; actionPlanId: string },
+): Promise<AgentStepCompletionEvidence[]> {
+  return (await listStepExecutionEvidence(supabase, params)).completion;
 }

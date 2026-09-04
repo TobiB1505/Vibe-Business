@@ -29,6 +29,28 @@ export type FounderActionCompletionEvidence = {
 };
 
 /**
+ * Durable proof that a step was **covered** by a run built for another step.
+ *
+ * Every id names the same records an `AgentStepCompletionEvidence` names, and
+ * that is deliberate: absorption is only meaningful once the absorbing run
+ * actually succeeded. What differs is the claim. This says *this step no longer
+ * needs doing, because that run performed it inside its own boundary* — never
+ * that the step was carried out as a piece of work in its own right.
+ */
+export type AbsorbedStepSatisfaction = {
+  executionSpecId: string;
+  agentExecutionRunId: string;
+  preparedChangeId: string;
+  validationRunId: string;
+  /** The covered step. */
+  stepKey: string;
+  stepOrder: number;
+  /** The step whose run covered it — the delivery the preparation was for. */
+  absorbedByStepKey: string;
+  absorbedByStepOrder: number;
+};
+
+/**
  * Whether one durable execution completed this step.
  *
  * ## Why the Planner's own fields are not consulted
@@ -145,6 +167,72 @@ export function completedStepsFromEvidence(
 }
 
 /**
+ * Which steps no longer need doing — a wider set than "which steps are done".
+ *
+ * ## Two words the product must not merge
+ *
+ * A step absorbed into a successful run is **satisfied**: nothing remains for
+ * anyone to do, because the run performed that work on its way to its own
+ * delivery. It is not **completed**: it was never carried out as a piece of
+ * work in its own right, and a product that recorded it as completed would
+ * throw away the answer to a question a founder can reasonably ask later —
+ * *was this analysis done on its own, or covered by something larger?*
+ *
+ * So `completedStepsFromEvidence` stays exactly as it was and remains the audit
+ * trail. This is the sequencing answer, and only sequencing reads it.
+ *
+ * ## When absorption starts counting
+ *
+ * Only once the absorbing run has succeeded, verified and validated — which is
+ * precisely the evidence `listStepExecutionEvidence` requires before it emits
+ * an `AbsorbedStepSatisfaction` at all. A planned run satisfies nothing, a
+ * running one satisfies nothing, and a failed one satisfies nothing. There is
+ * no state in between, because the evidence does not exist until the verdict
+ * does.
+ *
+ * ## What it deliberately does not do
+ *
+ * Verify that the absorption was *legitimate*. The spec's `absorbed_step_keys`
+ * were written from the validated document by the same insert that wrote the
+ * chain, and the database refuses a row whose absorbed set contains its own
+ * head or overlaps its own chain. Re-deriving absorbability here would ask
+ * today's dependency classifier about a decision made when the run was built —
+ * the same mistake `completedByAgentExecution` documents one function up.
+ */
+export function satisfiedStepsFromEvidence(
+  completed: ReadonlySet<number>,
+  absorbed: readonly AbsorbedStepSatisfaction[],
+): ReadonlySet<number> {
+  const satisfied = new Set(completed);
+
+  for (const item of absorbed) {
+    // The head must itself be finished. Absorption is a claim about what one
+    // run did, and a run whose own delivery is not complete has not finished
+    // establishing anything on the way to it.
+    if (!completed.has(item.absorbedByStepOrder)) continue;
+    satisfied.add(item.stepOrder);
+  }
+
+  return satisfied;
+}
+
+/** What covered each satisfied-but-not-completed step, for a screen to name. */
+export function absorptionByStepOrder(
+  completed: ReadonlySet<number>,
+  absorbed: readonly AbsorbedStepSatisfaction[],
+): ReadonlyMap<number, number> {
+  const covered = new Map<number, number>();
+
+  for (const item of absorbed) {
+    if (completed.has(item.stepOrder)) continue;
+    if (!completed.has(item.absorbedByStepOrder)) continue;
+    covered.set(item.stepOrder, item.absorbedByStepOrder);
+  }
+
+  return covered;
+}
+
+/**
  * The same question asked by the execution router, which is not the same
  * question — and this file holds both so the difference is stated once.
  *
@@ -178,10 +266,34 @@ export function completedStepsForExecutionRouting(
   agentEvidence: readonly AgentStepCompletionEvidence[],
   mergedPreparedChangeIds: ReadonlySet<string>,
   founderActionEvidence: readonly FounderActionCompletionEvidence[] = [],
+  absorbed: readonly AbsorbedStepSatisfaction[] = [],
 ): ReadonlySet<number> {
   const merged = agentEvidence.filter((item) =>
     mergedPreparedChangeIds.has(item.preparedChangeId),
   );
+  const completed = completedStepsFromEvidence(
+    steps,
+    founderResolutions,
+    merged,
+    founderActionEvidence,
+  );
 
-  return completedStepsFromEvidence(steps, founderResolutions, merged, founderActionEvidence);
+  /*
+   * Absorption counts here too, and leaving it out would cost real money.
+   *
+   * `classifyExecutionDependency` folds an unfinished `analysis` prerequisite
+   * into the next agentic run. If a merged run already absorbed that step and
+   * this set did not say so, the classifier would absorb it *again* — the agent
+   * re-establishing, inside a second paid run, exactly what the first one
+   * established. Saying it is satisfied makes the classifier return `satisfied`
+   * instead, which is the true answer.
+   *
+   * Merged rather than merely validated, for the same reason the delivered
+   * steps are: a successor is prepared against the default branch, so work that
+   * has not reached it is not there to build on.
+   */
+  return satisfiedStepsFromEvidence(
+    completed,
+    absorbed.filter((item) => mergedPreparedChangeIds.has(item.preparedChangeId)),
+  );
 }

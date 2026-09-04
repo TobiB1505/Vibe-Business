@@ -245,6 +245,7 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     progress: planProgress(storedPlan.steps),
     ...overrides,
     completedStepOrders: overrides.completedStepOrders ?? [],
+    absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
     founderInputRequest,
     // Derived from the request the fixture just built, so a scenario can never
     // claim open questions it does not carry.
@@ -378,6 +379,33 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         firstActionableStep: firstActionableStep(STEPS, completed),
         progress: planProgress(STEPS, completed),
         completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * A step a successful run covered rather than carried out (ADR 0089).
+   *
+   * Step 1 is `vibe` + `analysis`, which `classifyExecutionDependency` folds
+   * into the run built for step 3. Once that run has succeeded, verified and
+   * validated, step 1 needs nobody to do it — but it was never executed on its
+   * own, and a row marked done would erase that. The scene exists to prove the
+   * row says which run covered it, and does not claim it was finished.
+   */
+  action_plan_absorbed_step: (): ActionPlanFixture => {
+    const completed = new Set([2, 3]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, new Set([1, 2, 3])),
+        progress: planProgress(STEPS, new Set([1, 2, 3])),
+        completedStepOrders: [...completed],
+        absorbedByStepOrder: { 1: 3 },
         founderInputRequest: null,
       }),
       activeOperation: null,

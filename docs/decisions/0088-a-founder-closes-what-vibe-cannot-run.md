@@ -3,7 +3,7 @@
 Status: Accepted
 Date: 2026-09-04
 
-Supersedes nothing. Widens the attestation authority [ADR 0055](0055-founder-action-attestation-evidence.md) established, and changes no execution authority: nothing here lets Vibe run, prepare, approve or merge anything it could not run, prepare, approve or merge before.
+Extended by [ADR 0089](0089-absorbed-is-satisfied-not-completed.md), which answers the question left open below. Supersedes nothing. Widens the attestation authority [ADR 0055](0055-founder-action-attestation-evidence.md) established, and changes no execution authority: nothing here lets Vibe run, prepare, approve or merge anything it could not run, prepare, approve or merge before.
 
 ## Context
 

@@ -325,6 +325,31 @@ test.describe("ready plan — a step no execution can finish", () => {
   });
 });
 
+test.describe("ready plan — a step a run covered rather than did", () => {
+  /*
+   * The distinction ADR 0089 turns on, asserted where a founder reads it.
+   * "Done" and "covered" are the same fact for sequencing and different facts
+   * for the record, and only the rendered row can show that the product keeps
+   * them apart.
+   */
+  test("names the run that covered it, and does not call it done", async ({ page }) => {
+    await page.goto("/e2e/action_plan_absorbed_step");
+    await openFullPlannedWork(page);
+
+    // `.first()` because a later row names this step in its own "Depends on"
+    // line; rows render in plan order, so the first match is step 01 itself.
+    const row = page
+      .getByTestId("plan-step")
+      .filter({ hasText: "Draft the search-facing copy for that segment" })
+      .first();
+
+    await expect(row).toContainText("Covered by step 03");
+    await expect(row).not.toContainText("Waiting");
+    // Its number stays a number. The tick belongs to work somebody carried out.
+    await expect(row).toContainText("01");
+  });
+});
+
 test.describe("ready plan — compact checklist", () => {
   test("shows every task title while every checklist row starts closed", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
