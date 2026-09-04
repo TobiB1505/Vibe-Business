@@ -30,8 +30,12 @@ import {
   getLatestCompletedActionPlan,
   type StoredActionPlan,
 } from "./store";
-import { completedStepsFromEvidence } from "./completion";
-import { listAgentStepCompletionEvidence } from "./completion-store";
+import {
+  absorptionByStepOrder,
+  completedStepsFromEvidence,
+  satisfiedStepsFromEvidence,
+} from "./completion";
+import { listAgentStepCompletionEvidence, listStepExecutionEvidence } from "./completion-store";
 import { listFounderActionCompletionEvidence } from "./founder-action-store";
 import {
   listActiveFounderResolutions,
@@ -391,6 +395,16 @@ export type ActionPlanView = {
   progress: PlanProgress;
   /** Serializable projection of type-specific completion evidence. */
   completedStepOrders: number[];
+  /**
+   * Steps a successful run covered as preparation, and what covered each.
+   *
+   * Kept apart from `completedStepOrders` because they say different things
+   * (ADR 0091): a covered step needs nobody to do it, and was never carried out
+   * on its own. The key is the covered step's order, the value the order of the
+   * step whose run absorbed it — enough for a screen to say which, without
+   * either number becoming a claim that the covered step ran.
+   */
+  absorbedByStepOrder: Record<number, number>;
   /** The request for the current actionable founder-owned step, if one is open. */
   founderInputRequest: FounderInputRequest | null;
   /**
@@ -428,17 +442,21 @@ export async function getLatestActionPlan(
       getFounderIntent(supabase, projectId),
       listActiveFounderResolutions(supabase, projectId),
       listFounderInputRequestsForPlan(supabase, plan.id),
-      listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+      listStepExecutionEvidence(supabase, { projectId, actionPlanId: plan.id }),
       listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
     ]);
 
   const completed = completedStepsFromEvidence(
     plan.steps,
     resolutions,
-    agentEvidence,
+    agentEvidence.completion,
     founderActionEvidence,
   );
-  const actionable = firstActionableStep(plan.steps, completed);
+  /* What is finished, plus what nothing needs to do. Sequencing asks the wider
+     question; `completedStepOrders` below still answers the narrow one. */
+  const satisfied = satisfiedStepsFromEvidence(completed, agentEvidence.absorbed);
+  const absorption = absorptionByStepOrder(completed, agentEvidence.absorbed);
+  const actionable = firstActionableStep(plan.steps, satisfied);
 
   return {
     plan,
@@ -450,8 +468,9 @@ export async function getLatestActionPlan(
       currentContractVersion: ACTION_PLANNER_CONTRACT_VERSION,
     }),
     firstActionableStep: actionable,
-    progress: planProgress(plan.steps, completed),
+    progress: planProgress(plan.steps, satisfied),
     completedStepOrders: [...completed],
+    absorbedByStepOrder: Object.fromEntries(absorption),
     openFounderInputCount: requests.filter((request) => request.status === "open").length,
     founderInputRequest:
       actionable === null

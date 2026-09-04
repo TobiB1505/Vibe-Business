@@ -41,7 +41,7 @@ import { resolveChainPricingClass } from "@/modules/execution-contract/pricing-c
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { classifyExecutionRisk } from "@/modules/execution-contract/risk";
 import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
-import { listAgentStepCompletionEvidence } from "@/modules/action-plans/completion-store";
+import { listStepExecutionEvidence } from "@/modules/action-plans/completion-store";
 import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
@@ -343,13 +343,21 @@ async function routingCompletedSteps(
 
   const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
     listActiveFounderResolutions(supabase, projectId),
-    listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId }),
+    listStepExecutionEvidence(supabase, { projectId, actionPlanId }),
     listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId }),
   ]);
 
   /* The second hop, and only when there is something to ask about. A plan with
      no completed agent step asks the merge table nothing at all. */
-  const preparedChangeIds = [...new Set(agentEvidence.map((item) => item.preparedChangeId))];
+  /* Both projections reach the merge lookup: an absorbed step is satisfied for
+     routing only once the change that absorbed it is on the default branch. */
+  const preparedChangeIds = [
+    ...new Set(
+      [...agentEvidence.completion, ...agentEvidence.absorbed].map(
+        (item) => item.preparedChangeId,
+      ),
+    ),
+  ];
   const merges =
     preparedChangeIds.length > 0
       ? await getLatestMergesForPreparedChanges(supabase, { projectId, preparedChangeIds })
@@ -363,9 +371,10 @@ async function routingCompletedSteps(
     completedSteps: completedStepsForExecutionRouting(
       steps,
       founderResolutions,
-      agentEvidence,
+      agentEvidence.completion,
       mergedPreparedChangeIds,
       founderActionEvidence,
+      agentEvidence.absorbed,
     ),
     founderResolutions,
   };

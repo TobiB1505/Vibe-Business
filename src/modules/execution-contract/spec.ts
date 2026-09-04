@@ -218,6 +218,36 @@ export function chainedStepOrdersOf(spec: {
   return members.length === 0 ? [] : [spec.stepOrder, ...members.map((member) => member.stepOrder)];
 }
 
+/**
+ * Every step this run absorbs as preparation, in plan order — or nothing.
+ *
+ * The mirror of {@link chainedStepKeysOf} and deliberately not the same thing.
+ * A chain member is **delivered** by the run; an absorbed step is work the run
+ * performs on its way to delivering something else, and the two sets are
+ * disjoint by construction — `resolveBuildChain` carries `product_change`
+ * steps, `classifyExecutionDependency` absorbs `analysis` ones.
+ *
+ * Unlike the chain, the head is never a member: a step does not absorb itself.
+ * That is why this returns the preparation as it stands rather than prepending
+ * `stepKey`, and why the column carrying it has the opposite CHECK.
+ *
+ * Read from the objective for the same reason the chain is: the document is
+ * what was built and validated, so a column derived from it cannot disagree
+ * with the spec it sits beside (§54).
+ */
+export function absorbedStepKeysOf(spec: {
+  objective: Pick<ExecutionObjective, "preparation">;
+}): readonly string[] {
+  return spec.objective.preparation.map((preparation) => preparation.stepKey);
+}
+
+/** The orders matching {@link absorbedStepKeysOf}, in the same order. */
+export function absorbedStepOrdersOf(spec: {
+  objective: Pick<ExecutionObjective, "preparation">;
+}): readonly number[] {
+  return spec.objective.preparation.map((preparation) => preparation.stepOrder);
+}
+
 export type ExecutionRepositoryBinding = {
   repositoryConnectionId: string;
   fullName: string;

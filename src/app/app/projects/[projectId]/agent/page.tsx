@@ -52,6 +52,10 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { isFounderAttestable } from "@/modules/action-plans/completion";
+import { firstActionableStep } from "@/modules/action-plans/sequence";
+import { EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
+import { AgentPlanNextNotice } from "./agent-plan-next-notice";
 import { AgentStaleReadNotice } from "./agent-stale-read-notice";
 import { AgentWorkspaceChoice } from "./agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
@@ -443,6 +447,34 @@ async function AgentWorkspaceBody({
       : [];
 
   /*
+   * The third refusal that is a question rather than a dead end, and the one a
+   * founder actually hit (Sprint 0141).
+   *
+   * The two above are about the repository. This one is about the plan: its
+   * next step is a founder decision, real-world work, or Vibe's own work with
+   * no executor — so nothing resolves `agentic`, and the screen drew the same
+   * empty call-to-action block under the same confident hero. The caption said
+   * "an Agent run is not currently available for it", which named no step, no
+   * reason and no way on.
+   *
+   * `completedSteps` is the *routing* set, not the plan screen's display set,
+   * and that is the right one here: this notice answers "what is Vibe waiting
+   * for", which is the same question the router asked. For an attestable step
+   * the two sets agree by construction — neither a founder action nor Vibe
+   * work without an executor produces a commit that could sit unmerged.
+   */
+  const planNextStep =
+    agentRoutes?.available && !agenticStep
+      ? firstActionableStep([...agentRoutes.plan.steps], agentRoutes.completedSteps)
+      : null;
+  const planNextResolution =
+    planNextStep && agentRoutes?.available
+      ? (agentRoutes.resolutions.find(
+          (resolution) => resolution.stepOrder === planNextStep.order,
+        ) ?? null)
+      : null;
+
+  /*
    * The ready hero names the step the button would start, not just the Move.
    *
    * `agenticStep` is what `AgentStartAction` submits, and until this existed
@@ -645,6 +677,14 @@ async function AgentWorkspaceBody({
                         </p>
                       )}
                     </div>
+                  ) : planNextStep && planNextResolution ? (
+                    <AgentPlanNextNotice
+                      stepOrder={planNextStep.order}
+                      stepTitle={planNextStep.title}
+                      reasonLabel={EXECUTION_REASON_LABELS[planNextResolution.reason]}
+                      planHref={planHref}
+                      canConfirm={isFounderAttestable(planNextStep)}
+                    />
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
@@ -659,8 +699,10 @@ async function AgentWorkspaceBody({
                     ? "This Move already has a prepared change. Review its checks, preview and approval here."
                     : agenticStep
                       ? `Run step ${String(agenticStep.order).padStart(2, "0")} of this Move here. Vibe carries that one step through a secure, reviewable flow.`
-                      : readyTask
-                        ? "This Move is selected, but an Agent run is not currently available for it."
+                      : planNextStep
+                        ? "This Move is selected. Its next step is not one Vibe can run, so nothing starts here yet."
+                        : readyTask
+                          ? "This Move is selected, but an Agent run is not currently available for it."
                         : "Choose a Move from your Action Plan, then return here to run it with Vibe."
                 }
               />

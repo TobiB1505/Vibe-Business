@@ -302,6 +302,54 @@ test.describe("ready plan — founder action attestation", () => {
   });
 });
 
+test.describe("ready plan — a step no execution can finish", () => {
+  /*
+   * The dead end a founder actually hit, asserted where it was visible and
+   * nowhere else. Every unit test passed while this screen offered a step
+   * marked "Start here" with nothing under it to start.
+   */
+  test("offers a confirmation, and does not call Vibe's work the founder's", async ({ page }) => {
+    await page.goto("/e2e/action_plan_vibe_no_executor");
+
+    await expect(
+      page.getByRole("heading", { name: "Draft the search-facing copy for that segment" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Vibe can't run this one").first()).toBeVisible();
+    await expect(page.getByText("isn't a change to your product").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Confirm this is complete" })).toBeVisible();
+
+    // The claim it must never make. The founder is confirming the step's own
+    // completion criterion, not testifying that Vibe did the work.
+    await expect(page.getByText("does not claim Vibe did the work").first()).toBeVisible();
+    await expect(page.getByText("Your action")).toHaveCount(0);
+  });
+});
+
+test.describe("ready plan — a step a run covered rather than did", () => {
+  /*
+   * The distinction ADR 0091 turns on, asserted where a founder reads it.
+   * "Done" and "covered" are the same fact for sequencing and different facts
+   * for the record, and only the rendered row can show that the product keeps
+   * them apart.
+   */
+  test("names the run that covered it, and does not call it done", async ({ page }) => {
+    await page.goto("/e2e/action_plan_absorbed_step");
+    await openFullPlannedWork(page);
+
+    // `.first()` because a later row names this step in its own "Depends on"
+    // line; rows render in plan order, so the first match is step 01 itself.
+    const row = page
+      .getByTestId("plan-step")
+      .filter({ hasText: "Draft the search-facing copy for that segment" })
+      .first();
+
+    await expect(row).toContainText("Covered by step 03");
+    await expect(row).not.toContainText("Waiting");
+    // Its number stays a number. The tick belongs to work somebody carried out.
+    await expect(row).toContainText("01");
+  });
+});
+
 test.describe("ready plan — compact checklist", () => {
   test("shows every task title while every checklist row starts closed", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");

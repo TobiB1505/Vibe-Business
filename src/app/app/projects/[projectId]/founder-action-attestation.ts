@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { isFounderAttestable } from "@/modules/action-plans/completion";
 import { getLatestActionPlan } from "@/modules/action-plans/service";
 import { requireSession } from "@/modules/auth/session";
 import { attestFounderAction } from "@/modules/operations/founder-action/server-writes";
@@ -35,8 +36,10 @@ export async function attestFounderActionStepAction(
     current.plan.id !== actionPlanId ||
     current.staleness.length > 0 ||
     current.firstActionableStep?.id !== stepKey ||
-    current.firstActionableStep.actor !== "founder_action" ||
-    current.firstActionableStep.executionSupport !== "founder_acts"
+    /* One predicate, shared with the completion projection and the database
+       function behind this call, so the three cannot drift into disagreeing
+       about which steps a founder is allowed to close (ADR 0090). */
+    !isFounderAttestable(current.firstActionableStep)
   ) {
     return { ok: false, message: ERROR_COPY.step_not_attestable };
   }

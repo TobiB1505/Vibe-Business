@@ -41,16 +41,28 @@ afterAll(() => db?.stop());
 function insertSpec(
   label: string,
   chain: { keys: string; orders: string } | null,
-  overrides: { stepKey?: string; stepOrder?: number } = {},
+  overrides: {
+    stepKey?: string;
+    stepOrder?: number;
+    absorbed?: { keys: string; orders: string };
+  } = {},
 ): string {
   const [, projectId] = db
     .sql(`select user_id, project_id from public.build_lifecycle_fixture('${label}');`)
     .split("|");
 
-  const columns = chain
-    ? ", chain_step_keys, chain_step_orders"
-    : "";
-  const values = chain ? `, ${chain.keys}, ${chain.orders}` : "";
+  const extra: string[] = [];
+  const extraValues: string[] = [];
+  if (chain) {
+    extra.push("chain_step_keys", "chain_step_orders");
+    extraValues.push(chain.keys, chain.orders);
+  }
+  if (overrides.absorbed) {
+    extra.push("absorbed_step_keys", "absorbed_step_orders");
+    extraValues.push(overrides.absorbed.keys, overrides.absorbed.orders);
+  }
+  const columns = extra.length > 0 ? `, ${extra.join(", ")}` : "";
+  const values = extraValues.length > 0 ? `, ${extraValues.join(", ")}` : "";
 
   return `
     with plan as (
@@ -195,5 +207,94 @@ describe("a chained spec is as immutable as any other", () => {
          where id = '${id}';`,
       ),
     ).toContain("immutable");
+  });
+});
+
+/**
+ * The mirror columns, and the one constraint that is the inverse of the chain's.
+ *
+ * `absorbed_step_keys` names what a run *performed* rather than what it
+ * delivered, and the whole distinction rests on a row never being able to claim
+ * both about the same step. A chain must contain its head; absorbed preparation
+ * must not, because a run that absorbed its own head would satisfy its own
+ * prerequisite — and the projection that reads these columns decides what a
+ * founder is asked to do next (ADR 0091).
+ */
+describe("absorbed preparation is constrained as tightly as delivery", () => {
+  it("defaults to empty, which is what every pre-existing row absorbed", () => {
+    const id = db.sqlLast(insertSpec("absorbed-default", null));
+
+    expect(
+      db.sql(
+        `select absorbed_step_keys::text || ' ' || absorbed_step_orders::text
+         from public.execution_specs where id = '${id}';`,
+      ),
+    ).toBe("{} {}");
+  });
+
+  it("accepts preparation that is neither the head nor a delivery", () => {
+    const id = db.sqlLast(
+      insertSpec("absorbed-valid", { keys: `'{"2-build","3-link"}'`, orders: "'{2,3}'" }, {
+        absorbed: { keys: `'{"1-analyse"}'`, orders: "'{1}'" },
+      }),
+    );
+
+    expect(
+      db.sql(`select absorbed_step_orders::text from public.execution_specs where id = '${id}';`),
+    ).toBe("{1}");
+  });
+
+  it("refuses arrays of different lengths", () => {
+    expect(
+      db.sqlExpectingError(
+        insertSpec("absorbed-lengths", null, {
+          absorbed: { keys: `'{"1-analyse","0-scope"}'`, orders: "'{1}'" },
+        }),
+      ),
+    ).toMatch(/execution_specs_absorbed_arrays_agree/);
+  });
+
+  it("refuses a blank key", () => {
+    expect(
+      db.sqlExpectingError(
+        insertSpec("absorbed-blank", null, {
+          absorbed: { keys: `'{"  "}'`, orders: "'{1}'" },
+        }),
+      ),
+    ).toMatch(/execution_specs_absorbed_keys_non_empty/);
+  });
+
+  it("refuses orders that do not ascend", () => {
+    expect(
+      db.sqlExpectingError(
+        insertSpec("absorbed-descending", null, {
+          absorbed: { keys: `'{"1-a","0-b"}'`, orders: "'{3,1}'" },
+        }),
+      ),
+    ).toMatch(/execution_specs_absorbed_orders_ascending/);
+  });
+
+  it("refuses a run that absorbed its own head", () => {
+    // The inverse of `execution_specs_chain_contains_head`, and the reason the
+    // two column pairs are separate: a step cannot satisfy its own prerequisite.
+    expect(
+      db.sqlExpectingError(
+        insertSpec("absorbed-self", null, {
+          absorbed: { keys: `'{"2-build"}'`, orders: "'{2}'" },
+        }),
+      ),
+    ).toMatch(/execution_specs_absorbed_excludes_head/);
+  });
+
+  it("refuses a step that is both absorbed and delivered", () => {
+    // Delivered or covered, never both — otherwise one row would say a step was
+    // carried out and that it never needed carrying out.
+    expect(
+      db.sqlExpectingError(
+        insertSpec("absorbed-overlap", { keys: `'{"2-build","3-link"}'`, orders: "'{2,3}'" }, {
+          absorbed: { keys: `'{"3-link"}'`, orders: "'{3}'" },
+        }),
+      ),
+    ).toMatch(/execution_specs_absorbed_disjoint_from_chain/);
   });
 });
