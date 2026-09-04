@@ -66,3 +66,7 @@ src/app/.well-known/workflow/
 # Output of an external UI review tool. Regenerated on demand, and it records
 # an absolute path from whichever machine produced it.
 /premium-audit.json
+
+# Projekt-Atlas: aus dem Repository generierte Uebersichtsseite (pnpm atlas).
+# Wird neu gebaut statt nachgefuehrt, gehoert deshalb nicht in die Historie.
+/.atlas/
