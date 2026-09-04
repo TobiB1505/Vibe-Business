@@ -20,7 +20,7 @@ import {
   type OutcomeRow,
   type SpendRow,
   type SpendSource,
-  type ToolRow,
+  type AgentSummary,
 } from "./schema";
 
 /** The subset of `operation_runs` the console reads. */
@@ -41,14 +41,17 @@ export type UsageRow = {
   created_at: string;
   status: string;
   provider_cost_usd: number | null;
+  /** Absent on `ai_usage_events`, which has a real provider price. */
+  estimated_cost_nano_usd?: number | null;
 };
 
 export type OnboardingRow = { state: string; completed_at: string | null };
 
-export type ToolEventRow = {
-  tool: string;
-  decision: string;
-  success: boolean | null;
+export type AgentRunRow = {
+  status: string;
+  failure_code: string | null;
+  duration_ms: number | null;
+  changed_file_count: number | null;
 };
 
 /**
@@ -183,13 +186,23 @@ export function toMicroUsd(usd: number | null | undefined): MicroUsd {
   return Math.round(usd * 1_000_000);
 }
 
+/** Nano-USD to micro-USD. Integers throughout; a bad row contributes nothing. */
+export function nanoToMicroUsd(nano: number | null | undefined): MicroUsd {
+  if (typeof nano !== "number" || !Number.isFinite(nano) || nano < 0) return 0;
+  return Math.round(nano / 1_000);
+}
+
 export function buildSpend(
   sources: readonly { source: SpendSource; rows: readonly UsageRow[] }[],
 ): readonly SpendRow[] {
   return sources.map(({ source, rows }) => ({
     source,
     events: rows.length,
-    microUsd: rows.reduce((total, row) => total + toMicroUsd(row.provider_cost_usd), 0),
+    measuredMicroUsd: rows.reduce((total, row) => total + toMicroUsd(row.provider_cost_usd), 0),
+    estimatedMicroUsd: rows.reduce(
+      (total, row) => total + nanoToMicroUsd(row.estimated_cost_nano_usd),
+      0,
+    ),
   }));
 }
 
@@ -210,23 +223,43 @@ export function buildFunnel(rows: readonly OnboardingRow[]): readonly FunnelRow[
     .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state));
 }
 
-export function buildTools(rows: readonly ToolEventRow[]): readonly ToolRow[] {
-  const byTool = new Map<string, ToolRow>();
+export function buildAgentSummary(rows: readonly AgentRunRow[]): AgentSummary {
+  let succeeded = 0;
+  let failed = 0;
+  let filesChanged = 0;
+  let durationTotal = 0;
+  let durationCount = 0;
+  const failures = new Map<string, number>();
 
   for (const row of rows) {
-    const entry = byTool.get(row.tool) ?? { tool: row.tool, allowed: 0, denied: 0, failed: 0 };
-    if (row.decision === "denied") entry.denied += 1;
-    else {
-      entry.allowed += 1;
-      // `success: null` means the gateway recorded no outcome — not a failure.
-      if (row.success === false) entry.failed += 1;
+    if (row.status === "succeeded") succeeded += 1;
+    else if (row.status === "failed") failed += 1;
+
+    if (typeof row.changed_file_count === "number" && row.changed_file_count > 0) {
+      filesChanged += row.changed_file_count;
     }
-    byTool.set(row.tool, entry);
+    // Averaged over the runs that recorded one, never over all of them: a null
+    // duration counted as zero drags the mean towards a number nothing measured.
+    if (typeof row.duration_ms === "number" && row.duration_ms >= 0) {
+      durationTotal += row.duration_ms;
+      durationCount += 1;
+    }
+    if (row.status === "failed") {
+      const code = row.failure_code ?? "(unclassified)";
+      failures.set(code, (failures.get(code) ?? 0) + 1);
+    }
   }
 
-  return [...byTool.values()].sort(
-    (a, b) => b.denied - a.denied || b.allowed - a.allowed || a.tool.localeCompare(b.tool),
-  );
+  return {
+    runs: rows.length,
+    succeeded,
+    failed,
+    filesChanged,
+    avgDurationMs: durationCount > 0 ? Math.round(durationTotal / durationCount) : null,
+    failures: [...failures.entries()]
+      .map(([failureCode, count]) => ({ failureCode, count }))
+      .sort((a, b) => b.count - a.count || a.failureCode.localeCompare(b.failureCode)),
+  };
 }
 
 /** The ISO instant a window starts at, for the query's `gte`. */

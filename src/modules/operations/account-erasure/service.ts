@@ -26,6 +26,25 @@ import { attachExecutionRun, createOperationRun, failOperationRun } from "../sto
  * statuses, which is what still allows a **retry after a failure** — a failed
  * erasure must not lock somebody out of erasing.
  *
+ * ## Why a *completed* erasure is refused, and a failed one is not
+ *
+ * The partial index covers only the active statuses, so it stops a second click
+ * that lands while the first is running — and correctly lets a retry through
+ * once a failed one is terminal. It cannot tell a failed erasure from a
+ * finished one, and those are opposites: after a completed erasure the identity
+ * has been deleted, so a second run has nothing to erase and dies at its first
+ * step.
+ *
+ * That is not hypothetical. Production carried one from 2026-08-27: a first
+ * erasure completed in eight seconds, a second was created eleven seconds after
+ * the first and sat in `preparing` for over eight days. It could be started at
+ * all because a session survives its own account — `getSession()` verifies the
+ * JWT's *signature*, which stays valid for a user row that no longer exists.
+ *
+ * Nothing swept it, either: the staleness backstop for an erasure runs at
+ * `findLatestErasure`, and that is the settings page, which the erased person
+ * can no longer reach. So the refusal belongs here, before the row exists.
+ *
  * ## What this does not do
  *
  * It does not warn, confirm, or explain. The consequence disclosure — that the
@@ -38,7 +57,9 @@ import { attachExecutionRun, createOperationRun, failOperationRun } from "../sto
 export type StartErasureResult =
   | { kind: "started"; operationId: string }
   | { kind: "active"; operationId: string }
-  | { kind: "blocked"; reason: "erasure_start_failed" };
+  | { kind: "blocked"; reason: "erasure_start_failed" }
+  /** A completed erasure already exists for this account. There is nothing left. */
+  | { kind: "already_erased" };
 
 /** Stable per identity, so a second click collides instead of starting a second run. */
 export function computeErasureIdentity(userId: string): string {
@@ -119,6 +140,22 @@ export async function startAccountErasure(
     userId: string;
   },
 ): Promise<StartErasureResult> {
+  /*
+   * Checked before the row is created rather than after, because a created row
+   * is a run that has to be cleaned up. The active-status index still owns the
+   * simultaneous case; this owns the sequential one it cannot see.
+   */
+  const finished = await supabase
+    .from("operation_runs")
+    .select("id")
+    .eq("user_id", params.userId)
+    .eq("operation_type", "account_erasure")
+    .eq("status", "completed")
+    .limit(1)
+    .maybeSingle();
+
+  if (finished.data) return { kind: "already_erased" };
+
   const inputIdentity = computeErasureIdentity(params.userId);
 
   const created = await createOperationRun(supabase, {

@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
-  AGENT_TOOL_COLUMNS,
+  AGENT_RUN_COLUMNS,
   AI_USAGE_COLUMNS,
   DEEP_SCAN_USAGE_COLUMNS,
   ONBOARDING_COLUMNS,
@@ -12,7 +12,7 @@ import {
   selection,
 } from "./columns";
 import { FEED_LIMIT, SAMPLE_LIMIT } from "./schema";
-import type { OnboardingRow, OperationRunRow, ToolEventRow, UsageRow } from "./shape";
+import type { AgentRunRow, OnboardingRow, OperationRunRow, UsageRow } from "./shape";
 
 /**
  * The console's reads. **This is the reviewed rule 53 exception** ([ADR 0088](../../../docs/decisions/0088-the-internal-operator-console.md) §2).
@@ -120,19 +120,19 @@ export async function readOnboarding(client: SupabaseClient): Promise<readonly O
   return (data ?? []) as unknown as readonly OnboardingRow[];
 }
 
-export async function readToolEvents(
+export async function readAgentRuns(
   client: SupabaseClient,
   since: string,
-): Promise<readonly ToolEventRow[]> {
+): Promise<readonly AgentRunRow[]> {
   const { data, error } = await client
-    .from("agent_tool_events")
-    .select(selection(AGENT_TOOL_COLUMNS))
+    .from("agent_execution_runs")
+    .select(selection(AGENT_RUN_COLUMNS))
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(SAMPLE_LIMIT);
 
-  if (error) throw new Error(`internal-console: agent_tool_events read failed (${error.code})`);
-  return (data ?? []) as unknown as readonly ToolEventRow[];
+  if (error) throw new Error(`internal-console: agent_execution_runs read failed (${error.code})`);
+  return (data ?? []) as unknown as readonly AgentRunRow[];
 }
 
 /**

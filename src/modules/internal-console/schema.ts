@@ -86,21 +86,35 @@ export type MicroUsd = number;
 
 export type SpendSource = "inference" | "sandbox" | "browser";
 
+/**
+ * One provider's spend, as two separate figures.
+ *
+ * They are not added together anywhere, and that is the point.
+ * `measuredMicroUsd` is what a provider reported. `estimatedMicroUsd` is
+ * Vibe's own derivation from quantities a provider reported without a price —
+ * which is every sandbox row and every browser row, by design. Summing them
+ * into one number would let an assumption be read as a measurement, which is
+ * the one thing `economy/cost.ts` exists to prevent.
+ */
 export type SpendRow = {
   source: SpendSource;
   events: number;
-  microUsd: MicroUsd;
+  measuredMicroUsd: MicroUsd;
+  estimatedMicroUsd: MicroUsd;
 };
 
 /** Where projects currently stand. Counts of states, never names. */
 export type FunnelRow = { state: string; count: number };
 
-/** What the agent asked its gateway for, and what the gateway said. */
-export type ToolRow = {
-  tool: string;
-  allowed: number;
-  denied: number;
+/** How the agent runs in this window went. */
+export type AgentSummary = {
+  runs: number;
+  succeeded: number;
   failed: number;
+  filesChanged: number;
+  /** Mean of the runs that recorded one, or null when none did. */
+  avgDurationMs: number | null;
+  failures: readonly FailureRow[];
 };
 
 /** Everything one refresh returns. */
@@ -114,7 +128,7 @@ export type ConsoleSnapshot = {
   failures: readonly FailureRow[];
   spend: readonly SpendRow[];
   funnel: readonly FunnelRow[];
-  tools: readonly ToolRow[];
+  agents: AgentSummary;
   /** True when a query hit its bound, so a total is a floor rather than a total. */
   truncated: boolean;
 };
