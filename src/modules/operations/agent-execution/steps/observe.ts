@@ -451,6 +451,28 @@ async function recordContextUsage(
         uniqueFilesRead: usage.uniqueFilesRead,
         repeatedFileReads: usage.repeatedFileReads,
         filesReadOutsideContext: usage.filesReadOutsideContext,
+        /*
+         * The two counts above, said as paths — and listed after them on
+         * purpose. `boundEvent` drops the key that overflows its byte budget,
+         * so a run with pathological path lengths keeps the numbers, which are
+         * exact, and loses the list, which is a sample. The reverse would store
+         * paths with nothing to read them against.
+         *
+         *
+         * Counting was the whole answer until now, and across fourteen runs it
+         * said: 133 files offered, 45 opened, 78 opened that were never
+         * offered. True, and not enough to change anything with — a ranking
+         * cannot be rewritten from a number that says it was wrong without
+         * saying where.
+         *
+         * Repository paths, so they are bounded and redacted like every other
+         * string that reaches this table, and capped in count besides
+         * (rule 27). Contents never travel; a path is not a copy of a file
+         * (rule 26).
+         */
+        unreadCandidates: usage.unreadCandidates,
+        readOutsideContext: usage.readOutsideContext,
+        pathsTruncated: usage.pathsTruncated,
       },
     );
   } catch (error) {

@@ -37,7 +37,11 @@ omitted:
 
 Vibe Business is a founder command center: calm enough for daily use, precise enough for consequential work. Product surfaces should feel like a dark operations console made for business decisions, not a developer IDE and not a decorative analytics template. Its signature is disciplined mint guidance over near-black layered surfaces. Restraint wins everywhere data or action needs to be compared.
 
-The register is product-first. Marketing expression does not lead inside `/app`. Avoid glassmorphism, neon gradients, oversized empty hero areas, generic statistic-card grids, and fabricated activity that exists only to make a screen look busy.
+The audience is AI-native builders. They arrive from Linear, Vercel, Claude, Raycast, Arc, Framer and Lovable, and they read interface quality as product quality — so for this product, craft is not decoration around the value, it is part of it. The bar for a major surface is not "clean SaaS UI" but "would this feel at home in a premium AI-native product?". A surface that merely works is not yet finished.
+
+Restraint here is a compositional tool, not a ceiling. Ordinary surfaces stay quiet so that the moments which deserve spectacle can have it; a product where everything is loud has no emphasis left to spend. Both are in play, and choosing between them per surface is the design work.
+
+The register is product-first, and the standing prohibitions are against the _generic_, not against ambition. Marketing expression does not lead inside `/app`. Avoid glassmorphism, neon gradients, oversized empty hero areas, generic statistic-card grids, and fabricated activity that exists only to make a screen look busy — the first four because they are the house style of every dashboard template and would make Vibe unrecognisable, the last because it is a lie. Those are different reasons, and only the last one is absolute: an expressive treatment that is unmistakably Vibe's own is welcome, while inventing state is never permitted at any level of polish.
 
 The runtime source of truth is [src/app/globals.css](src/app/globals.css). This file records the durable intent and maps to those established tokens; it does not generate them.
 
@@ -71,7 +75,9 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain, Product Scan and Agent exceptions are defined below, and they are the only three.
+On ordinary product surfaces — settings, billing, tables, index pages, forms — motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is deliberate and it is what buys the signature surfaces their contrast; it is a statement about _ordinary_ surfaces, not a cap on the product.
+
+Motion beyond that is governed by [Craft and Motion](#craft-and-motion) below, which supersedes this document's earlier position that the three named signature surfaces were the only places cinematic motion could exist.
 
 Billing follows a compact financial-dashboard composition: plan, spendable Credits and the Credit model form one equal-height overview row; real Credit prices and top-up packs come next; recent activity and plan choices complete the page. Stripe remains the visible payment boundary for renewal, invoices and cancellation. Reference-only finance data such as payment-card suffixes, invoice rows, period charts or per-product usage must not appear until the billing read model can supply it truthfully. The balance expiry ring may visualize only the actual next-expiring share of currently spendable Credits, with an explicit text label; it is never a fabricated usage meter.
 
@@ -108,6 +114,81 @@ It never advances copy, numbers or stage state on a timer. Reduced motion remove
 slides, transforms, orbit and pulse while leaving the same priority, Move and
 named stages present immediately. Static cards do not breathe, scan or glow.
 
+## External UI and Design Tooling
+
+### Vibe owns the visual identity
+
+This document, the runtime tokens, the primitives in `src/components/ui/` and every Vibe-owned product component are the design authority. External libraries and catalogues are **resources, not authorities** — nothing is adopted because a catalogue is confident about it.
+
+Within that, adopt aggressively. An external pattern is worth taking when it materially improves visual quality, interaction quality, perceived craftsmanship, motion, usability, accessibility or delight. Do not reject one merely because it is visually expressive; judge whether it strengthens Vibe. The test applied to the result is not how much was changed but whether the surface still reads as this product.
+
+### shadcn is reference infrastructure, not the design system
+
+Vibe is not a shadcn project. There is no `components.json`, and the dependency set carries no Radix package, no icon library and no `clsx`/`tailwind-merge`/`cva`; `cn` is a local join and every primitive under `src/components/ui/` is hand-written on Tailwind v4. Two consequences follow and both are easy to trip over:
+
+- Never run `shadcn init`, and never introduce a second design system implicitly. Registry install commands (`npx shadcn@latest add …`) will _create_ `components.json` when none exists, scaffolding a parallel `ui/` convention beside this one. Port by hand instead.
+- A pasted component's `className` prop will not override its base classes here, because `cn` does no Tailwind conflict resolution. This fails silently.
+
+Use the shadcn MCP for what it is genuinely good at: component research, accessible interaction primitives, Dialog / Popover / Tooltip / Select / Command / Tabs / Accordion patterns, keyboard and focus behaviour, and implementation reference.
+
+A shadcn or Radix primitive **may** be introduced where it materially improves Vibe. That is not forbidden. Before it is, state the concrete problem, why the existing Vibe implementation is weaker, the dependencies it brings, and how it will be visually integrated. The objective is not to avoid shadcn — it is to avoid becoming generic shadcn.
+
+### 21st.dev is an active design resource
+
+Search it broadly when designing a significant new surface: interaction patterns, high-end cards, unusual layouts, AI interfaces, progress experiences, transitions, state changes, review interfaces, motion ideas, spatial UI, microinteractions and visual hierarchy.
+
+Its components are not inspiration that must always be reduced to something simpler. A finding may be reused conceptually, adapted, heavily adapted, partially ported, or — where technically appropriate — integrated fairly directly. Classify each one explicitly as **REUSE**, **ADAPT**, **HEAVILY ADAPT**, **INSPIRE** or **REJECT**, and do not default to keeping Vibe's existing presentation when an external pattern is materially better.
+
+### Dependencies
+
+External UI dependencies are not prohibited categorically. One earns its place by providing real value in accessibility, interaction correctness, sophisticated motion, rendering quality, implementation quality, development speed or product polish. Before adding one, state what it solves, whether Vibe already solves it, its bundle and runtime implications, who owns it long-term, and how it fits visually.
+
+What this guards against is accumulation by accident — a dependency arriving because a component demo was copied whole rather than because anyone decided it should.
+
+### Reuse logic, not necessarily presentation
+
+Architecture reuse and visual reuse are separate decisions. Before building something new, inspect what exists and reuse the parts that carry authority: domain state, actions, data models, validation and established accessibility behaviour. Do not preserve an old visual presentation merely because it is already there — an existing component may be reused, extended, recomposed, visually redesigned, or replaced at the presentation layer when the new experience is materially better.
+
+### Research workflow for significant UI work
+
+Understand the product state and the user's goal; read the rules here that apply; inspect the existing Vibe components; search 21st.dev broadly; search shadcn where primitives or accessibility are relevant; consider motion patterns; compare several directions; prefer the strongest product experience rather than automatically the smallest change; report meaningful dependency or architecture changes before introducing them; then build the chosen direction in Vibe's own visual language.
+
+## Craft and Motion
+
+### The craft bar
+
+For an important surface, "does this work?" is the first question and not the last. Also ask whether it feels exceptional, and consider deliberately: entrance choreography, shared-layout transitions, contextual animation, hover depth, active-state transitions, progressive disclosure, animated hierarchy changes, spatial continuity, subtle parallax, animated typography, state morphing, timed stagger, responsive motion, tactile button feedback, and polished loading and success states.
+
+The interface should be recognisable as Vibe rather than as default shadcn, default Tailwind, a dashboard template, a generic AI chat, or a collection of catalogue components stacked together.
+
+### Motion is a first-class tool
+
+Motion is encouraged wherever it improves continuity, hierarchy, comprehension, state awareness, perceived responsiveness, emotional quality or product identity. It is **not** restricted to a fixed list of surfaces, and a new important surface may establish its own motion language when the surface justifies one.
+
+Onboarding, Nova Home, Nova's conversations and choices, the Product Understanding reveal, the Business Audit reveal, Move transitions, Action Plan progression, Agent execution, prepared-change review and completion transitions are all places where expressive motion is appropriate.
+
+Three obligations travel with every motion language, new or existing, and none of them is negotiable:
+
+- `prefers-reduced-motion` removes transforms, continuous movement and pulsing while leaving every piece of content, state and action present at first paint.
+- Continuous motion pauses while the document is hidden.
+- Panel geometry is reserved before the first event, so arriving content never moves text somebody is reading.
+
+### Motion may be ambitious; it may never be false
+
+Visual ambition is encouraged. False state is forbidden. Never animate fabricated progress or percentages, a state Vibe has not observed, success before success exists, deployment when only a merge is known, or activity while a process is in fact waiting.
+
+This is the boundary that the rest of this section spends its freedom against: the design may be experimental, the state model may not. External UI never changes domain truth. An approval surface cannot alter what is actually approved; a diff surface cannot introduce partial approval where the product approves one immutable commit; a progress surface cannot invent a fraction; a question component cannot invent choices; an execution control cannot bypass Credit, risk or resolver checks; and model prose never becomes authority because it was rendered beautifully.
+
+## Signature Surfaces
+
+A signature surface is one where the product's understanding is the thing being shown, and where choreography carries meaning rather than decorating it. Three exist today — Business Brain, Product Scan and Agent — and they are described below.
+
+**The set is open.** Earlier revisions of this document declared it closed at three; that position is retired. A new signature surface requires an intentional design argument — what it means, what its motion says that static layout could not, and why it earns the contrast — not a prohibition. What must not happen is every card behaving like one: the richest choreography is reserved for moments that deserve it, and ordinary cards, forms, tables and index pages stay quiet so that reservation means something.
+
+**Nova is recognised as a signature surface.** Nova is intended to become the canonical Home experience, and when it is built it is to be designed as one of Vibe's strongest visual identities rather than constrained to being quieter than the surfaces that preceded it. It should read as an intelligent presence and a premium product agent — something that understands the product and is actively orchestrating the business — and it may use distinctive transitions, rich focus cards, animated state changes, sophisticated progress presentation, ambient motion, custom identity elements, spatial transitions, layered information and premium microinteractions. Avoid copying generic chatbot UI; do not read "not a chatbot" as "visually plain". The intended reaction is that this feels like a product from the future, without costing the reader any trust or clarity.
+
+_Nova is not implemented at HEAD._ It exists as an architecture audit, a pure `deriveNovaFocus` ranking, and visual prototypes under `src/app/e2e/`. This paragraph is a standing design decision about what Nova is to be when it ships, and the surfaces described below remain the product's current signature set. Recognising Nova as Home reverses [ADR 0047](docs/decisions/0047-business-health-is-project-home.md), which is a decision to be recorded in its own ADR when Nova is built, not by this document.
+
 ## Signature Surface: Business Brain
 
 The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections, spherical planet nodes and staged entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: planet colour represents health, planet size represents materiality, and a relationship line exists only where the audit grouped areas into the same conclusion. The centre remains the only aggregate score; a planet may show its own evidence-grounded diagnostic lens score, which never contributes to the centre and is `—` when unsupported.
@@ -132,7 +213,7 @@ Motion for React owns event arrival, connector activation and the active orbital
 
 ## Signature Surface: Agent
 
-Agent is the third and last narrow signature surface, and its metaphor is neither health nor discovery but **work in progress**. It is the one screen where a founder is watching software change their product and can see none of it happening, and the surface exists to make that wait legible rather than decorative.
+Agent is the third narrow signature surface, and its metaphor is neither health nor discovery but **work in progress**. It was the last one for as long as the set was closed; [Signature Surfaces](#signature-surfaces) above now governs how a fourth is added. It is the one screen where a founder is watching software change their product and can see none of it happening, and the surface exists to make that wait legible rather than decorative.
 
 Five stages — Understand, Build, Validate, Preview, Review — are rendered from `agentStageSteps`, which projects over the execution timeline and the prepared change's own gates and re-decides neither. The rail is a completion indicator, unlike the Action Plan's Move stepper, so a tick means the work is done. Two things it must never draw: a connector that fills part way, which is a percentage in disguise, and a pending stage that looks like a skipped one — those mean "keep waiting" and "this is never coming" and must differ in mark, in label and in words.
 
@@ -149,11 +230,16 @@ The Build stage owns the Agent's live event record beside the working core. Vali
 - Do keep account metrics honest and derived from stored domain data.
 - Do preserve full repository and branch identity through responsive transformations.
 - Do use one visual accent and a quiet foreground hierarchy.
-- Do reserve cinematic motion and luminous depth for the Business Brain on project Home.
+- Do reserve cinematic motion and luminous depth for surfaces that have earned a signature argument, and keep ordinary surfaces quiet so that reservation reads.
 - Do let Product Scan motion follow stored discoveries and nothing else.
+- Do search 21st.dev and shadcn before designing a significant new surface, and say what was rejected as well as what was taken.
+- Do state the problem, the alternative and the cost before adding a UI dependency.
 - Don't invent “active”, trend, pull-request or activity data for reference fidelity.
 - Don't duplicate shared surfaces, buttons, status pills or icon grammar in screen-local systems.
 - Don't let a table impose viewport height or overflow rules on the account shell.
 - Don't reintroduce a sticky project header or repeat repository/branch metadata above every project page.
 - Don't copy the Business Brain glow or choreography onto ordinary cards, forms or index pages.
 - Don't reuse Product Scan's scanner core outside onboarding and My Product.
+- Don't run `shadcn init`, and don't let a registry install command scaffold a second `ui/` convention.
+- Don't reject an external pattern for being visually expressive, and don't adopt one that leaves the surface looking like a catalogue.
+- Don't let polish outrun observation: no animated percentage, no success before success, no motion that implies work nobody is doing.

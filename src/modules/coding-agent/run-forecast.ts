@@ -3,7 +3,8 @@ import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { RepositoryContextSize } from "@/modules/economy/cost-drivers";
 import { deriveExecutionSurfaceRequirement } from "@/modules/execution-context/surface";
 import { resolveStepPricingClass } from "@/modules/execution-contract/pricing-class";
-import { HISTORICAL_LEARNING_RECORDS } from "@/modules/economy/intelligence/learning-dataset";
+import { learningRecordsFor } from "@/modules/economy/intelligence/learning-dataset";
+import { measuredRunDataset, type MeasuredRunObservation } from "@/modules/economy/measured-runs";
 import { resolveEconomyModel } from "@/modules/economy/intelligence/model-version";
 import {
   estimateExecutionEconomics,
@@ -57,11 +58,23 @@ import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intell
  * rather than reading it as zero, so that is an absent measurement and not a
  * small one.
  *
- * ## Free, and offline
+ * ## Free, and still offline
  *
- * Pure over static data plus the snapshot the page already holds. No provider
- * call, no network, no database read of its own, no clock beyond the one passed
- * in. Rendering the Agent screen must spend nothing, and this keeps that true.
+ * Pure over the dataset it is handed plus the snapshot the page already holds.
+ * No provider call, no network, no database read *of its own*, no clock beyond
+ * the one passed in. Rendering the Agent screen must spend nothing, and that
+ * stays true — the caller does the reading, once, and this decides what it
+ * means.
+ *
+ * ## Where the dataset comes from, and why that is the point
+ *
+ * `dataset` was a default parameter over `HISTORICAL_RUNS` and nothing ever
+ * passed anything else. That constant was read out of Supabase by a person on
+ * 2026-08-20 and typed into the repository, so every "comparable runs" sentence
+ * a founder has read since was counted against that morning — while the runs
+ * kept accumulating in a table nothing read back. The 2026-08-21 intelligence
+ * review called this the missing learning loop; the loop was connected at this
+ * end and to a constant at the other.
  */
 
 export type RunForecastInput = {
@@ -79,6 +92,21 @@ export type RunForecastInput = {
   riskClass: ExecutionRiskClass;
   /** The snapshot this run would be pinned to. Null when none resolved. */
   snapshot: RepositoryIntelligenceSnapshot | null;
+  /**
+   * Completed runs the caller read back, as raw observations.
+   *
+   * Required rather than defaulted, and observations rather than a finished
+   * dataset. The default is what let the estimator go on answering from a
+   * frozen sample for a fortnight without anybody having to decide that it
+   * should — nothing failed, nothing looked wrong, and the number on the
+   * screen simply stopped moving. A caller with nothing to add passes `[]`.
+   *
+   * Raw observations, because assembling them carries cost figures and this
+   * file is the one sanctioned to hold those (`sprint-0054-safety.test.ts`). A
+   * caller that assembled the dataset itself would be a page holding
+   * nanodollars, which is the shape that suite exists to prevent.
+   */
+  observations: readonly MeasuredRunObservation[];
 };
 
 /**
@@ -161,6 +189,9 @@ export function forecastRun(input: RunForecastInput): RunForecast | null {
   });
 
   const economyModel = resolveEconomyModel(input.at);
+  // The published seed plus the caller's completed runs, deduplicated. Built
+  // here so no amount crosses back out to whoever did the reading.
+  const dataset = measuredRunDataset(input.observations);
 
   const estimate = estimateExecutionEconomics({
     at: input.at,
@@ -178,8 +209,11 @@ export function forecastRun(input: RunForecastInput): RunForecast | null {
     economyModel,
     // Exactly 1 for every cohort today, and computed rather than hard-coded so
     // the first cohort that earns a correction gets it here without a change.
+    historicalRuns: dataset,
+    // Derived from the same dataset, so a correction and the sample it was
+    // measured on can never describe different sets of runs.
     cohortCorrection: correctionForCohort(
-      detectCohortBias(HISTORICAL_LEARNING_RECORDS, economyModel.adjustmentPolicy),
+      detectCohortBias(learningRecordsFor(dataset), economyModel.adjustmentPolicy),
       {
         pricingClass: classification.pricingClass,
         changeKind: input.step.changeKind,

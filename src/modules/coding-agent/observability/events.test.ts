@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   MAX_EVENT_STRING,
+  MAX_METADATA_ARRAY,
   MAX_METADATA_BYTES,
   MAX_METADATA_KEYS,
   REDACTED,
@@ -135,6 +136,89 @@ describe("bounded, because a repository is untrusted input", () => {
     });
 
     expect(event.metadata).toEqual({ bytes: 0, ratio: 0 });
+  });
+});
+
+describe("a list of paths, which is the most repository-controlled value here", () => {
+  const base = {
+    sequence: 1,
+    type: "context_used",
+    phase: "reviewing_change",
+    audience: "internal",
+    occurredAt: "2026-08-19T10:00:00.000Z",
+    summary: "Read 2 of 8 briefed file(s)",
+  } as const;
+
+  const SECRET = "sk-ant-api03-XXXXXXXXXXXXXXXXXXXX";
+
+  /*
+   * Arrays exist in this table for one reason: a list of paths is the
+   * difference between knowing Vibe's briefing missed and knowing *what* it
+   * missed. That also makes them the shape a per-string rule quietly stops
+   * covering, which is why each of these is asserted rather than assumed.
+   */
+  it("stores a list of strings rather than dropping it", () => {
+    // The defect this was written against. Before arrays were handled every
+    // non-scalar became `null`: the write succeeded, the event existed, and the
+    // thing it was added to record was gone.
+    const event = boundEvent({
+      ...base,
+      metadata: { readOutsideContext: ["src/app/page.tsx", "package.json"] },
+    });
+
+    expect(event.metadata.readOutsideContext).toEqual(["src/app/page.tsx", "package.json"]);
+  });
+
+  it("redacts every element, not just the first", () => {
+    const event = boundEvent({
+      ...base,
+      metadata: { readOutsideContext: ["fine.ts", `token ${SECRET}`] },
+    });
+
+    expect(JSON.stringify(event.metadata)).not.toContain(SECRET);
+  });
+
+  it("caps the element count", () => {
+    const many = Array.from({ length: MAX_METADATA_ARRAY + 10 }, (_, index) => `f${index}.ts`);
+    const event = boundEvent({ ...base, metadata: { readOutsideContext: many } });
+
+    expect(event.metadata.readOutsideContext).toHaveLength(MAX_METADATA_ARRAY);
+  });
+
+  it("loses the paths before it loses the counts", () => {
+    /*
+     * `MAX_METADATA_BYTES` drops the key that overflowed and stops. Which key
+     * that is depends on insertion order, so the order is a property rather
+     * than an accident: a run with pathological path lengths keeps the numbers
+     * — which are exact and small — and loses the list, which is a sample.
+     *
+     * The reverse would be the worst outcome available: a stored event that
+     * looks complete, carries paths, and has lost the counts they are supposed
+     * to be read against.
+     */
+    const longPaths = Array.from({ length: MAX_METADATA_ARRAY }, () => `src/${"a".repeat(200)}.ts`);
+    const event = boundEvent({
+      ...base,
+      metadata: {
+        candidatesOffered: 8,
+        filesReadOutsideContext: 4,
+        readOutsideContext: longPaths,
+      },
+    });
+
+    expect(event.metadata.candidatesOffered).toBe(8);
+    expect(event.metadata.filesReadOutsideContext).toBe(4);
+    expect(event.metadata.readOutsideContext).toBeUndefined();
+  });
+
+  it("drops a non-string element rather than storing it", () => {
+    // A repository cannot put an object into this table by hiding it in a list.
+    const event = boundEvent({
+      ...base,
+      metadata: { readOutsideContext: ["ok.ts", { nested: true }, 7] as never },
+    });
+
+    expect(event.metadata.readOutsideContext).toEqual(["ok.ts"]);
   });
 });
 
