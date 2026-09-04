@@ -1,7 +1,7 @@
 # 0141 — The step that nothing could finish
 
 **Date:** 2026-09-04
-**Decision:** [ADR 0088](../decisions/0088-a-founder-closes-what-vibe-cannot-run.md)
+**Decision:** [ADR 0090](../decisions/0090-a-founder-closes-what-vibe-cannot-run.md)
 
 ## What the founder reported
 
@@ -31,7 +31,7 @@ Three symptoms. One cause, and two display defects that hid it.
 
 ## What was built
 
-**The attestation opens to the set with no executor** (ADR 0088). One predicate, `isFounderAttestable`, enforced at the four layers that had each encoded the narrow rule separately — the completion projection, the server action, the render condition, and the `security definer` database function that is the actual authority.
+**The attestation opens to the set with no executor** (ADR 0090). One predicate, `isFounderAttestable`, enforced at the four layers that had each encoded the narrow rule separately — the completion projection, the server action, the render condition, and the `security definer` database function that is the actual authority.
 
 The discriminator is `changeKind`, never `executionSupport`, and that is the load-bearing choice: `not_yet_supported` is also what every agent-buildable step carries, because the deterministic registry has one entry and misses nearly all of them. Keying on the stored support value would have given a founder a control that closes the work Vibe exists to do. The copy says what the click means and what it does not: *"It does not claim Vibe did the work."*
 
@@ -53,7 +53,7 @@ Domain 8,534 · SQL 390 · browser 514 · lint 0/0 · build green.
 
 ## What this does not do
 
-**It does not close the absorption question.** Whether a run that absorbs an `analysis` prerequisite should also *complete* it is a separate authority — Vibe's own evidence rather than a founder's word — and it needs the absorbed keys to reach `listAgentStepCompletionEvidence`, which today they do not. Recorded as open in ADR 0088 rather than answered on the way past.
+**It does not close the absorption question.** Whether a run that absorbs an `analysis` prerequisite should also *complete* it is a separate authority — Vibe's own evidence rather than a founder's word — and it needs the absorbed keys to reach `listAgentStepCompletionEvidence`, which today they do not. Recorded as open in ADR 0090 rather than answered on the way past.
 
 **It does not change what a plan's entry point is.** `firstActionableStep` still has no knowledge of absorption, so an absorbable step is still offered to the founder as the thing to do next. With the attestation open that is workable rather than fatal, but it is not right.
 

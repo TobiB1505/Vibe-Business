@@ -117,7 +117,7 @@ export function stepDisplayState(
    * Covered step order → the order of the step whose run covered it.
    *
    * A fifth state rather than a sixth flavour of `done`, because the two are
-   * different claims (ADR 0089). "Done" says somebody carried this out; this
+   * different claims (ADR 0091). "Done" says somebody carried this out; this
    * says a larger run performed it on the way to something else, and the row
    * names which. Checked after `completed` so a step that is genuinely both —
    * absorbed and later executed on its own — reads as executed.
@@ -242,7 +242,7 @@ const REPOSITORY_CAPABILITY_REASONS: readonly ExecutionResolutionReason[] = [
  *
  * Both come from `classifyIntrinsic` refusing a `vibe` step whose change kind
  * is not `product_change`. Naming them is what lets the plan screen offer a
- * confirmation instead of a dead end (ADR 0088).
+ * confirmation instead of a dead end (ADR 0090).
  */
 const NO_EXECUTOR_REASONS: readonly ExecutionResolutionReason[] = [
   "no_executor_for_vibe_work",

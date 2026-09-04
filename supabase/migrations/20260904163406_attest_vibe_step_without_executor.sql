@@ -1,4 +1,4 @@
--- ADR 0088: a founder may also close a Vibe step Vibe has no executor for.
+-- ADR 0090: a founder may also close a Vibe step Vibe has no executor for.
 --
 -- `resolveStepExecution` refuses every `vibe` step whose change kind is not
 -- `product_change`, and that refusal had no way out: no agent run produces

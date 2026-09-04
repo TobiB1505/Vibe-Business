@@ -82,7 +82,7 @@ function chainMembers(spec: CompletionSpecRow): { stepKey: string; stepOrder: nu
  *
  * Paired by index like {@link chainMembers}, and constrained the same way —
  * equal lengths, ascending orders, and the head *excluded* rather than
- * required. Empty for every row written before ADR 0089, which is the honest
+ * required. Empty for every row written before ADR 0091, which is the honest
  * value: those runs absorbed nothing this reader can see.
  */
 function absorbedMembers(spec: CompletionSpecRow): { stepKey: string; stepOrder: number }[] {
@@ -107,7 +107,7 @@ function absorbedMembers(spec: CompletionSpecRow): { stepKey: string; stepOrder:
  *
  * What they are not is interchangeable. `completion` says a step was carried
  * out; `absorbed` says a step no longer needs to be, and names what covered it.
- * ADR 0089 turns on keeping those apart.
+ * ADR 0091 turns on keeping those apart.
  */
 export async function listStepExecutionEvidence(
   supabase: SupabaseClient,

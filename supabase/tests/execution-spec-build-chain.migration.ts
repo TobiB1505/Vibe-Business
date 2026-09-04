@@ -218,7 +218,7 @@ describe("a chained spec is as immutable as any other", () => {
  * both about the same step. A chain must contain its head; absorbed preparation
  * must not, because a run that absorbed its own head would satisfy its own
  * prerequisite — and the projection that reads these columns decides what a
- * founder is asked to do next (ADR 0089).
+ * founder is asked to do next (ADR 0091).
  */
 describe("absorbed preparation is constrained as tightly as delivery", () => {
   it("defaults to empty, which is what every pre-existing row absorbed", () => {

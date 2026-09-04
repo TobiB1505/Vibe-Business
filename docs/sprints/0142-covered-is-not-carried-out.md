@@ -1,7 +1,7 @@
 # 0142 — Covered is not carried out
 
 **Date:** 2026-09-04
-**Decision:** [ADR 0089](../decisions/0089-absorbed-is-satisfied-not-completed.md)
+**Decision:** [ADR 0091](../decisions/0091-absorbed-is-satisfied-not-completed.md)
 
 ## The question, and the founder's answer to it
 

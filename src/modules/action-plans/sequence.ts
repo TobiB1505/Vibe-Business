@@ -22,7 +22,7 @@ import type { ActionPlanStep, PlanProgress } from "./schema";
 
 /** Steps whose type-specific authoritative completion evidence exists. */
 /**
- * Step orders that need nobody to do them — the sequencing input (ADR 0089).
+ * Step orders that need nobody to do them — the sequencing input (ADR 0091).
  *
  * Wider than "completed" and deliberately so. A step completed by a founder
  * resolution, an attestation or a verified run is in here; so is a step a
@@ -157,7 +157,7 @@ export function isUnblocked(step: ActionPlanStep, satisfied: SatisfiedSteps): bo
  *
  * It takes `SatisfiedSteps`, not completions, which is what stops the plan
  * offering a founder work a successful run already performed inside its own
- * boundary (ADR 0089). The step is skipped as an entry point; the plan still
+ * boundary (ADR 0091). The step is skipped as an entry point; the plan still
  * records that it was covered rather than carried out.
  */
 export function firstActionableStep(

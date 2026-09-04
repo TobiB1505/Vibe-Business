@@ -37,13 +37,14 @@ import { describe, expect, it } from "vitest";
  *
  * ## What is deliberately not asserted
  *
- * - **Module README presence.** Thirteen modules have none, and the count is
- *   not the argument. A README written to satisfy a test is the "list of
- *   intentions pretending to be documentation" that `docs/business/README.md`
- *   bans, and asserting presence would *bless* the dead stub directories rather
- *   than retire them. Sprint 0124 revisited this and kept the position: the new
- *   check below makes the READMEs that exist accurate, and manufactures none.
- *   Recorded as a gap in `docs/ROADMAP.md` instead.
+ * - **Module README presence.** Every module has one as of 2026-09-04, and the
+ *   count was never the argument. A README written to satisfy a test is the
+ *   "list of intentions pretending to be documentation" that
+ *   `docs/business/README.md` bans, and asserting presence would *bless* a dead
+ *   stub directory rather than retire it. Sprint 0124 revisited this and kept
+ *   the position; reaching zero does not change it, because the assertion would
+ *   now be the thing standing between a retired module and its deletion. The
+ *   checks below make the READMEs that exist accurate, and manufacture none.
  * - **No duplicate sprint numbers.** `0054` is used twice, and fixing it means
  *   renaming a file four documents link to.
  * - **Anchor validation.** A slugifier that disagrees with GitHub's would fail
@@ -72,6 +73,24 @@ function markdownFiles(dir: string): string[] {
 }
 
 /** Markdown link targets, minus the anchor, minus anything not a local path. */
+/**
+ * Every module README, as a repo-relative path.
+ *
+ * Section C used to read the repository root and `docs/` only, so a broken
+ * link inside a module README resolved to nothing and failed nothing — while
+ * section F, checking the same files, caught a wrong *filename* in the very
+ * same sentence. The asymmetry was not a decision; the module READMEs simply
+ * were not in the list.
+ */
+function moduleReadmes(): string[] {
+  const modules = join(ROOT, "src/modules");
+  return readdirSync(modules, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(modules, entry.name, "README.md"))
+    .filter((path) => existsSync(path))
+    .map((path) => relative(ROOT, path));
+}
+
 function relativeLinkTargets(source: string): string[] {
   return [...source.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)]
     .map((match) => match[1].split("#")[0])
@@ -178,10 +197,15 @@ describe("every relative link in the documentation resolves", () => {
   const files = [
     ...readdirSync(ROOT).filter((f) => f.endsWith(".md")),
     ...markdownFiles(DOCS),
+    ...moduleReadmes(),
   ];
 
   it("finds the documents it is supposed to be checking", () => {
     expect(files.length).toBeGreaterThan(60);
+  });
+
+  it("includes the module READMEs", () => {
+    expect(files.filter((f) => f.startsWith("src/modules/")).length).toBeGreaterThan(20);
   });
 
   it("resolves every target", () => {
@@ -512,10 +536,10 @@ describe("every decision is visible from ARCHITECTURE.md", () => {
  *
  * ## What is deliberately not asserted, still
  *
- * **Module README presence**, for the reason the header gives: a README written
- * to satisfy a test is the "list of intentions pretending to be documentation"
- * that `docs/business/README.md` bans. This check makes the READMEs that exist
- * accurate; it does not manufacture more of them.
+ * **Module README presence**, for the reason the header gives — unchanged now
+ * that every module has one, because the assertion would outlive the fact and
+ * block a retirement rather than catch a defect. This check makes the READMEs
+ * that exist accurate; it does not manufacture more of them.
  */
 describe("every file a module README names exists", () => {
   /** Every file under `src/`, at any depth, as a repo-relative path. */

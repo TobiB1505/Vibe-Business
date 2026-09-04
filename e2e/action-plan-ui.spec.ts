@@ -327,7 +327,7 @@ test.describe("ready plan — a step no execution can finish", () => {
 
 test.describe("ready plan — a step a run covered rather than did", () => {
   /*
-   * The distinction ADR 0089 turns on, asserted where a founder reads it.
+   * The distinction ADR 0091 turns on, asserted where a founder reads it.
    * "Done" and "covered" are the same fact for sequencing and different facts
    * for the record, and only the rendered row can show that the product keeps
    * them apart.

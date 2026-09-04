@@ -386,7 +386,7 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
-   * A step a successful run covered rather than carried out (ADR 0089).
+   * A step a successful run covered rather than carried out (ADR 0091).
    *
    * Step 1 is `vibe` + `analysis`, which `classifyExecutionDependency` folds
    * into the run built for step 3. Once that run has succeeded, verified and
@@ -417,7 +417,7 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
    *
    * "Draft the search-facing copy" is `vibe` + `analysis`: Vibe's own work,
    * which `resolveStepExecution` refuses because it is not a `product_change`.
-   * No run produces it, no founder resolution covers it, and until ADR 0088 no
+   * No run produces it, no founder resolution covers it, and until ADR 0090 no
    * attestation reached it — so once the decision in front of it was answered,
    * the plan stopped here permanently and every later step went with it.
    *

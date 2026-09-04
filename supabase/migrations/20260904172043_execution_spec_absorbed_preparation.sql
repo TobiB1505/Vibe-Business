@@ -1,4 +1,4 @@
--- ADR 0089: which steps a run absorbed, durably, so actionability can read it.
+-- ADR 0091: which steps a run absorbed, durably, so actionability can read it.
 --
 -- `absorbedPreparationKeys` has always gone into the spec identity — two runs
 -- carrying different preparation are different execution boundaries — but it
@@ -29,7 +29,7 @@ alter table public.execution_specs
   add column if not exists absorbed_step_orders integer[] not null default '{}'::integer[];
 
 comment on column public.execution_specs.absorbed_step_keys is
-  'Plan steps this run performs as preparation rather than delivers, in plan order. Never contains step_key. Empty for a run that absorbed nothing, and for every row written before ADR 0089. Feeds the actionability projection, never the completion projection.';
+  'Plan steps this run performs as preparation rather than delivers, in plan order. Never contains step_key. Empty for a run that absorbed nothing, and for every row written before ADR 0091. Feeds the actionability projection, never the completion projection.';
 
 comment on column public.execution_specs.absorbed_step_orders is
   'The step orders matching absorbed_step_keys, in the same order. Strictly ascending.';

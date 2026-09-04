@@ -154,7 +154,7 @@ function PlanStepRow({
       ? "Waiting"
       : sequence.label;
   /* A covered row is finished for the plan but was never carried out, so it
-     gets the muted mark rather than the tick a completion earns (ADR 0089). */
+     gets the muted mark rather than the tick a completion earns (ADR 0091). */
   const covered = display === "covered";
 
   return (

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startCluster, type Cluster } from "./harness";
 
 /**
- * Which steps a founder may close with their own confirmation (ADR 0088).
+ * Which steps a founder may close with their own confirmation (ADR 0090).
  *
  * ## Why this runs against a real cluster
  *

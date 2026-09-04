@@ -38,7 +38,7 @@ export async function attestFounderActionStepAction(
     current.firstActionableStep?.id !== stepKey ||
     /* One predicate, shared with the completion projection and the database
        function behind this call, so the three cannot drift into disagreeing
-       about which steps a founder is allowed to close (ADR 0088). */
+       about which steps a founder is allowed to close (ADR 0090). */
     !isFounderAttestable(current.firstActionableStep)
   ) {
     return { ok: false, message: ERROR_COPY.step_not_attestable };

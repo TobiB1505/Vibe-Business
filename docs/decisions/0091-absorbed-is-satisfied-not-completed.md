@@ -1,9 +1,9 @@
-# 0089 - Absorbed is satisfied, not completed
+# 0091 - Absorbed is satisfied, not completed
 
 Status: Accepted
 Date: 2026-09-04
 
-Extends [ADR 0088](0088-a-founder-closes-what-vibe-cannot-run.md), which recorded this question as open, and [ADR 0054](0054-agent-action-plan-completion-evidence.md), whose completion authority is deliberately left untouched. Changes no execution, approval or merge authority.
+Extends [ADR 0090](0090-a-founder-closes-what-vibe-cannot-run.md), which recorded this question as open, and [ADR 0054](0054-agent-action-plan-completion-evidence.md), whose completion authority is deliberately left untouched. Changes no execution, approval or merge authority.
 
 ## Context
 

@@ -399,7 +399,7 @@ export type ActionPlanView = {
    * Steps a successful run covered as preparation, and what covered each.
    *
    * Kept apart from `completedStepOrders` because they say different things
-   * (ADR 0089): a covered step needs nobody to do it, and was never carried out
+   * (ADR 0091): a covered step needs nobody to do it, and was never carried out
    * on its own. The key is the covered step's order, the value the order of the
    * step whose run absorbed it — enough for a screen to say which, without
    * either number becoming a claim that the covered step ran.

@@ -12,6 +12,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
+    "atlas": "node scripts/atlas.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
     "ai:probe-audit-schema": "vitest run --config vitest.probe.config.mts src/modules/ai/probe",

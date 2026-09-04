@@ -88,7 +88,7 @@ function completedByAgentExecution(
 }
 
 /**
- * Which steps a founder may close with their own confirmation (ADR 0088).
+ * Which steps a founder may close with their own confirmation (ADR 0090).
  *
  * Two disjoint sets, and the second one is what this function was widened for.
  *
