@@ -542,6 +542,49 @@ export function BillingView({
             )}
           </Surface>
 
+          {/*
+            Where the Credits went, per product (audit R24). The history below
+            says what happened; this says which product it happened to — the
+            question a founder with four products asks first, and the one the
+            ledger could answer all along and never did.
+          */}
+          {overview.spendByProduct.length > 0 && (
+            <Surface
+              as="section"
+              aria-labelledby="spend-by-product-heading"
+              level="panel"
+              padding="lg"
+              className="flex flex-col gap-4"
+            >
+              <div>
+                <MonoLabel id="spend-by-product-heading" as="h2" className="text-mint">
+                  Where it went
+                </MonoLabel>
+                <p className="text-fg mt-2 font-semibold">Spend by product</p>
+                {/*
+                  Over the history below, not ever. A total that silently
+                  covered the last hundred movements would be read as lifetime.
+                */}
+                <p className="text-fg-muted mt-1 text-ui">
+                  Across the activity shown below.
+                </p>
+              </div>
+              <ul className="divide-line-2 divide-y" data-testid="spend-by-product">
+                {overview.spendByProduct.map((product) => (
+                  <li
+                    key={product.projectId}
+                    className="flex items-baseline justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
+                  >
+                    <span className="text-fg-body truncate text-sm">{product.name}</span>
+                    <span className="text-fg-secondary text-sm tabular-nums">
+                      {product.displayCredits} Credits
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </Surface>
+          )}
+
           <Surface
             as="section"
             aria-labelledby="recent-activity-heading"
@@ -597,6 +640,8 @@ export function BillingView({
                           {entry.label}
                         </span>
                         <span className="text-fg-meta text-xs">
+                          {/* Which product, when the movement belongs to one. */}
+                          {entry.productName ? `${entry.productName} · ` : ""}
                           {formatDate(entry.at)}
                         </span>
                       </div>

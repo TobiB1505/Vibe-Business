@@ -524,3 +524,27 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
   });
 });
 
+/*
+ * Slice 5, R24. The ledger has carried `project_id` since it existed and the
+ * read never selected it, so Billing could show that 200 Credits left the
+ * account and not which of four products spent them.
+ */
+test.describe("where the Credits went", () => {
+  test("groups spend by product, and says what the total covers", async ({ page }) => {
+    await open(page, "billing-free");
+
+    const spend = page.getByTestId("spend-by-product");
+    await expect(spend).toBeVisible();
+    await expect(spend).toContainText("Acme");
+    await expect(spend).toContainText(/35 Credits/);
+
+    // The scope of the number is stated rather than left to be assumed.
+    await expect(page.getByText(/across the activity shown below/i)).toBeVisible();
+  });
+
+  test("names the product on the movement that belongs to one", async ({ page }) => {
+    await open(page, "billing-free");
+
+    await expect(page.getByText(/Acme ·/)).toBeVisible();
+  });
+});

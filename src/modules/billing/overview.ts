@@ -11,6 +11,7 @@ import { remainingCapacity, spendableCapacity, spendableLots, type CreditLot } f
 import { reconcileAndRepairBalance } from "@/modules/credits/service";
 import { findOrphanedHolds } from "@/modules/credits/orphaned-holds";
 import { listOperationRunsByIds } from "@/modules/operations/store";
+import { listProjectNames } from "@/modules/projects/workspace-context";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { alertOperator } from "@/lib/observability/alert";
 import {
@@ -88,6 +89,35 @@ export type CreditActivityEntry = {
   /** Already formatted for display, e.g. `"-35"`. */
   displayAmount: string;
   at: string;
+  /**
+   * The product this movement belongs to, named.
+   *
+   * Null for an account-level movement — a purchase and a welcome grant belong
+   * to no product — and null again when the id could not be resolved to a
+   * name, because an identifier is an address rather than something a founder
+   * reads.
+   */
+  productName: string | null;
+};
+
+/**
+ * Where the Credits went, per product (audit R24).
+ *
+ * Charges only, and positive: this answers "what did each product cost me",
+ * so a refund reduces a product's total rather than appearing as income, and a
+ * purchase belongs to no product at all. Ordered by spend, because the
+ * question is which product is expensive.
+ *
+ * Derived from the same page of ledger entries the history shows. It is
+ * therefore "spend in recent history", not "spend ever" — and the surface says
+ * which, because a total that silently covers the last hundred movements is a
+ * number a founder would read as lifetime.
+ */
+export type ProductSpend = {
+  projectId: string;
+  name: string;
+  credits: CreditUnits;
+  displayCredits: string;
 };
 
 /**
@@ -214,6 +244,14 @@ export type BillingOverview = {
   plan: BillingPlanView;
   recentActivity: CreditActivityEntry[];
   /**
+   * What each product cost, over the history shown above.
+   *
+   * "Over the history shown" and not "ever": the page reads a capped page of
+   * the ledger, and a total that silently covered the last hundred movements
+   * would be read as lifetime. The surface says which.
+   */
+  spendByProduct: ProductSpend[];
+  /**
    * Whether this account has ever received its Welcome allowance.
    *
    * Drives the one-time reconciliation affordance for accounts that existed
@@ -280,6 +318,7 @@ export async function getBillingOverview(
       monthlyAllowance: null,
       plan,
       recentActivity: [],
+      spendByProduct: [],
       welcomeGranted: false,
     };
   }
@@ -353,6 +392,17 @@ export async function getBillingOverview(
 
   const shown = entries.slice(0, limit);
 
+  /*
+   * Named once, used twice: the history rows and the per-product totals both
+   * want the same handful of product names, and reading them separately would
+   * be the same query asked twice on one page load.
+   */
+  const productNames = await listProjectNames(
+    supabase,
+    shown.map((entry) => entry.projectId).filter((id): id is string => id !== null),
+  );
+  const activity = await describeActivity(supabase, shown, productNames);
+
   return {
     availableCredits,
     displayAvailable: formatCredits(availableCredits),
@@ -367,7 +417,8 @@ export async function getBillingOverview(
       : null,
     monthlyAllowance: monthlyAllowance(lotReconciliation.lots, now),
     plan,
-    recentActivity: await describeActivity(supabase, shown),
+    recentActivity: activity,
+    spendByProduct: spendByProduct(shown, productNames),
     welcomeGranted,
   };
 }
@@ -435,6 +486,7 @@ function monthlyAllowance(lots: readonly CreditLot[], now: Date): MonthlyAllowan
 async function describeActivity(
   supabase: SupabaseClient,
   entries: readonly LedgerEntry[],
+  productNameById: ReadonlyMap<string, string>,
 ): Promise<CreditActivityEntry[]> {
   const operationIds = [
     ...new Set(
@@ -461,7 +513,9 @@ async function describeActivity(
   const operationTypeById = new Map(operations.map((run) => [run.id, run.operationType]));
   const reservationKeyById = new Map(reservations.map((held) => [held.id, held.idempotencyKey]));
 
-  return entries.map((entry) => toActivityEntry(entry, { operationTypeById, reservationKeyById }));
+  return entries.map((entry) =>
+    toActivityEntry(entry, { operationTypeById, reservationKeyById, productNameById }),
+  );
 }
 
 /** Logs, then yields nothing to name entries with. Never rethrows. */
@@ -502,6 +556,7 @@ function toActivityEntry(
   records: {
     operationTypeById: ReadonlyMap<string, string>;
     reservationKeyById: ReadonlyMap<string, string>;
+    productNameById: ReadonlyMap<string, string>;
   },
 ): CreditActivityEntry {
   return {
@@ -510,7 +565,37 @@ function toActivityEntry(
     creditDelta: entry.creditDelta,
     displayAmount: `${entry.creditDelta > 0 ? "+" : ""}${formatCredits(entry.creditDelta)}`,
     at: entry.createdAt,
+    productName: entry.projectId ? (records.productNameById.get(entry.projectId) ?? null) : null,
   };
+}
+
+/**
+ * Charges, totalled per product, biggest first.
+ *
+ * A movement with no product is skipped rather than pooled into an "other"
+ * row: a purchase is not spend, and inventing a bucket for it would put money
+ * coming in beside money going out.
+ */
+export function spendByProduct(
+  entries: readonly LedgerEntry[],
+  productNameById: ReadonlyMap<string, string>,
+): ProductSpend[] {
+  const totals = new Map<string, number>();
+
+  for (const entry of entries) {
+    if (entry.projectId === null) continue;
+    if (entry.creditDelta >= 0) continue;
+    totals.set(entry.projectId, (totals.get(entry.projectId) ?? 0) + Math.abs(entry.creditDelta));
+  }
+
+  return [...totals.entries()]
+    .map(([projectId, spent]) => ({
+      projectId,
+      name: productNameById.get(projectId) ?? "Another product",
+      credits: creditUnits(spent),
+      displayCredits: formatCredits(creditUnits(spent)),
+    }))
+    .sort((left, right) => right.credits - left.credits);
 }
 
 /**

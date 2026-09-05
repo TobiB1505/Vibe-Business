@@ -162,6 +162,16 @@ export type LedgerEntry = {
   operationRunId: string | null;
   reservationId: string | null;
   refundsLedgerEntryId: string | null;
+  /**
+   * Which product the movement belongs to, when it belongs to one.
+   *
+   * The column has existed since the ledger did and the read never selected
+   * it, so Billing could show a founder that 200 Credits left the account and
+   * not which of their four products spent them. Null for account-level
+   * movements — a purchase and a welcome grant belong to no product, and
+   * attributing them to one would be inventing an origin.
+   */
+  projectId: string | null;
   rateCardVersion: string | null;
   idempotencyKey: string;
   createdAt: string;
@@ -175,13 +185,14 @@ type LedgerRow = {
   operation_run_id: string | null;
   reservation_id: string | null;
   refunds_ledger_entry_id: string | null;
+  project_id: string | null;
   rate_card_version: string | null;
   idempotency_key: string;
   created_at: string;
 };
 
 const LEDGER_COLUMNS =
-  "id, credit_account_id, kind, credit_delta, operation_run_id, reservation_id, refunds_ledger_entry_id, rate_card_version, idempotency_key, created_at";
+  "id, credit_account_id, kind, credit_delta, operation_run_id, reservation_id, refunds_ledger_entry_id, project_id, rate_card_version, idempotency_key, created_at";
 
 function mapLedgerEntry(row: LedgerRow): LedgerEntry {
   return {
@@ -192,6 +203,7 @@ function mapLedgerEntry(row: LedgerRow): LedgerEntry {
     operationRunId: row.operation_run_id,
     reservationId: row.reservation_id,
     refundsLedgerEntryId: row.refunds_ledger_entry_id,
+    projectId: row.project_id,
     rateCardVersion: row.rate_card_version,
     idempotencyKey: row.idempotency_key,
     createdAt: row.created_at,
@@ -230,13 +242,26 @@ export const LEDGER_READ_LIMIT = 100;
 export async function listLedgerEntries(
   supabase: SupabaseClient,
   creditAccountId: string,
+  /**
+   * One page of history, when the caller wants more than the newest movements.
+   *
+   * Offset paging rather than a cursor: the ledger is append-only and read
+   * newest-first, so a page boundary cannot shift under a reader the way it
+   * can in a list that reorders. `LEDGER_READ_LIMIT` stays the default and the
+   * ceiling — a page is a page, and asking for the whole ledger is what made
+   * this read degrade with age.
+   */
+  page?: { limit?: number; offset?: number },
 ): Promise<LedgerEntry[]> {
+  const limit = Math.min(page?.limit ?? LEDGER_READ_LIMIT, LEDGER_READ_LIMIT);
+  const offset = Math.max(0, page?.offset ?? 0);
+
   const { data, error } = await supabase
     .from("billing_credit_ledger")
     .select(LEDGER_COLUMNS)
     .eq("credit_account_id", creditAccountId)
     .order("created_at", { ascending: false })
-    .limit(LEDGER_READ_LIMIT);
+    .range(offset, offset + limit - 1);
 
   if (error) throw error;
   return ((data ?? []) as LedgerRow[]).map(mapLedgerEntry);
