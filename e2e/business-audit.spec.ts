@@ -109,7 +109,12 @@ test.describe("signature Business Brain", () => {
     await expect(signalsPanel).toContainText(/38\s*\/100/i);
     await expect(signalsPanel).toContainText(/signals behind this score/i);
     await expect(signalsPanel).toContainText(/individual signals do not carry invented point values/i);
-    await expect(detail.getByRole("tab")).toHaveCount(4);
+    /*
+     * Three, not four. The evidence tab's numbered citation cards were the
+     * shared drawer's content one tab away from the conclusion it supports;
+     * they moved behind the count in the header.
+     */
+    await expect(detail.getByRole("tab")).toHaveCount(3);
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
   });
 
@@ -134,19 +139,19 @@ test.describe("signature Business Brain", () => {
 
     await overview.press("ArrowRight");
 
-    const evidence = detail.getByRole("tab", { name: /^evidence/i });
-    await expect(evidence).toBeFocused();
-    await expect(evidence).toHaveAttribute("aria-selected", "false");
+    const signals = detail.getByRole("tab", { name: /^signals$/i });
+    await expect(signals).toBeFocused();
+    await expect(signals).toHaveAttribute("aria-selected", "false");
     await expect(overview).toHaveAttribute("aria-selected", "true");
 
-    await evidence.press("Enter");
-    await expect(evidence).toHaveAttribute("aria-selected", "true");
+    await signals.press("Enter");
+    await expect(signals).toHaveAttribute("aria-selected", "true");
     await expect(overview).toHaveAttribute("aria-selected", "false");
 
     // End reaches the last tab, and still only moves.
-    await evidence.press("End");
+    await signals.press("End");
     await expect(detail.getByRole("tab", { name: /^history$/i })).toBeFocused();
-    await expect(evidence).toHaveAttribute("aria-selected", "true");
+    await expect(signals).toHaveAttribute("aria-selected", "true");
   });
 
   /*
@@ -220,6 +225,43 @@ test.describe("signature Business Brain", () => {
     );
     expect(mint).not.toBe("");
     expect(colour).not.toBe(mint);
+  });
+
+  test("opens the lens's own citations from the detail header", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+    await lens(page, /revenue & economics/i).click();
+
+    const detail = page.getByTestId("selected-lens-detail");
+    await detail.getByRole("button", { name: /sources?$/ }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText("Revenue & Economics");
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(drawer).toBeHidden();
+  });
+
+  /*
+   * Slice 2: contradictions belong on My Product *and* on the Brain. Here they
+   * qualify the scores beside them — a capability the audit read out of the
+   * repository may be one no visitor can reach.
+   */
+  test("carries a code-against-live disagreement as evidence about the business", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(SYNTHESIS);
+
+    const heading = page.getByRole("heading", {
+      name: /your code against your live product/i,
+    });
+    await expect(heading).toBeVisible();
+
+    const finding = heading.locator("xpath=..").getByRole("article").first();
+    await expect(finding).toBeVisible();
+    await expect(finding).toContainText(/your code · your live product/i);
+    await expect(finding).toContainText(/needs attention/i);
   });
 
   test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {

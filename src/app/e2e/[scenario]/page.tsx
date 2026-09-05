@@ -6,6 +6,7 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
 import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
@@ -1324,6 +1325,18 @@ export default async function E2eScenarioPage({
               view={view}
               movesHref="/app/projects/project_e2e/plan"
               hasMoves={hasMoves}
+              /*
+               * The same comparison My Product renders, built from the same
+               * fixtures rather than restated — the Brain carries it as
+               * evidence about the business, and without this the branch had
+               * no browser coverage at all.
+               */
+              contradictions={
+                crossCheckIntelligence(
+                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                ).checks
+              }
             />
           ) : (
             <p>This fixture predates the Business Brain.</p>

@@ -7,9 +7,11 @@ import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { TabList, tabPanelId, tabTriggerId } from "@/components/ui/tabs";
 import { FindingCard } from "@/components/system/finding-card";
+import { CitationCount } from "@/components/system/evidence-drawer";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import { movesContextHref } from "@/modules/opportunities/lineage";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
+import type { IntelligenceCrossCheck } from "@/modules/repository-intelligence/cross-check";
 import type {
   BusinessBrainNode,
   BusinessBrainPriority,
@@ -17,13 +19,21 @@ import type {
 } from "@/modules/projects/business-brain-view";
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 
-const DETAIL_TABS = ["overview", "evidence", "signals", "history"] as const;
+/*
+ * No `evidence` tab.
+ *
+ * It listed the lens's citations as numbered cards — the same detail and the
+ * same source line the shared evidence drawer renders, one tab away from the
+ * conclusion they support. The audit asks this column to use that drawer
+ * instead of a local tab, so the citations moved behind the count in the
+ * header, beside the diagnosis they are evidence *for*.
+ */
+const DETAIL_TABS = ["overview", "signals", "history"] as const;
 type DetailTab = (typeof DETAIL_TABS)[number];
 
 /* Written out rather than capitalised from the key: a label is copy. */
 const LENS_TAB_LABELS: Record<DetailTab, string> = {
   overview: "Overview",
-  evidence: "Evidence",
   signals: "Signals",
   history: "History",
 };
@@ -218,12 +228,14 @@ function DefaultPanel({
   view,
   movesHref,
   hasMoves,
+  contradictions,
   onExplore,
   reducedMotion,
 }: {
   view: BusinessBrainView;
   movesHref: string;
   hasMoves: boolean;
+  contradictions: IntelligenceCrossCheck[];
   onExplore: (lens: BusinessLens) => void;
   reducedMotion: boolean;
 }) {
@@ -290,6 +302,30 @@ function DefaultPanel({
           </p>
         )}
       </section>
+      {/*
+        The audit reads the code; a contradiction is the code disagreeing with
+        what a visitor can actually reach. It belongs beside the blockers
+        because it qualifies them — a capability scored on the repository
+        alone may be one nobody can get to.
+      */}
+      {contradictions.length > 0 && (
+        <section className="business-brain-side-card flex flex-col gap-4 p-4 sm:p-5">
+          <h2 className="text-fg text-base font-semibold tracking-[-0.02em]">
+            Your code against your live product
+          </h2>
+          {contradictions.map((check) => (
+            <FindingCard
+              key={check.id}
+              variant="contradiction"
+              severity="attention"
+              title={check.title}
+              explanation={check.detail}
+              sourceLabel="Your code · Your live product"
+            />
+          ))}
+        </section>
+      )}
+
       <RecentChanges view={view} />
     </motion.div>
   );
@@ -374,6 +410,16 @@ function SelectedPanel({
             <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", node.health === "weak" ? "border-coral/25 bg-coral/[0.08] text-coral" : node.health === "strong" ? "border-mint/25 bg-mint/[0.08] text-mint" : "border-amber/25 bg-amber/[0.08] text-amber")}>
               {stateLabel}
             </span>
+            {/*
+              The lens's own citations, beside the reading they support rather
+              than one tab away from it — the same drawer a blocker, a
+              contradiction and a profile fact open.
+            */}
+            <CitationCount
+              citations={evidence.map((item) => ({ detail: item.detail, source: item.source }))}
+              title={node.label}
+              conclusion={node.problem?.explanation ?? null}
+            />
           </div>
         </div>
         <button type="button" onClick={onClose} aria-label="Back to Business Health overview" className="border-line-2 text-fg-muted hover:border-line-strong hover:text-fg flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border text-lg transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
@@ -384,7 +430,7 @@ function SelectedPanel({
       <TabList
         tabs={DETAIL_TABS.map((tab) => ({
           value: tab,
-          label: tab === "evidence" ? `Evidence (${evidence.length})` : LENS_TAB_LABELS[tab],
+          label: LENS_TAB_LABELS[tab],
         }))}
         value={activeTab}
         onSelect={setActiveTab}
@@ -496,24 +542,6 @@ function SelectedPanel({
             </>
           )}
 
-          {activeTab === "evidence" && (
-            evidence.length > 0 ? (
-              <ul className="flex flex-col gap-3">
-                {evidence.map((item, index) => (
-                  <motion.li key={item.id} className="business-brain-insight-card flex gap-3 p-4" initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reducedMotion ? 0 : index * 0.035 }}>
-                    <span className="border-line-2 bg-surface-4 text-fg-meta flex size-8 shrink-0 items-center justify-center rounded-lg text-xs tabular-nums">{index + 1}</span>
-                    <div className="min-w-0">
-                      <p className="text-fg-secondary text-sm leading-relaxed">{item.detail}</p>
-                      <p className="text-fg-meta mt-1 text-xs">{item.source}</p>
-                    </div>
-                  </motion.li>
-                ))}
-              </ul>
-            ) : (
-              <HonestTabEmpty title="No assessable evidence" body="Vibe did not record evidence that can support a scored conclusion for this area." />
-            )
-          )}
-
           {activeTab === "signals" && (
             <div className="flex flex-col gap-4">
               <section className="business-brain-insight-card overflow-hidden p-5" aria-labelledby={`${tabId}-score-heading`}>
@@ -588,10 +616,12 @@ export function AuditIntelligence({
   view,
   movesHref,
   hasMoves,
+  contradictions = [],
 }: {
   view: BusinessBrainView;
   movesHref: string;
   hasMoves: boolean;
+  contradictions?: IntelligenceCrossCheck[];
 }) {
   const reducedMotion = Boolean(useReducedMotion());
   const [selected, setSelected] = useState<BusinessLens | null>(null);
@@ -676,6 +706,7 @@ export function AuditIntelligence({
             view={view}
             movesHref={movesHref}
             hasMoves={hasMoves}
+            contradictions={contradictions}
             onExplore={select}
             reducedMotion={reducedMotion}
           />

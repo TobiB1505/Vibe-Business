@@ -14,6 +14,7 @@ import {
 import { getPausedAudit, getProjectAuditReadings } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
+import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
 import {
   getLatestSession,
@@ -206,6 +207,20 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           entry: buildNovaAuditEntry(businessBrainView, latestAudit.result.synthesis),
         })
       : null;
+
+  /*
+   * The same comparison My Product renders, read here as evidence about the
+   * business rather than about the code: a capability the audit scored on the
+   * strength of the repository, which no visitor can reach, is a finding the
+   * Brain has to carry too.
+   */
+  const crossCheck = latestSnapshot?.result
+    ? crossCheckIntelligence(
+        latestSnapshot.result,
+        latestLiveSnapshot?.result ?? null,
+        latestDeepScanSnapshot?.result ?? null,
+      )
+    : null;
 
   const deepScanModel = deepScanAccess
     ? buildDeepScanViewModel({
@@ -420,6 +435,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
             view={businessBrainView}
             movesHref={projectSectionHref(project.id, "action-plan")}
             hasMoves={hasMoves}
+            contradictions={crossCheck?.compared ? crossCheck.checks : []}
           />
         ) : latestAudit?.result ? (
           <Notice tone="info" label="Older audit">
