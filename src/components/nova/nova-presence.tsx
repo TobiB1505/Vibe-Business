@@ -176,6 +176,7 @@ export function NovaPresence({
   seed = "vibe",
   size = "md",
   introduce = false,
+  still = false,
   className,
 }: {
   /**
@@ -204,6 +205,19 @@ export function NovaPresence({
    * pauses while hidden; an entrance is not continuous.
    */
   introduce?: boolean;
+  /**
+   * Draw the state without the motion that belongs to it.
+   *
+   * For a *legend*: a page that explains what the mark means has to be able to
+   * show `working` without asserting that work is happening. On the landing
+   * page nothing is running — no project, no repository, no operation — so a
+   * turning aperture there would be the one thing DESIGN.md forbids at any
+   * level of polish, and the copy beside it carries the motion instead.
+   *
+   * It can only ever *remove* motion. There is no setting that adds movement
+   * to a state that did not earn it, which is the direction that would matter.
+   */
+  still?: boolean;
   className?: string;
 }) {
   const reduceMotion = useReducedMotion();
@@ -227,8 +241,9 @@ export function NovaPresence({
   );
 
   const opening = introduce && reduceMotion !== true;
-  /* Only a live read turns the frame or traces the curve. */
-  const working = state === "working" && animate;
+  /* Only a live read turns the frame or traces the curve — and a legend
+     asking for the state without the claim turns nothing at all. */
+  const working = state === "working" && animate && !still;
 
   return (
     <span

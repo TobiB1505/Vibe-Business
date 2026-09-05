@@ -45,6 +45,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           </Link>
           <div className="ml-8 hidden items-center gap-7 lg:flex">
             {[
+              ["Nova", "/#nova"],
               ["Product", "/#product"],
               ["How it works", "/#how"],
               ["Business Brain", "/#brain"],

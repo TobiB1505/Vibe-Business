@@ -347,3 +347,58 @@ test.describe("a product logo that will not load", () => {
     await expect(mark).toHaveAttribute("alt", "");
   });
 });
+
+/*
+ * Nova on the first page (DESIGN.md, "Signature Surface: the Landing Page").
+ *
+ * The page said "AI business co-founder" in its own eyebrow and never named
+ * the co-founder — a visitor met the product's protagonist after signing up.
+ */
+test.describe("meeting Nova before signing up", () => {
+  test("names her in the hero and introduces her below it", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByText(/nova · your ai business co-founder/i)).toBeVisible();
+
+    const section = page.getByTestId("landing-nova");
+    await expect(section).toBeVisible();
+    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+  });
+
+  /*
+   * The property this section is most likely to lose. Nothing is running on a
+   * marketing page — no project, no repository, no operation — so a turning
+   * aperture here would be the "activity while a process is in fact waiting"
+   * DESIGN.md forbids at any level of polish. The four states are a legend,
+   * and every one of them is drawn at rest.
+   */
+  test("shows the four states as a key, with none of them claiming to be running", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const section = page.getByTestId("landing-nova");
+    await section.scrollIntoViewIfNeeded();
+
+    // Scoped to the legend: the introduction above it is a second
+    // `listening` mark, and it is the same one at hero size.
+    const legend = section.getByRole("list");
+    for (const state of ["idle", "listening", "working", "settled"]) {
+      await expect(legend.locator(`[data-nova-presence="${state}"]`)).toHaveCount(1);
+    }
+
+    // The spin class only ever appears on a live run; nothing here is one.
+    const spinning = await section.locator('[class*="nSpin-"]').count();
+    expect(spinning).toBe(0);
+  });
+
+  test("survives reduced motion with the whole introduction present", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+
+    const section = page.getByTestId("landing-nova");
+    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+    await expect(section.getByText(/what her mark tells you/i)).toBeVisible();
+    // The mark itself is present at first paint, not assembled into existence.
+    await expect(section.locator('[data-nova-presence]').first()).toBeVisible();
+  });
+});

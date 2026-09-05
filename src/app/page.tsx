@@ -2,6 +2,8 @@ import Link from "next/link";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { LandingBusinessBrain } from "@/components/marketing/landing-business-brain";
+import { LandingNova } from "@/components/marketing/landing-nova";
+import { NovaPresence } from "@/components/nova/nova-presence";
 import { buttonClasses } from "@/components/ui/button";
 import {
   ActionPlanIcon,
@@ -111,11 +113,13 @@ export default function HomePage() {
         />
 
         <div className="flex flex-col items-start gap-7">
-          <span className="text-fg-prose inline-flex items-center gap-2 rounded-full border border-line-strong bg-surface-2 px-3.5 py-2 font-mono text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
-            <span aria-hidden="true" className="text-mint">
-              ✦
-            </span>
-            AI business co-founder
+          {/*
+            The eyebrow said "AI business co-founder" beside a generic sparkle
+            and never named the co-founder. Her own mark, and her name.
+          */}
+          <span className="text-fg-prose inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-surface-2 py-1.5 pr-3.5 pl-2 font-mono text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
+            <NovaPresence state="listening" seed="vibe" size="sm" />
+            Nova · your AI business co-founder
           </span>
 
           <h1 className="text-fg max-w-[12ch] text-[clamp(2.75rem,5vw,4.5rem)] leading-[1.02] font-bold tracking-[-0.055em] text-balance">
@@ -182,6 +186,12 @@ export default function HomePage() {
           </span>
         </div>
       </div>
+
+      {/*
+        Nova, immediately after the hero that now names her — before the flow,
+        because "who is doing this" comes before "how does it work".
+      */}
+      <LandingNova />
 
       <section id="how" aria-labelledby="how-heading" className="scroll-mt-24 py-20 sm:py-28">
         <div className="grid gap-10 xl:grid-cols-[20rem_minmax(0,1fr)] xl:gap-16">
