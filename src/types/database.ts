@@ -22,6 +22,7 @@ export type Database = {
           attestation_version: string
           attested_by_user_id: string
           created_at: string
+          finding: string | null
           id: string
           project_id: string
         }
@@ -32,6 +33,7 @@ export type Database = {
           attestation_version?: string
           attested_by_user_id: string
           created_at?: string
+          finding?: string | null
           id?: string
           project_id: string
         }
@@ -42,6 +44,7 @@ export type Database = {
           attestation_version?: string
           attested_by_user_id?: string
           created_at?: string
+          finding?: string | null
           id?: string
           project_id?: string
         }
@@ -2447,6 +2450,8 @@ export type Database = {
       }
       execution_specs: {
         Row: {
+          absorbed_step_keys: string[]
+          absorbed_step_orders: number[]
           action_plan_id: string
           base_sha: string
           business_audit_id: string
@@ -2475,6 +2480,8 @@ export type Database = {
           step_order: number
         }
         Insert: {
+          absorbed_step_keys?: string[]
+          absorbed_step_orders?: number[]
           action_plan_id: string
           base_sha: string
           business_audit_id: string
@@ -2503,6 +2510,8 @@ export type Database = {
           step_order: number
         }
         Update: {
+          absorbed_step_keys?: string[]
+          absorbed_step_orders?: number[]
           action_plan_id?: string
           base_sha?: string
           business_audit_id?: string
@@ -4323,6 +4332,7 @@ export type Database = {
         Args: {
           p_action_plan_id: string
           p_action_plan_step_key: string
+          p_finding?: string
           p_project_id: string
           p_user_id: string
         }
@@ -4359,6 +4369,20 @@ export type Database = {
       erase_project_lifecycle: {
         Args: { p_project_id: string; p_user_id: string }
         Returns: boolean
+      }
+      list_ai_usage_events_for_run: {
+        Args: { p_project_id: string; p_run_id: string }
+        Returns: {
+          cache_creation_input_tokens: number
+          cache_read_input_tokens: number
+          created_at: string
+          input_tokens: number
+          latency_ms: number
+          output_tokens: number
+          provider_cost_usd: number
+          status: string
+          thinking_tokens: number
+        }[]
       }
       materialize_allocation_capacity: {
         Args: { p_allocation_id: string }
