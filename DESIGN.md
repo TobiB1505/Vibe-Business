@@ -41,7 +41,7 @@ The audience is AI-native builders. They arrive from Linear, Vercel, Claude, Ray
 
 Restraint here is a compositional tool, not a ceiling. Ordinary surfaces stay quiet so that the moments which deserve spectacle can have it; a product where everything is loud has no emphasis left to spend. Both are in play, and choosing between them per surface is the design work.
 
-The register is product-first, and the standing prohibitions are against the _generic_, not against ambition. Marketing expression does not lead inside `/app`. Avoid glassmorphism, neon gradients, oversized empty hero areas, generic statistic-card grids, and fabricated activity that exists only to make a screen look busy — the first four because they are the house style of every dashboard template and would make Vibe unrecognisable, the last because it is a lie. Those are different reasons, and only the last one is absolute: an expressive treatment that is unmistakably Vibe's own is welcome, while inventing state is never permitted at any level of polish.
+The register is product-first: marketing expression does not lead inside `/app`. But the standing prohibitions are against the _generic_, not against ambition, and they are applied as a test rather than as a list of banned techniques — see [Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused). One item is absolute at any level of polish: fabricated activity, which exists to make a screen look busy, is a lie rather than a style.
 
 The runtime source of truth is [src/app/globals.css](src/app/globals.css). This file records the durable intent and maps to those established tokens; it does not generate them.
 
@@ -161,6 +161,20 @@ For an important surface, "does this work?" is the first question and not the la
 
 The interface should be recognisable as Vibe rather than as default shadcn, default Tailwind, a dashboard template, a generic AI chat, or a collection of catalogue components stacked together.
 
+### Expressive technique is judged, not pre-refused
+
+No visual technique is refused by category. 3D, glass, gradients, glow, expressive hero layouts and ambitious motion are all available. Earlier revisions of this document listed several of them as things to avoid; that list is retired as a list, and its judgement is kept as a test. Ask of the specific treatment on the specific surface:
+
+- Does it **strengthen hierarchy** — is something easier to find or to rank because of it?
+- Does it **reinforce Vibe's identity**, rather than some other product's?
+- Does it create a **wow moment that means something**, tied to what this screen is actually for?
+- Does it stay **readable and performant** at every width, in reduced motion, and on a hidden tab?
+- Does it **fit this product state** — the same treatment can be right on a reveal and wrong on a settings page?
+
+Refuse it when the result is generic, decorative, visually noisy, or disconnected from Vibe. Those are the grounds. "It is a gradient" is not, and neither is "the catalogue version of this looked like a marketing page" — the question is always what _this_ treatment does on _this_ surface.
+
+Two things this does not loosen. Contrast is still the reason ordinary surfaces stay quiet: a technique that would be right on a signature moment is usually wrong stamped across every card, and spending it everywhere is how a product runs out of emphasis. And truthfulness is untouched — an expressive treatment is judged on the criteria above _after_ it has satisfied [Motion may be ambitious; it may never be false](#motion-may-be-ambitious-it-may-never-be-false), never instead of it.
+
 ### Motion is a first-class tool
 
 Motion is encouraged wherever it improves continuity, hierarchy, comprehension, state awareness, perceived responsiveness, emotional quality or product identity. It is **not** restricted to a fixed list of surfaces, and a new important surface may establish its own motion language when the surface justifies one.
@@ -178,6 +192,18 @@ Three obligations travel with every motion language, new or existing, and none o
 Visual ambition is encouraged. False state is forbidden. Never animate fabricated progress or percentages, a state Vibe has not observed, success before success exists, deployment when only a merge is known, or activity while a process is in fact waiting.
 
 This is the boundary that the rest of this section spends its freedom against: the design may be experimental, the state model may not. External UI never changes domain truth. An approval surface cannot alter what is actually approved; a diff surface cannot introduce partial approval where the product approves one immutable commit; a progress surface cannot invent a fraction; a question component cannot invent choices; an execution control cannot bypass Credit, risk or resolver checks; and model prose never becomes authority because it was rendered beautifully.
+
+### Ambience around a working state, never evidence of one
+
+Decorative "thinking" motion — a shimmering label, a drifting field, an ambient pulse around work in flight — is admissible as a visual treatment **around** a state Vibe has genuinely observed. It is never admissible as the thing that tells a founder work is happening.
+
+Three properties separate the two, and they belong in the code rather than in a comment:
+
+- **Bound to an observed state.** The treatment is keyed to a stage the product recorded as running. It must be unreachable on a pending, paused, failed or skipped one — a shimmer over a paused run is the animated form of "activity while a process is in fact waiting".
+- **Removable without loss.** Every word the treatment decorates stays present and legible with the motion gone. If turning it off changes what the founder knows, it was carrying information and is not ambience.
+- **Carrying no timing.** Its period is fixed and unrelated to how long the work has run or has left. A treatment that accelerates with apparent progress is a percentage nobody measured.
+
+Model reasoning stays out of bounds regardless (rule 43). A trace beside such a treatment may show what Vibe recorded itself doing — files read, files written, stages entered — and never a model's account of its own thinking, streamed or otherwise.
 
 ## Signature Surfaces
 
@@ -243,5 +269,6 @@ The Build stage owns the Agent's live event record beside the working core. Vali
 - Don't copy the Business Brain glow or choreography onto ordinary cards, forms or index pages.
 - Don't reuse Product Scan's scanner core outside onboarding and My Product.
 - Don't run `shadcn init`, and don't let a registry install command scaffold a second `ui/` convention.
-- Don't reject an external pattern for being visually expressive, and don't adopt one that leaves the surface looking like a catalogue.
+- Don't reject a technique or an external pattern by category — judge the specific treatment on the specific surface, and say which of the five criteria it fails.
+- Don't adopt one that leaves the surface looking like a catalogue, and don't spend a signature technique on every card until there is no emphasis left.
 - Don't let polish outrun observation: no animated percentage, no success before success, no motion that implies work nobody is doing.
