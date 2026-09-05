@@ -104,15 +104,29 @@ const TASK: AgentTask = {
 
 import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
+import type { ValidationSummary } from "@/modules/validation/view";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
 
-/** The four checks the sandbox actually runs, mid-flight. */
+/**
+ * The validation's phases mid-flight, at the shape `validationChecks` now
+ * produces them (audit R32).
+ *
+ * The source-integrity phase leads because it is the one the founder cannot
+ * infer: it says what Vibe proved about the bytes the sandbox ran, before any
+ * of the commands below it means anything. And two phases are `skipped`, which
+ * is what the depth note beside this list exists to explain.
+ */
 const CHECKS: ValidationCheck[] = [
+  { name: "Source integrity", detail: "Source integrity", state: "passed" },
   { name: "Dependencies", detail: "Installing packages", state: "passed" },
-  { name: "Type safety", detail: "Checking TypeScript types", state: "passed" },
-  { name: "Tests", detail: "Running unit and integration tests", state: "passed" },
-  { name: "Production build", detail: "Building for production", state: "running" },
+  { name: "Type safety", detail: "Checking TypeScript types", state: "running" },
+  { name: "Tests", detail: "Skipped — not needed for this change", state: "skipped" },
+  {
+    name: "Production build",
+    detail: "Skipped — not needed for this change",
+    state: "skipped",
+  },
 ];
 
 const FILE_EVENTS: StoredExecutionEvent[] = ([
@@ -204,6 +218,8 @@ type Fixture = {
   activity: TimelineStep[];
   task: AgentTask | null;
   checks: ValidationCheck[];
+  /** How much of the profile ran, and why. Null before depth existed. */
+  validationDepth: ValidationSummary["depth"];
   previewChanges: PreviewChange[];
   mergeFiles: MergeFile[];
   mergeSummary: MergeSummary;
@@ -243,6 +259,16 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     activity: [...(input.timeline ?? [])],
     task: input.timeline === null ? null : TASK,
     checks: CHECKS,
+    /*
+     * A depth that skipped two steps, with the reason. The check rows can say
+     * a step was skipped; only this says it was a decision and which one.
+     */
+    validationDepth: {
+      depth: "fast",
+      label: "Fast",
+      reason: "a low-risk presentational change",
+      notRun: ["test", "build"],
+    },
     previewChanges: PREVIEW_CHANGES,
     mergeFiles: MERGE_FILES,
     mergeSummary: MERGE_SUMMARY,

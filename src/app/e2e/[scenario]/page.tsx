@@ -72,6 +72,7 @@ import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agen
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
+import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
@@ -958,6 +959,7 @@ export default async function E2eScenarioPage({
       activity,
       task,
       checks,
+      validationDepth,
       fileEvents,
       currentAction,
       files,
@@ -1055,7 +1057,12 @@ export default async function E2eScenarioPage({
             validate: (
               <AgentValidateStage
                 running={live}
-                checks={<AgentValidationChecks checks={checks} />}
+                checks={
+                  <div className="flex flex-col gap-3">
+                    <AgentValidationChecks checks={checks} />
+                    <ValidationDepthNote depth={validationDepth} />
+                  </div>
+                }
               />
             ),
             preview: (

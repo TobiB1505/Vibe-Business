@@ -29,6 +29,7 @@ import { getFounderInputRequestForInterrupt } from "@/modules/founder-input/stor
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { type TimelineStep } from "./observability/timeline";
 import { runObservationFrom, type LiveFile } from "./observability/live-view";
+import type { ValidationPhaseView, ValidationSummary } from "@/modules/validation/view";
 import { getAgentExecutionStatus } from "./service";
 
 /**
@@ -94,6 +95,16 @@ export type AgentWorkspaceView = {
   files: readonly LiveFile[];
   /** The sandbox's own steps, as rows. Empty when nothing has been validated. */
   checks: ValidationCheck[];
+  /**
+   * How much of the profile ran, and why.
+   *
+   * Carried alongside the checks because the two only mean anything together:
+   * a list with three of seven rows skipped invites "why did you not check
+   * that?", and the depth is the answer. Null for a run validated before depth
+   * existed — those ran everything, and labelling them now would be
+   * relabelling history.
+   */
+  validationDepth: ValidationSummary["depth"];
   /** Named changes for the preview rail. Empty when nothing describes them. */
   previewChanges: PreviewChange[];
   mergeSummary: MergeSummary;
@@ -163,6 +174,7 @@ export async function readAgentWorkspace(
       currentAction: null,
       files: [],
       checks: validationChecks(change),
+      validationDepth: change?.validation?.depth ?? null,
       previewChanges: [],
       mergeSummary: mergeSummaryFor(change),
       interrupt: null,
@@ -349,6 +361,7 @@ export async function readAgentWorkspace(
     currentAction: observation.currentAction,
     files: observation.files,
     checks: validationChecks(change),
+    validationDepth: change?.validation?.depth ?? null,
     // Nothing stored describes a change in prose, so the preview rail carries
     // no invented summaries. The frames and the file list carry the answer.
     previewChanges: [],
@@ -497,26 +510,62 @@ async function resolveTask(
  * neither exists, and a tick beside a check nobody ran is the one thing a
  * safety screen must never show.
  */
-const CHECK_ROWS: { step: string; name: string; detail: string }[] = [
-  { step: "install", name: "Dependencies", detail: "Installing packages" },
-  { step: "typecheck", name: "Type safety", detail: "Checking types" },
-  { step: "test", name: "Tests", detail: "Running unit and integration tests" },
-  { step: "build", name: "Production build", detail: "Building for production" },
-];
+/**
+ * The validation's own phases, as the founder reads them (audit R32).
+ *
+ * ## What was here before
+ *
+ * Four fixed rows — dependencies, types, tests, build — every one of them
+ * reporting the run's *overall* verdict, because the card was thought to carry
+ * nothing finer. Its comment said so and was honest about being coarse.
+ *
+ * It was not true. `change.validation` is already a `ValidationSummary` — the
+ * workspace builds one for the card's own progress — and it has carried
+ * per-phase results, durations, skip reasons and the source-integrity check
+ * all along. The agent workspace was the only surface not reading them, so a
+ * founder on the stage that decides saw four rows repeating one verdict where
+ * the validation panel two clicks away showed which steps ran, which were
+ * skipped, and why.
+ *
+ * ## The vocabularies
+ *
+ * A phase is `active` while it runs and `not_run` when the validation never
+ * reached it. The check rows say `running` and `pending` for the same two
+ * things — a difference in copy, not in meaning, so it is mapped rather than
+ * reconciled. `skipped` stays `skipped`: a step that did not need to run is
+ * not a step that has not run yet.
+ */
+const PHASE_STATE: Record<ValidationPhaseView["state"], ValidationCheck["state"]> = {
+  passed: "passed",
+  failed: "failed",
+  active: "running",
+  pending: "pending",
+  skipped: "skipped",
+  not_run: "pending",
+  /* A step the sandbox cut off produced no verdict, which is a failure. */
+  timed_out: "failed",
+};
+
+const SKIP_REASONS: Record<string, string> = {
+  outside_depth: "not needed for this change",
+  not_configured: "your project defines no such step",
+  unsupported: "Vibe cannot run this here",
+};
 
 function validationChecks(change: PreparedChangeWorkspaceItem | null): ValidationCheck[] {
-  const status = change?.validation?.status ?? null;
-  if (status === null) return [];
+  const run = change?.validation ?? null;
+  if (run === null) return [];
 
-  /*
-   * The card carries the run's overall status rather than its per-step results,
-   * so every row reports that one verdict. A row claiming a step-level outcome
-   * the card cannot see would be worse than a row that is honestly coarse.
-   */
-  const state: ValidationCheck["state"] =
-    status === "passed" ? "passed" : status === "failed" ? "failed" : "running";
-
-  return CHECK_ROWS.map((row) => ({ name: row.name, detail: row.detail, state }));
+  return run.phases.map((phase) => ({
+    name: phase.label,
+    detail:
+      phase.state === "skipped"
+        ? `Skipped — ${phase.skipReason ? (SKIP_REASONS[phase.skipReason] ?? "not needed here") : "not needed here"}`
+        : phase.state === "active"
+          ? phase.activeLabel
+          : phase.label,
+    state: PHASE_STATE[phase.state],
+  }));
 }
 
 /**

@@ -37,6 +37,7 @@ import { AgentTrustPanel } from "./agent-header";
 import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
+import { ValidationDepthNote } from "./validation-depth-note";
 import { AgentValidateAction } from "./agent-validate-action";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
@@ -778,7 +779,14 @@ async function AgentWorkspaceBody({
                 running={live}
                 checks={
                   displayedWorkspace.checks.length > 0 ? (
-                    <AgentValidationChecks checks={displayedWorkspace.checks} />
+                    <div className="flex flex-col gap-3">
+                      <AgentValidationChecks checks={displayedWorkspace.checks} />
+                      {/*
+                        What was skipped, and why. The rows say which steps did
+                        not run; this says it was a decision.
+                      */}
+                      <ValidationDepthNote depth={displayedWorkspace.validationDepth} />
+                    </div>
                   ) : (
                     <Notice tone="info" label="Validation checks">
                       Checks appear here when a prepared change reaches validation.

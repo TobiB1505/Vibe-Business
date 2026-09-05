@@ -219,7 +219,13 @@ test.describe("agent activity and independent validation stay distinct", () => {
     await page.goto(VALIDATING);
 
     const checks = page.getByTestId("agent-validation-checks");
-    await expect(checks.locator("[data-check]")).toHaveCount(4);
+    /*
+     * Five, not four. The rows are the validation's own phases now (audit
+     * R32), so source integrity is named alongside the four commands — a step
+     * the sandbox genuinely performs, and the one a founder cannot infer from
+     * the others.
+     */
+    await expect(checks.locator("[data-check]")).toHaveCount(5);
 
     /*
      * The reference drew "Linting" and "Security scan". Neither step exists in
@@ -674,5 +680,33 @@ test.describe("what the review names that the change cannot", () => {
     // A statement, not an offer. There is nothing here to press.
     await expect(withheld.getByRole("button")).toHaveCount(0);
     await expect(withheld.getByRole("link")).toHaveCount(0);
+  });
+});
+
+/*
+ * Slice 4, third acceptance line. The stage that decides showed four rows all
+ * repeating the run's one overall verdict, with a comment calling itself
+ * honestly coarse — while `change.validation` had carried per-phase results,
+ * skip reasons and the source-integrity check all along.
+ */
+test.describe("what the validation checked, and what it did not", () => {
+  test("names the phases, including the one that verified the source", async ({ page }) => {
+    await page.goto(VALIDATING);
+
+    const checks = page.getByTestId("agent-validation-checks");
+    await expect(checks).toContainText(/source integrity/i);
+
+    // And the skipped ones say they were skipped, rather than reporting a pass.
+    await expect(checks).toContainText(/skipped/i);
+  });
+
+  test("says which steps were skipped and why it was a decision", async ({ page }) => {
+    await page.goto(VALIDATING);
+
+    const note = page.getByTestId("validation-depth-note");
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(/fast checks/i);
+    await expect(note).toContainText(/low-risk presentational change/i);
+    await expect(note).toContainText(/did not run tests and the production build/i);
   });
 });
