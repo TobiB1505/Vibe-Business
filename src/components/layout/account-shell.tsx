@@ -73,17 +73,26 @@ export const ACCOUNT_SECTIONS = [
 /**
  * Named, visible, and not a link.
  *
- * Both are real product intentions with nothing behind them yet, and both are
- * more honest as a disabled label than as either a hidden feature or a page
- * that apologises for itself.
- *
- * `Team` in particular cannot be quietly shipped: ownership is single-user in
- * every table (`projects.user_id`, RLS on `auth.uid()`, one GitHub identity per
- * user), and `billing/catalog.ts` says in its own words "No Enterprise, no
- * Team, no annual, no seats". There is no sharing primitive to expose.
+ * A real product intention with nothing behind it yet is more honest as a
+ * disabled label than as either a hidden feature or a page that apologises for
+ * itself — as long as it is still true that there is nothing behind it.
  */
 export const SOON_SECTIONS = [
-  { id: "experiments", label: "Experiments", icon: "experiments" },
+  /*
+   * No `Experiments` here any more (audit §303, Slice 6).
+   *
+   * It was honest when this list was written and stopped being so when the
+   * project rail gained a live `Experiments` destination: the account rail
+   * then said "coming soon" about a room the founder could already walk into
+   * one level down. Two rails disagreeing about whether a feature exists is
+   * worse than either answer, and the true one is that it does.
+   *
+   * `Team` stays, and is a different case entirely: ownership is single-user
+   * in every table (`projects.user_id`, RLS on `auth.uid()`, one GitHub
+   * identity per user), and `billing/catalog.ts` says in its own words "No
+   * Enterprise, no Team, no annual, no seats". There is no sharing primitive
+   * to expose, so the label is the whole of what is true.
+   */
   { id: "team", label: "Team", icon: "team" },
 ] as const;
 

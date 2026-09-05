@@ -206,6 +206,29 @@ test.describe("not observed", () => {
       await expect(page.getByRole("button", { name: forbidden })).toHaveCount(0);
     }
   });
+
+  /*
+   * Slice 6. This state deliberately had no control at all, on a reading of
+   * rule 60 that its own second sentence contradicts — "the user starts it".
+   * A deployment that landed an hour after the window closed is exactly the
+   * case where looking again is the honest answer, and nobody but the founder
+   * knows it happened.
+   *
+   * It is a re-check, not a recovery: it observes the same public pages again
+   * and changes nothing, which is why it is allowed to sit beside the four
+   * forbidden verbs above rather than joining them.
+   */
+  test("offers one way to look again, and says the window is still closed", async ({ page }) => {
+    await page.goto("/e2e/outcome_not_observed");
+    const outcome = outcomeSection(page);
+
+    const again = outcome.getByTestId("outcome-check-again");
+    await expect(again).toBeVisible();
+    await expect(again).toContainText(/check again/i);
+
+    // The sentence does not start implying Vibe is still watching.
+    await expect(outcome).toContainText(/vibe is no longer looking/i);
+  });
 });
 
 test.describe("Vibe could not check", () => {
