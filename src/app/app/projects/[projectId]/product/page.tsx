@@ -10,7 +10,6 @@ import { getProductScanEvents } from "@/modules/product-scan/store";
 import { buildProductScanPresentation } from "@/modules/product-scan/presentation";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
-import { describeIncompleteness } from "@/modules/live-product-intelligence/human-view";
 import {
   getLatestLiveSnapshotAttempt,
   getLatestSuccessfulLiveSnapshot,
@@ -23,7 +22,8 @@ import {
   getLatestSuccessfulSnapshot,
 } from "@/modules/repository-intelligence/store";
 import { UnderstandingConfirm } from "../understanding-confirm";
-import { UnderstandingPanel, type UnderstandingSource } from "../understanding-panel";
+import { UnderstandingPanel } from "../understanding-panel";
+import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -115,107 +115,46 @@ export default async function MyProductPage({
 
   const SCAN_ANCHOR = "product-scan";
 
-  /**
-   * The code half, in three honest states. A failed attempt only outranks
-   * silence when no earlier successful read exists — data a founder can still
-   * see is not erased by a later failure.
+  /*
+   * What the understanding rests on (audit C8/R6).
+   *
+   * This was four objects assembled here — a hundred lines of nested
+   * ternaries producing label, state, sentence, link and action per source,
+   * with no room for the reason one stopped short, the amount it read, when,
+   * or what the remedy costs. `buildSourceCoverage` owns all of it now, and
+   * owns it once: the Provenance Strip renders the same four facts under a
+   * priced control.
    */
-  const codeSource: UnderstandingSource = repositorySnapshot?.result
-    ? {
-        id: "code",
-        label: "Your code",
-        state: "ready",
-        detail: "Vibe has read what your repository builds.",
-        href: `#${SCAN_ANCHOR}`,
-        action: "View Product Scan",
-      }
-    : repositoryAttempt?.status === "failed"
-      ? {
-          id: "code",
-          label: "Your code",
-          state: "failed",
-          detail: "Vibe couldn't read your code last time.",
-          href: `#${SCAN_ANCHOR}`,
-          action: "Scan again",
-        }
-      : {
-          id: "code",
-          label: "Your code",
-          state: "none",
-          detail: project.repository
-            ? "Vibe hasn't read your code yet."
-            : "No repository is connected yet.",
-          href: project.repository ? `#${SCAN_ANCHOR}` : projectSectionHref(project.id, "settings"),
-          action: project.repository ? "Scan my product" : "Connect a repository",
-        };
-
-  /**
-   * The live half. `partial` is the state Sprint 0082 exists for: the site was
-   * visited and could not be fully read — usually because pages build
-   * themselves in the browser — and the note carries the same sentence the
-   * full summary shows, from the one function that knows why.
-   */
-  const liveIncomplete = liveSnapshot?.result ? describeIncompleteness(liveSnapshot.result) : null;
-  const liveSource: UnderstandingSource = liveSnapshot?.result
-    ? {
-        id: "live",
-        label: "Your public product",
-        state: liveIncomplete === null ? "ready" : "partial",
-        detail:
-          liveIncomplete === null
-            ? "Vibe has visited what a first-time visitor reaches."
-            : "Vibe visited your product, but couldn't read all of it.",
-        note: liveIncomplete,
-        href: `#${SCAN_ANCHOR}`,
-        action: "View Product Scan",
-      }
-    : liveAttempt?.status === "failed"
-      ? {
-          id: "live",
-          label: "Your public product",
-          state: "failed",
-          detail: "Vibe couldn't reach your product last time.",
-          href: `#${SCAN_ANCHOR}`,
-          action: "Scan again",
-        }
-      : {
-          id: "live",
-          label: "Your public product",
-          state: "none",
-          detail: project.productionUrl
-            ? "Vibe hasn't visited your product yet."
-            : "No production website is set yet.",
-          href: project.productionUrl
-            ? `#${SCAN_ANCHOR}`
-            : projectSectionHref(project.id, "settings"),
-          action: project.productionUrl ? "Scan my product" : "Add your website",
-        };
-
-  const sources: UnderstandingSource[] = [
-    codeSource,
-    liveSource,
-    {
-      id: "deep-scan",
-      label: "Your signed-in product",
-      state: deepScanSnapshot?.result ? "ready" : "none",
-      detail: deepScanSnapshot?.result
-        ? "Vibe has seen what your product looks like after signing in."
-        : "Vibe hasn't seen past your sign-in yet.",
-      // The only route to a page that is deliberately not in the navigation.
-      href: projectSectionHref(project.id, "deep-scan"),
-      action: "Deep Scan",
+  const sources = buildSourceCoverage({
+    repository: {
+      result: repositorySnapshot?.result ?? null,
+      completedAt: repositorySnapshot?.completedAt ?? null,
+      failed: repositoryAttempt?.status === "failed",
     },
-    {
-      id: "intent",
-      label: "What you told Vibe",
-      state: isEmptyFounderIntent(founderIntent.intent) ? "none" : "ready",
-      detail: isEmptyFounderIntent(founderIntent.intent)
-        ? "You haven't told Vibe anything about the business yet."
-        : "Your own words about the business, which outrank anything derived.",
-      href: `${projectSectionHref(project.id, "settings")}#founder-intent`,
-      action: "Tell Vibe",
+    live: {
+      result: liveSnapshot?.result ?? null,
+      completedAt: liveSnapshot?.completedAt ?? null,
+      failed: liveAttempt?.status === "failed",
     },
-  ];
+    deepScan: {
+      result: deepScanSnapshot?.result ?? null,
+      completedAt: deepScanSnapshot?.completedAt ?? null,
+      pagesInspected: deepScanSnapshot?.pagesInspected ?? null,
+    },
+    founder: { told: !isEmptyFounderIntent(founderIntent.intent), at: null },
+    hrefs: {
+      scan: `#${SCAN_ANCHOR}`,
+      deepScan: projectSectionHref(project.id, "deep-scan"),
+      settings: projectSectionHref(project.id, "settings"),
+      founderIntent: `${projectSectionHref(project.id, "settings")}#founder-intent`,
+      connectRepository: projectSectionHref(project.id, "settings"),
+      addWebsite: projectSectionHref(project.id, "settings"),
+    },
+    connected: {
+      repository: Boolean(project.repository),
+      productionUrl: Boolean(project.productionUrl),
+    },
+  });
 
   return (
     <WorkspaceSection id="my-product">

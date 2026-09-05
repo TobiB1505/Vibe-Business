@@ -568,8 +568,14 @@ export default async function E2eScenarioPage({
             }}
             founderContextHref="#founder-context"
             sources={[
+              /*
+                The fixture states the same four sources the real page builds,
+                at the shape `SourceCoverage` fixed — including a partial read
+                with its reason and its measured count, which is the state the
+                grid of cards had no room for and no fixture ever showed.
+              */
               {
-                id: "code",
+                source: "repository",
                 label: "Your code",
                 state: fixture.view.sources.some(
                   (source) => source.label === "Your code" && source.used,
@@ -581,40 +587,58 @@ export default async function E2eScenarioPage({
                 )
                   ? "Vibe has read what your repository builds."
                   : "Vibe hasn't read your code yet.",
-                href: "#product-evidence",
-                action: "See what it read",
+                reasons: [],
+                measured: { files: 128 },
+                at: "2026-08-14T08:22:59.917Z",
+                remedy: { label: "See what it read", href: "#product-evidence", operation: null },
               },
               {
-                id: "live",
+                source: "live",
                 label: "Your public product",
                 state: fixture.view.sources.some(
                   (source) => source.label === "Your public product" && source.used,
                 )
-                  ? "ready"
+                  ? "partial"
                   : "none",
                 detail: fixture.view.sources.some(
                   (source) => source.label === "Your public product" && source.used,
                 )
-                  ? "Vibe has visited what a first-time visitor reaches."
+                  ? "Vibe visited your product, but couldn't read all of it."
                   : "Your public product has not been checked yet.",
-                href: "#product-evidence",
-                action: "See what it saw",
+                reasons: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? [
+                      "Two pages on your site build themselves in your visitor's browser, so Vibe saw an empty shell for those.",
+                    ]
+                  : [],
+                measured: { pages: 6 },
+                at: "2026-08-14T08:24:11.000Z",
+                remedy: { label: "See what it saw", href: "#product-evidence", operation: null },
               },
               {
-                id: "deep-scan",
+                source: "deep_scan",
                 label: "Your signed-in product",
                 detail: "Your signed-in product has not been checked yet.",
                 state: "none",
-                href: "#product-evidence",
-                action: "Deep Scan",
+                reasons: [],
+                measured: {},
+                at: null,
+                remedy: {
+                  label: "Deep Scan",
+                  href: "#product-evidence",
+                  operation: "deep_scan",
+                },
               },
               {
-                id: "intent",
+                source: "founder",
                 label: "What you told Vibe",
                 detail: "Your stated stage, monetization intent and primary goal.",
                 state: "ready",
-                href: "#founder-context",
-                action: "View context",
+                reasons: [],
+                measured: {},
+                at: null,
+                remedy: { label: "View context", href: "#founder-context", operation: null },
               },
             ]}
             actions={

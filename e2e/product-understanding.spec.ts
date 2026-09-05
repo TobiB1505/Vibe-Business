@@ -140,11 +140,24 @@ test.describe("the conclusion comes first", () => {
     await expect(sources).toContainText("3/4");
   });
 
-  test("never shows a count of files, routes or detections", async ({ page }) => {
+  test("never shows a count of files, routes or detections as a finding", async ({ page }) => {
     await forbidExternalCalls(page);
     await page.goto(READY);
 
-    const body = (await page.locator("body").innerText()).toLowerCase();
+    /*
+     * Everything except the coverage list, which is where a count belongs.
+     *
+     * This asserted no file count anywhere, and against a page that led with
+     * "431 files scanned" that was right — a measurement is not an
+     * understanding. The audit's R6 asks each source to say how much of it was
+     * read, which is the opposite claim: not what Vibe found, but how far it
+     * got before it stopped. It is provenance beside the source, never a
+     * conclusion, and the rest of the page still may not carry one.
+     */
+    const visible = await page.locator("body").innerText();
+    const coverage = await page.getByTestId("source-coverage").innerText();
+    const body = visible.replace(coverage, "").toLowerCase();
+
     expect(body).not.toMatch(/\d+\s+(files?|routes?|detections?)/);
     expect(body).not.toContain("repository intelligence");
     expect(body).not.toContain("snapshot");
@@ -385,5 +398,51 @@ test.describe("a profile fact can be checked", () => {
 
     await drawer.getByRole("button", { name: /close/i }).click();
     await expect(drawer).toBeHidden();
+  });
+});
+
+/*
+ * Audit R6: one component for the four sources, saying five things about each
+ * — state, what Vibe did, why it stopped short, how much it read and when, and
+ * what the remedy costs. The grid of glyph cards it replaces could say the
+ * first two.
+ */
+test.describe("what the understanding rests on", () => {
+  test("gives every source a state, a reason, a measured count and a priced remedy", async ({
+    page,
+  }) => {
+    await page.goto(READY);
+
+    const list = page.getByTestId("source-coverage");
+    await expect(list).toBeVisible();
+    await expect(list.getByRole("listitem")).toHaveCount(4);
+
+    const code = list.locator('[data-source="repository"]');
+    await expect(code).toContainText("Read");
+    await expect(code).toContainText(/128 files/);
+    await expect(code).toContainText(/read 14 Aug 2026/);
+
+    // Partial is its own state, and it says why rather than only that.
+    const live = list.locator('[data-source="live"]');
+    await expect(live).toHaveAttribute("data-state", "partial");
+    await expect(live).toContainText("Partly read");
+    await expect(live).toContainText(/build themselves in your visitor's browser/i);
+
+    // The remedy carries its price before it is pressed.
+    const deepScan = list.locator('[data-source="deep_scan"]');
+    await expect(deepScan).toContainText("Deep Scan");
+    await expect(deepScan).toContainText(/\d+ Credits/);
+
+    // And a free remedy states no price rather than "0 Credits".
+    const founder = list.locator('[data-source="founder"]');
+    await expect(founder).not.toContainText(/Credits/);
+  });
+
+  test("never prints a count for a source nothing measured", async ({ page }) => {
+    await page.goto(READY);
+
+    const deepScan = page.getByTestId("source-coverage").locator('[data-source="deep_scan"]');
+    await expect(deepScan).toHaveAttribute("data-state", "none");
+    await expect(deepScan).not.toContainText(/\b0 (files|pages)\b/);
   });
 });

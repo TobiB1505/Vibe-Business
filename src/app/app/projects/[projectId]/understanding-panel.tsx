@@ -3,6 +3,8 @@ import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { Disclosure, TechnicalDetails } from "@/components/ui/disclosure";
 import { Surface } from "@/components/ui/surface";
+import { SourceCoverageList } from "@/components/system/source-coverage";
+import type { SourceCoverage } from "@/modules/provenance/source-coverage";
 import { CitationCount } from "@/components/system/evidence-drawer";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { projectSectionHref } from "@/components/layout/project-shell";
@@ -36,28 +38,6 @@ export type UnderstandingSource = {
   note?: string | null;
   href: string;
   action: string;
-};
-
-const SOURCE_STATE: Record<
-  UnderstandingSourceState,
-  { label: string; className: string }
-> = {
-  ready: {
-    label: "Available",
-    className: "border-mint/20 bg-mint/[0.06] text-mint",
-  },
-  partial: {
-    label: "Partially available",
-    className: "border-amber/20 bg-amber/[0.06] text-amber",
-  },
-  failed: {
-    label: "Last scan failed",
-    className: "border-coral-line bg-coral-tint-soft text-coral",
-  },
-  none: {
-    label: "Not available yet",
-    className: "border-line-2 bg-surface-3 text-fg-muted",
-  },
 };
 
 const TONE_TEXT: Record<ConfidenceTone, string> = {
@@ -114,13 +94,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <p className="text-mint text-[0.68rem] font-semibold tracking-[0.12em] uppercase">{children}</p>;
 }
 
-function sourceKind(id: string): ProductGlyphKind {
-  if (id === "code") return "code";
-  if (id === "live") return "live";
-  if (id === "deep-scan") return "scan";
-  return "intent";
-}
-
 export function UnderstandingPanel({
   view,
   projectId,
@@ -137,7 +110,7 @@ export function UnderstandingPanel({
   understoodAt?: string | null;
   founderIntent?: FounderIntent;
   founderContextHref?: string;
-  sources?: UnderstandingSource[];
+  sources?: SourceCoverage[];
   actions: React.ReactNode;
 }) {
   const { headline, brand } = view;
@@ -154,14 +127,26 @@ export function UnderstandingPanel({
       ]
     : [];
 
-  const renderedSources: UnderstandingSource[] = sources ?? view.sources.map((source, index) => ({
-    id: ["code", "live", "deep-scan"][index] ?? `source-${index}`,
-    label: source.label,
-    detail: source.label,
-    state: source.used ? "ready" : "none",
-    href: "#product-evidence",
-    action: "View evidence",
-  }));
+  /*
+   * The fallback for callers that pass no coverage — the onboarding reveal,
+   * which knows which sources were used and nothing about why one stopped
+   * short. It says only what it knows: used or not, and no invented reason,
+   * count or date.
+   */
+  const renderedSources: SourceCoverage[] =
+    sources ??
+    view.sources.map((source, index): SourceCoverage => ({
+      source: (["repository", "live", "deep_scan", "founder"] as const)[index] ?? "founder",
+      label: source.label,
+      state: source.used ? "ready" : "none",
+      detail: source.used
+        ? "Vibe used this."
+        : "Vibe has nothing from this yet.",
+      reasons: [],
+      measured: {},
+      at: null,
+      remedy: { label: "View evidence", href: "#product-evidence", operation: null },
+    }));
 
   return (
     <div className="flex flex-col gap-4" data-testid="product-understanding-dashboard">
@@ -297,18 +282,14 @@ export function UnderstandingPanel({
 
       <Surface level="panel" padding="lg" className="flex flex-col gap-5">
         <SectionLabel>Vibe learns from</SectionLabel>
-        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {renderedSources.map((source) => (
-            <li key={source.id} className="border-line-1 bg-surface-2 flex min-h-40 flex-col rounded-xl border p-4">
-              <div className="flex items-start justify-between gap-3"><span className="border-line-2 bg-surface-3 text-fg-secondary flex size-9 items-center justify-center rounded-full border"><ProductGlyph kind={sourceKind(source.id)} /></span><span className={`${SOURCE_STATE[source.state].className} rounded-full border px-2 py-1 text-[0.65rem]`}>{SOURCE_STATE[source.state].label}</span></div>
-              <h3 className="text-fg mt-4 text-sm font-semibold">{source.label}</h3>
-              <p className="text-fg-muted mt-1 text-xs leading-5">{source.detail}</p>
-              {source.note && <p className="text-fg-meta mt-2 flex-1 text-[0.68rem] leading-5">{source.note}</p>}
-              {!source.note && <span className="flex-1" aria-hidden />}
-              <Link href={source.href} className="text-fg-secondary hover:text-mint mt-4 w-fit rounded-sm text-xs underline underline-offset-4 transition-interactive focus-visible:ring-2 focus-visible:ring-mint">{source.action}</Link>
-            </li>
-          ))}
-        </ul>
+        {/*
+          One component for the four sources (audit R6). The grid of glyph
+          cards said state and a sentence; it had no place for the reason a
+          source stopped short, how much of it was read, when, or what the
+          remedy costs — which is the whole difference between "Vibe doesn't
+          know" and "Vibe couldn't find out".
+        */}
+        <SourceCoverageList sources={renderedSources} />
         {view.limitations.length > 0 && <ul className="border-line-1 flex flex-col gap-1.5 border-t pt-4">{view.limitations.map((limitation) => <li key={limitation} className="text-fg-meta text-xs">{limitation}</li>)}</ul>}
       </Surface>
 
