@@ -115,7 +115,16 @@ test.describe("the hero is about one named product", () => {
     // so it is first by attention tier — and the hero must be that one rather
     // than the newest or the highest-scoring. It is named by its *product*
     // name, Payflow, which is what every surface on this screen calls it.
-    const hero = page.getByRole("region", { name: "Payflow" });
+    //
+    // The region's accessible name was exactly "Payflow", from an `sr-only`
+    // heading that carried the product name and nothing else. It now carries
+    // what the region is as well — "Business signal Payflow" — because a
+    // screen-reader user landing on a region named only for a product has to
+    // read on to find out it is a score. The assertion this test exists to
+    // make is unchanged: the hero is about one named product, and that
+    // product is the one attention ranked first.
+    const hero = page.getByRole("region", { name: /Payflow/ });
+    await expect(hero).toHaveAccessibleName(/Business signal/);
     await expect(hero.getByRole("link", { name: "Payflow" })).toBeVisible();
     // Scoped to the hero: the same product's card below shows 46 too, and a
     // page-wide match would pass on the card alone while the hero was blank.

@@ -66,7 +66,14 @@ const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
 const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
-const NEXT_MOVE_CARD = read("src/app/app/next-move-card.tsx");
+/*
+ * The dashboard's Next move zone. It was its own panel beside the Business
+ * signal one; both are now `SignalCard`, because two full-width cards with a
+ * control each asked an unanalysed product's owner the same question twice.
+ * The regression below is unchanged and still lives in that code — only the
+ * file it lives in moved.
+ */
+const NEXT_MOVE_CARD = read("src/app/app/signal-card.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {
