@@ -453,3 +453,28 @@ test.describe("what the understanding rests on", () => {
     await expect(deepScan).not.toContainText(/\b0 (files|pages)\b/);
   });
 });
+
+/*
+ * The screen that asks a founder to check Vibe's work.
+ *
+ * It showed a label and a value per fact, so the question was being asked
+ * about a claim with no indication whether Vibe was confident or had inferred
+ * it from a single meta description — and "roughly right" and "wrong" are
+ * different corrections.
+ */
+test.describe("the product reveal", () => {
+  test("says how sure Vibe is about each fact, and what it rests on", async ({ page }) => {
+    await page.goto("/e2e/onboarding_product_reveal");
+
+    const facts = page.getByTestId("product-reveal-facts");
+    await expect(facts).toBeVisible();
+
+    const first = facts.locator("> div").first();
+    await expect(first).toContainText(/likely|confirmed|unclear|not found/i);
+
+    await first.getByRole("button", { name: /sources?$/ }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/your live site/i);
+  });
+});

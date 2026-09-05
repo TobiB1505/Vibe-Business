@@ -8,6 +8,7 @@ import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
 import { SourceCoverageStrip } from "@/components/system/source-coverage";
+import { ProductRevealFacts } from "@/app/app/onboarding/[projectId]/reveal-facts";
 import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
@@ -483,7 +484,16 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
-        {scenario === "onboarding_logo_broken" ? (
+        {scenario === "onboarding_product_reveal" ? (
+          /*
+            The same component the reveal renders, on the same understanding
+            view the real page builds — so what a browser proves here is what a
+            founder is shown before answering "did Vibe get this right?".
+          */
+          <ProductRevealFacts
+            facts={E2E_UNDERSTANDING_SCENARIOS.understanding_ready().view.audience.slice(0, 2)}
+          />
+        ) : scenario === "onboarding_logo_broken" ? (
           // The host does not exist, so the browser's load genuinely fails —
           // which is the only way to prove the fallback rather than assert it.
           <ProductLogo src="https://acme.test/logo.png" alt="Acme logo" size={44} />

@@ -52,6 +52,7 @@ import { LiveSiteStep } from "./live-site-step";
 import { OperationWatcher } from "./operation-watcher";
 import { OnboardingOperationFailure, OnboardingStalled } from "./operation-states";
 import { ProductConfirmation } from "./product-confirmation";
+import { ProductRevealFacts } from "./reveal-facts";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
@@ -421,14 +422,8 @@ export default async function ProjectOnboardingPage({
                 </p>
               )}
             </div>
-            <div className="grid w-full max-w-[54rem] gap-3 text-left sm:grid-cols-2">
-              {understanding.audience.slice(0, 2).map((fact) => (
-                <div key={fact.label} className="border-line-2 bg-surface-2 rounded-xl border p-4">
-                  <p className="text-fg-meta text-xs">{fact.label}</p>
-                  <p className="text-fg-body mt-1 text-sm">{fact.value}</p>
-                </div>
-              ))}
-            </div>
+            <ProductRevealFacts facts={understanding.audience.slice(0, 2)} />
+
             <div className="border-line-2 w-full border-t pt-6">
               <h2 className="text-fg-body mb-4 font-semibold">Did Vibe get this right?</h2>
               <ProductConfirmation
