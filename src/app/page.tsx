@@ -2,71 +2,21 @@ import Link from "next/link";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { LandingBusinessBrain } from "@/components/marketing/landing-business-brain";
+import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingNova } from "@/components/marketing/landing-nova";
+import { LandingTrust } from "@/components/marketing/landing-trust";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { buttonClasses } from "@/components/ui/button";
 import {
-  ActionPlanIcon,
   AgentIcon,
   ArrowRightIcon,
   BranchIcon,
-  BusinessHealthIcon,
   CheckIcon,
-  CodeIcon,
-  GlobeIcon,
   LockIcon,
-  ProductsIcon,
-  RocketIcon,
-  TargetIcon,
 } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
 import { listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
-
-const FLOW = [
-  {
-    title: "Understand",
-    body: "Vibe reads your repository and public product without keeping a copy of your code.",
-    label: "Product intelligence",
-    icon: ProductsIcon,
-  },
-  {
-    title: "Diagnose",
-    body: "Nine business areas turn scattered product signals into one grounded assessment.",
-    label: "Business Brain",
-    icon: BusinessHealthIcon,
-  },
-  {
-    title: "Prioritize",
-    body: "The most important business problem becomes the next move, with the reason attached.",
-    label: "Opportunity",
-    icon: TargetIcon,
-  },
-  {
-    title: "Plan",
-    body: "Vibe breaks the move into concrete steps and makes ownership and dependencies visible.",
-    label: "Action Plan",
-    icon: ActionPlanIcon,
-  },
-  {
-    title: "Execute",
-    body: "Supported changes are prepared on an isolated branch and validated before review.",
-    label: "AI Agent",
-    icon: AgentIcon,
-  },
-  {
-    title: "Measure",
-    body: "After delivery, Vibe checks what became observable without claiming what it cannot prove.",
-    label: "Outcome",
-    icon: RocketIcon,
-  },
-] as const;
-
-const PRODUCT_SIGNALS = [
-  ["Repository", "Structure, capabilities and business surfaces", CodeIcon],
-  ["Live product", "Public pages, positioning and conversion paths", GlobeIcon],
-  ["Founder intent", "Audience, goals and context only you can provide", TargetIcon],
-] as const;
 
 const AGENT_STAGES = [
   ["Understand", "Goal and live premises checked"],
@@ -103,16 +53,24 @@ export default function HomePage() {
 
   return (
     <MarketingShell>
-      <section
-        id="top"
-        className="relative grid gap-12 py-16 sm:py-24 xl:grid-cols-[minmax(25rem,0.78fr)_minmax(42rem,1.22fr)] xl:items-center xl:gap-8"
-      >
+      {/*
+        The claim gets the width, and the product follows it.
+        
+        This was a two-column split: the headline in a narrow left column with
+        the Business Brain beside it, both competing for the first look. The
+        strongest dark landing pages in the catalogue (Noir, Deepflow) do the
+        opposite — one centred claim with real air around it, then the product
+        itself below, large and framed. It reads as a sentence and then its
+        evidence rather than as two things at once, and it is what gives a
+        first-time visitor somewhere to start.
+      */}
+      <section id="top" className="relative py-16 sm:py-24">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute -top-32 -left-40 -z-10 size-[42rem] rounded-full bg-[radial-gradient(circle,rgb(0_229_160/0.1),transparent_66%)] blur-3xl"
+          className="pointer-events-none absolute -top-40 left-1/2 -z-10 size-[56rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgb(0_229_160/0.11),transparent_64%)] blur-3xl"
         />
 
-        <div className="flex flex-col items-start gap-7">
+        <div className="mx-auto flex max-w-[52rem] flex-col items-center gap-7 text-center">
           {/*
             The eyebrow said "AI business co-founder" beside a generic sparkle
             and never named the co-founder. Her own mark, and her name.
@@ -122,16 +80,16 @@ export default function HomePage() {
             Nova · your AI business co-founder
           </span>
 
-          <h1 className="text-fg max-w-[12ch] text-[clamp(2.75rem,5vw,4.5rem)] leading-[1.02] font-bold tracking-[-0.055em] text-balance">
+          <h1 className="text-fg max-w-[16ch] text-[clamp(3rem,6.5vw,5.25rem)] leading-[0.98] font-bold tracking-[-0.055em] text-balance">
             You built the product. Now build <span className="text-mint">the business.</span>
           </h1>
 
-          <p className="text-fg-prose max-w-[54ch] text-lg leading-relaxed">
+          <p className="text-fg-prose max-w-[58ch] text-lg leading-relaxed text-balance">
             Vibe Business understands what you built, finds what is holding the business back,
             prioritizes what to do next, and helps you execute it with AI.
           </p>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3">
             <Link href="/signup" className={`${buttonClasses()} px-6 py-4 text-base`}>
               <GithubIcon />
               Start with your GitHub repo
@@ -145,7 +103,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <ul className="text-fg-muted flex flex-wrap gap-x-6 gap-y-3 text-xs">
+          <ul className="text-fg-muted flex flex-wrap justify-center gap-x-6 gap-y-3 text-xs">
             <li className="flex items-center gap-2">
               <CheckIcon size={15} /> No credit card to start
             </li>
@@ -156,18 +114,26 @@ export default function HomePage() {
               <LockIcon size={15} /> No stored copy of your code
             </li>
           </ul>
-
-          <div className="mt-3 flex flex-col gap-3">
-            <MonoLabel>Built for products made with</MonoLabel>
-            <div className="text-fg-secondary flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold">
-              {["Cursor", "Replit", "Lovable", "Bolt", "Claude Code", "Codex"].map((tool) => (
-                <span key={tool}>{tool}</span>
-              ))}
-            </div>
-          </div>
         </div>
 
-        <LandingBusinessBrain />
+        {/*
+          The product, below the claim rather than beside it. Not a screenshot
+          and not a mockup — the real Business Brain, rendered from the same
+          component the app uses, in the state a visitor with no product would
+          actually get.
+        */}
+        <div className="mt-14 sm:mt-20">
+          <LandingBusinessBrain />
+        </div>
+
+        <div className="mt-12 flex flex-col items-center gap-3">
+          <MonoLabel>Built for products made with</MonoLabel>
+          <div className="text-fg-secondary flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-semibold">
+            {["Cursor", "Replit", "Lovable", "Bolt", "Claude Code", "Codex"].map((tool) => (
+              <span key={tool}>{tool}</span>
+            ))}
+          </div>
+        </div>
       </section>
 
       <div className="border-line-1 flex flex-col items-center gap-5 border-y py-7">
@@ -193,117 +159,9 @@ export default function HomePage() {
       */}
       <LandingNova />
 
-      <section id="how" aria-labelledby="how-heading" className="scroll-mt-24 py-20 sm:py-28">
-        <div className="grid gap-10 xl:grid-cols-[20rem_minmax(0,1fr)] xl:gap-16">
-          <div className="flex flex-col items-start gap-5">
-            <MonoLabel className="text-mint">How Vibe turns code into progress</MonoLabel>
-            <h2
-              id="how-heading"
-              className="text-fg text-[clamp(2.25rem,4vw,3.5rem)] leading-[1.04] font-bold tracking-[-0.045em] text-balance"
-            >
-              From code to business. <span className="text-mint">Vibe</span> every step.
-            </h2>
-            <p className="text-fg-prose leading-relaxed">
-              One continuous path from product understanding to a reviewed, measurable change.
-            </p>
-          </div>
+      <LandingFlow />
 
-          <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {FLOW.map((step, index) => {
-              const Icon = step.icon;
-              return (
-                <li
-                  key={step.title}
-                  className="border-line-2 bg-surface-2 rounded-panel flex min-h-56 flex-col items-start gap-4 border p-5"
-                >
-                  <div className="flex w-full items-center justify-between">
-                    <span className="text-mint flex size-11 items-center justify-center rounded-xl border border-mint-line bg-mint-tint">
-                      <Icon size={20} />
-                    </span>
-                    <span className="text-mint font-mono text-xs">
-                      {String(index + 1).padStart(2, "0")}
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    <h3 className="text-fg text-lg font-semibold">{step.title}</h3>
-                    <p className="text-fg-secondary text-sm leading-relaxed">{step.body}</p>
-                  </div>
-                  <span className="text-fg-muted mt-auto rounded-full border border-line-2 bg-surface-3 px-3 py-1.5 text-xs">
-                    {step.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
-      </section>
-
-      <section
-        id="product"
-        aria-labelledby="product-heading"
-        className="border-line-1 scroll-mt-24 border-t py-20 sm:py-28"
-      >
-        <div className="grid gap-10 lg:grid-cols-[minmax(18rem,0.72fr)_minmax(0,1.28fr)] lg:items-center lg:gap-16">
-          <div className="flex flex-col gap-5">
-            <MonoLabel className="text-mint">Starts with understanding</MonoLabel>
-            <h2
-              id="product-heading"
-              className="text-fg text-[clamp(2.25rem,4vw,3.5rem)] leading-[1.04] font-bold tracking-[-0.045em] text-balance"
-            >
-              Vibe learns what you have actually built.
-            </h2>
-            <p className="text-fg-prose max-w-[48ch] leading-relaxed">
-              Repository evidence, the public product and your own intent stay separate and
-              traceable. Vibe turns them into a product picture without asking you to recreate the
-              work in a form.
-            </p>
-            <ul className="mt-2 flex flex-col gap-4">
-              {PRODUCT_SIGNALS.map(([title, body, Icon]) => (
-                <li key={title} className="flex gap-4">
-                  <span className="text-mint mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-xl border border-mint-line bg-mint-tint">
-                    <Icon size={18} />
-                  </span>
-                  <span>
-                    <span className="text-fg block font-semibold">{title}</span>
-                    <span className="text-fg-secondary mt-1 block text-sm leading-relaxed">
-                      {body}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="border-line-2 bg-surface-2 rounded-card overflow-hidden border shadow-card">
-            <div className="border-line-2 flex flex-wrap items-start justify-between gap-4 border-b px-5 py-5 sm:px-7">
-              <div>
-                <h3 className="text-fg text-xl font-semibold">Product understanding</h3>
-                <p className="text-fg-secondary mt-1 text-sm">
-                  A bounded, evidence-backed picture of what already exists.
-                </p>
-              </div>
-              <span className="text-mint rounded-full border border-mint-line bg-mint-tint px-3 py-1.5 text-xs font-semibold">
-                Ready for review
-              </span>
-            </div>
-            <div className="grid gap-px bg-line-1 sm:grid-cols-3">
-              {PRODUCT_SIGNALS.map(([title, body, Icon]) => (
-                <div key={title} className="bg-surface-2 p-5 sm:p-6">
-                  <Icon className="text-mint" size={20} />
-                  <p className="text-fg mt-5 font-semibold">{title}</p>
-                  <p className="text-fg-secondary mt-2 text-sm leading-relaxed">{body}</p>
-                </div>
-              ))}
-            </div>
-            <div className="bg-app/40 flex flex-wrap items-center justify-between gap-4 px-5 py-4 sm:px-7">
-              <span className="text-fg-muted text-xs">Raw source files are not persisted.</span>
-              <span className="text-fg-secondary flex items-center gap-2 text-xs">
-                <LockIcon size={14} /> Evidence paths remain traceable
-              </span>
-            </div>
-          </div>
-        </div>
-      </section>
+      <LandingTrust />
 
       <section
         id="brain"
