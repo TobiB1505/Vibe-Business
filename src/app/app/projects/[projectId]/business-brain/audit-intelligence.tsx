@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { type KeyboardEvent, useId, useRef, useState } from "react";
+import { useId, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
+import { TabList, tabPanelId, tabTriggerId } from "@/components/ui/tabs";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import { movesContextHref } from "@/modules/opportunities/lineage";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
@@ -17,6 +18,14 @@ import { BusinessLensIcon, BusinessMap } from "./business-map";
 
 const DETAIL_TABS = ["overview", "evidence", "signals", "history"] as const;
 type DetailTab = (typeof DETAIL_TABS)[number];
+
+/* Written out rather than capitalised from the key: a label is copy. */
+const LENS_TAB_LABELS: Record<DetailTab, string> = {
+  overview: "Overview",
+  evidence: "Evidence",
+  signals: "Signals",
+  history: "History",
+};
 
 function ArrowIcon({ direction = "right" }: { direction?: "right" | "up" | "down" }) {
   const glyph = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
@@ -273,7 +282,6 @@ function SelectedPanel({
 }) {
   const reducedMotion = Boolean(useReducedMotion());
   const [activeTab, setActiveTab] = useState<DetailTab>("overview");
-  const tabRefs = useRef<Partial<Record<DetailTab, HTMLButtonElement | null>>>({});
   const tabId = useId().replace(/:/g, "");
   const relationships = view.relationships.filter(
     (relationship) => relationship.from === node.id || relationship.to === node.id,
@@ -315,23 +323,6 @@ function SelectedPanel({
           ? "bg-mint"
           : "bg-fg-disabled";
 
-  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: DetailTab) {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const currentIndex = DETAIL_TABS.indexOf(current);
-    const next =
-      event.key === "Home"
-        ? DETAIL_TABS[0]
-        : event.key === "End"
-          ? DETAIL_TABS.at(-1)!
-          : DETAIL_TABS[
-              (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + DETAIL_TABS.length) %
-                DETAIL_TABS.length
-            ];
-    setActiveTab(next);
-    tabRefs.current[next]?.focus();
-  }
-
   return (
     <motion.section
       key={node.id}
@@ -360,40 +351,25 @@ function SelectedPanel({
         </button>
       </div>
 
-      <div role="tablist" aria-label={`${node.label} details`} className="border-line-1 mt-5 flex gap-1 overflow-x-auto border-b px-4 sm:px-5">
-        {DETAIL_TABS.map((tab) => {
-          const selected = activeTab === tab;
-          const label = tab === "evidence" ? `Evidence (${evidence.length})` : `${tab[0].toUpperCase()}${tab.slice(1)}`;
-          return (
-            <button
-              key={tab}
-              ref={(element) => { tabRefs.current[tab] = element; }}
-              type="button"
-              role="tab"
-              id={`${tabId}-${tab}-tab`}
-              aria-controls={`${tabId}-${tab}-panel`}
-              aria-selected={selected}
-              tabIndex={selected ? 0 : -1}
-              onClick={() => setActiveTab(tab)}
-              onKeyDown={(event) => onTabKeyDown(event, tab)}
-              className={cn(
-                "relative min-h-11 shrink-0 cursor-pointer px-3 text-sm transition-interactive focus-visible:ring-2 focus-visible:ring-mint",
-                selected ? (node.health === "weak" ? "text-coral" : "text-mint") : "text-fg-muted hover:text-fg",
-              )}
-            >
-              {label}
-              {selected && <motion.span layoutId={`${tabId}-active-tab`} className={cn("absolute inset-x-2 -bottom-px h-0.5", node.health === "weak" ? "bg-coral" : "bg-mint")} />}
-            </button>
-          );
-        })}
-      </div>
+      <TabList
+        tabs={DETAIL_TABS.map((tab) => ({
+          value: tab,
+          label: tab === "evidence" ? `Evidence (${evidence.length})` : LENS_TAB_LABELS[tab],
+        }))}
+        value={activeTab}
+        onSelect={setActiveTab}
+        label={`${node.label} details`}
+        idBase={tabId}
+        tone={node.health === "weak" ? "coral" : "mint"}
+        className="mt-5 px-4 sm:px-5"
+      />
 
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={activeTab}
           role="tabpanel"
-          id={`${tabId}-${activeTab}-panel`}
-          aria-labelledby={`${tabId}-${activeTab}-tab`}
+          id={tabPanelId(tabId, activeTab)}
+          aria-labelledby={tabTriggerId(tabId, activeTab)}
           className="flex flex-1 flex-col gap-4 p-4 sm:p-5"
           initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}

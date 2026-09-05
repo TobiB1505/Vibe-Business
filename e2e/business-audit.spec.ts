@@ -109,6 +109,42 @@ test.describe("signature Business Brain", () => {
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
   });
 
+  /*
+   * The tablist arrows browse; they do not choose.
+   *
+   * This column's tabs used to select as the arrow key moved, which means a
+   * screen-reader user cannot walk the four sections without hearing four
+   * panels replace each other. The shared `TabList` moves focus and waits for
+   * Enter, and this is the assertion that keeps it that way — the difference
+   * is invisible to a mouse and only observable here.
+   */
+  test("lets the keyboard browse the detail tabs before committing to one", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+    await lens(page, /revenue & economics/i).click();
+
+    const detail = page.getByTestId("selected-lens-detail");
+    const overview = detail.getByRole("tab", { name: /^overview$/i });
+    await overview.click();
+    await expect(overview).toHaveAttribute("aria-selected", "true");
+
+    await overview.press("ArrowRight");
+
+    const evidence = detail.getByRole("tab", { name: /^evidence/i });
+    await expect(evidence).toBeFocused();
+    await expect(evidence).toHaveAttribute("aria-selected", "false");
+    await expect(overview).toHaveAttribute("aria-selected", "true");
+
+    await evidence.press("Enter");
+    await expect(evidence).toHaveAttribute("aria-selected", "true");
+    await expect(overview).toHaveAttribute("aria-selected", "false");
+
+    // End reaches the last tab, and still only moves.
+    await evidence.press("End");
+    await expect(detail.getByRole("tab", { name: /^history$/i })).toBeFocused();
+    await expect(evidence).toHaveAttribute("aria-selected", "true");
+  });
+
   test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
