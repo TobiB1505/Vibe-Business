@@ -8,6 +8,8 @@ import {
   projectSectionHref,
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
+import { WalletChip } from "@/components/system/wallet-chip";
+import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
@@ -75,7 +77,7 @@ export default async function ProjectLayout({
   // used to discover which project ids exist.
   if (!project) notFound();
 
-  const [counts, github, siblingProjects, agentStatus] = await Promise.all([
+  const [counts, github, siblingProjects, agentStatus, balance] = await Promise.all([
     getProjectWorkspaceCounts(supabase, project.id),
     getGithubIdentity(supabase, session.userId),
     listProjectSwitcherOptions(supabase, {
@@ -83,6 +85,15 @@ export default async function ProjectLayout({
       currentProjectId: project.id,
     }),
     readAgentRailStatus(supabase, project.id),
+    /*
+     * The balance, in the same window as everything else (audit R22).
+     *
+     * One query per account, and the one this product already makes on the
+     * account surfaces — every priced control here states its price and none
+     * of them could state what the founder had to spend it from. A failure
+     * renders no chip rather than breaking the project, like the counts above.
+     */
+    getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null),
   ]);
   const identity = buildAccountIdentity({ email: session.email, github });
 
@@ -131,7 +142,12 @@ export default async function ProjectLayout({
             })),
           ]}
           items={navItems}
-          footer={<AccountMenu identity={identity} subtitle="Founder" placement="above" />}
+          footer={
+            <div className="flex flex-col gap-3">
+              <WalletChip balance={balance} href="/app/billing" />
+              <AccountMenu identity={identity} subtitle="Founder" placement="above" />
+            </div>
+          }
         />
       }
     >

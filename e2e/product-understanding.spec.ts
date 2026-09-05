@@ -478,3 +478,24 @@ test.describe("the product reveal", () => {
     await expect(drawer).toContainText(/your live site/i);
   });
 });
+
+/*
+ * Slice 5: the balance is readable from a project route, not only from
+ * Billing. Every priced control in this product states its price; none of
+ * them could state what the founder had to spend it from.
+ */
+test.describe("what the account can spend", () => {
+  test("carries the balance in the project rail, as a link to Billing", async ({ page }) => {
+    await page.goto(READY);
+
+    const chip = page.getByTestId("wallet-chip");
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText("Credits");
+    await expect(chip).toContainText("35");
+    await expect(chip).toHaveAttribute("href", "/app/billing");
+
+    // 35 is below the threshold, so it is worth noticing rather than selling.
+    await expect(chip).toHaveAttribute("data-low", "true");
+    await expect(chip).not.toContainText(/top up|buy|upgrade/i);
+  });
+});

@@ -72,6 +72,7 @@ import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agen
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
 import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
+import { WalletChip } from "@/components/system/wallet-chip";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
@@ -545,16 +546,27 @@ export default async function E2eScenarioPage({
             ]}
             items={navItems}
             footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                }}
-                subtitle="Founder"
-                placement="above"
-              />
+              <div className="flex flex-col gap-3">
+                {/*
+                  The balance, where the real rail carries it (audit R22) — so
+                  the browser proves a founder can see what they have from a
+                  project route, not only from Billing.
+                */}
+                <WalletChip
+                  balance={{ availableCredits: creditsToUnits(35), display: "35 Credits" }}
+                  href="/app/billing"
+                />
+                <AccountMenu
+                  identity={{
+                    displayName: "Tobi",
+                    initials: "TB",
+                    avatarUrl: null,
+                    fromGithub: true,
+                  }}
+                  subtitle="Founder"
+                  placement="above"
+                />
+              </div>
             }
           />
         }
