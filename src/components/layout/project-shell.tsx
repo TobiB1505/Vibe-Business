@@ -60,7 +60,15 @@ export const PROJECT_SECTIONS = [
    * live alias, and `#business-audit` still resolves, so nothing a founder or
    * a recovery fragment points at has moved.
    */
-  { id: "home", label: "Home", icon: "home", segment: "" },
+  /*
+   * Named for what it is rather than for where it sits. "Home" was accurate
+   * and said nothing — and the account rail one level up already has a Home,
+   * so a founder moving between them met the same word for two different
+   * destinations. "Nova" is the surface's actual name, it is the only rail
+   * item that names a *who* rather than a subject, and the mark beside it is
+   * the same instrument the page itself carries.
+   */
+  { id: "home", label: "Nova", icon: "nova", segment: "" },
   {
     id: "business-health",
     label: "Business Health",

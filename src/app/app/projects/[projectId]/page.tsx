@@ -3,7 +3,7 @@ import { NovaHome } from "./nova/nova-home";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Home",
+  title: "Nova",
   description: "What needs your attention right now.",
 };
 

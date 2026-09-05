@@ -52,14 +52,17 @@ describe("project workspace sections", () => {
    * This assertion used to pin the index to "Business Health", on the argument
    * that naming it "Home" would be generic. ADR 0085 reverses that: the index
    * is Nova, whose job is the founder's first question — what do I do now —
-   * and the diagnosis is the second one. "Home" is the honest label for a
-   * surface that leads with whatever currently matters, because what it leads
-   * with changes.
+   * and the diagnosis is the second one.
+   *
+   * It is labelled "Nova" rather than "Home" for two reasons. The account rail
+   * one level up already has a Home, so the same word named two destinations;
+   * and this is the one rail item that names a *who* rather than a subject,
+   * which is the whole claim of the surface.
    */
   it("makes the project index Nova and keeps Business Health as its own destination", () => {
     expect(PROJECT_SECTIONS.find((section) => section.id === "home")).toMatchObject({
-      label: "Home",
-      icon: "home",
+      label: "Nova",
+      icon: "nova",
       segment: "",
     });
 
@@ -75,6 +78,13 @@ describe("project workspace sections", () => {
   it("puts Business Health directly after the index it was promoted out of", () => {
     const ids = PROJECT_SECTIONS.map((section) => section.id);
     expect(ids.slice(0, 2)).toEqual(["home", "business-health"]);
+  });
+
+  it("does not repeat the account rail's word for a different destination", () => {
+    // Both rails are on screen together on every project route. Two items
+    // reading "Home" and going to different places is the ambiguity the
+    // rename removes.
+    expect(PROJECT_SECTIONS.map((section) => section.label)).not.toContain("Home");
   });
 
   it("keeps project configuration distinct from account settings", () => {
