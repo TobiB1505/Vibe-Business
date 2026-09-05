@@ -88,9 +88,11 @@
 
 - Every route has a truthful metadata title.
 - Account sidebar becomes the established top strip below `lg`; project and account rails never nest.
-- On desktop, the project rail owns product identity, the bounded product switcher, project navigation and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
+- On desktop, the project rail owns product identity, the bounded product switcher, project navigation, the spendable Credit balance and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
 - Project routes render `My Products / {product}` — plus the route's own name on every section but Home — followed by one route-owned H1, description and action. Repository, branch and connection metadata do not repeat above every page.
 - `Project Settings` is a project destination. Profile, Account settings, Billing and Sign out live only in the account disclosure at the rail footer.
+- Every priced control states its price before it is pressed, from the rate card in force, and an operation that costs nothing says `Included` rather than staying silent ([ADR 0094](docs/decisions/0094-a-free-operation-says-so.md)). An operation the policy does not price says nothing at all — a refusal is not a price of nothing.
+- The spendable balance is readable from every project route and links to Billing. A balance that has not been read renders nothing; it is never shown as zero.
 - Project Home at `/app/projects/:projectId` is Nova: one focus, what is running, what else is true, and the business reading as context. It leads with exactly one control, and that control carries its price before it is pressed.
 - Business Health is its own rail destination at `/health`, which was already a live address before it became one. It remains the canonical diagnosis surface.
 - `#business-audit` remains the stable recovery anchor and resolves on Business Health.
