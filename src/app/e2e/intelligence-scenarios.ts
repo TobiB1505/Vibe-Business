@@ -225,6 +225,24 @@ function liveSnapshot(): LiveProductIntelligenceSnapshot {
   } as unknown as LiveProductIntelligenceSnapshot;
 }
 
+/** Reaches everything the repository claims, so the comparison finds nothing. */
+function agreeingLiveSnapshot(): LiveProductIntelligenceSnapshot {
+  return {
+    productSurfaces: [
+      { id: "homepage", name: "Homepage", detected: true, confidence: "high", evidence: [] },
+      { id: "login", name: "Login", detected: true, confidence: "high", evidence: [] },
+      { id: "pricing", name: "Pricing", detected: true, confidence: "high", evidence: [] },
+      {
+        id: "checkout_billing",
+        name: "Checkout",
+        detected: true,
+        confidence: "high",
+        evidence: [],
+      },
+    ],
+  } as unknown as LiveProductIntelligenceSnapshot;
+}
+
 export type IntelligenceFixture = {
   snapshot: RepositoryIntelligenceSnapshot;
   analyzedAt: string;
@@ -245,6 +263,29 @@ export const E2E_INTELLIGENCE_SCENARIOS = {
     analyzedAt: "2026-08-14T08:22:59.917Z",
     live: liveSnapshot(),
   }),
+
+  /**
+   * Code and live product agree.
+   *
+   * The state that has to *say so*. It renders the same empty check list as
+   * "no live scan has run", and the two must not look alike on screen.
+   */
+  repository_intelligence_agreement: (): IntelligenceFixture => {
+    const base = repositorySnapshot();
+    return {
+      snapshot: {
+        ...base,
+        /* The code has the pricing and checkout the live product shows. */
+        businessSurfaces: base.businessSurfaces.map((surface) =>
+          surface.id === "pricing_page" || surface.id === "checkout_billing"
+            ? { ...surface, detected: true }
+            : surface,
+        ),
+      },
+      analyzedAt: "2026-08-14T08:22:59.917Z",
+      live: agreeingLiveSnapshot(),
+    };
+  },
 
   /** A framework whose routes are declared in code, so pages are unreadable. */
   repository_intelligence_limited_routes: (): IntelligenceFixture => {

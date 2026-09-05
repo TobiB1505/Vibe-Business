@@ -25,6 +25,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const CODE_ONLY = "/e2e/repository_intelligence";
 const CONTRADICTION = "/e2e/repository_intelligence_contradiction";
+const AGREEMENT = "/e2e/repository_intelligence_agreement";
 const LIMITED_ROUTES = "/e2e/repository_intelligence_limited_routes";
 
 async function forbidExternalCalls(page: Page): Promise<string[]> {
@@ -161,6 +162,23 @@ test.describe("the two intelligence layers", () => {
       page.getByText("Your product can take payments, but nothing a visitor can reach leads to paying."),
     ).toBeVisible();
     await expect(page.getByText("Repository signal")).toHaveCount(0);
+  });
+
+  /*
+   * The half of R7 that is easy to leave out: an empty comparison and a
+   * comparison that never ran render the same empty list, and on screen they
+   * are opposite claims. One says so; the other stays silent.
+   */
+  test("says the two layers agree, but only when they were compared", async ({ page }) => {
+    await page.goto(AGREEMENT);
+
+    const section = page.getByRole("region", { name: /your code against your live product/i });
+    await expect(section).toContainText(/everything vibe compared lines up/i);
+
+    await page.goto(CODE_ONLY);
+    await expect(
+      page.getByRole("region", { name: /your code against your live product/i }),
+    ).toHaveCount(0);
   });
 
   test("says an analysis did not finish before its results are read", async ({ page }) => {

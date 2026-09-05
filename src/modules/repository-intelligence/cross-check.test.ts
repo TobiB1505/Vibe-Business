@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildIntelligenceCrossChecks } from "./cross-check";
+import { buildIntelligenceCrossChecks, crossCheckIntelligence } from "./cross-check";
 import type { RepositoryIntelligenceSnapshot } from "./schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { AuthenticatedProductIntelligenceSnapshot } from "@/modules/authenticated-product-intelligence/schema";
@@ -108,6 +108,54 @@ describe("a disagreement becomes a business finding", () => {
     );
 
     expect(checks).toEqual([]);
+  });
+});
+
+/**
+ * The distinction the empty array cannot carry.
+ *
+ * Every assertion above reads `[]` as "nothing to report", and for the checks
+ * themselves that is right. On screen it is not: "your code and your live
+ * product agree" and "nothing has been compared" are opposite sentences, and
+ * only one of them may be said out loud. `crossCheckIntelligence` is where the
+ * guards stop being invisible.
+ */
+describe("saying nothing and finding nothing are different answers", () => {
+  it("reports a real comparison that found no disagreement", () => {
+    const result = crossCheckIntelligence(
+      repository(["pricing_page", "payments", "authentication"]),
+      live(["homepage", "pricing", "login"]),
+    );
+
+    expect(result.compared).toBe(true);
+    expect(result.checks).toEqual([]);
+  });
+
+  it("reports that no comparison happened when there is no live scan", () => {
+    const result = crossCheckIntelligence(repository(["pricing_page"]), null);
+
+    expect(result).toEqual({ compared: false, reason: "no_live_scan", checks: [] });
+  });
+
+  it("reports that no comparison happened when the live scan reached nothing", () => {
+    const result = crossCheckIntelligence(repository(["pricing_page", "payments"]), live([]));
+
+    expect(result).toEqual({
+      compared: false,
+      reason: "live_scan_detected_nothing",
+      checks: [],
+    });
+  });
+
+  it("keeps the checks-only caller returning exactly what it returned before", () => {
+    const args = [
+      repository(["pricing_page", "payments"]),
+      live(["homepage", "login"]),
+    ] as const;
+
+    expect(buildIntelligenceCrossChecks(...args)).toEqual(
+      crossCheckIntelligence(...args).checks,
+    );
   });
 });
 

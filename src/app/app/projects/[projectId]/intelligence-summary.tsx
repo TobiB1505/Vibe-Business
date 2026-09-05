@@ -6,7 +6,8 @@ import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
-import { buildIntelligenceCrossChecks } from "@/modules/repository-intelligence/cross-check";
+import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
+import { FindingCard } from "@/components/system/finding-card";
 import {
   buildRepositoryHumanView,
   CAPABILITY_STATUS_LABELS,
@@ -148,7 +149,7 @@ export function IntelligenceSummary({
   authenticatedSnapshot?: AuthenticatedProductIntelligenceSnapshot | null;
 }) {
   const view = buildRepositoryHumanView(snapshot);
-  const crossChecks = buildIntelligenceCrossChecks(snapshot, liveSnapshot, authenticatedSnapshot);
+  const crossCheck = crossCheckIntelligence(snapshot, liveSnapshot, authenticatedSnapshot);
 
   return (
     <div className="flex flex-col gap-4">
@@ -184,18 +185,45 @@ export function IntelligenceSummary({
         </Notice>
       )}
 
-      {crossChecks.length > 0 && (
-        <Notice tone="waiting" label="Your code and your live product disagree">
-          <ul className="flex flex-col gap-3">
-            {crossChecks.map((check) => (
-              <li key={check.id} className="flex flex-col gap-1">
-                <span className="text-fg font-semibold">{check.title}</span>
-                <span className="text-fg-prose">{check.detail}</span>
-                {check.nextStep && <NextStepLink step={check.nextStep} projectId={projectId} />}
-              </li>
-            ))}
-          </ul>
-        </Notice>
+      {/*
+        Contradictions (audit R7). Rendered only when a comparison actually
+        happened: with no live scan, or one that reached nothing, the section
+        is absent rather than reassuring — `crossCheckIntelligence` is the half
+        that knows the difference.
+      */}
+      {crossCheck.compared && (
+        <section
+          aria-label="Your code against your live product"
+          className="flex flex-col gap-3"
+        >
+          <MonoLabel as="h4">Your code against your live product</MonoLabel>
+          {crossCheck.checks.length > 0 ? (
+            crossCheck.checks.map((check) => (
+              <FindingCard
+                key={check.id}
+                variant="contradiction"
+                severity="attention"
+                title={check.title}
+                explanation={check.detail}
+                sourceLabel="Your code · Your live product"
+                action={
+                  check.nextStep && <NextStepLink step={check.nextStep} projectId={projectId} />
+                }
+              />
+            ))
+          ) : (
+            /*
+              The registry asks this state to say so rather than vanish: a
+              founder who has read a list of disagreements once needs to know
+              the list is empty this time, not wonder whether it ran. It claims
+              only what was compared.
+            */
+            <p className="text-fg-prose max-w-[70ch] text-sm leading-relaxed">
+              Everything Vibe compared lines up. What your code contains and what your live
+              product shows a visitor agreed on every surface it checked.
+            </p>
+          )}
+        </section>
       )}
 
       {view.groups.map((group) => (
