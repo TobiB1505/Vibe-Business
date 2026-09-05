@@ -729,3 +729,27 @@ test.describe("what the change cost", () => {
     await expect(cost).not.toContainText(/\$/);
   });
 });
+
+/*
+ * Slice 4's last acceptance line. The workspace shows the newest run; a
+ * product that had run the agent eleven times had ten it could no longer
+ * reach, including the ones whose changes were merged.
+ */
+test.describe("the runs before this one", () => {
+  test("lists them, and links only the ones that produced a change", async ({ page }) => {
+    await page.goto("/e2e/agent-run-history");
+
+    const table = page.getByRole("table", { name: /agent runs for this product/i });
+    await expect(table).toBeVisible();
+    await expect(table.getByRole("row")).toHaveCount(4); // head + three runs
+
+    await expect(table).toContainText("Finished");
+    await expect(table).toContainText("Failed");
+    await expect(table).toContainText("Stopped");
+
+    // A run that produced no change offers no link, and shows a dash rather
+    // than a zero — it changed nothing, which is not the same as zero files.
+    await expect(table.getByRole("link")).toHaveCount(1);
+    await expect(table).toContainText("—");
+  });
+});

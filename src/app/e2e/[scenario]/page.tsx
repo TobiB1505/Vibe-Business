@@ -71,6 +71,7 @@ import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activi
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
+import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
@@ -1329,6 +1330,48 @@ export default async function E2eScenarioPage({
    * is real either way: the panel and the skeleton reach the client while the
    * slow half is still resolving, which before this could not happen at all.
    */
+  /*
+   * The run list on its own (audit R29). The Agent route needs a session and a
+   * project to reach, so without this the one screen that lets a founder find
+   * an earlier run would have no browser coverage.
+   */
+  if (scenario === "agent-run-history") {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentRunHistory
+          runs={[
+            {
+              id: "run_3",
+              status: "completed",
+              startedAt: "2026-08-27T10:44:00.000Z",
+              completedAt: "2026-08-27T10:51:00.000Z",
+              changedFileCount: 4,
+              preparedChangeId: "change_3",
+            },
+            {
+              id: "run_2",
+              status: "failed",
+              startedAt: "2026-08-24T09:12:00.000Z",
+              completedAt: "2026-08-24T09:14:00.000Z",
+              changedFileCount: null,
+              preparedChangeId: null,
+            },
+            {
+              id: "run_1",
+              status: "cancelled",
+              startedAt: "2026-08-20T16:03:00.000Z",
+              completedAt: "2026-08-20T16:05:00.000Z",
+              changedFileCount: null,
+              preparedChangeId: null,
+            },
+          ]}
+          changeHref={(id) => `/app/projects/project_e2e/agent?change=${id}`}
+        />
+      </main>
+    );
+  }
+
   if (scenario === "agent-streaming") {
     return (
       <main className="mx-auto max-w-[70rem] p-8">

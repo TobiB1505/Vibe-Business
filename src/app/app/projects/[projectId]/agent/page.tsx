@@ -46,6 +46,9 @@ import { AgentFileActivity } from "./agent-file-activity";
 import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { CostLine } from "@/components/system/cost-line";
+import { MonoLabel } from "@/components/ui/typography";
+import { AgentRunHistory } from "./agent-run-history";
+import { listAgentRuns } from "@/modules/coding-agent/observability/run-view";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
@@ -297,7 +300,7 @@ async function AgentWorkspaceBody({
   /* The focus answer and start discoverability are independent. Keep them in
      one parallel read window so restoring the real start control does not
      reintroduce the old serial Agent-page latency. */
-  const [focusAction, agentRoutes, measuredRuns] = await Promise.all([
+  const [focusAction, agentRoutes, measuredRuns, pastRuns] = await Promise.all([
     focusedMove
       ? (async () => {
           const [summaries, activeOperation, failedOperation] = await Promise.all(
@@ -347,6 +350,14 @@ async function AgentWorkspaceBody({
     readyTask !== null && !agentWorking
       ? listMeasuredRunObservations(supabase)
       : Promise.resolve([]),
+    /*
+     * Every run this product has had (audit R29).
+     *
+     * In the same window as everything else, so the list costs no additional
+     * latency, and bounded — a founder scanning for the run they mean does not
+     * need the eleventh page of them.
+     */
+    listAgentRuns(supabase, { projectId, limit: 20 }),
   ]);
 
   const focus = requestedTaskMatchesRun
@@ -871,6 +882,25 @@ async function AgentWorkspaceBody({
               ),
             }}
           />
+
+        {/*
+          The runs before this one (audit R29). The workspace shows the newest;
+          a product that has run the agent eleven times had ten it could no
+          longer reach, including the ones whose changes were merged.
+        */}
+        {pastRuns.length > 1 && (
+          <section className="flex flex-col gap-3" aria-labelledby="agent-run-history-title">
+            <MonoLabel as="h2" id="agent-run-history-title">
+              Earlier runs
+            </MonoLabel>
+            <AgentRunHistory
+              runs={pastRuns}
+              changeHref={(preparedChangeId) =>
+                `${projectSectionHref(project.id, "agent")}?change=${preparedChangeId}`
+              }
+            />
+          </section>
+        )}
       </div>
     </div>
   );

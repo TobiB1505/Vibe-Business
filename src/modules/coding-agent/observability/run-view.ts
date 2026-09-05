@@ -271,3 +271,68 @@ async function readValidationState(
 
   return "not_started";
 }
+
+/**
+ * Every agent run for one project, newest first (audit R29).
+ *
+ * ## Why a founder needs this
+ *
+ * The workspace shows the latest run, and a project that has run the agent
+ * eleven times has ten runs it can no longer reach — including the ones whose
+ * changes were merged, which is the half a founder is most likely to want
+ * back. There was no query for them at all.
+ *
+ * ## What it deliberately does not read
+ *
+ * The event log, the economics and the change. This is a list a person scans
+ * to find the run they mean; assembling each row's timeline would be a
+ * fan-out on a page that only needs names and dates, and the run's own row
+ * already carries what a row shows. Opening one is where the rest is read.
+ *
+ * Ordinary RLS applies. The 90-day event sweep does not remove these rows, but
+ * it does remove the story behind an old one — which is a fact the surface
+ * says rather than something this hides.
+ */
+export type AgentRunSummary = {
+  id: string;
+  status: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  /** Files Vibe verified the run changed. Null before a run produced any. */
+  changedFileCount: number | null;
+  /** The change this run produced, when it produced one. */
+  preparedChangeId: string | null;
+};
+
+export async function listAgentRuns(
+  supabase: SupabaseClient,
+  params: { projectId: string; limit?: number },
+): Promise<AgentRunSummary[]> {
+  const { data, error } = await supabase
+    .from("agent_execution_runs")
+    .select("id, status, started_at, completed_at, changed_file_count, prepared_change_id")
+    .eq("project_id", params.projectId)
+    .order("started_at", { ascending: false, nullsFirst: false })
+    .limit(params.limit ?? 20);
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => {
+    const record = row as {
+      id: string;
+      status: string;
+      started_at: string | null;
+      completed_at: string | null;
+      changed_file_count: number | null;
+      prepared_change_id: string | null;
+    };
+    return {
+      id: record.id,
+      status: record.status,
+      startedAt: record.started_at,
+      completedAt: record.completed_at,
+      changedFileCount: record.changed_file_count,
+      preparedChangeId: record.prepared_change_id,
+    };
+  });
+}
