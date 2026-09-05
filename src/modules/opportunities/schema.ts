@@ -187,11 +187,15 @@ export const EFFORT_LABELS: Record<OpportunityEffort, string> = {
   low: "Low effort",
 };
 
-export const CONFIDENCE_LABELS: Record<Confidence, string> = {
-  high: "High confidence",
-  medium: "Medium confidence",
-  low: "Low confidence",
-};
+/*
+ * No `CONFIDENCE_LABELS` here.
+ *
+ * It existed, matched `JUDGMENT_WORDS` in `components/system/confidence.tsx`
+ * word for word, and had no caller — because Move confidence was rendered
+ * nowhere. Now that it renders, it renders through the one vocabulary the
+ * product uses for every judgment, and a second table in this module would be
+ * the duplication C3 exists to remove.
+ */
 
 /** User-facing execution copy. Never promises automation that does not exist. */
 export const EXECUTION_READINESS_LABELS: Record<ExecutionReadiness, string> = {

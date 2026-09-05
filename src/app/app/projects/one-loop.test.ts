@@ -179,10 +179,25 @@ describe("context filters, it never reranks", () => {
 });
 
 describe("the card says one thing at a time", () => {
-  it("shows impact and effort without turning evidence into card furniture", () => {
+  /*
+   * This asserted that confidence stayed off the card, and that was the right
+   * call against the shape it would have taken: `CONFIDENCE_LABELS` is the
+   * opportunities module's own label table, and a third raw enum in the chip
+   * row is card furniture.
+   *
+   * The audit reverses the *absence*, not that argument (§E4, R15): Move
+   * confidence is stored on every Move and was rendered nowhere in the
+   * product, which is a P0 gap. It renders through the one shared
+   * confidence vocabulary now, so there is one word for "how sure is Vibe"
+   * across facts, judgments and coverage — and the module's private table
+   * still has no business here.
+   */
+  it("shows impact, effort and confidence in one vocabulary, not three enums", () => {
     const chips = PANEL.slice(PANEL.indexOf('className="flex flex-wrap items-center gap-2"'));
     expect(chips).toContain("IMPACT_LABELS");
     expect(chips).toContain("EFFORT_LABELS");
+    expect(chips).toContain("ConfidenceIndicator");
+    expect(chips).toContain('kind: "judgment"');
     expect(chips).not.toContain("CONFIDENCE_LABELS");
     expect(chips).not.toContain("DIMENSION_LABELS");
     expect(PANEL).not.toContain("describeEvidenceId");
