@@ -494,6 +494,33 @@ export async function getReservation(
 }
 
 /**
+ * What one operation's run reserved, and what it settled at (audit R23).
+ *
+ * A change is the product of an operation, and the operation's reservation is
+ * where the money went — but nothing joined the two, so a merged change could
+ * not say what it cost. This is that join, keyed on the operation run the
+ * change came from.
+ *
+ * Ordinary RLS applies: a plain select, returning only what the caller's
+ * session may already see. `null` is "no reservation for this run", which is
+ * a real answer for an operation that was free.
+ */
+export async function findReservationForOperation(
+  supabase: SupabaseClient,
+  params: { operationRunId: string; projectId: string },
+): Promise<CreditReservation | null> {
+  const { data, error } = await supabase
+    .from("billing_credit_reservations")
+    .select(RESERVATION_COLUMNS)
+    .eq("operation_run_id", params.operationRunId)
+    .eq("project_id", params.projectId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapReservation(data as ReservationRow) : null;
+}
+
+/**
  * Reservations by id, in one read.
  *
  * Mirrors `operations/store.ts`'s `listOperationRunsByIds`, and exists for the

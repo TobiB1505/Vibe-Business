@@ -105,6 +105,8 @@ const TASK: AgentTask = {
 import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
 import type { ValidationSummary } from "@/modules/validation/view";
+import type { ChangeCost } from "@/components/system/cost-line";
+import { creditUnits } from "@/modules/credits/units";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
 
@@ -220,6 +222,8 @@ type Fixture = {
   checks: ValidationCheck[];
   /** How much of the profile ran, and why. Null before depth existed. */
   validationDepth: ValidationSummary["depth"];
+  /** What the run cost, from the hold it ran against. */
+  cost: ChangeCost;
   previewChanges: PreviewChange[];
   mergeFiles: MergeFile[];
   mergeSummary: MergeSummary;
@@ -263,6 +267,7 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
      * A depth that skipped two steps, with the reason. The check rows can say
      * a step was skipped; only this says it was a decision and which one.
      */
+    cost: { kind: "settled", credits: creditUnits(200_000) },
     validationDepth: {
       depth: "fast",
       label: "Fast",

@@ -73,6 +73,7 @@ import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-fi
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
+import { CostLine } from "@/components/system/cost-line";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
@@ -960,6 +961,7 @@ export default async function E2eScenarioPage({
       task,
       checks,
       validationDepth,
+      cost,
       fileEvents,
       currentAction,
       files,
@@ -1094,6 +1096,7 @@ export default async function E2eScenarioPage({
                 compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
                 backHref="#"
                 canMerge
+                decision={<CostLine cost={cost} />}
               />
               </>
             ),

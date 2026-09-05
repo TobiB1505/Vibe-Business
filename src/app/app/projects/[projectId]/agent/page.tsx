@@ -45,6 +45,7 @@ import { resolveAgentInterruptAction } from "./interrupt-actions";
 import { AgentFileActivity } from "./agent-file-activity";
 import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
+import { CostLine } from "@/components/system/cost-line";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
@@ -852,7 +853,18 @@ async function AgentWorkspaceBody({
                     commitSha={change.commitSha}
                     compareUrl={change.compareUrl}
                     backHref={planHref}
-                    decision={<AgentReviewDecision projectId={project.id} change={change} />}
+                    decision={
+                      <div className="flex flex-col gap-3">
+                        <AgentReviewDecision projectId={project.id} change={change} />
+                        {/*
+                          What it cost, from the hold it ran against (audit
+                          R23). Beside the decision rather than after it: a
+                          founder about to merge is the person who wants to
+                          know what the run they are approving was charged.
+                        */}
+                        <CostLine cost={displayedWorkspace.cost} />
+                      </div>
+                    }
                     canMerge={change.merge.state === "ready"}
                   />
                 </div>

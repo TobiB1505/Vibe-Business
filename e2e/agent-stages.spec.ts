@@ -710,3 +710,22 @@ test.describe("what the validation checked, and what it did not", () => {
     await expect(note).toContainText(/did not run tests and the production build/i);
   });
 });
+
+/*
+ * Slice 4, fourth acceptance line. A merged change could not say what it cost:
+ * the reservation is where the money went and nothing joined it to the change.
+ */
+test.describe("what the change cost", () => {
+  test("names the settled Credits beside the decision", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const cost = page.getByTestId("cost-line");
+    await expect(cost).toBeVisible();
+    await expect(cost).toHaveAttribute("data-cost", "settled");
+    await expect(cost).toContainText(/this change cost/i);
+    await expect(cost).toContainText(/Credits/);
+
+    // The charge, never Vibe's own cost of producing it.
+    await expect(cost).not.toContainText(/\$/);
+  });
+});

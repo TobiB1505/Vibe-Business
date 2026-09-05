@@ -30,6 +30,8 @@ import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { type TimelineStep } from "./observability/timeline";
 import { runObservationFrom, type LiveFile } from "./observability/live-view";
 import type { ValidationPhaseView, ValidationSummary } from "@/modules/validation/view";
+import { findReservationForOperation } from "@/modules/credits/store";
+import type { ChangeCost } from "@/components/system/cost-line";
 import { getAgentExecutionStatus } from "./service";
 
 /**
@@ -105,6 +107,8 @@ export type AgentWorkspaceView = {
    * relabelling history.
    */
   validationDepth: ValidationSummary["depth"];
+  /** What this run cost, once the hold it ran against has settled. */
+  cost: ChangeCost;
   /** Named changes for the preview rail. Empty when nothing describes them. */
   previewChanges: PreviewChange[];
   mergeSummary: MergeSummary;
@@ -175,6 +179,7 @@ export async function readAgentWorkspace(
       files: [],
       checks: validationChecks(change),
       validationDepth: change?.validation?.depth ?? null,
+      cost: { kind: "unknown" },
       previewChanges: [],
       mergeSummary: mergeSummaryFor(change),
       interrupt: null,
@@ -209,7 +214,7 @@ export async function readAgentWorkspace(
   const runId = operation.agentExecutionRunId;
   if (runId === null) return idle(selectedChange);
 
-  const [runView, events, interrupt, change] = await Promise.all([
+  const [runView, events, interrupt, change, reservation] = await Promise.all([
     readAgentRunForLiveView(supabase, { runId, projectId }),
     listExecutionEvents(supabase, { runId, projectId }),
     /*
@@ -230,6 +235,17 @@ export async function readAgentWorkspace(
             preparedChangeId: operation.resultId,
           })
         : Promise.resolve(null),
+    /*
+     * What the run cost, from the hold it was charged against (audit R23).
+     *
+     * One read, keyed on the operation — the reservation is where the money
+     * went, and nothing joined it to the change, so a merged change could not
+     * say what it cost. Read for every run rather than only merged ones: a
+     * release is as much an answer as a charge, and a founder whose run was
+     * refunded should be told rather than left assuming the reserved figure
+     * was taken.
+     */
+    findReservationForOperation(supabase, { operationRunId: stored.id, projectId }),
   ]);
 
   /*
@@ -248,6 +264,21 @@ export async function readAgentWorkspace(
     run: runView?.run ?? null,
   });
   const timeline = observation.timeline;
+
+  /*
+   * `settled` carries the number the account was actually charged; `released`
+   * says the hold came back. A run with no reservation was free, and `unknown`
+   * renders nothing rather than inventing a zero (ADR 0094's rule, in the
+   * other direction).
+   */
+  const cost: ChangeCost =
+    reservation === null
+      ? { kind: "unknown" }
+      : reservation.status === "settled" && reservation.settledCredits !== null
+        ? { kind: "settled", credits: reservation.settledCredits }
+        : reservation.status === "released" || reservation.status === "expired"
+          ? { kind: "released" }
+          : { kind: "pending" };
 
   /*
    * `file_read` is what the harness reported reading; the changed count is
@@ -362,6 +393,7 @@ export async function readAgentWorkspace(
     files: observation.files,
     checks: validationChecks(change),
     validationDepth: change?.validation?.depth ?? null,
+    cost,
     // Nothing stored describes a change in prose, so the preview rail carries
     // no invented summaries. The frames and the file list carry the answer.
     previewChanges: [],
