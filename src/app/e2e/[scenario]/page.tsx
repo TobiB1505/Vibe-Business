@@ -71,6 +71,7 @@ import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activi
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
+import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
@@ -1068,6 +1069,14 @@ export default async function E2eScenarioPage({
               />
             ),
             review: (
+              <>
+              {/*
+                The paths policy refused, on the stage a person decides from.
+                `AgentPreviewActions` binds real server actions and cannot be
+                mounted here, so the part that is new — naming what is not in
+                the change — is rendered on its own.
+              */}
+              <WithheldPaths paths={files.filter((f) => f.withheldBy !== null).map((f) => f.path)} />
               <AgentMergeStage
                 summary={mergeSummary}
                 files={mergeFiles}
@@ -1079,6 +1088,7 @@ export default async function E2eScenarioPage({
                 backHref="#"
                 canMerge
               />
+              </>
             ),
           }}
         />

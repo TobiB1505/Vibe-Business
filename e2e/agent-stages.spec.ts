@@ -654,3 +654,25 @@ test.describe("a run in flight says what it is doing", () => {
     expect(body).not.toMatch(/\bUSD\b/i);
   });
 });
+
+/*
+ * Slice 4, second acceptance line. The diff moved onto the stage a person
+ * decides from — it lived only on `ChangeGates`, which this workspace
+ * replaced, so a founder approved a change whose contents were a click away on
+ * another surface. And the paths policy refused are named, because they are
+ * not in the change and their absence otherwise reads as "never touched".
+ */
+test.describe("what the review names that the change cannot", () => {
+  test("names the files the run was not allowed to change", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const withheld = page.getByTestId("withheld-paths");
+    await expect(withheld).toBeVisible();
+    await expect(withheld).toContainText(/one file the run was not allowed to change/i);
+    await expect(withheld).toContainText(".env.local");
+
+    // A statement, not an offer. There is nothing here to press.
+    await expect(withheld.getByRole("button")).toHaveCount(0);
+    await expect(withheld.getByRole("link")).toHaveCount(0);
+  });
+});

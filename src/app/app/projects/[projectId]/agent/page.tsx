@@ -815,7 +815,15 @@ async function AgentWorkspaceBody({
                     linesRemoved={change.lineStats?.removed}
                     filesHref={change.compareUrl ?? undefined}
                     reviewReady={change.review.state === "ready"}
-                    actions={<AgentPreviewActions projectId={project.id} change={change} />}
+                    actions={
+                      <AgentPreviewActions
+                        projectId={project.id}
+                        change={change}
+                        withheldPaths={displayedWorkspace.files
+                          .filter((file) => file.withheldBy !== null)
+                          .map((file) => file.path)}
+                      />
+                    }
                   />
                 </div>
               ),
