@@ -12,8 +12,6 @@ import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import {
   operationPollPhase,
-  operationProgressSteps,
-  OPERATION_STAGE_LABELS,
   type OperationView,
 } from "@/modules/operations/view";
 import { buildOpportunityBlockNotice, moveLensLabel } from "@/modules/opportunities/view";
@@ -31,7 +29,7 @@ import { MoveCard } from "./move-card";
 import { MoveStepper } from "./move-stepper";
 import { PlanDetailPanel } from "./plan-detail-panel";
 import { PlanGenerating } from "./plan-generating";
-import { PlanProgressSteps } from "./plan-progress-steps";
+import { OperationProgress } from "@/components/system/operation-progress";
 
 const POLL_INTERVAL_MS = 3_000;
 const SWIPE_DISTANCE = 72;
@@ -224,22 +222,12 @@ export function ActionPlanWorkspace({
               role="status"
               data-testid="moves-rescanning"
             >
-              <div className="flex flex-col gap-1.5">
-                <MonoLabel className="text-mint">Re-scanning your business</MonoLabel>
-                <p className="text-fg-prose text-sm leading-relaxed">
-                  {movesOperationView.stalled
-                    ? "This is taking much longer than expected."
-                    : `${OPERATION_STAGE_LABELS[movesOperationView.stage]}…`}
-                </p>
-              </div>
-              <PlanProgressSteps
-                steps={operationProgressSteps("opportunity_generation", movesOperationView)}
+              <MonoLabel className="text-mint">Re-scanning your business</MonoLabel>
+              <OperationProgress
+                sequence="opportunity_generation"
+                operation={movesOperationView}
+                runningNote="The plan below is your previous one until this finishes. You can leave this page. Vibe will continue."
               />
-              <p className="text-fg-muted text-xs leading-relaxed">
-                {movesOperationView.stalled
-                  ? "You can start again if this attempt never finishes."
-                  : "The plan below is your previous one until this finishes. You can leave this page. Vibe will continue."}
-              </p>
             </Surface>
           ) : null}
 

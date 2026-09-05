@@ -410,7 +410,14 @@ describe("a finished re-scan reaches the screen", () => {
    *  answers the empty case only, and it is in the other branch. */
   it("says a re-scan is running while the previous Moves are still shown", () => {
     expect(WORKSPACE).toContain('data-testid="moves-rescanning"');
-    expect(WORKSPACE).toContain('operationProgressSteps("opportunity_generation"');
+    /*
+     * The sequence, not the call. `operationProgressSteps` moved inside
+     * `OperationProgress` (audit R36) along with the stalled sentence and the
+     * failure copy each caller used to write for itself — what this asserts is
+     * that this surface still reports the *opportunity generation* run, which
+     * is the part that could go wrong in a refactor.
+     */
+    expect(WORKSPACE).toContain('sequence="opportunity_generation"');
     const rescan = WORKSPACE.slice(WORKSPACE.indexOf('data-testid="moves-rescanning"'));
     expect(rescan).toContain("The plan below is your previous one until this finishes.");
   });

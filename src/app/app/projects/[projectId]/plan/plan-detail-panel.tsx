@@ -20,8 +20,6 @@ import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import {
   freshestOperation,
   operationPollPhase,
-  operationProgressSteps,
-  OPERATION_STAGE_LABELS,
   type OperationView,
 } from "@/modules/operations/view";
 import { isFounderAttestable } from "@/modules/action-plans/completion";
@@ -48,7 +46,7 @@ import {
   stepSequenceStatus,
   type StepDisplayState,
 } from "@/modules/action-plans/view";
-import { PlanProgressSteps } from "./plan-progress-steps";
+import { OperationProgress } from "@/components/system/operation-progress";
 import { resolveFounderInputAction } from "../founder-input-action";
 import {
   attestFounderActionStepAction,
@@ -795,20 +793,8 @@ export function PlanDetailPanel({
         >
           {running && operation ? (
             <div className="flex flex-col gap-4" role="status">
-              <div className="flex flex-col gap-1.5">
-                <h3 className="text-fg text-xl font-semibold">Generating planned work</h3>
-                <p className="text-fg-prose text-sm leading-relaxed">
-                  {operation.stalled
-                    ? "This is taking much longer than expected."
-                    : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
-                </p>
-              </div>
-              <PlanProgressSteps steps={operationProgressSteps("action_planning", operation)} />
-              <p className="text-fg-muted text-xs leading-relaxed">
-                {operation.stalled
-                  ? "You can start again if this attempt never finishes."
-                  : "You can leave this page. Vibe will continue."}
-              </p>
+              <h3 className="text-fg text-xl font-semibold">Generating planned work</h3>
+              <OperationProgress sequence="action_planning" operation={operation} />
             </div>
           ) : planView ? (
             <PlanBody

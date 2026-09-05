@@ -1,9 +1,17 @@
+import type { ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 import { CheckIcon } from "@/components/ui/dashboard-icons";
-import type { OperationProgressStep } from "@/modules/operations/view";
+import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
+import {
+  OPERATION_STAGE_LABELS,
+  operationProgressSteps,
+  type OperationProgressStep,
+  type OperationView,
+  type ProgressSequenceId,
+} from "@/modules/operations/view";
 
 /**
- * What a run is doing, as named rows (ACTION PLAN UI-2).
+ * What a run is doing, as named rows (ACTION PLAN UI-2; audit R36).
  *
  * The rows come from `operationProgressSteps`, which reads the operation's own
  * durable stage — so a tick is a fact, not an animation that advances on a
@@ -29,7 +37,7 @@ const STAGE_DESCRIPTIONS: Partial<Record<string, string>> = {
   "Saving result": "Making the plan available across your workspace",
 };
 
-export function PlanProgressSteps({
+export function ProgressSteps({
   steps,
   className,
   variant = "compact",
@@ -125,5 +133,89 @@ export function PlanProgressSteps({
         </li>
       ))}
     </ol>
+  );
+}
+
+/**
+ * A running operation, whole: its stages, or why it is not running.
+ *
+ * ## What this merges
+ *
+ * The rows were shared; everything around them was not. Each caller wrote its
+ * own "this is taking much longer than expected", its own "you can leave this
+ * page", and its own lookup into `OPERATION_FAILURE_MESSAGES` — three
+ * vocabularies for three states of the same object, which is what the audit's
+ * R36 is about. A founder met different sentences for the same situation
+ * depending on which screen they were standing on.
+ *
+ * ## The three states, and the one rule between them
+ *
+ * **Running** shows the stages and says the page can be left. **Stalled** says
+ * the run has gone past what the work can take and offers a fresh start —
+ * never a percentage, and never a claim that it failed, because a stall is
+ * inferred from a clock and the run may yet land. **Failed** says what
+ * happened in the failure's own words, and offers `retry` *only* when
+ * `retryAllowed` — a failure that may already have been billed does not get a
+ * one-click repeat.
+ *
+ * What is deliberately not merged here: the Business Brain's `AuditPreparing`
+ * and `AuditAnalyzing`. Those are not stage lists. They are a signature
+ * surface's own lifecycle, and their own docblocks argue why they show no
+ * per-lens progress — folding them into a generic row list would delete that
+ * argument rather than consolidate it.
+ */
+export function OperationProgress({
+  sequence,
+  operation,
+  variant = "compact",
+  retry,
+  runningNote,
+  className,
+}: {
+  sequence: ProgressSequenceId;
+  operation: OperationView;
+  variant?: "compact" | "timeline";
+  /** Offered only when the failure is one a retry can honestly address. */
+  retry?: ReactNode;
+  /**
+   * What else is true while this runs, when the surface has something to add.
+   *
+   * The moves re-scan says the previous plan stays readable until the new one
+   * lands — a fact about that screen, not about running operations, and one
+   * the founder would otherwise have to guess. It replaces the default
+   * sentence rather than joining it, so no surface says both.
+   */
+  runningNote?: ReactNode;
+  className?: string;
+}) {
+  if (operation.status === "failed") {
+    return (
+      <div className={cn("flex flex-col gap-3", className)} data-testid="operation-progress">
+        <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+          {operation.failureCode
+            ? OPERATION_FAILURE_MESSAGES[operation.failureCode]
+            : "This run stopped before it finished."}
+        </p>
+        {operation.retryAllowed && retry}
+      </div>
+    );
+  }
+
+  return (
+    <div className={cn("flex flex-col gap-3", className)} data-testid="operation-progress">
+      <p className="text-fg-prose text-sm leading-relaxed">
+        {operation.stalled
+          ? "This is taking much longer than expected."
+          : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
+      </p>
+
+      <ProgressSteps steps={operationProgressSteps(sequence, operation)} variant={variant} />
+
+      <p className="text-fg-muted text-xs leading-relaxed">
+        {operation.stalled
+          ? "You can start again if this attempt never finishes."
+          : (runningNote ?? "You can leave this page. Vibe will continue.")}
+      </p>
+    </div>
   );
 }
