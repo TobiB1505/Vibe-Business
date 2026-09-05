@@ -1611,6 +1611,28 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
       ],
     };
   },
+
+  /**
+   * `list_ai_usage_events_for_run`. Modelled as the migration defines it: the
+   * row-level counterpart to `sum_agent_run_usage`, filtered by both the run
+   * and the project rather than relying on RLS the fake does not simulate.
+   */
+  list_ai_usage_events_for_run: (db, params) => ({
+    data: db
+      .rows("ai_usage_events")
+      .filter((row) => row.job_id === params.p_run_id && row.project_id === params.p_project_id)
+      .map((row) => ({
+        status: row.status,
+        input_tokens: row.input_tokens ?? null,
+        output_tokens: row.output_tokens ?? null,
+        cache_read_input_tokens: row.cache_read_input_tokens ?? null,
+        cache_creation_input_tokens: row.cache_creation_input_tokens ?? null,
+        thinking_tokens: row.thinking_tokens ?? null,
+        provider_cost_usd: row.provider_cost_usd ?? null,
+        latency_ms: row.latency_ms ?? null,
+        created_at: row.created_at ?? null,
+      })),
+  }),
 };
 
 /**

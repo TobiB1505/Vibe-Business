@@ -6,6 +6,17 @@ vi.mock("@/lib/observability/alert", () => ({
   alertOperator: (message: string, context?: Record<string, unknown>) =>
     alertOperator(message, context),
 }));
+/**
+ * `readExecutionEconomics` reads `ai_usage_events` through the service-role
+ * client (`service-boundary.test.ts`), because that table has been
+ * deliberately unreachable through the Data API since the Wave 1 privilege
+ * work. `FakeDatabase` has no RLS to bypass, so both clients are the same
+ * fake here — this suite is about the live view's shape, not about who is
+ * allowed to run the read.
+ */
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => fakeSupabase(db),
+}));
 import { fakeAgentSpec, fakeDetachedAgentProvider } from "@/modules/coding-agent/test-support";
 import type { BaseContentPort, BaseTreePort } from "@/modules/coding-agent/candidate";
 import type { ObservedRuntimeEntry } from "@/modules/coding-agent/provider";

@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
 import {
   summarizeExecutionEconomics,
   type ExecutionEconomics,
@@ -19,6 +20,15 @@ import {
  * The join key for provider usage is `job_id = agent_execution_run_id`, which
  * is the same key the run's own gateway ceilings are measured against — so the
  * cost shown in the inspector is by construction the cost the ceilings saw.
+ *
+ * `ai_usage_events` has been deliberately unreachable through the Data API
+ * since the Wave 1 privilege work (see `sum_agent_run_usage`), so its half of
+ * this read goes through `list_ai_usage_events_for_run` on the service-role
+ * client rather than the caller's session-scoped one — this file is a
+ * reviewed site in `service-boundary.test.ts`. Ownership of `params.projectId`
+ * is not taken from this function's arguments: it was already established a
+ * moment earlier by the caller's own RLS-scoped read of the operation row,
+ * filtered by both the project id and the session's user id together.
  */
 
 export async function readExecutionEconomics(
@@ -33,13 +43,10 @@ export async function readExecutionEconomics(
   },
 ): Promise<ExecutionEconomics> {
   const [usage, sandbox] = await Promise.all([
-    supabase
-      .from("ai_usage_events")
-      .select(
-        "status, input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, thinking_tokens, provider_cost_usd, latency_ms, created_at",
-      )
-      .eq("job_id", params.runId)
-      .eq("project_id", params.projectId),
+    createServiceClient().rpc("list_ai_usage_events_for_run", {
+      p_run_id: params.runId,
+      p_project_id: params.projectId,
+    }),
     supabase
       .from("sandbox_usage_events")
       .select(

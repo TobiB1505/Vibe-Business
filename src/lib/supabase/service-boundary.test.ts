@@ -130,6 +130,18 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
       "concurrency gate keeps driving it with clients of its own.",
   },
   {
+    file: join("modules", "coding-agent", "economics", "store.ts"),
+    why:
+      "ai_usage_events has been deliberately unreachable through the Data API since the Wave 1 " +
+      "privilege work (see sum_agent_run_usage) — authenticated was never granted select, and its " +
+      "since-revoked insert was the table's only other grant — so every render of the " +
+      "execution-cost inspector for a run that had spent anything failed with 42501 " +
+      "(VIBE-BUSINESS-PROJECT-1 / -3). Ownership is not taken from the caller's arguments: " +
+      "readExecutionEconomics's projectId and runId come from the operation row the caller " +
+      "already read a moment earlier through its own RLS-scoped client, filtered by both the " +
+      "project id and the session's user id together.",
+  },
+  {
     file: join("modules", "auth", "throttle.ts"),
     why:
       "VB-053 / ADR 0060. record_auth_attempt is no longer callable by anon, because anon is " +
