@@ -186,7 +186,13 @@ test.describe("the two intelligence layers", () => {
 
     const notice = page.getByRole("status").first();
     await expect(notice).toContainText("did not finish");
-    await expect(notice).toContainText("tree_truncated");
+    /*
+     * In words, not in the analyzer's vocabulary. This asserted the literal
+     * `tree_truncated` on screen (audit D12) — a budget name a founder can
+     * only read as a defect in their own repository.
+     */
+    await expect(notice).toContainText(/more files than vibe reads in one pass/i);
+    await expect(notice).not.toContainText("tree_truncated");
   });
 });
 
