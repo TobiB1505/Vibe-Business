@@ -1,3 +1,4 @@
+import { cn } from "@/lib/utils/cn";
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -414,291 +415,154 @@ export function BillingView({
       )}
 
       {/*
-        One grid, two columns that each stack — not two grids stacked.
+        Four rows, not two columns that stop at different heights.
 
-        The price table is roughly twice the height of the pack list, so as two
-        separate rows the right-hand side ended in several hundred pixels of
-        nothing before the plans began again below it. Reading order is
-        unchanged, and each column still flows in the order it did.
+        The page was one grid whose left column ran on for a full screen
+        after the right had ended — prices, two activity panels and the
+        ledger on one side, packs and plans on the other. `DESIGN.md` asks
+        for a compact financial-dashboard composition, and the shape that
+        produces is a row per question rather than a tall column beside a
+        short one.
+
+        Prices and packs still pair, for the reason they were paired in the
+        first place: the price table is about twice the height of the pack
+        list, so as two full-width rows the packs would sit alone above a lot
+        of nothing. Both also answer "what does this cost".
+        Plans take the full width because they are the page's one real
+        decision and were the narrowest thing on it. The two short
+        histories pair, and the long ledger gets the width it always
+        needed. Reading order is unchanged.
       */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
-        <div className="flex flex-col gap-4">
           <Surface
-            as="section"
-            aria-labelledby="credit-prices-heading"
-            id="credit-prices"
-            level="panel"
-            padding="none"
-            className="scroll-mt-6 overflow-hidden"
-          >
-            <div className="border-line-2 flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-6">
-              <div className="min-w-0">
-                <MonoLabel
-                  id="credit-prices-heading"
-                  as="h2"
-                  className="text-mint"
-                >
-                  Credit prices
-                </MonoLabel>
-                <p className="text-fg mt-2 font-semibold">
-                  Know the cost before you start
-                </p>
-                <p className="text-fg-prose mt-1.5 max-w-[46ch] text-sm">
-                  Credits power Vibe&rsquo;s business intelligence and Agent
-                  work. Every task shows what it costs beside the button that
-                  starts it.
-                </p>
-              </div>
-              <span className="text-fg-meta hidden shrink-0 items-center gap-1.5 pt-1 text-xs sm:inline-flex">
-                <InfoIcon size={14} /> Known before you start
-              </span>
-            </div>
-            <ul className="divide-line-2 divide-y">
-              {priceRows.map(({ operation, resolved }) => {
-                const price = resolved.price;
-
-                return (
-                  /*
-                   * Stacked on a phone, opposed on a desktop.
-                   *
-                   * The agent row is three label/amount pairs, and on a narrow
-                   * screen forcing it to share a line with the operation name
-                   * squeezed both into two-line wraps. Below `sm` the name gets
-                   * the full width and the amounts sit under it, indented past
-                   * the icon so the column still reads as a column.
-                   */
-                  <li
-                    key={operation}
-                    className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        aria-hidden="true"
-                        className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
-                      >
-                        <SparklesIcon size={16} />
-                      </span>
-                      <span className="text-fg-body text-sm">
-                        {OPERATION_NAMES[operation]}
-                        {resolved.basis !== "measured" && (
-                          <sup className="text-fg-meta ml-0.5 text-[0.65rem]">
-                            *
-                          </sup>
-                        )}
-                      </span>
-                    </div>
-
-                    {price.kind === "by_execution_class" ? (
-                      <span className="flex shrink-0 flex-col gap-1 pl-12 sm:items-end sm:pl-0">
-                        {EXECUTION_PRICING_CLASSES.map((pricingClass) => (
-                          <span
-                            key={pricingClass}
-                            className="flex items-baseline justify-between gap-2 sm:justify-end"
-                          >
-                            <span className="text-fg-meta text-xs">
-                              {EXECUTION_CLASS_NAMES[pricingClass]}
-                            </span>
-                            <span className="text-fg text-sm font-semibold tabular-nums">
-                              {formatCreditsForDisplay(
-                                price.creditUnitsByClass[pricingClass],
-                              )}{" "}
-                              Credits
-                            </span>
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      <span className="text-fg shrink-0 pl-12 text-sm font-semibold tabular-nums sm:pl-0">
-                        {price.kind === "free"
-                          ? "Free"
-                          : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
-                      </span>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-
-            {/*
-            The footnote, not a badge.
-
-            A badge next to a price reads as a property of the offer — "new",
-            "popular", "discounted". This is a statement about Vibe's own
-            confidence in the number, which is a smaller and more honest claim,
-            and it belongs where a reader looks after the table rather than
-            beside the figure they are trying to compare.
-          */}
-            {/*
-            The settlement truth, in the customer's words.
-
-            `settleOperationCredits` settles at the reserved amount and
-            `releaseOperationCredits` returns the whole hold, so an Agent
-            improvement costs exactly its tier price or exactly nothing —
-            there is no partial charge anywhere in the system. "Up to 200
-            Credits" would therefore be the wrong kind of hedge: it implies a
-            variable settlement no code path can produce, and a customer who
-            budgeted for "up to" and was charged the top of it every time would
-            be right to feel misled. What is genuinely conditional is not the
-            amount but whether anything is charged at all, and that is what
-            this says.
-          */}
-            {hasQualifiedPrice && (
-              <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
-                <span aria-hidden="true">*</span> Agent prices scale with how
-                broad a change is, and Vibe tells you which before you start.
-                You are charged only if the Agent delivers a change &mdash; if
-                it doesn&rsquo;t, the Credits stay yours. A Deep Scan price
-                covers the browser session that reads your signed-in product.
+          as="section"
+          aria-labelledby="credit-prices-heading"
+          id="credit-prices"
+          level="panel"
+          padding="none"
+          className="scroll-mt-6 overflow-hidden"
+        >
+          <div className="border-line-2 flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-6">
+            <div className="min-w-0">
+              <MonoLabel
+                id="credit-prices-heading"
+                as="h2"
+                className="text-mint"
+              >
+                Credit prices
+              </MonoLabel>
+              <p className="text-fg mt-2 font-semibold">
+                Know the cost before you start
               </p>
-            )}
-          </Surface>
+              <p className="text-fg-prose mt-1.5 max-w-[46ch] text-sm">
+                Credits power Vibe&rsquo;s business intelligence and Agent
+                work. Every task shows what it costs beside the button that
+                starts it.
+              </p>
+            </div>
+            <span className="text-fg-meta hidden shrink-0 items-center gap-1.5 pt-1 text-xs sm:inline-flex">
+              <InfoIcon size={14} /> Known before you start
+            </span>
+          </div>
+          <ul className="divide-line-2 divide-y">
+            {priceRows.map(({ operation, resolved }) => {
+              const price = resolved.price;
 
-          {accountActivity.length > 0 && (
-            <Surface
-              as="section"
-              aria-labelledby="account-activity-heading"
-              level="panel"
-              padding="lg"
-              className="flex flex-col gap-4"
-            >
-              <div>
-                <MonoLabel id="account-activity-heading" as="h2" className="text-mint">
-                  Your account
-                </MonoLabel>
-                <p className="text-fg mt-2 font-semibold">Account activity</p>
-                <p className="text-fg-muted mt-1 text-ui">
-                  What happened to the account itself — Credits bought, accounts connected.
-                </p>
-              </div>
-              <ActivityFeed entries={accountActivity} hasMore={false} />
-            </Surface>
-          )}
+              return (
+                /*
+                 * Stacked on a phone, opposed on a desktop.
+                 *
+                 * The agent row is three label/amount pairs, and on a narrow
+                 * screen forcing it to share a line with the operation name
+                 * squeezed both into two-line wraps. Below `sm` the name gets
+                 * the full width and the amounts sit under it, indented past
+                 * the icon so the column still reads as a column.
+                 */
+                <li
+                  key={operation}
+                  className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6"
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span
+                      aria-hidden="true"
+                      className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
+                    >
+                      <SparklesIcon size={16} />
+                    </span>
+                    <span className="text-fg-body text-sm">
+                      {OPERATION_NAMES[operation]}
+                      {resolved.basis !== "measured" && (
+                        <sup className="text-fg-meta ml-0.5 text-[0.65rem]">
+                          *
+                        </sup>
+                      )}
+                    </span>
+                  </div>
+
+                  {price.kind === "by_execution_class" ? (
+                    <span className="flex shrink-0 flex-col gap-1 pl-12 sm:items-end sm:pl-0">
+                      {EXECUTION_PRICING_CLASSES.map((pricingClass) => (
+                        <span
+                          key={pricingClass}
+                          className="flex items-baseline justify-between gap-2 sm:justify-end"
+                        >
+                          <span className="text-fg-meta text-xs">
+                            {EXECUTION_CLASS_NAMES[pricingClass]}
+                          </span>
+                          <span className="text-fg text-sm font-semibold tabular-nums">
+                            {formatCreditsForDisplay(
+                              price.creditUnitsByClass[pricingClass],
+                            )}{" "}
+                            Credits
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-fg shrink-0 pl-12 text-sm font-semibold tabular-nums sm:pl-0">
+                      {price.kind === "free"
+                        ? "Free"
+                        : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
 
           {/*
-            Where the Credits went, per product (audit R24). The history below
-            says what happened; this says which product it happened to — the
-            question a founder with four products asks first, and the one the
-            ledger could answer all along and never did.
-          */}
-          {overview.spendByProduct.length > 0 && (
-            <Surface
-              as="section"
-              aria-labelledby="spend-by-product-heading"
-              level="panel"
-              padding="lg"
-              className="flex flex-col gap-4"
-            >
-              <div>
-                <MonoLabel id="spend-by-product-heading" as="h2" className="text-mint">
-                  Where it went
-                </MonoLabel>
-                <p className="text-fg mt-2 font-semibold">Spend by product</p>
-                {/*
-                  Over the history below, not ever. A total that silently
-                  covered the last hundred movements would be read as lifetime.
-                */}
-                <p className="text-fg-muted mt-1 text-ui">
-                  Across the activity shown below.
-                </p>
-              </div>
-              <ul className="divide-line-2 divide-y" data-testid="spend-by-product">
-                {overview.spendByProduct.map((product) => (
-                  <li
-                    key={product.projectId}
-                    className="flex items-baseline justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
-                  >
-                    <span className="text-fg-body truncate text-sm">{product.name}</span>
-                    <span className="text-fg-secondary text-sm tabular-nums">
-                      {product.displayCredits} Credits
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Surface>
+          The footnote, not a badge.
+
+          A badge next to a price reads as a property of the offer — "new",
+          "popular", "discounted". This is a statement about Vibe's own
+          confidence in the number, which is a smaller and more honest claim,
+          and it belongs where a reader looks after the table rather than
+          beside the figure they are trying to compare.
+        */}
+          {/*
+          The settlement truth, in the customer's words.
+
+          `settleOperationCredits` settles at the reserved amount and
+          `releaseOperationCredits` returns the whole hold, so an Agent
+          improvement costs exactly its tier price or exactly nothing —
+          there is no partial charge anywhere in the system. "Up to 200
+          Credits" would therefore be the wrong kind of hedge: it implies a
+          variable settlement no code path can produce, and a customer who
+          budgeted for "up to" and was charged the top of it every time would
+          be right to feel misled. What is genuinely conditional is not the
+          amount but whether anything is charged at all, and that is what
+          this says.
+        */}
+          {hasQualifiedPrice && (
+            <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
+              <span aria-hidden="true">*</span> Agent prices scale with how
+              broad a change is, and Vibe tells you which before you start.
+              You are charged only if the Agent delivers a change &mdash; if
+              it doesn&rsquo;t, the Credits stay yours. A Deep Scan price
+              covers the browser session that reads your signed-in product.
+            </p>
           )}
-
-          <Surface
-            as="section"
-            aria-labelledby="recent-activity-heading"
-            level="panel"
-            padding="none"
-            className="overflow-hidden"
-          >
-            <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
-              <div>
-                <MonoLabel
-                  id="recent-activity-heading"
-                  as="h2"
-                  className="text-mint"
-                >
-                  Recent usage
-                </MonoLabel>
-                <p className="text-fg mt-2 font-semibold">
-                  Latest Credit activity
-                </p>
-              </div>
-              <span className="text-fg-meta text-xs">Newest first</span>
-            </div>
-            {overview.recentActivity.length === 0 ? (
-              /*
-              An empty history is a normal state, not a missing one. It says
-              what will fill it, so a new account reads this as "nothing has
-              happened yet" rather than "something failed to load".
-            */
-              <div className="px-5 py-8 sm:px-6">
-                <p className="text-fg-body text-sm font-medium">
-                  No Credit activity yet
-                </p>
-                <p className="text-fg-muted mt-1.5 max-w-[42ch] text-sm">
-                  Credits you add and tasks you run will appear here.
-                </p>
-              </div>
-            ) : (
-              <ul className="divide-line-2 divide-y">
-                {overview.recentActivity.map((entry) => (
-                  <li
-                    key={entry.id}
-                    className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6"
-                  >
-                    <div className="flex min-w-0 items-center gap-3">
-                      <span
-                        aria-hidden="true"
-                        className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
-                      >
-                        {activityIcon(entry)}
-                      </span>
-                      <div className="flex min-w-0 flex-col gap-1">
-                        <span className="text-fg-body truncate text-sm font-medium">
-                          {entry.label}
-                        </span>
-                        <span className="text-fg-meta text-xs">
-                          {/* Which product, when the movement belongs to one. */}
-                          {entry.productName ? `${entry.productName} · ` : ""}
-                          {formatDate(entry.at)}
-                        </span>
-                      </div>
-                    </div>
-                    {/* The sign carries the meaning, so it is never colour
-                      alone (§93) — a "+" and a "-" are readable without it.
-                      No unit suffix here: unlike the price list and plan
-                      benefit rows, this text must stay exactly the signed
-                      amount, and a browser test asserts on it verbatim. */}
-                    <span
-                      className={
-                        entry.creditDelta > 0
-                          ? "text-mint shrink-0 text-sm font-semibold tabular-nums"
-                          : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"
-                      }
-                    >
-                      {entry.displayAmount}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Surface>
-        </div>
-
+        </Surface>
         <div className="flex flex-col gap-4">
           <Surface
             as="section"
@@ -739,74 +603,207 @@ export function BillingView({
               can&rsquo;t be purchased.
             </Notice>
           )}
-
-          <Surface
-            as="section"
-            aria-labelledby="plans-heading"
-            id="plans"
-            level="panel"
-            padding="none"
-            className="scroll-mt-6 overflow-hidden"
-          >
-            <div className="border-line-2 border-b px-5 py-5 sm:px-6">
-              <MonoLabel id="plans-heading" as="h2" className="text-mint">
-                Plans
-              </MonoLabel>
-              {/*
-              "Choose a plan", not "Monthly Credits".
-
-              The activity list now labels a plan renewal "Monthly Credits", and
-              this panel headed the same two words — two different things saying
-              the same thing on one screen. This one is a chooser, so it says so.
-            */}
-              <p className="text-fg mt-2 font-semibold">Choose a plan</p>
-            </div>
-            <div className="divide-line-2 divide-y">
-              {plans.map((plan) => (
-                <StartPlanForm
-                  key={plan.key}
-                  planKey={plan.key}
-                  planName={plan.name}
-                  price={`${formatPrice(plan.priceCents)} / month`}
-                  credits={formatCreditsForDisplay(plan.monthlyCreditUnits)}
-                  disabled={!stripeReady}
-                  current={overview.plan.key === plan.key}
-                />
-              ))}
-            </div>
-
-            {/*
-            What the grant is actually worth, in the units of work the customer
-            came here to buy — and given room, because it is the only thing on
-            this page that answers the question a plan is actually chosen on.
-
-            "1,000 Credits" is a number nobody can price without the table above
-            and a calculator, and a customer choosing a plan is choosing how much
-            work they can do, not how many Credits they will hold. Both figures
-            are computed from the same catalog and the same rate card the charge
-            uses, so this can never drift from the real answer. It was an `xs`
-            right-aligned `dl` at the bottom of the narrow column, wrapping to
-            three lines: the least legible element on the screen carrying the
-            most decision-relevant sentence.
-          */}
-            <dl className="border-line-2 divide-line-2 divide-y border-t">
-              {plans.map((plan) => {
-                const buys = planPurchasingPower(plan.monthlyCreditUnits, at);
-                if (!buys) return null;
-
-                return (
-                  <div key={plan.key} className="px-5 py-3.5 sm:px-6">
-                    <dt className="text-fg-meta text-xs">{plan.name} buys</dt>
-                    <dd className="text-fg-body mt-1 text-sm">
-                      {buys} each month
-                    </dd>
-                  </div>
-                );
-              })}
-            </dl>
-          </Surface>
         </div>
       </div>
+
+      <Surface
+        as="section"
+        aria-labelledby="plans-heading"
+        id="plans"
+        level="panel"
+        padding="none"
+        className="scroll-mt-6 overflow-hidden"
+      >
+        <div className="border-line-2 border-b px-5 py-5 sm:px-6">
+          <MonoLabel id="plans-heading" as="h2" className="text-mint">
+            Plans
+          </MonoLabel>
+          {/*
+          "Choose a plan", not "Monthly Credits".
+
+          The activity list now labels a plan renewal "Monthly Credits", and
+          this panel headed the same two words — two different things saying
+          the same thing on one screen. This one is a chooser, so it says so.
+        */}
+          <p className="text-fg mt-2 font-semibold">Choose a plan</p>
+        </div>
+        <div className="divide-line-2 grid divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          {plans.map((plan) => (
+            <StartPlanForm
+              key={plan.key}
+              planKey={plan.key}
+              planName={plan.name}
+              price={`${formatPrice(plan.priceCents)} / month`}
+              credits={formatCreditsForDisplay(plan.monthlyCreditUnits)}
+              buys={planPurchasingPower(plan.monthlyCreditUnits, at)}
+              disabled={!stripeReady}
+              current={overview.plan.key === plan.key}
+            />
+          ))}
+        </div>
+
+      </Surface>
+
+      {/*
+        A pair only when there are two. Both panels are conditional — a new
+        account has neither, and an account that has spent nothing has only the
+        first — so a fixed two-column grid leaves whichever one survives at half
+        width beside an empty half. `lg:grid-cols-2` is applied when the second
+        panel is actually there.
+      */}
+      <div
+        className={cn(
+          "grid items-start gap-4",
+          accountActivity.length > 0 &&
+            overview.spendByProduct.length > 0 &&
+            "lg:grid-cols-2",
+        )}
+      >
+      {accountActivity.length > 0 && (
+        <Surface
+          as="section"
+          aria-labelledby="account-activity-heading"
+          level="panel"
+          padding="lg"
+          className="flex flex-col gap-4"
+        >
+          <div>
+            <MonoLabel id="account-activity-heading" as="h2" className="text-mint">
+              Your account
+            </MonoLabel>
+            <p className="text-fg mt-2 font-semibold">Account activity</p>
+            <p className="text-fg-muted mt-1 text-ui">
+              What happened to the account itself — Credits bought, accounts connected.
+            </p>
+          </div>
+          <ActivityFeed entries={accountActivity} hasMore={false} />
+        </Surface>
+      )}
+
+      {/*
+        Where the Credits went, per product (audit R24). The history below
+        says what happened; this says which product it happened to — the
+        question a founder with four products asks first, and the one the
+        ledger could answer all along and never did.
+      */}
+      {overview.spendByProduct.length > 0 && (
+        <Surface
+          as="section"
+          aria-labelledby="spend-by-product-heading"
+          level="panel"
+          padding="lg"
+          className="flex flex-col gap-4"
+        >
+          <div>
+            <MonoLabel id="spend-by-product-heading" as="h2" className="text-mint">
+              Where it went
+            </MonoLabel>
+            <p className="text-fg mt-2 font-semibold">Spend by product</p>
+            {/*
+              Over the history below, not ever. A total that silently
+              covered the last hundred movements would be read as lifetime.
+            */}
+            <p className="text-fg-muted mt-1 text-ui">
+              Across the activity shown below.
+            </p>
+          </div>
+          <ul className="divide-line-2 divide-y" data-testid="spend-by-product">
+            {overview.spendByProduct.map((product) => (
+              <li
+                key={product.projectId}
+                className="flex items-baseline justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
+              >
+                <span className="text-fg-body truncate text-sm">{product.name}</span>
+                <span className="text-fg-secondary text-sm tabular-nums">
+                  {product.displayCredits} Credits
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      )}
+      </div>
+
+      <Surface
+        as="section"
+        aria-labelledby="recent-activity-heading"
+        level="panel"
+        padding="none"
+        className="overflow-hidden"
+      >
+        <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
+          <div>
+            <MonoLabel
+              id="recent-activity-heading"
+              as="h2"
+              className="text-mint"
+            >
+              Recent usage
+            </MonoLabel>
+            <p className="text-fg mt-2 font-semibold">
+              Latest Credit activity
+            </p>
+          </div>
+          <span className="text-fg-meta text-xs">Newest first</span>
+        </div>
+        {overview.recentActivity.length === 0 ? (
+          /*
+          An empty history is a normal state, not a missing one. It says
+          what will fill it, so a new account reads this as "nothing has
+          happened yet" rather than "something failed to load".
+        */
+          <div className="px-5 py-8 sm:px-6">
+            <p className="text-fg-body text-sm font-medium">
+              No Credit activity yet
+            </p>
+            <p className="text-fg-muted mt-1.5 max-w-[42ch] text-sm">
+              Credits you add and tasks you run will appear here.
+            </p>
+          </div>
+        ) : (
+          <ul className="divide-line-2 divide-y">
+            {overview.recentActivity.map((entry) => (
+              <li
+                key={entry.id}
+                className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6"
+              >
+                <div className="flex min-w-0 items-center gap-3">
+                  <span
+                    aria-hidden="true"
+                    className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
+                  >
+                    {activityIcon(entry)}
+                  </span>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-fg-body truncate text-sm font-medium">
+                      {entry.label}
+                    </span>
+                    <span className="text-fg-meta text-xs">
+                      {/* Which product, when the movement belongs to one. */}
+                      {entry.productName ? `${entry.productName} · ` : ""}
+                      {formatDate(entry.at)}
+                    </span>
+                  </div>
+                </div>
+                {/* The sign carries the meaning, so it is never colour
+                  alone (§93) — a "+" and a "-" are readable without it.
+                  No unit suffix here: unlike the price list and plan
+                  benefit rows, this text must stay exactly the signed
+                  amount, and a browser test asserts on it verbatim. */}
+                <span
+                  className={
+                    entry.creditDelta > 0
+                      ? "text-mint shrink-0 text-sm font-semibold tabular-nums"
+                      : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"
+                  }
+                >
+                  {entry.displayAmount}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Surface>
 
       <footer className="text-fg-meta flex items-center justify-center gap-2 px-4 pb-2 text-center text-xs">
         <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe

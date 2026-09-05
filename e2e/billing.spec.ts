@@ -497,14 +497,25 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
   });
 
   test("says what a plan buys, in work rather than in Credits", async ({ page }) => {
-    const text = await page.locator("body").innerText();
-
     // 1,000 ÷ 200 = 5 and 1,000 ÷ 35 = 28, both rounded down. Computed from the
     // catalog and the rate card, never typed, so it cannot drift from what is
     // actually charged.
-    expect(text).toContain("Builder buys");
-    expect(text).toContain("5 standard agent improvements, or 28 Business Audits each month");
-    expect(text).toContain("15 standard agent improvements, or 85 Business Audits each month");
+    //
+    // This used to read the whole body and also assert the label "Builder
+    // buys". The sentence lived in a `dl` under the plan list, so the name had
+    // to be repeated for a reader to know which plan it was about. It now sits
+    // inside the plan's own row, which is why the prefix is gone — and why
+    // this asserts something stronger than the old version could: each
+    // sentence is *in* the plan it describes, not merely somewhere on the page.
+    const plans = page.getByRole("region", { name: "Plans" });
+
+    await expect(plans.getByText("Builder", { exact: true })).toBeVisible();
+    await expect(
+      plans.getByText("5 standard agent improvements, or 28 Business Audits each month"),
+    ).toBeVisible();
+    await expect(
+      plans.getByText("15 standard agent improvements, or 85 Business Audits each month"),
+    ).toBeVisible();
   });
 
   test("still exposes no provider cost, token count or internal unit", async ({ page }) => {
