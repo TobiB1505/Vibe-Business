@@ -48,6 +48,37 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     canStart: false,
   } satisfies DeepScanViewModel,
 
+  /**
+   * A finished scan that has things to say about itself.
+   *
+   * `completeness: "partial"` used to be the whole account of a scan that had
+   * recorded specific warnings, so this is the state the disclosure exists
+   * for: the result leads, the caveats are behind a label that says how many.
+   */
+  "deep-scan-completed-with-warnings": {
+    ...BASE,
+    state: "completed",
+    includedScanAvailable: false,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    lastResult: {
+      analyzedAt: "2026-08-30T09:12:00.000Z",
+      pagesInspected: 7,
+      completeness: "partial",
+      surfaces: [
+        { id: "dashboard", name: "Dashboard" },
+        { id: "settings", name: "Settings" },
+      ],
+      warnings: [
+        "One page took too long to load and was not read.",
+        "Vibe could not tell two settings pages apart, so it read one of them.",
+      ],
+      accessMode: "credits",
+    },
+  } satisfies DeepScanViewModel,
+
   /** No policy prices an additional scan. The honest terminal answer. */
   "deep-scan-credits-required": {
     ...BASE,

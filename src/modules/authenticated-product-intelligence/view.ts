@@ -60,6 +60,17 @@ export type DeepScanResultSummary = {
   completeness: "complete" | "partial";
   /** Detected surfaces only, as id + label. No evidence internals. */
   surfaces: DeepScanSurface[];
+  /**
+   * What the scan noticed but could not act on, in our own words.
+   *
+   * The snapshot has carried these since it existed and nothing rendered
+   * them, so "Check finished: only partly" was the whole account a founder
+   * got of a scan that had four specific things to say. Safe to display by
+   * construction: `AuthenticatedWarning.message` is authored here and never
+   * provider or page text, which is the rule that makes this a message and
+   * not a leak.
+   */
+  warnings: string[];
   accessMode: DeepScanAccessMode;
 };
 
@@ -167,6 +178,7 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
           surfaces: latestSnapshot.result.productSurfaces
             .filter((surface) => surface.detected)
             .map((surface) => ({ id: surface.id, name: surface.name })),
+          warnings: latestSnapshot.result.warnings.map((warning) => warning.message),
           accessMode: latestSnapshot.accessMode,
         }
       : null;

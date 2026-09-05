@@ -83,3 +83,27 @@ test.describe("an additional Deep Scan that is not for sale", () => {
     await expect(page.getByRole("link", { name: "Top up Credits" })).toHaveCount(0);
   });
 });
+
+/*
+ * Slice 3: a finished scan says what it could not check, behind a disclosure.
+ * The snapshot has carried these warnings since it existed and the view model
+ * dropped them, so "Check finished: only partly" was the entire account of a
+ * scan that had specific things to report.
+ */
+test.describe("what a finished scan could not check", () => {
+  test("keeps the caveats behind a label that counts them", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-completed-with-warnings");
+
+    // The result leads. The caveats are not above it.
+    await expect(page.getByText("Pages Vibe looked at")).toBeVisible();
+
+    const disclosure = page.getByText("2 things Vibe could not check");
+    await expect(disclosure).toBeVisible();
+
+    // Counted before it is opened, so the label is the size of what is behind it.
+    await expect(page.getByText(/took too long to load/i)).toBeHidden();
+    await disclosure.click();
+    await expect(page.getByText(/took too long to load/i)).toBeVisible();
+    await expect(page.getByText(/could not tell two settings pages apart/i)).toBeVisible();
+  });
+});
