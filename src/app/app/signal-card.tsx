@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import { ArrowRightIcon, InfoIcon } from "@/components/ui/dashboard-icons";
-import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
+import { scoreDisplay } from "@/components/ui/score-display";
+import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { Sparkline, sparklineBreakCaption } from "@/components/ui/sparkline";
-import { statusToneText, type StatusTone } from "@/components/ui/status-pill";
+import { statusToneText } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { formatDate, formatTimestamp } from "@/lib/utils/format-datetime";
@@ -50,13 +51,6 @@ import { buildScoreSeries, type ScoreSeries } from "@/modules/projects/score-ser
  * present, and an empty one implies a history the product has not accumulated.
  */
 
-const SCORE_TONE: Record<ScoreTone, StatusTone> = {
-  strong: "success",
-  partial: "waiting",
-  weak: "problem",
-  unscored: "neutral",
-};
-
 const RING_SIZE = 152;
 const RING_STROKE = 9;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
@@ -80,7 +74,7 @@ function ScoreRing({ score }: { score: number }) {
       <svg
         aria-hidden
         viewBox={`0 0 ${RING_SIZE} ${RING_SIZE}`}
-        className={cn("size-full -rotate-90", statusToneText(SCORE_TONE[tone]))}
+        className={cn("size-full -rotate-90", statusToneText(statusForScoreTone(tone)))}
         fill="none"
       >
         <circle
@@ -105,7 +99,7 @@ function ScoreRing({ score }: { score: number }) {
         <span
           className={cn(
             "text-[3.25rem] leading-none font-bold tracking-[-0.06em] tabular-nums",
-            statusToneText(SCORE_TONE[tone]),
+            statusToneText(statusForScoreTone(tone)),
           )}
         >
           {score}

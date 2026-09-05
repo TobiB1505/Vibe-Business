@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils/cn";
+import { formatDate } from "@/lib/utils/format-datetime";
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import {
@@ -93,14 +94,6 @@ type PriceRow = {
   };
 };
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
-
 function formatPrice(cents: number): string {
   return `€${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
@@ -108,9 +101,16 @@ function formatPrice(cents: number): string {
 function planTiming(overview: BillingOverview): string {
   if (overview.plan.key === "free") return "No renewal date";
   if (!overview.plan.renewsAt) return "Active subscription";
-  return overview.plan.endingAtPeriodEnd
-    ? `Ends on ${formatDate(overview.plan.renewsAt)}`
-    : `Renews on ${formatDate(overview.plan.renewsAt)}`;
+  /*
+   * The shared formatter returns null for a date it cannot parse, where the
+   * local one returned the string "Invalid Date". Neither belongs in a
+   * sentence, so an unparseable renewal says what is still true — there is a
+   * subscription — instead of naming a day that does not exist.
+   */
+  const renews = formatDate(overview.plan.renewsAt);
+  if (!renews) return "Active subscription";
+
+  return overview.plan.endingAtPeriodEnd ? `Ends on ${renews}` : `Renews on ${renews}`;
 }
 
 function activityIcon(entry: CreditActivityEntry) {

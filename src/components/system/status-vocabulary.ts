@@ -1,3 +1,4 @@
+import type { ScoreTone } from "@/components/ui/score-display";
 import type { StatusGlyphName, StatusTone } from "@/components/ui/status-pill";
 import type { NovaFocusTier } from "@/modules/nova/focus";
 import type { OperationPollPhase } from "@/modules/operations/view";
@@ -177,4 +178,30 @@ export function novaPresenceState(input: {
   if (input.phase === "waiting_user" || input.tier === "decision") return "listening";
   if (input.tier === "settled") return "settled";
   return "idle";
+}
+
+/**
+ * A score band as a status tone.
+ *
+ * Three components carried this as a private `SCORE_TONE` map — the product
+ * card, the products-index row and the dashboard's signal card — all four
+ * lines identical in each. That is the table this module exists to make
+ * unnecessary, and three copies is how the same band starts rendering in two
+ * colours on adjacent screens.
+ *
+ * `unscored` is `neutral` and deliberately not `problem`: a product nothing
+ * could be measured on has not scored badly, and colouring it as failure is
+ * rule 44 in pixels.
+ */
+export function statusForScoreTone(tone: ScoreTone): StatusTone {
+  switch (tone) {
+    case "strong":
+      return "success";
+    case "partial":
+      return "waiting";
+    case "weak":
+      return "problem";
+    case "unscored":
+      return "neutral";
+  }
 }

@@ -5,6 +5,7 @@ import {
   novaPresenceState,
   statusForFocusTier,
   statusForOperationPhase,
+  statusForScoreTone,
   statusPresentation,
   type StatusKey,
 } from "./status-vocabulary";
@@ -192,5 +193,105 @@ describe("Nova components take their words from the vocabulary", () => {
     for (const { name, body } of sources) {
       expect(body, name).not.toMatch(/STATE_WORDS|STATUS_TONE\b|TONE_CLASSES/);
     }
+  });
+});
+
+/**
+ * Audit P3.20 — "remove duplicated `SCORE_TONE` maps".
+ *
+ * There were three, in the product card, the products-index row and the
+ * dashboard's signal card, four identical lines each. None of them was wrong;
+ * that is the point. A band renders in two colours on adjacent screens only
+ * after somebody edits one copy, and nothing in this repository would have
+ * failed when they did.
+ *
+ * The check is deliberately repo-wide rather than scoped to a directory: the
+ * copies were spread across three, and a scoped check would have caught none
+ * of them.
+ */
+describe("a score band has one tone table", () => {
+  const ROOT = join(process.cwd(), "src");
+
+  function sourcesUnder(dir: string): { path: string; body: string }[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return sourcesUnder(full);
+      if (!entry.name.endsWith(".tsx") && !entry.name.endsWith(".ts")) return [];
+      return [{ path: full, body: readFileSync(full, "utf8") }];
+    });
+  }
+
+  const sources = sourcesUnder(ROOT);
+
+  it("finds the sources it is supposed to be checking", () => {
+    expect(sources.length).toBeGreaterThan(200);
+  });
+
+  it("maps ScoreTone to a StatusTone in exactly one place", () => {
+    const declaring = sources
+      .filter(({ body }) => /Record<ScoreTone,\s*StatusTone>/.test(body))
+      .map(({ path }) => path.slice(ROOT.length + 1));
+
+    expect(
+      declaring,
+      "Use `statusForScoreTone` from this module instead of a local table — " +
+        "three copies is how one band starts rendering in two colours.",
+    ).toEqual([]);
+  });
+
+  it("gives every band a tone, and never calls an unscored product a failure", () => {
+    expect(statusForScoreTone("strong")).toBe("success");
+    expect(statusForScoreTone("partial")).toBe("waiting");
+    expect(statusForScoreTone("weak")).toBe("problem");
+    // Rule 44 in pixels: nothing measurable is not a bad result.
+    expect(statusForScoreTone("unscored")).toBe("neutral");
+    expect(statusForScoreTone("unscored")).not.toBe("problem");
+  });
+});
+
+/**
+ * Audit P3.20 — "remove the local `formatDate`".
+ *
+ * Billing carried its own, built on `toLocaleDateString("en-GB")`. Two things
+ * followed and both were live: it printed "15 Sept 2026" where every other
+ * surface prints "15 Sep 2026", and it read the *runtime's* timezone, so a
+ * balance expiring at `2026-09-01T00:00Z` renders as "31 Aug 2026" anywhere
+ * west of UTC — a date a customer plans around, off by a day, on the one page
+ * where that is money.
+ */
+describe("one date formatter", () => {
+  const ROOT = join(process.cwd(), "src");
+
+  function sourcesUnder(dir: string): { path: string; body: string }[] {
+    return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) return sourcesUnder(full);
+      if (!entry.name.endsWith(".tsx") && !entry.name.endsWith(".ts")) return [];
+      return [{ path: full, body: readFileSync(full, "utf8") }];
+    });
+  }
+
+  /**
+   * Comments are stripped first. The first version of this matched the word
+   * anywhere, and named two files whose docblocks *describe having removed*
+   * exactly this call (PERF-021) — a check that fails on a record of the fix
+   * is worse than no check, because the obvious way to quiet it is to delete
+   * the explanation.
+   */
+  function code(body: string): string {
+    return body.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+  }
+
+  it("leaves no local date formatter to drift from the shared one", () => {
+    const offenders = sourcesUnder(ROOT)
+      .filter(({ path }) => !path.endsWith(join("lib", "utils", "format-datetime.ts")))
+      .filter(({ body }) => /\.toLocale(Date|Time)String\s*\(/.test(code(body)))
+      .map(({ path }) => path.slice(ROOT.length + 1));
+
+    expect(
+      offenders,
+      "Use `formatDate`/`formatTimestamp` from lib/utils/format-datetime — they " +
+        "are explicit about UTC, and a locale formatter reads the runtime's timezone.",
+    ).toEqual([]);
   });
 });

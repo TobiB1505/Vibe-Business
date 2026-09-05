@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ArrowRightIcon } from "@/components/ui/dashboard-icons";
-import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
+import { scoreDisplay } from "@/components/ui/score-display";
+import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { Sparkline } from "@/components/ui/sparkline";
-import { statusToneText, type StatusTone } from "@/components/ui/status-pill";
+import { statusToneText } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
@@ -11,13 +12,6 @@ import { initialsFrom } from "@/modules/auth/initials";
 import type { DashboardProject } from "@/modules/projects/dashboard";
 import { productDisplayName } from "@/modules/projects/display-name";
 import { buildScoreSeries } from "@/modules/projects/score-series";
-
-const SCORE_TONE: Record<ScoreTone, StatusTone> = {
-  strong: "success",
-  partial: "waiting",
-  weak: "problem",
-  unscored: "neutral",
-};
 
 function primaryAction(project: DashboardProject): { label: string; href: string } {
   const base = `/app/projects/${project.id}`;
@@ -38,7 +32,7 @@ function ScoreValue({ project }: { project: DashboardProject }) {
     const { tone } = scoreDisplay(project.score);
     return (
       <span className="flex items-baseline gap-1 font-semibold tabular-nums">
-        <span className={statusToneText(SCORE_TONE[tone])}>{project.score}</span>
+        <span className={statusToneText(statusForScoreTone(tone))}>{project.score}</span>
         <span className="text-fg-meta text-xs">/100</span>
       </span>
     );

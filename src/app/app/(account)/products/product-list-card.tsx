@@ -8,8 +8,9 @@ import {
   LockIcon,
 } from "@/components/ui/dashboard-icons";
 import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
+import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { Sparkline } from "@/components/ui/sparkline";
-import { StatusPill, statusToneText, type StatusTone } from "@/components/ui/status-pill";
+import { StatusPill, statusToneText } from "@/components/ui/status-pill";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { initialsFrom } from "@/modules/auth/initials";
@@ -17,13 +18,6 @@ import { productDisplayName } from "@/modules/projects/display-name";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { buildScoreSeries } from "@/modules/projects/score-series";
 import { productListStatus } from "./product-list-state";
-
-const SCORE_TONE: Record<ScoreTone, StatusTone> = {
-  strong: "success",
-  partial: "waiting",
-  weak: "problem",
-  unscored: "neutral",
-};
 
 const TILE_TONE: Record<ScoreTone, string> = {
   strong: "from-mint/35 via-mint/15 to-surface-hover border-mint-line text-mint",
@@ -186,7 +180,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                 <p className="text-fg-meta text-[0.6875rem]">Business signal</p>
                 {product.scoreState === "scored" && product.score !== null ? (
                   <p className="mt-1 flex items-baseline gap-1 font-semibold tabular-nums">
-                    <span className={cn("text-lg", statusToneText(SCORE_TONE[display.tone]))}>
+                    <span className={cn("text-lg", statusToneText(statusForScoreTone(display.tone)))}>
                       {product.score}
                     </span>
                     <span className="text-fg-meta text-xs">/100</span>
