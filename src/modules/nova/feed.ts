@@ -180,6 +180,18 @@ const MESSAGE_FOR_CANDIDATE: Record<FocusCandidateKind, string> = {
   nothing_to_do: "Nothing needs you right now.",
 };
 
+/**
+ * The sentence for one candidate, for a surface that is not the feed.
+ *
+ * Exported so Nova Home renders the *same* words as the feed rather than a
+ * second table beside it. The table stays private: a caller gets one sentence
+ * for one candidate and cannot iterate, reorder or add to it, which is what
+ * keeps this the only place Nova's copy is written.
+ */
+export function novaCandidateMessage(kind: FocusCandidateKind): string {
+  return MESSAGE_FOR_CANDIDATE[kind];
+}
+
 /** What the control above the options asks. */
 const PROMPT_FOR_CANDIDATE: Partial<Record<FocusCandidateKind, string>> = {
   merge_ready: "Move it onto your default branch?",
@@ -231,6 +243,15 @@ function subjectFor(candidate: FocusCandidate): NovaActionSubject {
  * it at all. Rendering a button that cannot be pressed is worse than rendering
  * no button — the founder would be left pressing it.
  */
+export function novaCandidateOption(candidate: FocusCandidate): NovaChoiceOption | null {
+  return optionFor(candidate);
+}
+
+/** The question above the control, when the candidate asks one. */
+export function novaCandidatePrompt(kind: FocusCandidateKind): string | null {
+  return PROMPT_FOR_CANDIDATE[kind] ?? null;
+}
+
 function optionFor(candidate: FocusCandidate): NovaChoiceOption | null {
   const actionId = novaCandidateAction(candidate.kind);
   if (actionId === null || !isOfferable(actionId)) return null;

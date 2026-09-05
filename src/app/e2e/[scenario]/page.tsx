@@ -6,6 +6,10 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
 import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
+import { SourceCoverageStrip } from "@/components/system/source-coverage";
+import { ProductRevealFacts } from "@/app/app/onboarding/[projectId]/reveal-facts";
+import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
@@ -16,6 +20,21 @@ import {
   AuditPreparing,
   AuditWaitingHeader,
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
+import { creditsToUnits } from "@/modules/credits/units";
+import { novaPresenceState } from "@/components/system/status-vocabulary";
+import { FocusCard } from "@/app/app/projects/[projectId]/nova/focus-card";
+import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
+import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
+import { ProductIdentity } from "@/app/app/projects/[projectId]/nova/product-identity";
+import { HealthScore } from "@/app/app/projects/[projectId]/nova/health-score";
+import { FindingCard } from "@/components/system/finding-card";
+import { NOVA_ACTION_META } from "@/modules/nova/actions";
+import {
+  isE2eNovaScenario,
+  novaScenarioHealth,
+  novaScenarioView,
+  NOVA_SCENARIO_PRIORITY,
+} from "../nova-scenarios";
 import { E2E_ACTION_PLAN_SCENARIOS, isE2eActionPlanScenario } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import {
@@ -51,6 +70,12 @@ import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
+import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
+import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
+import { WalletChip } from "@/components/system/wallet-chip";
+import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
+import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
+import { CostLine } from "@/components/system/cost-line";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
@@ -62,6 +87,8 @@ import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-r
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
+  E2E_PROFILE_SCENARIOS,
+  isE2eProfileScenario,
   E2E_PRODUCTS_SCENARIOS,
   E2E_REPOSITORIES_SCENARIOS,
   isE2eAccountScenario,
@@ -69,6 +96,7 @@ import {
   isE2eRepositoriesScenario,
 } from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
+import { ProfileView } from "@/app/app/(account)/profile/profile-view";
 import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-account";
 import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
 import { ProductsIndex } from "@/app/app/(account)/products/products-index";
@@ -191,6 +219,95 @@ export default async function E2eScenarioPage({
     </p>
   );
 
+  if (isE2eNovaScenario(scenario)) {
+    const view = novaScenarioView(scenario);
+    const health = novaScenarioHealth(scenario);
+    const entry = view.primary;
+    const control = entry.control;
+    const priced = control.kind === "server_action" ? control.option : null;
+    /*
+      Derived exactly as production derives it. A fixture that set the mark by
+      hand could show a turning aperture over a scenario with nothing running,
+      which is the claim `novaPresenceState` exists to make impossible.
+    */
+    const presence = novaPresenceState({
+      tier: entry.tier,
+      phase: view.working?.phase ?? "idle",
+    });
+
+    return (
+      <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
+        {label}
+
+        <ProductIdentity
+          name="Payflow"
+          logoUrl={null}
+          category="Developer tool"
+          understood="confirmed"
+          productHref="/app/projects/project_e2e/product"
+        />
+
+        {/*
+          The real card, given the real view model. The control is a plain
+          button rather than a live form: this fixture is about what a founder
+          can see before pressing, and the price beside an unpressed control is
+          exactly the claim under test.
+        */}
+        <FocusCard
+          entry={entry}
+          presence={presence}
+          seed="project_e2e"
+          operation={priced ? NOVA_ACTION_META[priced.actionId].price : null}
+          /*
+            Built through `creditsToUnits` rather than cast. A raw `420` is
+            420 *internal units* — 0.42 Credits — and reads as unaffordable
+            beside a 35-Credit price. The brand exists to catch exactly that,
+            and casting past it is how a fixture ends up asserting a bug.
+          */
+          balance={{ availableCredits: creditsToUnits(420), display: "420" }}
+          consequence={priced?.confirmationNote ?? undefined}
+          control={
+            control.kind === "none" ? undefined : (
+              <Button variant="primary">
+                {control.kind === "elsewhere" ? control.label : control.option.label}
+              </Button>
+            )
+          }
+        />
+
+        <WorkingStrip working={view.working} presence={presence} seed="project_e2e" />
+
+        <AttentionStack
+          entries={view.secondary}
+          hrefFor={() => "/app/projects/project_e2e/agent"}
+        />
+
+        {health && (
+          <HealthScore
+            score={health.score}
+            stateLabel={health.stateLabel}
+            scoredLenses={health.scoredLenses}
+            eligibleLenses={health.eligibleLenses}
+            insufficientCoverageReason={health.insufficientCoverageReason}
+            healthHref="/app/projects/project_e2e/health"
+          />
+        )}
+
+        {health && (
+          <FindingCard
+            variant="priority"
+            rank={1}
+            title={NOVA_SCENARIO_PRIORITY.headline}
+            explanation={NOVA_SCENARIO_PRIORITY.explanation}
+            whyItMatters={NOVA_SCENARIO_PRIORITY.whyItMatters}
+            severity={NOVA_SCENARIO_PRIORITY.severity}
+            citations={NOVA_SCENARIO_PRIORITY.citations}
+          />
+        )}
+      </main>
+    );
+  }
+
   if (isE2eProductScanScenario(scenario)) {
     const fixture = E2E_PRODUCT_SCAN_SCENARIOS[scenario];
     return (
@@ -266,6 +383,29 @@ export default async function E2eScenarioPage({
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
           at={"at" in fixture ? new Date(fixture.at) : undefined}
+          /*
+            The two events that belong to no product, which the project-scoped
+            read filters out by construction — so this is the only place a
+            browser can see them (audit R24).
+          */
+          accountActivity={[
+            {
+              id: "a1",
+              eventType: "credit_grant.posted",
+              at: "2026-08-16T10:00:00.000Z",
+              title: "Credits added",
+              tone: "success",
+              facts: [],
+            },
+            {
+              id: "a2",
+              eventType: "github.installation.connected",
+              at: "2026-08-10T09:00:00.000Z",
+              title: "GitHub installation connected",
+              tone: "success",
+              facts: [],
+            },
+          ]}
         />
       </main>
     );
@@ -376,7 +516,16 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
-        {scenario === "onboarding_logo_broken" ? (
+        {scenario === "onboarding_product_reveal" ? (
+          /*
+            The same component the reveal renders, on the same understanding
+            view the real page builds — so what a browser proves here is what a
+            founder is shown before answering "did Vibe get this right?".
+          */
+          <ProductRevealFacts
+            facts={E2E_UNDERSTANDING_SCENARIOS.understanding_ready().view.audience.slice(0, 2)}
+          />
+        ) : scenario === "onboarding_logo_broken" ? (
           // The host does not exist, so the browser's load genuinely fails —
           // which is the only way to prove the fallback rather than assert it.
           <ProductLogo src="https://acme.test/logo.png" alt="Acme logo" size={44} />
@@ -423,16 +572,27 @@ export default async function E2eScenarioPage({
             ]}
             items={navItems}
             footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                }}
-                subtitle="Founder"
-                placement="above"
-              />
+              <div className="flex flex-col gap-3">
+                {/*
+                  The balance, where the real rail carries it (audit R22) — so
+                  the browser proves a founder can see what they have from a
+                  project route, not only from Billing.
+                */}
+                <WalletChip
+                  balance={{ availableCredits: creditsToUnits(35), display: "35 Credits" }}
+                  href="/app/billing"
+                />
+                <AccountMenu
+                  identity={{
+                    displayName: "Tobi",
+                    initials: "TB",
+                    avatarUrl: null,
+                    fromGithub: true,
+                  }}
+                  subtitle="Founder"
+                  placement="above"
+                />
+              </div>
             }
           />
         }
@@ -463,8 +623,14 @@ export default async function E2eScenarioPage({
             }}
             founderContextHref="#founder-context"
             sources={[
+              /*
+                The fixture states the same four sources the real page builds,
+                at the shape `SourceCoverage` fixed — including a partial read
+                with its reason and its measured count, which is the state the
+                grid of cards had no room for and no fixture ever showed.
+              */
               {
-                id: "code",
+                source: "repository",
                 label: "Your code",
                 state: fixture.view.sources.some(
                   (source) => source.label === "Your code" && source.used,
@@ -476,40 +642,66 @@ export default async function E2eScenarioPage({
                 )
                   ? "Vibe has read what your repository builds."
                   : "Vibe hasn't read your code yet.",
-                href: "#product-evidence",
-                action: "See what it read",
+                reasons: [],
+                measured: { files: 128 },
+                at: "2026-08-14T08:22:59.917Z",
+                remedy: {
+                  label: "See what it read",
+                  href: "#product-evidence",
+                  operation: "product_understanding",
+                },
               },
               {
-                id: "live",
+                source: "live",
                 label: "Your public product",
                 state: fixture.view.sources.some(
                   (source) => source.label === "Your public product" && source.used,
                 )
-                  ? "ready"
+                  ? "partial"
                   : "none",
                 detail: fixture.view.sources.some(
                   (source) => source.label === "Your public product" && source.used,
                 )
-                  ? "Vibe has visited what a first-time visitor reaches."
+                  ? "Vibe visited your product, but couldn't read all of it."
                   : "Your public product has not been checked yet.",
-                href: "#product-evidence",
-                action: "See what it saw",
+                reasons: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? [
+                      "Two pages on your site build themselves in your visitor's browser, so Vibe saw an empty shell for those.",
+                    ]
+                  : [],
+                measured: { pages: 6 },
+                at: "2026-08-14T08:24:11.000Z",
+                remedy: {
+                  label: "See what it saw",
+                  href: "#product-evidence",
+                  operation: "product_understanding",
+                },
               },
               {
-                id: "deep-scan",
+                source: "deep_scan",
                 label: "Your signed-in product",
                 detail: "Your signed-in product has not been checked yet.",
                 state: "none",
-                href: "#product-evidence",
-                action: "Deep Scan",
+                reasons: [],
+                measured: {},
+                at: null,
+                remedy: {
+                  label: "Deep Scan",
+                  href: "#product-evidence",
+                  operation: "deep_scan",
+                },
               },
               {
-                id: "intent",
+                source: "founder",
                 label: "What you told Vibe",
                 detail: "Your stated stage, monetization intent and primary goal.",
                 state: "ready",
-                href: "#founder-context",
-                action: "View context",
+                reasons: [],
+                measured: {},
+                at: null,
+                remedy: { label: "View context", href: "#founder-context", operation: null },
               },
             ]}
             actions={
@@ -807,7 +999,11 @@ export default async function E2eScenarioPage({
       activity,
       task,
       checks,
+      validationDepth,
+      cost,
       fileEvents,
+      currentAction,
+      files,
       previewChanges,
       previewImages,
       mergeFiles,
@@ -880,10 +1076,19 @@ export default async function E2eScenarioPage({
               <AgentBuildStage
                 task={task}
                 live={live}
-                core={<AgentCore state={core} caption={caption} size="compact" />}
+                core={
+                  <AgentCore
+                    state={core}
+                    caption={(live ? currentAction : null) ?? caption}
+                    size="compact"
+                  />
+                }
                 activity={
                   fileEvents.length > 0 ? (
-                    <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                    <div className="flex flex-col gap-5">
+                      <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                      <AgentRunFiles files={files} />
+                    </div>
                   ) : (
                     <AgentActivity steps={activity} title="Agent progress" live={live} />
                   )
@@ -893,7 +1098,12 @@ export default async function E2eScenarioPage({
             validate: (
               <AgentValidateStage
                 running={live}
-                checks={<AgentValidationChecks checks={checks} />}
+                checks={
+                  <div className="flex flex-col gap-3">
+                    <AgentValidationChecks checks={checks} />
+                    <ValidationDepthNote depth={validationDepth} />
+                  </div>
+                }
               />
             ),
             preview: (
@@ -907,6 +1117,14 @@ export default async function E2eScenarioPage({
               />
             ),
             review: (
+              <>
+              {/*
+                The paths policy refused, on the stage a person decides from.
+                `AgentPreviewActions` binds real server actions and cannot be
+                mounted here, so the part that is new — naming what is not in
+                the change — is rendered on its own.
+              */}
+              <WithheldPaths paths={files.filter((f) => f.withheldBy !== null).map((f) => f.path)} />
               <AgentMergeStage
                 summary={mergeSummary}
                 files={mergeFiles}
@@ -917,7 +1135,9 @@ export default async function E2eScenarioPage({
                 compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
                 backHref="#"
                 canMerge
+                decision={<CostLine cost={cost} />}
               />
+              </>
             ),
           }}
         />
@@ -1035,6 +1255,37 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * Profile, through the component `/app/profile` renders. It takes the
+   * session's email and the connection row as props precisely so this can
+   * supply both — the harness has neither.
+   */
+  if (isE2eProfileScenario(scenario)) {
+    const fixture = E2E_PROFILE_SCENARIOS[scenario]();
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProfileView email={fixture.email} github={fixture.github} />
+      </AccountShell>
+    );
+  }
+
   /**
    * The account erasure control, rendered through the same component
    * `/app/settings` renders. Composing a lookalike here would test a screen
@@ -1148,6 +1399,48 @@ export default async function E2eScenarioPage({
    * is real either way: the panel and the skeleton reach the client while the
    * slow half is still resolving, which before this could not happen at all.
    */
+  /*
+   * The run list on its own (audit R29). The Agent route needs a session and a
+   * project to reach, so without this the one screen that lets a founder find
+   * an earlier run would have no browser coverage.
+   */
+  if (scenario === "agent-run-history") {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentRunHistory
+          runs={[
+            {
+              id: "run_3",
+              status: "completed",
+              startedAt: "2026-08-27T10:44:00.000Z",
+              completedAt: "2026-08-27T10:51:00.000Z",
+              changedFileCount: 4,
+              preparedChangeId: "change_3",
+            },
+            {
+              id: "run_2",
+              status: "failed",
+              startedAt: "2026-08-24T09:12:00.000Z",
+              completedAt: "2026-08-24T09:14:00.000Z",
+              changedFileCount: null,
+              preparedChangeId: null,
+            },
+            {
+              id: "run_1",
+              status: "cancelled",
+              startedAt: "2026-08-20T16:03:00.000Z",
+              completedAt: "2026-08-20T16:05:00.000Z",
+              changedFileCount: null,
+              preparedChangeId: null,
+            },
+          ]}
+          changeHref={(id) => `/app/projects/project_e2e/agent?change=${id}`}
+        />
+      </main>
+    );
+  }
+
   if (scenario === "agent-streaming") {
     return (
       <main className="mx-auto max-w-[70rem] p-8">
@@ -1216,11 +1509,55 @@ export default async function E2eScenarioPage({
           variant="intelligence"
         >
           {view ? (
+            <>
+            {/*
+              The strip the Business Health route renders under its priced
+              audit control, from the same builder — without it this density
+              had no browser coverage at all.
+            */}
+            <SourceCoverageStrip
+              sources={buildSourceCoverage({
+                repository: {
+                  result:
+                    E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                  completedAt: "2026-08-14T08:22:59.917Z",
+                },
+                live: {
+                  result: E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                  completedAt: "2026-08-14T08:24:11.000Z",
+                },
+                deepScan: { result: null },
+                founder: { told: true, at: null },
+                hrefs: {
+                  scan: "/app/projects/project_e2e/my-product",
+                  deepScan: "/app/projects/project_e2e/deep-scan",
+                  settings: "/app/projects/project_e2e/settings",
+                  founderIntent: "/app/projects/project_e2e/settings#founder-intent",
+                  connectRepository: "/app/projects/project_e2e/settings",
+                  addWebsite: "/app/projects/project_e2e/settings",
+                },
+                connected: { repository: true, productionUrl: true },
+              })}
+              className="mb-4"
+            />
             <AuditOverview
               view={view}
               movesHref="/app/projects/project_e2e/plan"
               hasMoves={hasMoves}
+              /*
+               * The same comparison My Product renders, built from the same
+               * fixtures rather than restated — the Brain carries it as
+               * evidence about the business, and without this the branch had
+               * no browser coverage at all.
+               */
+              contradictions={
+                crossCheckIntelligence(
+                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                ).checks
+              }
             />
+            </>
           ) : (
             <p>This fixture predates the Business Brain.</p>
           )}

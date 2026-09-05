@@ -332,3 +332,45 @@ describe("the onboarding step reads in one wave", () => {
     expect(PAGE.indexOf("const surface =")).toBeLessThan(PAGE.indexOf("const auditFailure ="));
   });
 });
+
+/**
+ * Onboarding ends on a decision (audit Slice 6).
+ *
+ * The last screen showed the founder the one Move Vibe would start with, its
+ * problem and why it comes first — and then offered only a way out of the
+ * flow. The whole of onboarding built to a recommendation nobody could act on
+ * from the screen that made it.
+ *
+ * Asserted against the source, like the rest of this file: the control binds a
+ * real Server Action and cannot be mounted in the fixture harness, so what a
+ * browser could prove here is the markup and not the wiring.
+ */
+describe("the last screen offers the Move it just recommended", () => {
+  const DECISION = read("src/app/app/onboarding/[projectId]/first-move-decision.tsx");
+
+  it("offers planning as a priced control, not a sentence", () => {
+    expect(PAGE).toContain("<FirstMoveDecision");
+    expect(DECISION).toContain("startPlanAction");
+    // The price rides on the control, from the rate card in force.
+    expect(DECISION).toContain("<ActionBlock");
+    expect(DECISION).toContain('operation="action_plan"');
+  });
+
+  it("never defaults a replan on", () => {
+    // Rule 60: a paid re-run is an explicit request, never a default.
+    expect(DECISION).toContain('name="force" value="false"');
+    expect(DECISION).not.toContain('value="true"');
+  });
+
+  it("keeps leaving free, and keeps naming where it goes", () => {
+    expect(PAGE).toContain("completeOnboardingAction");
+    expect(PAGE).toContain("Go to your workspace");
+    // Comments quote the phrase they explain, so the check reads the markup.
+    expect(copyOf(PAGE)).not.toContain("Go to dashboard");
+  });
+
+  it("offers the plain exit when there is no Move to decide about", () => {
+    // A screen with no recommendation has nothing to price.
+    expect(PAGE).toContain("{firstOpportunity ? (");
+  });
+});

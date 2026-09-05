@@ -347,3 +347,120 @@ test.describe("a product logo that will not load", () => {
     await expect(mark).toHaveAttribute("alt", "");
   });
 });
+
+/*
+ * Nova on the first page (DESIGN.md, "Signature Surface: the Landing Page").
+ *
+ * The page said "AI business co-founder" in its own eyebrow and never named
+ * the co-founder — a visitor met the product's protagonist after signing up.
+ */
+test.describe("meeting Nova before signing up", () => {
+  test("names her in the hero and introduces her below it", async ({ page }) => {
+    await page.goto("/");
+
+    await expect(page.getByText(/nova · your ai business co-founder/i)).toBeVisible();
+
+    const section = page.getByTestId("landing-nova");
+    await expect(section).toBeVisible();
+    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+  });
+
+  /*
+   * The property this section is most likely to lose. Nothing is running on a
+   * marketing page — no project, no repository, no operation — so a turning
+   * aperture here would be the "activity while a process is in fact waiting"
+   * DESIGN.md forbids at any level of polish. The four states are a legend,
+   * and every one of them is drawn at rest.
+   */
+  test("shows the four states as a key, with none of them claiming to be running", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const section = page.getByTestId("landing-nova");
+    await section.scrollIntoViewIfNeeded();
+
+    // Scoped to the legend: the introduction above it is a second
+    // `listening` mark, and it is the same one at hero size.
+    const legend = section.getByRole("list");
+    for (const state of ["idle", "listening", "working", "settled"]) {
+      await expect(legend.locator(`[data-nova-presence="${state}"]`)).toHaveCount(1);
+    }
+
+    // The spin class only ever appears on a live run; nothing here is one.
+    const spinning = await section.locator('[class*="nSpin-"]').count();
+    expect(spinning).toBe(0);
+  });
+
+  test("survives reduced motion with the whole introduction present", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+
+    const section = page.getByTestId("landing-nova");
+    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+    await expect(section.getByText(/what her mark tells you/i)).toBeVisible();
+    // The mark itself is present at first paint, not assembled into existence.
+    await expect(section.locator('[data-nova-presence]').first()).toBeVisible();
+  });
+});
+
+/*
+ * The six steps, walkable. This was a static grid of six equal cards — it said
+ * what the product does and showed none of it.
+ */
+test.describe("walking the six steps", () => {
+  test("switches one reserved panel, and shows the real components in it", async ({ page }) => {
+    await page.goto("/");
+    const flow = page.getByTestId("landing-flow");
+    await flow.scrollIntoViewIfNeeded();
+
+    await expect(flow.getByRole("tab")).toHaveCount(6);
+
+    // Understand: the same source-coverage list My Product renders, with a
+    // partial source that states why it stopped short.
+    await expect(flow.getByTestId("source-coverage")).toBeVisible();
+    await expect(flow).toContainText(/build themselves in your visitor's browser/i);
+
+    /*
+     * Reserved geometry: switching a tab must not move the page under somebody
+     * reading it, which on a marketing page matters most.
+     */
+    const before = await flow.boundingBox();
+    await flow.getByRole("tab", { name: "Execute" }).click();
+    await expect(flow.getByTestId("agent-run-files")).toBeVisible();
+    const after = await flow.boundingBox();
+    expect(Math.abs((before?.height ?? 0) - (after?.height ?? 0))).toBeLessThanOrEqual(2);
+
+    // The refused path is named here too — it is the thing a diff cannot show.
+    await expect(flow).toContainText("Sensitive path policy");
+  });
+
+  test("admits on Measure what it cannot see", async ({ page }) => {
+    await page.goto("/");
+    const flow = page.getByTestId("landing-flow");
+    await flow.scrollIntoViewIfNeeded();
+    await flow.getByRole("tab", { name: "Measure" }).click();
+
+    await expect(flow).toContainText(/not measured/i);
+    await expect(flow).toContainText(/reads your public product, not your revenue/i);
+  });
+});
+
+/*
+ * The trust bento. Its tiles hold real parts, and the prices in them are
+ * resolved from the rate card rather than typed into the page — so a landing
+ * page cannot advertise a number the product has stopped charging.
+ */
+test.describe("why it can be believed", () => {
+  test("shows the source strip and resolves its prices from the rate card", async ({ page }) => {
+    await page.goto("/");
+    const trust = page.getByRole("region", { name: /an opinion you can check/i });
+    await trust.scrollIntoViewIfNeeded();
+
+    await expect(trust.getByTestId("source-coverage-strip")).toBeVisible();
+
+    // Deep Scan is priced; a rescan is free and says so rather than staying quiet.
+    await expect(trust).toContainText(/\d+ Credits/);
+    await expect(trust).toContainText("Included");
+    await expect(trust).not.toContainText(/0 Credits/);
+  });
+});

@@ -53,7 +53,15 @@ export type BusinessBrainNode = {
   priorityLabel: string;
   ring: MapRing;
   angle: number;
-  summary: string | null;
+  /*
+   * No `summary` here on purpose.
+   *
+   * `BusinessLensAssessment.summary` is internal prose — its own schema says
+   * it is not shown to the founder — and the Brain's detail column used it as
+   * the fallback when a lens had no diagnosis. The honest fallback is a
+   * sentence that says the evidence did not support one, so the field stops at
+   * this boundary rather than being carried across and then not rendered.
+   */
   blockerRank: number | null;
   connectedNodeIds: BusinessLens[];
   missingContext: string[];
@@ -90,10 +98,28 @@ export type BusinessBrainView = {
     summary: string | null;
     scoredLenses: number;
     eligibleLenses: number;
+    /**
+     * Why nothing could be scored, when nothing could.
+     *
+     * The audit computes this and the Brain rendered an em dash over it: a
+     * score the product declined to give, with the reason it can give left
+     * unread. Null whenever a score exists.
+     */
+    insufficientCoverageReason: string | null;
   };
   nodes: BusinessBrainNode[];
   relationships: BusinessBrainRelationship[];
   primaryPriority: BusinessBrainPriority | null;
+  /**
+   * Every blocker the audit ranked, `primaryPriority` first.
+   *
+   * The view carried the first one and a count of the rest, which is enough to
+   * write "and 3 more" and not enough to show them. R11 is the ranked stack,
+   * and a count cannot be rendered into one — so the list crosses the boundary
+   * and `additionalPriorityCount` stays as the cheap read for callers that
+   * only need the number.
+   */
+  priorities: BusinessBrainPriority[];
   additionalPriorityCount: number;
   recentChanges: BusinessBrainChange[];
   recentChangesUnavailableReason: "no_history" | "not_comparable" | "unscored" | null;
@@ -211,7 +237,6 @@ export function buildBusinessBrainView(params: {
       priorityLabel: MATERIALITY_LABELS[node.materiality],
       ring: node.ring,
       angle: node.angle,
-      summary: node.summary || null,
       blockerRank: node.blockerRank,
       connectedNodeIds: node.relatedLenses,
       missingContext: node.missingContext,
@@ -239,6 +264,8 @@ export function buildBusinessBrainView(params: {
       summary: synthesis.overall || null,
       scoredLenses: params.audit.overall.scoredLenses,
       eligibleLenses: params.audit.overall.eligibleLenses,
+      insufficientCoverageReason:
+        score === null ? params.audit.overall.insufficientCoverageReason : null,
     },
     nodes,
     relationships: map.connections.map((relationship) => ({
@@ -247,6 +274,10 @@ export function buildBusinessBrainView(params: {
     })),
     primaryPriority:
       firstBlocker && problems[0] ? { ...problems[0], lensIds: firstBlocker.lenses } : null,
+    priorities: problems.map((entry, index) => ({
+      ...entry,
+      lensIds: synthesis.blockers[index]?.lenses ?? [],
+    })),
     additionalPriorityCount: Math.max(0, problems.length - 1),
     recentChanges: history.changes,
     recentChangesUnavailableReason: history.unavailable,

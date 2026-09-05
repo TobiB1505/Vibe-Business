@@ -185,25 +185,59 @@ function NotDeployed() {
 }
 
 /**
- * What a dead end leaves standing (UI-5 §8).
+ * What a dead end leaves standing (UI-5 §8), and the one thing it now offers.
  *
- * `not_observed` and `failed` are the two terminal answers with nothing to
- * click: once a verification row exists, `canVerify` is false for every state,
- * and the observation window has closed behind it. A screen that stops at the
- * bad news leaves two questions open — whether the merge came undone, and
- * whether something is still running — and the answers are "no" and "no".
+ * `not_observed` and `failed` are the two terminal answers, and the observation
+ * window has closed behind both. A screen that stops at the bad news leaves two
+ * questions open — whether the merge came undone, and whether something is
+ * still running — and the answers are "no" and "no".
  *
- * Deliberately without an affordance. Looking again costs provider time, and
- * starting that on the user's behalf is what CLAUDE.md rule 60 forbids; the
- * panel's action allowlist is one label long so that stays true.
+ * ## Why there is a control here now
+ *
+ * This was deliberately without one, and the argument was rule 60: looking
+ * again costs provider time, and starting that on the user's behalf is
+ * forbidden. The first half of that is right and the second half over-read the
+ * rule, whose own second sentence is *"the user starts it"*. Rule 60 forbids
+ * Vibe deciding to spend; it does not forbid Vibe offering the founder the
+ * decision — and a deployment that landed an hour after the window closed is
+ * exactly the case where the honest answer is "look again", with nobody but
+ * the founder able to know that.
+ *
+ * So: never automatic, never on a timer, never as a consequence of arriving on
+ * the page. One control the founder presses, and the sentence above it still
+ * says the window is closed rather than implying Vibe is still watching.
  */
-function WindowClosed({ endsAt }: { endsAt: string | null }) {
+function WindowClosed({
+  endsAt,
+  onCheckAgain,
+  pending,
+}: {
+  endsAt: string | null;
+  /** Omitted where a re-check cannot help. Never wired to anything automatic. */
+  onCheckAgain?: () => void;
+  pending?: boolean;
+}) {
   return (
-    <p className="text-xs text-fg-muted">
-      Your change is still in your repository — this says only what Vibe could see on your public
-      product. The checking window {endsAt ? `closed at ${localTime(endsAt)}` : "is closed"}, and
-      Vibe is no longer looking.
-    </p>
+    <div className="space-y-2">
+      <p className="text-xs text-fg-muted">
+        Your change is still in your repository — this says only what Vibe could see on your public
+        product. The checking window {endsAt ? `closed at ${localTime(endsAt)}` : "is closed"}, and
+        Vibe is no longer looking.
+      </p>
+      {onCheckAgain && (
+        <Button
+          type="button"
+          variant="secondary"
+          size="sm"
+          onClick={onCheckAgain}
+          disabled={pending}
+          busy={pending}
+          data-testid="outcome-check-again"
+        >
+          {pending ? "Checking…" : "Check again"}
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -354,7 +388,7 @@ export function OutcomePanel({
             This does not mean a deployment failed. Vibe does not read your hosting provider, so it
             cannot say why the behavior was not visible.
           </p>
-          <WindowClosed endsAt={current.windowEndsAt} />
+          <WindowClosed endsAt={current.windowEndsAt} onCheckAgain={check} pending={pending} />
           <OutcomeLadder productOutcome="Not observed" businessImpact={businessImpactLabel} />
         </div>
       ) : current.state === "failed" ? (
@@ -367,7 +401,7 @@ export function OutcomePanel({
             This says nothing about whether your product behaves as intended — only that Vibe could
             not observe it.
           </p>
-          <WindowClosed endsAt={current.windowEndsAt} />
+          <WindowClosed endsAt={current.windowEndsAt} onCheckAgain={check} pending={pending} />
           {/* The one terminal state that used to end without the ladder — so the
               row saying nobody has measured the business went missing on
               exactly the answer that leaves a user most unsure (§33). */}

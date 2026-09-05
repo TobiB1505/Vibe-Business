@@ -41,7 +41,7 @@ The audience is AI-native builders. They arrive from Linear, Vercel, Claude, Ray
 
 Restraint here is a compositional tool, not a ceiling. Ordinary surfaces stay quiet so that the moments which deserve spectacle can have it; a product where everything is loud has no emphasis left to spend. Both are in play, and choosing between them per surface is the design work.
 
-The register is product-first: marketing expression does not lead inside `/app`. But the standing prohibitions are against the _generic_, not against ambition, and they are applied as a test rather than as a list of banned techniques — see [Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused). One item is absolute at any level of polish: fabricated activity, which exists to make a screen look busy, is a lie rather than a style.
+The register is product-first **inside `/app`**: marketing expression does not lead over a founder's own data. Outside it — the landing page above all — the register is marketing's, and that surface is held to a different bar rather than a lower one; see [Signature Surface: the Landing Page](#signature-surface-the-landing-page). The standing prohibitions are against the _generic_, not against ambition, and they are applied as a test rather than as a list of banned techniques — see [Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused). One item is absolute at any level of polish, on either side of that line: fabricated activity, which exists to make a screen look busy, is a lie rather than a style.
 
 The runtime source of truth is [src/app/globals.css](src/app/globals.css). This file records the durable intent and maps to those established tokens; it does not generate them.
 
@@ -75,11 +75,13 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-On ordinary product surfaces — settings, billing, tables, index pages, forms — motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is deliberate and it is what buys the signature surfaces their contrast; it is a statement about _ordinary_ surfaces, not a cap on the product.
+On ordinary product surfaces — settings, billing, tables, index pages, forms — *continuous* motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is what buys the signature surfaces their contrast.
+
+**Quiet is not plain, and this rule has been read as though it were.** It governs choreography — orbits, auras, staged entrances, ambient movement — and it says nothing about craft. A dashboard, a profile or a billing page may have considered composition, real hierarchy, depth, texture, an entrance, hover states with weight, and a layout somebody clearly designed. The test that applies to them is the same five questions every other surface answers ([Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused)); what they may not do is borrow a *signature* surface's language and spend the contrast the product has been saving. A screen that is merely inoffensive has failed this document, not satisfied it.
 
 Motion beyond that is governed by [Craft and Motion](#craft-and-motion) below, which supersedes this document's earlier position that the three named signature surfaces were the only places cinematic motion could exist.
 
-Billing follows a compact financial-dashboard composition: plan, spendable Credits and the Credit model form one equal-height overview row; real Credit prices and top-up packs come next; recent activity and plan choices complete the page. Stripe remains the visible payment boundary for renewal, invoices and cancellation. Reference-only finance data such as payment-card suffixes, invoice rows, period charts or per-product usage must not appear until the billing read model can supply it truthfully. The balance expiry ring may visualize only the actual next-expiring share of currently spendable Credits, with an explicit text label; it is never a fabricated usage meter.
+Billing follows a compact financial-dashboard composition, as a row per question rather than two columns of different heights: spendable Credits beside the plan open it, at twice the width; real Credit prices and top-up packs come next; plans take the full width, because choosing one is the page's only real decision and it was the narrowest thing on it; the two short histories pair when both exist, and the Credit ledger closes the page at full width. Stripe remains the visible payment boundary for renewal, invoices and cancellation. Reference-only finance data such as payment-card suffixes, invoice rows, period charts or per-product usage must not appear until the billing read model can supply it truthfully. The balance expiry ring may visualize only the actual next-expiring share of currently spendable Credits, with an explicit text label; it is never a fabricated usage meter.
 
 The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure. The profile confirmation is the terminal surface: legacy scan summaries, coach prompts and cross-navigation actions must not continue below it.
 
@@ -124,10 +126,14 @@ Within that, adopt aggressively. An external pattern is worth taking when it mat
 
 ### shadcn is reference infrastructure, not the design system
 
-Vibe is not a shadcn project. There is no `components.json`, and the dependency set carries no Radix package, no icon library and no `clsx`/`tailwind-merge`/`cva`; `cn` is a local join and every primitive under `src/components/ui/` is hand-written on Tailwind v4. Two consequences follow and both are easy to trip over:
+Vibe is not a shadcn project. The dependency set carries no Radix package, no icon library and no `clsx`/`tailwind-merge`/`cva`; `cn` is a local join and every primitive under `src/components/ui/` is hand-written on Tailwind v4. Two consequences follow and both are easy to trip over:
 
-- Never run `shadcn init`, and never introduce a second design system implicitly. Registry install commands (`npx shadcn@latest add …`) will _create_ `components.json` when none exists, scaffolding a parallel `ui/` convention beside this one. Port by hand instead.
+- Never run `shadcn init`, and never introduce a second design system implicitly. Port by hand instead.
 - A pasted component's `className` prop will not override its base classes here, because `cn` does no Tailwind conflict resolution. This fails silently.
+
+A `components.json` **does** exist, and it exists to make the first of those enforceable rather than remembered ([ADR 0095](docs/decisions/0095-design-tooling-is-repo-native.md)). Earlier revisions of this section said there was none, and warned that an install command would create one and scaffold a parallel `ui/` convention. That warning was right about the danger and wrong about where it lived: the file writes nothing, `shadcn add` writes, and where it writes is `aliases`. So the file is authored deliberately with every CLI-writable path pointed at a gitignored `src/components/vendor/`, and `src/components/ui/` is now unreachable by an install command. `shadcn init` stays forbidden, and the reason sharpens — it would rewrite exactly those aliases.
+
+`vendor/` is a reading room, not a component directory: third-party source lands there to be read and ported by hand, nothing in it is committed, and nothing in it is imported by the application.
 
 Use the shadcn MCP for what it is genuinely good at: component research, accessible interaction primitives, Dialog / Popover / Tooltip / Select / Command / Tabs / Accordion patterns, keyboard and focus behaviour, and implementation reference.
 
@@ -148,6 +154,10 @@ What this guards against is accumulation by accident — a dependency arriving b
 ### Reuse logic, not necessarily presentation
 
 Architecture reuse and visual reuse are separate decisions. Before building something new, inspect what exists and reuse the parts that carry authority: domain state, actions, data models, validation and established accessibility behaviour. Do not preserve an old visual presentation merely because it is already there — an existing component may be reused, extended, recomposed, visually redesigned, or replaced at the presentation layer when the new experience is materially better.
+
+### The skills are where the procedure lives
+
+`.claude/skills/` carries this section as an operating procedure that travels with a clone: `ui-design-system` governs, `component-sourcing` holds the search-and-port workflow, `motion-design` holds the motion obligations, `ui-audit` reviews without editing, and ten source-specific skills say what each catalogue is for and what it must not do. `docs/development/remote-design-tooling.md` says what a remote environment needs. This document stays the authority; the skills are how it is applied.
 
 ### Research workflow for significant UI work
 
@@ -207,13 +217,27 @@ Model reasoning stays out of bounds regardless (rule 43). A trace beside such a 
 
 ## Signature Surfaces
 
-A signature surface is one where the product's understanding is the thing being shown, and where choreography carries meaning rather than decorating it. Three exist today — Business Brain, Product Scan and Agent — and they are described below.
+A signature surface is one where the product's understanding is the thing being shown, and where choreography carries meaning rather than decorating it. Four exist today — the landing page, Business Brain, Product Scan and Agent — and they are described below. The landing page is the exception to the definition's first half and is argued on its own terms: it shows no founder's data, because the visitor has not arrived with any.
 
 **The set is open.** Earlier revisions of this document declared it closed at three; that position is retired. A new signature surface requires an intentional design argument — what it means, what its motion says that static layout could not, and why it earns the contrast — not a prohibition. What must not happen is every card behaving like one: the richest choreography is reserved for moments that deserve it, and ordinary cards, forms, tables and index pages stay quiet so that reservation means something.
 
 **Nova is recognised as a signature surface.** Nova is intended to become the canonical Home experience, and when it is built it is to be designed as one of Vibe's strongest visual identities rather than constrained to being quieter than the surfaces that preceded it. It should read as an intelligent presence and a premium product agent — something that understands the product and is actively orchestrating the business — and it may use distinctive transitions, rich focus cards, animated state changes, sophisticated progress presentation, ambient motion, custom identity elements, spatial transitions, layered information and premium microinteractions. Avoid copying generic chatbot UI; do not read "not a chatbot" as "visually plain". The intended reaction is that this feels like a product from the future, without costing the reader any trust or clarity.
 
-_Nova is not implemented at HEAD._ It exists as an architecture audit, a pure `deriveNovaFocus` ranking, and visual prototypes under `src/app/e2e/`. This paragraph is a standing design decision about what Nova is to be when it ships, and the surfaces described below remain the product's current signature set. Recognising Nova as Home reverses [ADR 0047](docs/decisions/0047-business-health-is-project-home.md), which is a decision to be recorded in its own ADR when Nova is built, not by this document.
+_Nova is the project Home at HEAD._ The first slice ships the surface itself: `deriveNovaFocus`'s ranking mounted as `src/app/app/projects/[projectId]/nova/`, one Focus Card carrying one priced control, a working strip, a bounded attention stack and the business reading as context. [ADR 0085](docs/decisions/0085-nova-is-the-project-home.md) records the reversal of [ADR 0047](docs/decisions/0047-business-health-is-project-home.md); Business Health keeps every address it had.
+
+What has *not* shipped is the choreography this section describes. Nova Home is currently calm by construction — one card reveal, one working dot, and no motion language of its own — because the surface had to be legible before it was expressive. The paragraph above therefore remains a standing design decision about what Nova is to become, and the three surfaces described below remain the product's current signature set.
+
+## Signature Surface: the Landing Page
+
+The landing page is a signature surface, and it is the one whose argument is not about a founder's data at all.
+
+**Why it qualifies.** Every other signature surface earns its choreography by showing what the product understood. This one earns it by being the only screen a visitor meets before they trust anything — no account, no repository, no audit, nothing of theirs on screen. What it has to carry is the claim itself: that Vibe reads a real product, judges a real business, and does work a founder can check. A page that states that in a stack of neat cards is asking to be believed on the strength of its typography. The first impression is a product claim, and it is made visually or not at all.
+
+**So the register is marketing's.** Expression may lead here in a way it deliberately does not inside `/app`: a hero that moves, depth that is felt rather than measured, a composition built for a scroll rather than for a return visit, and copy written to be read once with attention rather than a hundred times at a glance. The audience arrives from Linear, Vercel, Framer and Lovable and reads craft as capability before they read a word.
+
+**Nova belongs here, and this is where she is introduced.** She is the product's Home and its named presence; a first page that never mentions her leaves the visitor to meet the product's protagonist after signing up. The landing page may show her mark, her states, and what she does — an *introduction*, with the same avatar and the same four presences the product uses, so the Nova a visitor meets and the Nova they sign in to are one thing.
+
+**What does not relax.** Everything on this page is a claim about a real product, so the truthfulness rules apply exactly as they do inside the app — see [Motion may be ambitious; it may never be false](#motion-may-be-ambitious-it-may-never-be-false). No invented metric, no fabricated dashboard, no customer logo that is not a customer, no screenshot of a state the product cannot reach, and no counter that counts nothing. A demonstration must be a demonstration: where the page shows the product working, it shows the real components on stated example data, and says so. Reduced motion, hidden-tab pausing and reserved geometry are obligations here too — a marketing page is where a visitor is most likely to arrive on a slow phone.
 
 ## Signature Surface: Business Brain
 
@@ -257,6 +281,9 @@ The Build stage owns the Agent's live event record beside the working core. Vali
 - Do preserve full repository and branch identity through responsive transformations.
 - Do use one visual accent and a quiet foreground hierarchy.
 - Do reserve cinematic motion and luminous depth for surfaces that have earned a signature argument, and keep ordinary surfaces quiet so that reservation reads.
+- Do design the ordinary surfaces anyway. Quiet governs choreography, never craft — a dashboard, profile or billing page that is merely inoffensive has failed this document.
+- Do treat the landing page as the product's first claim, and hold it to a marketing register rather than a product-first one.
+- Don't put a number, a logo, a screenshot or a counter on the landing page that the product cannot stand behind — the truthfulness rules do not stop at `/app`.
 - Do let Product Scan motion follow stored discoveries and nothing else.
 - Do search 21st.dev and shadcn before designing a significant new surface, and say what was rejected as well as what was taken.
 - Do state the problem, the alternative and the cost before adding a UI dependency.

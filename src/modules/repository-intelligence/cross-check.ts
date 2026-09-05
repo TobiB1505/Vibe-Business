@@ -77,17 +77,53 @@ function authDetected(
   return authenticated.productSurfaces.some((surface) => surface.id === id && surface.detected);
 }
 
+/**
+ * Whether a comparison happened at all, and what it found.
+ *
+ * `buildIntelligenceCrossChecks` returns an empty array for two situations a
+ * reader cannot tell apart: nothing was compared, and everything compared
+ * agreed. On screen those are opposite statements. "Your code and your live
+ * product agree" is a finding; saying it because no live scan has ever run
+ * would be the invented reassurance rule 44 exists to prevent.
+ *
+ * So the guards report themselves. `compared: false` means silence is the only
+ * honest output.
+ */
+export type IntelligenceCrossCheckResult =
+  | { compared: false; reason: "no_live_scan" | "live_scan_detected_nothing"; checks: [] }
+  | { compared: true; checks: IntelligenceCrossCheck[] };
+
+export function crossCheckIntelligence(
+  repository: RepositoryIntelligenceSnapshot,
+  live: LiveProductIntelligenceSnapshot | null,
+  authenticated: AuthenticatedProductIntelligenceSnapshot | null = null,
+): IntelligenceCrossCheckResult {
+  if (!live) return { compared: false, reason: "no_live_scan", checks: [] };
+
+  // A check that identified nothing at all is a failed check, not a product
+  // with nothing in it. Comparing against it would invent findings.
+  const liveSawSomething = live.productSurfaces.some((surface) => surface.detected);
+  if (!liveSawSomething) {
+    return { compared: false, reason: "live_scan_detected_nothing", checks: [] };
+  }
+
+  return { compared: true, checks: comparisons(repository, live, authenticated) };
+}
+
+/** The checks themselves, for callers that only weigh how many there are. */
 export function buildIntelligenceCrossChecks(
   repository: RepositoryIntelligenceSnapshot,
   live: LiveProductIntelligenceSnapshot | null,
   authenticated: AuthenticatedProductIntelligenceSnapshot | null = null,
 ): IntelligenceCrossCheck[] {
-  if (!live) return [];
+  return crossCheckIntelligence(repository, live, authenticated).checks;
+}
 
-  // A check that identified nothing at all is a failed check, not a product
-  // with nothing in it. Comparing against it would invent findings.
-  const liveSawSomething = live.productSurfaces.some((surface) => surface.detected);
-  if (!liveSawSomething) return [];
+function comparisons(
+  repository: RepositoryIntelligenceSnapshot,
+  live: LiveProductIntelligenceSnapshot,
+  authenticated: AuthenticatedProductIntelligenceSnapshot | null,
+): IntelligenceCrossCheck[] {
 
   const repositoryDetected = (id: string) =>
     repository.businessSurfaces.some((surface) => surface.id === id && surface.detected);

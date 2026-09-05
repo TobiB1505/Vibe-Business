@@ -221,10 +221,37 @@ describe("routes load only what they render", () => {
     expect(agent, "the Agent page has no Suspense boundary").toContain("<Suspense");
   });
 
-  it("keeps Home on the shared Business Health read model", () => {
-    expect(source("page.tsx")).toContain("ProjectBusinessHealth");
+  /*
+   * Home was the Business Health read model until ADR 0085 made the index
+   * Nova. The invariant the old assertion was protecting still holds and is
+   * what is checked here: Home renders one composed read and does not pull the
+   * prepared-change workspace, which is the Agent's and is expensive.
+   */
+  it("keeps Home on the single Nova read", () => {
+    expect(source("page.tsx")).toContain("NovaHome");
+    expect(source("page.tsx")).not.toContain("ProjectBusinessHealth");
     expect(source("page.tsx")).not.toContain("listPreparedChangeSummaries");
     expect(source("page.tsx")).not.toContain("getPreparedChangeWorkspace");
+  });
+
+  it("keeps Home's reads to what Home draws", () => {
+    // Not a route file, so it is read directly: this is the module the index
+    // delegates its whole read to, and the bounds belong to it.
+    const nova = readFileSync(join(ROUTE_DIR, "nova/nova-home-data.ts"), "utf8");
+
+    // Calls rather than mentions: the module names the reads it deliberately
+    // does not make, and a substring check would match its own reasoning.
+    expect(nova).toContain("getHeaderCreditBalance(");
+
+    // The overview repairs on read and belongs on Billing alone.
+    expect(nova).not.toContain("getBillingOverview(");
+
+    // Home shows a score, not a chart. Sixty readings would be rows fetched to
+    // be thrown away on the most-visited route in the product.
+    expect(nova).not.toContain("getProjectAuditReadings(");
+
+    // The prepared-change workspace is the Agent's expensive read.
+    expect(nova).not.toContain("getPreparedChangeWorkspace(");
   });
 
   it("keeps the audit read off routes that do not show a score", () => {

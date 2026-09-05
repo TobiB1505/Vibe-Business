@@ -13,6 +13,7 @@ import {
   getDeepScanLiveViewAction,
   startDeepScanAction,
 } from "./deep-scan-actions";
+import { Disclosure } from "@/components/ui/disclosure";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
 
@@ -351,6 +352,31 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             ))}
           </ul>
         </div>
+      )}
+
+      {/*
+        Behind a disclosure, not in the summary. A warning is a caveat on a
+        result the founder came here to read, and putting four of them above
+        the result would make the caveats the finding. Nothing is hidden — the
+        count is in the label, so the disclosure says how much is behind it
+        before it is opened.
+      */}
+      {result.warnings.length > 0 && (
+        <Disclosure
+          label={
+            result.warnings.length === 1
+              ? "1 thing Vibe could not check"
+              : `${result.warnings.length} things Vibe could not check`
+          }
+        >
+          <ul className="flex flex-col gap-2">
+            {result.warnings.map((warning) => (
+              <li key={warning} className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </Disclosure>
       )}
 
       {result.accessMode === "included_first_scan" && (

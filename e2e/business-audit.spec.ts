@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const SYNTHESIS = "/e2e/audit-synthesis";
+const UNSCORED = "/e2e/audit-unscored";
 const NO_MOVES = "/e2e/audit-synthesis-no-moves";
 
 function lens(page: Page, name: string | RegExp) {
@@ -65,15 +66,18 @@ test.describe("signature Business Brain", () => {
     await expect(page.getByText(/missing evidence is never scored as zero/i)).toBeVisible();
   });
 
-  test("shows only the highest real priority by default and the exact remaining count", async ({
-    page,
-  }) => {
+  /*
+   * The remaining-count assertion this test used to carry is gone with the
+   * behaviour: R11 replaces "and 1 more priority" with the blockers
+   * themselves. What survives unchanged is the ranking — one blocker leads,
+   * and it is the one the audit ranked first.
+   */
+  test("leads with the highest real priority and its impact", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
     await expect(page.getByTestId("primary-priority")).toContainText(
       "People still don't have a clear way to pay you.",
     );
-    await expect(page.getByText(/see 1 more priority/i)).toBeVisible();
     await expect(page.getByTestId("primary-priority")).toContainText(/high impact/i);
     await expect(page.getByTestId("primary-priority")).toContainText(/medium effort/i);
   });
@@ -105,8 +109,181 @@ test.describe("signature Business Brain", () => {
     await expect(signalsPanel).toContainText(/38\s*\/100/i);
     await expect(signalsPanel).toContainText(/signals behind this score/i);
     await expect(signalsPanel).toContainText(/individual signals do not carry invented point values/i);
-    await expect(detail.getByRole("tab")).toHaveCount(4);
+    /*
+     * Three, not four. The evidence tab's numbered citation cards were the
+     * shared drawer's content one tab away from the conclusion it supports;
+     * they moved behind the count in the header.
+     */
+    await expect(detail.getByRole("tab")).toHaveCount(3);
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
+  });
+
+  /*
+   * The tablist arrows browse; they do not choose.
+   *
+   * This column's tabs used to select as the arrow key moved, which means a
+   * screen-reader user cannot walk the four sections without hearing four
+   * panels replace each other. The shared `TabList` moves focus and waits for
+   * Enter, and this is the assertion that keeps it that way — the difference
+   * is invisible to a mouse and only observable here.
+   */
+  test("lets the keyboard browse the detail tabs before committing to one", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+    await lens(page, /revenue & economics/i).click();
+
+    const detail = page.getByTestId("selected-lens-detail");
+    const overview = detail.getByRole("tab", { name: /^overview$/i });
+    await overview.click();
+    await expect(overview).toHaveAttribute("aria-selected", "true");
+
+    await overview.press("ArrowRight");
+
+    const signals = detail.getByRole("tab", { name: /^signals$/i });
+    await expect(signals).toBeFocused();
+    await expect(signals).toHaveAttribute("aria-selected", "false");
+    await expect(overview).toHaveAttribute("aria-selected", "true");
+
+    await signals.press("Enter");
+    await expect(signals).toHaveAttribute("aria-selected", "true");
+    await expect(overview).toHaveAttribute("aria-selected", "false");
+
+    // End reaches the last tab, and still only moves.
+    await signals.press("End");
+    await expect(detail.getByRole("tab", { name: /^history$/i })).toBeFocused();
+    await expect(signals).toHaveAttribute("aria-selected", "true");
+  });
+
+  /*
+   * R11. The blockers after the first were a number and a link to Moves: the
+   * founder was told more existed and sent to a page that does not list them.
+   * They are read here now, in the audit's order, and each opens the same
+   * evidence drawer as every other finding.
+   */
+  test("reads the rest of the blockers in rank order, with the cost first", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(SYNTHESIS);
+
+    const second = page.getByRole("article").filter({ hasText: /actually working/i });
+    await expect(second).toBeVisible();
+    await expect(second).toContainText("02");
+
+    // Why-first: the consequence leads, the diagnosis follows it.
+    const paragraphs = await second.locator("p").allInnerTexts();
+    const why = paragraphs.findIndex((text) => /every change you make is a guess/i.test(text));
+    const diagnosis = paragraphs.findIndex((text) => /couldn't find anything measuring/i.test(text));
+    expect(why).toBeGreaterThanOrEqual(0);
+    expect(diagnosis).toBeGreaterThan(why);
+
+    await expect(page.getByText(/see \d+ more priorit/i)).toHaveCount(0);
+  });
+
+  test("opens one evidence drawer from a blocker, and never shows an evidence id", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(SYNTHESIS);
+
+    const second = page.getByRole("article").filter({ hasText: /actually working/i });
+    await second.getByRole("button", { name: /sources?$/ }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/evidence/i);
+
+    /*
+     * Rule 45 and the audit's acceptance both: a citation is a founder
+     * sentence and a named source. The raw id behind it is never on screen.
+     */
+    const drawerText = await drawer.innerText();
+    expect(drawerText).not.toMatch(/\b[a-z]+\.[a-z_]+\.[a-z_]+\b/);
+
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(drawer).toBeHidden();
+  });
+
+  /*
+   * R9's unscored state. The em dash was on screen and the sentence behind it
+   * was computed and rendered nowhere, so the founder saw the product decline
+   * to answer without being told why it could not.
+   */
+  test("says why there is no score, and does not colour the non-answer green", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(UNSCORED);
+
+    const map = page.getByTestId("business-map-radial");
+    await expect(map).toContainText(/only 2 of 9 areas could be assessed/i);
+
+    const label = map.getByText("Not enough evidence");
+    await expect(label).toBeVisible();
+    const colour = await label.evaluate((node) => getComputedStyle(node).color);
+    // The mint the product uses for a healthy reading.
+    const mint = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--color-mint").trim(),
+    );
+    expect(mint).not.toBe("");
+    expect(colour).not.toBe(mint);
+  });
+
+  test("opens the lens's own citations from the detail header", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+    await lens(page, /revenue & economics/i).click();
+
+    const detail = page.getByTestId("selected-lens-detail");
+    await detail.getByRole("button", { name: /sources?$/ }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText("Revenue & Economics");
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(drawer).toBeHidden();
+  });
+
+  /*
+   * Slice 2: contradictions belong on My Product *and* on the Brain. Here they
+   * qualify the scores beside them — a capability the audit read out of the
+   * repository may be one no visitor can reach.
+   */
+  test("carries a code-against-live disagreement as evidence about the business", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(SYNTHESIS);
+
+    const heading = page.getByRole("heading", {
+      name: /your code against your live product/i,
+    });
+    await expect(heading).toBeVisible();
+
+    const finding = heading.locator("xpath=..").getByRole("article").first();
+    await expect(finding).toBeVisible();
+    await expect(finding).toContainText(/your code · your live product/i);
+    await expect(finding).toContainText(/needs attention/i);
+  });
+
+  /*
+   * R39 at strip density: one line saying what the audit about to be paid for
+   * rests on, leading with the first gap. It lives on the route that already
+   * reads all three snapshots, so it costs no extra read.
+   */
+  test("says in one line what the audit rests on, and names the first gap", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const strip = page.getByTestId("source-coverage-strip");
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("data-gap", "deep_scan");
+
+    const text = (await strip.textContent()) ?? "";
+    expect(text).toContain("Rests on");
+    expect(text).toContain("code");
+    expect(text).toContain("signed-in product");
+
+    // The remedy for the gap, and only for the gap.
+    await expect(strip.getByRole("link")).toHaveCount(1);
+    await expect(strip.getByRole("link")).toContainText(/deep scan/i);
   });
 
   test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {
@@ -225,7 +402,14 @@ test.describe("signature Business Brain", () => {
   test("offers generation honestly when no Moves exist", async ({ page }) => {
     await page.goto(NO_MOVES);
 
-    await expect(page.getByRole("link", { name: /find next moves/i })).toBeVisible();
+    /*
+     * Scoped to the leading priority. The blocker stack below offers the same
+     * label on its own cards now, and both are right — the ambiguity is in the
+     * locator, not on the page.
+     */
+    await expect(
+      page.getByTestId("primary-priority").getByRole("link", { name: /find next moves/i }),
+    ).toBeVisible();
   });
 
   test("removes particles and large choreography for reduced motion", async ({ page }) => {

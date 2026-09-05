@@ -37,12 +37,18 @@ import { AgentTrustPanel } from "./agent-header";
 import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
+import { ValidationDepthNote } from "./validation-depth-note";
 import { AgentValidateAction } from "./agent-validate-action";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveAgentInterruptAction } from "./interrupt-actions";
 import { AgentFileActivity } from "./agent-file-activity";
+import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
+import { CostLine } from "@/components/system/cost-line";
+import { MonoLabel } from "@/components/ui/typography";
+import { AgentRunHistory } from "./agent-run-history";
+import { listAgentRuns } from "@/modules/coding-agent/observability/run-view";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
@@ -294,7 +300,7 @@ async function AgentWorkspaceBody({
   /* The focus answer and start discoverability are independent. Keep them in
      one parallel read window so restoring the real start control does not
      reintroduce the old serial Agent-page latency. */
-  const [focusAction, agentRoutes, measuredRuns] = await Promise.all([
+  const [focusAction, agentRoutes, measuredRuns, pastRuns] = await Promise.all([
     focusedMove
       ? (async () => {
           const [summaries, activeOperation, failedOperation] = await Promise.all(
@@ -344,6 +350,14 @@ async function AgentWorkspaceBody({
     readyTask !== null && !agentWorking
       ? listMeasuredRunObservations(supabase)
       : Promise.resolve([]),
+    /*
+     * Every run this product has had (audit R29).
+     *
+     * In the same window as everything else, so the list costs no additional
+     * latency, and bounded — a founder scanning for the run they mean does not
+     * need the eleventh page of them.
+     */
+    listAgentRuns(supabase, { projectId, limit: 20 }),
   ]);
 
   const focus = requestedTaskMatchesRun
@@ -727,17 +741,35 @@ async function AgentWorkspaceBody({
                   <AgentCore
                     state={displayedWorkspace.core}
                     headline={live ? "Vibe is building your change" : "The build stage is complete"}
-                    caption={agentCoreCaption(displayedWorkspace.stages)}
+                    /*
+                      What the run is doing right now, when it has reported an
+                      action. The stage caption says which of five phases it is
+                      in, which does not change for minutes at a time; the
+                      current action is the half that moves, and it was
+                      observed and never rendered.
+                    */
+                    caption={
+                      (live ? displayedWorkspace.currentAction : null) ??
+                      agentCoreCaption(displayedWorkspace.stages)
+                    }
                     size="compact"
                   />
                 }
                 activity={
                   displayedWorkspace.fileEvents.length > 0 ? (
-                    <AgentFileActivity
-                      events={displayedWorkspace.fileEvents}
-                      title="Live activity"
-                      live={live}
-                    />
+                    <div className="flex flex-col gap-5">
+                      <AgentFileActivity
+                        events={displayedWorkspace.fileEvents}
+                        title="Live activity"
+                        live={live}
+                      />
+                      {/*
+                        What the run touched, once per file — including the
+                        paths policy refused, which the change itself cannot
+                        show because they are not in it.
+                      */}
+                      <AgentRunFiles files={displayedWorkspace.files} />
+                    </div>
                   ) : displayedWorkspace.timeline === null ? (
                     <Notice tone="info" label="Live activity">
                       Activity appears here when the run starts.
@@ -759,7 +791,14 @@ async function AgentWorkspaceBody({
                 running={live}
                 checks={
                   displayedWorkspace.checks.length > 0 ? (
-                    <AgentValidationChecks checks={displayedWorkspace.checks} />
+                    <div className="flex flex-col gap-3">
+                      <AgentValidationChecks checks={displayedWorkspace.checks} />
+                      {/*
+                        What was skipped, and why. The rows say which steps did
+                        not run; this says it was a decision.
+                      */}
+                      <ValidationDepthNote depth={displayedWorkspace.validationDepth} />
+                    </div>
                   ) : (
                     <Notice tone="info" label="Validation checks">
                       Checks appear here when a prepared change reaches validation.
@@ -796,7 +835,15 @@ async function AgentWorkspaceBody({
                     linesRemoved={change.lineStats?.removed}
                     filesHref={change.compareUrl ?? undefined}
                     reviewReady={change.review.state === "ready"}
-                    actions={<AgentPreviewActions projectId={project.id} change={change} />}
+                    actions={
+                      <AgentPreviewActions
+                        projectId={project.id}
+                        change={change}
+                        withheldPaths={displayedWorkspace.files
+                          .filter((file) => file.withheldBy !== null)
+                          .map((file) => file.path)}
+                      />
+                    }
                   />
                 </div>
               ),
@@ -817,13 +864,43 @@ async function AgentWorkspaceBody({
                     commitSha={change.commitSha}
                     compareUrl={change.compareUrl}
                     backHref={planHref}
-                    decision={<AgentReviewDecision projectId={project.id} change={change} />}
+                    decision={
+                      <div className="flex flex-col gap-3">
+                        <AgentReviewDecision projectId={project.id} change={change} />
+                        {/*
+                          What it cost, from the hold it ran against (audit
+                          R23). Beside the decision rather than after it: a
+                          founder about to merge is the person who wants to
+                          know what the run they are approving was charged.
+                        */}
+                        <CostLine cost={displayedWorkspace.cost} />
+                      </div>
+                    }
                     canMerge={change.merge.state === "ready"}
                   />
                 </div>
               ),
             }}
           />
+
+        {/*
+          The runs before this one (audit R29). The workspace shows the newest;
+          a product that has run the agent eleven times had ten it could no
+          longer reach, including the ones whose changes were merged.
+        */}
+        {pastRuns.length > 1 && (
+          <section className="flex flex-col gap-3" aria-labelledby="agent-run-history-title">
+            <MonoLabel as="h2" id="agent-run-history-title">
+              Earlier runs
+            </MonoLabel>
+            <AgentRunHistory
+              runs={pastRuns}
+              changeHref={(preparedChangeId) =>
+                `${projectSectionHref(project.id, "agent")}?change=${preparedChangeId}`
+              }
+            />
+          </section>
+        )}
       </div>
     </div>
   );

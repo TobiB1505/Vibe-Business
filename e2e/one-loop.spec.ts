@@ -82,15 +82,20 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await expect(primary).toHaveAttribute("href", /\/plan\?from=blocker-1$/);
   });
 
-  test("secondary priorities stay reachable through the quieter remaining-priorities link", async ({
-    page,
-  }) => {
+  test("keeps the secondary priorities readable rather than counted", async ({ page }) => {
     await page.goto("/e2e/audit-synthesis");
 
-    const secondary = page.getByTestId("current-priorities").getByRole("link", {
-      name: "See 1 more priority",
-    });
-    await expect(secondary).toHaveAttribute("href", /\/plan$/);
+    /*
+     * This asserted a "See 1 more priority" link to the Plan. The founder was
+     * told a blocker existed and sent to a page that does not list blockers.
+     * R11 reads them here instead, ranked, each with its own way forward.
+     */
+    const panel = page.getByTestId("current-priorities");
+    await expect(panel.getByText(/see \d+ more priorit/i)).toHaveCount(0);
+
+    const second = panel.getByRole("article").filter({ hasText: /actually working/i });
+    await expect(second).toBeVisible();
+    await expect(second.getByRole("link")).toHaveAttribute("href", /\/plan(\?from=blocker-\d+)?$/);
   });
 
   /** §5: the key is an address, never something a founder reads. */
@@ -107,7 +112,12 @@ test.describe("the audit hands off to the moves that answer it", () => {
   test("offers a way forward even when no moves exist yet", async ({ page }) => {
     await page.goto("/e2e/audit-synthesis-no-moves");
 
-    const priorities = page.getByTestId("current-priorities");
+    /*
+     * Scoped to the leading priority: the ranked blockers below now carry the
+     * same offer on their own cards, which is the point of R11 and not an
+     * ambiguity on the page.
+     */
+    const priorities = page.getByTestId("primary-priority");
     await expect(priorities.getByRole("link", { name: "Find next moves" })).toBeVisible();
   });
 });
@@ -129,6 +139,21 @@ test.describe("moves entered from one finding", () => {
     await expect(page.getByTestId("move-step")).toHaveCount(4);
     await expect(page.getByTestId("move-card")).toHaveCount(1);
     await expect(page.getByTestId("move-card")).toContainText("Decide how customers pay");
+  });
+
+  /*
+   * Every Move has carried a `confidence` since the schema had the field, and
+   * the audit found it rendered nowhere in the product (§E4). It is how sure
+   * Vibe is that the problem exists and matters — which qualifies the impact
+   * and effort beside it rather than competing with them.
+   */
+  test("says how confident Vibe is that the Move is worth making", async ({ page }) => {
+    await page.goto(FROM_CONCLUSION);
+
+    const card = page.getByTestId("move-card");
+    await expect(card).toContainText(/high impact/i);
+    await expect(card).toContainText(/medium effort/i);
+    await expect(card).toContainText(/high confidence/i);
   });
 
   /** The stepper visualizes persisted rank and never renumbers context. */
@@ -224,14 +249,22 @@ test.describe("the single-Move priority navigator", () => {
 });
 
 test.describe("a move card says one thing at a time", () => {
-  test("shows readiness and impact, and not the rest", async ({ page }) => {
+  /*
+   * The hidden assertion here was `High confidence` staying off the card. The
+   * audit reverses that (§E4, R15): the value is stored on every Move and was
+   * rendered nowhere, which it counts as a P0 gap in what the product will
+   * admit about its own certainty. What the test still guards is the card
+   * saying one thing at a time — three qualifiers, and no evidence furniture.
+   */
+  test("shows readiness, impact, effort and confidence, and not the rest", async ({ page }) => {
     await page.goto(RANKED);
     const card = page.getByTestId("move-card");
 
     await expect(card).toContainText("Needs your input");
     await expect(card).toContainText("High impact");
-    await expect(card.getByText("High confidence")).not.toBeVisible();
     await expect(card.getByText("Medium effort")).toBeVisible();
+    await expect(card.getByText("High confidence")).toBeVisible();
+    await expect(card.getByRole("button", { name: /sources?$/ })).toHaveCount(0);
   });
 
   test("states a dependency before anything is pressed", async ({ page }) => {

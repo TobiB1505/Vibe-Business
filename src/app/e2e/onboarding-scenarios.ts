@@ -103,6 +103,14 @@ export const E2E_ONBOARDING_STATIC_SCENARIOS = [
   "onboarding_audit_parked",
   "onboarding_audit_awaiting",
   "onboarding_logo_broken",
+  /*
+   * The two facts the reveal asks a founder to confirm.
+   *
+   * The reveal needs a session, a project and a profile to reach, so the one
+   * screen that asks the founder to check Vibe's work had no browser coverage
+   * — which is how it kept a label and a value for as long as it did.
+   */
+  "onboarding_product_reveal",
 ] as const;
 
 export type E2eOnboardingStaticScenario = (typeof E2E_ONBOARDING_STATIC_SCENARIOS)[number];

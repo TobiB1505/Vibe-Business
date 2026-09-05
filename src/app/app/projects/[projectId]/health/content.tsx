@@ -14,6 +14,7 @@ import {
 import { getPausedAudit, getProjectAuditReadings } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
+import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
 import {
   getLatestSession,
@@ -39,6 +40,8 @@ import { NovaAuditVoice } from "../nova-audit-voice";
 import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../audit-lifecycle";
 import { NeedsUserPanel } from "../needs-user-panel";
 import { ProvenancePanel } from "../provenance-panel";
+import { SourceCoverageStrip } from "@/components/system/source-coverage";
+import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import { RunAuditButton } from "../run-audit-button";
 
 /**
@@ -206,6 +209,58 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           entry: buildNovaAuditEntry(businessBrainView, latestAudit.result.synthesis),
         })
       : null;
+
+  /*
+   * The same comparison My Product renders, read here as evidence about the
+   * business rather than about the code: a capability the audit scored on the
+   * strength of the repository, which no visitor can reach, is a finding the
+   * Brain has to carry too.
+   */
+  /*
+   * What the audit about to be paid for rests on (audit R39, strip density).
+   *
+   * This page already reads all three snapshots for the cross-check, so the
+   * strip costs nothing extra here — which is exactly why it goes here and not
+   * on Nova Home, where the same line would buy three reads on the product's
+   * most-visited route.
+   */
+  const auditSources = latestSnapshot
+    ? buildSourceCoverage({
+        repository: {
+          result: latestSnapshot.result ?? null,
+          completedAt: latestSnapshot.completedAt ?? null,
+        },
+        live: {
+          result: latestLiveSnapshot?.result ?? null,
+          completedAt: latestLiveSnapshot?.completedAt ?? null,
+        },
+        deepScan: {
+          result: latestDeepScanSnapshot?.result ?? null,
+          completedAt: latestDeepScanSnapshot?.completedAt ?? null,
+        },
+        founder: { told: false, at: null },
+        hrefs: {
+          scan: projectSectionHref(project.id, "my-product"),
+          deepScan: projectSectionHref(project.id, "deep-scan"),
+          settings: projectSectionHref(project.id, "settings"),
+          founderIntent: `${projectSectionHref(project.id, "settings")}#founder-intent`,
+          connectRepository: projectSectionHref(project.id, "settings"),
+          addWebsite: projectSectionHref(project.id, "settings"),
+        },
+        connected: {
+          repository: Boolean(project.repository),
+          productionUrl: Boolean(project.productionUrl),
+        },
+      })
+    : null;
+
+  const crossCheck = latestSnapshot?.result
+    ? crossCheckIntelligence(
+        latestSnapshot.result,
+        latestLiveSnapshot?.result ?? null,
+        latestDeepScanSnapshot?.result ?? null,
+      )
+    : null;
 
   const deepScanModel = deepScanAccess
     ? buildDeepScanViewModel({
@@ -378,6 +433,13 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
         <ProvenancePanel provenance={auditProvenance} projectId={project.id} />
 
         {/*
+          One line of the same four sources the full list shows on My Product,
+          leading with the first gap — because the three that are fine are not
+          what changes the decision to spend Credits on another audit.
+        */}
+        {auditSources && <SourceCoverageStrip sources={auditSources} />}
+
+        {/*
           CORE-2 §16: the first qualified audit is free, and the entitlement is
           decided server-side. This one states the decision and nothing else —
           the price and the balance belong to the state *after* it is spent, and
@@ -420,6 +482,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
             view={businessBrainView}
             movesHref={projectSectionHref(project.id, "action-plan")}
             hasMoves={hasMoves}
+            contradictions={crossCheck?.compared ? crossCheck.checks : []}
           />
         ) : latestAudit?.result ? (
           <Notice tone="info" label="Older audit">

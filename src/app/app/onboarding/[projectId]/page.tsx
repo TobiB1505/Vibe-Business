@@ -52,6 +52,9 @@ import { LiveSiteStep } from "./live-site-step";
 import { OperationWatcher } from "./operation-watcher";
 import { OnboardingOperationFailure, OnboardingStalled } from "./operation-states";
 import { ProductConfirmation } from "./product-confirmation";
+import { ProductRevealFacts } from "./reveal-facts";
+import { FirstMoveDecision } from "./first-move-decision";
+import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
@@ -142,6 +145,7 @@ export default async function ProjectOnboardingPage({
     firstMovePlan,
     understandingFailure,
     auditAccess,
+    balance,
   ] = await Promise.all([
     onboarding.understandingOperation
       ? getProductScanEvents(supabase, {
@@ -174,7 +178,20 @@ export default async function ProjectOnboardingPage({
     onboarding.state === "product_reveal"
       ? getAuditAccessStatus(supabase, { projectId, userId: session.userId })
       : null,
+    /*
+     * The balance, only on the screen that offers a priced decision.
+     *
+     * A missing balance never suppresses a price — `CostDisclosure` states one
+     * either way — so a failure here costs the affordability sentence and
+     * nothing else.
+     */
+    onboarding.state === "first_move"
+      ? getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null)
+      : null,
   ]);
+
+  /* The Move onboarding ends on, when the Opportunity Engine produced one. */
+  const firstOpportunity = onboarding.opportunities?.set.opportunities[0] ?? null;
 
   /*
    * `not_applicable` is exactly "nothing is owed" — the included first audit,
@@ -421,14 +438,8 @@ export default async function ProjectOnboardingPage({
                 </p>
               )}
             </div>
-            <div className="grid w-full max-w-[54rem] gap-3 text-left sm:grid-cols-2">
-              {understanding.audience.slice(0, 2).map((fact) => (
-                <div key={fact.label} className="border-line-2 bg-surface-2 rounded-xl border p-4">
-                  <p className="text-fg-meta text-xs">{fact.label}</p>
-                  <p className="text-fg-body mt-1 text-sm">{fact.value}</p>
-                </div>
-              ))}
-            </div>
+            <ProductRevealFacts facts={understanding.audience.slice(0, 2)} />
+
             <div className="border-line-2 w-full border-t pt-6">
               <h2 className="text-fg-body mb-4 font-semibold">Did Vibe get this right?</h2>
               <ProductConfirmation
@@ -595,16 +606,40 @@ export default async function ProjectOnboardingPage({
                 done — your workspace is where everything lives from here.
               </p>
               {/*
-                Named for where it goes. This completes setup and opens this
-                project's workspace, not the global dashboard, and calling it
-                "Go to dashboard" sent people looking for a screen they had not
-                been taken to (UI-S1 §16).
+                Onboarding ends on a decision, not a door (audit Slice 6).
+                
+                The founder has just read the one Move Vibe would start with
+                and why it comes first; offering only a way out of the flow
+                spent the whole of onboarding on a recommendation nobody could
+                act on from the screen that made it. The price is on the
+                control, and leaving stays free.
+                
+                Named for where it goes: this opens *this project's* workspace,
+                not the global dashboard — "Go to dashboard" sent people
+                looking for a screen they had not been taken to (UI-S1 §16).
               */}
-              <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
-                <button type="submit" className={buttonClasses()}>
-                  Go to your workspace
-                </button>
-              </form>
+              {firstOpportunity ? (
+                <FirstMoveDecision
+                  projectId={projectId}
+                  opportunityId={firstOpportunity.id}
+                  balance={balance}
+                  skip={
+                    <button
+                      type="submit"
+                      formAction={completeOnboardingAction.bind(null, projectId)}
+                      className="text-fg-secondary hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                    >
+                      Go to your workspace
+                    </button>
+                  }
+                />
+              ) : (
+                <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
+                  <button type="submit" className={buttonClasses()}>
+                    Go to your workspace
+                  </button>
+                </form>
+              )}
             </Surface>
           )}
         </section>

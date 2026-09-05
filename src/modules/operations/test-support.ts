@@ -958,6 +958,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   private orderColumn: string | null = null;
   private orderAscending = true;
   private limitCount: number | null = null;
+  private rangeBounds: { from: number; to: number } | null = null;
   private countMode = false;
   private headOnly = false;
 
@@ -1024,6 +1025,19 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
   limit(count: number): this {
     this.limitCount = count;
+    return this;
+  }
+
+  /**
+   * PostgREST's inclusive `[from, to]` window, which is how a paged read asks
+   * for anything but the first page.
+   *
+   * Modelled rather than aliased to `limit`, because the offset is the half
+   * that matters: a double that ignored `from` would return page one for every
+   * page and a paging test would pass over a read that never moved.
+   */
+  range(from: number, to: number): this {
+    this.rangeBounds = { from, to };
     return this;
   }
   /**
@@ -1099,6 +1113,9 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
       });
     }
 
+    if (this.rangeBounds !== null) {
+      rows = rows.slice(this.rangeBounds.from, this.rangeBounds.to + 1);
+    }
     if (this.limitCount !== null) rows = rows.slice(0, this.limitCount);
     return rows;
   }

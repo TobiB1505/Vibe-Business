@@ -25,6 +25,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 const CODE_ONLY = "/e2e/repository_intelligence";
 const CONTRADICTION = "/e2e/repository_intelligence_contradiction";
+const AGREEMENT = "/e2e/repository_intelligence_agreement";
 const LIMITED_ROUTES = "/e2e/repository_intelligence_limited_routes";
 
 async function forbidExternalCalls(page: Page): Promise<string[]> {
@@ -163,12 +164,35 @@ test.describe("the two intelligence layers", () => {
     await expect(page.getByText("Repository signal")).toHaveCount(0);
   });
 
+  /*
+   * The half of R7 that is easy to leave out: an empty comparison and a
+   * comparison that never ran render the same empty list, and on screen they
+   * are opposite claims. One says so; the other stays silent.
+   */
+  test("says the two layers agree, but only when they were compared", async ({ page }) => {
+    await page.goto(AGREEMENT);
+
+    const section = page.getByRole("region", { name: /your code against your live product/i });
+    await expect(section).toContainText(/everything vibe compared lines up/i);
+
+    await page.goto(CODE_ONLY);
+    await expect(
+      page.getByRole("region", { name: /your code against your live product/i }),
+    ).toHaveCount(0);
+  });
+
   test("says an analysis did not finish before its results are read", async ({ page }) => {
     await page.goto(LIMITED_ROUTES);
 
     const notice = page.getByRole("status").first();
     await expect(notice).toContainText("did not finish");
-    await expect(notice).toContainText("tree_truncated");
+    /*
+     * In words, not in the analyzer's vocabulary. This asserted the literal
+     * `tree_truncated` on screen (audit D12) — a budget name a founder can
+     * only read as a defect in their own repository.
+     */
+    await expect(notice).toContainText(/more files than vibe reads in one pass/i);
+    await expect(notice).not.toContainText("tree_truncated");
   });
 });
 

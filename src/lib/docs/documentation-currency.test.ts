@@ -248,6 +248,47 @@ describe("every relative link in the documentation resolves", () => {
  */
 const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string }[] = [
   {
+    path: "DESIGN.md",
+    claim: "recent activity and plan choices complete the page",
+    retiredBy:
+      "Plans moved ahead of the histories and took the full width. They were the narrowest " +
+      "element on the page and are its one real decision, and the column they sat in ended " +
+      "half a screen above the one beside it.",
+  },
+  {
+    path: "UX-CONTRACT.md",
+    claim: "`Review this move` on project Home",
+    retiredBy:
+      "ADR 0085 — project Home is `NovaHome`. The control still exists in " +
+      "`home-status.tsx` and is still tested, but the only thing that mounts it is the e2e " +
+      "fixture route, so it reaches no founder. Audit P1.10 harvests or deletes it; until " +
+      "then the contract may not promise a control no product route renders.",
+  },
+  {
+    path: "UX-CONTRACT.md",
+    claim: "three equal overview panels",
+    retiredBy:
+      "Two, at 2:1 — spendable Credits beside the plan. The third was the Credit model, " +
+      "folded into the price table it pointed at. The rest of the page is now a row per " +
+      "question rather than asymmetric content/support grids.",
+  },
+  {
+    path: "UX-CONTRACT.md",
+    claim: "the two operator-only dogfood routes are the named exceptions",
+    retiredBy:
+      "`loading-coverage.test.ts` exempts nothing; the dogfood routes went with ADR 0092, " +
+      "which removed the internal harness. Every signed-in route is held to the rule.",
+  },
+  {
+    path: "DESIGN.md",
+    claim: "There is no `components.json`",
+    retiredBy:
+      "ADR 0095 — one exists, and it exists to make the rule that sentence introduced " +
+      "enforceable rather than remembered. Every CLI-writable alias points at a gitignored " +
+      "`src/components/vendor/`, so `src/components/ui/` is unreachable by an install command. " +
+      "`shadcn init` is still forbidden; history may quote the old sentence.",
+  },
+  {
     path: "PRODUCT.md",
     claim: "Deep Scan is not wired to them",
     retiredBy:

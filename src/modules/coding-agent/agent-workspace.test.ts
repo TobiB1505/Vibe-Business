@@ -40,7 +40,6 @@ const SOURCE = readFileSync(
 describe("the customer-facing agent read stays inside what a founder may select", () => {
   it("does not build the economics-bearing live model", () => {
     expect(SOURCE).not.toContain("buildAgentExecutionLiveModel");
-    expect(SOURCE).not.toContain("live-view");
   });
 
   it("never names the internal cost ledger", () => {
@@ -51,10 +50,35 @@ describe("the customer-facing agent read stays inside what a founder may select"
   /**
    * The replacement path. The timeline is a projection over stored events, and
    * both of those tables are readable by the founder who owns the project.
+   *
+   * This also forbade importing `live-view` at all, which was right while that
+   * module had one entry point and it read economics. The split (audit C7)
+   * gives it two: `runObservationFrom` touches no usage ledger, and forbidding
+   * the file rather than the function would have forced this surface to keep a
+   * second copy of a derivation it shares — which is the drift the split exists
+   * to end. The ledger itself is still forbidden, above and below.
    */
-  it("derives the timeline from the event log instead", () => {
-    expect(SOURCE).toContain("buildExecutionTimeline");
+  it("derives the timeline from the shared observation over the event log", () => {
+    expect(SOURCE).toContain("runObservationFrom");
     expect(SOURCE).toContain("listExecutionEvents");
+  });
+
+  /**
+   * And the observation half carries no USD, so adopting it cannot put Vibe's
+   * own cost on a founder's screen by accident.
+   */
+  it("reads an observation that has no cost figure in it", () => {
+    const liveView = readFileSync(
+      join(process.cwd(), "src/modules/coding-agent/observability/live-view.ts"),
+      "utf8",
+    );
+    const observationType = liveView.slice(
+      liveView.indexOf("export type RunObservation = {"),
+      liveView.indexOf("export type AgentExecutionLiveModel = {"),
+    );
+    expect(observationType).not.toContain("economics");
+    expect(observationType).toContain('Omit<AgentRunMetrics, "completion">');
+    expect(liveView).toContain('providerCostUsd: _cost');
   });
 
   /**

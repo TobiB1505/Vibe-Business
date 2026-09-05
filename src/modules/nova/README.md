@@ -22,6 +22,7 @@ focus.ts       what needs attention now, ranked — pure, and the whole of the d
 read.ts        the facts behind it, gathered in a bounded number of queries
 actions.ts     what each control says, costs, and does to the world
 feed.ts        the focus as entries on a screen — sentences, one control, progress
+home-view.ts   the focus as Home composes it — one card, a strip, a bounded stack
 first-run.ts   Nova's introduction, and the walkthrough she offers once
 onboarding.ts  the scan and the reveal, and what may ride along with "yes"
 voice/
@@ -35,6 +36,27 @@ voice/
     rubric.ts  the six questions a regular expression cannot answer
     nova-voice.probe.ts   the paid run — never part of `pnpm test`
 ```
+
+## Two projections, one ranking
+
+`feed.ts` and `home-view.ts` both turn a `NovaFocus` into something a screen
+can render, and they exist separately because a transcript and a composition
+need different shapes for the same facts. The feed is linear — message,
+control, progress, asides. Home is one dominant card with a strip and a stack
+beneath it.
+
+What they do not have is different *facts*, and specifically not different
+words: `home-view.ts` reads Nova's sentences back out of `feed.ts` through
+`novaCandidateMessage` rather than keeping a second table. Neither reorders
+anything. `deriveNovaFocus` decides what leads and what follows, and both
+projections take that decision as given.
+
+`home-view.ts` adds exactly one judgement of its own, and it is about this
+surface rather than about the product: whether Home can supply the arguments a
+candidate's action needs. A merge needs an approval id and a build needs a plan
+step key, neither of which the focus facts carry — so those candidates are
+routed to the screen that owns the decision, with wording that says so instead
+of a button wearing the catalog's verb over a link.
 
 ## Focus: a ranking, not a position
 

@@ -103,15 +103,32 @@ const TASK: AgentTask = {
 };
 
 import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
+import type { ValidationSummary } from "@/modules/validation/view";
+import type { ChangeCost } from "@/components/system/cost-line";
+import { creditUnits } from "@/modules/credits/units";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
 
-/** The four checks the sandbox actually runs, mid-flight. */
+/**
+ * The validation's phases mid-flight, at the shape `validationChecks` now
+ * produces them (audit R32).
+ *
+ * The source-integrity phase leads because it is the one the founder cannot
+ * infer: it says what Vibe proved about the bytes the sandbox ran, before any
+ * of the commands below it means anything. And two phases are `skipped`, which
+ * is what the depth note beside this list exists to explain.
+ */
 const CHECKS: ValidationCheck[] = [
+  { name: "Source integrity", detail: "Source integrity", state: "passed" },
   { name: "Dependencies", detail: "Installing packages", state: "passed" },
-  { name: "Type safety", detail: "Checking TypeScript types", state: "passed" },
-  { name: "Tests", detail: "Running unit and integration tests", state: "passed" },
-  { name: "Production build", detail: "Building for production", state: "running" },
+  { name: "Type safety", detail: "Checking TypeScript types", state: "running" },
+  { name: "Tests", detail: "Skipped — not needed for this change", state: "skipped" },
+  {
+    name: "Production build",
+    detail: "Skipped — not needed for this change",
+    state: "skipped",
+  },
 ];
 
 const FILE_EVENTS: StoredExecutionEvent[] = ([
@@ -203,11 +220,19 @@ type Fixture = {
   activity: TimelineStep[];
   task: AgentTask | null;
   checks: ValidationCheck[];
+  /** How much of the profile ran, and why. Null before depth existed. */
+  validationDepth: ValidationSummary["depth"];
+  /** What the run cost, from the hold it ran against. */
+  cost: ChangeCost;
   previewChanges: PreviewChange[];
   mergeFiles: MergeFile[];
   mergeSummary: MergeSummary;
   previewImages: PreviewImages | null;
   fileEvents: StoredExecutionEvent[];
+  /** What the run reported doing last, or null between actions. */
+  currentAction: string | null;
+  /** Every path the run touched, including the ones policy refused. */
+  files: LiveFile[];
   /**
    * A start the founder asked for and did not get.
    *
@@ -238,11 +263,34 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     activity: [...(input.timeline ?? [])],
     task: input.timeline === null ? null : TASK,
     checks: CHECKS,
+    /*
+     * A depth that skipped two steps, with the reason. The check rows can say
+     * a step was skipped; only this says it was a decision and which one.
+     */
+    cost: { kind: "settled", credits: creditUnits(200_000) },
+    validationDepth: {
+      depth: "fast",
+      label: "Fast",
+      reason: "a low-risk presentational change",
+      notRun: ["test", "build"],
+    },
     previewChanges: PREVIEW_CHANGES,
     mergeFiles: MERGE_FILES,
     mergeSummary: MERGE_SUMMARY,
     previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
+    currentAction: input.timeline === null ? null : "Editing src/app/pricing/page.tsx",
+    /*
+     * One refused path among the touched ones. It is the state the change
+     * itself cannot show — a file that is not in it because policy said no
+     * looks exactly like a file nobody touched.
+     */
+    files: [
+      { path: "src/app/pricing/page.tsx", kind: "generated", detail: null, bytes: 1840, withheldBy: null },
+      { path: "src/components/pricing-table.tsx", kind: "generated", detail: null, bytes: 920, withheldBy: null },
+      { path: "package.json", kind: "observed", detail: null, bytes: null, withheldBy: null },
+      { path: ".env.local", kind: "candidate", detail: null, bytes: null, withheldBy: "Sensitive path policy" },
+    ],
     startRefusal: null,
     chainOffer: null,
   };

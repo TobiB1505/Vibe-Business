@@ -435,7 +435,14 @@ describe("an unfinished analysis says so", () => {
     );
 
     expect(view.incompleteReason).toContain("did not finish");
-    expect(view.incompleteReason).toContain("tree_truncated");
+    /*
+     * The reason, in words. This asserted the raw `tree_truncated` — the
+     * budget tracker's own name for its limit, interpolated into a sentence
+     * written for a founder, who was left to decide whether it described a
+     * fault in their repository. Audit D12.
+     */
+    expect(view.incompleteReason).toContain("more files than Vibe reads in one pass");
+    expect(view.incompleteReason).not.toContain("tree_truncated");
   });
 
   it("is silent when the analysis finished", () => {

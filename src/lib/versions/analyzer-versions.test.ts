@@ -155,6 +155,8 @@ const REPOSITORY: AnalyzerPin = {
     "service.ts": "orchestration — decides when to analyze, never what a repository contains",
     "store.ts": "persistence, and the reuse lookup that reads this constant",
     "human-view.ts": "presentation of a stored snapshot, downstream of the snapshot itself",
+    "completeness-labels.ts":
+      "wording for a reason the analyzer already recorded; it renames nothing the snapshot stores",
     /*
      * Cross-checks are computed at audit time from two finished snapshots and
      * are stored in neither. They belong to `EVIDENCE_PACK_V3_VERSION`, which

@@ -48,12 +48,43 @@ describe("project workspace sections", () => {
     }
   });
 
-  it("names the project index for its business job rather than as generic Home", () => {
+  /*
+   * This assertion used to pin the index to "Business Health", on the argument
+   * that naming it "Home" would be generic. ADR 0085 reverses that: the index
+   * is Nova, whose job is the founder's first question — what do I do now —
+   * and the diagnosis is the second one.
+   *
+   * It is labelled "Nova" rather than "Home" for two reasons. The account rail
+   * one level up already has a Home, so the same word named two destinations;
+   * and this is the one rail item that names a *who* rather than a subject,
+   * which is the whole claim of the surface.
+   */
+  it("makes the project index Nova and keeps Business Health as its own destination", () => {
     expect(PROJECT_SECTIONS.find((section) => section.id === "home")).toMatchObject({
-      label: "Business Health",
-      icon: "business-health",
+      label: "Nova",
+      icon: "nova",
       segment: "",
     });
+
+    expect(PROJECT_SECTIONS.find((section) => section.id === "business-health")).toMatchObject({
+      label: "Business Health",
+      icon: "business-health",
+      // `/health` was already a live alias for the diagnosis before it became
+      // a rail item, so no address a founder holds has moved.
+      segment: "health",
+    });
+  });
+
+  it("puts Business Health directly after the index it was promoted out of", () => {
+    const ids = PROJECT_SECTIONS.map((section) => section.id);
+    expect(ids.slice(0, 2)).toEqual(["home", "business-health"]);
+  });
+
+  it("does not repeat the account rail's word for a different destination", () => {
+    // Both rails are on screen together on every project route. Two items
+    // reading "Home" and going to different places is the ambiguity the
+    // rename removes.
+    expect(PROJECT_SECTIONS.map((section) => section.label)).not.toContain("Home");
   });
 
   it("keeps project configuration distinct from account settings", () => {

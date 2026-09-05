@@ -2,6 +2,7 @@
 
 import { AlertIcon, BoltIcon, TargetIcon, UserIcon } from "@/components/ui/dashboard-icons";
 import { RatingChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { ConfidenceIndicator } from "@/components/system/confidence";
 import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
 import {
@@ -150,6 +151,14 @@ export function MoveCard({
         ) : null}
         <RatingChip>{IMPACT_LABELS[opportunity.impact]}</RatingChip>
         <RatingChip>{EFFORT_LABELS[opportunity.effort]}</RatingChip>
+        {/*
+          How sure Vibe is that the problem exists and matters — stored on
+          every Move since the schema had a `confidence` field, and rendered
+          nowhere until now. Third in the row on purpose: impact and effort
+          are what the Move would cost and return, and how confident Vibe is
+          qualifies both rather than competing with them.
+        */}
+        <ConfidenceIndicator model={{ kind: "judgment", level: opportunity.confidence }} />
       </div>
 
       <div className="border-line-2 flex items-start gap-3 border-t pt-4">

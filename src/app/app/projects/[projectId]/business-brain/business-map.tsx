@@ -5,6 +5,30 @@ import { motion, useReducedMotion } from "motion/react";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
+import { CoverageLine } from "@/components/system/confidence";
+import type { ScoreTone } from "@/components/ui/score-display";
+
+/**
+ * The overall reading's own tone, by state.
+ *
+ * `unscored` is the one that mattered. Both renderers branched on `weak` and
+ * sent everything else to mint, so "Not enough evidence" — the product
+ * declining to answer — arrived in the colour it uses for a healthy business.
+ * A non-answer is neutral; only a real reading earns a colour.
+ */
+const SCORE_STATE_CHIP: Record<ScoreTone, string> = {
+  strong: "bg-mint/10 text-mint",
+  partial: "bg-mint/10 text-mint",
+  weak: "bg-amber/10 text-amber",
+  unscored: "bg-surface-4 text-fg-muted",
+};
+
+const SCORE_STATE_TEXT: Record<ScoreTone, string> = {
+  strong: "text-mint",
+  partial: "text-mint",
+  weak: "text-amber",
+  unscored: "text-fg-muted",
+};
 import type {
   BusinessBrainNode,
   BusinessBrainView,
@@ -208,8 +232,15 @@ function MobileBrain({ view, selected, onSelect }: {
       <div className="business-brain-mobile-core mx-auto flex size-48 flex-col items-center justify-center rounded-full text-center">
         <span className="text-fg text-5xl leading-none font-semibold tracking-[-0.05em]">{view.overall.score ?? "—"}</span>
         <span className="text-fg mt-2 text-sm font-semibold">Business Health</span>
-        <span className="text-amber mt-2 text-xs">{view.overall.stateLabel}</span>
+        <span className={cn("mt-2 text-xs", SCORE_STATE_TEXT[view.overall.state])}>{view.overall.stateLabel}</span>
       </div>
+
+      <CoverageLine
+        scored={view.overall.scoredLenses}
+        eligible={view.overall.eligibleLenses}
+        reason={view.overall.insufficientCoverageReason}
+        className="text-center"
+      />
 
       <div className="-mx-4 overflow-x-auto px-4 pb-3">
         <ul className="flex w-max snap-x gap-3" aria-label="Business dimensions">
@@ -333,7 +364,7 @@ export function BusinessMap({
         >
           <span className="text-fg text-[3.9rem] leading-none font-semibold tracking-[-0.065em] tabular-nums">{view.overall.score ?? "—"}</span>
           <span className="text-fg mt-2.5 text-base font-semibold">Business Health</span>
-          <span className={cn("mt-2.5 rounded-full px-3 py-1 text-[0.7rem] font-medium", view.overall.state === "weak" ? "bg-amber/10 text-amber" : "bg-mint/10 text-mint")}>{view.overall.stateLabel}</span>
+          <span className={cn("mt-2.5 rounded-full px-3 py-1 text-[0.7rem] font-medium", SCORE_STATE_CHIP[view.overall.state])}>{view.overall.stateLabel}</span>
         </div>
 
         <ul className="contents" aria-label="Business dimensions">
@@ -341,6 +372,18 @@ export function BusinessMap({
             <NodeButton key={node.id} node={node} index={index} selected={selected === node.id} related={active !== null && related.has(node.id)} dimmed={active !== null && !related.has(node.id)} reducedMotion={reducedMotion} onSelect={onSelect} onHover={setHovered} />
           ))}
         </ul>
+        {/*
+          The score's own footnote: how much of the business it covers, or —
+          when there is no score — the reason there is none. It sits under the
+          map rather than inside the core, which is a fixed circle a sentence
+          cannot live in.
+        */}
+        <CoverageLine
+          scored={view.overall.scoredLenses}
+          eligible={view.overall.eligibleLenses}
+          reason={view.overall.insufficientCoverageReason}
+          className="absolute inset-x-0 bottom-0 text-center"
+        />
       </div>
 
       <MobileBrain view={view} selected={selected} onSelect={onSelect} />

@@ -66,7 +66,14 @@ const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
 const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
-const NEXT_MOVE_CARD = read("src/app/app/next-move-card.tsx");
+/*
+ * The dashboard's Next move zone. It was its own panel beside the Business
+ * signal one; both are now `SignalCard`, because two full-width cards with a
+ * control each asked an unanalysed product's owner the same question twice.
+ * The regression below is unchanged and still lives in that code — only the
+ * file it lives in moved.
+ */
+const NEXT_MOVE_CARD = read("src/app/app/signal-card.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {
@@ -179,10 +186,25 @@ describe("context filters, it never reranks", () => {
 });
 
 describe("the card says one thing at a time", () => {
-  it("shows impact and effort without turning evidence into card furniture", () => {
+  /*
+   * This asserted that confidence stayed off the card, and that was the right
+   * call against the shape it would have taken: `CONFIDENCE_LABELS` is the
+   * opportunities module's own label table, and a third raw enum in the chip
+   * row is card furniture.
+   *
+   * The audit reverses the *absence*, not that argument (§E4, R15): Move
+   * confidence is stored on every Move and was rendered nowhere in the
+   * product, which is a P0 gap. It renders through the one shared
+   * confidence vocabulary now, so there is one word for "how sure is Vibe"
+   * across facts, judgments and coverage — and the module's private table
+   * still has no business here.
+   */
+  it("shows impact, effort and confidence in one vocabulary, not three enums", () => {
     const chips = PANEL.slice(PANEL.indexOf('className="flex flex-wrap items-center gap-2"'));
     expect(chips).toContain("IMPACT_LABELS");
     expect(chips).toContain("EFFORT_LABELS");
+    expect(chips).toContain("ConfidenceIndicator");
+    expect(chips).toContain('kind: "judgment"');
     expect(chips).not.toContain("CONFIDENCE_LABELS");
     expect(chips).not.toContain("DIMENSION_LABELS");
     expect(PANEL).not.toContain("describeEvidenceId");
@@ -395,7 +417,14 @@ describe("a finished re-scan reaches the screen", () => {
    *  answers the empty case only, and it is in the other branch. */
   it("says a re-scan is running while the previous Moves are still shown", () => {
     expect(WORKSPACE).toContain('data-testid="moves-rescanning"');
-    expect(WORKSPACE).toContain('operationProgressSteps("opportunity_generation"');
+    /*
+     * The sequence, not the call. `operationProgressSteps` moved inside
+     * `OperationProgress` (audit R36) along with the stalled sentence and the
+     * failure copy each caller used to write for itself — what this asserts is
+     * that this surface still reports the *opportunity generation* run, which
+     * is the part that could go wrong in a refactor.
+     */
+    expect(WORKSPACE).toContain('sequence="opportunity_generation"');
     const rescan = WORKSPACE.slice(WORKSPACE.indexOf('data-testid="moves-rescanning"'));
     expect(rescan).toContain("The plan below is your previous one until this finishes.");
   });

@@ -95,6 +95,33 @@ export async function listProjectSwitcherOptions(
 }
 
 /**
+ * The names of a handful of products, by id (audit R24).
+ *
+ * Billing knows which product each Credit movement belongs to and could only
+ * say so as an identifier — which is an address, never something a founder
+ * reads. This is the one read that turns those into names, `.in()`-joined so
+ * the query count does not follow the length of the history.
+ *
+ * A name that cannot be resolved is simply absent from the map. The caller
+ * says "another product" rather than printing an id, which is the same rule
+ * every other surface applies to an unresolvable reference.
+ */
+export async function listProjectNames(
+  supabase: SupabaseClient,
+  projectIds: readonly string[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(projectIds)];
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase.from("projects").select("id, name").in("id", ids);
+
+  // A history that cannot name its products is still a history worth showing.
+  if (error) return new Map();
+
+  return new Map((data ?? []).map((row) => [row.id as string, row.name as string]));
+}
+
+/**
  * Returns null when the project does not exist or does not belong to the
  * caller. Callers turn that into `notFound()`; this function does not redirect,
  * so it stays usable from anywhere.
