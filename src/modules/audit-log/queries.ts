@@ -120,3 +120,50 @@ export async function listAuditEventsForProject(
     hasMore,
   };
 }
+
+/**
+ * The same log, unscoped by product (audit R24).
+ *
+ * ## Why the project filter is the whole difference
+ *
+ * `audit_events` is written per user, and a handful of the things it records
+ * belong to no product at all: a Credit purchase, a GitHub account connected
+ * or disconnected, an erasure requested. `listAuditEventsForProject` cannot
+ * return those — its `project_id` filter excludes precisely the rows with no
+ * project — so they were written and never read anywhere.
+ *
+ * Everything else is unchanged, deliberately: the same RLS, the same
+ * `created_at, id` ordering that keeps a paged read from skipping or repeating
+ * a row written in the same statement as its neighbour, and the same
+ * one-row-beyond trick so "is there more" costs no second query.
+ */
+export async function listAuditEventsForAccount(
+  supabase: SupabaseClient,
+  params: {
+    /** Taken from the verified session by the caller, never inferred here. */
+    userId: string;
+    limit?: number;
+    offset?: number;
+  },
+): Promise<ListAuditEventsResult> {
+  const limit = Math.min(Math.max(params.limit ?? DEFAULT_ACTIVITY_LIMIT, 1), MAX_ACTIVITY_LIMIT);
+  const offset = Math.max(params.offset ?? 0, 0);
+
+  const { data, error } = await supabase
+    .from("audit_events")
+    .select("id, event_type, created_at, metadata")
+    .eq("user_id", params.userId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .range(offset, offset + limit);
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as AuditEventRow[];
+  const hasMore = rows.length > limit;
+
+  return {
+    events: rows.slice(0, limit).map(mapAuditEventRow),
+    hasMore,
+  };
+}

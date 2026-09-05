@@ -8,6 +8,8 @@ import {
   SparklesIcon,
 } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
+import { ActivityFeed } from "@/app/app/projects/[projectId]/activity-feed";
+import type { ActivityEntry } from "@/modules/audit-log/view";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
 import {
@@ -124,11 +126,20 @@ export function BillingView({
   overview,
   stripeReady,
   checkoutState,
+  accountActivity = [],
   at = new Date(),
 }: {
   overview: BillingOverview;
   stripeReady: boolean;
   checkoutState?: string;
+  /**
+   * The account's own record — the events that belong to no product.
+   *
+   * A Credit purchase and a GitHub connection are written to `audit_events`
+   * with no `project_id`, which is exactly what the project-scoped read
+   * filters out, so they had been recorded and shown nowhere.
+   */
+  accountActivity?: ActivityEntry[];
   /**
    * The instant the price table resolves at. Defaults to now.
    *
@@ -541,6 +552,27 @@ export function BillingView({
               </p>
             )}
           </Surface>
+
+          {accountActivity.length > 0 && (
+            <Surface
+              as="section"
+              aria-labelledby="account-activity-heading"
+              level="panel"
+              padding="lg"
+              className="flex flex-col gap-4"
+            >
+              <div>
+                <MonoLabel id="account-activity-heading" as="h2" className="text-mint">
+                  Your account
+                </MonoLabel>
+                <p className="text-fg mt-2 font-semibold">Account activity</p>
+                <p className="text-fg-muted mt-1 text-ui">
+                  What happened to the account itself — Credits bought, accounts connected.
+                </p>
+              </div>
+              <ActivityFeed entries={accountActivity} hasMore={false} />
+            </Surface>
+          )}
 
           {/*
             Where the Credits went, per product (audit R24). The history below

@@ -380,6 +380,29 @@ export default async function E2eScenarioPage({
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
           at={"at" in fixture ? new Date(fixture.at) : undefined}
+          /*
+            The two events that belong to no product, which the project-scoped
+            read filters out by construction — so this is the only place a
+            browser can see them (audit R24).
+          */
+          accountActivity={[
+            {
+              id: "a1",
+              eventType: "credit_grant.posted",
+              at: "2026-08-16T10:00:00.000Z",
+              title: "Credits added",
+              tone: "success",
+              facts: [],
+            },
+            {
+              id: "a2",
+              eventType: "github.installation.connected",
+              at: "2026-08-10T09:00:00.000Z",
+              title: "GitHub installation connected",
+              tone: "success",
+              facts: [],
+            },
+          ]}
         />
       </main>
     );

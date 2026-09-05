@@ -548,3 +548,20 @@ test.describe("where the Credits went", () => {
     await expect(page.getByText(/Acme ·/)).toBeVisible();
   });
 });
+
+/*
+ * Slice 5's last acceptance line. `audit_events` is written per user, and the
+ * rows with no `project_id` — a Credit grant, a GitHub connection — could not
+ * be returned by the project-scoped read, which filters on exactly the column
+ * they have nothing in. They were recorded and shown nowhere.
+ */
+test.describe("the account's own record", () => {
+  test("shows the events that belong to no product", async ({ page }) => {
+    await open(page, "billing-free");
+
+    const section = page.getByRole("region", { name: /your account/i });
+    await expect(section).toBeVisible();
+    await expect(section).toContainText(/credits added/i);
+    await expect(section).toContainText(/github installation connected/i);
+  });
+});
