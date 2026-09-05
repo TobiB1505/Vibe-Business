@@ -103,6 +103,7 @@ const TASK: AgentTask = {
 };
 
 import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
 
@@ -208,6 +209,10 @@ type Fixture = {
   mergeSummary: MergeSummary;
   previewImages: PreviewImages | null;
   fileEvents: StoredExecutionEvent[];
+  /** What the run reported doing last, or null between actions. */
+  currentAction: string | null;
+  /** Every path the run touched, including the ones policy refused. */
+  files: LiveFile[];
   /**
    * A start the founder asked for and did not get.
    *
@@ -243,6 +248,18 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     mergeSummary: MERGE_SUMMARY,
     previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
+    currentAction: input.timeline === null ? null : "Editing src/app/pricing/page.tsx",
+    /*
+     * One refused path among the touched ones. It is the state the change
+     * itself cannot show — a file that is not in it because policy said no
+     * looks exactly like a file nobody touched.
+     */
+    files: [
+      { path: "src/app/pricing/page.tsx", kind: "generated", detail: null, bytes: 1840, withheldBy: null },
+      { path: "src/components/pricing-table.tsx", kind: "generated", detail: null, bytes: 920, withheldBy: null },
+      { path: "package.json", kind: "observed", detail: null, bytes: null, withheldBy: null },
+      { path: ".env.local", kind: "candidate", detail: null, bytes: null, withheldBy: "Sensitive path policy" },
+    ],
     startRefusal: null,
     chainOffer: null,
   };

@@ -70,6 +70,7 @@ import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
+import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
@@ -957,6 +958,8 @@ export default async function E2eScenarioPage({
       task,
       checks,
       fileEvents,
+      currentAction,
+      files,
       previewChanges,
       previewImages,
       mergeFiles,
@@ -1029,10 +1032,19 @@ export default async function E2eScenarioPage({
               <AgentBuildStage
                 task={task}
                 live={live}
-                core={<AgentCore state={core} caption={caption} size="compact" />}
+                core={
+                  <AgentCore
+                    state={core}
+                    caption={(live ? currentAction : null) ?? caption}
+                    size="compact"
+                  />
+                }
                 activity={
                   fileEvents.length > 0 ? (
-                    <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                    <div className="flex flex-col gap-5">
+                      <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                      <AgentRunFiles files={files} />
+                    </div>
                   ) : (
                     <AgentActivity steps={activity} title="Agent progress" live={live} />
                   )

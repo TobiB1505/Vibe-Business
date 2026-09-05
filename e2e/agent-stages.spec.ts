@@ -614,3 +614,43 @@ test.describe("a founder who declines the chain", () => {
     await expect(page.getByTestId("agent-task-chain-note")).toHaveCount(0);
   });
 });
+
+/*
+ * Slice 4, first acceptance line: a running run shows its current action and
+ * the files it touched, and no USD anywhere near either.
+ *
+ * The observation half of the run model reached the customer for the first
+ * time here (audit C7) — before the split it was blocked by an RLS failure on
+ * the cost ledger that the model read alongside it.
+ */
+test.describe("a run in flight says what it is doing", () => {
+  test("names the current action and every file, including the refused one", async ({ page }) => {
+    await page.goto(BUILDING);
+
+    // The action that moves, not only the phase that does not.
+    await expect(page.getByText(/editing src\/app\/pricing\/page\.tsx/i)).toBeVisible();
+
+    const files = page.getByTestId("agent-run-files");
+    await expect(files).toBeVisible();
+    await expect(files).toContainText("src/app/pricing/page.tsx");
+    await expect(files).toContainText("Changed");
+
+    /*
+     * The path policy refused. Not in the change, so the change cannot show
+     * it — and without this a founder cannot tell "not touched" from "not
+     * allowed".
+     */
+    await expect(files).toContainText(".env.local");
+    await expect(files).toContainText("Not allowed");
+    await expect(files).toContainText("Sensitive path policy");
+    await expect(files).toContainText(/1 withheld/);
+  });
+
+  test("puts no dollar figure anywhere on the run", async ({ page }) => {
+    await page.goto(BUILDING);
+
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/\$\s?\d/);
+    expect(body).not.toMatch(/\bUSD\b/i);
+  });
+});

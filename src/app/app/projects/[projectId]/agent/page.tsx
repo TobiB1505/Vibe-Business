@@ -42,6 +42,7 @@ import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveAgentInterruptAction } from "./interrupt-actions";
 import { AgentFileActivity } from "./agent-file-activity";
+import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
@@ -727,17 +728,35 @@ async function AgentWorkspaceBody({
                   <AgentCore
                     state={displayedWorkspace.core}
                     headline={live ? "Vibe is building your change" : "The build stage is complete"}
-                    caption={agentCoreCaption(displayedWorkspace.stages)}
+                    /*
+                      What the run is doing right now, when it has reported an
+                      action. The stage caption says which of five phases it is
+                      in, which does not change for minutes at a time; the
+                      current action is the half that moves, and it was
+                      observed and never rendered.
+                    */
+                    caption={
+                      (live ? displayedWorkspace.currentAction : null) ??
+                      agentCoreCaption(displayedWorkspace.stages)
+                    }
                     size="compact"
                   />
                 }
                 activity={
                   displayedWorkspace.fileEvents.length > 0 ? (
-                    <AgentFileActivity
-                      events={displayedWorkspace.fileEvents}
-                      title="Live activity"
-                      live={live}
-                    />
+                    <div className="flex flex-col gap-5">
+                      <AgentFileActivity
+                        events={displayedWorkspace.fileEvents}
+                        title="Live activity"
+                        live={live}
+                      />
+                      {/*
+                        What the run touched, once per file — including the
+                        paths policy refused, which the change itself cannot
+                        show because they are not in it.
+                      */}
+                      <AgentRunFiles files={displayedWorkspace.files} />
+                    </div>
                   ) : displayedWorkspace.timeline === null ? (
                     <Notice tone="info" label="Live activity">
                       Activity appears here when the run starts.

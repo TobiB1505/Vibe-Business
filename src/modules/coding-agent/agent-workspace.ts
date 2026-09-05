@@ -28,7 +28,7 @@ import { findOpenInterruptForRun } from "./store";
 import { getFounderInputRequestForInterrupt } from "@/modules/founder-input/store";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { type TimelineStep } from "./observability/timeline";
-import { runObservationFrom } from "./observability/live-view";
+import { runObservationFrom, type LiveFile } from "./observability/live-view";
 import { getAgentExecutionStatus } from "./service";
 
 /**
@@ -77,6 +77,21 @@ export type AgentWorkspaceView = {
   stage: AgentStage | null;
   /** The Agent's stored event record, shown beside the working Build stage. */
   fileEvents: StoredExecutionEvent[];
+  /**
+   * What the run is doing right now, in its own words, or null between
+   * actions. Observed rather than narrated — it comes from the last event the
+   * harness reported, so it cannot claim work that produced no event.
+   */
+  currentAction: string | null;
+  /**
+   * Every file this run touched, deduplicated, with what happened to it.
+   *
+   * `withheldBy` names the policy that kept a path out of the change rather
+   * than dropping it silently — a file the agent tried to write and was
+   * refused is a fact about the run, and a founder reading a change is owed
+   * the difference between "not touched" and "not allowed".
+   */
+  files: readonly LiveFile[];
   /** The sandbox's own steps, as rows. Empty when nothing has been validated. */
   checks: ValidationCheck[];
   /** Named changes for the preview rail. Empty when nothing describes them. */
@@ -145,6 +160,8 @@ export async function readAgentWorkspace(
       taskOpportunityId: change?.opportunityId ?? null,
       stage: stageForWorkspace(stages, change),
       fileEvents: [],
+      currentAction: null,
+      files: [],
       checks: validationChecks(change),
       previewChanges: [],
       mergeSummary: mergeSummaryFor(change),
@@ -329,6 +346,8 @@ export async function readAgentWorkspace(
     taskOpportunityId,
     stage,
     fileEvents,
+    currentAction: observation.currentAction,
+    files: observation.files,
     checks: validationChecks(change),
     // Nothing stored describes a change in prose, so the preview rail carries
     // no invented summaries. The frames and the file list carry the answer.
