@@ -27,7 +27,8 @@ import { listExecutionEvents } from "./observability/store";
 import { findOpenInterruptForRun } from "./store";
 import { getFounderInputRequestForInterrupt } from "@/modules/founder-input/store";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
-import { buildExecutionTimeline, type TimelineStep } from "./observability/timeline";
+import { type TimelineStep } from "./observability/timeline";
+import { runObservationFrom } from "./observability/live-view";
 import { getAgentExecutionStatus } from "./service";
 
 /**
@@ -203,20 +204,30 @@ export async function readAgentWorkspace(
   ]);
 
   /*
-   * Vibe's own counts, from Vibe's own record. `file_read` is what the harness
-   * reported reading; the verified count is what Vibe confirmed it changed —
-   * never the number of files the runtime touched, which is a different and
-   * larger number, and run b33635a1 is why anybody knows that.
+   * One derivation of the run, shared with the operator's view (audit C7).
+   *
+   * This built its own timeline because the full live model reads execution
+   * economics out of `ai_usage_events`, which the customer role cannot select
+   * — so mounting it here threw `42501`. The split makes that unnecessary:
+   * `runObservationFrom` touches no usage ledger and carries no USD, and the
+   * two screens now order events and count files by the same rules instead of
+   * by two hand-kept copies of them.
    */
-  const filesInspected = events.filter((event) => event.type === "file_read").length;
-  const filesChanged = runView?.run.changedFileCount ?? null;
-
-  const timeline = buildExecutionTimeline({
-    events,
-    status: operation.status,
-    candidateFileCount: filesChanged,
-    filesInspected,
+  const observation = runObservationFrom(events, {
+    operation,
+    projectId,
+    run: runView?.run ?? null,
   });
+  const timeline = observation.timeline;
+
+  /*
+   * `file_read` is what the harness reported reading; the changed count is
+   * what Vibe confirmed it changed — never the number of files the runtime
+   * touched, which is a different and larger number, and run b33635a1 is why
+   * anybody knows that. Both come from the shared observation now.
+   */
+  const filesInspected = observation.metrics.filesRead;
+  const filesChanged = runView?.run.changedFileCount ?? null;
 
   /*
    * The Move this run is working on.
