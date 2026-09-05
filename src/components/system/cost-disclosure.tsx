@@ -1,5 +1,6 @@
-import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
+import { type RetailOperationKind } from "@/modules/credits/retail";
 import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
+import { INCLUDED_WORD, priceDisplayFor } from "@/components/ui/credit-price";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { cn } from "@/lib/utils/cn";
 
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils/cn";
  *
  * The sourcing spec proposed rendering "Free" and "Included" as words. That
  * reverses a recorded decision — BILLING CORE-2 §56, documented on
- * `CreditPrice` — that a free operation renders nothing at all, because a zero
+ * `CreditPrice` — that a free operation names itself rather than printing a zero
  * beside a button invites the question of when it might stop being zero.
  * Reversing it is a billing decision with its own record, not something a UI
  * slice does on the way past, so this component keeps the existing behaviour
@@ -37,25 +38,7 @@ export type CostBalance = {
   display: string;
 };
 
-function priceOf(
-  operation: RetailOperationKind,
-  pricingClass?: ExecutionPricingClass | null,
-): CreditUnits | null {
-  const resolved = resolveRetailPrice(operation);
-  if (!resolved) return null;
 
-  switch (resolved.price.kind) {
-    case "free":
-    case "not_priced":
-      return null;
-    case "fixed":
-      return resolved.price.creditUnits;
-    case "by_execution_class":
-      // A surface with no step in hand renders nothing rather than a range:
-      // "150–350 Credits" is not a price, and the cheapest of three is a lie.
-      return pricingClass ? resolved.price.creditUnitsByClass[pricingClass] : null;
-  }
-}
 
 export function CostDisclosure({
   operation,
@@ -76,9 +59,21 @@ export function CostDisclosure({
 }) {
   if (operation === null) return null;
 
-  const credits = priceOf(operation, pricingClass);
-  if (credits === null) return null;
+  const display = priceDisplayFor(operation, pricingClass);
+  if (display.kind === "silent") return null;
 
+  /*
+   * A free operation says so and stops. There is no balance sentence to write
+   * beside it — "of 400 Credits available" after "Included" would put the
+   * operation back into a conversation about spending that it is not in.
+   */
+  if (display.kind === "included") {
+    return (
+      <span className={cn("text-fg-meta text-ui", className)}>{INCLUDED_WORD}</span>
+    );
+  }
+
+  const credits = display.credits;
   const affordable = balance ? balance.availableCredits >= credits : true;
 
   return (
@@ -114,7 +109,8 @@ export function canAfford(
   pricingClass?: ExecutionPricingClass | null,
 ): boolean {
   if (operation === null || !balance) return true;
-  const credits = priceOf(operation, pricingClass);
-  if (credits === null) return true;
-  return balance.availableCredits >= credits;
+  const display = priceDisplayFor(operation, pricingClass);
+  // Included and unpriced are both "no amount to be short of".
+  if (display.kind !== "credits") return true;
+  return balance.availableCredits >= display.credits;
 }

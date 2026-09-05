@@ -433,9 +433,16 @@ test.describe("what the understanding rests on", () => {
     await expect(deepScan).toContainText("Deep Scan");
     await expect(deepScan).toContainText(/\d+ Credits/);
 
-    // And a free remedy states no price rather than "0 Credits".
+    /*
+     * A free remedy names itself rather than printing a zero (ADR 0094).
+     * Silence beside a priced sibling reads as a price that has not loaded.
+     */
+    await expect(code).toContainText("Included");
+    await expect(code).not.toContainText(/0 Credits/);
+
+    // And an operation the policy does not price still says nothing at all.
     const founder = list.locator('[data-source="founder"]');
-    await expect(founder).not.toContainText(/Credits/);
+    await expect(founder).not.toContainText(/Credits|Included/);
   });
 
   test("never prints a count for a source nothing measured", async ({ page }) => {

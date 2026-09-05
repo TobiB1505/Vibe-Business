@@ -590,7 +590,11 @@ export default async function E2eScenarioPage({
                 reasons: [],
                 measured: { files: 128 },
                 at: "2026-08-14T08:22:59.917Z",
-                remedy: { label: "See what it read", href: "#product-evidence", operation: null },
+                remedy: {
+                  label: "See what it read",
+                  href: "#product-evidence",
+                  operation: "product_understanding",
+                },
               },
               {
                 source: "live",
@@ -614,7 +618,11 @@ export default async function E2eScenarioPage({
                   : [],
                 measured: { pages: 6 },
                 at: "2026-08-14T08:24:11.000Z",
-                remedy: { label: "See what it saw", href: "#product-evidence", operation: null },
+                remedy: {
+                  label: "See what it saw",
+                  href: "#product-evidence",
+                  operation: "product_understanding",
+                },
               },
               {
                 source: "deep_scan",
