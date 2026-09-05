@@ -87,6 +87,8 @@ import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-r
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
+  E2E_PROFILE_SCENARIOS,
+  isE2eProfileScenario,
   E2E_PRODUCTS_SCENARIOS,
   E2E_REPOSITORIES_SCENARIOS,
   isE2eAccountScenario,
@@ -94,6 +96,7 @@ import {
   isE2eRepositoriesScenario,
 } from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
+import { ProfileView } from "@/app/app/(account)/profile/profile-view";
 import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-account";
 import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
 import { ProductsIndex } from "@/app/app/(account)/products/products-index";
@@ -1248,6 +1251,37 @@ export default async function E2eScenarioPage({
       >
         <div className="sr-only">{label}</div>
         <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  /*
+   * Profile, through the component `/app/profile` renders. It takes the
+   * session's email and the connection row as props precisely so this can
+   * supply both — the harness has neither.
+   */
+  if (isE2eProfileScenario(scenario)) {
+    const fixture = E2E_PROFILE_SCENARIOS[scenario]();
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProfileView email={fixture.email} github={fixture.github} />
       </AccountShell>
     );
   }
