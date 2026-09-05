@@ -248,6 +248,15 @@ describe("every relative link in the documentation resolves", () => {
  */
 const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string }[] = [
   {
+    path: "DESIGN.md",
+    claim: "There is no `components.json`",
+    retiredBy:
+      "ADR 0095 — one exists, and it exists to make the rule that sentence introduced " +
+      "enforceable rather than remembered. Every CLI-writable alias points at a gitignored " +
+      "`src/components/vendor/`, so `src/components/ui/` is unreachable by an install command. " +
+      "`shadcn init` is still forbidden; history may quote the old sentence.",
+  },
+  {
     path: "PRODUCT.md",
     claim: "Deep Scan is not wired to them",
     retiredBy:

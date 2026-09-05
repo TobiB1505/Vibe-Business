@@ -1,0 +1,35 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "new-york",
+  "rsc": true,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/app/globals.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@/components/vendor",
+    "ui": "@/components/vendor/ui",
+    "lib": "@/components/vendor/lib",
+    "hooks": "@/components/vendor/hooks",
+    "utils": "@/components/vendor/lib/utils"
+  },
+  "registries": {
+    "@magicui": "https://magicui.design/r/{name}",
+    "@aceternity": "https://ui.aceternity.com/registry/{name}.json",
+    "@kokonutui": "https://kokonutui.com/r/{name}.json",
+    "@cult-ui": "https://cult-ui.com/r/{name}.json",
+    "@motion-primitives": "https://motion-primitives.com/c/{name}.json",
+    "@coss": "https://coss.com/ui/r/{name}.json",
+    "@reui": {
+      "url": "https://reui.io/r/{style}/{name}.json",
+      "headers": {
+        "Authorization": "Bearer ${REUI_LICENSE_KEY}"
+      }
+    }
+  }
+}

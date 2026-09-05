@@ -126,10 +126,14 @@ Within that, adopt aggressively. An external pattern is worth taking when it mat
 
 ### shadcn is reference infrastructure, not the design system
 
-Vibe is not a shadcn project. There is no `components.json`, and the dependency set carries no Radix package, no icon library and no `clsx`/`tailwind-merge`/`cva`; `cn` is a local join and every primitive under `src/components/ui/` is hand-written on Tailwind v4. Two consequences follow and both are easy to trip over:
+Vibe is not a shadcn project. The dependency set carries no Radix package, no icon library and no `clsx`/`tailwind-merge`/`cva`; `cn` is a local join and every primitive under `src/components/ui/` is hand-written on Tailwind v4. Two consequences follow and both are easy to trip over:
 
-- Never run `shadcn init`, and never introduce a second design system implicitly. Registry install commands (`npx shadcn@latest add …`) will _create_ `components.json` when none exists, scaffolding a parallel `ui/` convention beside this one. Port by hand instead.
+- Never run `shadcn init`, and never introduce a second design system implicitly. Port by hand instead.
 - A pasted component's `className` prop will not override its base classes here, because `cn` does no Tailwind conflict resolution. This fails silently.
+
+A `components.json` **does** exist, and it exists to make the first of those enforceable rather than remembered ([ADR 0095](docs/decisions/0095-design-tooling-is-repo-native.md)). Earlier revisions of this section said there was none, and warned that an install command would create one and scaffold a parallel `ui/` convention. That warning was right about the danger and wrong about where it lived: the file writes nothing, `shadcn add` writes, and where it writes is `aliases`. So the file is authored deliberately with every CLI-writable path pointed at a gitignored `src/components/vendor/`, and `src/components/ui/` is now unreachable by an install command. `shadcn init` stays forbidden, and the reason sharpens — it would rewrite exactly those aliases.
+
+`vendor/` is a reading room, not a component directory: third-party source lands there to be read and ported by hand, nothing in it is committed, and nothing in it is imported by the application.
 
 Use the shadcn MCP for what it is genuinely good at: component research, accessible interaction primitives, Dialog / Popover / Tooltip / Select / Command / Tabs / Accordion patterns, keyboard and focus behaviour, and implementation reference.
 
@@ -150,6 +154,10 @@ What this guards against is accumulation by accident — a dependency arriving b
 ### Reuse logic, not necessarily presentation
 
 Architecture reuse and visual reuse are separate decisions. Before building something new, inspect what exists and reuse the parts that carry authority: domain state, actions, data models, validation and established accessibility behaviour. Do not preserve an old visual presentation merely because it is already there — an existing component may be reused, extended, recomposed, visually redesigned, or replaced at the presentation layer when the new experience is materially better.
+
+### The skills are where the procedure lives
+
+`.claude/skills/` carries this section as an operating procedure that travels with a clone: `ui-design-system` governs, `component-sourcing` holds the search-and-port workflow, `motion-design` holds the motion obligations, `ui-audit` reviews without editing, and ten source-specific skills say what each catalogue is for and what it must not do. `docs/development/remote-design-tooling.md` says what a remote environment needs. This document stays the authority; the skills are how it is applied.
 
 ### Research workflow for significant UI work
 

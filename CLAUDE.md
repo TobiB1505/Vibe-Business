@@ -93,6 +93,27 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 
 84. Formatting follows [`prettier.config.mjs`](prettier.config.mjs), and no change reformats code it is not already editing. `pnpm format <path>` takes a path and refuses to run without one, because the repository is not written to one width — at the closest fit, a repo-wide pass rewrites 719 of 1,214 source files. A one-time reformat is a deliberate change with its own commit and its own `.git-blame-ignore-revs`, not something a tool does on the way past. Never run a formatter with a width nobody chose: that is what the config file is for.
 
+85. UI work goes through the repo-native design toolkit in [.claude/skills/](.claude/skills/), not from memory and not from scratch — see [ADR 0095](docs/decisions/0095-design-tooling-is-repo-native.md). The rule is **search → inspect → choose → adapt → install**: search Vibe's own inventory first, then shadcn primitives, then the external registries; port by hand into Vibe's tokens and semantics. Never `shadcn init`, and never change `aliases` in `components.json` — they point every install command at a gitignored `src/components/vendor/`, which is what makes `src/components/ui/` unreachable by one. Secrets stay `${VAR}` in `.mcp.json`.
+
+## UI / Design Tooling
+
+The repository carries its own design toolkit, so UI work does not depend on anything installed on one laptop. Consult it automatically for interface work — [DESIGN.md](DESIGN.md) remains the authority, and the skills are how it is applied.
+
+| Skill | For |
+|---|---|
+| [ui-design-system](.claude/skills/ui-design-system/SKILL.md) | **Governs.** What Vibe owns, the token vocabulary, the non-negotiables |
+| [component-sourcing](.claude/skills/component-sourcing/SKILL.md) | Finding, comparing, choosing and porting a component |
+| [motion-design](.claude/skills/motion-design/SKILL.md) | When motion is purposeful, and the three obligations |
+| [ui-audit](.claude/skills/ui-audit/SKILL.md) | Reviewing a screen — read-only |
+
+Ten source skills sit under those: `shadcn-ui`, `21st-ui`, `reui`, `origin-ui`, `motion-primitives`, `magic-ui`, `aceternity-ui`, `kokonut-ui`, `cult-ui`, `jolly-ui`.
+
+**Sourcing hierarchy.** Structure and accessibility: existing Vibe components → shadcn/ui → ReUI → COSS (formerly Origin UI) → Jolly UI where React Aria earns it. Modern SaaS components: 21st.dev, ReUI, COSS, Kokonut, Cult. Motion: Motion Primitives, Magic UI. Signature moments, selectively: Aceternity, Magic UI, Cult, 21st.dev — exceptional moments, never the default interface language.
+
+Vibe's semantic components — `StatusPill`, `FindingCard`, `CostDisclosure`, `ConfidenceIndicator`, `EvidenceDrawer`, `ActionBlock`, `SourceCoverage`, `NovaPresence` — are never replaced by a generic equivalent. External sources adapt to Vibe; never the reverse.
+
+Remote setup and the environment variables it needs: [docs/development/remote-design-tooling.md](docs/development/remote-design-tooling.md).
+
 ## Commit Conventions
 
 Every commit subject uses Conventional Commits:
