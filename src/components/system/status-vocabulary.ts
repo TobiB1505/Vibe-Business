@@ -140,3 +140,41 @@ export function statusForOperationPhase(phase: OperationPollPhase): StatusPresen
 export function statusForFocusTier(tier: NovaFocusTier): StatusPresentation {
   return tier === "settled" ? STATUS.nothing_to_do : STATUS[tier];
 }
+
+/**
+ * Which state Nova's mark stands in (`components/nova/nova-presence.tsx`).
+ *
+ * ## Why this is derived and not a prop somebody picks
+ *
+ * The prototype this avatar comes from sets a presence per scene, which is
+ * right for a prototype and wrong for the product: a mark a caller can set to
+ * `working` is a mark that can claim activity nobody observed, which is the
+ * one thing `DESIGN.md` calls a lie rather than a style. So the state is a
+ * function of what the domain already decided, and this is the only place that
+ * function exists.
+ *
+ * ## The four readings
+ *
+ * - **`working`** — and *only* when an operation the product recorded is
+ *   genuinely running. Not "a run exists", not "something is blocked": the
+ *   operations view's own `working` phase and nothing else turns the frame.
+ * - **`listening`** — the work is with the founder. Either an operation paused
+ *   on them, or the ranking's top item is a decision they have to make. The
+ *   iris is open because Nova is waiting on a person, not on a machine.
+ * - **`settled`** — nothing needs them. The widest, brightest state, and still.
+ * - **`idle`** — something is true and none of the above: blocked, stalled,
+ *   ready to start. Dim and still, because Nova is not doing anything about it.
+ *
+ * A stall is deliberately **not** `working`. It is inferred from a clock rather
+ * than observed, and a turning frame over a run that may already be dead is
+ * exactly the animated claim this mapping exists to prevent.
+ */
+export function novaPresenceState(input: {
+  tier: NovaFocusTier;
+  phase: OperationPollPhase;
+}): "idle" | "listening" | "working" | "settled" {
+  if (input.phase === "working") return "working";
+  if (input.phase === "waiting_user" || input.tier === "decision") return "listening";
+  if (input.tier === "settled") return "settled";
+  return "idle";
+}

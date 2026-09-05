@@ -2,11 +2,14 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  novaPresenceState,
   statusForFocusTier,
   statusForOperationPhase,
   statusPresentation,
   type StatusKey,
 } from "./status-vocabulary";
+import type { NovaFocusTier } from "@/modules/nova/focus";
+import type { OperationPollPhase } from "@/modules/operations/view";
 import { FOCUS_CANDIDATE_KINDS, novaCandidateTier } from "@/modules/nova/focus";
 
 const ALL_KEYS: StatusKey[] = [
@@ -95,6 +98,65 @@ describe("the shared status vocabulary", () => {
     const settled = statusForFocusTier("settled");
     expect(settled.tone).toBe("neutral");
     expect(settled.word).toBe("Nothing to do");
+  });
+});
+
+/**
+ * Nova's mark, and the one claim it must never make.
+ *
+ * The prototype this avatar comes from sets a presence per scene. In the
+ * product that would be a mark a caller can point at `working`, which is
+ * `DESIGN.md`'s one absolute: fabricated activity is a lie rather than a
+ * style. So the state is derived, and these are the derivations.
+ */
+describe("Nova's presence state", () => {
+  const TIERS: NovaFocusTier[] = ["blocked", "decision", "ready", "setup", "settled"];
+  const PHASES: OperationPollPhase[] = ["idle", "working", "waiting_user", "stalled", "settled"];
+
+  it("turns the frame only while an operation is genuinely running", () => {
+    for (const tier of TIERS) {
+      for (const phase of PHASES) {
+        const state = novaPresenceState({ tier, phase });
+        if (state === "working") {
+          expect(phase, `tier ${tier} / phase ${phase} claimed work`).toBe("working");
+        }
+      }
+    }
+  });
+
+  it("never treats a stall as working", () => {
+    // A stall is inferred from a clock, not observed. A turning frame over a
+    // run that may already be dead is the animated form of the same lie.
+    for (const tier of TIERS) {
+      expect(novaPresenceState({ tier, phase: "stalled" }), tier).not.toBe("working");
+    }
+  });
+
+  it("listens when the work is with the founder", () => {
+    expect(novaPresenceState({ tier: "ready", phase: "waiting_user" })).toBe("listening");
+    expect(novaPresenceState({ tier: "decision", phase: "idle" })).toBe("listening");
+  });
+
+  it("settles only when there is genuinely nothing to do", () => {
+    expect(novaPresenceState({ tier: "settled", phase: "idle" })).toBe("settled");
+    // Blocked is not settled. Something is wrong and Nova is not acting on it.
+    expect(novaPresenceState({ tier: "blocked", phase: "idle" })).toBe("idle");
+  });
+
+  it("prefers observed work over a tier's opinion", () => {
+    // A running operation while the ranking's top item is a decision: the
+    // machine is doing something, and that is the more specific fact.
+    expect(novaPresenceState({ tier: "decision", phase: "working" })).toBe("working");
+  });
+
+  it("answers for every combination the domain can produce", () => {
+    for (const tier of TIERS) {
+      for (const phase of PHASES) {
+        expect(["idle", "listening", "working", "settled"]).toContain(
+          novaPresenceState({ tier, phase }),
+        );
+      }
+    }
   });
 });
 

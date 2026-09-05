@@ -1,5 +1,6 @@
-import { StatusDot, statusToneText } from "@/components/ui/status-pill";
+import { statusToneText } from "@/components/ui/status-pill";
 import { statusForOperationPhase } from "@/components/system/status-vocabulary";
+import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { cn } from "@/lib/utils/cn";
 import type { NovaWorkingEntry } from "@/modules/nova/home-view";
 
@@ -22,17 +23,33 @@ import type { NovaWorkingEntry } from "@/modules/nova/home-view";
  * it is a fact the executor actually wrote rather than a number invented to
  * fill a track.
  *
- * The dot pulses only while genuinely working, and only for motion-safe
- * readers — a strip that kept pulsing over a paused run would be the animated
- * form of a status line narrating work nobody is doing.
+ * Nova's mark turns only while genuinely working — a strip that kept moving
+ * over a paused run would be the animated form of a status line narrating work
+ * nobody is doing.
  */
-export function WorkingStrip({ working }: { working: NovaWorkingEntry | null }) {
+export function WorkingStrip({
+  working,
+  presence,
+  seed,
+}: {
+  working: NovaWorkingEntry | null;
+  /** Derived by `novaPresenceState`, never chosen here. */
+  presence: NovaPresenceState;
+  seed: string;
+}) {
   // Nothing running is not an empty state — it is the absence of a fact, and
   // the strip simply is not there. An "idle" row would be furniture.
   if (working === null || working.phase === "idle" || working.phase === "settled") return null;
 
   const status = statusForOperationPhase(working.phase);
-  const live = working.phase === "working";
+
+  /*
+   * Both tables were written to the person being waited on, so both say
+   * "Waiting for you" — and the strip read "Waiting for you · Waiting for
+   * you". Neither table is wrong on its own; what is wrong is printing the
+   * same sentence twice, so the stage yields to the status word it duplicates.
+   */
+  const stage = working.stageLabel === status.word ? null : working.stageLabel;
 
   return (
     <div
@@ -42,13 +59,21 @@ export function WorkingStrip({ working }: { working: NovaWorkingEntry | null }) 
         "px-4 py-3",
       )}
     >
+      {/*
+        The mark rather than a dot. It says the same thing more precisely —
+        the frame turns only while an operation is genuinely running, and
+        stands still and open while the work is with the founder — and it is
+        the same instrument the Focus Card carries, at a size that cannot
+        compete with it. The word beside it still carries the state, so
+        nothing here depends on the mark being seen.
+      */}
       <span className="flex items-center gap-2.5">
-        <StatusDot tone={status.tone} className={live ? "motion-safe:animate-pulse" : undefined} />
+        <NovaPresence state={presence} seed={seed} size="sm" />
         <span className={cn("text-ui font-semibold", statusToneText(status.tone))}>
           {status.word}
         </span>
       </span>
-      <span className="text-fg-prose min-w-0 text-sm">{working.stageLabel}</span>
+      {stage && <span className="text-fg-prose min-w-0 text-sm">{stage}</span>}
       {working.phase === "stalled" && (
         <span className="text-fg-muted text-ui">
           It has been running far longer than it should.

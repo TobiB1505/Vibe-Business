@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ActionBlock } from "@/components/system/action-block";
 import type { CostBalance } from "@/components/system/cost-disclosure";
 import { statusForFocusTier } from "@/components/system/status-vocabulary";
+import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { StatusPill } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
@@ -39,6 +40,8 @@ import type { NovaHomeEntry } from "@/modules/nova/home-view";
  */
 export function FocusCard({
   entry,
+  presence,
+  seed,
   control,
   operation,
   balance,
@@ -47,6 +50,10 @@ export function FocusCard({
   className,
 }: {
   entry: NovaHomeEntry;
+  /** Derived by `novaPresenceState`, never chosen here. */
+  presence: NovaPresenceState;
+  /** The project, so one product always draws the same mark. */
+  seed: string;
   /** The bound control, or nothing when the candidate carries none. */
   control?: ReactNode;
   /** The retail kind the control charges under. Null when it is free. */
@@ -71,34 +78,82 @@ export function FocusCard({
        * needs you" would dress an absence of work as an offer.
        */
       tone={settled ? "neutral" : "mint"}
-      className={cn("flex flex-col gap-5", className)}
+      className={cn("relative overflow-hidden", className)}
     >
-      <div className="flex flex-col gap-3">
-        <StatusPill tone={status.tone} className="self-start">
-          {status.word}
-        </StatusPill>
+      {/*
+        Depth spent on exactly one object.
 
-        <h1
-          id="nova-focus"
-          className="text-fg max-w-[24ch] text-headline leading-[1.14] font-bold tracking-[-0.035em] text-balance sm:max-w-[28ch]"
-        >
-          {entry.message}
-        </h1>
+        Three layers, and each answers `DESIGN.md`'s first test — does it
+        strengthen hierarchy? An aura that pulls the eye to the card, an edge
+        light that gives it a lit top so it reads as raised rather than merely
+        bordered, and a floor wash that seats it. Together they make the
+        primary a different *kind* of thing from the rows below, which is the
+        ranking `deriveNovaFocus` produced, drawn rather than captioned.
 
-        {entry.detail && <p className="text-fg-prose max-w-[62ch] text-lead">{entry.detail}</p>}
-      </div>
+        None of it is on the working strip or the secondary rows, and that is
+        the point: this treatment is legible as emphasis only while it stays
+        the only place on the page that has it.
 
-      {children}
-
-      {control && (
-        <ActionBlock
-          control={control}
-          operation={operation ?? null}
-          balance={balance}
-          consequence={consequence}
-          footnote={entry.prompt}
-        />
+        Withheld when settled. A lit card over "nothing needs you" would spend
+        the page's emphasis on the absence of work.
+      */}
+      {!settled && (
+        <>
+          <div
+            aria-hidden
+            className="bg-mint/10 pointer-events-none absolute -top-28 -right-20 size-72 rounded-full blur-3xl"
+          />
+          <div
+            aria-hidden
+            className="via-mint/45 pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent to-transparent"
+          />
+          <div
+            aria-hidden
+            className="bg-mint/5 pointer-events-none absolute -bottom-24 -left-10 size-56 rounded-full blur-3xl"
+          />
+        </>
       )}
+
+      <div className="relative flex flex-col gap-5">
+        {/*
+          The mark leads, at the page's one large size. A founder scanning this
+          screen should land here before reading a word — and the mark says
+          which of four things Nova is doing while they do.
+        */}
+        <div className="flex items-start gap-4 sm:gap-5">
+          <NovaPresence state={presence} seed={seed} size="lg" className="max-sm:hidden" />
+
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div className="flex items-center gap-3">
+              {/* Below the large mark's breakpoint the small one keeps the
+                  identity present rather than dropping Nova on a phone. */}
+              <NovaPresence state={presence} seed={seed} size="sm" className="sm:hidden" />
+              <StatusPill tone={status.tone}>{status.word}</StatusPill>
+            </div>
+
+            <h1
+              id="nova-focus"
+              className="text-fg max-w-[24ch] text-headline leading-[1.14] font-bold tracking-[-0.035em] text-balance sm:max-w-[28ch]"
+            >
+              {entry.message}
+            </h1>
+
+            {entry.detail && <p className="text-fg-prose max-w-[62ch] text-lead">{entry.detail}</p>}
+          </div>
+        </div>
+
+        {children}
+
+        {control && (
+          <ActionBlock
+            control={control}
+            operation={operation ?? null}
+            balance={balance}
+            consequence={consequence}
+            footnote={entry.prompt}
+          />
+        )}
+      </div>
     </VibeCard>
   );
 }

@@ -5,7 +5,11 @@ import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaHomeEntry, NovaHomeSection } from "@/modules/nova/home-view";
 import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-context";
 
+import { novaPresenceState } from "@/components/system/status-vocabulary";
+import type { NovaPresenceState } from "@/components/nova/nova-presence";
+
 import { AttentionStack } from "./attention-stack";
+import { NovaRise } from "./nova-rise";
 import { FocusCard } from "./focus-card";
 import { HealthScore, HealthScoreAbsent } from "./health-score";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
@@ -89,26 +93,55 @@ export async function NovaHome({
     return href.agent;
   }
 
+  /*
+   * Which of four things Nova is doing, from what the domain observed. The
+   * mark on the Focus Card and the mark on the working strip are the same
+   * instrument in the same state, because they are reading the same facts —
+   * and neither is a prop a caller picked.
+   */
+  const presence = novaPresenceState({
+    tier: data.view.primary.tier,
+    phase: data.view.working?.phase ?? "idle",
+  });
+
   return (
     <div className="flex flex-col gap-8">
-      <ProductIdentity
-        name={data.identity.name}
-        logoUrl={data.identity.logoUrl}
-        category={data.identity.category}
-        understood={data.identity.understood}
-        productHref={href.product}
-      />
+      <NovaRise>
+        <ProductIdentity
+          name={data.identity.name}
+          logoUrl={data.identity.logoUrl}
+          category={data.identity.category}
+          understood={data.identity.understood}
+          productHref={href.product}
+        />
+      </NovaRise>
 
-      <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
+      {/*
+        The primary settles first and the rest follows: the ranking drawn in
+        time. Every delay below is the position `deriveNovaFocus` decided.
+      */}
+      <NovaRise delay={0.06}>
+        <FocusSection
+          data={data}
+          projectId={project.id}
+          sectionHref={sectionHref}
+          presence={presence}
+          seed={project.id}
+        />
+      </NovaRise>
 
-      <WorkingStrip working={data.view.working} />
+      <NovaRise delay={0.18}>
+        <WorkingStrip working={data.view.working} presence={presence} seed={project.id} />
+      </NovaRise>
 
-      <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
+      <NovaRise delay={0.26}>
+        <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
+      </NovaRise>
 
       {data.health ? (
         /* `HealthScore` is itself a labelled region; wrapping it in a second
            one would put two landmarks with the same name around one panel. */
-        <div className="flex flex-col gap-4">
+        <NovaRise delay={0.34} className="flex flex-col gap-4">
           <HealthScore
             score={data.health.score}
             stateLabel={data.health.stateLabel}
@@ -134,9 +167,11 @@ export async function NovaHome({
               citations={data.health.priority.citations}
             />
           )}
-        </div>
+        </NovaRise>
       ) : (
-        <HealthScoreAbsent healthHref={href.health} />
+        <NovaRise delay={0.34}>
+          <HealthScoreAbsent healthHref={href.health} />
+        </NovaRise>
       )}
     </div>
   );
@@ -154,21 +189,25 @@ function FocusSection({
   data,
   projectId,
   sectionHref,
+  presence,
+  seed,
 }: {
   data: NovaHomeData;
   projectId: string;
   sectionHref: Record<NovaHomeSection, string>;
+  presence: NovaPresenceState;
+  seed: string;
 }) {
   const entry = data.view.primary;
   const control = entry.control;
 
   if (control.kind === "none") {
-    return <FocusCard entry={entry} />;
+    return <FocusCard entry={entry} presence={presence} seed={seed} />;
   }
 
   if (control.kind === "elsewhere") {
     return (
-      <FocusCard entry={entry}>
+      <FocusCard entry={entry} presence={presence} seed={seed}>
         <NovaLinkControl href={sectionHref[control.section]} label={control.label} />
       </FocusCard>
     );
@@ -194,7 +233,7 @@ function FocusSection({
             "/app/connect/github";
 
     return (
-      <FocusCard entry={entry}>
+      <FocusCard entry={entry} presence={presence} seed={seed}>
         <NovaLinkControl href={target} label={control.option.label} />
       </FocusCard>
     );
@@ -203,7 +242,7 @@ function FocusSection({
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return <FocusCard entry={entry} />;
+    return <FocusCard entry={entry} presence={presence} seed={seed} />;
   }
 
   const subject = control.option.subject;
@@ -217,6 +256,8 @@ function FocusSection({
   return (
     <FocusCard
       entry={entry}
+      presence={presence}
+      seed={seed}
       operation={meta.price}
       balance={data.balance}
       consequence={control.option.confirmationNote}

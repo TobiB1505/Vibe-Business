@@ -17,6 +17,7 @@ import {
   AuditWaitingHeader,
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
 import { creditsToUnits } from "@/modules/credits/units";
+import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { FocusCard } from "@/app/app/projects/[projectId]/nova/focus-card";
 import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
 import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
@@ -211,6 +212,15 @@ export default async function E2eScenarioPage({
     const entry = view.primary;
     const control = entry.control;
     const priced = control.kind === "server_action" ? control.option : null;
+    /*
+      Derived exactly as production derives it. A fixture that set the mark by
+      hand could show a turning aperture over a scenario with nothing running,
+      which is the claim `novaPresenceState` exists to make impossible.
+    */
+    const presence = novaPresenceState({
+      tier: entry.tier,
+      phase: view.working?.phase ?? "idle",
+    });
 
     return (
       <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
@@ -232,6 +242,8 @@ export default async function E2eScenarioPage({
         */}
         <FocusCard
           entry={entry}
+          presence={presence}
+          seed="project_e2e"
           operation={priced ? NOVA_ACTION_META[priced.actionId].price : null}
           /*
             Built through `creditsToUnits` rather than cast. A raw `420` is
@@ -250,7 +262,7 @@ export default async function E2eScenarioPage({
           }
         />
 
-        <WorkingStrip working={view.working} />
+        <WorkingStrip working={view.working} presence={presence} seed="project_e2e" />
 
         <AttentionStack
           entries={view.secondary}

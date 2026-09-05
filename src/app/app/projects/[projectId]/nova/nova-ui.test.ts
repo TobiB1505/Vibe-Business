@@ -83,17 +83,38 @@ describe("Nova Home", () => {
       }
     });
 
-    it("animates only while something is genuinely happening", () => {
-      // The one loop on this page is the working dot, and it is behind both a
-      // live check and `motion-safe`.
-      const strip = component("working-strip.tsx");
-      expect(strip).toContain("motion-safe:animate-pulse");
-      expect(strip).toContain('const live = working.phase === "working"');
-
+    it("never sets Nova's mark by hand", () => {
+      /*
+       * The mark is the one element on this page that can *look* like
+       * activity. Every caller takes its state from `novaPresenceState`; a
+       * literal would be a component asserting work nobody observed.
+       */
       for (const { name, body } of FILES) {
-        if (name === "working-strip.tsx") continue;
+        expect(body, name).not.toMatch(/state=["'](working|listening|settled|idle)["']/);
+      }
+      expect(component("nova-home.tsx")).toContain("novaPresenceState(");
+    });
+
+    it("keeps continuous motion out of everything but the mark", () => {
+      // The aperture owns its own loops and pauses them on a hidden tab. No
+      // Nova surface adds a second continuous animation beside it.
+      for (const { name, body } of FILES) {
         expect(body, name).not.toMatch(/animate-(pulse|spin|bounce|ping)/);
       }
+    });
+
+    it("bounds the entrance and lets reduced motion skip it", () => {
+      const rise = component("nova-rise.tsx");
+      expect(rise).toContain("useReducedMotion");
+      // The finished state renders immediately rather than animating to it.
+      expect(rise).toMatch(/if \(reduceMotion\) return/);
+
+      const delays = [...component("nova-home.tsx").matchAll(/delay=\{([\d.]+)\}/g)].map((m) =>
+        Number(m[1]),
+      );
+      expect(delays.length).toBeGreaterThan(0);
+      // Nothing readable waits longer than the reveal budget.
+      expect(Math.max(...delays)).toBeLessThanOrEqual(0.4);
     });
   });
 
