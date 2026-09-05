@@ -109,6 +109,25 @@ describe("Nova Home", () => {
       expect(component("nova-home-data.ts")).toContain("describeEvidenceId");
     });
 
+    /**
+     * The bug this was written for.
+     *
+     * Every product-profile field is an `Attributed<T>` — `{ value,
+     * confidence, sources, evidence }` — so reaching into the stored document
+     * for `identity.category` hands React an object to render, and the enum
+     * inside it (`developer_tool`) is a machine token no founder should read.
+     * Both faults come from the same move: parsing a domain document in a
+     * surface instead of asking the module that owns its words.
+     */
+    it("takes display values from a module's view boundary, never from a stored document", () => {
+      const reader = component("nova-home-data.ts");
+
+      expect(reader).toContain("buildHeadline");
+      // No walking into a profile or audit document for something to print.
+      expect(reader).not.toMatch(/result\??\.\s*identity/);
+      expect(reader).not.toMatch(/\.\s*identity\s*\??\.\s*\w+\s*\??\.\s*value/);
+    });
+
     it("puts the conclusion above the evidence, never the other way round", () => {
       const finding = readFileSync(
         join(process.cwd(), "src/components/system/finding-card.tsx"),

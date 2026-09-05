@@ -79,7 +79,13 @@ export function NovaServerActionControl({
   );
 
   return (
-    <div className="flex w-full flex-col gap-3">
+    /*
+     * `items-start` matters: a column flex container stretches its children by
+     * default, which made the one primary control span the whole Focus Card.
+     * A button as wide as the card it sits in reads as a banner rather than as
+     * the one thing to press.
+     */
+    <div className="flex w-full flex-col items-start gap-3">
       {form}
       {state?.ok === false && (
         <Notice tone="problem" label="It did not start">

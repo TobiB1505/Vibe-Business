@@ -11,6 +11,8 @@ import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import { readNovaFocus } from "@/modules/nova/read";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { productDisplayName } from "@/modules/projects/display-name";
+import { buildHeadline } from "@/modules/product-understanding/view";
+import type { ProductProfile } from "@/modules/product-understanding/schema";
 
 /**
  * Everything Nova Home renders, read once (UI Sourcing Spec §15).
@@ -74,7 +76,8 @@ type IdentityRow = {
   product_name: string | null;
   product_logo_url: string | null;
   confirmed_at: string | null;
-  result: { identity?: { category?: string | null } } | null;
+  synthesized: boolean | null;
+  result: ProductProfile | null;
 };
 
 async function readIdentity(
@@ -84,7 +87,7 @@ async function readIdentity(
 ): Promise<NovaProductIdentity> {
   const { data, error } = await supabase
     .from("product_profiles")
-    .select("product_name, product_logo_url, confirmed_at, result")
+    .select("product_name, product_logo_url, confirmed_at, synthesized, result")
     .eq("project_id", projectId)
     .eq("status", "completed")
     .order("created_at", { ascending: false })
@@ -95,12 +98,26 @@ async function readIdentity(
 
   const row = (data ?? null) as IdentityRow | null;
 
+  /*
+   * The category goes through `buildHeadline` rather than out of the document.
+   *
+   * Every profile field is an `Attributed<T>` — `{ value, confidence, sources,
+   * evidence }` — so `identity.category` is an object, and the enum inside it
+   * (`developer_tool`) is a machine token no founder should ever read. Reaching
+   * in for it produced both faults at once: React was handed an object to
+   * render, and had it been a string it would have been the raw member.
+   *
+   * The module's own view boundary already resolves the label and is the only
+   * place that holds the table, so Home asks it instead of parsing.
+   */
+  const headline = row?.result ? buildHeadline(row.result, row.synthesized ?? false) : null;
+
   return {
     // The product's own name, falling back to the label typed at connection
     // time. The rail says the project's; Home says the product's.
     name: productDisplayName({ name: projectName, productName: row?.product_name ?? null }),
     logoUrl: row?.product_logo_url ?? null,
-    category: row?.result?.identity?.category ?? null,
+    category: headline?.category ?? null,
     understood: row === null ? "not_read" : row.confirmed_at ? "confirmed" : "unconfirmed",
   };
 }
