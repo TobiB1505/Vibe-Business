@@ -53,7 +53,15 @@ export type BusinessBrainNode = {
   priorityLabel: string;
   ring: MapRing;
   angle: number;
-  summary: string | null;
+  /*
+   * No `summary` here on purpose.
+   *
+   * `BusinessLensAssessment.summary` is internal prose — its own schema says
+   * it is not shown to the founder — and the Brain's detail column used it as
+   * the fallback when a lens had no diagnosis. The honest fallback is a
+   * sentence that says the evidence did not support one, so the field stops at
+   * this boundary rather than being carried across and then not rendered.
+   */
   blockerRank: number | null;
   connectedNodeIds: BusinessLens[];
   missingContext: string[];
@@ -211,7 +219,6 @@ export function buildBusinessBrainView(params: {
       priorityLabel: MATERIALITY_LABELS[node.materiality],
       ring: node.ring,
       angle: node.angle,
-      summary: node.summary || null,
       blockerRank: node.blockerRank,
       connectedNodeIds: node.relatedLenses,
       missingContext: node.missingContext,

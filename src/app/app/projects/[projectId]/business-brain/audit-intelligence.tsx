@@ -383,7 +383,8 @@ function SelectedPanel({
                 <div className="min-w-0">
                   <h3 className="text-fg text-sm font-semibold">What we found</h3>
                   <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
-                    {node.problem?.explanation ?? node.summary ?? "The available evidence did not support a concise diagnosis for this area."}
+                    {node.problem?.explanation ??
+                      "The available evidence did not support a concise diagnosis for this area."}
                   </p>
                 </div>
               </div>
