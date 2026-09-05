@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { E2E_AUDIT_SCENARIOS } from "@/app/e2e/audit-scenarios";
 import { buildBusinessBrainView } from "./business-brain-view";
 import type { AuditReading } from "./score-series";
@@ -56,11 +57,14 @@ describe("buildBusinessBrainView", () => {
    */
   it("leaves the internal lens summary on the other side of the boundary", () => {
     const audit = E2E_AUDIT_SCENARIOS["audit-synthesis"]();
-    const marked = {
+    const synthesis = audit.synthesis;
+    if (!synthesis) throw new Error("fixture has no synthesis to mark");
+
+    const marked: BusinessReadinessAudit = {
       ...audit,
       synthesis: {
-        ...audit.synthesis,
-        lenses: audit.synthesis.lenses.map((lens) => ({
+        ...synthesis,
+        lenses: synthesis.lenses.map((lens) => ({
           ...lens,
           summary: "INTERNAL-PROSE-NOT-FOR-THE-FOUNDER",
         })),
@@ -75,7 +79,7 @@ describe("buildBusinessBrainView", () => {
       moveByConclusion: {},
     });
 
-    expect(marked.synthesis.lenses.every((lens) => lens.summary.length > 0)).toBe(true);
+    expect(marked.synthesis?.lenses.every((lens) => lens.summary.length > 0)).toBe(true);
     expect(JSON.stringify(view)).not.toContain("INTERNAL-PROSE-NOT-FOR-THE-FOUNDER");
   });
 

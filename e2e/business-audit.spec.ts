@@ -65,15 +65,18 @@ test.describe("signature Business Brain", () => {
     await expect(page.getByText(/missing evidence is never scored as zero/i)).toBeVisible();
   });
 
-  test("shows only the highest real priority by default and the exact remaining count", async ({
-    page,
-  }) => {
+  /*
+   * The remaining-count assertion this test used to carry is gone with the
+   * behaviour: R11 replaces "and 1 more priority" with the blockers
+   * themselves. What survives unchanged is the ranking — one blocker leads,
+   * and it is the one the audit ranked first.
+   */
+  test("leads with the highest real priority and its impact", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
     await expect(page.getByTestId("primary-priority")).toContainText(
       "People still don't have a clear way to pay you.",
     );
-    await expect(page.getByText(/see 1 more priority/i)).toBeVisible();
     await expect(page.getByTestId("primary-priority")).toContainText(/high impact/i);
     await expect(page.getByTestId("primary-priority")).toContainText(/medium effort/i);
   });
@@ -143,6 +146,54 @@ test.describe("signature Business Brain", () => {
     await evidence.press("End");
     await expect(detail.getByRole("tab", { name: /^history$/i })).toBeFocused();
     await expect(evidence).toHaveAttribute("aria-selected", "true");
+  });
+
+  /*
+   * R11. The blockers after the first were a number and a link to Moves: the
+   * founder was told more existed and sent to a page that does not list them.
+   * They are read here now, in the audit's order, and each opens the same
+   * evidence drawer as every other finding.
+   */
+  test("reads the rest of the blockers in rank order, with the cost first", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(SYNTHESIS);
+
+    const second = page.getByRole("article").filter({ hasText: /actually working/i });
+    await expect(second).toBeVisible();
+    await expect(second).toContainText("02");
+
+    // Why-first: the consequence leads, the diagnosis follows it.
+    const paragraphs = await second.locator("p").allInnerTexts();
+    const why = paragraphs.findIndex((text) => /every change you make is a guess/i.test(text));
+    const diagnosis = paragraphs.findIndex((text) => /couldn't find anything measuring/i.test(text));
+    expect(why).toBeGreaterThanOrEqual(0);
+    expect(diagnosis).toBeGreaterThan(why);
+
+    await expect(page.getByText(/see \d+ more priorit/i)).toHaveCount(0);
+  });
+
+  test("opens one evidence drawer from a blocker, and never shows an evidence id", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1200 });
+    await page.goto(SYNTHESIS);
+
+    const second = page.getByRole("article").filter({ hasText: /actually working/i });
+    await second.getByRole("button", { name: /sources?$/ }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/evidence/i);
+
+    /*
+     * Rule 45 and the audit's acceptance both: a citation is a founder
+     * sentence and a named source. The raw id behind it is never on screen.
+     */
+    const drawerText = await drawer.innerText();
+    expect(drawerText).not.toMatch(/\b[a-z]+\.[a-z_]+\.[a-z_]+\b/);
+
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(drawer).toBeHidden();
   });
 
   test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {
@@ -261,7 +312,14 @@ test.describe("signature Business Brain", () => {
   test("offers generation honestly when no Moves exist", async ({ page }) => {
     await page.goto(NO_MOVES);
 
-    await expect(page.getByRole("link", { name: /find next moves/i })).toBeVisible();
+    /*
+     * Scoped to the leading priority. The blocker stack below offers the same
+     * label on its own cards now, and both are right — the ambiguity is in the
+     * locator, not on the page.
+     */
+    await expect(
+      page.getByTestId("primary-priority").getByRole("link", { name: /find next moves/i }),
+    ).toBeVisible();
   });
 
   test("removes particles and large choreography for reduced motion", async ({ page }) => {

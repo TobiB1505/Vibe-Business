@@ -82,15 +82,20 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await expect(primary).toHaveAttribute("href", /\/plan\?from=blocker-1$/);
   });
 
-  test("secondary priorities stay reachable through the quieter remaining-priorities link", async ({
-    page,
-  }) => {
+  test("keeps the secondary priorities readable rather than counted", async ({ page }) => {
     await page.goto("/e2e/audit-synthesis");
 
-    const secondary = page.getByTestId("current-priorities").getByRole("link", {
-      name: "See 1 more priority",
-    });
-    await expect(secondary).toHaveAttribute("href", /\/plan$/);
+    /*
+     * This asserted a "See 1 more priority" link to the Plan. The founder was
+     * told a blocker existed and sent to a page that does not list blockers.
+     * R11 reads them here instead, ranked, each with its own way forward.
+     */
+    const panel = page.getByTestId("current-priorities");
+    await expect(panel.getByText(/see \d+ more priorit/i)).toHaveCount(0);
+
+    const second = panel.getByRole("article").filter({ hasText: /actually working/i });
+    await expect(second).toBeVisible();
+    await expect(second.getByRole("link")).toHaveAttribute("href", /\/plan(\?from=blocker-\d+)?$/);
   });
 
   /** §5: the key is an address, never something a founder reads. */
@@ -107,7 +112,12 @@ test.describe("the audit hands off to the moves that answer it", () => {
   test("offers a way forward even when no moves exist yet", async ({ page }) => {
     await page.goto("/e2e/audit-synthesis-no-moves");
 
-    const priorities = page.getByTestId("current-priorities");
+    /*
+     * Scoped to the leading priority: the ranked blockers below now carry the
+     * same offer on their own cards, which is the point of R11 and not an
+     * ambiguity on the page.
+     */
+    const priorities = page.getByTestId("primary-priority");
     await expect(priorities.getByRole("link", { name: "Find next moves" })).toBeVisible();
   });
 });

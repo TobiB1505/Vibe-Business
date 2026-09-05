@@ -50,6 +50,16 @@ export function FindingCard({
   title,
   explanation,
   whyItMatters,
+  /**
+   * Which of the two paragraphs reads first.
+   *
+   * A finding leads with what it is. A *priority* leads with what it costs —
+   * the audit's R11 asks the blocker stack for why-first, because a ranked
+   * list is read for consequence and the diagnosis is the follow-up. Ordering
+   * it here keeps both paragraphs in the slot they are named for, rather than
+   * making call sites swap two props and mean the opposite of what they say.
+   */
+  lead = "explanation",
   severity = "attention",
   confidence,
   citations = [],
@@ -66,6 +76,7 @@ export function FindingCard({
   title: string;
   explanation?: string | null;
   whyItMatters?: string | null;
+  lead?: "explanation" | "why";
   severity?: FindingSeverity;
   confidence?: ConfidenceViewModel | null;
   citations?: EvidenceCitation[];
@@ -103,13 +114,21 @@ export function FindingCard({
         )}
       </div>
 
-      {explanation && (
-        <p className="text-fg-prose max-w-[68ch] text-sm leading-relaxed">{explanation}</p>
-      )}
-
-      {whyItMatters && (
-        <p className="text-fg-secondary max-w-[68ch] text-sm leading-relaxed">{whyItMatters}</p>
-      )}
+      {(() => {
+        /* The prominent paragraph, then the quieter one. */
+        const [first, second] =
+          lead === "why" && whyItMatters ? [whyItMatters, explanation] : [explanation, whyItMatters];
+        return (
+          <>
+            {first && (
+              <p className="text-fg-prose max-w-[68ch] text-sm leading-relaxed">{first}</p>
+            )}
+            {second && (
+              <p className="text-fg-secondary max-w-[68ch] text-sm leading-relaxed">{second}</p>
+            )}
+          </>
+        );
+      })()}
 
       {showMeta && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">

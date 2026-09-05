@@ -48,6 +48,7 @@ const PREVIEW_VIEW: BusinessBrainView = {
   })),
   relationships: [],
   primaryPriority: null,
+  priorities: [],
   additionalPriorityCount: 0,
   recentChanges: [],
   recentChangesUnavailableReason: "no_history",

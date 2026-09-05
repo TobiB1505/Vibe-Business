@@ -6,6 +6,7 @@ import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { TabList, tabPanelId, tabTriggerId } from "@/components/ui/tabs";
+import { FindingCard } from "@/components/system/finding-card";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import { movesContextHref } from "@/modules/opportunities/lineage";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
@@ -244,14 +245,43 @@ function DefaultPanel({
               hasMoves={hasMoves}
               onExplore={onExplore}
             />
-            {view.additionalPriorityCount > 0 && (
-              <Link
-                href={movesHref}
-                className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-sm text-sm transition-interactive"
-              >
-                See {view.additionalPriorityCount} more {view.additionalPriorityCount === 1 ? "priority" : "priorities"}
-                <ArrowIcon />
-              </Link>
+            {/*
+              R11, the rest of the stack. These were a count and a link to
+              Moves: the founder was told three more blockers existed and sent
+              somewhere that does not list them. They are blockers, so they are
+              read here, in the audit's own order, leading with what each one
+              costs — and each carries its evidence behind the same drawer as
+              every other finding in the product.
+            */}
+            {view.priorities.length > 1 && (
+              <ol className="flex flex-col gap-3">
+                {view.priorities.slice(1).map((priority) => (
+                  <li key={priority.key}>
+                    <FindingCard
+                      variant="priority"
+                      rank={priority.rank}
+                      title={priority.headline}
+                      explanation={priority.explanation}
+                      whyItMatters={priority.whyItMatters}
+                      lead="why"
+                      severity={priority.tone === "critical" ? "critical" : "attention"}
+                      citations={priority.evidence.map((item) => ({
+                        detail: item.detail,
+                        source: item.source,
+                      }))}
+                      action={
+                        <Link
+                          href={actionHref(priority, movesHref)}
+                          className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-sm text-sm transition-interactive"
+                        >
+                          {actionLabel(priority.moveCount, hasMoves)}
+                          <ArrowIcon />
+                        </Link>
+                      }
+                    />
+                  </li>
+                ))}
+              </ol>
             )}
           </>
         ) : (

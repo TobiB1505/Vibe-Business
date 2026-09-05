@@ -102,6 +102,16 @@ export type BusinessBrainView = {
   nodes: BusinessBrainNode[];
   relationships: BusinessBrainRelationship[];
   primaryPriority: BusinessBrainPriority | null;
+  /**
+   * Every blocker the audit ranked, `primaryPriority` first.
+   *
+   * The view carried the first one and a count of the rest, which is enough to
+   * write "and 3 more" and not enough to show them. R11 is the ranked stack,
+   * and a count cannot be rendered into one — so the list crosses the boundary
+   * and `additionalPriorityCount` stays as the cheap read for callers that
+   * only need the number.
+   */
+  priorities: BusinessBrainPriority[];
   additionalPriorityCount: number;
   recentChanges: BusinessBrainChange[];
   recentChangesUnavailableReason: "no_history" | "not_comparable" | "unscored" | null;
@@ -254,6 +264,10 @@ export function buildBusinessBrainView(params: {
     })),
     primaryPriority:
       firstBlocker && problems[0] ? { ...problems[0], lensIds: firstBlocker.lenses } : null,
+    priorities: problems.map((entry, index) => ({
+      ...entry,
+      lensIds: synthesis.blockers[index]?.lenses ?? [],
+    })),
     additionalPriorityCount: Math.max(0, problems.length - 1),
     recentChanges: history.changes,
     recentChangesUnavailableReason: history.unavailable,
