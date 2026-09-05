@@ -139,6 +139,18 @@ export function SourceCoverageList({
  * never truncated, however narrow the viewport gets. If the line has to wrap
  * to two, it wraps.
  */
+/**
+ * The label as it reads mid-sentence.
+ *
+ * "Rests on code ✓ · public product ✓" — the possessive is already carried by
+ * "rests on", and only the first letter is lowered, so "What you told Vibe"
+ * keeps its Vibe.
+ */
+function stripLabel(label: string): string {
+  const withoutPossessive = label.replace(/^Your /, "");
+  return withoutPossessive.charAt(0).toLowerCase() + withoutPossessive.slice(1);
+}
+
 export function SourceCoverageStrip({
   sources,
   className,
@@ -157,7 +169,7 @@ export function SourceCoverageStrip({
       <span>Rests on</span>
       {sources.map((source, index) => (
         <span key={source.source} className="whitespace-nowrap">
-          {source.label.replace(/^Your /, "")}
+          {stripLabel(source.label)}
           <span className={cn("ml-1", source.state === "ready" ? "text-mint" : "text-fg-meta")}>
             {source.state === "ready" ? "✓" : "—"}
           </span>

@@ -7,6 +7,8 @@ import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
+import { SourceCoverageStrip } from "@/components/system/source-coverage";
+import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
@@ -1353,6 +1355,37 @@ export default async function E2eScenarioPage({
           variant="intelligence"
         >
           {view ? (
+            <>
+            {/*
+              The strip the Business Health route renders under its priced
+              audit control, from the same builder — without it this density
+              had no browser coverage at all.
+            */}
+            <SourceCoverageStrip
+              sources={buildSourceCoverage({
+                repository: {
+                  result:
+                    E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                  completedAt: "2026-08-14T08:22:59.917Z",
+                },
+                live: {
+                  result: E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                  completedAt: "2026-08-14T08:24:11.000Z",
+                },
+                deepScan: { result: null },
+                founder: { told: true, at: null },
+                hrefs: {
+                  scan: "/app/projects/project_e2e/my-product",
+                  deepScan: "/app/projects/project_e2e/deep-scan",
+                  settings: "/app/projects/project_e2e/settings",
+                  founderIntent: "/app/projects/project_e2e/settings#founder-intent",
+                  connectRepository: "/app/projects/project_e2e/settings",
+                  addWebsite: "/app/projects/project_e2e/settings",
+                },
+                connected: { repository: true, productionUrl: true },
+              })}
+              className="mb-4"
+            />
             <AuditOverview
               view={view}
               movesHref="/app/projects/project_e2e/plan"
@@ -1370,6 +1403,7 @@ export default async function E2eScenarioPage({
                 ).checks
               }
             />
+            </>
           ) : (
             <p>This fixture predates the Business Brain.</p>
           )}

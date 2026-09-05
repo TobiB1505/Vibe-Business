@@ -222,6 +222,13 @@ function liveSnapshot(): LiveProductIntelligenceSnapshot {
         evidence: [],
       },
     ],
+    /*
+     * A real snapshot carries these, and the cast below hid that it did not.
+     * Anything reading a live snapshot for its completeness — the source
+     * coverage strip does — throws on the fixture rather than on a defect.
+     */
+    completeness: { status: "complete", reasons: [] },
+    metrics: { pagesFetched: 6, bytesFetched: 148_000, requestCount: 9, durationMs: 4_200 },
   } as unknown as LiveProductIntelligenceSnapshot;
 }
 
@@ -240,6 +247,13 @@ function agreeingLiveSnapshot(): LiveProductIntelligenceSnapshot {
         evidence: [],
       },
     ],
+    /*
+     * A real snapshot carries these, and the cast below hid that it did not.
+     * Anything reading a live snapshot for its completeness — the source
+     * coverage strip does — throws on the fixture rather than on a defect.
+     */
+    completeness: { status: "complete", reasons: [] },
+    metrics: { pagesFetched: 6, bytesFetched: 148_000, requestCount: 9, durationMs: 4_200 },
   } as unknown as LiveProductIntelligenceSnapshot;
 }
 

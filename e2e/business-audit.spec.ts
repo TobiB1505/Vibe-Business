@@ -264,6 +264,28 @@ test.describe("signature Business Brain", () => {
     await expect(finding).toContainText(/needs attention/i);
   });
 
+  /*
+   * R39 at strip density: one line saying what the audit about to be paid for
+   * rests on, leading with the first gap. It lives on the route that already
+   * reads all three snapshots, so it costs no extra read.
+   */
+  test("says in one line what the audit rests on, and names the first gap", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const strip = page.getByTestId("source-coverage-strip");
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("data-gap", "deep_scan");
+
+    const text = (await strip.textContent()) ?? "";
+    expect(text).toContain("Rests on");
+    expect(text).toContain("code");
+    expect(text).toContain("signed-in product");
+
+    // The remedy for the gap, and only for the gap.
+    await expect(strip.getByRole("link")).toHaveCount(1);
+    await expect(strip.getByRole("link")).toContainText(/deep scan/i);
+  });
+
   test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
