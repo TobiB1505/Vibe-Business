@@ -1,24 +1,33 @@
-import { WorkspaceSection } from "@/components/layout/project-shell";
-import { SkeletonSection } from "@/components/ui/skeleton";
+import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
+import { VibeCard } from "@/components/ui/surface";
 
 /**
- * Shown while this route resolves its reads (UI-4 §1).
+ * Shown while Nova resolves its reads (UI-4 §1).
  *
- * The section heading is rendered rather than skeletonised: it is static for
- * this route, so showing it immediately means the page keeps its identity from
- * the first frame and nothing moves when the content lands. It comes from
- * `WORKSPACE_SECTION_HEADINGS`, the same place the route takes it from, so the
- * skeleton and the page it stands in for cannot word it differently.
- * Only the body — the part that genuinely depends on a read — is a placeholder.
+ * ## Why this one renders no heading
+ *
+ * Every other route in the workspace shows its section heading immediately,
+ * because the heading is static for that route and holding it back would let
+ * the page change identity as it lands. Nova's heading is not static: it *is*
+ * the focus — one sentence about what needs the founder now — and there is no
+ * honest way to render it before the ranking has been read.
+ *
+ * So this reserves the geometry instead. The card, the strip and the stack
+ * occupy the space they will occupy, and nothing a founder is reading moves
+ * when the answer arrives.
  */
 export default function Loading() {
   return (
-    <WorkspaceSection
-      id="business-audit"
-      eyebrow="Business intelligence"
-      variant="intelligence"
-    >
-      <SkeletonSection />
-    </WorkspaceSection>
+    <div className="flex flex-col gap-8" aria-busy="true">
+      <SkeletonBlock className="h-7 w-56" />
+
+      <VibeCard padding="lg" className="flex flex-col gap-5">
+        <SkeletonBlock className="h-6 w-32 rounded-full" />
+        <SkeletonText lines={2} className="max-w-[28ch]" />
+        <SkeletonBlock className="h-11 w-44" />
+      </VibeCard>
+
+      <SkeletonBlock className="h-40 w-full rounded-panel" />
+    </div>
   );
 }

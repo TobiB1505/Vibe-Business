@@ -51,7 +51,22 @@ import { cn } from "@/lib/utils/cn";
  *   settings     — production URL, founder intent, the repository connection
  */
 export const PROJECT_SECTIONS = [
-  { id: "home", label: "Business Health", icon: "business-health", segment: "" },
+  /*
+   * The project index is Nova (ADR 0085). It was Business Health, which
+   * answered "how is the business doing" to a founder who came back to ask
+   * "what do I do now" — the diagnosis is the second question, not the first.
+   *
+   * Business Health keeps every one of its addresses: `/health` was already a
+   * live alias, and `#business-audit` still resolves, so nothing a founder or
+   * a recovery fragment points at has moved.
+   */
+  { id: "home", label: "Home", icon: "home", segment: "" },
+  {
+    id: "business-health",
+    label: "Business Health",
+    icon: "business-health",
+    segment: "health",
+  },
   {
     // Second, immediately after Home, because every section below reasons
     // *from* this one: the audit, the plan and everything downstream all start
@@ -103,10 +118,20 @@ export type ProjectSubsectionId = (typeof PROJECT_SUBSECTIONS)[number]["id"];
 export type WorkspaceSectionId = ProjectSectionId | ProjectSubsectionId | "business-audit";
 
 /**
- * Every section that renders a heading. `home` is not one: the project index
- * renders the Business Health section, so `business-audit` is the id it uses.
+ * Every section that renders a heading.
+ *
+ * Two rail destinations are absent, for opposite reasons.
+ *
+ * `home` is Nova, whose heading is the focus itself — the one sentence about
+ * what needs the founder now. A static title above it would be a second, less
+ * useful heading competing with the real one.
+ *
+ * `business-health` renders under the stable `business-audit` id instead. That
+ * id is also the recovery anchor the opportunity engine resolves to, so the
+ * heading stays where every existing address already points; the rail item and
+ * the heading are two names for one destination on purpose.
  */
-export type WorkspaceHeadingId = Exclude<WorkspaceSectionId, "home">;
+export type WorkspaceHeadingId = Exclude<WorkspaceSectionId, "home" | "business-health">;
 
 /**
  * What each workspace section calls itself, in one place (PERF-015).

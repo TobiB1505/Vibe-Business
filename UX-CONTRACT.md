@@ -91,8 +91,9 @@
 - On desktop, the project rail owns product identity, the bounded product switcher, project navigation and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
 - Project routes render `My Products / {product}` — plus the route's own name on every section but Home — followed by one route-owned H1, description and action. Repository, branch and connection metadata do not repeat above every page.
 - `Project Settings` is a project destination. Profile, Account settings, Billing and Sign out live only in the account disclosure at the rail footer.
-- Project Home is the canonical Business Health surface at `/app/projects/:projectId`; `/health` is a compatibility alias and is never a second rail item.
-- `#business-audit` remains the stable recovery anchor and resolves on canonical project Home.
+- Project Home at `/app/projects/:projectId` is Nova: one focus, what is running, what else is true, and the business reading as context. It leads with exactly one control, and that control carries its price before it is pressed.
+- Business Health is its own rail destination at `/health`, which was already a live address before it became one. It remains the canonical diagnosis surface.
+- `#business-audit` remains the stable recovery anchor and resolves on Business Health.
 - The radial Business Brain becomes a horizontally browsable dimension rail plus the same detail panel on narrow screens. Labels, health, priority, selection and detail remain available; geometry is never the only interface.
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.

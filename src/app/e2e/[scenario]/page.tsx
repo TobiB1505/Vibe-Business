@@ -16,6 +16,20 @@ import {
   AuditPreparing,
   AuditWaitingHeader,
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
+import { creditsToUnits } from "@/modules/credits/units";
+import { FocusCard } from "@/app/app/projects/[projectId]/nova/focus-card";
+import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
+import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
+import { ProductIdentity } from "@/app/app/projects/[projectId]/nova/product-identity";
+import { HealthScore } from "@/app/app/projects/[projectId]/nova/health-score";
+import { FindingCard } from "@/components/system/finding-card";
+import { NOVA_ACTION_META } from "@/modules/nova/actions";
+import {
+  isE2eNovaScenario,
+  novaScenarioHealth,
+  novaScenarioView,
+  NOVA_SCENARIO_PRIORITY,
+} from "../nova-scenarios";
 import { E2E_ACTION_PLAN_SCENARIOS, isE2eActionPlanScenario } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import {
@@ -190,6 +204,84 @@ export default async function E2eScenarioPage({
       {scenario}
     </p>
   );
+
+  if (isE2eNovaScenario(scenario)) {
+    const view = novaScenarioView(scenario);
+    const health = novaScenarioHealth(scenario);
+    const entry = view.primary;
+    const control = entry.control;
+    const priced = control.kind === "server_action" ? control.option : null;
+
+    return (
+      <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
+        {label}
+
+        <ProductIdentity
+          name="Payflow"
+          logoUrl={null}
+          category="Developer tool"
+          understood="confirmed"
+          productHref="/app/projects/project_e2e/product"
+        />
+
+        {/*
+          The real card, given the real view model. The control is a plain
+          button rather than a live form: this fixture is about what a founder
+          can see before pressing, and the price beside an unpressed control is
+          exactly the claim under test.
+        */}
+        <FocusCard
+          entry={entry}
+          operation={priced ? NOVA_ACTION_META[priced.actionId].price : null}
+          /*
+            Built through `creditsToUnits` rather than cast. A raw `420` is
+            420 *internal units* — 0.42 Credits — and reads as unaffordable
+            beside a 35-Credit price. The brand exists to catch exactly that,
+            and casting past it is how a fixture ends up asserting a bug.
+          */
+          balance={{ availableCredits: creditsToUnits(420), display: "420" }}
+          consequence={priced?.confirmationNote ?? undefined}
+          control={
+            control.kind === "none" ? undefined : (
+              <Button variant="primary">
+                {control.kind === "elsewhere" ? control.label : control.option.label}
+              </Button>
+            )
+          }
+        />
+
+        <WorkingStrip working={view.working} />
+
+        <AttentionStack
+          entries={view.secondary}
+          hrefFor={() => "/app/projects/project_e2e/agent"}
+        />
+
+        {health && (
+          <HealthScore
+            score={health.score}
+            stateLabel={health.stateLabel}
+            scoredLenses={health.scoredLenses}
+            eligibleLenses={health.eligibleLenses}
+            insufficientCoverageReason={health.insufficientCoverageReason}
+            healthHref="/app/projects/project_e2e/health"
+          />
+        )}
+
+        {health && (
+          <FindingCard
+            variant="priority"
+            rank={1}
+            title={NOVA_SCENARIO_PRIORITY.headline}
+            explanation={NOVA_SCENARIO_PRIORITY.explanation}
+            whyItMatters={NOVA_SCENARIO_PRIORITY.whyItMatters}
+            severity={NOVA_SCENARIO_PRIORITY.severity}
+            citations={NOVA_SCENARIO_PRIORITY.citations}
+          />
+        )}
+      </main>
+    );
+  }
 
   if (isE2eProductScanScenario(scenario)) {
     const fixture = E2E_PRODUCT_SCAN_SCENARIOS[scenario];

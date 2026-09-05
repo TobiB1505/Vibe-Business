@@ -1,18 +1,20 @@
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { ProjectBusinessHealth } from "./health/content";
+import { NovaHome } from "./nova/nova-home";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Business health",
-  description: "How business-ready this product is, across nine areas.",
+  title: "Home",
+  description: "What needs your attention right now.",
 };
 
 /**
- * Project Home is the Business Health command surface (UI-11).
+ * The project index is Nova (ADR 0085).
  *
- * The diagnosis is the opening context for every action that follows. The
- * legacy `/health` address renders this same component, and the opportunity
- * engine's recovery fragment resolves to its `#business-audit` anchor here.
+ * It answers one question — *what do I do now?* — from the ranking
+ * `deriveNovaFocus` has always produced and nothing has ever rendered. The
+ * diagnosis it replaces is not gone: Business Health is its own rail item at
+ * `/health`, which was already a live address, and `#business-audit` still
+ * resolves there for the opportunity engine's recovery fragment.
  */
 export default async function ProjectHomePage({
   params,
@@ -20,7 +22,7 @@ export default async function ProjectHomePage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const access = await requireProjectAccess(projectId);
+  const { supabase, userId, project } = await requireProjectAccess(projectId);
 
-  return <ProjectBusinessHealth access={access} />;
+  return <NovaHome supabase={supabase} userId={userId} project={project} />;
 }
