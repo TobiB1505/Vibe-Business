@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 const SYNTHESIS = "/e2e/audit-synthesis";
+const UNSCORED = "/e2e/audit-unscored";
 const NO_MOVES = "/e2e/audit-synthesis-no-moves";
 
 function lens(page: Page, name: string | RegExp) {
@@ -194,6 +195,31 @@ test.describe("signature Business Brain", () => {
 
     await drawer.getByRole("button", { name: /close/i }).click();
     await expect(drawer).toBeHidden();
+  });
+
+  /*
+   * R9's unscored state. The em dash was on screen and the sentence behind it
+   * was computed and rendered nowhere, so the founder saw the product decline
+   * to answer without being told why it could not.
+   */
+  test("says why there is no score, and does not colour the non-answer green", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(UNSCORED);
+
+    const map = page.getByTestId("business-map-radial");
+    await expect(map).toContainText(/only 2 of 9 areas could be assessed/i);
+
+    const label = map.getByText("Not enough evidence");
+    await expect(label).toBeVisible();
+    const colour = await label.evaluate((node) => getComputedStyle(node).color);
+    // The mint the product uses for a healthy reading.
+    const mint = await page.evaluate(() =>
+      getComputedStyle(document.documentElement).getPropertyValue("--color-mint").trim(),
+    );
+    expect(mint).not.toBe("");
+    expect(colour).not.toBe(mint);
   });
 
   test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {

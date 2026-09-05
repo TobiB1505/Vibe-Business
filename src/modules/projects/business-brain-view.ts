@@ -98,6 +98,14 @@ export type BusinessBrainView = {
     summary: string | null;
     scoredLenses: number;
     eligibleLenses: number;
+    /**
+     * Why nothing could be scored, when nothing could.
+     *
+     * The audit computes this and the Brain rendered an em dash over it: a
+     * score the product declined to give, with the reason it can give left
+     * unread. Null whenever a score exists.
+     */
+    insufficientCoverageReason: string | null;
   };
   nodes: BusinessBrainNode[];
   relationships: BusinessBrainRelationship[];
@@ -256,6 +264,8 @@ export function buildBusinessBrainView(params: {
       summary: synthesis.overall || null,
       scoredLenses: params.audit.overall.scoredLenses,
       eligibleLenses: params.audit.overall.eligibleLenses,
+      insufficientCoverageReason:
+        score === null ? params.audit.overall.insufficientCoverageReason : null,
     },
     nodes,
     relationships: map.connections.map((relationship) => ({
