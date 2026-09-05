@@ -41,7 +41,7 @@ The audience is AI-native builders. They arrive from Linear, Vercel, Claude, Ray
 
 Restraint here is a compositional tool, not a ceiling. Ordinary surfaces stay quiet so that the moments which deserve spectacle can have it; a product where everything is loud has no emphasis left to spend. Both are in play, and choosing between them per surface is the design work.
 
-The register is product-first: marketing expression does not lead inside `/app`. But the standing prohibitions are against the _generic_, not against ambition, and they are applied as a test rather than as a list of banned techniques — see [Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused). One item is absolute at any level of polish: fabricated activity, which exists to make a screen look busy, is a lie rather than a style.
+The register is product-first **inside `/app`**: marketing expression does not lead over a founder's own data. Outside it — the landing page above all — the register is marketing's, and that surface is held to a different bar rather than a lower one; see [Signature Surface: the Landing Page](#signature-surface-the-landing-page). The standing prohibitions are against the _generic_, not against ambition, and they are applied as a test rather than as a list of banned techniques — see [Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused). One item is absolute at any level of polish, on either side of that line: fabricated activity, which exists to make a screen look busy, is a lie rather than a style.
 
 The runtime source of truth is [src/app/globals.css](src/app/globals.css). This file records the durable intent and maps to those established tokens; it does not generate them.
 
@@ -75,7 +75,9 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-On ordinary product surfaces — settings, billing, tables, index pages, forms — motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is deliberate and it is what buys the signature surfaces their contrast; it is a statement about _ordinary_ surfaces, not a cap on the product.
+On ordinary product surfaces — settings, billing, tables, index pages, forms — *continuous* motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is what buys the signature surfaces their contrast.
+
+**Quiet is not plain, and this rule has been read as though it were.** It governs choreography — orbits, auras, staged entrances, ambient movement — and it says nothing about craft. A dashboard, a profile or a billing page may have considered composition, real hierarchy, depth, texture, an entrance, hover states with weight, and a layout somebody clearly designed. The test that applies to them is the same five questions every other surface answers ([Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused)); what they may not do is borrow a *signature* surface's language and spend the contrast the product has been saving. A screen that is merely inoffensive has failed this document, not satisfied it.
 
 Motion beyond that is governed by [Craft and Motion](#craft-and-motion) below, which supersedes this document's earlier position that the three named signature surfaces were the only places cinematic motion could exist.
 
@@ -207,7 +209,7 @@ Model reasoning stays out of bounds regardless (rule 43). A trace beside such a 
 
 ## Signature Surfaces
 
-A signature surface is one where the product's understanding is the thing being shown, and where choreography carries meaning rather than decorating it. Three exist today — Business Brain, Product Scan and Agent — and they are described below.
+A signature surface is one where the product's understanding is the thing being shown, and where choreography carries meaning rather than decorating it. Four exist today — the landing page, Business Brain, Product Scan and Agent — and they are described below. The landing page is the exception to the definition's first half and is argued on its own terms: it shows no founder's data, because the visitor has not arrived with any.
 
 **The set is open.** Earlier revisions of this document declared it closed at three; that position is retired. A new signature surface requires an intentional design argument — what it means, what its motion says that static layout could not, and why it earns the contrast — not a prohibition. What must not happen is every card behaving like one: the richest choreography is reserved for moments that deserve it, and ordinary cards, forms, tables and index pages stay quiet so that reservation means something.
 
@@ -216,6 +218,18 @@ A signature surface is one where the product's understanding is the thing being 
 _Nova is the project Home at HEAD._ The first slice ships the surface itself: `deriveNovaFocus`'s ranking mounted as `src/app/app/projects/[projectId]/nova/`, one Focus Card carrying one priced control, a working strip, a bounded attention stack and the business reading as context. [ADR 0085](docs/decisions/0085-nova-is-the-project-home.md) records the reversal of [ADR 0047](docs/decisions/0047-business-health-is-project-home.md); Business Health keeps every address it had.
 
 What has *not* shipped is the choreography this section describes. Nova Home is currently calm by construction — one card reveal, one working dot, and no motion language of its own — because the surface had to be legible before it was expressive. The paragraph above therefore remains a standing design decision about what Nova is to become, and the three surfaces described below remain the product's current signature set.
+
+## Signature Surface: the Landing Page
+
+The landing page is a signature surface, and it is the one whose argument is not about a founder's data at all.
+
+**Why it qualifies.** Every other signature surface earns its choreography by showing what the product understood. This one earns it by being the only screen a visitor meets before they trust anything — no account, no repository, no audit, nothing of theirs on screen. What it has to carry is the claim itself: that Vibe reads a real product, judges a real business, and does work a founder can check. A page that states that in a stack of neat cards is asking to be believed on the strength of its typography. The first impression is a product claim, and it is made visually or not at all.
+
+**So the register is marketing's.** Expression may lead here in a way it deliberately does not inside `/app`: a hero that moves, depth that is felt rather than measured, a composition built for a scroll rather than for a return visit, and copy written to be read once with attention rather than a hundred times at a glance. The audience arrives from Linear, Vercel, Framer and Lovable and reads craft as capability before they read a word.
+
+**Nova belongs here, and this is where she is introduced.** She is the product's Home and its named presence; a first page that never mentions her leaves the visitor to meet the product's protagonist after signing up. The landing page may show her mark, her states, and what she does — an *introduction*, with the same avatar and the same four presences the product uses, so the Nova a visitor meets and the Nova they sign in to are one thing.
+
+**What does not relax.** Everything on this page is a claim about a real product, so the truthfulness rules apply exactly as they do inside the app — see [Motion may be ambitious; it may never be false](#motion-may-be-ambitious-it-may-never-be-false). No invented metric, no fabricated dashboard, no customer logo that is not a customer, no screenshot of a state the product cannot reach, and no counter that counts nothing. A demonstration must be a demonstration: where the page shows the product working, it shows the real components on stated example data, and says so. Reduced motion, hidden-tab pausing and reserved geometry are obligations here too — a marketing page is where a visitor is most likely to arrive on a slow phone.
 
 ## Signature Surface: Business Brain
 
@@ -259,6 +273,9 @@ The Build stage owns the Agent's live event record beside the working core. Vali
 - Do preserve full repository and branch identity through responsive transformations.
 - Do use one visual accent and a quiet foreground hierarchy.
 - Do reserve cinematic motion and luminous depth for surfaces that have earned a signature argument, and keep ordinary surfaces quiet so that reservation reads.
+- Do design the ordinary surfaces anyway. Quiet governs choreography, never craft — a dashboard, profile or billing page that is merely inoffensive has failed this document.
+- Do treat the landing page as the product's first claim, and hold it to a marketing register rather than a product-first one.
+- Don't put a number, a logo, a screenshot or a counter on the landing page that the product cannot stand behind — the truthfulness rules do not stop at `/app`.
 - Do let Product Scan motion follow stored discoveries and nothing else.
 - Do search 21st.dev and shadcn before designing a significant new surface, and say what was rejected as well as what was taken.
 - Do state the problem, the alternative and the cost before adding a UI dependency.
