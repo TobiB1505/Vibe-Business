@@ -3,6 +3,8 @@ import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { Disclosure, TechnicalDetails } from "@/components/ui/disclosure";
 import { Surface } from "@/components/ui/surface";
+import { CitationCount } from "@/components/system/evidence-drawer";
+import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { projectSectionHref } from "@/components/layout/project-shell";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import {
@@ -12,6 +14,17 @@ import {
   type FounderIntent,
 } from "@/modules/projects/founder-intent";
 import type { ConfidenceTone, UnderstandingView } from "@/modules/product-understanding/view";
+
+/**
+ * Evidence ids to citations, resolved through the one table that knows how to
+ * say them in a founder's words. The id itself never reaches the screen.
+ */
+function citationsFor(ids: readonly string[]) {
+  return ids.map((id) => {
+    const described = describeEvidenceId(id);
+    return { detail: described.detail, source: described.source, certainty: described.certainty };
+  });
+}
 
 export type UnderstandingSourceState = "ready" | "partial" | "failed" | "none";
 
@@ -207,6 +220,17 @@ export function UnderstandingPanel({
               <h3 className="text-fg mt-4 text-sm font-semibold">{fact.label}</h3>
               <p className={`${TONE_TEXT[fact.tone]} mt-2 flex-1 text-sm leading-6`}>{fact.value}</p>
               <p className="text-fg-meta mt-4 flex items-center gap-2 text-[0.7rem]"><span className={`${TONE_DOT[fact.tone]} size-1.5 rounded-full`} aria-hidden />{fact.note}</p>
+              {/*
+                The same drawer every score and finding opens. The profile is
+                the one surface with per-field confidence, and it was also the
+                one that could not show what the confidence rested on.
+              */}
+              <CitationCount
+                citations={citationsFor(fact.evidence)}
+                title={fact.label}
+                conclusion={fact.value}
+                className="mt-2"
+              />
             </article>
           ))}
         </div>

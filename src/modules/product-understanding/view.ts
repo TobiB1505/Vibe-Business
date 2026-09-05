@@ -138,6 +138,16 @@ export type UnderstandingFact = {
   tone: ConfidenceTone;
   note: string;
   sources: EvidenceSource[];
+  /**
+   * The evidence-pack ids behind the claim.
+   *
+   * `sources` says *which layer* saw it; these say *what it saw*, and they are
+   * what makes an attributed claim checkable rather than merely attributed
+   * (`Attributed.evidence`). The profile dropped them at this boundary, so the
+   * one place in the product with per-field confidence was also the one place
+   * that could not show its working.
+   */
+  evidence: string[];
 };
 
 export type ProductDnaFact = UnderstandingFact & {
@@ -160,6 +170,7 @@ export function buildProductDna(profile: ProductProfile): ProductDnaFact[] {
     tone: toneFor(attributed.confidence),
     note: confidenceNote(attributed.confidence, attributed.sources),
     sources: attributed.sources,
+    evidence: attributed.evidence,
   }));
 }
 
@@ -181,6 +192,7 @@ export function buildAudienceFacts(profile: ProductProfile): UnderstandingFact[]
         tone: toneFor(attributed.confidence),
         note: confidenceNote(attributed.confidence, attributed.sources),
         sources: attributed.sources,
+        evidence: attributed.evidence,
       },
     ];
   });

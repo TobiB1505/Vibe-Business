@@ -227,8 +227,14 @@ test.describe("did I get this right", () => {
 
     await page.getByRole("button", { name: "Let me fix it" }).click();
 
-    await expect(page.getByLabel("Who it's for")).toBeVisible();
-    await expect(page.getByLabel("What your product does")).toBeVisible();
+    /*
+     * By role, not by label alone. Every profile fact now renders its evidence
+     * drawer into the DOM — closed, `display: none`, and out of the
+     * accessibility tree — but a `<dialog>` labelled "Who it's for" still
+     * matches a bare label query, and the field is what this test means.
+     */
+    await expect(page.getByRole("textbox", { name: "Who it's for" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "What your product does" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save what I changed" })).toBeVisible();
 
     // The editor starts from what Vibe said, not from blank.
@@ -351,5 +357,33 @@ test.describe("document structure", () => {
     for (let index = 1; index < levels.length; index += 1) {
       expect(levels[index] - levels[index - 1]).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+/*
+ * The profile is the one surface in the product with per-field confidence,
+ * and it was the one that could not show what the confidence rested on:
+ * `Attributed.evidence` carries the ids and `UnderstandingFact` dropped them.
+ * They open the same drawer as a score, a finding and a blocker.
+ */
+test.describe("a profile fact can be checked", () => {
+  test("opens the shared evidence drawer, in words rather than ids", async ({ page }) => {
+    await page.goto(READY);
+
+    const fact = page.getByRole("article").first();
+    await expect(fact).toBeVisible();
+    await fact.getByRole("button", { name: /sources?$/ }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/evidence/i);
+    await expect(drawer).toContainText("What it does");
+
+    // A citation is a sentence and a named source. The id behind it is not.
+    const text = await drawer.innerText();
+    expect(text).not.toMatch(/\b[a-z]+\.[a-z_]+\.[a-z_]+\b/);
+
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(drawer).toBeHidden();
   });
 });
