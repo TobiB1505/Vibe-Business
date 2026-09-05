@@ -33,7 +33,8 @@ import { cn } from "@/lib/utils/cn";
  *
  * ## The four states
  *
- * - `idle` — mostly closed, dim, and **still**. Nothing is happening.
+ * - `idle` — the narrowest of the four, dim, and **still**. Nothing is
+ *   happening.
  * - `listening` — open and lit. A question is sitting with a person.
  * - `working` — the frame turns at a **constant** rate and the curve traces.
  *   Constant by rule: a mark that accelerated with apparent progress would be
@@ -59,11 +60,51 @@ export type NovaPresenceSize = keyof typeof SIZES;
 
 const BLADES = 5;
 /** Inner radius per unit of `open`. Wide, so the curve is the subject. */
-const HOLE = 52;
+export const HOLE = 52;
+
+/**
+ * The light curve, in its own 48-unit box, and how it is placed in the frame.
+ *
+ * Exported with `HOLE` and `APERTURE` because the mark has one geometric
+ * invariant worth holding: no opening may close inside the curve it exists to
+ * frame. `nova-presence.test.ts` derives the curve's reach from these values
+ * and checks every state against it, which is the check `idle` shipped
+ * without.
+ */
+export const CURVE = {
+  /** Scaled about the curve's *visual* middle, which is not the box's. */
+  scale: 40 / 39,
+  origin: { x: 24.5, y: 23.5 },
+  /** The quiet baseline before the event. */
+  baseline: { d: "M5 35 H16", width: 2.4 },
+  /** The rise and the decay. Drawn twice: a dim track, then the lit stroke. */
+  rise: { d: "M16 35 C19.5 35 20.5 12 24 12 C28.5 12 31 27 44 30.5", width: 2.9 },
+  /** The one point on a light curve anybody reads first. */
+  peak: { x: 24, y: 12, r: 3.2 },
+} as const;
 
 /** How far the iris stands open per state. */
-const APERTURE: Record<NovaPresenceState, number> = {
-  idle: 0.4,
+export const APERTURE: Record<NovaPresenceState, number> = {
+  /*
+   * The one opening the prototype never drew, and so the one it could not
+   * hand over. Its nine scenes and its intro render `listening`, `working`
+   * and `settled` only; `idle` exists there as a type member and a default
+   * argument and is never on screen.
+   *
+   * It arrived here at 0.4, and at 0.4 the blades close inside the mark they
+   * are supposed to frame: the light curve reaches 24.45 units from centre
+   * (its far end, bottom-left, half its stroke included) while the blades'
+   * inner edge sits at 0.4 × HOLE = 20.8. The curve crossed the blades by
+   * 3.65 units — the collision the other three states never show, because
+   * the narrowest of them clears it by 3.63.
+   *
+   * 0.5 puts the inner edge at 26 and clears the curve by 1.55. It keeps
+   * `idle` the narrowest opening of the four, which is the whole of what the
+   * state has to say geometrically; the rest of what separates it from
+   * `working` is `LUMA` and stillness, which is where the difference was
+   * always carried.
+   */
+  idle: 0.5,
   listening: 0.62,
   working: 0.54,
   /*
@@ -295,28 +336,28 @@ export function NovaPresence({
           is open to show it.
         */}
         <motion.g
-          transform={`translate(50 50) scale(${(40 / 39).toFixed(3)}) translate(-24.5 -23.5)`}
+          transform={`translate(50 50) scale(${CURVE.scale.toFixed(3)}) translate(${-CURVE.origin.x} ${-CURVE.origin.y})`}
           initial={opening ? { opacity: 0 } : false}
           animate={{ opacity: 1 }}
           transition={reduceMotion ? { duration: 0 } : { duration: 0.2, delay: opening ? 1.28 : 0 }}
         >
           {/* The quiet baseline before the event. */}
           <path
-            d="M5 35 H16"
+            d={CURVE.baseline.d}
             fill="none"
             stroke="var(--color-fg)"
             strokeOpacity={0.18 * luma + 0.06}
-            strokeWidth={2.4}
+            strokeWidth={CURVE.baseline.width}
             strokeLinecap="round"
           />
           {/* A dim track, so the trace has something to run along and the shape
               stays legible at every point of the loop. */}
           <path
-            d="M16 35 C19.5 35 20.5 12 24 12 C28.5 12 31 27 44 30.5"
+            d={CURVE.rise.d}
             fill="none"
             stroke="var(--color-mint)"
             strokeOpacity={0.16}
-            strokeWidth={2.9}
+            strokeWidth={CURVE.rise.width}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -324,11 +365,11 @@ export function NovaPresence({
             className={
               working ? `nTrace-${id}` : opening && !reduceMotion ? `nDraw-${id}` : undefined
             }
-            d="M16 35 C19.5 35 20.5 12 24 12 C28.5 12 31 27 44 30.5"
+            d={CURVE.rise.d}
             fill="none"
             stroke="var(--color-mint)"
             strokeOpacity={luma}
-            strokeWidth={2.9}
+            strokeWidth={CURVE.rise.width}
             strokeLinecap="round"
             strokeLinejoin="round"
           />
@@ -342,9 +383,9 @@ export function NovaPresence({
                   ? `nPeakDraw-${id}`
                   : undefined
             }
-            cx={24}
-            cy={12}
-            r={3.2}
+            cx={CURVE.peak.x}
+            cy={CURVE.peak.y}
+            r={CURVE.peak.r}
             fill="var(--color-mint)"
             fillOpacity={luma}
           />
