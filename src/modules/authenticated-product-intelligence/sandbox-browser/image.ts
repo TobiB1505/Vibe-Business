@@ -6,6 +6,7 @@ import { writeSandboxTextFile } from "@/modules/validation/sandbox-files";
 import type { AuthenticatedAnalysisFailure } from "../errors";
 import { BROWSER_RUNTIME_VERSION } from "./guard-program";
 import {
+  IMAGE_BUILD_CWD,
   IMAGE_BUILD_HOSTS,
   IMAGE_LINK,
   IMAGE_LINK_PROGRAM,
@@ -116,7 +117,9 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
       for (const [index, command] of imageBuildCommands().entries()) {
         const result = await handle.run({
           command,
-          cwd: BROWSER_SANDBOX.root,
+          // Not the root: command 0 is the `mkdir` that creates it. See
+          // `IMAGE_BUILD_CWD`.
+          cwd: IMAGE_BUILD_CWD,
           timeoutMs: BUILD_STEP_TIMEOUT_MS,
         });
         if (result.exitCode !== 0) {
@@ -150,7 +153,7 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
 
       const linked = await handle.run({
         command: imageLinkCommand(),
-        cwd: BROWSER_SANDBOX.root,
+        cwd: IMAGE_BUILD_CWD,
         timeoutMs: BUILD_STEP_TIMEOUT_MS,
         env: { ...imageBuildEnv(), ...IMAGE_LINK.env },
       });

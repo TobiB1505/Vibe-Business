@@ -39,6 +39,36 @@ export const BROWSER_PLAYWRIGHT_VERSION = "1.62.1";
 const BROWSERS_DIR = `${BROWSER_SANDBOX.root}/browsers`;
 
 /**
+ * Where the build's commands run, and why it is not the directory they build.
+ *
+ * `/`, not `BROWSER_SANDBOX.root`, and this constant exists so the reason
+ * survives.
+ *
+ * The first real Deep Scan failed here, at command 0, after 3.8 seconds:
+ *
+ * ```
+ * failed to start process: chdir /vibe-browser: no such file or directory
+ * ```
+ *
+ * That command is the `mkdir -p` which **creates** `/vibe-browser`, and it was
+ * being started with `/vibe-browser` as its working directory. A process cannot
+ * `chdir` into a directory that does not exist yet, so the command whose whole
+ * job is to create the root could never run.
+ *
+ * It is specific to this sandbox, which is what hid it. A validation or preview
+ * sandbox is created from a **git source**, and the clone makes the working
+ * directory before any command runs. This one is `{ kind: "image" }` — no
+ * clone, no source, nothing on the filesystem but the base image — so the
+ * directory has to be made, and the making cannot happen inside itself.
+ *
+ * Every build command addresses its target absolutely (`mkdir -p` the root,
+ * `npm install --prefix` it, `PLAYWRIGHT_BROWSERS_PATH` under it, `node` with
+ * the program's full path), so none of them needs a working directory at all.
+ * `/` is simply somewhere that is certain to exist.
+ */
+export const IMAGE_BUILD_CWD = "/";
+
+/**
  * The commands that build the image, in the order they run.
  *
  * Every one is Vibe-constructed as `{ command, args[] }` and never a string a

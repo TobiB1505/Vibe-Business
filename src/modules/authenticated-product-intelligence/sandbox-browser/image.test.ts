@@ -4,7 +4,7 @@ import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { BROWSER_GUARD_PROGRAM, BROWSER_RUNTIME_VERSION } from "./guard-program";
 import { createBrowserRuntimeImage } from "./image";
-import { IMAGE_BUILD_HOSTS, IMAGE_LINK, imageBuildCommands } from "./image-build";
+import { IMAGE_BUILD_CWD, IMAGE_BUILD_HOSTS, IMAGE_LINK, imageBuildCommands } from "./image-build";
 import { BROWSER_SANDBOX } from "./runtime";
 
 /**
@@ -240,5 +240,71 @@ describe("a failed build costs one sandbox and no retry loop", () => {
 
     expect(result).toEqual({ ok: false, error: "browser_provider_unavailable" });
     expect(JSON.stringify(result)).not.toContain("boom");
+  });
+});
+
+/**
+ * The defect that broke the first real Deep Scan, asserted as the property
+ * rather than as the constant.
+ *
+ * Command 0 is the `mkdir -p` that creates `/vibe-browser`, and it was started
+ * with `/vibe-browser` as its working directory:
+ *
+ *     failed to start process: chdir /vibe-browser: no such file or directory
+ *
+ * A validation or preview sandbox never meets this, which is what hid it: those
+ * are created from a **git source** and the clone makes the working directory
+ * before any command runs. This one has no source at all.
+ *
+ * Asserting `cwd === "/"` would pass over a build that mkdir'd a second
+ * directory and then ran inside that instead. What has to hold is that a
+ * command never runs somewhere the build has not made yet — so the test walks
+ * the transcript keeping the directories that exist, which is what the sandbox
+ * does.
+ */
+describe("a build command never runs in a directory that does not exist yet", () => {
+  function commandRuns(sandboxes: ReturnType<typeof fakeSandboxProvider>) {
+    return sandboxes.events.flatMap((event) =>
+      event.kind === "command" ? [{ command: event.command, cwd: event.cwd }] : [],
+    );
+  }
+
+  it("starts every command somewhere that has been created", async () => {
+    const sandboxes = fakeSandboxProvider({});
+    const { resolver } = image(sandboxes);
+
+    await resolver.resolve();
+
+    // Two directories exist before the build says anything. `/` is the base
+    // image's root, and `.` is wherever the provider started the process —
+    // which is what `writeSandboxTextFile` uses, correctly, because it
+    // redirects to an absolute path and needs no directory of its own.
+    // Everything else has to be made first, and `/vibe-browser` is the one
+    // this build makes.
+    const existing = new Set(["/", "."]);
+
+    for (const run of commandRuns(sandboxes)) {
+      expect(
+        existing.has(run.cwd),
+        `\`${run.command}\` runs in ${run.cwd}, which nothing has created yet`,
+      ).toBe(true);
+
+      // `mkdir -p a b` creates each of its arguments, which is how the root
+      // comes to exist at all.
+      const [command, ...args] = run.command.split(" ");
+      if (command === "mkdir") {
+        for (const argument of args) if (argument.startsWith("/")) existing.add(argument);
+      }
+    }
+  });
+
+  it("makes the root before anything is installed into it", async () => {
+    // The order the property above depends on, stated once so a reordering is
+    // a failure here rather than a 400 from the provider.
+    const [first] = imageBuildCommands();
+
+    expect(first.command).toBe("mkdir");
+    expect(first.args).toContain(BROWSER_SANDBOX.root);
+    expect(IMAGE_BUILD_CWD).not.toBe(BROWSER_SANDBOX.root);
   });
 });
