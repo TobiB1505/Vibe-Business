@@ -4,10 +4,11 @@ import {
   buildBusinessBrainView,
   type BusinessBrainView,
 } from "@/modules/projects/business-brain-view";
-import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
+import { buildOperationView, OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "./agent-block";
 import { AskBlock, PlanAskBlock, WorkspaceAskBlock } from "./ask-block";
 import { MoveBlock } from "./move-block";
+import { ProgressBlock } from "./progress-block";
 import { ReviewBlock } from "./review-block";
 import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "./audit-block";
@@ -191,6 +192,32 @@ const WORKSPACES: WorkspaceCandidate[] = [
 const MOVES_FIXTURE = E2E_MOVES_SCENARIOS.moves_ranked();
 const MOVE = MOVES_FIXTURE.opportunities[0]!;
 const MOVE_EXECUTION = MOVES_FIXTURE.executionStates[MOVE.id] ?? null;
+
+
+/**
+ * The planning run, at a chosen point in its own stages.
+ *
+ * Built through `buildOperationView` rather than written as a literal, so the study draws the same
+ * object the route draws — `stalled`, `shouldPoll` and `retryAllowed` are derived here exactly as
+ * they are in production, and a change to that derivation shows up in the lab rather than only in
+ * the app.
+ */
+function planningRun(startedMsAgo: number, stage: "preparing" | "planning" | "validating") {
+  const started = new Date(Date.now() - startedMsAgo);
+  return buildOperationView({
+    operationId: "study-action-planning",
+    status: "running",
+    stage,
+    failureCode: null,
+    resultId: null,
+    startedAt: started.toISOString(),
+    completedAt: null,
+    createdAt: started.toISOString(),
+  });
+}
+
+/** The same run, past the point where a wait is still believable. */
+const PLANNING_STALLED = planningRun(12 * 60 * 1000, "planning");
 
 /** The agent fixture the workspace's own stage routes render from. */
 const AGENT = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
@@ -688,6 +715,59 @@ export function StudyBlock({ study }: { study: Study }) {
           The control is outside, as every control is. A Move block is a view, so a founder reading
           it is never a mis-click away from spending inside the thing they are reading — and the
           card gives up its own surface rather than the block giving up its frame.
+        </Context>
+      </section>
+
+
+      {/* ── The minute after the press ───────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>What the twenty Credits are doing</Eyebrow>
+        <Context>
+          The press used to be the end of the thread. Twenty Credits were spent, a run took about a
+          minute, and the next thing a founder saw was a finished plan on another screen — if they
+          thought to go and look. The press and its consequence were not visibly the same event.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble tone="active" index={0}>
+            <Line>That&rsquo;s started. The steps will land here, not on another screen.</Line>
+          </Bubble>
+          <RenderBlock label="Planning the move" tone="active" index={1}>
+            <ProgressBlock sequence="action_planning" operation={planningRun(40_000, "planning")} />
+          </RenderBlock>
+        </div>
+        <Context>
+          No percentage, no &ldquo;3 of 4&rdquo;, no estimate — the rows come from the run&rsquo;s
+          own durable stage, so a tick is a fact rather than an animation on a timer. It is the
+          shipped checklist, not a copy of it: the component carries no frame of its own, so there
+          was not even a variant to add. Nova says the one thing the block cannot — that the result
+          arrives here — and the first draft of this line did not: it repeated the current row back
+          in Nova&rsquo;s voice, which is the two-UIs problem in copy rather than in components.
+        </Context>
+      </section>
+
+      {/* ── The same run, too long ───────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>When the minute becomes twelve</Eyebrow>
+        <Context>
+          A durable run can be lost by the platform, and the row would then say
+          &ldquo;running&rdquo; forever. The block says so without claiming the run failed — it may
+          yet land, and a founder told otherwise pays twice.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <RenderBlock label="Planning the move" tone="waiting" index={0}>
+            <ProgressBlock sequence="action_planning" operation={PLANNING_STALLED} />
+          </RenderBlock>
+          <Moves
+            moves={[{ label: "Start again", operation: "action_plan" }]}
+            balance={STUDY_BALANCE}
+          />
+        </div>
+        <Context>
+          No bubble. The block already says it in the shipped component&rsquo;s own words, and a
+          bubble above it would be Nova reading the panel out loud — so this is the case where a
+          render block is the whole message and speech would only be a second voice. Starting again
+          is a second twenty Credits, so it is a control outside the block like every other priced
+          thing.
         </Context>
       </section>
 

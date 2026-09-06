@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, watchableOperations } from "./block-registry";
+import {
+  BLOCK_FOR_MOMENT,
+  BLOCK_FOR_OPERATION,
+  progressSequenceFor,
+  watchableOperations,
+} from "./block-registry";
 import { FOCUS_CANDIDATE_KINDS } from "@/modules/nova/focus";
 import { OPERATION_TYPES } from "@/modules/operations/schema";
 
@@ -39,6 +44,11 @@ describe("what a founder sees for each state", () => {
    * agreeing. `nova/read.ts` decides which operations Nova reports progress
    * for; this decides which have something to show. Anything Nova watches must
    * have a block, or a founder gets a running state with a blank space in it.
+   *
+   * The list is retyped rather than imported because `read.ts` is
+   * `server-only` and importing it here would fail before the assertion ran.
+   * It is not free-form: `as const` makes every entry an `OperationType`, so a
+   * renamed or deleted type fails to compile in this file too.
    */
   it("has a block for everything Nova reports progress on", () => {
     const watched = [
@@ -54,5 +64,29 @@ describe("what a founder sees for each state", () => {
       expect(BLOCK_FOR_OPERATION[type], type).not.toBe("none");
       expect(watchableOperations()).toContain(type);
     }
+  });
+
+  /*
+   * A block kind is a promise that something can be drawn. `progress` is the
+   * one kind that needs a second thing to exist — the named stages — and the
+   * two are decided in different files, so a mapping to `progress` without a
+   * sequence would render a run with an empty checklist under it.
+   */
+  it("has named stages for exactly the operations shown as progress", () => {
+    for (const type of OPERATION_TYPES) {
+      const shownAsProgress = BLOCK_FOR_OPERATION[type] === "progress";
+      expect(progressSequenceFor(type) !== null, type).toBe(shownAsProgress);
+    }
+  });
+
+  /*
+   * And the sequence is the operation's own. The two ids happen to share their
+   * names today, which is what makes the narrowing safe and also what would
+   * make a silent swap invisible.
+   */
+  it("gives each run its own stages", () => {
+    expect(progressSequenceFor("action_planning")).toBe("action_planning");
+    expect(progressSequenceFor("opportunity_generation")).toBe("opportunity_generation");
+    expect(progressSequenceFor("business_audit")).toBeNull();
   });
 });

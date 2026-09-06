@@ -1,5 +1,6 @@
 import type { FocusCandidateKind } from "@/modules/nova/focus";
 import { OPERATION_TYPES, type OperationType } from "@/modules/operations/schema";
+import type { ProgressSequenceId } from "@/modules/operations/view";
 
 /**
  * Which block shows which state, decided in one place.
@@ -22,7 +23,7 @@ import { OPERATION_TYPES, type OperationType } from "@/modules/operations/schema
  * Most operations are not things to watch. A preview teardown, a measurement,
  * an account erasure — a founder has no reason to see any of those arrive in a
  * conversation, and inventing a block for each would be fifteen surfaces for
- * six situations. Saying so explicitly is the difference between *decided* and
+ * seven situations. Saying so explicitly is the difference between *decided* and
  * *forgotten*, and it is the whole value of the record being total.
  *
  * `WATCHED_OPERATIONS` in `nova/read.ts` already makes almost the same
@@ -52,22 +53,27 @@ export type BlockKind =
   | "move"
   /** A question, answered where it was asked. */
   | "ask"
+  /** The named stages of a run, while it is running. */
+  | "progress"
   /** Nothing to show. Decided, not missing — see the header. */
   | "none";
 
 /**
  * What a founder sees while an operation of this type is running.
  *
- * Total over `OperationType`. Six have a block; the rest are machinery a
- * conversation has no reason to narrate.
+ * Total over `OperationType`. Twelve have a block; the remaining three are
+ * machinery a conversation has no reason to narrate.
  */
 export const BLOCK_FOR_OPERATION: Record<OperationType, BlockKind> = {
   business_audit: "audit",
   product_scan: "scan",
   product_understanding: "scan",
   agent_execution: "agent",
-  action_planning: "move",
-  opportunity_generation: "move",
+
+  /* The two runs that have named stages. A founder who just spent twenty
+     Credits watches the stages, not the Move they already read. */
+  action_planning: "progress",
+  opportunity_generation: "progress",
 
   /* A prepared change's own lifecycle. The gate shows all of it, and it shows
      the same thing whichever step is currently running — so one block, not
@@ -134,4 +140,20 @@ export const BLOCK_FOR_MOMENT: Record<FocusCandidateKind, BlockKind> = {
 /** Every operation type that shows something, for a caller that needs the set. */
 export function watchableOperations(): OperationType[] {
   return OPERATION_TYPES.filter((type) => BLOCK_FOR_OPERATION[type] !== "none");
+}
+
+/**
+ * Which named stages a running operation has, if any.
+ *
+ * The two ids are identical to their operation types, which is why this is a
+ * narrowing rather than a table: `PROGRESS_SEQUENCES` in `operations/view.ts`
+ * is the one place the rows are defined, and a second map here would be a copy
+ * of its keys waiting to fall behind it.
+ *
+ * It exists so a caller cannot choose. Passing a sequence by hand is how a
+ * founder ends up watching the planning rows while an opportunity run is going
+ * — the rows would tick, they would be wrong, and nothing would say so.
+ */
+export function progressSequenceFor(type: OperationType): ProgressSequenceId | null {
+  return type === "action_planning" || type === "opportunity_generation" ? type : null;
 }
