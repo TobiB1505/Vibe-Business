@@ -148,6 +148,19 @@
   --text-title--letter-spacing: -0.02em;
   --text-lead: 0.9375rem;
   --text-lead--line-height: 1.7;
+  /* The same size, a heading's leading (UI Sourcing Spec, decision D5).
+     Eleven card headings write `text-[0.9375rem] leading-snug` by hand
+     because `--text-lead` is this size with prose leading and cannot serve
+     both. The size was never the problem; the leading was.
+
+     1.375 rather than the 1.35 the spec proposed, because 1.375 is
+     `leading-snug` and is what those eleven already render. Naming what
+     ships makes this a rename; naming 1.35 would have moved every card
+     heading in the product by a third of a pixel to match a number nobody
+     had looked at. v2 takes the spec's value, which is what a second
+     palette is for. */
+  --text-card-title: 0.9375rem;
+  --text-card-title--line-height: 1.375;
   --text-caption: 0.78125rem;
   --text-caption--line-height: 1.55;
   --text-label: 0.65625rem;
@@ -732,7 +745,8 @@
  * rendered page, not by reading this file. The build adds prefixes from the
  * configured targets; hand-writing them fights it.
  */
-.vibe-surface-card {
+.vibe-surface-card,
+.vibe-overlay {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 

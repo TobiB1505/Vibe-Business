@@ -148,6 +148,9 @@
   --text-title: 1.1875rem;
   --text-title--line-height: 1.32;
   --text-title--letter-spacing: -0.02em;
+  /* D5's own number. v1 keeps `leading-snug` because that is what its eleven
+     card headings already render; here there is nothing to preserve. */
+  --text-card-title--line-height: 1.35;
 
   /* ── The eyebrow ─────────────────────────────────────────────────────
      Treatment 2, chosen at review: the interface family, uppercase, and
@@ -294,6 +297,39 @@
  * cannot take pointer events.
  */
 [data-vibe="v2"] .vibe-surface-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/*
+ * The sheet is the other place glass belongs.
+ *
+ * `DESIGN.md` and the chosen direction both spend glass on chrome, overlays
+ * and signature moments. An evidence drawer is literally an overlay: it sits
+ * over the page a founder was reading, and the page staying legible behind it
+ * is the reason `Sheet` exists rather than a route.
+ *
+ * Same treatment as the card, deliberately — two glass surfaces that disagree
+ * about what glass looks like is how a product acquires a second material by
+ * accident.
+ */
+[data-vibe="v2"] .vibe-overlay {
+  background: var(--glass-fill);
+  border-color: var(--glass-line);
+  position: relative;
+}
+
+[data-vibe="v2"] .vibe-overlay::before {
   content: "";
   position: absolute;
   inset: 0;

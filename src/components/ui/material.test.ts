@@ -22,6 +22,7 @@ const V2 = readFileSync(join(process.cwd(), "src/app/theme-v2.css"), "utf8");
 const LAYOUT = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8");
 const SURFACE = readFileSync(join(process.cwd(), "src/components/ui/surface.tsx"), "utf8");
 const BUTTON = readFileSync(join(process.cwd(), "src/components/ui/button.tsx"), "utf8");
+const SHEET = readFileSync(join(process.cwd(), "src/components/ui/sheet.tsx"), "utf8");
 
 /** Every selector in a stylesheet, with its block. */
 function rules(css: string): { selector: string; body: string }[] {
@@ -42,6 +43,7 @@ const HOOKS = [
   "vibe-well",
   "vibe-control",
   "vibe-control-text",
+  "vibe-overlay",
 ] as const;
 
 describe("the primitives emit the material hooks", () => {
@@ -54,6 +56,10 @@ describe("the primitives emit the material hooks", () => {
 
   it("Well emits its own hook", () => {
     expect(SURFACE).toContain("vibe-well");
+  });
+
+  it("Sheet emits the overlay hook", () => {
+    expect(SHEET).toContain("vibe-overlay");
   });
 
   it("emits the control hook from buttonClasses, not from the component", () => {
@@ -83,9 +89,9 @@ describe("v1 is untouched", () => {
    * The exemption is narrow and the two assertions below are what keep it
    * narrow: the rule may only set the blur, and only from `var(--glass-*)`.
    */
-  const GLOBAL_EXEMPT = "vibe-surface-card";
+  const GLOBAL_EXEMPT = ["vibe-surface-card", "vibe-overlay"];
 
-  it.each(HOOKS.filter((hook) => hook !== GLOBAL_EXEMPT))(
+  it.each(HOOKS.filter((hook) => !GLOBAL_EXEMPT.includes(hook)))(
     "%s carries no rule outside the v2 scope",
     (hook) => {
       const leaked = rules(GLOBALS)
@@ -95,9 +101,14 @@ describe("v1 is untouched", () => {
     },
   );
 
-  it("styles the card in globals for the blur and nothing else", () => {
-    const global = rules(GLOBALS).filter((rule) => rule.selector === `.${GLOBAL_EXEMPT}`);
+  it("styles the two glass surfaces in globals for the blur and nothing else", () => {
+    const global = rules(GLOBALS).filter((rule) =>
+      GLOBAL_EXEMPT.some((hook) => rule.selector.includes(hook)),
+    );
     expect(global).toHaveLength(1);
+    // One rule for both, so the card and the sheet cannot drift into two
+    // different blurs — which is how a product ends up with two glasses.
+    for (const hook of GLOBAL_EXEMPT) expect(global[0].selector).toContain(hook);
     const properties = [...global[0].body.matchAll(/([a-z-]+):/g)].map((m) => m[1]);
     expect(new Set(properties)).toEqual(new Set(["backdrop-filter"]));
     // Values from tokens only: a literal here would put the number back in two
@@ -182,6 +193,26 @@ describe("the three motion obligations are structural", () => {
     const reduced = GLOBALS.slice(GLOBALS.indexOf("@media (prefers-reduced-motion: reduce)"));
     const block = reduced.slice(0, reduced.indexOf("\n}\n", reduced.indexOf(".vibe-reveal")) + 3);
     expect(block).toContain("opacity: 1");
+  });
+});
+
+describe("the card-title token exists rather than eleven literals", () => {
+  /**
+   * Decision D5 in the UI Sourcing Spec: a heading token at 15px.
+   *
+   * `--text-lead` is already 15px but carries prose leading (1.7), so eleven
+   * card headings write `text-[0.9375rem] leading-snug` instead. The size was
+   * never the problem; the leading was, and one token cannot serve both.
+   */
+  it("declares the size and a heading's leading", () => {
+    expect(GLOBALS).toMatch(/--text-card-title:\s*0\.9375rem/);
+    // 1.375 is `leading-snug`, which is what those eleven already render.
+    // Naming what ships makes this a rename rather than a redesign.
+    expect(GLOBALS).toMatch(/--text-card-title--line-height:\s*1\.375/);
+  });
+
+  it("lets v2 take the number the spec actually asked for", () => {
+    expect(V2).toMatch(/--text-card-title--line-height:\s*1\.35/);
   });
 });
 

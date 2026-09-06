@@ -72,6 +72,16 @@ The control hook is emitted from `buttonClasses()` rather than from `<Button>`, 
 
 **Two defects the rendered page found and the files did not.** The card's blur was a Tailwind utility hard-coded in the primitive, so `--glass-blur` could say 14px while the card rendered 24 — a token that lies. The blur now comes from the palette, which is the one `vibe-*` rule outside the scope, narrowed by tests to that property and to token-only values. And writing `-webkit-backdrop-filter` beside the standard property made Lightning CSS keep the prefix and drop the standard declaration, so the card computed `backdrop-filter: none` in *both* palettes; the build prefixes from its own targets, and a hand-written twin fights it. Neither was visible in a diff, in a type check or in a passing test.
 
+### The semantic components needed less than expected, and one token that did not exist
+
+S3 found the semantic layer already composing primitives rather than drawing its own material — `FindingCard` renders through `Surface level="panel"`, and none of the nine writes its own `rounded-card`. So S2's hooks reached them for free, and S3 is two findings rather than nine rewrites.
+
+**The sheet had the card's bug.** `Sheet` hard-coded a blur utility exactly as the card had, so `--glass-blur` would have said one thing while the evidence drawer rendered another. It now carries `vibe-overlay` and takes the blur from the same rule the card does — one rule for both, asserted, because two glass surfaces that disagree about what glass looks like is how a product acquires a second material without deciding to. In v2 the drawer takes the card's fill, line and sheen: `DESIGN.md` and the chosen direction both spend glass on overlays, and an evidence drawer is literally one.
+
+**Decision D5's token did not exist and eleven headings were working around it.** `--text-lead` is already 15px but carries prose leading (1.7), so eleven card headings write `text-[0.9375rem] leading-snug` by hand. The size was never the problem; the leading was, and one token cannot serve both. `--text-card-title` is declared at **1.375 in v1 rather than the 1.35 the spec proposed** — 1.375 is `leading-snug`, which is what those eleven already render, so naming what ships makes this a rename instead of moving every card heading in the product by a third of a pixel to match a number nobody had looked at. v2 takes 1.35, which is what a second palette is for. Measured: v1 renders 15px/20.625px, v2 15px/20.25px.
+
+The remaining ten conversions are route work and belong to S4, where each screen is looked at rather than swept.
+
 ### The palette is measured, not trusted
 
 `design-tokens.test.ts` now measures **both** palettes under the same rules. That is the whole reason `theme-v2.css` is a separate file: the test resolves a token by first regex match in `globals.css`, so a second block of the same names there would have left every assertion still measuring v1 while v2 shipped unchecked — which is exactly how `--color-fg-meta` reached production at 3.38:1 and stayed there for the life of the design system.
