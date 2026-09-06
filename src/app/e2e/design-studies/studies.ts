@@ -169,6 +169,9 @@ export const CREDITS_SCENARIO = "study-credits";
 /** The form controls: the well that converged, and the two that are not fields. */
 export const FORMS_SCENARIO = "study-forms";
 
+/** The heading scale, and the three ways to close the hole in it. */
+export const TYPE_SCENARIO = "study-type";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
