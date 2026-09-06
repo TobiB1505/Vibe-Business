@@ -620,38 +620,6 @@ export function Happened({
 }
 
 /**
- * The line that says where the founder got to.
- *
- * ## Why this is the piece that had to be invented
- *
- * Everything else on this screen already survives a reload, because all of it
- * is derived from rows: the operations, the prepared changes, the plan, the
- * events. A founder who comes back tomorrow is looking at exactly the state
- * they left. What they cannot tell is **which of it is new**, and no amount of
- * derivation answers that — it is a fact about a person, not about a project.
- *
- * So it is the one thing the product has to remember on their behalf: the last
- * moment they looked. One timestamp per founder per project, read here and
- * written when the page is opened.
- *
- * It is deliberately a *divider* and not a badge. A count would have to be
- * right, and "3 new" over a list somebody already scrolled past is worse than
- * nothing; a line simply marks a place, and a founder who reads past it has
- * lost nothing.
- */
-export function SinceDivider({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 py-2" role="separator">
-      <span aria-hidden className="h-px flex-1 bg-line-2" />
-      <span className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">
-        {children}
-      </span>
-      <span aria-hidden className="h-px flex-1 bg-line-2" />
-    </div>
-  );
-}
-
-/**
  * What Nova is doing, said the way a chat product says it.
  *
  * ## What this replaced, and why the box had to go

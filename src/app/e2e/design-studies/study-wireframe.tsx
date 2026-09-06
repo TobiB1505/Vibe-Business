@@ -25,7 +25,6 @@ import {
   type NovaAvailability,
   Moves,
   RenderBlock,
-  SinceDivider,
   Thinking,
 } from "./elements";
 import { Arriving } from "./arriving";
@@ -69,10 +68,12 @@ import type { Study } from "./studies";
  *   It carries no timestamps, because a sentence re-derived on every load was
  *   never "sent" at any particular time.
  *
- * The one thing that had to be invented is the line between them: which of
- * this the founder has already seen. That is a fact about a person rather than
- * about a project, so no derivation produces it — it is one timestamp per
- * founder per project, and it is the whole of the new state this screen needs.
+ * Nothing had to be invented for either. An earlier draft added one thing — a
+ * "While you were away" line, and a stored timestamp per founder to place it —
+ * and it was removed on the argument that nothing here runs without the
+ * founder: a run they started may land while they are gone, but its result is
+ * the present tense at the top of the thread, not something to mark as unread.
+ * This screen adds no new persisted state at all.
  *
  * ## What a bubble is for, which is narrower than it was
  *
@@ -119,14 +120,6 @@ const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 /** Where "now" is, so every relative time on this page is stable in a screenshot. */
 const NOW = Date.parse("2026-09-06T09:10:00.000Z");
-
-/**
- * The last moment this founder looked at this project.
- *
- * A constant here and a stored column later. Everything above it in the thread
- * happened while they were away.
- */
-const LAST_SEEN = Date.parse("2026-09-05T18:30:00.000Z");
 
 const ACTIVITY_RECORDS: AuditEventRecord[] = [
   {
@@ -335,8 +328,6 @@ export function StudyWireframe({
 
   /* Oldest first: a thread reads downward, and the log arrives newest first. */
   const past = [...activity].reverse();
-  const seen = past.filter((entry) => Date.parse(entry.at) <= LAST_SEEN);
-  const since = past.filter((entry) => Date.parse(entry.at) > LAST_SEEN);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8 max-sm:px-3 max-sm:py-4">
@@ -366,7 +357,7 @@ export function StudyWireframe({
 
             <Plan />
 
-            <Earlier seen={seen} since={since} />
+            <Earlier past={past} />
           </div>
 
           {/*
@@ -501,29 +492,30 @@ export function StudyWireframe({
 /**
  * What has happened, in the column about the work.
  *
- * Two groups and one line between them. Everything under the line happened
- * while the founder was away — the only thing on this screen that knows
- * anything about the person reading it, and the one piece of state no
- * derivation produces.
+ * ## Why there is no line through it
+ *
+ * There was one: a "While you were away" divider, and a `LAST_SEEN` timestamp
+ * to place it. It was the only state on this screen that knew anything about
+ * the person reading it, and the only thing here no derivation produced — one
+ * column per founder per project, and a migration to add it.
+ *
+ * It is gone because the premise was wrong. Nothing in this product happens
+ * without the founder: no model runs on a schedule, no work starts on its own,
+ * and there is no background that fills up overnight. What *can* land while
+ * they are away is a run they themselves started — and that run's result is
+ * already the present tense at the top of the thread, where they will read it
+ * first. The divider marked the boundary of a set that is either empty or
+ * already said.
+ *
+ * So the log is one list, newest at the bottom, and the product remembers
+ * nothing about who is looking at it.
  */
-function Earlier({
-  seen,
-  since,
-}: {
-  seen: ReturnType<typeof buildActivityFeed>;
-  since: ReturnType<typeof buildActivityFeed>;
-}) {
+function Earlier({ past }: { past: ReturnType<typeof buildActivityFeed> }) {
   return (
     <div className="flex flex-col gap-1.5 border-t border-line-1 pt-4">
       <Label>Earlier</Label>
       <div className="flex flex-col">
-        {seen.map((entry) => (
-          <Happened key={entry.id} title={entry.title} at={ago(entry.at)} tone={entry.tone} />
-        ))}
-      </div>
-      {since.length > 0 && <SinceDivider>While you were away</SinceDivider>}
-      <div className="flex flex-col">
-        {since.map((entry) => (
+        {past.map((entry) => (
           <Happened
             key={entry.id}
             title={entry.title}
