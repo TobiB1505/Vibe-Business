@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
+import { getFounderName } from "@/modules/auth/founder-profile";
 import { getGithubIdentity } from "@/modules/github/identity";
 import { ProfileView } from "./profile-view";
 
@@ -18,7 +19,10 @@ export default async function ProfilePage() {
   const session = await requireSession("/app/profile");
   const supabase = await createClient();
 
-  const github = await getGithubIdentity(supabase, session.userId);
+  const [github, founderName] = await Promise.all([
+    getGithubIdentity(supabase, session.userId),
+    getFounderName(supabase, session.userId),
+  ]);
 
-  return <ProfileView email={session.email} github={github} />;
+  return <ProfileView email={session.email} github={github} founderName={founderName} />;
 }

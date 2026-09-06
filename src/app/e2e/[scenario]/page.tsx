@@ -588,6 +588,7 @@ export default async function E2eScenarioPage({
                     initials: "TB",
                     avatarUrl: null,
                     fromGithub: true,
+                    chosen: false,
                   }}
                   subtitle="Founder"
                   placement="above"
@@ -1243,6 +1244,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1274,6 +1276,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1281,7 +1284,11 @@ export default async function E2eScenarioPage({
         }
       >
         <div className="sr-only">{label}</div>
-        <ProfileView email={fixture.email} github={fixture.github} />
+        <ProfileView
+          email={fixture.email}
+          github={fixture.github}
+          founderName={fixture.founderName ?? null}
+        />
       </AccountShell>
     );
   }
@@ -1305,6 +1312,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1330,6 +1338,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1355,6 +1364,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
