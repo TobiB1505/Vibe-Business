@@ -28,6 +28,7 @@ import {
   SinceDivider,
   Thinking,
 } from "./elements";
+import { Arriving } from "./arriving";
 import { AuditBlock } from "./audit-block";
 import { Clock } from "./clock";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
@@ -369,34 +370,21 @@ export function StudyWireframe({
           </div>
 
           {/*
-            The foot of the rail: the project this is about, what the account
-            can spend, and who is signed in.
+            The foot of the rail: what the account can spend, and who is signed
+            in. The project moved to the header, where the connection to it is
+            a status rather than a subtitle.
 
-            All three are context rather than conversation, which is why they
-            are here and not in the thread. A Move belongs beside the sentence
-            that explains it; a balance belongs in one fixed place a founder
-            can find without reading anything.
+            Both of these are context rather than conversation, which is why
+            they are here and not in the thread. A Move belongs beside the
+            sentence that explains it; a balance belongs in one fixed place a
+            founder can find without reading anything.
+
+            The shipped chip, not a second one. It already decides what a null
+            balance renders (nothing, because unread is not zero) and when a low
+            balance is worth colouring — and it does not offer to sell anything,
+            which is the thing a redraw would have added.
           */}
-          <div className={`flex flex-col gap-3 p-4 ${panel}`}>
-            <div className="flex items-center gap-3">
-              <span
-                aria-hidden
-                className="grid size-8 shrink-0 place-items-center rounded-nav border border-line-3 bg-surface-2 text-caption font-semibold text-fg"
-              >
-                P
-              </span>
-              <div className="min-w-0">
-                <p className="truncate text-ui font-semibold text-fg">Payflow</p>
-                <p className="truncate text-caption text-fg-meta">Developer tool</p>
-              </div>
-            </div>
-
-            {/*
-              The shipped chip, not a second one. It already decides what a
-              null balance renders (nothing, because unread is not zero) and
-              when a low balance is worth colouring — and it does not offer to
-              sell anything, which is the thing a redraw would have added.
-            */}
+          <div className={`flex flex-col gap-2.5 p-4 ${panel}`}>
             <WalletChip balance={STUDY_BALANCE} href="/app/billing" />
 
             <Link
@@ -429,6 +417,8 @@ export function StudyWireframe({
                 : AVAILABILITY
             }
             subject="Payflow"
+            /* The ranking's own precondition, not a second reading of it. */
+            connected={!FACTS.sourceDisconnected}
             mark={<NovaPresence state={presence} seed="project_e2e" size="sm" />}
             now={<Clock />}
           />
@@ -445,69 +435,48 @@ export function StudyWireframe({
           */}
           <div className={`flex flex-col gap-1 p-5 max-sm:p-3.5 ${panel}`}>
             {/* ── Now: what she has to say about it ───────────────────── */}
-            <div className="flex flex-col gap-1.5 pt-3">
-              {bubbles.map((bubble, position) => (
-                <Bubble
-                  key={bubble.key}
-                  tone={status.tone}
-                  open={status.open}
-                  aside={bubble.aside}
-                  tail={bubble.tail}
-                  index={position}
-                >
-                  {bubble.paragraphs.map((text) =>
-                    bubble.aside ? (
-                      <Context key={text}>{text}</Context>
-                    ) : (
-                      <Line key={text}>{text}</Line>
-                    ),
-                  )}
-                </Bubble>
-              ))}
-
-              {/*
-                What she made. A block, not a bubble — the same rule that put
-                the control outside one. It sits after the sentences because
-                that is the wireframe's order: she says it, then shows it.
-              */}
-              <RenderBlock label="Business audit" at="16h" index={bubbles.length}>
-                <AuditBlock view={auditView()} />
-              </RenderBlock>
-
-              {/*
-                She is composing, and the product observed it. Bound to the
-                operations view's own `working` phase and unreachable on any
-                other, so a borrowed chat idiom never implies somebody is at a
-                keyboard when nothing is running.
-              */}
-              {working?.phase === "working" && <Typing />}
-
-              {choice && (
-                /*
-                  The control is **outside** the bubble. A bubble means Nova is
-                  saying something; a Move is something the founder can do, and
-                  a button inside a speech bubble makes those one object when
-                  they are two. Only the question is speech.
-                */
-                <>
-                  {choice.prompt && (
+            <div className="pt-3">
+              <Arriving
+                items={[
+                  ...bubbles.map((bubble) => (
                     <Bubble
+                      key={bubble.key}
                       tone={status.tone}
                       open={status.open}
-                      tail={bubbles.at(-1)?.aside ?? true}
-                      index={bubbles.length + 1}
+                      aside={bubble.aside}
+                      tail={bubble.tail}
                     >
-                      <Line>{choice.prompt}</Line>
+                      {bubble.paragraphs.map((text) =>
+                        bubble.aside ? (
+                          <Context key={text}>{text}</Context>
+                        ) : (
+                          <Line key={text}>{text}</Line>
+                        ),
+                      )}
                     </Bubble>
-                  )}
+                  )),
+                  /*
+                    What she made. A block, not a bubble — the same rule that
+                    put the control outside one. It arrives in the thread like
+                    everything else, because it is one of the things she is
+                    showing rather than a panel bolted to the bottom.
+                  */
+                  <RenderBlock key="audit" label="Business audit" at="16h">
+                    <AuditBlock view={auditView()} />
+                  </RenderBlock>,
+                ]}
+              >
+                {choice && (
+                  /*
+                    The controls are outside the bubbles and outside the
+                    arrival: they appear once she has finished, which is when a
+                    decision is actually available to make.
+                  */
                   <div className="pt-1">
-                    <Moves
-                      moves={THREAD_MOVES}
-                      balance={STUDY_BALANCE}
-                    />
+                    <Moves moves={THREAD_MOVES} balance={STUDY_BALANCE} />
                   </div>
-                </>
-              )}
+                )}
+              </Arriving>
             </div>
           </div>
         </section>
@@ -631,24 +600,3 @@ function Plan() {
   );
 }
 
-/** Nova composing, in the shape a phone taught everybody. */
-function Typing() {
-  return (
-    <div
-      className="bubble bubble-neutral flex w-fit items-center gap-1.5 px-3.5 py-3"
-      role="status"
-      aria-label="Nova is working"
-    >
-      {[0, 1, 2].map((index) => (
-        <span
-          key={index}
-          aria-hidden
-          className="study-typing size-1.5 rounded-full bg-fg-muted"
-          /* Only the offset is inline; the animation is a class so the shell's
-             hidden-tab pause and the reduced-motion block can both reach it. */
-          style={{ animationDelay: `${index * 0.18}s` }}
-        />
-      ))}
-    </div>
-  );
-}

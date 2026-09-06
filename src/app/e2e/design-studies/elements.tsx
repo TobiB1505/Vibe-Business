@@ -444,11 +444,26 @@ export type NovaAvailability = { state: "online" } | { state: "offline"; because
  * puts it in the status bar: everything else on this surface is relative
  * — *32m ago*, *while you were away* — and a relative time is unreadable
  * without an absolute one somewhere in view.
+ *
+ * ## Why the project is up here and not at the foot of the rail
+ *
+ * Because this row is the status row, and a repository connection is a
+ * status — the one `focus.ts` calls "the precondition for everything else
+ * Nova could say", which is why `source_disconnected` outranks every other
+ * candidate rather than joining the queue. At the foot of the rail it was a
+ * name with a subtitle, sitting under a wallet and a profile, saying nothing
+ * about whether the thing it named still worked.
+ *
+ * Connected is a fact the product observes, not a decoration: it is the same
+ * `sourceDisconnected` the ranking reads. When it goes false the header says
+ * so before the founder reads a single sentence below it.
  */
 export function Header({
   availability,
   /** What this conversation is about. The project's own name, never Nova's. */
   subject,
+  /** Whether the repository behind that name is still reachable. */
+  connected,
   /** The mark, passed in so this element never decides which state it is in. */
   mark,
   /** The viewer's clock. Passed in, because only a client component has one. */
@@ -456,6 +471,7 @@ export function Header({
 }: {
   availability: NovaAvailability;
   subject: string;
+  connected: boolean;
   mark: ReactNode;
   now?: ReactNode;
 }) {
@@ -474,7 +490,16 @@ export function Header({
           {online ? "Online" : `Offline — ${availability.because}`}
         </p>
       </div>
-      <span className="shrink-0 truncate text-caption text-fg-meta max-sm:hidden">{subject}</span>
+      <div className="flex min-w-0 shrink-0 flex-col items-end gap-0.5 max-sm:hidden">
+        <span className="truncate text-caption text-fg-secondary">{subject}</span>
+        <span className="flex items-center gap-1.5 text-caption text-fg-meta">
+          <span
+            aria-hidden
+            className={`size-1.5 shrink-0 rounded-full ${connected ? "bg-mint" : "bg-coral"}`}
+          />
+          {connected ? "Connected" : "Disconnected"}
+        </span>
+      </div>
       {now}
     </header>
   );
