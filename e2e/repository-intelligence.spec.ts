@@ -123,7 +123,10 @@ test.describe("evidence is subordinated, never removed", () => {
   test("a disclosure is operable by keyboard alone", async ({ page }) => {
     await page.goto(CODE_ONLY);
 
-    const summary = page.getByText("What Vibe found").first();
+    // The `<summary>` itself, not the text inside it: the label now sits in a
+    // span that carries the control's container, and a span is not focusable.
+    // The browser's own control is still the `<summary>`, which is the point.
+    const summary = page.locator("summary").filter({ hasText: "What Vibe found" }).first();
     await summary.focus();
     await expect(summary).toBeFocused();
 
