@@ -8,6 +8,9 @@ import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-conte
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import type { NovaPresenceState } from "@/components/nova/nova-presence";
 
+import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { resolveFounderInputAction } from "../founder-input-action";
+
 import { AttentionStack } from "./attention-stack";
 import { NovaRise } from "./nova-rise";
 import { FocusCard } from "./focus-card";
@@ -186,9 +189,24 @@ export async function NovaHome({
  * The Focus Card and its one control.
  *
  * Split out because choosing the control is the only branching on this page,
- * and it is worth reading on its own: a bound action, a plain link, or — when
- * the decision needs arguments Home does not hold — a link to the surface that
- * does, wearing its own honest label rather than the catalog's verb.
+ * and it is worth reading on its own: a bound action, a plain link, the card
+ * that answers a question, or — when the decision needs arguments Home does
+ * not hold — a link to the surface that does, wearing its own honest label
+ * rather than the catalog's verb.
+ *
+ * ## The one that used to be a link and is not any more
+ *
+ * "Answer in the Agent" and "Answer in the plan" sent a founder out of Home to
+ * answer a question Home had just asked — and, for a runtime question, while
+ * the run that asked it sat paused. `FounderInputCard` takes the request and
+ * its resolution action as props, so it renders here, with the same options,
+ * the same recommendation and the same submit the owning surface shows.
+ *
+ * It is *inside* the Focus Card rather than beside it, unlike every other
+ * control on this page, and that is the difference between a control and an
+ * answer: a button is one press on a card that explains it, while a question
+ * is a thing to read and choose from. Splitting the question from its options
+ * would put the two halves of one decision in two boxes.
  */
 function FocusSection({
   data,
@@ -208,6 +226,36 @@ function FocusSection({
 
   if (control.kind === "none") {
     return <FocusCard entry={entry} presence={presence} seed={seed} />;
+  }
+
+  if (control.kind === "answer") {
+    /*
+     * The ranking saw an open request; this reads it again to render it. If it
+     * has been answered in between — in the Agent, in the plan, in another tab
+     * — there is nothing to ask, and a form for a settled question would be
+     * worse than a card with none. The sentence above it still stands.
+     */
+    if (!data.question) {
+      return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    }
+
+    return (
+      <FocusCard entry={entry} presence={presence} seed={seed}>
+        <FounderInputCard
+          projectId={projectId}
+          request={data.question}
+          /*
+           * Which flow this question came from. A runtime question has a paused
+           * run behind it and the card says so; a planner question does not.
+           * The candidate's kind is what knows, and it is the same distinction
+           * `focus.ts` used to raise two candidates instead of one.
+           */
+          context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
+          presentation="workspace"
+          resolveAction={resolveFounderInputAction}
+        />
+      </FocusCard>
+    );
   }
 
   if (control.kind === "elsewhere") {

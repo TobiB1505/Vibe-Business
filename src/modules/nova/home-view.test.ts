@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNovaHomeView, NOVA_SECONDARY_LIMIT } from "./home-view";
+import { buildNovaHomeView, novaControlLabel, NOVA_SECONDARY_LIMIT } from "./home-view";
 import { deriveNovaFocus, FOCUS_CANDIDATE_KINDS, type NovaFocusFacts } from "./focus";
 import { novaCandidateMessage } from "./feed";
 import type { OperationView } from "../operations/view";
@@ -156,7 +156,16 @@ describe("Nova Home view", () => {
       }
     });
 
-    it("sends a question to the card that owns answering it", () => {
+    /*
+     * This used to assert `elsewhere`, and the change is the point rather than
+     * a relaxation. A question was sent away because Home could not supply the
+     * arguments — and a question is the one case where it can: the candidate
+     * carries the request id, and the card that answers one takes the request
+     * and its resolution action as props. So the control names what to answer,
+     * and the surface renders the card instead of a link out of the
+     * conversation that asked.
+     */
+    it("answers a question where it was asked, and names what to answer", () => {
       const view = viewOf({
         questions: [
           {
@@ -169,8 +178,46 @@ describe("Nova Home view", () => {
       });
 
       expect(view.primary.kind).toBe("founder_input_required");
-      expect(view.primary.control.kind).toBe("elsewhere");
+      expect(view.primary.control.kind).toBe("answer");
+      if (view.primary.control.kind === "answer") {
+        expect(view.primary.control.founderInputRequestId).toBe("req-1");
+      }
       expect(view.primary.detail).toBe("Which plan tier?");
+    });
+
+    /*
+     * The other half, and the reason `elsewhere` still exists. A merge needs
+     * an approval id that no candidate carries; a build needs a plan step key.
+     * Answering needs neither, which is why exactly one of these moved.
+     */
+    it("keeps sending away the decisions whose arguments are still missing", () => {
+      const view = viewOf({ workspaceChoiceRequired: true });
+
+      expect(view.primary.kind).toBe("workspace_choice_required");
+      expect(view.primary.control.kind).toBe("elsewhere");
+    });
+
+    it("gives a label to every control that has one, and none to a card", () => {
+      const asked = viewOf({
+        questions: [
+          {
+            founderInputRequestId: "req-1",
+            question: "Which plan tier?",
+            origin: "planner",
+            stepOrder: 1,
+          },
+        ],
+      });
+      const settled = viewOf({});
+
+      // The card is the control, so a second verb beside it would be one act
+      // with two names.
+      expect(novaControlLabel(asked.primary.control)).toBeNull();
+      // And `nothing_to_do` has no control at all.
+      expect(novaControlLabel(settled.primary.control)).toBeNull();
+      expect(novaControlLabel(viewOf({ auditOutdated: true }).primary.control)).toBe(
+        "Run the audit again",
+      );
     });
 
     it("dispatches a re-audit itself, because it needs only the project", () => {

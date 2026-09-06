@@ -4,7 +4,11 @@ import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { RetailOperationKind } from "@/modules/credits/retail";
-import type { NovaHomeEntry, NovaHomeView } from "@/modules/nova/home-view";
+import {
+  novaControlLabel,
+  type NovaHomeEntry,
+  type NovaHomeView,
+} from "@/modules/nova/home-view";
 import { novaScenarioHealth, novaScenarioView, NOVA_SCENARIO_PRIORITY } from "../nova-scenarios";
 import type { Study } from "./studies";
 
@@ -88,9 +92,7 @@ function retailKindOf(entry: NovaHomeEntry): RetailOperationKind | null {
 const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 function controlLabel(entry: NovaHomeEntry): string | null {
-  const control = entry.control;
-  if (control.kind === "none") return null;
-  return control.kind === "elsewhere" ? control.label : control.option.label;
+  return novaControlLabel(entry.control);
 }
 
 export function StudyNovaHome({ study }: { study: Study }) {

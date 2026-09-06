@@ -11,7 +11,11 @@ import {
   deriveNovaFocus,
   FOCUS_CANDIDATE_KINDS,
 } from "@/modules/nova/focus";
-import { buildNovaHomeView, type NovaHomeEntry } from "@/modules/nova/home-view";
+import {
+  buildNovaHomeView,
+  novaControlLabel,
+  type NovaHomeEntry,
+} from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import { Bubble, Context, Line, Moves } from "./elements";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
@@ -116,14 +120,9 @@ function Label({ children }: { children: ReactNode }) {
   );
 }
 
-function controlOf(entry: NovaHomeEntry): { label: string; priced: boolean } | null {
-  const control = entry.control;
-  if (control.kind === "none") return null;
-  if (control.kind === "elsewhere") return { label: control.label, priced: false };
-  return {
-    label: control.option.label,
-    priced: NOVA_ACTION_META[control.option.actionId].price !== null,
-  };
+function controlOf(entry: NovaHomeEntry): { label: string } | null {
+  const label = novaControlLabel(entry.control);
+  return label === null ? null : { label };
 }
 
 function priceOf(entry: NovaHomeEntry) {
@@ -194,6 +193,17 @@ function Moment({ entry }: { entry: NovaHomeEntry }) {
             balance={STUDY_BALANCE}
           />
         </div>
+      ) : entry.control.kind === "answer" ? (
+        /*
+           Not the same as having nothing to press, and the gallery has to say
+           which. A question carries no separate control because the answering
+           card *is* the control — it brings the options, the recommendation and
+           the submit. Printing "no control" here would read as "nothing to do"
+           over the one moment that is entirely about doing something.
+        */
+        <p className="pt-1 font-mono text-caption text-fg-meta">
+          answered in the card — see /e2e/study-block
+        </p>
       ) : (
         /* `nothing_to_do` has no control on purpose. Saying so is part of the
            moment: a screen that invented one would be work Nova made up. */

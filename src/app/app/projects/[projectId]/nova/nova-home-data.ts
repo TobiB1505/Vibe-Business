@@ -7,6 +7,8 @@ import type { FindingSeverity } from "@/components/system/finding-card";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
+import { getFounderInputRequest } from "@/modules/founder-input/store";
+import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import { readNovaFocus } from "@/modules/nova/read";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
@@ -21,7 +23,9 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  *
  * This is the most-visited route in the product, and the audit's own risk note
  * for this slice was the read count on it. So the shape is deliberate: four
- * concurrent reads, none of which fans out per candidate.
+ * concurrent reads, none of which fans out per candidate — and one conditional
+ * fifth, described on `question` below, which happens only on the loads where
+ * the ranking put a question first.
  *
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
@@ -77,6 +81,21 @@ export type NovaHomeData = {
   health: NovaHealth | null;
   /** Null when the account has no Credit account yet. */
   balance: CostBalance | null;
+  /**
+   * The question to answer here, when the ranking put one first.
+   *
+   * A fifth read, and the only one that is conditional — it happens when and
+   * only when the primary candidate is a question, which is a state most loads
+   * are not in. That is the price of answering here instead of sending the
+   * founder to the surface that could: the request has to be in hand, and
+   * `FounderInputCard` takes it whole.
+   *
+   * Null also covers a request that has since been answered elsewhere. The
+   * ranking read a row that said open; if the request is gone by the time this
+   * reads it, the card renders nothing rather than a form for a settled
+   * question.
+   */
+  question: FounderInputRequest | null;
 };
 
 type IdentityRow = {
@@ -195,5 +214,19 @@ export async function readNovaHomeData(
     getHeaderCreditBalance(supabase, { userId: params.userId }),
   ]);
 
-  return { view: buildNovaHomeView(focus), identity, health, balance };
+  const view = buildNovaHomeView(focus);
+
+  /*
+   * After the four, not beside them: the id to read comes out of the ranking,
+   * so this cannot join the batch above. It runs on the loads where the top of
+   * the ranking is a question and on no others — which is what keeps the
+   * documented read count honest rather than quietly five.
+   */
+  const control = view.primary.control;
+  const question =
+    control.kind === "answer"
+      ? await getFounderInputRequest(supabase, control.founderInputRequestId)
+      : null;
+
+  return { view, identity, health, balance, question };
 }

@@ -41,12 +41,35 @@ import type { FocusCandidate, FocusCandidateKind, NovaFocus, NovaFocusTier } fro
  * So a candidate whose action Home cannot supply arguments for is `elsewhere`:
  * the founder is sent to the surface that owns the decision, with wording that
  * says so. Nothing is hidden and nothing is promised.
+ *
+ * ## Why a fourth kind exists now
+ *
+ * Two of those five candidates were `elsewhere` for a reason that has stopped
+ * being true. An open question carries its own request id on the candidate, and
+ * the component that answers one — `FounderInputCard` — takes that request and
+ * its resolution action as props, so it renders anywhere the request can be
+ * read. Home can read it.
+ *
+ * `answer` says so. It is not a control at all in the sense the other three
+ * are: there is no label and no href, because the answering card is the
+ * control, and it brings its own options, its own recommendation and its own
+ * submit. What this carries is the identity of the thing to answer.
+ *
+ * The distinction still holds where it was true. A merge needs an approval id
+ * that no candidate carries; a build needs a plan step key. Those stay
+ * `elsewhere`, and sending somebody to a decision Home cannot hold is still
+ * better than a button that fails.
  */
-export type NovaControlKind = "server_action" | "navigation" | "elsewhere";
+export type NovaControlKind = "server_action" | "navigation" | "elsewhere" | "answer";
 
 export type NovaHomeControl =
   | { kind: "server_action"; option: NovaChoiceOption }
   | { kind: "navigation"; option: NovaChoiceOption }
+  /**
+   * Answered here. The card is the control, so there is no label to render —
+   * only the request to answer, which the candidate already names.
+   */
+  | { kind: "answer"; founderInputRequestId: string }
   /** Go and decide where the decision lives. Carries its own honest label. */
   | { kind: "elsewhere"; label: string; section: NovaHomeSection }
   /** Nothing to press. `nothing_to_do` has no control, and inventing one would be work Nova made up. */
@@ -106,13 +129,24 @@ export type NovaHomeView = {
  *   Restating a question's options in a second component is how two answers to
  *   one question get built.
  */
+/**
+ * The decisions Home genuinely cannot hold.
+ *
+ * Three, not five. A merge needs an approval id and a build needs a plan step
+ * key, and no candidate carries either — sending somebody to the surface that
+ * does is still the honest answer. `workspace_choice_required` stays for a
+ * different reason: the candidate names no application, because the list comes
+ * from the repository analysis rather than from the ranking, so Home has
+ * nothing to render a choice *of*.
+ *
+ * The two that left are the questions. Both carry the id of what is being
+ * asked, which is the whole of what answering needs.
+ */
 const ELSEWHERE: Partial<Record<FocusCandidateKind, { label: string; section: NovaHomeSection }>> =
   {
     merge_ready: { label: "Go to the change", section: "agent" },
     execution_offered: { label: "Go to the plan", section: "action-plan" },
     workspace_choice_required: { label: "Choose in the Agent", section: "agent" },
-    agent_question: { label: "Answer in the Agent", section: "agent" },
-    founder_input_required: { label: "Answer in the plan", section: "action-plan" },
   };
 
 function detailFor(candidate: FocusCandidate): string | null {
@@ -135,12 +169,43 @@ function controlFor(candidate: FocusCandidate): NovaHomeControl {
   const elsewhere = ELSEWHERE[candidate.kind];
   if (elsewhere) return { kind: "elsewhere", ...elsewhere };
 
+  /* A question is answered where it is asked. The candidate carries the id;
+     the card that answers it takes the request and its action as props. */
+  if (candidate.kind === "agent_question" || candidate.kind === "founder_input_required") {
+    return { kind: "answer", founderInputRequestId: candidate.founderInputRequestId };
+  }
+
   const option = novaCandidateOption(candidate);
   if (option === null) return { kind: "none" };
 
   return option.control === "navigation"
     ? { kind: "navigation", option }
     : { kind: "server_action", option };
+}
+
+/**
+ * What a control says, for a surface that needs one word rather than a control.
+ *
+ * A list of moments, a compact rail, a test that checks a screen offers what
+ * the ranking said it would. Null where there is nothing to say: `none` has no
+ * control, and `answer` *is* the control — the card carries its own submit, so
+ * a label beside it would be a second verb for one act.
+ *
+ * Written once here because five surfaces were each branching on the union to
+ * reach the same string, and a sixth case in the union means five files to
+ * find.
+ */
+export function novaControlLabel(control: NovaHomeControl): string | null {
+  switch (control.kind) {
+    case "server_action":
+    case "navigation":
+      return control.option.label;
+    case "elsewhere":
+      return control.label;
+    case "answer":
+    case "none":
+      return null;
+  }
 }
 
 function entryFor(candidate: FocusCandidate): NovaHomeEntry {

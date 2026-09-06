@@ -7,7 +7,7 @@ import { buildActivityFeed } from "@/modules/audit-log/view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
 import type { RetailOperationKind } from "@/modules/credits/retail";
 import type { NovaHomeEntry, NovaHomeView } from "@/modules/nova/home-view";
-import { buildNovaHomeView } from "@/modules/nova/home-view";
+import { buildNovaHomeView, novaControlLabel } from "@/modules/nova/home-view";
 import { deriveNovaFocus, type NovaFocusFacts } from "@/modules/nova/focus";
 import { novaScenarioHealth, novaScenarioView, NOVA_SCENARIO_PRIORITY } from "../nova-scenarios";
 import type { Study } from "./studies";
@@ -113,8 +113,7 @@ function retailKindOf(entry: NovaHomeEntry): RetailOperationKind | null {
 function controlLabel(entry: NovaHomeEntry): string | null {
   const control = entry.control;
   if (control.kind === "none") return null;
-  if (control.kind === "elsewhere") return control.label;
-  return control.option.label;
+  return novaControlLabel(control);
 }
 
 /**

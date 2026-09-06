@@ -10,7 +10,7 @@ import {
   type FocusCandidateKind,
   type NovaFocusFacts,
 } from "@/modules/nova/focus";
-import { buildNovaHomeView, type NovaHomeEntry } from "@/modules/nova/home-view";
+import { buildNovaHomeView, novaControlLabel, type NovaHomeEntry } from "@/modules/nova/home-view";
 import type { Study } from "./studies";
 
 /**
@@ -125,8 +125,7 @@ function entryFor(kind: FocusCandidateKind): NovaHomeEntry {
 function controlLabel(entry: NovaHomeEntry): string | null {
   const control = entry.control;
   if (control.kind === "none") return null;
-  if (control.kind === "elsewhere") return control.label;
-  return control.option.label;
+  return novaControlLabel(control);
 }
 
 function priceOf(entry: NovaHomeEntry) {

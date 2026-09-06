@@ -4,6 +4,7 @@ import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
+import { novaControlLabel } from "@/modules/nova/home-view";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
@@ -440,17 +441,14 @@ export default async function E2eScenarioPage({
           /* The same label the button carries, so the fixture exercises the
              footnote's refusal to repeat it rather than rendering past it. */
           controlLabel={
-            control.kind === "none"
-              ? undefined
-              : control.kind === "elsewhere"
-                ? control.label
-                : control.option.label
+            novaControlLabel(control) ?? undefined
           }
           control={
-            control.kind === "none" ? undefined : (
-              <Button variant="primary">
-                {control.kind === "elsewhere" ? control.label : control.option.label}
-              </Button>
+            /* Null covers both "nothing to press" and "answered in the card",
+               and this fixture renders neither — it is the Focus Card's shape,
+               not the answering flow. */
+            novaControlLabel(control) === null ? undefined : (
+              <Button variant="primary">{novaControlLabel(control)}</Button>
             )
           }
         />
