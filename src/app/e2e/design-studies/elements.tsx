@@ -142,12 +142,18 @@ export function Move({
  * words, which is the surface built for the full set. A thread shows what to
  * do next; a list shows what there is.
  *
- * ## Why they are tiles
+ * ## Why they are tiles, and why one is not
  *
  * So none of them wraps. The first side-by-side attempt used rows and a priced
  * control broke onto two lines beside a free one, which made a spend and a
  * navigation read as two different sizes of thing. Stacked, they are one shape
  * at one height, and three of them fill the width of the block above.
+ *
+ * A lone move is a row instead. The tile shape exists so that several controls
+ * can stand beside each other at one height; one has nothing to stand beside,
+ * and rendering it as a tile leaves a third of the width taken by a control
+ * with an empty line under it. Most of the twenty-one moments offer exactly
+ * one move, which is where that showed.
  */
 export function Moves({
   moves,
@@ -161,10 +167,28 @@ export function Moves({
   balance?: CostBalance | null;
 }) {
   const shown = moves.slice(0, 3);
-  if (shown.length === 0) return null;
+  const [only] = shown;
+  if (!only) return null;
+
+  if (shown.length === 1) {
+    return (
+      <div className="max-w-[24rem]">
+        <Move
+          label={only.label}
+          operation={only.operation ?? null}
+          leavesTo={only.leavesTo}
+          balance={balance}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="grid gap-2.5 max-sm:grid-cols-1 sm:grid-cols-3">
+    <div
+      className={`grid gap-2.5 max-sm:grid-cols-1 ${
+        shown.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"
+      }`}
+    >
       {shown.map((move) => (
         <Move
           key={move.label}

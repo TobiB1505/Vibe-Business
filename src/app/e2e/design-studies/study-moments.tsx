@@ -1,12 +1,10 @@
 import type { ReactNode } from "react";
-import { CostDisclosure } from "@/components/system/cost-disclosure";
 import {
   novaPresenceState,
   statusForCandidate,
   statusForFocusTier,
 } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { StatusPill } from "@/components/ui/status-pill";
 import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import {
@@ -15,6 +13,7 @@ import {
 } from "@/modules/nova/focus";
 import { buildNovaHomeView, type NovaHomeEntry } from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
+import { Bubble, Context, Line, Moves } from "./elements";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
 
@@ -133,6 +132,77 @@ function priceOf(entry: NovaHomeEntry) {
   return NOVA_ACTION_META[control.option.actionId].price;
 }
 
+/**
+ * One moment, in the shape the thread will actually give it.
+ *
+ * ## Why this replaced a row
+ *
+ * The gallery used to render a pill, a sentence, a detail line and a chip —
+ * a table with a status column, which is a fine index and a poor test. It
+ * could not answer the question this page exists for: *does the vocabulary
+ * carry twenty-one different situations?* A pill answers it by fiat, because
+ * the word is right there. The thread has no pill.
+ *
+ * So each moment is drawn exactly as the wireframe draws one: the sentence in
+ * a bubble carrying the moment's register, the subject's own line as an aside,
+ * the question as a second bubble, and the control outside all of them.
+ *
+ * ## What the page then shows, which is the finding
+ *
+ * The register is tone and contour, and **there is no status word anywhere**.
+ * That is not an omission — it is the claim being tested. `DESIGN.md` says
+ * colour is never the only signal, and here the other signal is the sentence
+ * itself: *"My last audit did not finish"*, *"I have lost access to your
+ * repository"*. Each candidate states its own situation, which is a stronger
+ * signal than a label above it would be.
+ *
+ * Scroll the page and the twenty-one either read apart or they do not. That is
+ * a thing to look at rather than to argue about, and it is why the code name
+ * is the only label left on a row.
+ */
+function Moment({ entry }: { entry: NovaHomeEntry }) {
+  const status = statusForCandidate(entry.kind);
+  const control = controlOf(entry);
+  const price = priceOf(entry);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Bubble tone={status.tone} open={status.open}>
+        <Line>{entry.message}</Line>
+      </Bubble>
+
+      {/* The subject's own sentence — a change's headline, a question's text.
+          Nova wrote neither, so neither leads. */}
+      {entry.detail && (
+        <Bubble aside tail={false}>
+          <Context>{entry.detail}</Context>
+        </Bubble>
+      )}
+
+      {/* The question above the control, when the candidate asks one. Not
+          every one does: a navigation needs nothing asked before it. */}
+      {entry.prompt && (
+        <Bubble tone={status.tone} open={status.open} tail={false}>
+          <Line>{entry.prompt}</Line>
+        </Bubble>
+      )}
+
+      {control ? (
+        <div className="pt-1">
+          <Moves
+            moves={[{ label: control.label, operation: price }]}
+            balance={STUDY_BALANCE}
+          />
+        </div>
+      ) : (
+        /* `nothing_to_do` has no control on purpose. Saying so is part of the
+           moment: a screen that invented one would be work Nova made up. */
+        <p className="pt-1 font-mono text-caption text-fg-meta">no control</p>
+      )}
+    </div>
+  );
+}
+
 export function StudyMoments({ study }: { study: Study }) {
   const panel =
     study.skin === "glass"
@@ -161,9 +231,18 @@ export function StudyMoments({ study }: { study: Study }) {
           the product&rsquo;s; none of it is written for this page.
         </p>
         <p className="study-measure text-caption text-fg-secondary">
-          An index to work through, not a screen to ship. The layout studies each show one moment —
-          usually the friendly one — and a shape that only ever met a change awaiting review will
-          meet the other twenty in production.
+          Each one is drawn the way the thread will draw it: the sentence in a bubble carrying the
+          moment&rsquo;s register, the subject&rsquo;s own line as an aside, the question as a
+          second bubble, the control outside all of them. The gallery used to be a table with a
+          status column, which is a fine index and a poor test — a pill answers &ldquo;can a
+          founder tell these apart?&rdquo; by fiat, and the thread has no pill.
+        </p>
+        <p className="study-measure text-caption text-fg-secondary">
+          So there is no status word anywhere below. That is the claim being tested rather than an
+          omission: colour is never the only signal here, and the other signal is the sentence.
+          <em> My last audit did not finish</em> and <em>my audit has been running far longer than
+          it should</em> say what they are without a label, which is more than a label would.
+          Twenty-one of them in a column either read apart or they do not.
         </p>
       </div>
 
@@ -187,42 +266,12 @@ export function StudyMoments({ study }: { study: Study }) {
             </div>
 
             <ul className={`flex flex-col divide-y divide-line-1 ${panel}`}>
-              {rows.map(({ kind, entry }) => {
-                const status = statusForCandidate(kind);
-                const control = controlOf(entry);
-                const presence = novaPresenceState({ tier: entry.tier, phase: "idle" });
-
-                return (
-                  <li key={kind} className="flex flex-col gap-2.5 px-5 py-4">
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <NovaPresence state={presence} seed="project_e2e" size="sm" />
-                      <StatusPill tone={status.tone}>{status.word}</StatusPill>
-                      <code className="font-mono text-caption text-fg-meta">{kind}</code>
-                    </div>
-
-                    <p className="text-ui text-fg-body">{entry.message}</p>
-
-                    {entry.detail && <p className="text-caption text-fg-prose">{entry.detail}</p>}
-
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                      {control ? (
-                        <span className="rounded-nav border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-caption font-semibold text-mint">
-                          {control.label}
-                        </span>
-                      ) : (
-                        /* `nothing_to_do` has no control on purpose, and a
-                           blocked candidate whose recovery lives elsewhere has
-                           none here either. Saying so is part of the moment. */
-                        <span className="text-caption text-fg-meta">no control</span>
-                      )}
-                      <CostDisclosure operation={priceOf(entry)} balance={STUDY_BALANCE} />
-                      {entry.prompt && (
-                        <span className="text-caption text-fg-meta">{entry.prompt}</span>
-                      )}
-                    </div>
-                  </li>
-                );
-              })}
+              {rows.map(({ kind, entry }) => (
+                <li key={kind} className="flex flex-col gap-2.5 px-5 py-5">
+                  <code className="font-mono text-caption text-fg-meta">{kind}</code>
+                  <Moment entry={entry} />
+                </li>
+              ))}
             </ul>
           </section>
         );
