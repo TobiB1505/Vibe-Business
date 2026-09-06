@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/*
+ * The v2 design system (S1 — ADR 0096). Scoped to `[data-vibe="v2"]`, which
+ * nothing carries yet, so this import changes no pixel in production today.
+ * It lives in its own file so `design-tokens.test.ts` can measure the two
+ * palettes separately — a second block of the same token names here would
+ * leave the test silently measuring v1 while v2 shipped unchecked.
+ */
+@import "./theme-v2.css";
+
 /**
  * Vibe Business design tokens (UI-0).
  *

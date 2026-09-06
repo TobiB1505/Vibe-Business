@@ -45,6 +45,14 @@ The register is product-first **inside `/app`**: marketing expression does not l
 
 The runtime source of truth is [src/app/globals.css](src/app/globals.css). This file records the durable intent and maps to those established tokens; it does not generate them.
 
+### Two vocabularies, one of them not switched on
+
+Since [ADR 0096](docs/decisions/0096-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
+
+v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, opaque panels with bright hairlines and tight corners, glass spent on chrome and signature moments rather than on dense data, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
+
+Both palettes are measured by `design-tokens.test.ts` against `--color-surface-4`, and both must hold 4.5:1 on every load-bearing ramp step. When v2 is everywhere, its values move into `@theme`, the scope is deleted, and this section goes with it.
+
 ## Colors
 
 Ground and app establish the frame. Surface depth is created with the four alpha surface tokens in `globals.css`, not arbitrary solid greys. Mint is brand, active navigation, focus and primary action. Amber means waiting or incomplete; coral means a real failure, gap or destructive risk. Neither status colour is decorative.
