@@ -506,6 +506,56 @@ test.describe("the loop survives a phone", () => {
 });
 
 /**
+ * "Why this move" continues rather than opening.
+ *
+ * The reason is prose, so it gets the continuation treatment: the first lines
+ * stay visible under a fade and the control ends the sentence. The thing worth
+ * a test is the *measurement* — whether the control is offered at all depends
+ * on the container's width, and a "See more" over a sentence that already ends
+ * on screen is a control that lies. jsdom cannot answer that, because it has
+ * no layout; only a browser can.
+ */
+test.describe("the reason continues only when there is more of it", () => {
+  const REASON = "Everything downstream";
+
+  async function openTheMove(page: Page) {
+    await page.goto(RANKED);
+    await page.getByRole("tab", { name: /Say who the product is for/ }).click();
+    return page.locator("section[aria-labelledby='why-this-move']");
+  }
+
+  test("offers nothing when the reason already fits", async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    const section = await openTheMove(page);
+
+    await expect(section).toContainText(REASON);
+    await expect(section.getByRole("button", { name: /See more|Show less/ })).toHaveCount(0);
+  });
+
+  test("offers the rest when the reason is clamped, and keeps the whole of it", async ({
+    page,
+  }) => {
+    // Narrow enough that the reason runs past two lines. The width is the
+    // input to this behaviour, so it is the thing the test varies.
+    await page.setViewportSize({ width: 330, height: 844 });
+    const section = await openTheMove(page);
+
+    const more = section.getByRole("button", { name: "See more" });
+    await expect(more).toBeVisible();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+
+    // Clamping is visual: the full string is in the DOM in both states, so a
+    // screen reader never depends on the toggle.
+    await expect(section).toContainText("depends on that answer");
+
+    await more.click();
+    const less = section.getByRole("button", { name: "Show less" });
+    await expect(less).toHaveAttribute("aria-expanded", "true");
+    await expect(section).toContainText("depends on that answer");
+  });
+});
+
+/**
  * The last leg: Move → Agent → back (UI-S3).
  *
  * The seam these cover is the one a founder used to fall through. They picked

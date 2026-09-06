@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
-import { Button, TextAction } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { ChevronDownIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/states";
 import { StatusPill } from "@/components/ui/status-pill";
+import { SeeMore } from "@/components/ui/see-more";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
@@ -90,27 +91,16 @@ const POLL_INTERVAL_MS = 3_000;
 /**
  * A "read more" toggle over text that is never mutated or sliced.
  *
- * The full string is always in the DOM — CSS `line-clamp` hides overflow
- * visually without removing it, so a screen reader already gets the whole
- * thing regardless of the toggle's state.
+ * This was written here first, and `SeeMore` is its extraction: the clamp, the
+ * always-in-the-DOM string and the reasoning about screen readers are the same
+ * ones this file worked out. What the shared component adds is the fade that
+ * says the sentence continues, and a chevron rather than an underlined word.
  */
 function ExpandableText({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className={cn("text-fg-prose text-sm leading-relaxed", !expanded && "line-clamp-2")}>
-        {text}
-      </p>
-      <TextAction
-        type="button"
-        onClick={() => setExpanded((value) => !value)}
-        aria-expanded={expanded}
-        className="self-start text-xs"
-      >
-        {expanded ? "Show less" : "More context"}
-      </TextAction>
-    </div>
+    <SeeMore lines={2} textClassName="text-fg-prose text-sm leading-relaxed">
+      {text}
+    </SeeMore>
   );
 }
 

@@ -193,7 +193,9 @@ test.describe("ready plan — founder input focus", () => {
     // the *full* sentence is in the DOM before anything is expanded.
     await expect(page.getByText(fullSentence, { exact: false }).first()).toBeAttached();
 
-    await page.getByRole("button", { name: "More context" }).first().click();
+    // "See more" since the reason took the continuation treatment: the control
+    // ends the sentence rather than labelling a block, so it says what it does.
+    await page.getByRole("button", { name: "See more" }).first().click();
     await expect(page.getByText(fullSentence, { exact: false }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Show less" }).first()).toBeVisible();
   });
