@@ -249,6 +249,11 @@ export function Bubble({
  *
  * Both read the register's custom properties, so a dashed bubble gets a dashed
  * tail and a 2px bubble a 2px one, without either side knowing about the other.
+ *
+ * The outer edge is a curve rather than a straight hypotenuse. A triangle is
+ * what a wedge looks like; a tail is what a drop of something looks like as it
+ * leaves the shape, and the difference is the whole reason the first version
+ * read as a spike glued to a card.
  */
 function BubbleTail() {
   return (
@@ -260,9 +265,9 @@ function BubbleTail() {
       viewBox="0 0 11 12"
       fill="none"
     >
-      <path d="M11 0.5 L0 0.5 L11 12 Z" fill="var(--bubble-fill)" />
+      <path d="M11 0.5 L1.5 0.5 Q0 0.6 0.6 2 Q3 6.6 11 12 Z" fill="var(--bubble-fill)" />
       <path
-        d="M11 0.5 L0 0.5 L9.5 10.4"
+        d="M11 0.5 L1.5 0.5 Q0 0.6 0.6 2 Q3 6.6 9.5 10.4"
         stroke="var(--bubble-line)"
         strokeWidth="var(--bubble-width)"
         strokeDasharray="var(--bubble-dash)"
@@ -472,5 +477,40 @@ export function SinceDivider({ children }: { children: ReactNode }) {
       </span>
       <span aria-hidden className="h-px flex-1 bg-line-2" />
     </div>
+  );
+}
+
+/**
+ * What Nova is doing, said the way a chat product says it.
+ *
+ * ## What this replaced, and why the box had to go
+ *
+ * A labelled well reading "RIGHT NOW / Reading what you built". Two problems,
+ * and the second is the real one. It was a container around a single line,
+ * which is a card for a sentence. And above it sat the word "Working" — a
+ * state the mark beside it was already showing, spelled out again in case the
+ * mark did not work. If the mark does not work, the fix is the mark.
+ *
+ * ## What it may say, and what it may never say
+ *
+ * `OPERATION_STAGE_LABELS[stage]` — the stage the executor actually wrote to
+ * the operation row. That is a record of what Vibe *did*, and it is the only
+ * thing allowed here. Rule 43 forbids rendering model reasoning, and this is
+ * precisely the element a founder would most enjoy having lie to them: a
+ * stream of sentences a model wrote about its own thinking is the version of
+ * this that reads best and is not allowed.
+ *
+ * So the shimmer is on a sentence the product can stand behind, and the
+ * sentence stays legible with the shimmer gone.
+ */
+export function Thinking({ children }: { children: ReactNode }) {
+  return (
+    <p
+      className="study-thinking study-measure text-center text-ui font-medium"
+      /* Announced as a state, not as a moving gradient. */
+      role="status"
+    >
+      {children}
+    </p>
   );
 }

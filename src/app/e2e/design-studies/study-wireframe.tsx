@@ -1,10 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import {
-  novaPresenceState,
-  statusForCandidate,
-  statusForOperationPhase,
-} from "@/components/system/status-vocabulary";
+import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { firstActionableStep } from "@/modules/action-plans/sequence";
 import { stepDisplayState, stepSequenceStatus } from "@/modules/action-plans/view";
@@ -24,6 +20,7 @@ import {
   Move,
   type NovaAvailability,
   SinceDivider,
+  Thinking,
 } from "./elements";
 import { Clock } from "./clock";
 import { NO_FACTS } from "./moment-fixtures";
@@ -265,7 +262,6 @@ export function StudyWireframe({
     tier: view.primary.tier,
     phase: working?.phase ?? "idle",
   });
-  const workStatus = working ? statusForOperationPhase(working.phase) : null;
   const status = statusForCandidate(view.primary.kind);
 
   const panel =
@@ -290,45 +286,31 @@ export function StudyWireframe({
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8 max-sm:px-3 max-sm:py-4">
       <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-start">
         {/* ── The rail: Nova, and what is open ───────────────────────── */}
-        <aside className="study-rise flex flex-col gap-5" style={rise(0)}>
+        {/*
+          Second on a phone. The rail is the work column and the thread is the
+          conversation, and a founder who opens this on a phone came for the
+          conversation — putting the whole plan and the whole log above it means
+          scrolling past everything to reach the one thing that speaks.
+        */}
+        <aside className="study-rise flex flex-col gap-5 max-lg:order-2" style={rise(0)}>
           <div className={`flex flex-col gap-5 p-5 ${panel}`}>
-            <div className="flex flex-col items-center gap-3.5 text-center">
+            <div className="flex flex-col items-center gap-4 text-center">
               <NovaPresence state={presence} seed="project_e2e" size="hero" />
-              <div className="flex flex-col gap-1">
-                <Label>Nova</Label>
-                {/*
-                  The work state, which is a different question from the header's
-                  availability. Online says the service is reachable; this says
-                  what she is doing with it.
-                */}
-                <p className="text-ui font-semibold text-fg">
-                  {workStatus ? workStatus.word : "Nothing running"}
-                </p>
-              </div>
+              {/*
+                No name and no state word under the mark. "NOVA / Working" was
+                the mark's own two facts written out again underneath it in
+                case it did not read — and if a mark does not read, the answer
+                is the mark, not a caption apologising for it.
+
+                What replaces it is the stage: what she is doing, in a sentence,
+                with no box around it. The box was a card built for one line.
+              */}
+              {working && <Thinking>{working.stageLabel}</Thinking>}
             </div>
 
-            {working && (
-              <div className="flex flex-col gap-1.5 rounded-well bg-well px-3.5 py-3">
-                <Label>Right now</Label>
-                {/* The stage the executor wrote. No bar: a durable operation has
-                    no honest fraction, and the stage says more than one could. */}
-                <p className="text-ui text-fg-body">{working.stageLabel}</p>
-              </div>
-            )}
-
-            {/*
-              The list the wireframe puts under her state. Not a second thread —
-              the thread is the conversation and this is the inventory, which is
-              why it carries words and no sentences.
-            */}
-            {/*
-              The list the wireframe puts under her state. Not a second thread —
-              the thread is the conversation and this is the inventory, so each
-              row names the *task* rather than repeating the sentence. The task
-              is the action catalog's own label, which is also what the control
-              in the thread says: one vocabulary, not two.
-            */}
             <Plan />
+
+            <Earlier seen={seen} since={since} />
           </div>
 
           <div className={`flex flex-col gap-3 p-4 ${panel}`}>
@@ -348,7 +330,11 @@ export function StudyWireframe({
         </aside>
 
         {/* ── The thread: what happened, then what is true now ────────── */}
-        <section className="study-rise flex flex-col gap-3" style={rise(1)} aria-label="Nova">
+        <section
+          className="study-rise flex flex-col gap-3 max-lg:order-1"
+          style={rise(1)}
+          aria-label="Nova"
+        >
           <Header
             availability={
               offline
@@ -360,39 +346,17 @@ export function StudyWireframe({
             now={<Clock />}
           />
 
+          {/*
+            The chat panel holds bubbles and nothing else.
+
+            The log used to sit at the top of it, under a heading, and it was
+            wrong for a reason that took saying out loud: this box is the place
+            Nova speaks. A row that reads "Vibe finished a change · 32m" is not
+            something she is saying, it is something that happened, and putting
+            it in the same container makes the container mean two things. It is
+            in the rail now, which is the column about the work.
+          */}
           <div className={`flex flex-col gap-1 p-5 max-sm:p-3.5 ${panel}`}>
-            {/* ── Earlier: the log, oldest first ──────────────────────── */}
-            <Label>Earlier</Label>
-            <div className="flex flex-col divide-y divide-line-1 pb-1">
-              {seen.map((entry) => (
-                <Happened
-                  key={entry.id}
-                  title={entry.title}
-                  at={ago(entry.at)}
-                  tone={entry.tone}
-                  facts={entry.facts}
-                />
-              ))}
-            </div>
-
-            {/*
-              The only line on this screen that knows anything about the person
-              reading it. Everything under it happened while they were away.
-            */}
-            {since.length > 0 && <SinceDivider>While you were away</SinceDivider>}
-
-            <div className="flex flex-col divide-y divide-line-1 pb-2">
-              {since.map((entry) => (
-                <Happened
-                  key={entry.id}
-                  title={entry.title}
-                  at={ago(entry.at)}
-                  tone={entry.tone}
-                  facts={entry.facts}
-                />
-              ))}
-            </div>
-
             {/* ── Now: what she has to say about it ───────────────────── */}
             <div className="flex flex-col gap-2.5 pt-3">
               {messages.map((entry, position) => {
@@ -454,6 +418,45 @@ export function StudyWireframe({
             </div>
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * What has happened, in the column about the work.
+ *
+ * Two groups and one line between them. Everything under the line happened
+ * while the founder was away — the only thing on this screen that knows
+ * anything about the person reading it, and the one piece of state no
+ * derivation produces.
+ */
+function Earlier({
+  seen,
+  since,
+}: {
+  seen: ReturnType<typeof buildActivityFeed>;
+  since: ReturnType<typeof buildActivityFeed>;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-line-1 pt-4">
+      <Label>Earlier</Label>
+      <div className="flex flex-col">
+        {seen.map((entry) => (
+          <Happened key={entry.id} title={entry.title} at={ago(entry.at)} tone={entry.tone} />
+        ))}
+      </div>
+      {since.length > 0 && <SinceDivider>While you were away</SinceDivider>}
+      <div className="flex flex-col">
+        {since.map((entry) => (
+          <Happened
+            key={entry.id}
+            title={entry.title}
+            at={ago(entry.at)}
+            tone={entry.tone}
+            facts={entry.facts}
+          />
+        ))}
       </div>
     </div>
   );

@@ -762,19 +762,27 @@
    instead of merely unlikely.
    ──────────────────────────────────────────────────────────────────────── */
 
+/*
+   Rounder than the rest of the system, and deliberately out of step with it.
+   Every other surface here uses `--radius-card` (12px) because a panel holding
+   dense data wants a tight corner. A speech bubble is not that object — it is
+   the one shape on the screen a founder has already learned somewhere else,
+   and the thing they learned is soft. A 12px bubble reads as a card with a
+   spike on it.
+*/
 .bubble {
   position: relative;
   background: var(--bubble-fill);
   border: var(--bubble-width) var(--bubble-stroke) var(--bubble-line);
-  border-radius: var(--radius-card);
+  border-radius: 17px;
   --bubble-stroke: solid;
   --bubble-dash: none;
 }
 
-/* The tail squares off the corner it grows from. Without this the triangle
-   meets a curve and reads as a chip stuck to the side of a pill. */
+/* The tail squares off the corner it grows from. Without this the tail meets a
+   17px curve and reads as a chip stuck to the side of a pill. */
 .bubble-tailed {
-  border-top-left-radius: 3px;
+  border-top-left-radius: 4px;
 }
 
 /*
@@ -850,13 +858,23 @@
   --bubble-width: 0px;
 }
 
-/* Arrival. Opacity and transform only, so nothing below a bubble moves while
-   somebody is reading it, and the origin is the tail — she speaks from there,
-   so that is the point the message grows out of. */
+/*
+   Arrival, rebuilt.
+
+   The first version unfolded from the top-left over 480ms and read as wrong
+   for a reason worth naming: a message does not grow out of its own tail, it
+   arrives from below and pushes the thread up. So the origin is the bottom
+   edge, the travel is upward, and the whole thing is over in 280ms — a chat
+   bubble that takes half a second to appear is a chat bubble somebody is
+   waiting for.
+
+   Opacity and transform only, so nothing below a bubble moves while it is
+   being read.
+*/
 @keyframes bubble-arrive {
   from {
     opacity: 0;
-    transform: translate3d(0, 10px, 0) scale(0.965);
+    transform: translate3d(0, 14px, 0) scale(0.96);
   }
   to {
     opacity: 1;
@@ -865,9 +883,49 @@
 }
 
 .bubble-arrive {
-  transform-origin: top left;
-  animation: bubble-arrive var(--dur-entrance) var(--ease-out) both;
-  animation-delay: calc(var(--i, 0) * 90ms);
+  transform-origin: bottom left;
+  animation: bubble-arrive 280ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/*
+   What she is doing, in the shape ChatGPT taught everybody: a line of text
+   with light travelling across it.
+
+   Admissible under all three of `DESIGN.md`'s properties for decorative
+   motion. It renders only while an operation the product recorded is running.
+   The sentence is fully legible with it off — it is `OPERATION_STAGE_LABELS`,
+   the stage the executor actually wrote, never a model's account of its own
+   thinking (rule 43). And the sweep carries no timing: a fixed period,
+   unrelated to how long the run has taken or has left.
+*/
+@keyframes study-thinking {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.study-thinking {
+  background: linear-gradient(
+      90deg,
+      var(--color-fg-meta) 0%,
+      var(--color-fg-meta) 30%,
+      var(--color-fg) 45%,
+      var(--color-fg-meta) 60%,
+      var(--color-fg-meta) 100%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: study-thinking 3.2s linear infinite;
+}
+
+.study-paused .study-thinking {
+  animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -875,5 +933,13 @@
     animation: none !important;
     opacity: 1;
     transform: none;
+  }
+  /* The gradient has to go with the animation, not just the animation: text
+     painted through a clipped background with `color: transparent` is
+     invisible the moment nothing moves. */
+  .study-thinking {
+    animation: none !important;
+    background: none;
+    color: var(--color-fg-body);
   }
 }
