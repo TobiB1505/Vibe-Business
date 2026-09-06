@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ChevronDownIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { Disclosure } from "@/components/ui/disclosure";
+import { Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
 import { StatusPill } from "@/components/ui/status-pill";
 import { SeeMore } from "@/components/ui/see-more";
@@ -569,13 +570,12 @@ function FounderActionCard({
             >
               {prompt.finding.label}
             </label>
-            <textarea
+            <Textarea
               id={`finding-${step.id}`}
               name="finding"
               required
               rows={4}
               maxLength={1200}
-              className="border-line-2 bg-surface-2 text-fg-body rounded-well w-full resize-y border px-3 py-2 text-body leading-relaxed"
               data-testid="attestation-finding"
             />
             <p className="text-fg-muted text-caption">{prompt.finding.help}</p>

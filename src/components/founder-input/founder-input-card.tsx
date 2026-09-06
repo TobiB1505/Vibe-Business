@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { Button, TextAction } from "@/components/ui/button";
 import { CheckIcon } from "@/components/ui/dashboard-icons";
 import { Disclosure } from "@/components/ui/disclosure";
+import { Textarea } from "@/components/ui/field";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
@@ -238,14 +239,13 @@ export function FounderInputCard({
               <label htmlFor={customInputId} className="text-fg-secondary text-body font-medium">
                 Your answer
               </label>
-              <textarea
+              <Textarea
                 id={customInputId}
                 name="customAnswer"
                 maxLength={1200}
                 rows={4}
                 disabled={pending}
                 aria-describedby={customHelpId}
-                className="border-line-3 bg-field text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 resize-none rounded-field border px-3 py-2 text-body leading-relaxed outline-none focus:ring-1 disabled:opacity-60"
                 placeholder="Write the direction or information Vibe should use."
               />
               <p id={customHelpId} className="text-fg-muted text-caption leading-relaxed">
@@ -379,14 +379,13 @@ export function FounderInputCard({
             <label htmlFor={customInputId} className="text-fg-secondary text-body font-medium">
               Your answer
             </label>
-            <textarea
+            <Textarea
               id={customInputId}
               name="customAnswer"
               maxLength={1200}
               rows={4}
               disabled={pending}
               aria-describedby={customHelpId}
-              className="border-line-3 bg-surface-1 text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 resize-none rounded-xl border px-3 py-2 text-body leading-relaxed outline-none focus:ring-1 disabled:opacity-60"
               placeholder="Write the direction or information Vibe should use."
             />
             <p id={customHelpId} className="text-fg-muted text-caption leading-relaxed">

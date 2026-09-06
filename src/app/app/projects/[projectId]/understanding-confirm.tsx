@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, Input, inputClassName } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { Surface } from "@/components/ui/surface";
 import { MAX_CORRECTION_LENGTH } from "@/modules/product-understanding/schema";
 import {
@@ -138,14 +138,13 @@ export function UnderstandingConfirm({
         {FIELDS.map((field) => (
           <Field key={field.name} id={field.name} label={field.label} hint={field.hint}>
             {field.long ? (
-              <textarea
+              <Textarea
                 id={field.name}
                 name={field.name}
                 defaultValue={values[field.name]}
                 maxLength={MAX_CORRECTION_LENGTH}
                 rows={3}
                 aria-describedby={`${field.name}-hint`}
-                className={inputClassName}
               />
             ) : (
               <Input

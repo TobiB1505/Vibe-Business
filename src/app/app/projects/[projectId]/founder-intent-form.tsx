@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, Select } from "@/components/ui/field";
 import {
   GOAL_LABELS,
   MONETIZATION_LABELS,
@@ -36,18 +37,6 @@ const ERROR_MESSAGES: Record<SaveFounderIntentFailure, string> = {
   project_not_found: "This project could not be found.",
   save_failed: "This could not be saved. Try again in a moment.",
 };
-
-const inputClass =
-  "w-full rounded-md border border-line-strong bg-field px-3 py-1.5 text-body text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none";
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block space-y-1">
-      <span className="text-caption text-fg-muted">{label}</span>
-      {children}
-    </label>
-  );
-}
 
 const initialState: FounderIntentActionState = null;
 
@@ -101,22 +90,22 @@ export function FounderIntentForm({
       </p>
 
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field label="Stage">
-          <select name="stage" defaultValue={intent.stage ?? ""} className={inputClass}>
+        <Field id="stage" label="Stage">
+          <Select id="stage" name="stage" defaultValue={intent.stage ?? ""}>
             <option value="">Not specified</option>
             {PROJECT_STAGES.map((stage) => (
               <option key={stage} value={stage}>
                 {STAGE_LABELS[stage]}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
-        <Field label="Monetization you're planning">
-          <select
+        <Field id="monetizationModel" label="Monetization you're planning">
+          <Select
+            id="monetizationModel"
             name="monetizationModel"
             defaultValue={intent.monetizationModel ?? ""}
-            className={inputClass}
           >
             <option value="">Not specified</option>
             {MONETIZATION_MODELS.map((model) => (
@@ -124,18 +113,18 @@ export function FounderIntentForm({
                 {MONETIZATION_LABELS[model]}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
 
-        <Field label="Primary goal">
-          <select name="primaryGoal" defaultValue={intent.primaryGoal ?? ""} className={inputClass}>
+        <Field id="primaryGoal" label="Primary goal">
+          <Select id="primaryGoal" name="primaryGoal" defaultValue={intent.primaryGoal ?? ""}>
             <option value="">Not specified</option>
             {PRIMARY_GOALS.map((goal) => (
               <option key={goal} value={goal}>
                 {GOAL_LABELS[goal]}
               </option>
             ))}
-          </select>
+          </Select>
         </Field>
       </div>
 

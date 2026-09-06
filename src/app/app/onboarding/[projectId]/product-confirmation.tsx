@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Field, Input, inputClassName } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MAX_CORRECTION_LENGTH } from "@/modules/product-understanding/schema";
@@ -143,13 +143,12 @@ export function ProductConfirmation({
         {FIELDS.map((field) => (
           <Field key={field.name} id={field.name} label={field.label}>
             {field.long ? (
-              <textarea
+              <Textarea
                 id={field.name}
                 name={field.name}
                 rows={3}
                 maxLength={MAX_CORRECTION_LENGTH}
                 defaultValue={values[field.name]}
-                className={`${inputClassName} resize-none`}
               />
             ) : (
               <Input
