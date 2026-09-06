@@ -13,6 +13,7 @@ import {
   imageBuildEnv,
   imageLinkCommand,
 } from "./image-build";
+import { describeError, reportBrowserFailure } from "./diagnostics";
 import type { BrowserRuntimeImage } from "./provider";
 import { BROWSER_SANDBOX } from "./runtime";
 
@@ -106,18 +107,29 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         timeoutMs: BUILD_TIMEOUT_MS,
         env: imageBuildEnv(),
       });
-    } catch {
+    } catch (error) {
+      reportBrowserFailure("image_build_create", { error: describeError(error) });
       return { ok: false, error: "browser_provider_unavailable" };
     }
 
     try {
-      for (const command of imageBuildCommands()) {
+      for (const [index, command] of imageBuildCommands().entries()) {
         const result = await handle.run({
           command,
           cwd: BROWSER_SANDBOX.root,
           timeoutMs: BUILD_STEP_TIMEOUT_MS,
         });
         if (result.exitCode !== 0) {
+          // The output is Vibe's own build commands talking — a browser
+          // download and a package install, with no customer input anywhere in
+          // the VM. Bounded because a registry that answers with an HTML error
+          // page must not turn one failure into a megabyte of log.
+          reportBrowserFailure("image_build_command", {
+            commandIndex: index,
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            output: result.output.slice(-1500),
+          });
           await discard(handle);
           return { ok: false, error: "browser_provider_unavailable" };
         }
@@ -131,6 +143,7 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         content: IMAGE_LINK_PROGRAM,
       });
       if (!link.ok) {
+        reportBrowserFailure("image_build_write", { file: "link program" });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };
       }
@@ -142,6 +155,12 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         env: { ...imageBuildEnv(), ...IMAGE_LINK.env },
       });
       if (linked.exitCode !== 0) {
+        reportBrowserFailure("image_build_command", {
+          commandIndex: "link",
+          exitCode: linked.exitCode,
+          timedOut: linked.timedOut,
+          output: linked.output.slice(-1500),
+        });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };
       }
@@ -151,6 +170,7 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         content: (await import("./guard-program")).BROWSER_GUARD_PROGRAM,
       });
       if (!guard.ok) {
+        reportBrowserFailure("image_build_write", { file: "guard program" });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };
       }
@@ -167,7 +187,8 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
       });
 
       return { ok: true, snapshotId: artifact.snapshotId };
-    } catch {
+    } catch (error) {
+      reportBrowserFailure("image_build_snapshot", { error: describeError(error) });
       await discard(handle);
       return { ok: false, error: "browser_provider_unavailable" };
     }

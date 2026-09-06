@@ -205,4 +205,40 @@ describe("a failed build costs one sandbox and no retry loop", () => {
     // minutes per attempt, on a person waiting for a browser.
     expect(sandboxes.createCount()).toBe(1);
   });
+
+  /**
+   * The first real Deep Scan failed after 3.8 seconds and nothing anywhere
+   * said why — no log line, no Sentry issue, no row, and one sentence covering
+   * six distinct causes. The refusal is the same as it was; what changed is
+   * that the operator can now tell which of them happened.
+   */
+  it("says which step failed, and what the step said", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sandboxes = fakeSandboxProvider(failingInstall());
+    const { resolver } = image(sandboxes);
+
+    await resolver.resolve();
+    // `alertOperator` logs first and unconditionally, then reports to Sentry;
+    // the local line is the one this can observe without a network.
+    await Promise.resolve();
+
+    expect(reported).toHaveBeenCalledWith(
+      "deep scan: the browser session could not start",
+      expect.objectContaining({ step: "image_build_command", exitCode: 1, output: "boom" }),
+    );
+
+    reported.mockRestore();
+  });
+
+  it("keeps the provider's account out of what the customer is told", async () => {
+    // §17: no provider message, no exit code, no stack. The operator gets the
+    // detail; the person waiting gets a sentence they can act on.
+    const sandboxes = fakeSandboxProvider(failingInstall());
+    const { resolver } = image(sandboxes);
+
+    const result = await resolver.resolve();
+
+    expect(result).toEqual({ ok: false, error: "browser_provider_unavailable" });
+    expect(JSON.stringify(result)).not.toContain("boom");
+  });
 });
