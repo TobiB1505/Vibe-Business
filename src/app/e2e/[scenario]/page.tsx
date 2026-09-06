@@ -65,6 +65,8 @@ import BillingLoading from "@/app/app/(account)/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
 import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
 import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
+import { e2eBriefing, isE2eBriefingScenario } from "../briefing-scenarios";
+import { BriefingPanel } from "@/app/app/projects/[projectId]/nova/briefing-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
@@ -1155,6 +1157,15 @@ export default async function E2eScenarioPage({
       <main className="mx-auto max-w-3xl p-8">
         {label}
         <ProvenancePanel provenance={e2eProvenance(scenario)} projectId="project_e2e" />
+      </main>
+    );
+  }
+
+  if (isE2eBriefingScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <BriefingPanel view={e2eBriefing(scenario)} projectId="project_e2e" />
       </main>
     );
   }

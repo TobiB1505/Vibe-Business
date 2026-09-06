@@ -5,10 +5,21 @@ import type { EvidenceCitation } from "@/components/system/evidence-drawer";
 import type { CostBalance } from "@/components/system/cost-disclosure";
 import type { FindingSeverity } from "@/components/system/finding-card";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
+import {
+  getAuditCurrency,
+  getAuditReadiness,
+  readAuditEvidence,
+  type AuditEvidence,
+} from "@/modules/business-audit/service";
+import { getFounderName } from "@/modules/auth/founder-profile";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
+import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { buildNovaBriefing } from "@/modules/nova/briefing/briefing";
+import { buildBriefingView, type BriefingView } from "@/modules/nova/briefing/view";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import { readNovaFocus } from "@/modules/nova/read";
+import { buildProvenanceChain } from "@/modules/provenance/chain";
+import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { productDisplayName } from "@/modules/projects/display-name";
 import { buildHeadline } from "@/modules/product-understanding/view";
@@ -20,22 +31,35 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * ## Why the reads are counted
  *
  * This is the most-visited route in the product, and the audit's own risk note
- * for this slice was the read count on it. So the shape is deliberate: four
- * concurrent reads, none of which fans out per candidate.
+ * for this slice was the read count on it. So the shape is deliberate: one
+ * awaited evidence read, then a single concurrent wave, none of which fans out
+ * per candidate.
  *
+ * 0. `readAuditEvidence` — the six documents everything below shares, fetched
+ *    once and handed down. Awaited first for the reason Business Health awaits
+ *    it first: one round trip's latency buys back eight (VB-022).
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
  * 2. The product's identity row — three columns, one project.
- * 3. The latest audit — a stamp, then that one document. Not the sixty-reading
- *    trend, which is Business Health's and draws a chart Home does not have.
- * 4. The balance — `getHeaderCreditBalance`, which is documented as the one
+ * 3. The balance — `getHeaderCreditBalance`, which is documented as the one
  *    billing read a per-page surface may make. Never `getBillingOverview`,
  *    which repairs on read.
+ * 4. Currency and readiness, both given the prefetched evidence, so neither
+ *    re-reads a snapshot; the Move set; and the founder's name.
+ *
+ * The latest audit is no longer read at all — it arrives inside the evidence,
+ * which is two queries fewer than the stamp-then-document pair this used to
+ * make, and it is now the same audit the briefing's chain judges. Not the
+ * sixty-reading trend, which is Business Health's and draws a chart Home does
+ * not have.
  *
  * ## What it must not do
  *
  * Re-rank anything. `deriveNovaFocus` decides what leads and what follows;
- * this assembles the facts around that decision and adds no candidate.
+ * this assembles the facts around that decision and adds no candidate. The
+ * briefing is held to the same rule: `buildProvenanceChain` judges the
+ * evidence and the opportunity engine ranked the Move, so what is assembled
+ * here is the join and never a second opinion.
  */
 
 export type NovaProductIdentity = {
@@ -65,6 +89,8 @@ export type NovaHealth = {
 
 export type NovaHomeData = {
   view: NovaHomeView;
+  /** Where the founder stands, joined from the evidence this read already holds. */
+  briefing: BriefingView;
   identity: NovaProductIdentity;
   /** Null when no audit has ever completed — not a score of zero. */
   health: NovaHealth | null;
@@ -134,11 +160,18 @@ function citation(id: string): EvidenceCitation {
   return { detail: described.detail, source: described.source, certainty: described.certainty };
 }
 
-async function readHealth(supabase: SupabaseClient, projectId: string): Promise<NovaHealth | null> {
-  const stamp = await getLatestAuditStamp(supabase, projectId);
-  if (!stamp) return null;
-
-  const stored = await getProjectAuditById(supabase, { projectId, auditId: stamp.id });
+/**
+ * The business reading, from the audit the evidence read already holds.
+ *
+ * It used to fetch its own — a stamp, then that document by id — which was two
+ * queries for the row `readAuditEvidence` returns as `latestAudit`. Now that
+ * the briefing needs the evidence anyway, taking the audit from it is two
+ * reads back rather than two more, and it removes the way the two could
+ * disagree: Home's score and Home's briefing are the same audit by
+ * construction.
+ */
+function buildHealth(latestAudit: AuditEvidence["latestAudit"]): NovaHealth | null {
+  const stored = latestAudit;
   if (!stored?.result) return null;
 
   /*
@@ -180,14 +213,54 @@ async function readHealth(supabase: SupabaseClient, projectId: string): Promise<
 
 export async function readNovaHomeData(
   supabase: SupabaseClient,
-  params: { projectId: string; userId: string; projectName: string },
+  params: { projectId: string; userId: string; projectName: string; now?: Date },
 ): Promise<NovaHomeData> {
-  const [focus, identity, health, balance] = await Promise.all([
-    readNovaFocus(supabase, params.projectId),
-    readIdentity(supabase, params.projectId, params.projectName),
-    readHealth(supabase, params.projectId),
-    getHeaderCreditBalance(supabase, { userId: params.userId }),
-  ]);
+  /*
+   * Genuinely first, so it is awaited before the wave rather than inside it —
+   * the same shape Business Health uses, and for the same reason. Everything
+   * below that judges currency takes it as `prefetched` and re-reads nothing,
+   * so the six documents are fetched once for the score, the chain and the
+   * briefing together (VB-022).
+   */
+  const evidence = await readAuditEvidence(supabase, params.projectId);
 
-  return { view: buildNovaHomeView(focus), identity, health, balance };
+  const [focus, identity, balance, currency, readiness, opportunities, founderName] =
+    await Promise.all([
+      readNovaFocus(supabase, params.projectId),
+      readIdentity(supabase, params.projectId, params.projectName),
+      getHeaderCreditBalance(supabase, { userId: params.userId }),
+      getAuditCurrency(supabase, params.projectId, evidence),
+      getAuditReadiness(supabase, params.projectId, evidence),
+      getLatestOpportunities(supabase, params.projectId),
+      getFounderName(supabase, params.userId),
+    ]);
+
+  /*
+   * The engine's own rank-1 Move, never a re-ranking. Passed whenever a set
+   * exists; whether it is worth *voicing* is the briefing's decision, and it
+   * only reaches the read once the chain says the set is sound.
+   */
+  const topMove =
+    opportunities?.set.opportunities.find((opportunity) => opportunity.rank === 1) ?? null;
+
+  const briefing = buildNovaBriefing({
+    founderName,
+    projectName: params.projectName,
+    primaryGoal: evidence.founderIntent.intent.primaryGoal,
+    chain: buildProvenanceChain(
+      provenanceInputsFrom({ evidence, readiness, currency, opportunities }),
+    ),
+    focus,
+    topMove: topMove ? { title: topMove.title, whyNow: topMove.whyNow } : null,
+    /* Injected so a render is a function of its inputs and one clock. */
+    now: params.now ?? new Date(),
+  });
+
+  return {
+    view: buildNovaHomeView(focus),
+    briefing: buildBriefingView(briefing),
+    identity,
+    health: buildHealth(evidence.latestAudit),
+    balance,
+  };
 }
