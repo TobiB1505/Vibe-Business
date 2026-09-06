@@ -124,11 +124,37 @@ export function imageBuildEnv(): Record<string, string> {
  * separate.
  */
 export const IMAGE_BUILD_HOSTS = [
+  // `npm install`, and `npx --yes playwright@…` fetching the installer itself.
   "registry.npmjs.org",
   "*.npmjs.org",
+  // Playwright's three CDN mirrors, as `PLAYWRIGHT_CDN_MIRRORS` lists them in
+  // the pinned release. Two names, because the second is the first's origin.
   "cdn.playwright.dev",
   "playwright.download.prss.microsoft.com",
   "*.blob.core.windows.net",
+  /*
+   * Where the browser actually comes from, which is not where it is asked for.
+   *
+   * The second real Deep Scan died here, on command 2, with
+   * `getaddrinfo EAI_AGAIN storage.googleapis.com` — a DNS refusal, because an
+   * allowlisted host answered with a redirect to one that was not.
+   *
+   * Measured rather than assumed, 2026-09-06:
+   *
+   *     HEAD https://cdn.playwright.dev/dbazure/download/playwright/…
+   *     307 → https://storage.googleapis.com/chrome-for-testing-public/…
+   *                                          /143.0.7499.4/linux64/chrome-linux64.zip
+   *
+   * Playwright's `chromium` on linux-x64 is Chrome for Testing, and Chrome for
+   * Testing is published to a Google Cloud Storage bucket. The CDN is a front
+   * for it. `*.blob.core.windows.net` above is the same shape one cloud over —
+   * the ESRP mirror's own redirect target — so the list already knew redirect
+   * targets belong in it and simply had the wrong one.
+   *
+   * Nothing in this repository references this host, so it reads like a stray
+   * entry. `image-build.test.ts` is what stops it being tidied away.
+   */
+  "storage.googleapis.com",
 ] as const;
 
 /**
