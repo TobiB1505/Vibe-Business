@@ -5,8 +5,10 @@ import {
   type BusinessBrainView,
 } from "@/modules/projects/business-brain-view";
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
+import { AgentChecks, AgentWorking } from "./agent-block";
 import { AuditBlock } from "./audit-block";
 import { ScanBlock } from "./scan-block";
+import { E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
 import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./elements";
@@ -70,6 +72,22 @@ function auditView(scenario: "audit-synthesis" | "audit-unscored"): BusinessBrai
   if (!view) throw new Error(`fixture ${scenario} produced no business brain view`);
   return view;
 }
+
+/** The agent fixture the workspace's own stage routes render from. */
+const AGENT = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
+
+/**
+ * The run's earlier stages, newest first.
+ *
+ * `OPERATION_STAGE_LABELS` values, in the order an agent run passes through
+ * them. These are the lines that go: the stage column is overwritten as the
+ * run moves, and nothing writes the ones before it down.
+ */
+const AGENT_STAGES = [
+  OPERATION_STAGE_LABELS.generating_change,
+  OPERATION_STAGE_LABELS.planning,
+  OPERATION_STAGE_LABELS.preflight,
+];
 
 /** The scan fixture the product's own reveal route renders from. */
 const SCAN = E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete;
@@ -318,6 +336,57 @@ export function StudyBlock({ study }: { study: Study }) {
             <Move label="Open the product scan" leavesTo="My product" />
           </div>
         </div>
+      </section>
+
+      {/* ── The Agent, and the two kinds of record ───────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>The Agent at work, and what survives it</Eyebrow>
+        <Context>
+          The block where the dissolving lines earn their argument, because both
+          kinds of record are on screen at once. The lines at the top are the run&rsquo;s stages —
+          a column that is overwritten as the run moves, with nothing writing down the ones before
+          it. The files under them are stored rows, so they are rendered by the shipped component
+          that already knows how to show them, disclosure and pulse included.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble index={0}>
+            <Line>I am building it now.</Line>
+          </Bubble>
+          <RenderBlock label="Building" index={1}>
+            <div className="flex flex-col gap-5">
+              <Dissolving stages={AGENT_STAGES} />
+              <AgentWorking events={AGENT.fileEvents} />
+            </div>
+          </RenderBlock>
+        </div>
+        <Context>
+          One dissolves because it was never written down; the other does not, because it was. That
+          is the whole rule, and it is visible here rather than argued for.
+        </Context>
+      </section>
+
+      {/* ── What the checks found ────────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>And what Vibe checked afterwards</Eyebrow>
+        <Context>
+          The validation, through the workspace&rsquo;s own component — including the rows it
+          refuses to dress up. A skipped check says it was skipped and why; it does not quietly
+          count as a pass, and the block does not roll five states into one tick.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <RenderBlock label="Checks" at="4m" index={0}>
+            <AgentChecks checks={AGENT.checks} />
+          </RenderBlock>
+          <div className="max-w-[24rem]">
+            <Move label="Look at the change" leavesTo="Agent" />
+          </div>
+        </div>
+        <Context>
+          What it must never say is that this is ready to ship. A validation pass means a
+          profile&rsquo;s commands exited zero in an isolated VM — never that a change is safe,
+          reviewed, mergeable or live (rule 66), which is why the control beside it goes to the
+          review rather than to a merge.
+        </Context>
       </section>
 
       {/* ── More than one thing to do ────────────────────────────────── */}

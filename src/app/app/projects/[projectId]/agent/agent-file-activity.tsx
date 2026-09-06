@@ -62,6 +62,7 @@ export function AgentFileActivity({
   limit = 6,
   title = "Vibe activity",
   live = false,
+  variant = "panel",
 }: {
   events: readonly StoredExecutionEvent[];
   limit?: number;
@@ -69,6 +70,15 @@ export function AgentFileActivity({
   title?: string;
   /** A pulse means new Agent events may still arrive. Settled records stay still. */
   live?: boolean;
+  /**
+   * Where this is drawn.
+   *
+   * `block` is Nova's thread, where the render block already supplies the
+   * frame — the same reason the Product Scan has a variant of that name. It
+   * drops this component's own panel and nothing else, so the rows, the
+   * ordering, the disclosure and the pulse stay the ones the workspace shows.
+   */
+  variant?: "panel" | "block";
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -79,7 +89,11 @@ export function AgentFileActivity({
 
   return (
     <section
-      className="rounded-panel border-line-3 bg-surface-3 flex flex-col gap-4 border p-5"
+      className={
+        variant === "block"
+          ? "flex flex-col gap-4"
+          : "rounded-panel border-line-3 bg-surface-3 flex flex-col gap-4 border p-5"
+      }
       data-testid="agent-file-activity"
     >
       <div className="flex items-center justify-between gap-2.5">
