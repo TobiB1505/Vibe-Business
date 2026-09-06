@@ -92,6 +92,10 @@
   --color-surface-3: rgb(255 255 255 / 0.04);
   --color-surface-4: rgb(255 255 255 / 0.05);
   --color-surface-hover: rgb(255 255 255 / 0.06);
+  /* Held down. Touch has no hover, so press is the only feedback a phone
+     gets — and it has to be a visible step past hover rather than the same
+     fill, or the control answers a finger with nothing. */
+  --color-surface-pressed: rgb(255 255 255 / 0.11);
   --color-well: rgb(0 0 0 / 0.3);
   --color-field: rgb(0 0 0 / 0.4);
 

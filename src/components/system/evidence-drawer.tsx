@@ -1,6 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
+import { IconButton } from "@/components/ui/icon-button";
+import { DismissIcon } from "@/components/ui/icons.generated";
 import { Sheet } from "@/components/ui/sheet";
 import { TextAction } from "@/components/ui/button";
 import { RatingChip } from "@/components/ui/status-pill";
@@ -82,9 +84,18 @@ export function EvidenceDrawer({
       <header className="border-line-2 flex flex-col gap-3 border-b p-6">
         <div className="flex items-start justify-between gap-4">
           <MonoLabel>Evidence</MonoLabel>
-          <TextAction type="button" onClick={onClose} className="text-ui">
-            Close
-          </TextAction>
+          {/*
+            A mark in a container rather than an underlined word. The word was
+            the least conventional answer available in a drawer header, and it
+            only ever read as a control because of a line under it — which on a
+            phone, where there is no hover to explain it, is all a founder gets.
+          */}
+          <IconButton
+            icon={<DismissIcon size={16} />}
+            label="Close"
+            onClick={onClose}
+            className="-me-1"
+          />
         </div>
         <h2 id={titleId} className="text-fg text-title font-bold">
           {title}
