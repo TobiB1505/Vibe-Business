@@ -31,7 +31,8 @@ import { FindingCard } from "@/components/system/finding-card";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { StudyShell } from "../design-studies/study-shell";
 import { StudyNovaHome } from "../design-studies/study-nova-home";
-import { studyByScenario } from "../design-studies/studies";
+import { StudyLabels } from "../design-studies/study-labels";
+import { LABELS_SCENARIO, STUDIES, studyByScenario } from "../design-studies/studies";
 import {
   isE2eNovaScenario,
   novaScenarioHealth,
@@ -229,6 +230,17 @@ export default async function E2eScenarioPage({
     trace; a study is a picture somebody looks at, and a stray line of debug
     text at the top of it is the first thing a reviewer would ask about.
   */
+  if (scenario === LABELS_SCENARIO) {
+    const chosen = STUDIES.find((entry) => entry.chosen);
+    if (chosen) {
+      return (
+        <StudyShell study={chosen}>
+          <StudyLabels study={chosen} />
+        </StudyShell>
+      );
+    }
+  }
+
   const study = studyByScenario(scenario);
   if (study) {
     return (
