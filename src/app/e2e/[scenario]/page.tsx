@@ -33,7 +33,9 @@ import { StudyShell } from "../design-studies/study-shell";
 import { StudyNovaHome } from "../design-studies/study-nova-home";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
+import { StudyActions } from "../design-studies/study-actions";
 import {
+  ACTIONS_SCENARIO,
   LABELS_SCENARIO,
   MONO_SCENARIO,
   STUDIES,
@@ -236,17 +238,19 @@ export default async function E2eScenarioPage({
     trace; a study is a picture somebody looks at, and a stray line of debug
     text at the top of it is the first thing a reviewer would ask about.
   */
-  /* The two follow-up comparisons both render in the chosen direction. */
-  if (scenario === LABELS_SCENARIO || scenario === MONO_SCENARIO) {
+  /* The follow-up comparisons all render in the chosen direction. */
+  const FOLLOW_UPS = {
+    [LABELS_SCENARIO]: StudyLabels,
+    [MONO_SCENARIO]: StudyMono,
+    [ACTIONS_SCENARIO]: StudyActions,
+  } as const;
+  const FollowUp = FOLLOW_UPS[scenario as keyof typeof FOLLOW_UPS];
+  if (FollowUp) {
     const chosen = STUDIES.find((entry) => entry.chosen);
     if (chosen) {
       return (
         <StudyShell study={chosen}>
-          {scenario === LABELS_SCENARIO ? (
-            <StudyLabels study={chosen} />
-          ) : (
-            <StudyMono study={chosen} />
-          )}
+          <FollowUp study={chosen} />
         </StudyShell>
       );
     }

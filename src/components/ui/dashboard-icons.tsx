@@ -189,6 +189,21 @@ export function ChevronDownIcon(props: IconProps) {
   );
 }
 
+/**
+ * Dismiss.
+ *
+ * The set had no close mark, which is why every dismissal in the product is a
+ * word — "Close", "Cancel" — including the one in a drawer header, where a
+ * word is the least conventional answer available.
+ */
+export function CloseIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m7 7 10 10M17 7 7 17" />
+    </IconFrame>
+  );
+}
+
 export function ChevronRightIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
