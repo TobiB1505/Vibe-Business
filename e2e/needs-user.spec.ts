@@ -193,3 +193,121 @@ test.describe("375px", () => {
     await expect(page.getByRole("button", { name: /not sure yet/i })).toBeVisible();
   });
 });
+
+test.describe("choosing an answer, from the keyboard", () => {
+  /**
+   * The gap this closes.
+   *
+   * The choice used to be drawn two ways across the product, and the card
+   * version hid its input with `sr-only` — a 1px clipped box. The browser drew
+   * the focus outline there, so a keyboard user tabbing through the options
+   * saw nothing move. Measured on the old markup: a 2px mint outline on a 1×1
+   * element.
+   *
+   * Only a browser can catch that. The markup was correct, the component
+   * rendered, every unit test passed, and the screen was unusable without a
+   * mouse.
+   */
+
+  /**
+   * What mint actually serialises to here.
+   *
+   * `ring-mint/30` becomes a `color-mix`, which Chromium computes to `oklab(…)`
+   * rather than to an `rgb()` string — so a test that pins the hex passes today
+   * and breaks on a browser update for no reason. This asks the page what the
+   * token resolves to and compares against that.
+   */
+  async function mintAs(page: Page, expression: string): Promise<string> {
+    return page.evaluate((value) => {
+      const probe = document.createElement("div");
+      probe.style.color = value;
+      document.body.append(probe);
+      const resolved = getComputedStyle(probe).color;
+      probe.remove();
+      return resolved;
+    }, expression);
+  }
+
+  test("draws the focus on the card, not on the clipped input", async ({ page }) => {
+    await page.goto(STAGE);
+
+    const options = page.getByRole("radio");
+    const before = await options
+      .first()
+      .evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow);
+
+    await options.first().focus();
+
+    const seen = await options.first().evaluate((input) => {
+      const label = input.closest("label")!;
+      return {
+        inputWidth: Math.round(input.getBoundingClientRect().width),
+        cardWidth: Math.round(label.getBoundingClientRect().width),
+      };
+    });
+
+    // The input really is the invisible one — if it stops being `sr-only` this
+    // test would pass for the wrong reason.
+    expect(seen.inputWidth).toBeLessThanOrEqual(1);
+    expect(seen.cardWidth).toBeGreaterThan(100);
+
+    // Polled, and the colour components only. The ring fades in, so a single
+    // sample catches whatever frame it lands on — one run read an alpha of
+    // 0.2, another read the transition's first frame at zero. The claim is
+    // that focus *becomes* visible on the card, not that it does so within
+    // one frame, so this waits for that rather than timing it.
+    const mint30 = await mintAs(page, "color-mix(in oklab, var(--color-mint) 30%, transparent)");
+    await expect
+      .poll(() =>
+        options.first().evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow),
+      )
+      .toContain(mint30.split(" / ")[0]);
+
+    const after = await options
+      .first()
+      .evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow);
+    expect(after).not.toBe(before);
+  });
+
+  test("moves between the options with the arrow keys", async ({ page }) => {
+    await page.goto(STAGE);
+
+    const options = page.getByRole("radio");
+    await options.first().focus();
+    await page.keyboard.press("ArrowDown");
+
+    // Real radios, so this is the browser's behaviour rather than ours. It is
+    // asserted because the alternative — divs with `aria-checked` — looks
+    // identical in a screenshot and loses it.
+    await expect(options.nth(1)).toBeChecked();
+  });
+
+  test("marks the chosen option with something that is there or is not", async ({ page }) => {
+    await page.goto(STAGE);
+
+    const mint = await mintAs(page, "var(--color-mint)");
+    const dotsIn = (index: number) =>
+      page
+        .getByRole("radio")
+        .nth(index)
+        .evaluate(
+          (input, fill) =>
+            [...input.closest("label")!.querySelectorAll("span")].filter((span) => {
+              const style = getComputedStyle(span);
+              const box = span.getBoundingClientRect();
+              return style.backgroundColor === fill && box.width > 4 && box.width === box.height;
+            }).length,
+          mint,
+        );
+
+    const chosen = page.getByRole("radio").nth(1);
+    await chosen.evaluate((input) => (input.closest("label") as HTMLElement).click());
+    await expect(chosen).toBeChecked();
+
+    // The dot, not the border. A tinted border says "selected" only next to
+    // the unselected ones; the dot says it on its own — so it has to be
+    // present on the chosen card and absent from the others.
+    expect(await dotsIn(1)).toBeGreaterThan(0);
+    expect(await dotsIn(0)).toBe(0);
+  });
+});

@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import {
   GOAL_LABELS,
   MONETIZATION_LABELS,
@@ -114,20 +115,14 @@ export function NeedsUserPanel({
           <fieldset className="flex flex-col gap-2">
             <legend className="sr-only">{question.prompt}</legend>
             {options.map((option) => (
-              <label
+              <ChoiceCard
                 key={option}
-                className="border-line-3 hover:border-line-4 has-checked:border-mint/60 flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 transition-[border-color]"
-              >
-                <input
-                  type="radio"
-                  name="value"
-                  value={option}
-                  checked={value === option}
-                  onChange={() => setValue(option)}
-                  className="accent-mint"
-                />
-                <span className="text-fg-body text-body">{labels?.[option] ?? option}</span>
-              </label>
+                name="value"
+                value={option}
+                checked={value === option}
+                onChange={() => setValue(option)}
+                label={labels?.[option] ?? option}
+              />
             ))}
           </fieldset>
         ) : (

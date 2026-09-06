@@ -4,12 +4,12 @@ import { useActionState, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Button, TextAction } from "@/components/ui/button";
 import { CheckIcon } from "@/components/ui/dashboard-icons";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Textarea } from "@/components/ui/field";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
-import { cn } from "@/lib/utils/cn";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 
 export type FounderInputFormState = { ok: true } | { ok: false; message: string } | null;
@@ -148,90 +148,44 @@ export function FounderInputCard({
           {options.map((option) => {
             const selected = selectedChoice === option.value;
             return (
-              <label
+              <ChoiceCard
                 key={option.value}
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-field border p-4 transition-interactive",
-                  selected
-                    ? "border-mint bg-mint-tint-soft"
-                    : "border-line-3 bg-surface-2 hover:border-line-strong hover:bg-surface-hover",
-                )}
-              >
-                <input
-                  type="radio"
-                  name="choice"
-                  value={option.value}
-                  checked={selected}
-                  onChange={() => {
-                    setSelectedChoice(option.value);
-                    setCustomOpen(false);
-                  }}
-                  disabled={pending}
-                  className="sr-only"
-                />
-                <span
-                  aria-hidden
-                  className={cn(
-                    "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
-                    selected ? "border-mint" : "border-line-strong",
-                  )}
-                >
-                  {selected && <span className="bg-mint size-2.5 rounded-full" />}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-fg-body flex flex-wrap items-center gap-2 text-body font-semibold">
+                name="choice"
+                value={option.value}
+                checked={selected}
+                onChange={() => {
+                  setSelectedChoice(option.value);
+                  setCustomOpen(false);
+                }}
+                disabled={pending}
+                label={
+                  <>
                     {option.label}
                     {option.recommended && (
                       <span className="bg-mint-tint text-mint rounded-full px-2 py-0.5 text-meta font-medium">
                         Suggested by Vibe
                       </span>
                     )}
-                  </span>
-                  {option.explanation && (
-                    <span className="text-fg-muted text-caption leading-relaxed">
-                      {option.explanation}
-                    </span>
-                  )}
-                </span>
-              </label>
+                  </>
+                }
+                detail={option.explanation}
+              />
             );
           })}
 
           {request.allowCustom && (
-            <label
-              className={cn(
-                "flex cursor-pointer items-start gap-3 rounded-field border p-4 transition-interactive",
-                selectedChoice === "custom"
-                  ? "border-mint bg-mint-tint-soft"
-                  : "border-line-3 bg-surface-2 hover:border-line-strong hover:bg-surface-hover",
-              )}
-            >
-              <input
-                type="radio"
-                name="choice"
-                value="custom"
-                checked={selectedChoice === "custom"}
-                onChange={() => {
-                  setSelectedChoice("custom");
-                  setCustomOpen(true);
-                }}
-                disabled={pending}
-                className="sr-only"
-              />
-              <span
-                aria-hidden
-                className={cn(
-                  "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border",
-                  selectedChoice === "custom" ? "border-mint" : "border-line-strong",
-                )}
-              >
-                {selectedChoice === "custom" && <span className="bg-mint size-2.5 rounded-full" />}
-              </span>
-              <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="text-fg-body text-body font-semibold">Something else</span>
-                <span className="text-fg-muted text-caption">Give Vibe a different answer</span>
-              </span>
-            </label>
+            <ChoiceCard
+              name="choice"
+              value="custom"
+              checked={selectedChoice === "custom"}
+              onChange={() => {
+                setSelectedChoice("custom");
+                setCustomOpen(true);
+              }}
+              disabled={pending}
+              label="Something else"
+              detail="Give Vibe a different answer"
+            />
           )}
 
           {customOpen && selectedChoice === "custom" && (

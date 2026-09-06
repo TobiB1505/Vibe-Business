@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import type { PickableRepository } from "@/modules/projects/connected-repositories";
 import { selectRepository, type SelectRepositoryResult } from "./actions";
 
@@ -48,32 +49,23 @@ export function RepositoryPicker({
             {/* Already-connected repositories stay visible but
                 unselectable, so it is obvious why they cannot be picked
                 again rather than them silently disappearing. */}
-            <label
-              className={
-                repo.alreadyConnected
-                  ? "flex items-center gap-3 px-4 py-3 opacity-50"
-                  : "hover:bg-surface-hover flex cursor-pointer items-center gap-3 px-4 py-3"
+            <ChoiceCard
+              surface="row"
+              name="githubRepositoryId"
+              value={repo.githubRepositoryId}
+              checked={selectedId === repo.githubRepositoryId}
+              onChange={() => setSelectedId(repo.githubRepositoryId)}
+              disabled={repo.alreadyConnected}
+              label={<span className="truncate">{repo.fullName}</span>}
+              detail={`${repo.private ? "Private" : "Public"} · default branch ${repo.defaultBranch}`}
+              trailing={
+                repo.alreadyConnected ? (
+                  <span className="text-fg-meta shrink-0 self-center text-caption">
+                    Already connected
+                  </span>
+                ) : undefined
               }
-            >
-              <input
-                type="radio"
-                name="githubRepositoryId"
-                value={repo.githubRepositoryId}
-                checked={selectedId === repo.githubRepositoryId}
-                onChange={() => setSelectedId(repo.githubRepositoryId)}
-                disabled={repo.alreadyConnected}
-                className="shrink-0"
-              />
-              <span className="min-w-0 flex-1">
-                <span className="text-fg-body block truncate text-body font-medium">{repo.fullName}</span>
-                <span className="text-fg-meta block text-caption">
-                  {repo.private ? "Private" : "Public"} · default branch {repo.defaultBranch}
-                </span>
-              </span>
-              {repo.alreadyConnected && (
-                <span className="text-fg-meta shrink-0 text-caption">Already connected</span>
-              )}
-            </label>
+            />
           </li>
         ))}
       </ul>
