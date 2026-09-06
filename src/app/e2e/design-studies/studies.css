@@ -585,6 +585,17 @@
   animation-play-state: paused;
 }
 
+/* Nova composing. Fixed period, unrelated to how long the run has taken —
+   a rhythm that accelerated with apparent progress would be a percentage
+   nobody measured. */
+.study-typing {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+.study-paused .study-typing {
+  animation-play-state: paused;
+}
+
 .study-press {
   transition:
     transform var(--dur-press) var(--ease-out),
@@ -608,9 +619,16 @@
 @media (prefers-reduced-motion: reduce) {
   .study-rise,
   .study-breathe,
+  .study-typing,
   .study-press {
     animation: none !important;
     transition: none !important;
+  }
+  /* Three still dots rather than none: the bubble is what says she is
+     composing, and removing it would take information the motion only
+     decorated. */
+  .study-typing {
+    opacity: 1;
   }
   /* The settled state, immediately — never a hidden element. */
   .study-rise {

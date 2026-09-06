@@ -221,3 +221,12 @@ export const CONSOLE_IDLE_SCENARIO = "study-console-idle";
 export function isConsoleScenario(scenario: string): boolean {
   return scenario === CONSOLE_SCENARIO || scenario === CONSOLE_IDLE_SCENARIO;
 }
+
+/**
+ * The moments gallery: every candidate the domain can raise, on one page.
+ *
+ * Not a layout study — an index to work through. The four layout studies each
+ * show one moment, and a shape that only ever met a change awaiting review
+ * will meet the other twenty in production.
+ */
+export const MOMENTS_SCENARIO = "study-moments";

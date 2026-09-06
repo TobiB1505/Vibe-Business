@@ -149,6 +149,52 @@ function facts(working: OperationView | null): NovaFocusFacts {
   };
 }
 
+/**
+ * Nova composing, in the shape a phone taught everybody (WhatsApp reference).
+ *
+ * ## Why this one is admissible and a shimmer over a paused run is not
+ *
+ * `DESIGN.md` gives decorative "thinking" motion three properties, and a typing
+ * bubble either has all of them or it is a lie:
+ *
+ * - **Bound to an observed state.** It renders only while `phase === "working"`
+ *   — an operation the product recorded as running. It is unreachable on
+ *   pending, waiting, stalled and failed, which is exactly where a borrowed
+ *   chat idiom would otherwise imply somebody is at the keyboard.
+ * - **Removable without loss.** Every sentence in the thread and the stage in
+ *   the left box are legible with it gone. Turn it off and the founder knows
+ *   the same things.
+ * - **Carrying no timing.** Three dots on a fixed 1.4s cycle, unrelated to how
+ *   long the run has taken or has left. A rhythm that accelerated with apparent
+ *   progress would be a percentage nobody measured.
+ *
+ * What it must never become is the thing that tells a founder work is
+ * happening. The state word and the stage do that; this decorates them.
+ */
+function Typing() {
+  return (
+    <div
+      className="flex w-fit items-center gap-1.5 rounded-card border border-line-2 bg-surface-1 px-4 py-3.5"
+      /* Announced once as a state rather than as three animating dots. */
+      role="status"
+      aria-label="Nova is working"
+    >
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          aria-hidden
+          className="study-typing size-1.5 rounded-full bg-fg-muted"
+          /* Only the offset is inline; the animation itself is a class so the
+             shell's hidden-tab pause and the reduced-motion block can reach
+             it. An inline `animation` is unreachable by both, which is how the
+             first draft of this quietly broke two of the three obligations. */
+          style={{ animationDelay: `${index * 0.18}s` }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** One message, arriving. No mark — the speaker stands in the left box. */
 function Says({ children, tone = "default" }: { children: ReactNode; tone?: "default" | "note" }) {
   return (
@@ -302,6 +348,12 @@ export function StudyConsole({ study, idle }: { study: Study; idle?: boolean }) 
             */
             return null;
           })}
+
+          {/*
+            She is composing, and the product observed it. Placed last in the
+            thread because that is where the next thing will arrive.
+          */}
+          {working?.phase === "working" && <Typing />}
 
           {choice && (
             <div className="flex flex-col gap-3 pt-1">
