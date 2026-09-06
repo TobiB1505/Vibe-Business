@@ -157,6 +157,9 @@ export const INLINE_SCENARIO = "study-inline";
 /** The block that opens — "see more", "More context", "Technical details". */
 export const DISCLOSURE_SCENARIO = "study-disclosure";
 
+/** What the action work left open: the links, and how loud a delete is. */
+export const LINKS_SCENARIO = "study-links";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }

@@ -39,9 +39,11 @@ import { StudyMark } from "../design-studies/study-mark";
 import { StudyDismiss } from "../design-studies/study-dismiss";
 import { StudyInline } from "../design-studies/study-inline";
 import { StudyDisclosure } from "../design-studies/study-disclosure";
+import { StudyLinks } from "../design-studies/study-links";
 import {
   ACTIONS_SCENARIO,
   DISCLOSURE_SCENARIO,
+  LINKS_SCENARIO,
   DISMISS_SCENARIO,
   ICON_ACTIONS_SCENARIO,
   INLINE_SCENARIO,
@@ -258,6 +260,7 @@ export default async function E2eScenarioPage({
     [DISMISS_SCENARIO]: StudyDismiss,
     [INLINE_SCENARIO]: StudyInline,
     [DISCLOSURE_SCENARIO]: StudyDisclosure,
+    [LINKS_SCENARIO]: StudyLinks,
   } as const;
   const FollowUp = FOLLOW_UPS[scenario as keyof typeof FOLLOW_UPS];
   if (FollowUp) {
