@@ -35,10 +35,12 @@ import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import { StudyActions } from "../design-studies/study-actions";
 import { StudyIconActions } from "../design-studies/study-icon-actions";
+import { StudyMark } from "../design-studies/study-mark";
 import {
   ACTIONS_SCENARIO,
   ICON_ACTIONS_SCENARIO,
   LABELS_SCENARIO,
+  MARK_SCENARIO,
   MONO_SCENARIO,
   STUDIES,
   studyByScenario,
@@ -246,6 +248,7 @@ export default async function E2eScenarioPage({
     [MONO_SCENARIO]: StudyMono,
     [ACTIONS_SCENARIO]: StudyActions,
     [ICON_ACTIONS_SCENARIO]: StudyIconActions,
+    [MARK_SCENARIO]: StudyMark,
   } as const;
   const FollowUp = FOLLOW_UPS[scenario as keyof typeof FOLLOW_UPS];
   if (FollowUp) {

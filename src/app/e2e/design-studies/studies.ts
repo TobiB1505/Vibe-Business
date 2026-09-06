@@ -145,6 +145,9 @@ export const ACTIONS_SCENARIO = "study-actions";
 /** The icon-led follow-up to it. */
 export const ICON_ACTIONS_SCENARIO = "study-icon-actions";
 
+/** Why the dismiss mark reads as drawn — weight and cut, at real sizes. */
+export const MARK_SCENARIO = "study-mark";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
