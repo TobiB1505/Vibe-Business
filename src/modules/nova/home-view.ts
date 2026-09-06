@@ -156,7 +156,14 @@ function entryFor(candidate: FocusCandidate): NovaHomeEntry {
   };
 }
 
-function workingFor(operation: OperationView | null): NovaWorkingEntry | null {
+/**
+ * The working entry, from one operation reading.
+ *
+ * Exported because the strip polls: a client that re-read the operation and
+ * then mapped it to a stage label itself would be a second projection of the
+ * same facts, and the two would drift the first time a stage was renamed.
+ */
+export function novaWorkingEntry(operation: OperationView | null): NovaWorkingEntry | null {
   if (operation === null) return null;
 
   return {
@@ -181,6 +188,6 @@ export function buildNovaHomeView(focus: NovaFocus): NovaHomeView {
   return {
     primary: entryFor(focus.primary),
     secondary: focus.secondary.slice(0, NOVA_SECONDARY_LIMIT).map(entryFor),
-    working: workingFor(focus.working),
+    working: novaWorkingEntry(focus.working),
   };
 }

@@ -7,6 +7,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
+import { footnoteFor } from "./footnote";
 
 /**
  * The one thing Vibe leads with (UI Sourcing Spec C1; audit E1).
@@ -37,6 +38,9 @@ import type { NovaHomeEntry } from "@/modules/nova/home-view";
  *
  * **Restate a price in prose.** The number lives in one place, rendered by
  * `CostDisclosure` from the same resolver the reservation calls.
+ *
+ * **Print its control's own label back at the reader.** `footnoteFor` owns
+ * that refusal and carries the argument for it.
  */
 export function FocusCard({
   entry,
@@ -46,6 +50,7 @@ export function FocusCard({
   operation,
   balance,
   consequence,
+  controlLabel,
   children,
   className,
 }: {
@@ -60,12 +65,18 @@ export function FocusCard({
   operation?: Parameters<typeof ActionBlock>[0]["operation"];
   balance?: CostBalance | null;
   consequence?: ReactNode;
+  /**
+   * The control's own words, so the footnote can decline to repeat them.
+   * Absent means there is nothing to collide with.
+   */
+  controlLabel?: string;
   /** Context the page supplies: the audit's top blocker, a change summary. */
   children?: ReactNode;
   className?: string;
 }) {
   const status = statusForFocusTier(entry.tier);
   const settled = entry.kind === "nothing_to_do";
+  const footnote = footnoteFor(entry.prompt, controlLabel);
 
   return (
     <VibeCard
@@ -150,7 +161,7 @@ export function FocusCard({
             operation={operation ?? null}
             balance={balance}
             consequence={consequence}
-            footnote={entry.prompt}
+            footnote={footnote}
           />
         )}
       </div>

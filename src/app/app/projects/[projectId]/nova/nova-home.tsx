@@ -14,7 +14,7 @@ import { FocusCard } from "./focus-card";
 import { HealthScore, HealthScoreAbsent } from "./health-score";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { ProductIdentity } from "./product-identity";
-import { WorkingStrip } from "./working-strip";
+import { NovaWorkingLive } from "./nova-working-live";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -131,7 +131,12 @@ export async function NovaHome({
       </NovaRise>
 
       <NovaRise delay={0.18}>
-        <WorkingStrip working={data.view.working} presence={presence} seed={project.id} />
+        <NovaWorkingLive
+          projectId={project.id}
+          working={data.view.working}
+          presence={presence}
+          seed={project.id}
+        />
       </NovaRise>
 
       <NovaRise delay={0.26}>
@@ -207,7 +212,7 @@ function FocusSection({
 
   if (control.kind === "elsewhere") {
     return (
-      <FocusCard entry={entry} presence={presence} seed={seed}>
+      <FocusCard entry={entry} presence={presence} seed={seed} controlLabel={control.label}>
         <NovaLinkControl href={sectionHref[control.section]} label={control.label} />
       </FocusCard>
     );
@@ -233,7 +238,7 @@ function FocusSection({
             "/app/connect/github";
 
     return (
-      <FocusCard entry={entry} presence={presence} seed={seed}>
+      <FocusCard entry={entry} presence={presence} seed={seed} controlLabel={control.option.label}>
         <NovaLinkControl href={target} label={control.option.label} />
       </FocusCard>
     );
@@ -261,6 +266,7 @@ function FocusSection({
       operation={meta.price}
       balance={data.balance}
       consequence={control.option.confirmationNote}
+      controlLabel={control.option.label}
       control={
         <NovaServerActionControl
           projectId={projectId}

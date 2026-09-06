@@ -7,6 +7,8 @@ import { buildActivityFeed } from "@/modules/audit-log/view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
 import type { RetailOperationKind } from "@/modules/credits/retail";
 import type { NovaHomeEntry, NovaHomeView } from "@/modules/nova/home-view";
+import { buildNovaHomeView } from "@/modules/nova/home-view";
+import { deriveNovaFocus, type NovaFocusFacts } from "@/modules/nova/focus";
 import { novaScenarioHealth, novaScenarioView, NOVA_SCENARIO_PRIORITY } from "../nova-scenarios";
 import type { Study } from "./studies";
 
@@ -176,6 +178,55 @@ function ago(at: string): string {
   return days === 1 ? "yesterday" : `${days}d ago`;
 }
 
+/**
+ * A project with more than two other true things.
+ *
+ * ## Why the dense case needed its own fixture
+ *
+ * The first render of this composition left a void under the stack: the
+ * health column carries the blocker and is taller, and `nova-review` raises
+ * only two secondary entries. Two rows cannot fill a column beside a panel
+ * that holds a score, a coverage line and a finding — so the question was
+ * whether the layout is wrong or the fixture is thin, and a screenshot of the
+ * thin case cannot answer it.
+ *
+ * The facts go through `deriveNovaFocus` exactly as every other scenario
+ * does. What is dense here is the project, not the ranking: five candidates
+ * arise because five things are true at once, which is the situation the
+ * ranking exists for.
+ */
+const DENSE_FACTS: NovaFocusFacts = {
+  sourceDisconnected: false,
+  failedOperations: { agent: false, scan: true, audit: false },
+  stalledOperations: { agent: false, scan: false, audit: false },
+  changes: [
+    {
+      preparedChangeId: "change_dense",
+      stage: "review_required",
+      headline: "Two files changed on a branch of their own",
+    },
+  ],
+  questions: [
+    {
+      founderInputRequestId: "fir_dense",
+      question: "Which of the two checkout flows should stay?",
+      origin: "planner",
+      stepOrder: 2,
+    },
+  ],
+  moves: [
+    { id: "move_dense_1", rank: 1, title: "Add a pricing page" },
+    { id: "move_dense_2", rank: 2, title: "Publish the changelog" },
+  ],
+  plannedMoveId: null,
+  executableStep: null,
+  planOffered: false,
+  auditOutdated: true,
+  repositoryReadOutdated: true,
+  workspaceChoiceRequired: false,
+  working: null,
+};
+
 const TONE_DOT: Record<string, string> = {
   success: "bg-mint",
   waiting: "bg-amber",
@@ -183,9 +234,19 @@ const TONE_DOT: Record<string, string> = {
   neutral: "bg-fg-disabled",
 };
 
-export function StudyComposition({ study, settled }: { study: Study; settled?: boolean }) {
+export function StudyComposition({
+  study,
+  settled,
+  dense,
+}: {
+  study: Study;
+  settled?: boolean;
+  dense?: boolean;
+}) {
   const scenario = settled ? ("nova-settled" as const) : ("nova-review" as const);
-  const view: NovaHomeView = novaScenarioView(scenario);
+  const view: NovaHomeView = dense
+    ? buildNovaHomeView(deriveNovaFocus(DENSE_FACTS))
+    : novaScenarioView(scenario);
   const health = novaScenarioHealth(scenario);
   const primary = view.primary;
   const status = statusForFocusTier(primary.tier);
@@ -198,7 +259,7 @@ export function StudyComposition({ study, settled }: { study: Study; settled?: b
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-12 max-sm:px-4 max-sm:py-8">
-      <CompositionChrome settled={settled} />
+      <CompositionChrome settled={settled} dense={dense} />
 
       <main className="flex flex-col gap-7">
         {/* ── Rank 0: whose product this is ────────────────────────── */}
@@ -404,7 +465,7 @@ export function StudyComposition({ study, settled }: { study: Study; settled?: b
 }
 
 /** Lab chrome: what this study is testing, printed on the study. */
-function CompositionChrome({ settled }: { settled?: boolean }) {
+function CompositionChrome({ settled, dense }: { settled?: boolean; dense?: boolean }) {
   return (
     <div className="flex flex-col gap-3 rounded-panel border border-dashed border-line-3 bg-well p-5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -419,7 +480,9 @@ function CompositionChrome({ settled }: { settled?: boolean }) {
       <p className="study-measure text-caption text-fg-secondary">
         {settled
           ? "The state a founder in good shape spends most of their time in. Compare it with /e2e/nova-settled, where the same facts leave the screen blank."
-          : "Compare with /e2e/study-chosen, which holds this material and keeps the shipped composition."}
+          : dense
+            ? "Five things true at once — the case the ranking exists for, and the one that says whether the band's left column is short or the fixture was."
+            : "Compare with /e2e/study-chosen, which holds this material and keeps the shipped composition."}
       </p>
     </div>
   );

@@ -156,9 +156,15 @@ export function isStudyScenario(scenario: string): boolean {
  */
 export const COMPOSITION_SCENARIO = "study-composition";
 export const COMPOSITION_SETTLED_SCENARIO = "study-composition-settled";
+/** Five candidates at once — the case that says whether the band's columns balance. */
+export const COMPOSITION_DENSE_SCENARIO = "study-composition-dense";
 
 export function isCompositionScenario(scenario: string): boolean {
-  return scenario === COMPOSITION_SCENARIO || scenario === COMPOSITION_SETTLED_SCENARIO;
+  return (
+    scenario === COMPOSITION_SCENARIO ||
+    scenario === COMPOSITION_SETTLED_SCENARIO ||
+    scenario === COMPOSITION_DENSE_SCENARIO
+  );
 }
 
 /** The direction every composition study is drawn in. */

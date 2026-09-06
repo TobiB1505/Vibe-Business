@@ -35,6 +35,7 @@ import { StudyComposition } from "../design-studies/study-composition";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
+  COMPOSITION_DENSE_SCENARIO,
   COMPOSITION_SETTLED_SCENARIO,
   chosenStudy,
   isCompositionScenario,
@@ -263,7 +264,11 @@ export default async function E2eScenarioPage({
     const chosen = chosenStudy();
     return (
       <StudyShell study={chosen}>
-        <StudyComposition study={chosen} settled={scenario === COMPOSITION_SETTLED_SCENARIO} />
+        <StudyComposition
+          study={chosen}
+          settled={scenario === COMPOSITION_SETTLED_SCENARIO}
+          dense={scenario === COMPOSITION_DENSE_SCENARIO}
+        />
       </StudyShell>
     );
   }
@@ -324,6 +329,15 @@ export default async function E2eScenarioPage({
           */
           balance={{ availableCredits: creditsToUnits(420), display: "420" }}
           consequence={priced?.confirmationNote ?? undefined}
+          /* The same label the button carries, so the fixture exercises the
+             footnote's refusal to repeat it rather than rendering past it. */
+          controlLabel={
+            control.kind === "none"
+              ? undefined
+              : control.kind === "elsewhere"
+                ? control.label
+                : control.option.label
+          }
           control={
             control.kind === "none" ? undefined : (
               <Button variant="primary">

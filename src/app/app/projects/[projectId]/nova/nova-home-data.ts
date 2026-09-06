@@ -32,6 +32,14 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  *    billing read a per-page surface may make. Never `getBillingOverview`,
  *    which repairs on read.
  *
+ * ## What it deliberately does not carry
+ *
+ * `moveCount`. The Business Brain uses it to label a control — *View 3 next
+ * moves* — and Home has no such control to label, so it was a field read out
+ * of the view model on every render of the product's most-visited route and
+ * dropped. A number nothing renders is not a smaller feature than one that is
+ * wrong; it is a read nobody can see going stale.
+ *
  * ## What it must not do
  *
  * Re-rank anything. `deriveNovaFocus` decides what leads and what follows;
@@ -51,7 +59,6 @@ export type NovaPriorityFinding = {
   whyItMatters: string | null;
   severity: FindingSeverity;
   citations: EvidenceCitation[];
-  moveCount: number;
 };
 
 export type NovaHealth = {
@@ -172,7 +179,6 @@ async function readHealth(supabase: SupabaseClient, projectId: string): Promise<
           whyItMatters: priority.whyItMatters,
           severity: priority.tone,
           citations: priority.evidence.map((item) => citation(item.id)),
-          moveCount: priority.moveCount,
         }
       : null,
   };
