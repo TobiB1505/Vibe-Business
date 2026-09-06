@@ -146,3 +146,24 @@ export function studyByScenario(scenario: string): Study | null {
 export function isStudyScenario(scenario: string): boolean {
   return studyByScenario(scenario) !== null;
 }
+
+/**
+ * The composition studies, rendered in the chosen direction.
+ *
+ * A separate axis from `STUDIES`: those vary material and hold the composition
+ * fixed, these do the reverse. Kept out of `STUDIES` so the direction gallery
+ * stays a comparison of four materials and does not silently become five.
+ */
+export const COMPOSITION_SCENARIO = "study-composition";
+export const COMPOSITION_SETTLED_SCENARIO = "study-composition-settled";
+
+export function isCompositionScenario(scenario: string): boolean {
+  return scenario === COMPOSITION_SCENARIO || scenario === COMPOSITION_SETTLED_SCENARIO;
+}
+
+/** The direction every composition study is drawn in. */
+export function chosenStudy(): Study {
+  const study = STUDIES.find((candidate) => candidate.chosen);
+  if (!study) throw new Error("no chosen study is marked in STUDIES");
+  return study;
+}

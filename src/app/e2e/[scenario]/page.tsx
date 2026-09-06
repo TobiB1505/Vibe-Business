@@ -31,9 +31,13 @@ import { FindingCard } from "@/components/system/finding-card";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { StudyShell } from "../design-studies/study-shell";
 import { StudyNovaHome } from "../design-studies/study-nova-home";
+import { StudyComposition } from "../design-studies/study-composition";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
+  COMPOSITION_SETTLED_SCENARIO,
+  chosenStudy,
+  isCompositionScenario,
   LABELS_SCENARIO,
   MONO_SCENARIO,
   STUDIES,
@@ -250,6 +254,18 @@ export default async function E2eScenarioPage({
         </StudyShell>
       );
     }
+  }
+
+  /* The composition studies vary rank rather than material, so they are always
+     drawn in the direction that won — otherwise a reader cannot tell which of
+     the two axes moved. */
+  if (isCompositionScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyComposition study={chosen} settled={scenario === COMPOSITION_SETTLED_SCENARIO} />
+      </StudyShell>
+    );
   }
 
   const study = studyByScenario(scenario);
