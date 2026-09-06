@@ -358,7 +358,7 @@ export function StudyWireframe({
           */}
           <div className={`flex flex-col gap-1 p-5 max-sm:p-3.5 ${panel}`}>
             {/* ── Now: what she has to say about it ───────────────────── */}
-            <div className="flex flex-col gap-2.5 pt-3">
+            <div className="flex flex-col gap-1.5 pt-3">
               {messages.map((entry, position) => {
                 const aside = entry.emphasis === "aside";
                 const previous = messages[position - 1];
@@ -542,7 +542,7 @@ function Plan() {
 function Typing() {
   return (
     <div
-      className="flex w-fit items-center gap-1.5 rounded-card border border-line-2 bg-surface-1 px-4 py-3.5"
+      className="bubble bubble-neutral flex w-fit items-center gap-1.5 px-3.5 py-3"
       role="status"
       aria-label="Nova is working"
     >

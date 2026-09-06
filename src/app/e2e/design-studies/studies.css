@@ -850,14 +850,6 @@
   --bubble-dash: 3 2.5;
 }
 
-/* An aside: something also true, never something to do. A bubble with no
-   walls, which is the one register a greyscale screenshot cannot confuse. */
-.bubble-aside {
-  --bubble-fill: transparent;
-  --bubble-line: transparent;
-  --bubble-width: 0px;
-}
-
 /*
    Arrival, rebuilt.
 

@@ -174,7 +174,7 @@ function facts(working: OperationView | null): NovaFocusFacts {
 function Typing() {
   return (
     <div
-      className="flex w-fit items-center gap-1.5 rounded-card border border-line-2 bg-surface-1 px-4 py-3.5"
+      className="bubble bubble-neutral flex w-fit items-center gap-1.5 px-3.5 py-3"
       /* Announced once as a state rather than as three animating dots. */
       role="status"
       aria-label="Nova is working"

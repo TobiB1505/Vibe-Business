@@ -187,8 +187,11 @@ export function Bubble({
   /** Whether a loop is hanging. From `statusForCandidate(...).open`. */
   open = false,
   /**
-   * Something also true, never something to do. A bubble with no walls, and no
-   * tail — nobody is being spoken to, so nothing points at a speaker.
+   * Something also true, never something to do.
+   *
+   * Still a bubble — quieter, and without the moment's register, because four
+   * coloured contours down one thread is four claims where the product is
+   * making one.
    */
   aside = false,
   /** The status word, from `statusForCandidate`. Never written at a call site. */
@@ -214,11 +217,9 @@ export function Bubble({
 
   return (
     <div
-      className={`bubble bubble-arrive ${aside ? "bubble-aside" : TONE_CLASS[tone]} ${
+      className={`bubble bubble-arrive ${aside ? "bubble-neutral" : TONE_CLASS[tone]} ${
         open && !aside ? "bubble-open" : ""
-      } ${hasTail ? "bubble-tailed" : ""} w-fit max-w-[46ch] ${
-        aside ? "px-1 py-1" : "px-4 py-3.5"
-      } flex min-w-0 flex-col gap-2`}
+      } ${hasTail ? "bubble-tailed" : ""} flex w-fit min-w-0 max-w-[46ch] flex-col gap-1.5 px-3.5 py-2.5`}
       style={{ "--i": index } as CSSProperties}
     >
       {hasTail && <BubbleTail />}
@@ -286,14 +287,22 @@ function BubbleTail() {
  * over, and everything it used to draw — an eyebrow, a rule, a tint — now
  * belongs to the container. A sentence that has to mark itself is a sentence
  * in the wrong box.
+ *
+ * ## Why it is not display weight any more
+ *
+ * It was `text-title` and semibold, which made the leading sentence a headline
+ * and every sentence after it look like the body copy underneath one. A chat
+ * has no headline. Every message in the reference is the same size and the
+ * same weight, and the difference between them is which bubble they are in —
+ * which is exactly the job this design already gave the container.
  */
 export function Line({ children }: { children: ReactNode }) {
-  return <p className="text-title font-semibold text-balance text-fg">{children}</p>;
+  return <p className="text-ui text-fg">{children}</p>;
 }
 
-/** The explanation under a Line. Quieter, and never a box of its own. */
+/** A quieter sentence. Same size as a Line — only the colour steps back. */
 export function Context({ children }: { children: ReactNode }) {
-  return <p className="study-measure text-caption text-fg-secondary">{children}</p>;
+  return <p className="text-ui text-fg-secondary">{children}</p>;
 }
 
 /* ── The Header ───────────────────────────────────────────────────────── */

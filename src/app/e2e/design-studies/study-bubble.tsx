@@ -162,7 +162,7 @@ function Thread() {
   const lastSpoke = spoken.length > 0 && spoken.at(-1)?.entry.emphasis !== "aside";
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-1.5">
       {spoken.map(({ entry, tail }, position) => {
         const aside = entry.emphasis === "aside";
         return (
@@ -261,8 +261,10 @@ export function StudyBubble({ study }: { study: Study }) {
               </Context>
             </Bubble>
             <p className="study-measure font-mono text-caption text-fg-meta">
-              An aside — something also true, never something to do. No walls and no tail, because
-              nobody is being spoken to. The one appearance a greyscale screenshot cannot confuse.
+              An aside — something also true, never something to do. Still a bubble: the first
+              version gave it no walls, and one large bubble with loose sentences under it does not
+              read as a quieter remark, it reads as a bubble that ran out. Quieter contour, no
+              tail, because it continues a run rather than opening one.
             </p>
           </div>
         </div>
@@ -276,7 +278,8 @@ export function StudyBubble({ study }: { study: Study }) {
           solid, double dashed. Those carry what somebody scanning needs before they read a word —
           is something wrong, and has anything concluded. Within &ldquo;nothing is wrong&rdquo;,
           hue and the word separate <em>worth starting</em> from <em>your turn</em>, and this sheet
-          claims no more than that.
+          claims no more than that. The aside is not on this row: it is a neutral bubble and has
+          no register to survive.
         </Context>
         <div className={`flex flex-col gap-4 p-6 grayscale ${panel}`}>
           {APPEARANCES.map(({ kind }, position) => (
