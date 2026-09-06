@@ -9,6 +9,7 @@ import {
   healthySandboxFiles,
   runValidationPhases,
   type FakeSandboxOptions,
+  type FakeSandboxProvider,
 } from "./test-support";
 
 /**
@@ -118,9 +119,9 @@ describe("network policy transitions (§10, §32)", () => {
     const provider = setup();
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
-    const modes = provider.policies().map((policy) =>
-      policy.mode === "allow_domains" ? policy.domains.join(",") : policy.mode,
-    );
+    const modes = provider
+      .policies()
+      .map((policy) => (policy.mode === "allow_domains" ? policy.domains.join(",") : policy.mode));
 
     expect(modes[0]).toContain("github.com");
     expect(modes[1]).toContain("registry.npmjs.org");
@@ -174,7 +175,9 @@ describe("network policy transitions (§10, §32)", () => {
 
     const timeline = provider.events
       .filter((event) => event.kind === "policy" || event.kind === "command")
-      .map((event) => (event.kind === "policy" ? `policy:${event.policy.mode}` : `cmd:${event.command}`));
+      .map((event) =>
+        event.kind === "policy" ? `policy:${event.policy.mode}` : `cmd:${event.command}`,
+      );
 
     const denyAll = timeline.indexOf("policy:deny_all");
     const firstRepositoryCode = timeline.findIndex((entry) => entry.startsWith("cmd:pnpm run"));
@@ -200,7 +203,9 @@ describe("credential handling (§7, §37)", () => {
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     const created = provider.createdWith();
-    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe("ghs_cloneTokenValue123456");
+    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe(
+      "ghs_cloneTokenValue123456",
+    );
     // The environment is where repository code could read it. It must not be there.
     expect(JSON.stringify(created?.env)).not.toContain("ghs_cloneTokenValue123456");
   });
@@ -318,14 +323,19 @@ describe("source integrity (§6, §29)", () => {
 
   it("accepts a prepared file whose hash matches", async () => {
     const content = "export default function robots() {}\n";
-    const provider = setup({ files: healthySandboxFiles({ "product/src/app/robots.ts": content }) });
+    const provider = setup({
+      files: healthySandboxFiles({ "product/src/app/robots.ts": content }),
+    });
 
     const outcome = await runValidationPhases(
       provider,
       noManifest,
       fakeValidationTarget({
         preparedFiles: [
-          { path: "src/app/robots.ts", contentHash: createHash("sha256").update(content).digest("hex") },
+          {
+            path: "src/app/robots.ts",
+            contentHash: createHash("sha256").update(content).digest("hex"),
+          },
         ],
       }),
     );
@@ -339,7 +349,9 @@ describe("source integrity (§6, §29)", () => {
     const outcome = await runValidationPhases(
       provider,
       noManifest,
-      fakeValidationTarget({ preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }] }),
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }],
+      }),
     );
 
     expect(outcome.failureCode).toBe("source_integrity_failed");
@@ -357,7 +369,10 @@ describe("step semantics (§19, §33)", () => {
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.status).toBe("passed");
-    expect(outcome.steps.test).toMatchObject({ status: "skipped", skipReason: "script_not_present" });
+    expect(outcome.steps.test).toMatchObject({
+      status: "skipped",
+      skipReason: "script_not_present",
+    });
     expect(provider.commands()).not.toContain("pnpm run test");
   });
 
@@ -365,7 +380,9 @@ describe("step semantics (§19, §33)", () => {
     // A repository that simply never had tests must not be reported as failing
     // them, which is what `npm test` on a scriptless project would produce.
     const provider = setup({
-      files: healthySandboxFiles({ "product/package.json": JSON.stringify({ scripts: { build: "next build" } }) }),
+      files: healthySandboxFiles({
+        "product/package.json": JSON.stringify({ scripts: { build: "next build" } }),
+      }),
     });
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -384,7 +401,9 @@ describe("step semantics (§19, §33)", () => {
   });
 
   it("fails when the build fails", async () => {
-    const provider = setup({ results: { "pnpm run build": { exitCode: 1, output: "Build error" } } });
+    const provider = setup({
+      results: { "pnpm run build": { exitCode: 1, output: "Build error" } },
+    });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -393,7 +412,9 @@ describe("step semantics (§19, §33)", () => {
   });
 
   it("fails when the install fails", async () => {
-    const provider = setup({ results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } });
+    const provider = setup({
+      results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } },
+    });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -405,7 +426,9 @@ describe("step semantics (§19, §33)", () => {
     // "It builds" is the claim. A repository that cannot make it is not
     // validated — it is unsupported.
     const provider = setup({
-      files: healthySandboxFiles({ "product/package.json": JSON.stringify({ scripts: { test: "vitest" } }) }),
+      files: healthySandboxFiles({
+        "product/package.json": JSON.stringify({ scripts: { test: "vitest" } }),
+      }),
     });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
@@ -416,7 +439,10 @@ describe("step semantics (§19, §33)", () => {
   it("classifies a deterministically identifiable missing-environment build failure", async () => {
     const provider = setup({
       results: {
-        "pnpm run build": { exitCode: 1, output: "Error: Missing required environment variable: DATABASE_URL" },
+        "pnpm run build": {
+          exitCode: 1,
+          output: "Error: Missing required environment variable: DATABASE_URL",
+        },
       },
     });
 
@@ -427,10 +453,17 @@ describe("step semantics (§19, §33)", () => {
 
   it("uses npm's locked install when the project uses npm", async () => {
     const provider = setup({
-      files: healthySandboxFiles({ "product/pnpm-lock.yaml": null, "product/package-lock.json": "{}" }),
+      files: healthySandboxFiles({
+        "product/pnpm-lock.yaml": null,
+        "product/package-lock.json": "{}",
+      }),
     });
 
-    await runValidationPhases(provider, noManifest, fakeValidationTarget({ packageManager: "npm" }));
+    await runValidationPhases(
+      provider,
+      noManifest,
+      fakeValidationTarget({ packageManager: "npm" }),
+    );
 
     expect(provider.commands()).toContain("npm ci --ignore-scripts");
     expect(provider.commands()).toContain("npm run build");
@@ -461,7 +494,10 @@ describe("timeouts (§14)", () => {
 describe("cleanup on every path (§23, §36)", () => {
   it.each([
     ["success", {}],
-    ["install failure", { results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } }],
+    [
+      "install failure",
+      { results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } },
+    ],
     ["test failure", { results: { "pnpm run test": { exitCode: 1 } } }],
     ["build failure", { results: { "pnpm run build": { exitCode: 1 } } }],
     ["timeout", { results: { "pnpm run build": { timedOut: true, exitCode: -1 } } }],
@@ -576,7 +612,9 @@ describe("failures explain themselves (post-dogfood)", () => {
     const outcome = await runValidationPhases(
       provider,
       noManifest,
-      fakeValidationTarget({ preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }] }),
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }],
+      }),
     );
 
     expect(outcome.failureDetail).toContain("/vercel/sandbox");
@@ -628,8 +666,16 @@ describe("a retry is not doomed by its own name (post-dogfood)", () => {
     const first = setup();
     const second = setup();
 
-    await runValidationPhases(first, noManifest, fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }));
-    await runValidationPhases(second, noManifest, fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }));
+    await runValidationPhases(
+      first,
+      noManifest,
+      fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }),
+    );
+    await runValidationPhases(
+      second,
+      noManifest,
+      fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }),
+    );
 
     expect(first.createdWith()?.name).not.toBe(second.createdWith()?.name);
   });
@@ -679,7 +725,6 @@ describe("diagnosing a missing checkout (post-dogfood)", () => {
     expect(inRepository("apps/web", "package.json")).toBe("apps/web/package.json");
     expect(inRepository(".")).toBe(".");
   });
-
 });
 
 describe("what source verification actually claims (post-dogfood, Option A)", () => {
@@ -712,7 +757,9 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
   it("still passes when the provider leaves no checkout to observe", async () => {
     // A provider that materializes a bare filesystem is not a failure: pinning
     // plus hashing carries the guarantee. Recorded as false, not fatal.
-    const provider = setup({ results: { "git rev-parse HEAD": { exitCode: 128, output: "not a git repository" } } });
+    const provider = setup({
+      results: { "git rev-parse HEAD": { exitCode: 128, output: "not a git repository" } },
+    });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -773,7 +820,9 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
 
     // This repository has no package-lock.json and no next.config.js. Neither
     // side has them, so neither is a gap worth recording.
-    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain("package-lock.json");
+    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain(
+      "package-lock.json",
+    );
     expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain("next.config.js");
   });
 
@@ -783,7 +832,9 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
     const outcome = await runValidationPhases(
       provider,
       noManifest,
-      fakeValidationTarget({ preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }] }),
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }],
+      }),
     );
 
     expect(outcome.failureCode).toBe("source_integrity_failed");
@@ -871,7 +922,11 @@ describe("gitCommitObserved reflects an observation, never an assumption", () =>
 
   it("never reports an observation when the command never ran", async () => {
     // Provisioning failed, so nothing was observed and nothing is claimed.
-    const outcome = await runValidationPhases(setup({ failCreate: true }), noManifest, fakeValidationTarget());
+    const outcome = await runValidationPhases(
+      setup({ failCreate: true }),
+      noManifest,
+      fakeValidationTarget(),
+    );
 
     expect(outcome.sourceIntegrity).toBeNull();
   });
@@ -958,5 +1013,151 @@ describe("the timeout model after the durable-phase refactor (§8)", () => {
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_lost" });
     expect(outcome.cleanup).toBe("not_provisioned");
+  });
+});
+
+/*
+ * Where each command runs, once install and build stop sharing a directory.
+ *
+ * Under ADR 0078 this question could not be asked: a repository was admitted
+ * only when its lockfile sat beside the manifest declaring `build`, so there
+ * was one directory and `cwd` was one value. An application inside a workspace
+ * has two, and getting them the wrong way round is not a visible failure — it
+ * is an install that resolves nothing, or a build against a dependency tree
+ * nobody committed.
+ */
+describe("a workspace install runs where the lockfile is", () => {
+  function workspaceTarget() {
+    return fakeValidationTarget({ workspaceRoot: "apps/web", installRoot: "." });
+  }
+
+  /*
+   * The workspace laid out the way a provider checkout has it: the lockfile at
+   * the clone root, the manifest under the application. The application's
+   * manifest is the one `readPlan` reads, which is the point — the scripts
+   * belong to the app and the dependencies belong to the workspace.
+   */
+  function workspaceProvider() {
+    return setup({
+      files: healthySandboxFiles({
+        "product/package.json": null,
+        "product/apps/web/package.json": JSON.stringify({
+          name: "web",
+          scripts: { build: "next build", test: "vitest run", typecheck: "tsc --noEmit" },
+        }),
+      }),
+    });
+  }
+
+  function cwdOf(provider: FakeSandboxProvider, contains: string): string[] {
+    return provider.events
+      .filter((event) => event.kind === "command" && event.command.includes(contains))
+      .map((event) => (event.kind === "command" ? event.cwd : ""));
+  }
+
+  it("installs at the workspace root and builds in the application", async () => {
+    const provider = workspaceProvider();
+
+    await runValidationPhases(provider, noManifest, workspaceTarget());
+
+    // `sourceRoot` is `product`, so the root is `product` and the application
+    // is `product/apps/web`. Asserted as full paths rather than suffixes: half
+    // of this bug is a path that looks right and is one level off.
+    expect(cwdOf(provider, "install")).toEqual(["product"]);
+    expect(cwdOf(provider, "run build")).toEqual(["product/apps/web"]);
+  });
+
+  it("looks for the lockfile where it would install, not where it builds", async () => {
+    /*
+     * The check that refuses before the network opens. Reading it under the
+     * application would report `lockfile_missing` for a workspace whose
+     * lockfile is exactly where it belongs — a refusal aimed at a founder who
+     * has nothing to fix.
+     */
+    const provider = workspaceProvider();
+
+    await runValidationPhases(provider, noManifest, workspaceTarget());
+
+    const lockfileReads = provider.events
+      .filter((event) => event.kind === "read" && event.path.includes("lock"))
+      .map((event) => (event.kind === "read" ? event.path : ""));
+
+    // The directory, not the basename: every lockfile candidate is probed, and
+    // what matters is that all of them are probed at the install root.
+    expect(lockfileReads.length).toBeGreaterThan(0);
+    for (const path of lockfileReads) {
+      expect(path.startsWith("product/apps/web/")).toBe(false);
+      expect(path.split("/").slice(0, -1).join("/")).toBe("product");
+    }
+  });
+
+  it("keeps both in the same directory when the application owns its lockfile", async () => {
+    // The shape every repository admitted before workspaces had, asserted so a
+    // refactor cannot make the single-application case take the split path.
+    const provider = setup();
+
+    await runValidationPhases(provider, noManifest, fakeValidationTarget());
+
+    expect(cwdOf(provider, "install")).toEqual(["product"]);
+    expect(cwdOf(provider, "run build")).toEqual(["product"]);
+  });
+});
+
+/*
+ * Where the source-acquisition credential is destroyed, and where that is
+ * checked.
+ *
+ * Rule 63 asks for absence to be verified rather than assumed. A clone puts
+ * `.git` at the clone root; this removed it from the *application* and then
+ * read the application's path back, so for any application not at the
+ * repository root it deleted nothing and confirmed the absence of a file that
+ * was never going to be there. A control aimed at the wrong path reports
+ * success by construction.
+ *
+ * Reached HEAD with Stufe 4, when `workspaceRoot` stopped always being `"."`,
+ * and never exercised: every stored run is a root application, where the two
+ * paths coincide.
+ */
+describe("the credential store is cleared where a clone puts it", () => {
+  it("clears and verifies the clone root, not only the application", async () => {
+    const provider = setup({
+      files: healthySandboxFiles({
+        "product/package.json": null,
+        "product/frontend/package.json": JSON.stringify({
+          name: "web",
+          scripts: { build: "next build" },
+        }),
+      }),
+    });
+
+    await runValidationPhases(
+      provider,
+      noManifest,
+      fakeValidationTarget({ workspaceRoot: "frontend" }),
+    );
+
+    const scrubbed = provider.events
+      .filter((event) => event.kind === "command" && event.command === "rm -rf .git")
+      .map((event) => (event.kind === "command" ? event.cwd : ""));
+    const verified = provider.events
+      .filter((event) => event.kind === "read" && event.path.endsWith(".git/config"))
+      .map((event) => (event.kind === "read" ? event.path : ""));
+
+    expect(scrubbed).toContain("product");
+    expect(verified).toContain("product/.git/config");
+  });
+
+  it("still clears exactly one directory for an application at the root", async () => {
+    // De-duplicated rather than doubled: the ordinary case must not pay for
+    // the subdirectory case with a second removal of the same directory.
+    const provider = setup();
+
+    await runValidationPhases(provider, noManifest, fakeValidationTarget());
+
+    const scrubbed = provider.events.filter(
+      (event) => event.kind === "command" && event.command === "rm -rf .git",
+    );
+
+    expect(scrubbed).toHaveLength(1);
   });
 });

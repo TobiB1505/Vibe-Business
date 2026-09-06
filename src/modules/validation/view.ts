@@ -272,9 +272,7 @@ function buildDepthView(run: {
       reason && reason in VALIDATION_DEPTH_REASON_LABELS
         ? VALIDATION_DEPTH_REASON_LABELS[reason]
         : "Validation depth chosen by policy",
-    notRun: VALIDATION_STEPS.filter(
-      (step) => run.steps[step]?.skipReason === "outside_depth",
-    ),
+    notRun: VALIDATION_STEPS.filter((step) => run.steps[step]?.skipReason === "outside_depth"),
   };
 }
 

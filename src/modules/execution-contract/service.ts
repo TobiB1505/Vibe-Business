@@ -5,10 +5,7 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { checkBudgetBinding, type BoundReservation, type ExecutionBudget } from "./budget";
 import { buildExecutionSpec, type BuildExecutionSpecInput, type ExecutionSpec } from "./spec";
 import { insertExecutionSpec, type StoredExecutionSpec } from "./store";
-import {
-  type ExecutionAdmission,
-  type ExecutionResolution,
-} from "./schema";
+import { type ExecutionAdmission, type ExecutionResolution } from "./schema";
 
 /**
  * The execution-contract domain API (EXECUTION CORE-3 §35, §54).

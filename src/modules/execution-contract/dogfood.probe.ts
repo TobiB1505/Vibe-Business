@@ -54,7 +54,10 @@ describe("execution resolver — real product dogfood", () => {
 
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    expect(supabaseUrl && serviceKey, "Supabase URL and service role key are required.").toBeTruthy();
+    expect(
+      supabaseUrl && serviceKey,
+      "Supabase URL and service role key are required.",
+    ).toBeTruthy();
 
     // Read-only, and constructed here rather than through `createServiceClient`
     // so this harness cannot be mistaken for an application code path — only
@@ -80,9 +83,11 @@ describe("execution resolver — real product dogfood", () => {
     const resolutions = resolvePlanExecution({
       plan: {
         steps: plan!.steps,
-        // Nothing in the product completes a step yet, exactly as
-        // `action-plans/sequence.ts` records. Passing an empty set is the
-        // truthful state, not a simplification.
+        // Deliberately empty, and no longer because completion does not exist —
+        // it does, and the router now reads it. This probe reports how every
+        // step resolves *before* any progress, which is the question an
+        // operator reading the table is asking; a probe that folded in today's
+        // progress would print a different table tomorrow for the same plan.
         completedSteps: new Set<number>(),
         isCurrent: plan!.status === "completed",
       },

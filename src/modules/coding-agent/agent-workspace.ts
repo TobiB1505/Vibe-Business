@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getExecutionSpecById } from "@/modules/execution-contract/store";
+import { chainedDeliveriesOf } from "@/modules/execution-contract/spec";
 import {
   getPreparedChangeWorkspaceItem,
   type PreparedChangeWorkspaceItem,
@@ -26,7 +27,11 @@ import { listExecutionEvents } from "./observability/store";
 import { findOpenInterruptForRun } from "./store";
 import { getFounderInputRequestForInterrupt } from "@/modules/founder-input/store";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
-import { buildExecutionTimeline, type TimelineStep } from "./observability/timeline";
+import { type TimelineStep } from "./observability/timeline";
+import { runObservationFrom, type LiveFile } from "./observability/live-view";
+import type { ValidationPhaseView, ValidationSummary } from "@/modules/validation/view";
+import { findReservationForOperation } from "@/modules/credits/store";
+import type { ChangeCost } from "@/components/system/cost-line";
 import { getAgentExecutionStatus } from "./service";
 
 /**
@@ -75,8 +80,35 @@ export type AgentWorkspaceView = {
   stage: AgentStage | null;
   /** The Agent's stored event record, shown beside the working Build stage. */
   fileEvents: StoredExecutionEvent[];
+  /**
+   * What the run is doing right now, in its own words, or null between
+   * actions. Observed rather than narrated — it comes from the last event the
+   * harness reported, so it cannot claim work that produced no event.
+   */
+  currentAction: string | null;
+  /**
+   * Every file this run touched, deduplicated, with what happened to it.
+   *
+   * `withheldBy` names the policy that kept a path out of the change rather
+   * than dropping it silently — a file the agent tried to write and was
+   * refused is a fact about the run, and a founder reading a change is owed
+   * the difference between "not touched" and "not allowed".
+   */
+  files: readonly LiveFile[];
   /** The sandbox's own steps, as rows. Empty when nothing has been validated. */
   checks: ValidationCheck[];
+  /**
+   * How much of the profile ran, and why.
+   *
+   * Carried alongside the checks because the two only mean anything together:
+   * a list with three of seven rows skipped invites "why did you not check
+   * that?", and the depth is the answer. Null for a run validated before depth
+   * existed — those ran everything, and labelling them now would be
+   * relabelling history.
+   */
+  validationDepth: ValidationSummary["depth"];
+  /** What this run cost, once the hold it ran against has settled. */
+  cost: ChangeCost;
   /** Named changes for the preview rail. Empty when nothing describes them. */
   previewChanges: PreviewChange[];
   mergeSummary: MergeSummary;
@@ -143,7 +175,11 @@ export async function readAgentWorkspace(
       taskOpportunityId: change?.opportunityId ?? null,
       stage: stageForWorkspace(stages, change),
       fileEvents: [],
+      currentAction: null,
+      files: [],
       checks: validationChecks(change),
+      validationDepth: change?.validation?.depth ?? null,
+      cost: { kind: "unknown" },
       previewChanges: [],
       mergeSummary: mergeSummaryFor(change),
       interrupt: null,
@@ -178,7 +214,7 @@ export async function readAgentWorkspace(
   const runId = operation.agentExecutionRunId;
   if (runId === null) return idle(selectedChange);
 
-  const [runView, events, interrupt, change] = await Promise.all([
+  const [runView, events, interrupt, change, reservation] = await Promise.all([
     readAgentRunForLiveView(supabase, { runId, projectId }),
     listExecutionEvents(supabase, { runId, projectId }),
     /*
@@ -199,23 +235,59 @@ export async function readAgentWorkspace(
             preparedChangeId: operation.resultId,
           })
         : Promise.resolve(null),
+    /*
+     * What the run cost, from the hold it was charged against (audit R23).
+     *
+     * One read, keyed on the operation — the reservation is where the money
+     * went, and nothing joined it to the change, so a merged change could not
+     * say what it cost. Read for every run rather than only merged ones: a
+     * release is as much an answer as a charge, and a founder whose run was
+     * refunded should be told rather than left assuming the reserved figure
+     * was taken.
+     */
+    findReservationForOperation(supabase, { operationRunId: stored.id, projectId }),
   ]);
 
   /*
-   * Vibe's own counts, from Vibe's own record. `file_read` is what the harness
-   * reported reading; the verified count is what Vibe confirmed it changed —
-   * never the number of files the runtime touched, which is a different and
-   * larger number, and run b33635a1 is why anybody knows that.
+   * One derivation of the run, shared with the operator's view (audit C7).
+   *
+   * This built its own timeline because the full live model reads execution
+   * economics out of `ai_usage_events`, which the customer role cannot select
+   * — so mounting it here threw `42501`. The split makes that unnecessary:
+   * `runObservationFrom` touches no usage ledger and carries no USD, and the
+   * two screens now order events and count files by the same rules instead of
+   * by two hand-kept copies of them.
    */
-  const filesInspected = events.filter((event) => event.type === "file_read").length;
-  const filesChanged = runView?.run.changedFileCount ?? null;
-
-  const timeline = buildExecutionTimeline({
-    events,
-    status: operation.status,
-    candidateFileCount: filesChanged,
-    filesInspected,
+  const observation = runObservationFrom(events, {
+    operation,
+    projectId,
+    run: runView?.run ?? null,
   });
+  const timeline = observation.timeline;
+
+  /*
+   * `settled` carries the number the account was actually charged; `released`
+   * says the hold came back. A run with no reservation was free, and `unknown`
+   * renders nothing rather than inventing a zero (ADR 0094's rule, in the
+   * other direction).
+   */
+  const cost: ChangeCost =
+    reservation === null
+      ? { kind: "unknown" }
+      : reservation.status === "settled" && reservation.settledCredits !== null
+        ? { kind: "settled", credits: reservation.settledCredits }
+        : reservation.status === "released" || reservation.status === "expired"
+          ? { kind: "released" }
+          : { kind: "pending" };
+
+  /*
+   * `file_read` is what the harness reported reading; the changed count is
+   * what Vibe confirmed it changed — never the number of files the runtime
+   * touched, which is a different and larger number, and run b33635a1 is why
+   * anybody knows that. Both come from the shared observation now.
+   */
+  const filesInspected = observation.metrics.filesRead;
+  const filesChanged = runView?.run.changedFileCount ?? null;
 
   /*
    * The Move this run is working on.
@@ -317,7 +389,11 @@ export async function readAgentWorkspace(
     taskOpportunityId,
     stage,
     fileEvents,
+    currentAction: observation.currentAction,
+    files: observation.files,
     checks: validationChecks(change),
+    validationDepth: change?.validation?.depth ?? null,
+    cost,
     // Nothing stored describes a change in prose, so the preview rail carries
     // no invented summaries. The frames and the file list carry the answer.
     previewChanges: [],
@@ -429,8 +505,17 @@ async function resolveTask(
     ...objective.preparation.map((entry) => ({
       order: entry.stepOrder,
       title: entry.title,
+      kind: "preparation" as const,
     })),
-    { order: spec.stepOrder, title: objective.stepTitle },
+    { order: spec.stepOrder, title: objective.stepTitle, kind: "delivery" as const },
+    /* The rest of the chain, if this run carried one. Read off the spec's own
+       fields rather than recomposed, so preparation and delivery cannot drift
+       apart on a screen the way they could if one list carried both. */
+    ...chainedDeliveriesOf(spec.spec).map((entry) => ({
+      order: entry.stepOrder,
+      title: entry.title,
+      kind: "delivery" as const,
+    })),
   ].sort((a, b) => a.order - b.order);
 
   return {
@@ -443,7 +528,7 @@ async function resolveTask(
       effort: chip(move.effort),
       lens: move.primaryLens,
       step: { order: spec.stepOrder, title: objective.stepTitle },
-      steps: planned.map((entry) => entry.title),
+      steps: planned.map((entry) => ({ title: entry.title, kind: entry.kind })),
     },
   };
 }
@@ -457,26 +542,62 @@ async function resolveTask(
  * neither exists, and a tick beside a check nobody ran is the one thing a
  * safety screen must never show.
  */
-const CHECK_ROWS: { step: string; name: string; detail: string }[] = [
-  { step: "install", name: "Dependencies", detail: "Installing packages" },
-  { step: "typecheck", name: "Type safety", detail: "Checking types" },
-  { step: "test", name: "Tests", detail: "Running unit and integration tests" },
-  { step: "build", name: "Production build", detail: "Building for production" },
-];
+/**
+ * The validation's own phases, as the founder reads them (audit R32).
+ *
+ * ## What was here before
+ *
+ * Four fixed rows — dependencies, types, tests, build — every one of them
+ * reporting the run's *overall* verdict, because the card was thought to carry
+ * nothing finer. Its comment said so and was honest about being coarse.
+ *
+ * It was not true. `change.validation` is already a `ValidationSummary` — the
+ * workspace builds one for the card's own progress — and it has carried
+ * per-phase results, durations, skip reasons and the source-integrity check
+ * all along. The agent workspace was the only surface not reading them, so a
+ * founder on the stage that decides saw four rows repeating one verdict where
+ * the validation panel two clicks away showed which steps ran, which were
+ * skipped, and why.
+ *
+ * ## The vocabularies
+ *
+ * A phase is `active` while it runs and `not_run` when the validation never
+ * reached it. The check rows say `running` and `pending` for the same two
+ * things — a difference in copy, not in meaning, so it is mapped rather than
+ * reconciled. `skipped` stays `skipped`: a step that did not need to run is
+ * not a step that has not run yet.
+ */
+const PHASE_STATE: Record<ValidationPhaseView["state"], ValidationCheck["state"]> = {
+  passed: "passed",
+  failed: "failed",
+  active: "running",
+  pending: "pending",
+  skipped: "skipped",
+  not_run: "pending",
+  /* A step the sandbox cut off produced no verdict, which is a failure. */
+  timed_out: "failed",
+};
+
+const SKIP_REASONS: Record<string, string> = {
+  outside_depth: "not needed for this change",
+  not_configured: "your project defines no such step",
+  unsupported: "Vibe cannot run this here",
+};
 
 function validationChecks(change: PreparedChangeWorkspaceItem | null): ValidationCheck[] {
-  const status = change?.validation?.status ?? null;
-  if (status === null) return [];
+  const run = change?.validation ?? null;
+  if (run === null) return [];
 
-  /*
-   * The card carries the run's overall status rather than its per-step results,
-   * so every row reports that one verdict. A row claiming a step-level outcome
-   * the card cannot see would be worse than a row that is honestly coarse.
-   */
-  const state: ValidationCheck["state"] =
-    status === "passed" ? "passed" : status === "failed" ? "failed" : "running";
-
-  return CHECK_ROWS.map((row) => ({ name: row.name, detail: row.detail, state }));
+  return run.phases.map((phase) => ({
+    name: phase.label,
+    detail:
+      phase.state === "skipped"
+        ? `Skipped — ${phase.skipReason ? (SKIP_REASONS[phase.skipReason] ?? "not needed here") : "not needed here"}`
+        : phase.state === "active"
+          ? phase.activeLabel
+          : phase.label,
+    state: PHASE_STATE[phase.state],
+  }));
 }
 
 /**

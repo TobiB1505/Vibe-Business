@@ -6,6 +6,10 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
 import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
+import { SourceCoverageStrip } from "@/components/system/source-coverage";
+import { ProductRevealFacts } from "@/app/app/onboarding/[projectId]/reveal-facts";
+import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
@@ -16,10 +20,22 @@ import {
   AuditPreparing,
   AuditWaitingHeader,
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
+import { creditsToUnits } from "@/modules/credits/units";
+import { novaPresenceState } from "@/components/system/status-vocabulary";
+import { FocusCard } from "@/app/app/projects/[projectId]/nova/focus-card";
+import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
+import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
+import { ProductIdentity } from "@/app/app/projects/[projectId]/nova/product-identity";
+import { HealthScore } from "@/app/app/projects/[projectId]/nova/health-score";
+import { FindingCard } from "@/components/system/finding-card";
+import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import {
-  E2E_ACTION_PLAN_SCENARIOS,
-  isE2eActionPlanScenario,
-} from "../action-plan-scenarios";
+  isE2eNovaScenario,
+  novaScenarioHealth,
+  novaScenarioView,
+  NOVA_SCENARIO_PRIORITY,
+} from "../nova-scenarios";
+import { E2E_ACTION_PLAN_SCENARIOS, isE2eActionPlanScenario } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import {
   E2E_AGENT_SCENARIOS,
@@ -29,21 +45,39 @@ import {
 } from "../command-center-scenarios";
 import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
 import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
+import { EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
+import { AgentPlanNextNotice } from "@/app/app/projects/[projectId]/agent/agent-plan-next-notice";
+import { AgentStaleReadNotice } from "@/app/app/projects/[projectId]/agent/agent-stale-read-notice";
+import { AgentWorkspaceChoice } from "@/app/app/projects/[projectId]/agent/agent-workspace-choice";
+import { Button } from "@/components/ui/button";
+import {
+  ANSWERED_WORKSPACE_ROOT,
+  E2E_WORKSPACE_CHOICE_SCENARIOS,
+  isE2eWorkspaceChoiceScenario,
+} from "../workspace-choice-scenarios";
+import { OperatorConsole } from "@/app/app/internal/console";
+import {
+  E2E_INTERNAL_CONSOLE_SCENARIOS,
+  isE2eInternalConsoleScenario,
+} from "../internal-console-scenarios";
 import { AppErrorPreview } from "../app-error-preview";
 import BillingLoading from "@/app/app/(account)/billing/loading";
-import {
-  E2E_AUDIT_CREDIT_SCENARIOS,
-  isE2eAuditCreditScenario,
-} from "../audit-credit-scenarios";
-import {
-  E2E_AGENT_STAGE_SCENARIOS,
-  isE2eAgentStageScenario,
-} from "../agent-stage-scenarios";
+import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
+import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
+import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
+import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
+import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
+import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
+import { WalletChip } from "@/components/system/wallet-chip";
+import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
+import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
+import { CostLine } from "@/components/system/cost-line";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
 import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
 import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
@@ -53,6 +87,8 @@ import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-r
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
+  E2E_PROFILE_SCENARIOS,
+  isE2eProfileScenario,
   E2E_PRODUCTS_SCENARIOS,
   E2E_REPOSITORIES_SCENARIOS,
   isE2eAccountScenario,
@@ -60,6 +96,7 @@ import {
   isE2eRepositoriesScenario,
 } from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
+import { ProfileView } from "@/app/app/(account)/profile/profile-view";
 import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-account";
 import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
 import { ProductsIndex } from "@/app/app/(account)/products/products-index";
@@ -85,10 +122,7 @@ import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding
 import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
 import { UnderstandingProgress } from "@/app/app/projects/[projectId]/understanding-progress";
 import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
-import {
-  E2E_PRODUCT_SCAN_SCENARIOS,
-  isE2eProductScanScenario,
-} from "../product-scan-scenarios";
+import { E2E_PRODUCT_SCAN_SCENARIOS, isE2eProductScanScenario } from "../product-scan-scenarios";
 import { ProductScanRevealFixture } from "../product-scan-reveal-fixture";
 import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";
 import {
@@ -185,6 +219,95 @@ export default async function E2eScenarioPage({
     </p>
   );
 
+  if (isE2eNovaScenario(scenario)) {
+    const view = novaScenarioView(scenario);
+    const health = novaScenarioHealth(scenario);
+    const entry = view.primary;
+    const control = entry.control;
+    const priced = control.kind === "server_action" ? control.option : null;
+    /*
+      Derived exactly as production derives it. A fixture that set the mark by
+      hand could show a turning aperture over a scenario with nothing running,
+      which is the claim `novaPresenceState` exists to make impossible.
+    */
+    const presence = novaPresenceState({
+      tier: entry.tier,
+      phase: view.working?.phase ?? "idle",
+    });
+
+    return (
+      <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
+        {label}
+
+        <ProductIdentity
+          name="Payflow"
+          logoUrl={null}
+          category="Developer tool"
+          understood="confirmed"
+          productHref="/app/projects/project_e2e/product"
+        />
+
+        {/*
+          The real card, given the real view model. The control is a plain
+          button rather than a live form: this fixture is about what a founder
+          can see before pressing, and the price beside an unpressed control is
+          exactly the claim under test.
+        */}
+        <FocusCard
+          entry={entry}
+          presence={presence}
+          seed="project_e2e"
+          operation={priced ? NOVA_ACTION_META[priced.actionId].price : null}
+          /*
+            Built through `creditsToUnits` rather than cast. A raw `420` is
+            420 *internal units* — 0.42 Credits — and reads as unaffordable
+            beside a 35-Credit price. The brand exists to catch exactly that,
+            and casting past it is how a fixture ends up asserting a bug.
+          */
+          balance={{ availableCredits: creditsToUnits(420), display: "420" }}
+          consequence={priced?.confirmationNote ?? undefined}
+          control={
+            control.kind === "none" ? undefined : (
+              <Button variant="primary">
+                {control.kind === "elsewhere" ? control.label : control.option.label}
+              </Button>
+            )
+          }
+        />
+
+        <WorkingStrip working={view.working} presence={presence} seed="project_e2e" />
+
+        <AttentionStack
+          entries={view.secondary}
+          hrefFor={() => "/app/projects/project_e2e/agent"}
+        />
+
+        {health && (
+          <HealthScore
+            score={health.score}
+            stateLabel={health.stateLabel}
+            scoredLenses={health.scoredLenses}
+            eligibleLenses={health.eligibleLenses}
+            insufficientCoverageReason={health.insufficientCoverageReason}
+            healthHref="/app/projects/project_e2e/health"
+          />
+        )}
+
+        {health && (
+          <FindingCard
+            variant="priority"
+            rank={1}
+            title={NOVA_SCENARIO_PRIORITY.headline}
+            explanation={NOVA_SCENARIO_PRIORITY.explanation}
+            whyItMatters={NOVA_SCENARIO_PRIORITY.whyItMatters}
+            severity={NOVA_SCENARIO_PRIORITY.severity}
+            citations={NOVA_SCENARIO_PRIORITY.citations}
+          />
+        )}
+      </main>
+    );
+  }
+
   if (isE2eProductScanScenario(scenario)) {
     const fixture = E2E_PRODUCT_SCAN_SCENARIOS[scenario];
     return (
@@ -234,6 +357,22 @@ export default async function E2eScenarioPage({
    * route renders, given a complete `BillingOverview` written by hand from the
    * read model's own types — no database, no Stripe request, no AI call.
    */
+  /*
+   * The operator console renders from a complete snapshot, so the component
+   * cannot tell this from production. Its own polling still runs and its
+   * action still refuses — an unauthenticated fixture is not an operator — so
+   * what this proves is the first frame, which is what a person opens during
+   * an incident.
+   */
+  if (isE2eInternalConsoleScenario(scenario)) {
+    return (
+      <>
+        {label}
+        <OperatorConsole initial={E2E_INTERNAL_CONSOLE_SCENARIOS[scenario]} />
+      </>
+    );
+  }
+
   if (isE2eBillingScenario(scenario)) {
     const fixture = E2E_BILLING_SCENARIOS[scenario];
     return (
@@ -244,6 +383,29 @@ export default async function E2eScenarioPage({
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
           at={"at" in fixture ? new Date(fixture.at) : undefined}
+          /*
+            The two events that belong to no product, which the project-scoped
+            read filters out by construction — so this is the only place a
+            browser can see them (audit R24).
+          */
+          accountActivity={[
+            {
+              id: "a1",
+              eventType: "credit_grant.posted",
+              at: "2026-08-16T10:00:00.000Z",
+              title: "Credits added",
+              tone: "success",
+              facts: [],
+            },
+            {
+              id: "a2",
+              eventType: "github.installation.connected",
+              at: "2026-08-10T09:00:00.000Z",
+              title: "GitHub installation connected",
+              tone: "success",
+              facts: [],
+            },
+          ]}
         />
       </main>
     );
@@ -354,7 +516,16 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
-        {scenario === "onboarding_logo_broken" ? (
+        {scenario === "onboarding_product_reveal" ? (
+          /*
+            The same component the reveal renders, on the same understanding
+            view the real page builds — so what a browser proves here is what a
+            founder is shown before answering "did Vibe get this right?".
+          */
+          <ProductRevealFacts
+            facts={E2E_UNDERSTANDING_SCENARIOS.understanding_ready().view.audience.slice(0, 2)}
+          />
+        ) : scenario === "onboarding_logo_broken" ? (
           // The host does not exist, so the browser's load genuinely fails —
           // which is the only way to prove the fallback rather than assert it.
           <ProductLogo src="https://acme.test/logo.png" alt="Acme logo" size={44} />
@@ -378,9 +549,7 @@ export default async function E2eScenarioPage({
       label: section.label,
       icon: section.icon,
       href:
-        section.id === "my-product"
-          ? currentHref
-          : projectSectionHref("project_e2e", section.id),
+        section.id === "my-product" ? currentHref : projectSectionHref("project_e2e", section.id),
       count: section.id === "action-plan" ? 3 : section.id === "agent" ? 13 : null,
       countTone: section.id === "action-plan" ? "accent" : "neutral",
     }));
@@ -403,16 +572,27 @@ export default async function E2eScenarioPage({
             ]}
             items={navItems}
             footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                }}
-                subtitle="Founder"
-                placement="above"
-              />
+              <div className="flex flex-col gap-3">
+                {/*
+                  The balance, where the real rail carries it (audit R22) — so
+                  the browser proves a founder can see what they have from a
+                  project route, not only from Billing.
+                */}
+                <WalletChip
+                  balance={{ availableCredits: creditsToUnits(35), display: "35 Credits" }}
+                  href="/app/billing"
+                />
+                <AccountMenu
+                  identity={{
+                    displayName: "Tobi",
+                    initials: "TB",
+                    avatarUrl: null,
+                    fromGithub: true,
+                  }}
+                  subtitle="Founder"
+                  placement="above"
+                />
+              </div>
             }
           />
         }
@@ -443,54 +623,86 @@ export default async function E2eScenarioPage({
             }}
             founderContextHref="#founder-context"
             sources={[
-            {
-              id: "code",
-              label: "Your code",
-              state: fixture.view.sources.some(
-                (source) => source.label === "Your code" && source.used,
-              )
-                ? "ready"
-                : "none",
-              detail: fixture.view.sources.some(
-                (source) => source.label === "Your code" && source.used,
-              )
-                ? "Vibe has read what your repository builds."
-                : "Vibe hasn't read your code yet.",
-              href: "#product-evidence",
-              action: "See what it read",
-            },
-            {
-              id: "live",
-              label: "Your public product",
-              state: fixture.view.sources.some(
-                (source) => source.label === "Your public product" && source.used,
-              )
-                ? "ready"
-                : "none",
-              detail: fixture.view.sources.some(
-                (source) => source.label === "Your public product" && source.used,
-              )
-                ? "Vibe has visited what a first-time visitor reaches."
-                : "Your public product has not been checked yet.",
-              href: "#product-evidence",
-              action: "See what it saw",
-            },
-            {
-              id: "deep-scan",
-              label: "Your signed-in product",
-              detail: "Your signed-in product has not been checked yet.",
-              state: "none",
-              href: "#product-evidence",
-              action: "Deep Scan",
-            },
-            {
-              id: "intent",
-              label: "What you told Vibe",
-              detail: "Your stated stage, monetization intent and primary goal.",
-              state: "ready",
-              href: "#founder-context",
-              action: "View context",
-            },
+              /*
+                The fixture states the same four sources the real page builds,
+                at the shape `SourceCoverage` fixed — including a partial read
+                with its reason and its measured count, which is the state the
+                grid of cards had no room for and no fixture ever showed.
+              */
+              {
+                source: "repository",
+                label: "Your code",
+                state: fixture.view.sources.some(
+                  (source) => source.label === "Your code" && source.used,
+                )
+                  ? "ready"
+                  : "none",
+                detail: fixture.view.sources.some(
+                  (source) => source.label === "Your code" && source.used,
+                )
+                  ? "Vibe has read what your repository builds."
+                  : "Vibe hasn't read your code yet.",
+                reasons: [],
+                measured: { files: 128 },
+                at: "2026-08-14T08:22:59.917Z",
+                remedy: {
+                  label: "See what it read",
+                  href: "#product-evidence",
+                  operation: "product_understanding",
+                },
+              },
+              {
+                source: "live",
+                label: "Your public product",
+                state: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? "partial"
+                  : "none",
+                detail: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? "Vibe visited your product, but couldn't read all of it."
+                  : "Your public product has not been checked yet.",
+                reasons: fixture.view.sources.some(
+                  (source) => source.label === "Your public product" && source.used,
+                )
+                  ? [
+                      "Two pages on your site build themselves in your visitor's browser, so Vibe saw an empty shell for those.",
+                    ]
+                  : [],
+                measured: { pages: 6 },
+                at: "2026-08-14T08:24:11.000Z",
+                remedy: {
+                  label: "See what it saw",
+                  href: "#product-evidence",
+                  operation: "product_understanding",
+                },
+              },
+              {
+                source: "deep_scan",
+                label: "Your signed-in product",
+                detail: "Your signed-in product has not been checked yet.",
+                state: "none",
+                reasons: [],
+                measured: {},
+                at: null,
+                remedy: {
+                  label: "Deep Scan",
+                  href: "#product-evidence",
+                  operation: "deep_scan",
+                },
+              },
+              {
+                source: "founder",
+                label: "What you told Vibe",
+                detail: "Your stated stage, monetization intent and primary goal.",
+                state: "ready",
+                reasons: [],
+                measured: {},
+                at: null,
+                remedy: { label: "View context", href: "#founder-context", operation: null },
+              },
             ]}
             actions={
               <UnderstandingConfirm
@@ -549,6 +761,204 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * The refusal that renders no control at all (Stufe 4).
+   *
+   * Nothing to configure — the notice reads its own sentence and its own note
+   * from the shared tables, so a fixture that passed either in would be testing
+   * the fixture. The link target is the only thing the route decides.
+   */
+  if (scenario === "agent-stale-read") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AgentStaleReadNotice
+          productHref={`${projectSectionHref("project_e2e", "my-product")}#product-scan`}
+        />
+      </main>
+    );
+  }
+
+  /*
+   * The refusal a founder actually hit, in both of its shapes (Sprint 0141).
+   *
+   * Same failure mode as the notice above and a different cause: the plan's
+   * next step is not one Vibe can run, so nothing resolves agentic and the
+   * screen drew an empty call-to-action block. The two scenes differ only in
+   * whether the founder can clear the step themselves, and that single word is
+   * the whole value of the notice — so it is proved in a browser rather than
+   * asserted about a prop.
+   */
+  /*
+   * The notice on the real stage, which is where it was actually broken.
+   *
+   * The three refusal scenes above render the notice on its own and cannot see
+   * the defect a founder photographed: passed as `startAction`, it went through
+   * `AgentStartCta` — a control treatment that clips its child to
+   * `rounded-full` under `overflow-hidden` and runs a highlight sweep across
+   * it. The notice was clipped into an ellipse with its own sentence cut in
+   * half, under a lock line promising what happens "before starting".
+   *
+   * So this scene asserts the structure rather than the words: a notice brings
+   * no start treatment with it.
+   */
+  if (scenario === "agent-stage-notice") {
+    return (
+      <main className="mx-auto max-w-[90rem] p-8">
+        {label}
+        <AgentReadyStage
+          task={{
+            title: "Give a visitor a working path to pay",
+            problem: "Three prices are published and none of them can be paid.",
+            whyNow: null,
+            impact: null,
+            effort: null,
+            lens: null,
+            step: null,
+            steps: [],
+          }}
+          planHref="/e2e/action-plan-ranked"
+          repository="TobiB1505/Vibe-Business"
+          liveUrl="https://vibebusiness.de"
+          caption="This Move is selected. Its next step is not one Vibe can run, so nothing starts here yet."
+          notice={
+            <AgentPlanNextNotice
+              stepOrder={3}
+              stepTitle="Build or complete the checkout and subscription flow"
+              reasonLabel={EXECUTION_REASON_LABELS.risk_class_prohibited}
+              planHref={projectSectionHref("project_e2e", "action-plan")}
+              shape="policy"
+            />
+          }
+        />
+      </main>
+    );
+  }
+
+  if (
+    scenario === "agent-plan-next-confirm" ||
+    scenario === "agent-plan-next-waiting" ||
+    scenario === "agent-plan-next-refused"
+  ) {
+    /*
+     * Three outlooks, because the third one is what a founder actually hit and
+     * the first version of this notice got wrong: a step Vibe refuses by policy
+     * was rendered with "an earlier step comes first" over "becomes available
+     * once that step is done". Both false, and the second one made the founder
+     * wait for something that was never coming.
+     */
+    const scene = {
+      "agent-plan-next-confirm": {
+        shape: "capability" as const,
+        stepOrder: 1,
+        stepTitle: "Establish what the existing billing route actually does",
+        reason: EXECUTION_REASON_LABELS.change_kind_not_executable,
+      },
+      "agent-plan-next-waiting": {
+        shape: "not_vibes" as const,
+        stepOrder: 2,
+        stepTitle: "Confirm the plan structure checkout should charge",
+        reason: EXECUTION_REASON_LABELS.founder_decision_required,
+      },
+      "agent-plan-next-refused": {
+        shape: "policy" as const,
+        stepOrder: 3,
+        stepTitle: "Build or complete the checkout and subscription flow",
+        reason: EXECUTION_REASON_LABELS.risk_class_prohibited,
+      },
+    }[scenario];
+
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AgentPlanNextNotice
+          stepOrder={scene.stepOrder}
+          stepTitle={scene.stepTitle}
+          reasonLabel={scene.reason}
+          planHref={projectSectionHref("project_e2e", "action-plan")}
+          shape={scene.shape}
+        />
+      </main>
+    );
+  }
+
+  /*
+   * The three ways a preview is not offered, side by side in the browser.
+   *
+   * They are one branch apart in the panel and one word apart in the card, and
+   * that is exactly why they are proved separately: the failure this state
+   * exists to prevent is a true sentence shown to the wrong founder. The
+   * browser is the only place that distinction is visible, because all three
+   * render the same shape — a heading, a sentence, and no control.
+   */
+  if (
+    scenario === "preview-not-supported" ||
+    scenario === "preview-repository-not-ready" ||
+    scenario === "preview-workspace-not-previewable"
+  ) {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <PreviewPanel
+          projectId="project_e2e"
+          preparedChangeId="prepared_e2e"
+          card={{
+            state:
+              scenario === "preview-not-supported"
+                ? "not_supported"
+                : scenario === "preview-repository-not-ready"
+                  ? "repository_not_ready"
+                  : "workspace_not_previewable",
+            previewSessionId: null,
+            operationRunId: null,
+            stage: null,
+            failureCode: null,
+            failureMessage: null,
+            expiresAt: null,
+            readyAt: null,
+          }}
+          serverOrigin={null}
+          productionUrl={null}
+          approved={false}
+          merged={false}
+        />
+      </main>
+    );
+  }
+
+  if (isE2eWorkspaceChoiceScenario(scenario)) {
+    const candidates = E2E_WORKSPACE_CHOICE_SCENARIOS[scenario]();
+    const chosen = scenario === "workspace-choice-answered" ? ANSWERED_WORKSPACE_ROOT : null;
+
+    /*
+     * A plain button rather than the real submit control, for the same reason
+     * every fixture here stops short of a server action: a component bound to a
+     * real project cannot mount in this harness. What the browser has to prove
+     * is the shape of the question — two applications, told apart, and no field
+     * to type a third into — and that is entirely presentational.
+     */
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AgentWorkspaceChoice
+          candidates={candidates}
+          chosen={chosen}
+          action={(candidate) => (
+            <Button
+              type="button"
+              variant={candidate.workspaceRoot === chosen ? "secondary" : "primary"}
+              disabled={candidate.workspaceRoot === chosen}
+              data-testid="agent-workspace-choose"
+              data-workspace-root={candidate.workspaceRoot}
+            >
+              {candidate.workspaceRoot === chosen ? "Working on this" : "Work on this"}
+            </Button>
+          )}
+        />
+      </main>
+    );
+  }
+
   // "Vibe needs you" (CORE-2a.4 §30): the same panel the score route renders,
   // given a question the real gate produced.
   if (isE2eNeedsUserScenario(scenario)) {
@@ -589,12 +999,17 @@ export default async function E2eScenarioPage({
       activity,
       task,
       checks,
+      validationDepth,
+      cost,
       fileEvents,
+      currentAction,
+      files,
       previewChanges,
       previewImages,
       mergeFiles,
       mergeSummary,
       startRefusal,
+      chainOffer,
     } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
     /* The orb turns for a live run and for nothing else. */
     const live = core === "working" || core === "waiting";
@@ -632,9 +1047,27 @@ export default async function E2eScenarioPage({
                         repositoryReadHref="/app/projects/project_e2e/product"
                       />
                     )}
+                    {/*
+                      Stand-in buttons, deliberately: the real control binds a
+                      server action, and what these scenarios exist to show is
+                      what a founder is offered — two prices, both named, and
+                      the single step still reachable.
+                    */}
+                    {chainOffer && (
+                      <button type="button" className="w-full rounded-full px-5 py-3">
+                        {`Build all ${chainOffer.memberCount} steps — ${chainOffer.chainCredits}`}
+                      </button>
+                    )}
                     <button type="button" className="w-full rounded-full px-5 py-3">
-                      Run with Vibe
+                      {chainOffer
+                        ? `Build just this step — ${chainOffer.stepCredits}`
+                        : "Run with Vibe"}
                     </button>
+                    {chainOffer && (
+                      <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                        {chainOffer.boundary}
+                      </p>
+                    )}
                   </div>
                 }
               />
@@ -643,10 +1076,19 @@ export default async function E2eScenarioPage({
               <AgentBuildStage
                 task={task}
                 live={live}
-                core={<AgentCore state={core} caption={caption} size="compact" />}
+                core={
+                  <AgentCore
+                    state={core}
+                    caption={(live ? currentAction : null) ?? caption}
+                    size="compact"
+                  />
+                }
                 activity={
                   fileEvents.length > 0 ? (
-                    <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                    <div className="flex flex-col gap-5">
+                      <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                      <AgentRunFiles files={files} />
+                    </div>
                   ) : (
                     <AgentActivity steps={activity} title="Agent progress" live={live} />
                   )
@@ -656,7 +1098,12 @@ export default async function E2eScenarioPage({
             validate: (
               <AgentValidateStage
                 running={live}
-                checks={<AgentValidationChecks checks={checks} />}
+                checks={
+                  <div className="flex flex-col gap-3">
+                    <AgentValidationChecks checks={checks} />
+                    <ValidationDepthNote depth={validationDepth} />
+                  </div>
+                }
               />
             ),
             preview: (
@@ -670,6 +1117,14 @@ export default async function E2eScenarioPage({
               />
             ),
             review: (
+              <>
+              {/*
+                The paths policy refused, on the stage a person decides from.
+                `AgentPreviewActions` binds real server actions and cannot be
+                mounted here, so the part that is new — naming what is not in
+                the change — is rendered on its own.
+              */}
+              <WithheldPaths paths={files.filter((f) => f.withheldBy !== null).map((f) => f.path)} />
               <AgentMergeStage
                 summary={mergeSummary}
                 files={mergeFiles}
@@ -680,10 +1135,25 @@ export default async function E2eScenarioPage({
                 compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
                 backHref="#"
                 canMerge
+                decision={<CostLine cost={cost} />}
               />
+              </>
             ),
           }}
         />
+      </main>
+    );
+  }
+
+  /*
+   * The provenance panel on its own, because what it has to get right is
+   * visual: an outdated link that is not visible is the incident again.
+   */
+  if (isE2eProvenanceScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <ProvenancePanel provenance={e2eProvenance(scenario)} projectId="project_e2e" />
       </main>
     );
   }
@@ -781,6 +1251,37 @@ export default async function E2eScenarioPage({
       >
         <div className="sr-only">{label}</div>
         <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  /*
+   * Profile, through the component `/app/profile` renders. It takes the
+   * session's email and the connection row as props precisely so this can
+   * supply both — the harness has neither.
+   */
+  if (isE2eProfileScenario(scenario)) {
+    const fixture = E2E_PROFILE_SCENARIOS[scenario]();
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProfileView email={fixture.email} github={fixture.github} />
       </AccountShell>
     );
   }
@@ -898,6 +1399,48 @@ export default async function E2eScenarioPage({
    * is real either way: the panel and the skeleton reach the client while the
    * slow half is still resolving, which before this could not happen at all.
    */
+  /*
+   * The run list on its own (audit R29). The Agent route needs a session and a
+   * project to reach, so without this the one screen that lets a founder find
+   * an earlier run would have no browser coverage.
+   */
+  if (scenario === "agent-run-history") {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentRunHistory
+          runs={[
+            {
+              id: "run_3",
+              status: "completed",
+              startedAt: "2026-08-27T10:44:00.000Z",
+              completedAt: "2026-08-27T10:51:00.000Z",
+              changedFileCount: 4,
+              preparedChangeId: "change_3",
+            },
+            {
+              id: "run_2",
+              status: "failed",
+              startedAt: "2026-08-24T09:12:00.000Z",
+              completedAt: "2026-08-24T09:14:00.000Z",
+              changedFileCount: null,
+              preparedChangeId: null,
+            },
+            {
+              id: "run_1",
+              status: "cancelled",
+              startedAt: "2026-08-20T16:03:00.000Z",
+              completedAt: "2026-08-20T16:05:00.000Z",
+              changedFileCount: null,
+              preparedChangeId: null,
+            },
+          ]}
+          changeHref={(id) => `/app/projects/project_e2e/agent?change=${id}`}
+        />
+      </main>
+    );
+  }
+
   if (scenario === "agent-streaming") {
     return (
       <main className="mx-auto max-w-[70rem] p-8">
@@ -966,11 +1509,55 @@ export default async function E2eScenarioPage({
           variant="intelligence"
         >
           {view ? (
+            <>
+            {/*
+              The strip the Business Health route renders under its priced
+              audit control, from the same builder — without it this density
+              had no browser coverage at all.
+            */}
+            <SourceCoverageStrip
+              sources={buildSourceCoverage({
+                repository: {
+                  result:
+                    E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                  completedAt: "2026-08-14T08:22:59.917Z",
+                },
+                live: {
+                  result: E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                  completedAt: "2026-08-14T08:24:11.000Z",
+                },
+                deepScan: { result: null },
+                founder: { told: true, at: null },
+                hrefs: {
+                  scan: "/app/projects/project_e2e/my-product",
+                  deepScan: "/app/projects/project_e2e/deep-scan",
+                  settings: "/app/projects/project_e2e/settings",
+                  founderIntent: "/app/projects/project_e2e/settings#founder-intent",
+                  connectRepository: "/app/projects/project_e2e/settings",
+                  addWebsite: "/app/projects/project_e2e/settings",
+                },
+                connected: { repository: true, productionUrl: true },
+              })}
+              className="mb-4"
+            />
             <AuditOverview
               view={view}
               movesHref="/app/projects/project_e2e/plan"
               hasMoves={hasMoves}
+              /*
+               * The same comparison My Product renders, built from the same
+               * fixtures rather than restated — the Brain carries it as
+               * evidence about the business, and without this the branch had
+               * no browser coverage at all.
+               */
+              contradictions={
+                crossCheckIntelligence(
+                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                ).checks
+              }
             />
+            </>
           ) : (
             <p>This fixture predates the Business Brain.</p>
           )}
@@ -998,7 +1585,7 @@ export default async function E2eScenarioPage({
           moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
           responsibilityByStepKey={fixture.responsibilityByStepKey ?? {}}
-            readiness={fixture.readiness}
+          readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}
           auditHref="/app/projects/project_e2e#business-audit"

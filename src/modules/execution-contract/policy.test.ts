@@ -186,9 +186,7 @@ describe("write scope (§17)", () => {
   });
 
   it("refuses a change that exceeds the byte ceiling", () => {
-    const result = checkWriteScope(agenticPolicy(), [
-      { path: "src/huge.ts", bytes: 200_001 },
-    ]);
+    const result = checkWriteScope(agenticPolicy(), [{ path: "src/huge.ts", bytes: 200_001 }]);
 
     expect(result.ok).toBe(false);
     if (result.ok) return;

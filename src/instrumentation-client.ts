@@ -22,6 +22,16 @@ Sentry.init({
   // This is the boundary that decides what leaves the process, and it
   // fails closed: a scrubbing failure drops the event.
   beforeSend: (event) => scrubErrorEvent(event),
+
+  // Third-party noise, not ours to fix. Meta's pixel (ADR 0041) loads
+  // `fbevents.js` cross-origin from connect.facebook.net, which itself loads
+  // further feature modules under a `signals/` path (VIBE-BUSINESS-PROJECT-4:
+  // "getBoundingClientRect is not a function", 206 events, no first-party
+  // frames). Cross-origin script errors report opaquely, so these frequently
+  // surface with a synthetic `app:///signals/...` path rather than the real
+  // origin — matching both forms keeps this scoped to Meta's script rather
+  // than silencing errors broadly.
+  denyUrls: [/connect\.facebook\.net/, /^app:\/\/\/signals\//],
 });
 
 // Required by the App Router so client navigations continue the active trace.

@@ -393,7 +393,16 @@ export const DEPENDENCY_HOSTS: readonly string[] = [
   "registry.npmjs.org",
   "*.npmjs.org",
   "*.npmjs.com",
+  // Yarn Berry's default registry. `bun install` uses npm's and needs no host
+  // of its own. Part of `SANDBOX_POLICY_VERSION`, because widening where an
+  // install may reach changes what "installed exactly what the lockfile said"
+  // was checked against.
+  "registry.yarnpkg.com",
 ];
 
 /** Hosts reachable while the source is cloned. GitHub only. */
-export const SOURCE_HOSTS: readonly string[] = ["github.com", "*.github.com", "codeload.github.com"];
+export const SOURCE_HOSTS: readonly string[] = [
+  "github.com",
+  "*.github.com",
+  "codeload.github.com",
+];

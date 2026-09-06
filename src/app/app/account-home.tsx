@@ -5,10 +5,10 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { ArrowRightIcon, PlusIcon } from "@/components/ui/dashboard-icons";
 import { buildAttentionItems, orderProjectsByAttention } from "@/modules/projects/attention";
+import { productDisplayName } from "@/modules/projects/display-name";
 import type { DashboardProject } from "@/modules/projects/dashboard";
-import { BusinessSignalPanel } from "./business-signal-panel";
-import { NextMoveCard } from "./next-move-card";
 import { ProductCard } from "./product-card";
+import { SignalCard } from "./signal-card";
 
 /**
  * Everything the account dashboard puts on screen (CORE-6).
@@ -25,12 +25,19 @@ import { ProductCard } from "./product-card";
  *
  * The page keeps what a page owns: the session, the reads, the redirects.
  *
- * ## The four objects, in the order they answer the question
+ * ## The three objects, in the order they answer the question
  *
- * Where things stand for the product that needs attention, the one move it
- * needs, every product as an index, and the route to add another. There is no
- * attention list and no activity feed — both left in CORE-6, and the ordering
- * the attention list uniquely contributed is what arranges the grid.
+ * Where things stand for the product that needs attention *and* the one move
+ * that follows from it, every product as an index, then the route to add
+ * another. There is no attention list and no activity feed — both left in
+ * CORE-6, and the ordering the attention list uniquely contributed is what
+ * arranges the grid.
+ *
+ * It was four. The signal and the move were separate full-width panels with a
+ * control each, which on an unanalysed product asked the same thing twice and
+ * offered a button into an action plan that held nothing. `SignalCard` argues
+ * the merge; what matters here is that the screen now has exactly one primary
+ * object and the grid is a quiet index under it.
  */
 
 const CONNECT_ERROR_MESSAGES: Record<string, string> = {
@@ -84,7 +91,9 @@ export function AccountHome({
   unfinishedSetupProjectId?: string | null;
 }) {
   const attention = buildAttentionItems(projects);
-  const projectNames = new Map(projects.map((project) => [project.id, project.name]));
+  const projectNames = new Map(
+    projects.map((project) => [project.id, productDisplayName(project)]),
+  );
 
   /*
    * Most-urgent first. The same ordering carries both halves of this screen:
@@ -137,19 +146,11 @@ export function AccountHome({
         <h1 className="text-fg text-headline sm:text-display font-bold tracking-[-0.04em] text-balance">
           {headline}
         </h1>
-        {projects.length > 0 && (
-          <p className="text-fg-muted text-base">{summary}</p>
-        )}
+        {projects.length > 0 && <p className="text-fg-muted text-base">{summary}</p>}
       </header>
 
       {hero && (
-        <section aria-labelledby="signal-heading" className="flex flex-col gap-5">
-          <h2 id="signal-heading" className="sr-only">
-            {hero.name}
-          </h2>
-          <BusinessSignalPanel project={hero} />
-          <NextMoveCard project={hero} />
-        </section>
+        <SignalCard project={hero} />
       )}
 
       {projects.length === 0 ? (
@@ -160,7 +161,10 @@ export function AccountHome({
             <h2 id="products-heading" className="text-fg text-title font-bold">
               Your products
             </h2>
-            <Link href="/app/products" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+            <Link
+              href="/app/products"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
               View all products
               <ArrowRightIcon size={16} />
             </Link>
@@ -178,20 +182,25 @@ export function AccountHome({
             ))}
           </ul>
 
+          {/*
+            A route, not an offer. This carried a 64px mint tile and a
+            two-line pitch, which gave a utility link the visual weight of the
+            work above it — on a screen whose whole claim is that one thing
+            matters most. One row, one sentence, one way in.
+          */}
           <Surface
             level="section"
-            padding="lg"
-            className="border-mint-line/70 flex flex-col gap-5 sm:flex-row sm:items-center"
+            padding="md"
+            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"
           >
-            <div className="bg-mint-tint text-mint flex size-16 shrink-0 items-center justify-center rounded-panel">
-              <PlusIcon size={30} />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-              <h3 className="text-fg text-title font-semibold">Connect a new product</h3>
-              <p className="text-fg-muted max-w-[52ch] text-sm leading-relaxed">
-                Add another repository to bring its business signal, priorities, and prepared work
-                into one command center.
-              </p>
+            <div className="flex min-w-0 items-center gap-3">
+              <span
+                aria-hidden
+                className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
+              >
+                <PlusIcon size={18} />
+              </span>
+              <h3 className="text-fg text-ui font-semibold">Connect a new product</h3>
             </div>
             <Link
               href="/app/connect/github"

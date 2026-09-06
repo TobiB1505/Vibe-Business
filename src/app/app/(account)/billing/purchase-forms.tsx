@@ -104,6 +104,7 @@ export function StartPlanForm({
   planName,
   price,
   credits,
+  buys,
   disabled,
   current,
 }: {
@@ -111,6 +112,19 @@ export function StartPlanForm({
   planName: string;
   price: string;
   credits: string;
+  /**
+   * What the monthly grant is worth in units of work, already rounded down.
+   *
+   * Inside the row rather than in a list underneath it: a customer choosing a
+   * plan is choosing how much work they can do, and "1,000 Credits" is a
+   * number nobody can price without the table above and a calculator. It sat
+   * in a detached `dl` below every plan, which made the reader match names to
+   * rows to answer the one question a plan is chosen on.
+   *
+   * Null when nothing in the card is priced, so a policy with no prices
+   * renders no claim rather than "0 audits".
+   */
+  buys?: string | null;
   disabled: boolean;
   current: boolean;
 }) {
@@ -126,6 +140,7 @@ export function StartPlanForm({
           <p className="text-fg-prose mt-1 text-xs tabular-nums">
             {credits} Credits each month
           </p>
+          {buys && <p className="text-fg-secondary mt-2 text-sm">{buys} each month</p>}
         </div>
         {current ? (
           <span className="bg-mint-tint text-mint border-mint-line shrink-0 rounded-full border px-3 py-1 text-xs font-semibold">

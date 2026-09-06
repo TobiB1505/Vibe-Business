@@ -77,17 +77,53 @@ function authDetected(
   return authenticated.productSurfaces.some((surface) => surface.id === id && surface.detected);
 }
 
+/**
+ * Whether a comparison happened at all, and what it found.
+ *
+ * `buildIntelligenceCrossChecks` returns an empty array for two situations a
+ * reader cannot tell apart: nothing was compared, and everything compared
+ * agreed. On screen those are opposite statements. "Your code and your live
+ * product agree" is a finding; saying it because no live scan has ever run
+ * would be the invented reassurance rule 44 exists to prevent.
+ *
+ * So the guards report themselves. `compared: false` means silence is the only
+ * honest output.
+ */
+export type IntelligenceCrossCheckResult =
+  | { compared: false; reason: "no_live_scan" | "live_scan_detected_nothing"; checks: [] }
+  | { compared: true; checks: IntelligenceCrossCheck[] };
+
+export function crossCheckIntelligence(
+  repository: RepositoryIntelligenceSnapshot,
+  live: LiveProductIntelligenceSnapshot | null,
+  authenticated: AuthenticatedProductIntelligenceSnapshot | null = null,
+): IntelligenceCrossCheckResult {
+  if (!live) return { compared: false, reason: "no_live_scan", checks: [] };
+
+  // A check that identified nothing at all is a failed check, not a product
+  // with nothing in it. Comparing against it would invent findings.
+  const liveSawSomething = live.productSurfaces.some((surface) => surface.detected);
+  if (!liveSawSomething) {
+    return { compared: false, reason: "live_scan_detected_nothing", checks: [] };
+  }
+
+  return { compared: true, checks: comparisons(repository, live, authenticated) };
+}
+
+/** The checks themselves, for callers that only weigh how many there are. */
 export function buildIntelligenceCrossChecks(
   repository: RepositoryIntelligenceSnapshot,
   live: LiveProductIntelligenceSnapshot | null,
   authenticated: AuthenticatedProductIntelligenceSnapshot | null = null,
 ): IntelligenceCrossCheck[] {
-  if (!live) return [];
+  return crossCheckIntelligence(repository, live, authenticated).checks;
+}
 
-  // A check that identified nothing at all is a failed check, not a product
-  // with nothing in it. Comparing against it would invent findings.
-  const liveSawSomething = live.productSurfaces.some((surface) => surface.detected);
-  if (!liveSawSomething) return [];
+function comparisons(
+  repository: RepositoryIntelligenceSnapshot,
+  live: LiveProductIntelligenceSnapshot,
+  authenticated: AuthenticatedProductIntelligenceSnapshot | null,
+): IntelligenceCrossCheck[] {
 
   const repositoryDetected = (id: string) =>
     repository.businessSurfaces.some((surface) => surface.id === id && surface.detected);
@@ -100,7 +136,31 @@ export function buildIntelligenceCrossChecks(
   const liveCheckout = liveDetected(live, "checkout_billing");
   const liveSignIn = liveDetected(live, "login") || liveDetected(live, "signup");
 
-  if (routesKnown && repositoryDetected("pricing_page") && !livePricing) {
+  /*
+   * A contradiction says one of two inputs is wrong. It does not say which.
+   *
+   * These checks read "the code has pricing, the live product does not" as a
+   * fact about the *business*, and mint it at the highest evidence priority —
+   * so a detector that missed a pricing surface becomes the most heavily
+   * weighted finding in the audit. That is exactly what happened to Vibe
+   * Business's own audit: an anchor-section pricing page was not classified,
+   * `payments-not-reachable` fired, and the founder was told twice that
+   * nothing on their site leads to paying, while the page displayed three
+   * prices.
+   *
+   * `observedPricePoints` is the disproof, and it comes from the same
+   * snapshot. When Vibe read prices off the live product, "no pricing is
+   * reachable" is not a finding — it is a disagreement between two of Vibe's
+   * own readings, and the honest response is to stay quiet rather than to
+   * accuse the business. `reconcilePricingConfidence` already lowers the
+   * surface signal's confidence for this case; this stops the contradiction
+   * being minted from the same doubtful input one layer up.
+   */
+  const livePricesObserved =
+    (live.pricing?.observedPricePoints.length ?? 0) > 0 ||
+    (live.pricing?.declaredPricePoints.length ?? 0) > 0;
+
+  if (routesKnown && repositoryDetected("pricing_page") && !livePricing && !livePricesObserved) {
     checks.push({
       id: "pricing-not-reachable",
       title: "Your pricing exists in the product, but visitors may not be able to find it.",
@@ -110,7 +170,7 @@ export function buildIntelligenceCrossChecks(
     });
   }
 
-  if (repositoryDetected("payments") && !livePricing && !liveCheckout) {
+  if (repositoryDetected("payments") && !livePricing && !liveCheckout && !livePricesObserved) {
     checks.push({
       id: "payments-not-reachable",
       title: "Your product can take payments, but nothing a visitor can reach leads to paying.",

@@ -1,4 +1,3 @@
-
 /**
  * Durable step bodies for agentic execution (EXECUTION CORE-4 §21, §22, §36, §37).
  *

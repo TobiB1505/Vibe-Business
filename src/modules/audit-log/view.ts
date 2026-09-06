@@ -174,6 +174,8 @@ const LABELS: Record<AuditEventType, string> = {
   "onboarding.first_move_started": "Setup: Vibe started working out your first move",
   "onboarding.first_move_viewed": "Setup: you saw your first move",
   "onboarding.completed": "Setup finished",
+  "nova.introduced": "Nova introduced herself",
+  "nova.workflow_answered": "Setup: you answered how much you wanted explained",
 
   // Billing (BILLING CORE-1 §34). Written in the customer's terms — "Credits",
   // never "ledger entry" or "posted delta" — because these are the only

@@ -219,7 +219,13 @@ test.describe("agent activity and independent validation stay distinct", () => {
     await page.goto(VALIDATING);
 
     const checks = page.getByTestId("agent-validation-checks");
-    await expect(checks.locator("[data-check]")).toHaveCount(4);
+    /*
+     * Five, not four. The rows are the validation's own phases now (audit
+     * R32), so source integrity is named alongside the four commands — a step
+     * the sandbox genuinely performs, and the one a founder cannot infer from
+     * the others.
+     */
+    await expect(checks.locator("[data-check]")).toHaveCount(5);
 
     /*
      * The reference drew "Linting" and "Security scan". Neither step exists in
@@ -547,5 +553,203 @@ test.describe("the run's subject is the step, with the Move as its context", () 
 
     const headline = page.getByTestId("agent-task-headline").first();
     await expect(headline).toHaveText("Add a clear pricing section to your website");
+  });
+});
+
+/**
+ * The build chain, offered (`build-chain-v1`).
+ *
+ * What these catch is a screen that cannot be read: one price over two options,
+ * a chain with no way out of it, or a short chain that says nothing about why.
+ * The chain rules themselves are structural and are proved against the
+ * founder's real plan in `chain.test.ts` — this is the layer that decides
+ * whether a founder can tell what they are about to buy.
+ */
+test.describe("a run that would carry two steps", () => {
+  test("offers both, at two different prices", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    const chain = page.getByRole("button", { name: /Build all 2 steps/ });
+    const single = page.getByRole("button", { name: /Build just this step/ });
+
+    await expect(chain).toBeVisible();
+    await expect(single).toBeVisible();
+
+    // One price over two options is the defect this exists for.
+    const chainLabel = (await chain.textContent()) ?? "";
+    const singleLabel = (await single.textContent()) ?? "";
+    expect(chainLabel).not.toBe(singleLabel);
+  });
+
+  test("says why the chain stops where it does", async ({ page }) => {
+    // Without this, a chain that ends at a Stripe step looks like a bug rather
+    // than the refusal it is.
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    await expect(page.getByTestId("agent-chain-boundary")).toContainText(
+      "more sensitive than Vibe builds on your behalf",
+    );
+  });
+
+  test("names both steps, as deliveries rather than groundwork", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    await expect(page.getByTestId("agent-task-step-delivery")).toHaveCount(2);
+    await expect(page.getByTestId("agent-task-step-preparation")).toHaveCount(0);
+  });
+
+  test("never claims more changes or checks than it made", async ({ page }) => {
+    // "2 steps done" would imply two artifacts and two verdicts. There is one
+    // of each, and the sentence has to say so (rule 66).
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    await expect(page.getByTestId("agent-task-chain-note")).toContainText(
+      "One change, checked once, covering these 2 steps",
+    );
+  });
+});
+
+test.describe("a founder who declines the chain", () => {
+  test("gets the screen exactly as it was, with one control", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-chain-declined");
+
+    await expect(page.getByRole("button", { name: "Run with Vibe" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Build all/ })).toHaveCount(0);
+    await expect(page.getByTestId("agent-chain-boundary")).toHaveCount(0);
+    // And no sentence about a chain, because there is not one.
+    await expect(page.getByTestId("agent-task-chain-note")).toHaveCount(0);
+  });
+});
+
+/*
+ * Slice 4, first acceptance line: a running run shows its current action and
+ * the files it touched, and no USD anywhere near either.
+ *
+ * The observation half of the run model reached the customer for the first
+ * time here (audit C7) — before the split it was blocked by an RLS failure on
+ * the cost ledger that the model read alongside it.
+ */
+test.describe("a run in flight says what it is doing", () => {
+  test("names the current action and every file, including the refused one", async ({ page }) => {
+    await page.goto(BUILDING);
+
+    // The action that moves, not only the phase that does not.
+    await expect(page.getByText(/editing src\/app\/pricing\/page\.tsx/i)).toBeVisible();
+
+    const files = page.getByTestId("agent-run-files");
+    await expect(files).toBeVisible();
+    await expect(files).toContainText("src/app/pricing/page.tsx");
+    await expect(files).toContainText("Changed");
+
+    /*
+     * The path policy refused. Not in the change, so the change cannot show
+     * it — and without this a founder cannot tell "not touched" from "not
+     * allowed".
+     */
+    await expect(files).toContainText(".env.local");
+    await expect(files).toContainText("Not allowed");
+    await expect(files).toContainText("Sensitive path policy");
+    await expect(files).toContainText(/1 withheld/);
+  });
+
+  test("puts no dollar figure anywhere on the run", async ({ page }) => {
+    await page.goto(BUILDING);
+
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/\$\s?\d/);
+    expect(body).not.toMatch(/\bUSD\b/i);
+  });
+});
+
+/*
+ * Slice 4, second acceptance line. The diff moved onto the stage a person
+ * decides from — it lived only on `ChangeGates`, which this workspace
+ * replaced, so a founder approved a change whose contents were a click away on
+ * another surface. And the paths policy refused are named, because they are
+ * not in the change and their absence otherwise reads as "never touched".
+ */
+test.describe("what the review names that the change cannot", () => {
+  test("names the files the run was not allowed to change", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const withheld = page.getByTestId("withheld-paths");
+    await expect(withheld).toBeVisible();
+    await expect(withheld).toContainText(/one file the run was not allowed to change/i);
+    await expect(withheld).toContainText(".env.local");
+
+    // A statement, not an offer. There is nothing here to press.
+    await expect(withheld.getByRole("button")).toHaveCount(0);
+    await expect(withheld.getByRole("link")).toHaveCount(0);
+  });
+});
+
+/*
+ * Slice 4, third acceptance line. The stage that decides showed four rows all
+ * repeating the run's one overall verdict, with a comment calling itself
+ * honestly coarse — while `change.validation` had carried per-phase results,
+ * skip reasons and the source-integrity check all along.
+ */
+test.describe("what the validation checked, and what it did not", () => {
+  test("names the phases, including the one that verified the source", async ({ page }) => {
+    await page.goto(VALIDATING);
+
+    const checks = page.getByTestId("agent-validation-checks");
+    await expect(checks).toContainText(/source integrity/i);
+
+    // And the skipped ones say they were skipped, rather than reporting a pass.
+    await expect(checks).toContainText(/skipped/i);
+  });
+
+  test("says which steps were skipped and why it was a decision", async ({ page }) => {
+    await page.goto(VALIDATING);
+
+    const note = page.getByTestId("validation-depth-note");
+    await expect(note).toBeVisible();
+    await expect(note).toContainText(/fast checks/i);
+    await expect(note).toContainText(/low-risk presentational change/i);
+    await expect(note).toContainText(/did not run tests and the production build/i);
+  });
+});
+
+/*
+ * Slice 4, fourth acceptance line. A merged change could not say what it cost:
+ * the reservation is where the money went and nothing joined it to the change.
+ */
+test.describe("what the change cost", () => {
+  test("names the settled Credits beside the decision", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const cost = page.getByTestId("cost-line");
+    await expect(cost).toBeVisible();
+    await expect(cost).toHaveAttribute("data-cost", "settled");
+    await expect(cost).toContainText(/this change cost/i);
+    await expect(cost).toContainText(/Credits/);
+
+    // The charge, never Vibe's own cost of producing it.
+    await expect(cost).not.toContainText(/\$/);
+  });
+});
+
+/*
+ * Slice 4's last acceptance line. The workspace shows the newest run; a
+ * product that had run the agent eleven times had ten it could no longer
+ * reach, including the ones whose changes were merged.
+ */
+test.describe("the runs before this one", () => {
+  test("lists them, and links only the ones that produced a change", async ({ page }) => {
+    await page.goto("/e2e/agent-run-history");
+
+    const table = page.getByRole("table", { name: /agent runs for this product/i });
+    await expect(table).toBeVisible();
+    await expect(table.getByRole("row")).toHaveCount(4); // head + three runs
+
+    await expect(table).toContainText("Finished");
+    await expect(table).toContainText("Failed");
+    await expect(table).toContainText("Stopped");
+
+    // A run that produced no change offers no link, and shows a dash rather
+    // than a zero — it changed nothing, which is not the same as zero files.
+    await expect(table.getByRole("link")).toHaveCount(1);
+    await expect(table).toContainText("—");
   });
 });

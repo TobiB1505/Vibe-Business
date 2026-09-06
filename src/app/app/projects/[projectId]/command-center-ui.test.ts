@@ -21,6 +21,9 @@ import { actionLabelText } from "./test-support";
 
 const DIR = join(process.cwd(), "src/app/app/projects/[projectId]");
 
+const SOURCE_COVERAGE = join(process.cwd(), "src/modules/provenance/source-coverage.ts");
+const SOURCE_COVERAGE_UI = join(process.cwd(), "src/components/system/source-coverage.tsx");
+
 function source(file: string): string {
   return readFileSync(join(DIR, file), "utf8");
 }
@@ -212,9 +215,16 @@ describe("one Product Scan, in the founder's words", () => {
   });
 
   it("derives the partial wording from the one function that knows why", () => {
-    // Not re-written per surface: describeIncompleteness is the sentence the
-    // live summary already shows, and the source row must agree with it.
-    expect(source("product/page.tsx")).toContain("describeIncompleteness");
+    /*
+     * Not re-written per surface: `describeIncompleteness` is the sentence the
+     * live summary already shows, and the source row must agree with it.
+     *
+     * It was asserted on `product/page.tsx`, which is where the four sources
+     * used to be assembled by hand. They are built in one module now (audit
+     * C8), and this is that module — the assertion follows the logic rather
+     * than the file it happened to live in.
+     */
+    expect(readFileSync(SOURCE_COVERAGE, "utf8")).toContain("describeIncompleteness");
   });
 
   it("ends the Product page at the profile confirmation instead of repeating legacy findings", () => {
@@ -261,12 +271,20 @@ describe("the sources block leads somewhere from every state", () => {
    * same one three bare fragments produced before this sprint.
    */
   it("gives every source row a link, not just the ready ones", () => {
-    const src = source("understanding-panel.tsx");
+    const model = readFileSync(SOURCE_COVERAGE, "utf8");
+    const component = readFileSync(SOURCE_COVERAGE_UI, "utf8");
 
-    // The type requires it, and the component renders it unconditionally —
-    // outside any `source.ready` branch.
-    expect(src).toContain("href: string;");
-    expect(src).toContain("href={source.href}");
-    expect(src).not.toMatch(/source\.ready\s*&&\s*<Link/);
+    /*
+     * The remedy is on the model and rendered from it, outside any branch on
+     * the source being ready. A source nobody can act on from is a dead end
+     * exactly where the founder needs a way forward.
+     */
+    expect(model).toContain("href: string;");
+    expect(component).toContain("href={source.remedy.href}");
+    expect(component).not.toMatch(/state === "ready"\s*&&\s*<Link/);
+
+    // Every branch of the builder ends on a remedy, or on `remedy: null` while
+    // a run is in flight — never on an absent field nobody noticed.
+    expect(model.match(/remedy: /g)?.length ?? 0).toBeGreaterThanOrEqual(10);
   });
 });

@@ -166,6 +166,20 @@ export function fakeRepositorySnapshot(
     frameworks: [{ id: "nextjs", name: "Next.js", confidence: "high", evidence: [] }],
     packageManager: "pnpm",
     scripts: { declared: ["test", "typecheck", "lint", "build"], source: "package.json" },
+    build: {
+      targets: [
+        {
+          directory: ".",
+          manifestPath: "package.json",
+          buildScript: true,
+          frameworks: ["nextjs", "react"],
+          lockfile: { path: "pnpm-lock.yaml", packageManager: "pnpm", inTargetDirectory: true },
+          declaresWorkspaces: false,
+          moduleLinker: null,
+        },
+      ],
+      truncated: false,
+    },
     runtime: [],
     integrationSignals: [
       { id: "supabase", name: "Supabase", category: "database", confidence: "high", evidence: [] },

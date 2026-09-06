@@ -17,9 +17,14 @@ import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded
  *     request body, not by presenting a Vibe session — there is no user agent
  *     and no cookie, by design. The endpoint is nonetheless the only funding
  *     path into the Credit ledger, so it needs to write.
+ *  3. **The internal operator console** (ADR 0088). The first caller that has a
+ *     session and still cannot use it: the console reads *across* tenants, so
+ *     RLS would scope it to the operator's own projects and answer a question
+ *     nobody asked. It is read-only.
  *
- * Both are the same situation and carry the same obligation: RLS cannot apply,
- * so ownership has to be re-established in code.
+ * The first two are the same situation and carry the same obligation: RLS
+ * cannot apply, so ownership has to be re-established in code. The third
+ * cannot re-establish ownership at all, and says so below.
  *
  * ## The rules that replace RLS
  *
@@ -35,9 +40,21 @@ import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded
  *     that row's ids. A step must never accept a `projectId` or `userId`
  *     parameter, because then a caller could name someone else's.
  *  3. **Stay inside `src/modules/operations/` or `src/modules/billing/`.**
- *     Nothing else may import this module. The read path the browser uses
- *     stays on the cookie-scoped client in `server.ts`, where RLS still
- *     enforces everything — including every read on the billing page.
+ *     Nothing else may import this module without an entry in
+ *     `REVIEWED_SITES`. The read path the browser uses stays on the
+ *     cookie-scoped client in `server.ts`, where RLS still enforces
+ *     everything — including every read on the billing page.
+ *
+ * ## The one caller that cannot obey (1) or (2), and what replaces them
+ *
+ * The operator console reads every tenant's rows on purpose, so there is no
+ * ownership to filter on. What it does instead is remove the thing (1) and (2)
+ * protect against: **no query it makes accepts a project id, a user id, or any
+ * other selector from its caller**, so there is no argument to forge. The
+ * filter is replaced by a prior gate — an operator id from verified claims,
+ * checked against an environment allowlist that is unset by default and that
+ * the application has no path to write. It reads and never writes, and every
+ * query names its columns from a constant. See ADR 0088.
  *
  * The billing webhook satisfies (1) and (2) the same way a workflow step does:
  * it never accepts a `userId` from its caller. The owner is resolved from

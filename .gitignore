@@ -58,11 +58,32 @@ src/app/.well-known/workflow/
 /blob-report/
 /playwright/.cache/
 
-# Claude Code local state: machine-specific settings and agent worktrees.
-# The worktrees are full repository checkouts with node_modules — a single one
-# reached 1 GB — so this must never be picked up by `git add -A`.
-.claude/
+# Claude Code. The directory is NOT ignored wholesale: `.claude/skills/` is
+# repo-native design tooling and has to travel with a clone (ADR 0095). What is
+# ignored is the machine-specific half.
+#
+# The worktrees are full repository checkouts with node_modules — the set
+# reached 5 GB — so this must never be picked up by `git add -A`.
+.claude/worktrees/
+# Per-machine permission grants and enabled-MCP toggles.
+.claude/settings.local.json
+.claude/*.local.json
+# Local MCP secrets, sourced into the environment before launching Claude Code.
+# Never committed; `docs/development/remote-design-tooling.md` says what goes in it.
+.claude/mcp.env
+
+# Registry staging area. Third-party components land here to be read and ported
+# by hand; nothing vendored is committed, and nothing here is imported by the
+# application (ADR 0095).
+/src/components/vendor/
 
 # Output of an external UI review tool. Regenerated on demand, and it records
 # an absolute path from whichever machine produced it.
 /premium-audit.json
+
+# Paid Nova voice eval output — per-case results, never committed.
+.nova-eval/
+
+# Projekt-Atlas: aus dem Repository generierte Uebersichtsseite (pnpm atlas).
+# Wird neu gebaut statt nachgefuehrt, gehoert deshalb nicht in die Historie.
+/.atlas/

@@ -1,6 +1,6 @@
 # 0047 - Business Health is the project Home
 
-Status: Accepted
+Status: Accepted; the navigation decision is reversed by [0085](0085-nova-is-the-project-home.md) — Home becomes Nova and Business Health returns to the rail. What this ADR says about the audit surface itself, and its `#business-audit` / `/health` compatibility guarantee, still stands
 
 Date: 2026-08-24
 

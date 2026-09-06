@@ -34,14 +34,20 @@ describe("detectMonorepo", () => {
 
   it("detects Turborepo", () => {
     const result = detectMonorepo(
-      contextFrom([{ path: "turbo.json" }, { path: "apps/web/package.json", content: packageJson({}) }]),
+      contextFrom([
+        { path: "turbo.json" },
+        { path: "apps/web/package.json", content: packageJson({}) },
+      ]),
     );
     expect(result.tool).toBe("Turborepo");
   });
 
   it("detects Nx", () => {
     const result = detectMonorepo(
-      contextFrom([{ path: "nx.json" }, { path: "apps/web/package.json", content: packageJson({}) }]),
+      contextFrom([
+        { path: "nx.json" },
+        { path: "apps/web/package.json", content: packageJson({}) },
+      ]),
     );
     expect(result.tool).toBe("Nx");
   });
@@ -88,7 +94,10 @@ describe("detectMonorepo", () => {
 
   it("reports no monorepo for a single-package repository", () => {
     const result = detectMonorepo(
-      contextFrom([{ path: "package.json", content: packageJson({}) }, { path: "src/app/page.tsx" }]),
+      contextFrom([
+        { path: "package.json", content: packageJson({}) },
+        { path: "src/app/page.tsx" },
+      ]),
     );
 
     expect(result.detected).toBe(false);

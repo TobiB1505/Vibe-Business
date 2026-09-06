@@ -36,10 +36,6 @@ const WITHOUT_THEIR_OWN_TITLE: readonly { route: string; why: string }[] = [
     route: "e2e/[scenario]/page.tsx",
     why: "The fixture harness. It exists only when VIBE_E2E_FIXTURES is set, which the Playwright web server does and no deployed build does.",
   },
-  {
-    route: "app/projects/[projectId]/agent-dogfood/page.tsx",
-    why: "A compatibility redirect for links made before the Agent workspace became canonical. It renders nothing, so there is no tab to name.",
-  },
 ];
 
 function pageFiles(dir: string = ROUTES): string[] {

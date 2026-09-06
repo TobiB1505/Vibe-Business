@@ -22,8 +22,15 @@ export default function Loading() {
         title="Profile"
         description="What Vibe knows about you — which is deliberately very little."
       />
+      {/*
+        Three blocks because the page has three objects — identity, the GitHub
+        connection, and what Vibe does not keep. Two blocks was the shape of
+        the page before those were separated, and a skeleton that promises the
+        wrong screen is the defect this file was written to fix.
+      */}
       <div role="status" aria-label="Loading your profile" className="flex flex-col gap-8">
-        <SkeletonBlock className="h-52 w-full" />
+        <SkeletonBlock className="h-28 w-full" />
+        <SkeletonBlock className="h-24 w-full" />
         <SkeletonBlock className="h-40 w-full" />
       </div>
     </div>

@@ -102,6 +102,48 @@ export { validationStillSettling } from "./poll";
 export type { ValidationState } from "./poll";
 import type { ValidationState } from "./poll";
 
+/**
+ * What a run did, as a founder may read it (audit C7).
+ *
+ * ## Why this is a separate type
+ *
+ * `AgentExecutionLiveModel` reads execution economics out of `ai_usage_events`
+ * — Vibe's own cost ledger, which the customer role deliberately cannot
+ * select. Mounting the whole model on a customer page threw
+ * `42501 permission denied`, and the workaround was to build a second, thinner
+ * timeline by hand in `agent-workspace.ts`: two derivations of the same run,
+ * only one of them maintained, and the observation half — current action,
+ * files, counters — never reached the founder at all.
+ *
+ * The split is what the RLS failure was actually pointing at. Everything here
+ * comes from the execution event log and the run row, both readable under the
+ * customer's own policies. Nothing here needs a grant.
+ *
+ * ## No USD, anywhere in it
+ *
+ * `completion.providerCostUsd` is stripped rather than passed through. What a
+ * run cost Vibe to produce is not a founder's to read — it is not the retail
+ * price, and showing it beside the retail price would invite exactly the
+ * comparison this product does not make. Removing the field, rather than
+ * declining to render it, is what keeps that true for every future consumer.
+ */
+export type RunObservation = {
+  operation: OperationView & { agentExecutionRunId: string | null };
+  timeline: TimelineStep[];
+  currentAction: string | null;
+  events: readonly StoredExecutionEvent[];
+  customerEvents: readonly StoredExecutionEvent[];
+  metrics: ObservedRunMetrics;
+  files: readonly LiveFile[];
+  gatewayRequestCeiling: number | null;
+  validation: ValidationState;
+};
+
+/** `AgentRunMetrics` with the operator's cost figure removed. */
+export type ObservedRunMetrics = Omit<AgentRunMetrics, "completion"> & {
+  completion: Omit<NonNullable<AgentRunMetrics["completion"]>, "providerCostUsd"> | null;
+};
+
 export type AgentExecutionLiveModel = {
   operation: OperationView & { agentExecutionRunId: string | null };
   timeline: TimelineStep[];
@@ -202,17 +244,39 @@ export type LiveRunRow = {
  * Takes the run row rather than re-reading it, because every caller already has
  * one and a second read could disagree with the first within one render.
  */
+type ObservationParams = {
+  operation: OperationView & { agentExecutionRunId: string | null };
+  projectId: string;
+  run: LiveRunRow | null;
+  limits?: { maxWallClockMs: number; maxTurns: number; maxProviderSpendUsd: number } | null;
+  gatewayRequestCeiling?: number | null;
+  validation?: ValidationState;
+  now?: () => number;
+};
+
+/**
+ * The observation half, and the only half a customer surface may build.
+ *
+ * Reads the execution event log and the run row. Touches no usage ledger, so
+ * it cannot fail on a policy the customer role does not hold — which is the
+ * failure that produced the second, hand-built timeline this replaces.
+ */
+export async function buildRunObservation(
+  supabase: SupabaseClient,
+  params: ObservationParams,
+): Promise<RunObservation> {
+  const runId = params.operation.agentExecutionRunId;
+
+  const events = runId
+    ? await listExecutionEvents(supabase, { runId, projectId: params.projectId })
+    : [];
+
+  return runObservationFrom(events, params);
+}
+
 export async function buildAgentExecutionLiveModel(
   supabase: SupabaseClient,
-  params: {
-    operation: OperationView & { agentExecutionRunId: string | null };
-    projectId: string;
-    run: LiveRunRow | null;
-    limits?: { maxWallClockMs: number; maxTurns: number; maxProviderSpendUsd: number } | null;
-    gatewayRequestCeiling?: number | null;
-    validation?: ValidationState;
-    now?: () => number;
-  },
+  params: ObservationParams,
 ): Promise<AgentExecutionLiveModel> {
   const runId = params.operation.agentExecutionRunId;
 
@@ -234,6 +298,34 @@ export async function buildAgentExecutionLiveModel(
       : Promise.resolve(emptyEconomics()),
   ]);
 
+  const observation = runObservationFrom(events, params);
+
+  return {
+    ...observation,
+    metrics: {
+      ...observation.metrics,
+      completion: completionWithCost(params.run),
+    },
+    economics,
+  };
+}
+
+/** The operator's view keeps the figure the founder's does not get. */
+function completionWithCost(run: LiveRunRow | null): AgentRunMetrics["completion"] {
+  return run?.completion ?? null;
+}
+
+/**
+ * The same observation, from events a caller has already read.
+ *
+ * Exported because the Agent workspace reads the event log for its own reasons
+ * and a second read inside this module could disagree with the first within
+ * one render — the reason the run row is passed in rather than re-read.
+ */
+export function runObservationFrom(
+  events: readonly StoredExecutionEvent[],
+  params: ObservationParams,
+): RunObservation {
   /*
    * Chronological, not by sequence.
    *
@@ -269,9 +361,18 @@ export async function buildAgentExecutionLiveModel(
     currentAction: currentAction(ordered),
     events: ordered,
     customerEvents: ordered.filter((event) => event.audience === "customer"),
-    metrics,
+    metrics: {
+      ...metrics,
+      /*
+       * The one field that had to be removed rather than left unread. Every
+       * other completion counter describes what the run *did*; this one is
+       * what it cost Vibe, and it has no place on a customer's screen.
+       */
+      completion: metrics.completion
+        ? (({ providerCostUsd: _cost, ...rest }) => rest)(metrics.completion)
+        : null,
+    },
     files,
-    economics,
     gatewayRequestCeiling: params.gatewayRequestCeiling ?? null,
     validation: params.validation ?? "not_started",
   };

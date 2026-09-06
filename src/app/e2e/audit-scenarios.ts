@@ -199,6 +199,28 @@ export const E2E_AUDIT_SCENARIOS = {
 
   /** Same truthful audit, with no Opportunity Engine output behind the CTA. */
   "audit-synthesis-no-moves": () => audit(VIBE_SYNTHESIS),
+
+  /**
+   * An audit that could not be scored, and says why.
+   *
+   * The overall score is `null` here — a real state the product reaches when
+   * too few lenses could be assessed. It renders as an em dash, and the
+   * sentence explaining the dash is the thing this fixture exists to show:
+   * `insufficientCoverageReason` was computed and displayed nowhere.
+   */
+  "audit-unscored": (): BusinessReadinessAudit => {
+    const scored = audit(VIBE_SYNTHESIS);
+    return {
+      ...scored,
+      overall: {
+        ...scored.overall,
+        score: null,
+        scoredLenses: 2,
+        insufficientCoverageReason:
+          "Only 2 of 9 areas could be assessed, which is too few to score the business as a whole.",
+      },
+    };
+  },
 } as const;
 
 export type E2eAuditScenario = keyof typeof E2E_AUDIT_SCENARIOS;

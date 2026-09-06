@@ -566,23 +566,23 @@ export function createVercelSandboxProvider(): SandboxProvider {
           : input.source.kind === "image"
             ? await Sandbox.create({ ...common, image: SANDBOX_RESOURCES.image })
             : await Sandbox.create({
-              ...common,
-              image: SANDBOX_RESOURCES.image,
-              source: {
-                type: "git",
-                url: input.source.repositoryUrl,
-                // The exact prepared commit, never a branch (§6).
-                revision: input.source.revision,
-                // A shallow clone: validation needs the tree, not the history.
-                depth: 1,
-                ...(input.source.credential
-                  ? {
-                      username: input.source.credential.username,
-                      password: input.source.credential.password,
-                    }
-                  : {}),
-              },
-            });
+                ...common,
+                image: SANDBOX_RESOURCES.image,
+                source: {
+                  type: "git",
+                  url: input.source.repositoryUrl,
+                  // The exact prepared commit, never a branch (§6).
+                  revision: input.source.revision,
+                  // A shallow clone: validation needs the tree, not the history.
+                  depth: 1,
+                  ...(input.source.credential
+                    ? {
+                        username: input.source.credential.username,
+                        password: input.source.credential.password,
+                      }
+                    : {}),
+                },
+              });
 
       await sandbox.update({ timeout: input.timeoutMs });
       await enforceSessionLifetime(sandbox, input.timeoutMs);
@@ -676,7 +676,9 @@ export function createVercelSandboxProvider(): SandboxProvider {
         // None of them set, with a deadline still to run, points away from our
         // code entirely and at the provider.
         const ending = [
-          session?.requestedStopAt === undefined ? null : `requestedStop=${session.requestedStopAt}`,
+          session?.requestedStopAt === undefined
+            ? null
+            : `requestedStop=${session.requestedStopAt}`,
           session?.abortedAt === undefined ? null : `aborted=${session.abortedAt}`,
           session?.snapshottedAt === undefined ? null : `snapshotted=${session.snapshottedAt}`,
         ].filter((fact): fact is string => fact !== null);
@@ -684,7 +686,9 @@ export function createVercelSandboxProvider(): SandboxProvider {
         const facts = [
           `status=${safeProviderField(sandbox.status) ?? "unknown"}`,
           `sandboxTimeout=${sandbox.timeout ?? "unknown"}`,
-          session === null ? null : `sessionStatus=${safeProviderField(session.status) ?? "unknown"}`,
+          session === null
+            ? null
+            : `sessionStatus=${safeProviderField(session.status) ?? "unknown"}`,
           session === null ? null : `sessionTimeout=${session.timeout}`,
           lifetime,
           ...(ending.length > 0 ? ending : session === null ? [] : ["endedBy=unattributed"]),

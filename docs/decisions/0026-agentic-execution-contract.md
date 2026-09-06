@@ -1,6 +1,6 @@
 # 0026 - Agentic Execution Contract
 
-Status: Accepted
+Status: Accepted; amended by [0077](0077-build-chains.md) — a run may carry the contiguous successors of its step, not only its preparation
 Date: 2026-08-18
 Builds on [0013](0013-durable-operation-execution.md), [0014](0014-first-execution-safety.md), [0015](0015-untrusted-repository-execution-provider.md), [0018](0018-human-approval-authority.md), [0019](0019-safe-approved-change-merge.md), [0024](0024-vibe-credits-economic-layer.md)
 

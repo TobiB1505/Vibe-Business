@@ -70,7 +70,13 @@ function snapshot(overrides: {
 
 describe("the forecast carries no money out of the estimator", () => {
   it("returns exactly the four reviewed fields, none of them an amount", () => {
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot() });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     expect(Object.keys(forecast).sort()).toEqual([
@@ -96,6 +102,7 @@ describe("the forecast carries no money out of the estimator", () => {
         step: { changeKind: "decision", evidenceIds: [] },
         riskClass: "low",
         snapshot: snapshot(),
+        observations: [],
       }),
     ).toBeNull();
   });
@@ -103,7 +110,13 @@ describe("the forecast carries no money out of the estimator", () => {
 
 describe("how much evidence is under the number", () => {
   it("counts the comparable runs Vibe has actually completed", () => {
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot() });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     // The historical dataset holds real runs of exactly this shape, so this is
@@ -122,6 +135,7 @@ describe("how much evidence is under the number", () => {
       step: { changeKind: "product_change", evidenceIds: ["repo.surface.payments"] },
       riskClass: "low",
       snapshot: snapshot(),
+      observations: [],
     });
     if (!forecast) throw new Error("expected a forecast");
 
@@ -135,14 +149,26 @@ describe("the repository the run will actually work in", () => {
     // `repositoryContextAvailableFor` is 0 across every backtested run, and the
     // brief's own scale is not computed until a run starts. The pre-run screen
     // is the first caller that can hand the estimator a tree.
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot() });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     expect(forecast.repositoryMeasured).toBe(true);
   });
 
   it("reports an unmeasured repository as unmeasured, never as small", () => {
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: null });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: null,
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     expect(forecast.repositoryMeasured).toBe(false);
@@ -158,7 +184,13 @@ describe("the repository the run will actually work in", () => {
     expect(context?.candidatesSent).toBeNull();
 
     // A large tree still measures, on the axes that exist.
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot() });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     expect(forecast?.repositoryMeasured).toBe(true);
   });
 
@@ -180,7 +212,13 @@ describe("the repository the run will actually work in", () => {
 
 describe("what a founder is told, above a button that spends money", () => {
   it("never renders the estimator's own working notes", () => {
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot() });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     const notes = [forecastEvidenceNote(forecast), ...forecastDriverNotes(forecast)].join(" ");
@@ -193,7 +231,13 @@ describe("what a founder is told, above a button that spends money", () => {
   });
 
   it("says at most two things, deterministically", () => {
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot(), });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     expect(forecastDriverNotes(forecast).length).toBeLessThanOrEqual(2);
@@ -204,10 +248,94 @@ describe("what a founder is told, above a button that spends money", () => {
     // Depth comes from a Prepared Change, which does not exist before a run.
     // "Vibe does not know yet" beside a Run button reads as a warning, and it
     // is not one — so that driver has no copy for `unknown` and drops out.
-    const forecast = forecastRun({ at: AT, step: SEO_STEP, riskClass: "moderate", snapshot: snapshot() });
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [],
+    });
     if (!forecast) throw new Error("expected a forecast");
 
     expect(forecast.drivers.some((driver) => driver.driver === "validation_depth")).toBe(true);
     expect(forecastDriverNotes(forecast).join(" ")).not.toContain("checks");
+  });
+});
+
+/*
+ * The sample stops being a constant.
+ *
+ * `economy/historical-runs.ts` was read out of Supabase by a person on
+ * 2026-08-20 and typed into the repository. It was this estimator's whole
+ * dataset, it has no database access, and it therefore stopped growing that
+ * morning — so "Based on N comparable runs" counted against that day while the
+ * runs kept accumulating. The 2026-08-21 intelligence review named it as the
+ * missing learning loop; this is the half of the loop that was a constant.
+ */
+describe("what the forecast counts", () => {
+  function observation(overrides: Record<string, unknown> = {}) {
+    return {
+      id: "run_new",
+      createdAt: "2026-09-02T00:22:31.732Z",
+      title: "Add a sitemap route",
+      riskClass: "moderate" as const,
+      changeKind: "product_change" as const,
+      evidenceIds: ["live.seo.sitemap_missing"],
+      providerCostNanoUsd: 120_000_000,
+      agentSandbox: null,
+      validationSandbox: null,
+      validationAttempted: false,
+      durationMs: 300_000,
+      ...overrides,
+    };
+  }
+
+  function sampleWith(observations: ReturnType<typeof observation>[]): number {
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations,
+    });
+    if (!forecast) throw new Error("expected a forecast");
+    return forecast.comparableRuns;
+  }
+
+  it("counts a completed run the seed does not describe", () => {
+    expect(sampleWith([observation()])).toBeGreaterThan(sampleWith([]));
+  });
+
+  it("counts one run once, however many rows describe it", () => {
+    /*
+     * Deduplication against the transcribed seed is asserted in
+     * `economy/measured-runs.test.ts`, where the seed can be named — this file
+     * may not import it (`sprint-0054-safety.test.ts` allows `run-forecast.ts`
+     * to read the economy layer and not its test). What belongs here is the
+     * consequence: a sample reported under a button that spends money must
+     * count a run once.
+     */
+    const twice = [observation(), observation()];
+
+    expect(sampleWith(twice)).toBe(sampleWith([observation()]));
+  });
+
+  it("still carries no amount out, however many runs it read", () => {
+    // The permission this file holds is conditional (ADR 0072). Growing the
+    // dataset must not grow what crosses the boundary.
+    const forecast = forecastRun({
+      at: AT,
+      step: SEO_STEP,
+      riskClass: "moderate",
+      snapshot: snapshot(),
+      observations: [observation()],
+    });
+
+    expect(Object.keys(forecast ?? {}).sort()).toEqual([
+      "comparableRuns",
+      "confidence",
+      "drivers",
+      "repositoryMeasured",
+    ]);
   });
 });

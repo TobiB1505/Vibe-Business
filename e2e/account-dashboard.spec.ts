@@ -52,10 +52,10 @@ test.describe("the account dashboard stays calmer than the project workspace", (
   });
 
   /**
- * The reference gives every card three useful `label: value` rows. Those rows
- * are now present, but the card still gets exactly one action — three ways out
- * of one card would turn a summary into a miniature workspace.
- */
+   * The reference gives every card three useful `label: value` rows. Those rows
+   * are now present, but the card still gets exactly one action — three ways out
+   * of one card would turn a summary into a miniature workspace.
+   */
   test("gives a product card three facts and one action", async ({ page }) => {
     await page.goto(THREE);
 
@@ -111,11 +111,21 @@ test.describe("the hero is about one named product", () => {
   test("names the product that needs attention, not the account", async ({ page }) => {
     await page.goto(THREE);
 
-    // "Needs You Now" is the only fixture with a failed validation, so it is
-    // first by attention tier — and the hero must be that one rather than the
-    // newest or the highest-scoring.
-    const hero = page.getByRole("region", { name: "Needs You Now" });
-    await expect(hero.getByRole("link", { name: "Needs You Now" })).toBeVisible();
+    // The "Needs You Now" project is the only fixture with a failed validation,
+    // so it is first by attention tier — and the hero must be that one rather
+    // than the newest or the highest-scoring. It is named by its *product*
+    // name, Payflow, which is what every surface on this screen calls it.
+    //
+    // The region's accessible name was exactly "Payflow", from an `sr-only`
+    // heading that carried the product name and nothing else. It now carries
+    // what the region is as well — "Business signal Payflow" — because a
+    // screen-reader user landing on a region named only for a product has to
+    // read on to find out it is a score. The assertion this test exists to
+    // make is unchanged: the hero is about one named product, and that
+    // product is the one attention ranked first.
+    const hero = page.getByRole("region", { name: /Payflow/ });
+    await expect(hero).toHaveAccessibleName(/Business signal/);
+    await expect(hero.getByRole("link", { name: "Payflow" })).toBeVisible();
     // Scoped to the hero: the same product's card below shows 46 too, and a
     // page-wide match would pass on the card alone while the hero was blank.
     await expect(hero.getByText("46")).toBeVisible();
@@ -123,6 +133,30 @@ test.describe("the hero is about one named product", () => {
     // No invented account-level figure anywhere on the screen.
     await expect(page.getByText(/overall score/i)).toHaveCount(0);
     await expect(page.getByText(/average/i)).toHaveCount(0);
+  });
+
+  test("calls one product by one name, hero and card alike", async ({ page }) => {
+    // The seam this closes: the hero read the project label while the card
+    // below it read the product name, so a founder saw one product introduced
+    // twice under two names on a single screen.
+    await page.goto(THREE);
+
+    await expect(page.getByText("Needs You Now")).toHaveCount(0);
+
+    const card = page.getByTestId("product-card").filter({ hasText: "Payflow" });
+    await expect(card.getByRole("heading", { name: "Payflow" })).toBeVisible();
+    // The repository is this card's anchor back to the project, and stays.
+    await expect(card).toContainText("founder/product");
+  });
+
+  test("shows the product's logo where it has one", async ({ page }) => {
+    await page.goto(THREE);
+
+    const withLogo = page.getByTestId("product-card").filter({ hasText: "Quietly Fine" });
+    await expect(withLogo.getByTestId("product-logo")).toBeVisible();
+
+    const withoutLogo = page.getByTestId("product-card").filter({ hasText: "Payflow" });
+    await expect(withoutLogo.getByTestId("product-logo")).toHaveCount(0);
   });
 
   test("explains a broken line instead of drawing a trend through it", async ({ page }) => {

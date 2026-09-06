@@ -31,10 +31,7 @@ import { describe, expect, it } from "vitest";
  * had to be exempted from them would be worth less than the drift it catches.
  */
 
-const WORKFLOW = join(
-  process.cwd(),
-  "src/modules/operations/agent-execution/workflow.ts",
-);
+const WORKFLOW = join(process.cwd(), "src/modules/operations/agent-execution/workflow.ts");
 const COST_MODEL = join(process.cwd(), "src/modules/economy/workflow-invocation-cost.ts");
 
 /** The literal, not the expression: a computed value here would be a second model. */

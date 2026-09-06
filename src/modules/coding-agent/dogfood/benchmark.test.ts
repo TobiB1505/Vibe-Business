@@ -45,11 +45,19 @@ describe("the harness cannot reach a provider or start a run", () => {
     }
   });
 
-  it("the probe prints the paid-run command rather than running it", () => {
+  /**
+   * There is no paid run to print a command for any more.
+   *
+   * The probe used to end by printing the internal dogfood URL that would start
+   * a real, billed benchmark. ADR 0092 removed both the surface and the fixture
+   * branch on the start path, so this harness compiles a fixture and stops —
+   * and the printout has to say so rather than pointing at a route that 404s.
+   */
+  it("the probe says it is a dry run rather than pointing at a start URL", () => {
     const probe = readFileSync(here("benchmark.probe.ts"), "utf8");
 
-    expect(probe).toContain("PAID EXECUTION");
-    expect(probe).toContain("This command cannot");
+    expect(probe).toContain("This is a dry run");
+    expect(probe).not.toContain("agent-dogfood/");
   });
 
   it("the fixture module holds no prompt, no model and no credential", () => {

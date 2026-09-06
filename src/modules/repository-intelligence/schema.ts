@@ -22,8 +22,27 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * Bumped whenever detection rules change materially, so a stored snapshot
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
+ *
+ * ## v6 → v7
+ *
+ * `declaresWorkspaces` changed meaning. It used to be true for any directory
+ * holding a `pnpm-workspace.yaml`, and that over-claims: pnpm 10 keeps
+ * `overrides`, `patchedDependencies` and `allowBuilds` in the same file, so a
+ * single-package repository pinning one transitive dependency declared a
+ * workspace it did not have — this repository among them. It is now the file's
+ * `packages:` key, or a `workspaces` field in the manifest.
+ *
+ * The bump is not optional hygiene. Under v6 nothing read the field; under v7
+ * it decides whether an ancestor lockfile may install an application below it,
+ * so a v6 answer read as a v7 one would put a sandbox to work in a directory
+ * chosen by a wrong fact.
+ *
+ * `src/lib/versions/analyzer-versions.test.ts` pins this constant to the
+ * detectors below it: their normalized source is hashed, so a changed detection
+ * rule fails until the version is bumped or the new hash is recorded with a
+ * stated reason why no stored snapshot can be affected.
  */
-export const ANALYZER_VERSION = "repo-intelligence-v4" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v7" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";
@@ -164,6 +183,20 @@ export type RouteIntelligence = {
   routes: RouteSummary[];
   /** True when the route list was trimmed for display/storage size. */
   truncated: boolean;
+  /**
+   * The router directory these routes were read from, repository-relative and
+   * trailing-slashed — `src/app/` at the root, `frontend/src/app/` for an
+   * application in a subdirectory.
+   *
+   * Recorded rather than re-derived, because it is the one place that knows.
+   * Every consumer that used to reconstruct it from route source paths was
+   * reconstructing a repository-root assumption along with it.
+   *
+   * Optional: a snapshot written before `repo-intelligence-v6` has no value
+   * here, and the absence is the honest answer for it — that analysis only ever
+   * looked at the repository root.
+   */
+  root?: string;
 };
 
 export type MonorepoIntelligence = {
@@ -196,7 +229,14 @@ export type PackageManagerId = "pnpm" | "npm" | "yarn" | "bun" | "unknown";
  * shown (`parsers/package-json.ts`), because a command line is an injection
  * surface and no detection needs it.
  */
-export type ProjectScriptId = "test" | "test:e2e" | "e2e" | "typecheck" | "lint" | "build" | "start";
+export type ProjectScriptId =
+  | "test"
+  | "test:e2e"
+  | "e2e"
+  | "typecheck"
+  | "lint"
+  | "build"
+  | "start";
 
 /**
  * Which of those scripts the repository root declares.
@@ -221,6 +261,97 @@ export type ProjectScripts = {
   declared: ProjectScriptId[];
   /** The manifest the names were read from, for evidence. Null when none. */
   source: string | null;
+};
+
+/**
+ * The package managers a lockfile can name.
+ *
+ * Finer than {@link PackageManagerId} in one place on purpose: Yarn 1 and Yarn
+ * 3+ are the same lockfile name and two different installers. Yarn 1's
+ * `--frozen-lockfile` does not reliably fail when `package.json` has gained a
+ * dependency the lockfile lacks, which is exactly the "silently validate a
+ * dependency tree nobody committed" failure a locked install exists to
+ * prevent — so the two must be distinguishable before anything decides how to
+ * install. Berry is recognised by `.yarnrc.yml` beside the lockfile.
+ */
+export type LockfilePackageManager = "pnpm" | "npm" | "yarn_berry" | "yarn_classic" | "bun";
+
+export type BuildTargetLockfile = {
+  /** Repository-relative path. */
+  path: string;
+  packageManager: LockfilePackageManager;
+  /**
+   * Whether it sits in the target's own directory.
+   *
+   * False means the nearest one belongs to an ancestor — a workspace install,
+   * which means something different in every package manager and is not a
+   * contract Vibe can honour yet. Recorded rather than dropped, so that
+   * decision has data when someone makes it.
+   */
+  inTargetDirectory: boolean;
+};
+
+/**
+ * One directory that might hold a buildable application.
+ *
+ * ## Why this is not `ProjectScripts` again
+ *
+ * `ProjectScripts` answers *"will anything check this run's result?"* for one
+ * manifest — the repository root's — and is banned from every module that
+ * builds a command. This answers a different question: *"how many independently
+ * installable applications does this repository contain, and where?"* Nothing
+ * here sources a command either; `validation/profile.ts` reads it to decide
+ * **admission**, and the sandbox still re-reads the real manifest to decide
+ * what to run. The two can disagree — and if they do, the run fails honestly at
+ * `readPlan` rather than running something nobody predicted.
+ *
+ * ## Why the frameworks are per-manifest
+ *
+ * `RepositoryIntelligenceSnapshot.frameworks` is a union across every parsed
+ * manifest, which is why a repository with a Next.js app in `frontend/` and a
+ * Python service in `backend/` reads as "a Next.js repository". True of the
+ * repository, useless for deciding what to start in one directory.
+ */
+export type BuildTarget = {
+  /** Repository-relative directory. `"."` for the repository root. */
+  directory: string;
+  /** The manifest that made this a target. */
+  manifestPath: string;
+  /** Whether that manifest declares a `build` script. */
+  buildScript: boolean;
+  /** Framework ids from **this manifest's own** dependencies. */
+  frameworks: string[];
+  lockfile: BuildTargetLockfile | null;
+  /**
+   * A `workspaces` field in this manifest, or a `pnpm-workspace.yaml` beside
+   * it that declares `packages:`.
+   *
+   * The pnpm half is a read rather than an existence check, and that is the
+   * v6 → v7 change: the file also carries `overrides` and friends, so having
+   * one says nothing about being a workspace. What this field decides — since
+   * Stufe 8 — is whether an application with no lockfile of its own may be
+   * installed from an ancestor's, which is a sandbox working directory.
+   */
+  declaresWorkspaces: boolean;
+  /**
+   * Yarn's module resolution, observed from `.pnp.cjs` rather than read.
+   *
+   * Under Plug'n'Play there is no `node_modules/.bin/`, so a framework binary
+   * cannot be invoked by path — validation still works through `yarn run`,
+   * a preview does not. Null when no Yarn lockfile applies.
+   *
+   * Deliberately derived from a file's *existence*: `.yarnrc.yml` would answer
+   * this directly and may also contain `npmAuthToken`, and rule 28 says a
+   * credential-bearing file's presence may be observed and its contents may
+   * not be read.
+   */
+  moduleLinker: "node_modules" | "pnp" | null;
+};
+
+export type BuildIntelligence = {
+  targets: BuildTarget[];
+  /** True when more targets existed than the budget allows (rule 27). */
+  truncated: boolean;
 };
 
 export type RepositoryFacts = {
@@ -261,7 +392,12 @@ export type Warning = {
  * What role a brand asset plays. A closed set, because "some SVG in
  * /public" is not a logo and must never be presented as one (CORE-1 §11).
  */
-export type BrandAssetRole = "logo" | "logo_alternate" | "favicon" | "app_icon" | "open_graph_image";
+export type BrandAssetRole =
+  | "logo"
+  | "logo_alternate"
+  | "favicon"
+  | "app_icon"
+  | "open_graph_image";
 
 /**
  * A file that *looks like* a brand asset by name and location. Never its
@@ -336,6 +472,15 @@ export type RepositoryIntelligenceSnapshot = {
   frameworks: Detection[];
   packageManager: PackageManagerId;
   scripts: ProjectScripts;
+  /**
+   * Optional because a stored snapshot is a document, not a live object.
+   *
+   * Every snapshot this analyzer writes carries it. Rows written before
+   * `repo-intelligence-v5` do not, and they are still read — so a consumer has
+   * to distinguish "no buildable application" from "this analysis never looked",
+   * and a required field would have made those the same answer.
+   */
+  build?: BuildIntelligence;
   runtime: Detection[];
   integrationSignals: IntegrationSignal[];
   routes: RouteIntelligence;

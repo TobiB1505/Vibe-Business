@@ -37,13 +37,14 @@ import { describe, expect, it } from "vitest";
  *
  * ## What is deliberately not asserted
  *
- * - **Module README presence.** Thirteen modules have none, and the count is
- *   not the argument. A README written to satisfy a test is the "list of
- *   intentions pretending to be documentation" that `docs/business/README.md`
- *   bans, and asserting presence would *bless* the dead stub directories rather
- *   than retire them. Sprint 0124 revisited this and kept the position: the new
- *   check below makes the READMEs that exist accurate, and manufactures none.
- *   Recorded as a gap in `docs/ROADMAP.md` instead.
+ * - **Module README presence.** Every module has one as of 2026-09-04, and the
+ *   count was never the argument. A README written to satisfy a test is the
+ *   "list of intentions pretending to be documentation" that
+ *   `docs/business/README.md` bans, and asserting presence would *bless* a dead
+ *   stub directory rather than retire it. Sprint 0124 revisited this and kept
+ *   the position; reaching zero does not change it, because the assertion would
+ *   now be the thing standing between a retired module and its deletion. The
+ *   checks below make the READMEs that exist accurate, and manufacture none.
  * - **No duplicate sprint numbers.** `0054` is used twice, and fixing it means
  *   renaming a file four documents link to.
  * - **Anchor validation.** A slugifier that disagrees with GitHub's would fail
@@ -72,6 +73,24 @@ function markdownFiles(dir: string): string[] {
 }
 
 /** Markdown link targets, minus the anchor, minus anything not a local path. */
+/**
+ * Every module README, as a repo-relative path.
+ *
+ * Section C used to read the repository root and `docs/` only, so a broken
+ * link inside a module README resolved to nothing and failed nothing — while
+ * section F, checking the same files, caught a wrong *filename* in the very
+ * same sentence. The asymmetry was not a decision; the module READMEs simply
+ * were not in the list.
+ */
+function moduleReadmes(): string[] {
+  const modules = join(ROOT, "src/modules");
+  return readdirSync(modules, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => join(modules, entry.name, "README.md"))
+    .filter((path) => existsSync(path))
+    .map((path) => relative(ROOT, path));
+}
+
 function relativeLinkTargets(source: string): string[] {
   return [...source.matchAll(/\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g)]
     .map((match) => match[1].split("#")[0])
@@ -178,10 +197,15 @@ describe("every relative link in the documentation resolves", () => {
   const files = [
     ...readdirSync(ROOT).filter((f) => f.endsWith(".md")),
     ...markdownFiles(DOCS),
+    ...moduleReadmes(),
   ];
 
   it("finds the documents it is supposed to be checking", () => {
     expect(files.length).toBeGreaterThan(60);
+  });
+
+  it("includes the module READMEs", () => {
+    expect(files.filter((f) => f.startsWith("src/modules/")).length).toBeGreaterThan(20);
   });
 
   it("resolves every target", () => {
@@ -223,6 +247,47 @@ describe("every relative link in the documentation resolves", () => {
  * commit that deletes it is the record of that.
  */
 const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string }[] = [
+  {
+    path: "DESIGN.md",
+    claim: "recent activity and plan choices complete the page",
+    retiredBy:
+      "Plans moved ahead of the histories and took the full width. They were the narrowest " +
+      "element on the page and are its one real decision, and the column they sat in ended " +
+      "half a screen above the one beside it.",
+  },
+  {
+    path: "UX-CONTRACT.md",
+    claim: "`Review this move` on project Home",
+    retiredBy:
+      "ADR 0085 — project Home is `NovaHome`. The control still exists in " +
+      "`home-status.tsx` and is still tested, but the only thing that mounts it is the e2e " +
+      "fixture route, so it reaches no founder. Audit P1.10 harvests or deletes it; until " +
+      "then the contract may not promise a control no product route renders.",
+  },
+  {
+    path: "UX-CONTRACT.md",
+    claim: "three equal overview panels",
+    retiredBy:
+      "Two, at 2:1 — spendable Credits beside the plan. The third was the Credit model, " +
+      "folded into the price table it pointed at. The rest of the page is now a row per " +
+      "question rather than asymmetric content/support grids.",
+  },
+  {
+    path: "UX-CONTRACT.md",
+    claim: "the two operator-only dogfood routes are the named exceptions",
+    retiredBy:
+      "`loading-coverage.test.ts` exempts nothing; the dogfood routes went with ADR 0092, " +
+      "which removed the internal harness. Every signed-in route is held to the rule.",
+  },
+  {
+    path: "DESIGN.md",
+    claim: "There is no `components.json`",
+    retiredBy:
+      "ADR 0095 — one exists, and it exists to make the rule that sentence introduced " +
+      "enforceable rather than remembered. Every CLI-writable alias points at a gitignored " +
+      "`src/components/vendor/`, so `src/components/ui/` is unreachable by an install command. " +
+      "`shadcn init` is still forbidden; history may quote the old sentence.",
+  },
   {
     path: "PRODUCT.md",
     claim: "Deep Scan is not wired to them",
@@ -512,10 +577,10 @@ describe("every decision is visible from ARCHITECTURE.md", () => {
  *
  * ## What is deliberately not asserted, still
  *
- * **Module README presence**, for the reason the header gives: a README written
- * to satisfy a test is the "list of intentions pretending to be documentation"
- * that `docs/business/README.md` bans. This check makes the READMEs that exist
- * accurate; it does not manufacture more of them.
+ * **Module README presence**, for the reason the header gives — unchanged now
+ * that every module has one, because the assertion would outlive the fact and
+ * block a retirement rather than catch a defect. This check makes the READMEs
+ * that exist accurate; it does not manufacture more of them.
  */
 describe("every file a module README names exists", () => {
   /** Every file under `src/`, at any depth, as a repo-relative path. */

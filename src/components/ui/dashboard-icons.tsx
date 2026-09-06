@@ -1,6 +1,7 @@
 import type { SVGProps } from "react";
 
 export type DashboardIconName =
+  | "nova"
   | "home"
   | "products"
   | "repositories"
@@ -29,6 +30,40 @@ function IconFrame({ size = 18, children, ...props }: IconProps) {
     >
       {children}
     </svg>
+  );
+}
+
+/**
+ * Nova, as a navigation icon.
+ *
+ * ## Why this is not `NovaPresence`
+ *
+ * The rail is not a status surface. `NovaPresence` reports one of four
+ * observed states and turns while work is in flight; a mark doing that in the
+ * navigation would be a second activity indicator competing with the one on
+ * the page, and it would need the focus state read on every project route to
+ * decide what to claim. In the rail the mark is an **identity**, not an
+ * instrument — so it is a still icon that reports nothing.
+ *
+ * ## The reduction
+ *
+ * Five blades become the pentagon their outer edges describe, and the light
+ * curve stays whole: flat, a steep rise, a slow decay. Those are the two
+ * ingredients, and the curve is the half that survives at 18px — five
+ * overlapping blades at this size are a smudge, while the silhouette plus the
+ * curve still reads as the same object a founder sees at full size on Home.
+ *
+ * Stroke-only on `currentColor`, like every icon beside it, so it takes the
+ * rail's active and inactive colours rather than carrying mint of its own.
+ */
+export function NovaIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      {/* The aperture, as the pentagon its five blades enclose. */}
+      <path d="M12 2.4 21.1 9 17.6 19.8 6.4 19.8 2.9 9Z" />
+      {/* The light curve: the quiet baseline, the rise, the peak, the decay. */}
+      <path d="M6.2 15.5H9.5c1 0 1.3-6.9 2.4-6.9 1.3 0 2.1 4.5 6 5.5" />
+    </IconFrame>
   );
 }
 
@@ -366,6 +401,7 @@ export function TargetIcon(props: IconProps) {
 
 export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardIconName }) {
   const Icon = {
+    nova: NovaIcon,
     home: HomeIcon,
     products: ProductsIcon,
     repositories: RepositoriesIcon,

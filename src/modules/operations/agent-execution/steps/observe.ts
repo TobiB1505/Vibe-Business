@@ -7,10 +7,16 @@ import {
   loadAgentRunContext,
 } from "./shared";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { discoverWorkspaceChanges, readWorkspaceBaseline } from "@/modules/coding-agent/sandbox-runtime/changes";
+import {
+  discoverWorkspaceChanges,
+  readWorkspaceBaseline,
+} from "@/modules/coding-agent/sandbox-runtime/changes";
 import { MAX_EVENTS_PER_RUN } from "@/modules/coding-agent/observability/events";
 import { eventsFromRuntimeFeed } from "@/modules/coding-agent/observability/runtime-feed";
-import { listExecutionEvents, recordExecutionEvents } from "@/modules/coding-agent/observability/store";
+import {
+  listExecutionEvents,
+  recordExecutionEvents,
+} from "@/modules/coding-agent/observability/store";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import { loadExecutionBrief } from "@/modules/execution-context/service";
 import { summarizeContextUsage } from "@/modules/execution-context/usage";
@@ -98,7 +104,8 @@ export async function pollAgentStep(
       console.error("[agent-observability] the runtime feed could not be recorded", {
         operationId,
         agentExecutionRunId: context.run.id,
-        detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
+        detail:
+          error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
       });
     }
   }
@@ -359,7 +366,6 @@ export async function collectAgentStep(
   return { ok: true, paused: false, observedPathCount, changedPaths };
 }
 
-
 /* ---------------------------------------------------------------------------
  * What the briefing was worth (EXECUTION CONTEXT INTELLIGENCE, PART L, PART M)
  * ------------------------------------------------------------------------ */
@@ -445,6 +451,28 @@ async function recordContextUsage(
         uniqueFilesRead: usage.uniqueFilesRead,
         repeatedFileReads: usage.repeatedFileReads,
         filesReadOutsideContext: usage.filesReadOutsideContext,
+        /*
+         * The two counts above, said as paths — and listed after them on
+         * purpose. `boundEvent` drops the key that overflows its byte budget,
+         * so a run with pathological path lengths keeps the numbers, which are
+         * exact, and loses the list, which is a sample. The reverse would store
+         * paths with nothing to read them against.
+         *
+         *
+         * Counting was the whole answer until now, and across fourteen runs it
+         * said: 133 files offered, 45 opened, 78 opened that were never
+         * offered. True, and not enough to change anything with — a ranking
+         * cannot be rewritten from a number that says it was wrong without
+         * saying where.
+         *
+         * Repository paths, so they are bounded and redacted like every other
+         * string that reaches this table, and capped in count besides
+         * (rule 27). Contents never travel; a path is not a copy of a file
+         * (rule 26).
+         */
+        unreadCandidates: usage.unreadCandidates,
+        readOutsideContext: usage.readOutsideContext,
+        pathsTruncated: usage.pathsTruncated,
       },
     );
   } catch (error) {
@@ -661,9 +689,7 @@ async function recordVerificationOutcome(
     };
 
     const postEdit = events.filter(after);
-    const completionRefusals = events.filter(
-      (event) => event.type === "completion_action_refused",
-    );
+    const completionRefusals = events.filter((event) => event.type === "completion_action_refused");
 
     await recordAgentRunObservations(deps.supabase, run.id, {
       verificationCommands: harnessChecks ?? checks.length,

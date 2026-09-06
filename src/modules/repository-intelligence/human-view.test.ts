@@ -60,11 +60,15 @@ function surfaces(detected: Partial<Record<BusinessSurfaceId, boolean>>) {
     name: id,
     detected: detected[id] === true,
     confidence: "high" as const,
-    evidence: detected[id] === true ? [{ kind: "file_path" as const, path: `src/app/${id}/page.tsx` }] : [],
+    evidence:
+      detected[id] === true ? [{ kind: "file_path" as const, path: `src/app/${id}/page.tsx` }] : [],
   }));
 }
 
-function routes(paths: string[], mode: RouteIntelligence["mode"] = "app_router"): RouteIntelligence {
+function routes(
+  paths: string[],
+  mode: RouteIntelligence["mode"] = "app_router",
+): RouteIntelligence {
   return {
     mode,
     routes: paths.map((path) => ({
@@ -92,7 +96,14 @@ function snapshot(overrides: Partial<RepositoryIntelligenceSnapshot> = {}) {
       totalTreeEntries: 812,
       sourceFileCount: 431,
       topLevelDirectories: ["src", "public"],
-      monorepo: { detected: false, tool: null, apps: [], packages: [], evidence: [], ambiguous: false },
+      monorepo: {
+        detected: false,
+        tool: null,
+        apps: [],
+        packages: [],
+        evidence: [],
+        ambiguous: false,
+      },
     },
     languages: [{ id: "typescript", name: "TypeScript", confidence: "high", evidence: [] }],
     frameworks: [{ id: "nextjs", name: "Next.js", confidence: "high", evidence: [] }],
@@ -117,7 +128,10 @@ function snapshot(overrides: Partial<RepositoryIntelligenceSnapshot> = {}) {
   } as unknown as RepositoryIntelligenceSnapshot;
 }
 
-function capability(view: ReturnType<typeof buildRepositoryHumanView>, id: string): RepositoryCapability {
+function capability(
+  view: ReturnType<typeof buildRepositoryHumanView>,
+  id: string,
+): RepositoryCapability {
   const found = view.capabilities.find((item) => item.id === id);
   if (!found) throw new Error(`no capability ${id}`);
   return found;
@@ -384,9 +398,9 @@ describe("nothing technical is lost", () => {
     const view = buildRepositoryHumanView(snapshot());
     const paid = capability(view, "getting-paid");
 
-    expect(paid.evidence.some((item) => item.path === "package.json" && item.detail === "stripe")).toBe(
-      true,
-    );
+    expect(
+      paid.evidence.some((item) => item.path === "package.json" && item.detail === "stripe"),
+    ).toBe(true);
   });
 
   it("deduplicates evidence that cites the same manifest repeatedly", () => {
@@ -421,7 +435,14 @@ describe("an unfinished analysis says so", () => {
     );
 
     expect(view.incompleteReason).toContain("did not finish");
-    expect(view.incompleteReason).toContain("tree_truncated");
+    /*
+     * The reason, in words. This asserted the raw `tree_truncated` — the
+     * budget tracker's own name for its limit, interpolated into a sentence
+     * written for a founder, who was left to decide whether it described a
+     * fault in their repository. Audit D12.
+     */
+    expect(view.incompleteReason).toContain("more files than Vibe reads in one pass");
+    expect(view.incompleteReason).not.toContain("tree_truncated");
   });
 
   it("is silent when the analysis finished", () => {
@@ -492,9 +513,7 @@ describe("the catching-mistakes capability", () => {
     // A Python project has not declined to declare a `test` script; it has
     // nowhere to declare one. Reported as tooling absent, never as a
     // manifest that omitted something.
-    const view = buildRepositoryHumanView(
-      snapshot({ scripts: { declared: [], source: null } }),
-    );
+    const view = buildRepositoryHumanView(snapshot({ scripts: { declared: [], source: null } }));
 
     expect(capability(view, "catching-mistakes").found).toEqual([]);
   });
@@ -507,6 +526,8 @@ describe("the catching-mistakes capability", () => {
     delete (stored as { scripts?: unknown }).scripts;
 
     expect(() => buildRepositoryHumanView(stored)).not.toThrow();
-    expect(capability(buildRepositoryHumanView(stored), "catching-mistakes").status).toBe("partial");
+    expect(capability(buildRepositoryHumanView(stored), "catching-mistakes").status).toBe(
+      "partial",
+    );
   });
 });

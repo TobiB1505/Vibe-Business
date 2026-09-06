@@ -8,7 +8,10 @@ import {
   EXECUTION_MODE_LABELS,
   EXECUTION_REASON_LABELS,
 } from "@/modules/execution-contract/view";
-import type { ExecutionResolution } from "@/modules/execution-contract/schema";
+import type {
+  ExecutionResolution,
+  ExecutionResolutionReason,
+} from "@/modules/execution-contract/schema";
 import type { ActionPlanBlockReason } from "./service";
 import type {
   ActionPlanStep,
@@ -99,14 +102,30 @@ export const PLAN_PROGRESS_LABELS: Record<PlanProgress, string> = {
  * as the plan's current entry point, but the others should not read as
  * blocked when they are not.
  */
-export type StepDisplayState = "start_here" | "also_ready" | "waiting_on_steps" | "done";
+export type StepDisplayState =
+  | "start_here"
+  | "also_ready"
+  | "waiting_on_steps"
+  | "done"
+  | "covered";
 
 export function stepDisplayState(
   step: ActionPlanStep,
   firstActionableOrder: number | null,
   completed: ReadonlySet<number> = new Set(),
+  /**
+   * Covered step order → the order of the step whose run covered it.
+   *
+   * A fifth state rather than a sixth flavour of `done`, because the two are
+   * different claims (ADR 0091). "Done" says somebody carried this out; this
+   * says a larger run performed it on the way to something else, and the row
+   * names which. Checked after `completed` so a step that is genuinely both —
+   * absorbed and later executed on its own — reads as executed.
+   */
+  absorbedByStepOrder: ReadonlyMap<number, number> = new Map(),
 ): StepDisplayState {
   if (completed.has(step.order)) return "done";
+  if (absorbedByStepOrder.has(step.order)) return "covered";
   if (firstActionableOrder !== null && step.order === firstActionableOrder) return "start_here";
   if (step.dependsOn.length === 0) return "also_ready";
   return "waiting_on_steps";
@@ -190,9 +209,49 @@ export const RESPONSIBILITY_SUBLABELS: Partial<Record<ExecutionSupport, string>>
  */
 export type StepResponsibility = { headline: string; sublabel: string | null };
 
+/**
+ * Why Vibe cannot work in this repository — as opposed to why it cannot do
+ * this step.
+ *
+ * The distinction is the whole of this set. A step waiting on an earlier one,
+ * or owed a founder decision, or refused for touching payments, is a fact about
+ * *the step*, and the row already prints its own sequence status beneath —
+ * repeating it in the responsibility line would say one thing twice. Every
+ * reason here is a fact about *the repository*, which the row says nowhere
+ * else, and which is the same for every step in the plan.
+ *
+ * Each is also actionable, which is why naming it beats "Not automated yet":
+ * a missing lockfile, a missing build script, an unanswered question about
+ * which app, or — the one with a free fix — an analysis older than the check
+ * that reads it.
+ */
+const REPOSITORY_CAPABILITY_REASONS: readonly ExecutionResolutionReason[] = [
+  "repository_not_connected",
+  "repository_snapshot_missing",
+  "repository_analysis_outdated",
+  "no_node_project",
+  "no_build_script",
+  "no_lockfile",
+  "package_manager_unsupported",
+  "workspace_choice_required",
+  "validation_profile_unsupported",
+];
+
+/**
+ * Reasons that mean "there is nothing here for Vibe to build", not "not yet".
+ *
+ * Both come from `classifyIntrinsic` refusing a `vibe` step whose change kind
+ * is not `product_change`. Naming them is what lets the plan screen offer a
+ * confirmation instead of a dead end (ADR 0090).
+ */
+const NO_EXECUTOR_REASONS: readonly ExecutionResolutionReason[] = [
+  "no_executor_for_vibe_work",
+  "change_kind_not_executable",
+];
+
 export function stepResponsibility(
   step: Pick<ActionPlanStep, "executionSupport">,
-  resolution: Pick<ExecutionResolution, "intrinsicMode"> | null,
+  resolution: Pick<ExecutionResolution, "intrinsicMode" | "reason"> | null,
 ): StepResponsibility {
   const stored: StepResponsibility = {
     headline: RESPONSIBILITY_HEADLINES[step.executionSupport],
@@ -200,11 +259,113 @@ export function stepResponsibility(
   };
 
   if (step.executionSupport !== "not_yet_supported") return stored;
-  if (resolution?.intrinsicMode !== "agentic") return stored;
+
+  if (resolution?.intrinsicMode === "agentic") {
+    return {
+      headline: EXECUTION_MODE_LABELS.agentic,
+      sublabel: EXECUTION_REASON_LABELS.agentic_v1_eligible,
+    };
+  }
+
+  /*
+   * The other half of the argument above, which was only ever half-applied.
+   *
+   * The resolver is asked here because the stored classification knows only the
+   * deterministic registry — that is what made a step the agent could build
+   * read "Not automated yet". But when the resolver answers *no*, it also says
+   * why, and that answer was thrown away: a founder whose analysis is one
+   * version out of date, or whose app has no lockfile, read the same four words
+   * as a founder asking for something Vibe genuinely cannot do.
+   *
+   * "Not automated yet" is not merely vague there. For a stale analysis it is
+   * **false** — the work is automated, and one free scan is the whole of what
+   * stands in the way.
+   */
+  if (resolution !== null && REPOSITORY_CAPABILITY_REASONS.includes(resolution.reason)) {
+    return { headline: stored.headline, sublabel: EXECUTION_REASON_LABELS[resolution.reason] };
+  }
+
+  /*
+   * The class the argument above left out, found by a founder getting stuck.
+   *
+   * These two are not a missing prerequisite the founder could go and fix —
+   * they say the step is not a change to the product at all, so no executor
+   * can exist for it. That is a different sentence from a repository reason,
+   * and it is a far better one than "Not automated yet", which reads as a
+   * feature Vibe has not shipped yet and leaves the founder waiting for it.
+   *
+   * Kept as its own list rather than folded into the one above so each keeps
+   * its own argument: those name something to repair, these name something to
+   * confirm.
+   */
+  if (resolution !== null && NO_EXECUTOR_REASONS.includes(resolution.reason)) {
+    return { headline: stored.headline, sublabel: EXECUTION_REASON_LABELS[resolution.reason] };
+  }
+
+  return stored;
+}
+
+/**
+ * What the confirmation card says, given why this step needs confirming.
+ *
+ * Two shapes behind one control, and they must not read alike. A
+ * `founder_action` step is the founder's own work and always was. A `vibe`
+ * step reaching this card means Vibe has no executor for it — and a founder
+ * who is told "Your action" about work the plan attributes to Vibe would be
+ * right to think the product had changed its mind about who does what.
+ *
+ * The actor is read here rather than interpolated into JSX, which is the rule
+ * this file exists to enforce.
+ */
+export type AttestationPrompt = {
+  pill: string;
+  lead: string | null;
+  footnote: string;
+  submitLabel: string;
+  /**
+   * The written answer this step is closed with, or null when it is closed by
+   * confirmation alone (ADR 0093).
+   *
+   * A `founder_action` step confirms that the world changed: the sitemap is
+   * submitted or it is not, and there is nothing to write down. A `vibe` step
+   * that no run can finish is the opposite — the finding **is** the step's
+   * output, and closing it with a tick records that the work happened while
+   * losing what it produced, which is what left the plan's later steps
+   * planning against the guess they started from.
+   *
+   * The prompt is Vibe's own wording and stays deliberately open. Vibe does
+   * not derive choices from the step's completion criterion: that criterion is
+   * model output, and turning model wording into a set of machine options is
+   * the mistake this codebase refuses everywhere else. The criterion is shown
+   * beside the field, in its own element, and the founder answers it.
+   */
+  finding: { label: string; help: string } | null;
+};
+
+export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): AttestationPrompt {
+  if (step.actor === "vibe") {
+    return {
+      pill: "Vibe can't run this one",
+      lead:
+        "This is Vibe's own work, but it isn't a change to your product — so there is no run " +
+        "that could finish it. Write down what you found and the plan moves on with it.",
+      footnote:
+        "Your finding is recorded against this exact plan step and given to the next planning " +
+        "run. It does not claim Vibe did the work.",
+      submitLabel: "Record this finding",
+      finding: {
+        label: "What did you find?",
+        help: "In your own words. The next plan is written with this in front of it.",
+      },
+    };
+  }
 
   return {
-    headline: EXECUTION_MODE_LABELS.agentic,
-    sublabel: EXECUTION_REASON_LABELS.agentic_v1_eligible,
+    pill: "Your action",
+    lead: null,
+    footnote: "This records your confirmation against this exact plan step.",
+    submitLabel: "Confirm this is complete",
+    finding: null,
   };
 }
 
@@ -254,12 +415,28 @@ function stepCompletedStatus(step: ActionPlanStep): StepSequenceStatus {
  * distinction between "the" entry point and "an" unblocked step is carried
  * by `StepDisplayState`/highlighting, not by this label.
  */
+/**
+ * What a covered row says, and what it refuses to say.
+ *
+ * Never "done": the step was not carried out. It names the step whose run
+ * performed the work, so a founder reading the plan a month later can tell the
+ * difference between an analysis somebody did and one that came free with a
+ * build — which is the whole reason absorption is not completion.
+ */
+function coveredLabel(coveredByOrder: number | null): string {
+  return coveredByOrder === null
+    ? "Covered by an earlier run"
+    : `Covered by step ${String(coveredByOrder).padStart(2, "0")}`;
+}
+
 export function stepSequenceStatus(
   step: ActionPlanStep,
   allSteps: ActionPlanStep[],
   display: StepDisplayState,
+  coveredByOrder: number | null = null,
 ): StepSequenceStatus {
   if (display === "done") return stepCompletedStatus(step);
+  if (display === "covered") return { label: coveredLabel(coveredByOrder), state: "done" };
   if (display !== "waiting_on_steps") return { label: "Ready now", state: "ready" };
 
   const byOrder = new Map(allSteps.map((entry) => [entry.order, entry]));

@@ -11,7 +11,7 @@ import { renderExecutionBrief } from "@/modules/execution-context/render";
 import { assertPolicyConsistency } from "@/modules/execution-context/policy";
 import { AGENTIC_EXECUTION_CONFIG } from "@/modules/ai/operations";
 import { AGENT_PROMPT_COMPILER_VERSION } from "../schema";
-import { resolveExecutableStep, type DogfoodStepPreview } from "../website-preflight";
+import { resolveExecutableStep, type AgentStepPreview } from "../website-preflight";
 import { benchmarkStep, benchmarkStepKey, findBenchmarkFixture, type BenchmarkFixture } from "./fixtures";
 
 /**
@@ -46,12 +46,12 @@ import { benchmarkStep, benchmarkStepKey, findBenchmarkFixture, type BenchmarkFi
 
 export type BenchmarkPreparation =
   | { ok: false; reason: "unknown_fixture" | "no_action_plan" | "no_snapshot" | "base_sha_mismatch"; detail: string }
-  | { ok: false; reason: "not_executable"; preview: Extract<DogfoodStepPreview, { eligible: false }> }
+  | { ok: false; reason: "not_executable"; preview: Extract<AgentStepPreview, { eligible: false }> }
   | {
       ok: true;
       fixture: BenchmarkFixture;
       stepKey: string;
-      preview: Extract<DogfoodStepPreview, { eligible: true }>;
+      preview: Extract<AgentStepPreview, { eligible: true }>;
       /** What the agent would actually be given, compiled by production code. */
       compiled: BenchmarkCompilation;
     };
@@ -230,7 +230,7 @@ export async function prepareBenchmark(
 async function compileBenchmark(
   supabase: SupabaseClient,
   projectId: string,
-  preview: Extract<DogfoodStepPreview, { eligible: true }>,
+  preview: Extract<AgentStepPreview, { eligible: true }>,
 ): Promise<BenchmarkCompilation> {
   const input = { supabase, projectId, spec: preview.spec };
 

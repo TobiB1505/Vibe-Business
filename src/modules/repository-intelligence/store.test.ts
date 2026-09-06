@@ -1,5 +1,9 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { describe, expect, it } from "vitest";
-import { FakeDatabase, fakeSupabase } from "@/modules/authenticated-product-intelligence/test-support";
+import {
+  FakeDatabase,
+  fakeSupabase,
+} from "@/modules/authenticated-product-intelligence/test-support";
 import { getSnapshotById } from "./store";
 
 /**
@@ -16,18 +20,21 @@ const PROJECT = "project_1";
 function seeded() {
   const db = new FakeDatabase();
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
     result: { routes: { mode: "app_router", truncated: false, routes: [] } },
   });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_other",
     project_id: "project_2",
     status: "completed",
     result: { routes: { mode: "app_router", truncated: false, routes: [] } },
   });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_running",
     project_id: PROJECT,
     status: "running",
@@ -38,7 +45,10 @@ function seeded() {
 
 describe("getSnapshotById", () => {
   it("returns the snapshot when the project owns it", async () => {
-    const snapshot = await getSnapshotById(seeded(), { snapshotId: "snapshot_1", projectId: PROJECT });
+    const snapshot = await getSnapshotById(seeded(), {
+      snapshotId: "snapshot_1",
+      projectId: PROJECT,
+    });
 
     expect(snapshot?.id).toBe("snapshot_1");
   });
@@ -46,13 +56,19 @@ describe("getSnapshotById", () => {
   it("refuses a snapshot belonging to another project", async () => {
     // The mutation this exists for: dropping the ownership predicate would let
     // a preparation generate code from a different tenant's route intelligence.
-    const snapshot = await getSnapshotById(seeded(), { snapshotId: "snapshot_other", projectId: PROJECT });
+    const snapshot = await getSnapshotById(seeded(), {
+      snapshotId: "snapshot_other",
+      projectId: PROJECT,
+    });
 
     expect(snapshot).toBeNull();
   });
 
   it("ignores a snapshot that never completed", async () => {
-    const snapshot = await getSnapshotById(seeded(), { snapshotId: "snapshot_running", projectId: PROJECT });
+    const snapshot = await getSnapshotById(seeded(), {
+      snapshotId: "snapshot_running",
+      projectId: PROJECT,
+    });
 
     expect(snapshot).toBeNull();
   });

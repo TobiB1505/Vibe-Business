@@ -27,6 +27,14 @@ export const ERASURE_FAILURE_REASONS = [
   "stripe_cancel_failed",
   "project_deletion_failed",
   "erasure_start_failed",
+  /**
+   * A completed erasure already exists for this account.
+   *
+   * Never a stored `failure_code` — no run fails with it. It is only ever the
+   * start path's refusal, surfaced through the same closed vocabulary so the
+   * screen has one place to look up copy.
+   */
+  "already_erased",
   "unknown",
 ] as const;
 
@@ -36,7 +44,10 @@ const KNOWN = new Set<string>(ERASURE_FAILURE_REASONS);
 
 /** `isActive()` over an unvalidated string, since this reads a database column. */
 function isErasureActive(status: string): boolean {
-  return (OPERATION_STATUSES as readonly string[]).includes(status) && isActive(status as OperationStatus);
+  return (
+    (OPERATION_STATUSES as readonly string[]).includes(status) &&
+    isActive(status as OperationStatus)
+  );
 }
 
 export function erasureViewState(record: ErasureRecord | null): ErasureViewState {
@@ -51,5 +62,8 @@ export function erasureViewState(record: ErasureRecord | null): ErasureViewState
   if (record.status !== "failed") return { kind: "idle" };
 
   const reason = record.failureCode ?? "unknown";
-  return { kind: "failed", reason: KNOWN.has(reason) ? (reason as ErasureFailureReason) : "unknown" };
+  return {
+    kind: "failed",
+    reason: KNOWN.has(reason) ? (reason as ErasureFailureReason) : "unknown",
+  };
 }

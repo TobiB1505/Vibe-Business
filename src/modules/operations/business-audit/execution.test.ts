@@ -1,6 +1,8 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
-import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import {
@@ -50,7 +52,7 @@ function identity() {
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+    evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
@@ -69,6 +71,7 @@ function deps(): ExecutionDeps {
 function seed(options: { inputIdentity?: string } = {}) {
   db.seed("projects", { id: PROJECT, user_id: USER });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "repo_snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -76,6 +79,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
   });
   db.seed("live_product_intelligence_snapshots", {
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     id: "live_snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -204,7 +208,9 @@ describe("re-entry and idempotency (§12, §30)", () => {
     expect(second.auditId).toBe(first.auditId);
     expect(auditRows()).toHaveLength(1);
     // And no second "started" event.
-    expect(db.rows("audit_events").filter((row) => row.event_type === "business_audit.started")).toHaveLength(1);
+    expect(
+      db.rows("audit_events").filter((row) => row.event_type === "business_audit.started"),
+    ).toHaveLength(1);
   });
 
   it("returns the same audit without a second provider call when inference re-runs", async () => {
@@ -312,11 +318,19 @@ describe("paid-call ambiguity (§11)", () => {
     });
 
     await prepareEvidenceStep(deps(), operationId);
-    const first = await runInferenceStep({ supabase: fakeSupabase(db), provider: invalid }, operationId, 1000);
+    const first = await runInferenceStep(
+      { supabase: fakeSupabase(db), provider: invalid },
+      operationId,
+      1000,
+    );
     expect(first.ok).toBe(false);
 
     // The audit is failed and the marker is set, so a re-entry stops.
-    const second = await runInferenceStep({ supabase: fakeSupabase(db), provider: invalid }, operationId, 1000);
+    const second = await runInferenceStep(
+      { supabase: fakeSupabase(db), provider: invalid },
+      operationId,
+      1000,
+    );
     expect(second.ok).toBe(false);
     expect(invalid.requests).toHaveLength(1);
   });
@@ -506,7 +520,11 @@ describe("pause and resume (ADR 0042 §P2)", () => {
 
   /** Spends the included audit, durably, so the run is Credit-funded. */
   function consumeIncludedEntitlement() {
-    db.seed("repository_connections", { id: "conn_1", project_id: PROJECT, github_repository_id: 12345 });
+    db.seed("repository_connections", {
+      id: "conn_1",
+      project_id: PROJECT,
+      github_repository_id: 12345,
+    });
     db.seed("free_audit_grants", { id: "grant_1", user_id: USER, github_repository_id: 12345 });
   }
 
@@ -555,7 +573,10 @@ describe("pause and resume (ADR 0042 §P2)", () => {
     expect(operationRow().status).toBe("needs_user");
     expect(operationRow().pause_cycle).toBe(1);
     expect(reservations()).toHaveLength(1);
-    expect(reservations()[0]).toMatchObject({ status: "released", release_reason: "cancelled_before_usage" });
+    expect(reservations()[0]).toMatchObject({
+      status: "released",
+      release_reason: "cancelled_before_usage",
+    });
   });
 
   it("does not pause a second time for the same question once it is asked", async () => {
@@ -668,7 +689,9 @@ describe("guards", () => {
 
     expect(operationRow().status).toBe("failed");
     expect(operationRow().failure_code).toBe("provider_timeout");
-    expect(db.rows("audit_events").filter((row) => row.event_type === "operation.failed")).toHaveLength(1);
+    expect(
+      db.rows("audit_events").filter((row) => row.event_type === "operation.failed"),
+    ).toHaveLength(1);
   });
 });
 

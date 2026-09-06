@@ -45,9 +45,13 @@ function reading(score: number | null, recordedAt: string, rubric?: string): Aud
   };
 }
 
-function project(overrides: Partial<DashboardProject> & { id: string; name: string }): DashboardProject {
+function project(
+  overrides: Partial<DashboardProject> & { id: string; name: string },
+): DashboardProject {
   return {
     repositoryFullName: "founder/product",
+    productName: null,
+    logoUrl: null,
     defaultBranch: "main",
     score: null,
     scoreState: "not_audited",
@@ -66,18 +70,23 @@ const THREE_PRODUCTS: DashboardProject[] = [
   project({
     id: "project_e2e_settled",
     name: "Quietly Fine",
+    // Same name, with a logo: the tile shows an image and no project line.
+    // The asset is served by this app, so the fixture reaches no network.
+    productName: "Quietly Fine",
+    logoUrl: "/brand/vibe-mark.svg",
     score: 71,
     scoreState: "scored",
     lastAnalysedAt: "2026-08-20T09:00:00Z",
-    scoreHistory: [
-      reading(71, "2026-08-20T09:00:00Z"),
-      reading(64, "2026-08-10T09:00:00Z"),
-    ],
+    scoreHistory: [reading(71, "2026-08-20T09:00:00Z"), reading(64, "2026-08-10T09:00:00Z")],
     nextMovesCount: 0,
   }),
   project({
     id: "project_e2e_blocked",
     name: "Needs You Now",
+    // A product whose name is not the label the founder typed — the case the
+    // change exists for, and the one that makes a search box and a name sort
+    // disagree with the screen if they are left on the project label.
+    productName: "Payflow",
     score: 46,
     scoreState: "scored",
     lastAnalysedAt: "2026-08-22T09:00:00Z",
@@ -221,4 +230,35 @@ export type E2eRepositoriesScenario = keyof typeof E2E_REPOSITORIES_SCENARIOS;
 
 export function isE2eRepositoriesScenario(value: string): value is E2eRepositoriesScenario {
   return value in E2E_REPOSITORIES_SCENARIOS;
+}
+
+/**
+ * Browser fixtures for Profile.
+ *
+ * The page reads a session and a connection row, so `ProfileView` takes both
+ * as props and this supplies them — the same split `AccountHome` uses, and for
+ * the same reason: the harness has no database and no session.
+ *
+ * Three, because the identity resolver has three branches and only one of them
+ * is the common case. The third is reachable — `Session.email` is nullable —
+ * and it is the one that would crash a page that derived a name itself.
+ */
+export const E2E_PROFILE_SCENARIOS = {
+  /** GitHub connected: the login is the name, the avatar is GitHub's. */
+  "profile-connected": () => ({
+    email: "founder@example.com",
+    github: { githubUserId: 583231, githubLogin: "ada-lovelace" },
+  }),
+
+  /** No connection: the address is the name, and the one action is offered. */
+  "profile-no-github": () => ({ email: "founder@example.com", github: null }),
+
+  /** Neither. The page must still render a person-shaped thing. */
+  "profile-no-email": () => ({ email: null, github: null }),
+} as const;
+
+export type E2eProfileScenario = keyof typeof E2E_PROFILE_SCENARIOS;
+
+export function isE2eProfileScenario(value: string): value is E2eProfileScenario {
+  return value in E2E_PROFILE_SCENARIOS;
 }

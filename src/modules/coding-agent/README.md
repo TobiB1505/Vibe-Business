@@ -58,7 +58,7 @@ a counter or a clock.
 | `prompt.ts` | *what is the agent told?* — deterministic, versioned, fenced |
 | `candidate.ts` | *what actually changed?* — read back, never reported |
 | `budget.ts` | the spec's ceilings, expanded into runtime counters |
-| `authorization.ts` | *whose economics?* — production has none; dogfood is allowlisted |
+| `authorization.ts` | *under which ceiling?* — one book, resolved for every project |
 | `identity.ts` | what makes two runs the same job, and two changes the same change |
 | `preflight.ts` | the §43 gate that runs before a Credit is spent |
 | `store.ts` / `service.ts` | the persisted concepts, server-only |
@@ -104,13 +104,15 @@ carries the sample, `small` has one cost observation and `complex` has none, so
 `credits/retail.ts` marks the Agent price `basis: "modelled"` and
 `margin-guard.test.ts` names the two tiers whose margin it cannot check.
 
-`authorization.ts` is still the only door between the two books, and it checks
-the allowlist **first**. Production now resolves for every project, so checking
-it first would have silently converted the dogfood account into a paying
-customer. A project named in the operator-managed environment variable keeps
-non-production economics; every project that is not named gets the production
-ones. What the list means changed with `launch-v1`: it used to say "let this one
-run at all", and now says "do not bill this one".
+`authorization.ts` is no longer a door between two books, because there is only
+one. It held an internal, non-production ceiling for projects named in
+`VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS`, and the same variable was checked
+first thing in three places in `website-preflight.ts` — which meant no project
+outside it could start an agent at all, whatever the price said. [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md)
+deleted both: every project resolves `launch-v1-budget` and every run is
+charged at retail. `agent_execution_runs.non_production_economics` stays,
+always `false`, because sixteen rows say `true` and mean something the current
+ones do not.
 
 Run `pnpm agent:preflight` against a real project to see the whole §43 picture —
 route, risk, validation profile, granted capabilities, ceilings, and the exact

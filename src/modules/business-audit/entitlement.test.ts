@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  AUDIT_CONTRACT_VERSION,
-  MIN_SUPPORTED_AUDIT_CONTRACT_VERSION,
-} from "./schema";
+import { AUDIT_CONTRACT_VERSION, MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
 import { creditsToUnits } from "@/modules/credits/units";
 import {
   AUDIT_START_LIMITS,
@@ -34,6 +31,7 @@ function facts(overrides: Partial<AuditEntitlementFacts> = {}): AuditEntitlement
     // Current by default, so the refresh path stays out of the way of the
     // entitlement cases below.
     storedAudit: { contractVersion: MIN_SUPPORTED_AUDIT_CONTRACT_VERSION },
+    scansCurrent: true,
     hasProductProfile: true,
     productProfileCurrent: true,
     ...overrides,
@@ -133,7 +131,9 @@ describe("consumesIncludedEntitlement", () => {
   });
 
   it("does not consume the included entitlement when credits funded the run", () => {
-    expect(consumesIncludedEntitlement({ accessMode: "credits", auditCompleted: true })).toBe(false);
+    expect(consumesIncludedEntitlement({ accessMode: "credits", auditCompleted: true })).toBe(
+      false,
+    );
   });
 
   /**
@@ -278,7 +278,9 @@ describe("system contract refresh", () => {
    * nothing to do with the customer's entitlement.
    */
   it("reports a refresh rather than a credits block", () => {
-    const status = toAuditAccessStatus(facts({ ...consumed, storedAudit: { contractVersion: null } }));
+    const status = toAuditAccessStatus(
+      facts({ ...consumed, storedAudit: { contractVersion: null } }),
+    );
     expect(status.blockedReason).toBeNull();
     expect(status.systemRefreshAvailable).toBe(true);
   });
@@ -398,4 +400,44 @@ describe("resolveAuditCreditGate", () => {
       expect(auditBlockedByCredits(gate)).toBe(false);
     },
   );
+});
+
+/**
+ * The gate that was missing when Vibe audited its own business on evidence a
+ * corrected detector had already disproved.
+ *
+ * Nothing downstream of a scan can notice that the machine which produced it
+ * has since been fixed — the profile hashes the snapshot's id, the audit hashes
+ * the profile, the Moves gate on the audit. So the check belongs at the top,
+ * ahead of every reason that would otherwise wave the run through.
+ */
+describe("a corrected analyzer stops a paid start", () => {
+  it("refuses when a scan is older than the analyzer running now", () => {
+    expect(authorizeAudit(facts({ scansCurrent: false }))).toEqual({
+      allowed: false,
+      reason: "scan_outdated",
+    });
+  });
+
+  /**
+   * Ordering, as a property. A profile built on an outdated scan reports
+   * itself current, so checking the profile first would let the run start.
+   */
+  it("refuses before it would ask about the profile", () => {
+    expect(authorizeAudit(facts({ scansCurrent: false, hasProductProfile: false }))).toEqual({
+      allowed: false,
+      reason: "scan_outdated",
+    });
+  });
+
+  /** And it refuses before anyone is asked to pay for it. */
+  it("refuses before the entitlement question", () => {
+    expect(authorizeAudit(facts({ scansCurrent: false, hasCompletedIncludedAudit: true }))).toEqual(
+      { allowed: false, reason: "scan_outdated" },
+    );
+  });
+
+  it("allows a run whose scans are current", () => {
+    expect(authorizeAudit(facts()).allowed).toBe(true);
+  });
 });

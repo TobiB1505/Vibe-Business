@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
+    },
+    "21st": {
+      "type": "http",
+      "url": "https://21st.dev/api/mcp",
+      "headers": {
+        "x-api-key": "${API_KEY_21ST}"
+      }
+    },
+    "reui": {
+      "type": "http",
+      "url": "https://mcp.reui.io",
+      "headers": {
+        "Authorization": "Bearer ${REUI_PAT_TOKEN}"
+      }
+    }
+  }
+}

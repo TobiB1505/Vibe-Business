@@ -1,4 +1,5 @@
 import type { DashboardProject } from "./dashboard";
+import { productDisplayName } from "./display-name";
 
 /**
  * What needs your attention (Sprint UI-3).
@@ -62,7 +63,13 @@ export type AttentionItem = {
   action: { label: string; href: string };
 };
 
-const TIER_ORDER: Record<AttentionTier, number> = {
+/**
+ * Exported because Nova ranks its own candidates by the same rule
+ * (`src/modules/nova/focus.ts`). A second copy of these four numbers is two
+ * priority orders that eventually disagree about which one the founder is
+ * shown first.
+ */
+export const TIER_ORDER: Record<AttentionTier, number> = {
   blocked: 0,
   decision: 1,
   ready: 2,
@@ -95,7 +102,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       kind: "validation_failed",
       tier: "blocked",
       projectId: project.id,
-      projectName: project.name,
+      projectName: productDisplayName(project),
       title: `${project.failedValidationCount} prepared ${plural(
         project.failedValidationCount,
         "change failed validation",
@@ -116,7 +123,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       kind: "prepared_waiting",
       tier: "decision",
       projectId: project.id,
-      projectName: project.name,
+      projectName: productDisplayName(project),
       title: `${waiting} prepared ${plural(waiting, "change is", "changes are")} waiting for you`,
       detail: "Nothing merges until you review and approve it.",
       action: { label: "Review change", href: projectHref(project.id, "agent") },
@@ -130,7 +137,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       kind: "moves_waiting",
       tier: "ready",
       projectId: project.id,
-      projectName: project.name,
+      projectName: productDisplayName(project),
       title: `${project.nextMovesCount} ${plural(
         project.nextMovesCount,
         "move is",
@@ -150,7 +157,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       kind: "no_repository",
       tier: "setup",
       projectId: project.id,
-      projectName: project.name,
+      projectName: productDisplayName(project),
       title: "No repository connected",
       detail: "Vibe needs a repository before it can analyse anything.",
       action: { label: "Finish setup", href: projectHref(project.id) },
@@ -161,7 +168,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       kind: "never_audited",
       tier: "setup",
       projectId: project.id,
-      projectName: project.name,
+      projectName: productDisplayName(project),
       title: "Never analysed",
       detail: "A business audit is what produces a score and the moves that follow from it.",
       action: { label: "Run audit", href: projectHref(project.id) },
@@ -172,15 +179,13 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
 }
 
 export function buildAttentionItems(projects: DashboardProject[]): AttentionItem[] {
-  return projects
-    .flatMap(itemsForProject)
-    .sort((a, b) => {
-      const tier = TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
-      if (tier !== 0) return tier;
-      // Stable within a tier: the same input always renders the same order.
-      const name = a.projectName.localeCompare(b.projectName);
-      return name !== 0 ? name : a.kind.localeCompare(b.kind);
-    });
+  return projects.flatMap(itemsForProject).sort((a, b) => {
+    const tier = TIER_ORDER[a.tier] - TIER_ORDER[b.tier];
+    if (tier !== 0) return tier;
+    // Stable within a tier: the same input always renders the same order.
+    const name = a.projectName.localeCompare(b.projectName);
+    return name !== 0 ? name : a.kind.localeCompare(b.kind);
+  });
 }
 
 /**
@@ -216,6 +221,6 @@ export function orderProjectsByAttention(projects: DashboardProject[]): Dashboar
 
   return projects.slice().sort((a, b) => {
     const byTier = (rank.get(a.id) ?? settled) - (rank.get(b.id) ?? settled);
-    return byTier !== 0 ? byTier : a.name.localeCompare(b.name);
+    return byTier !== 0 ? byTier : productDisplayName(a).localeCompare(productDisplayName(b));
   });
 }

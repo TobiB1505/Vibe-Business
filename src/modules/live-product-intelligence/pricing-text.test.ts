@@ -101,3 +101,41 @@ describe("observePrices", () => {
     expect(observePrices("<h1>Acme</h1><p>Ship faster with Acme.</p>")).toEqual([]);
   });
 });
+
+/**
+ * The shape every pricing card actually has.
+ *
+ * An amount and its period are separate elements — a large "€19" beside a
+ * small "/ month" — so the extracted text carries a space after the slash.
+ * Every lead-in here consumed its own trailing whitespace except the slash,
+ * which is why `€19/month` was read and `€19 / month` was not, and why Vibe
+ * Business's own three prices were recorded with no period attached. That
+ * absence became a large part of an audit finding stating that nothing on the
+ * page marked the numbers as prices.
+ */
+describe("a period separated from its amount by a slash and a space", () => {
+  it.each([
+    ["€19 / month", "month"],
+    ["€19 /month", "month"],
+    ["€19/month", "month"],
+    ["€19 / mo", "month"],
+    ["€49 / year", "year"],
+    ["€5 / week", "week"],
+  ])("reads %j as %s", (text, expected) => {
+    expect(observePrices(`Plan ${text} and some more copy`)[0]?.period).toBe(expected);
+  });
+
+  /** The spellings that already worked, kept working. */
+  it.each([
+    ["€19 per month", "month"],
+    ["€19 monthly", "month"],
+    ["€19 pro Monat", "month"],
+  ])("still reads %j as %s", (text, expected) => {
+    expect(observePrices(`Plan ${text} and some more copy`)[0]?.period).toBe(expected);
+  });
+
+  /** A slash that is not a period is still not a period. */
+  it("does not invent a period from an unrelated slash", () => {
+    expect(observePrices("Plan €19 / includes everything")[0]?.period).toBeNull();
+  });
+});

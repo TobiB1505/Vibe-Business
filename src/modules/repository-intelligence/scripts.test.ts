@@ -95,3 +95,64 @@ describe("a command is never built from the stored snapshot's script list", () =
     ).toEqual([]);
   });
 });
+
+/**
+ * The same boundary, for the fact Stufe 4 added.
+ *
+ * `BuildIntelligence.buildScript` says a manifest *declared* a build script at
+ * the analyzed commit. That is the same kind of claim `ProjectScripts` makes,
+ * and it would be the same defect if a command were built from it — so it is
+ * banned in the same places, with one recorded exception.
+ *
+ * ## Why an allowlist rather than a ban
+ *
+ * `validation/profile.ts` decides **admission**: whether Vibe should buy a
+ * sandbox for this repository at all. It builds no command, and it has to read
+ * this — nothing else in the snapshot can distinguish "there is a buildable
+ * application in `frontend/`" from "there is one at the root", which is the
+ * question a working directory is the answer to.
+ *
+ * The list below is the review record, in the shape `REVIEWED_SITES` uses in
+ * `src/lib/supabase/service-boundary.test.ts`. A second entry needs a reviewer,
+ * which is the property this file exists to keep.
+ */
+const BUILD_INTELLIGENCE_READERS: Record<string, string> = {
+  "src/modules/validation/profile.ts":
+    "Decides admission, not commands. Reads build targets to answer 'is there exactly " +
+    "one installable application, and where?' — a question no other snapshot field can " +
+    "answer, and one the sandbox cannot be asked before it has been paid for. What " +
+    "actually runs is still re-derived from the sandbox's own filesystem in every phase.",
+};
+
+describe("a command is never built from the stored snapshot's build targets", () => {
+  const READ =
+    /\bBuildIntelligence\b|\bBuildTarget\b|\b\w*(snapshot|spec|analysis|intelligence)\w*(\.\w+)*\.build\b/i;
+
+  it("is read in exactly the reviewed places, and nowhere else", () => {
+    const offending = FILES.filter((file) => {
+      if (BUILD_INTELLIGENCE_READERS[relative(".", file)]) return false;
+      // Fixtures build snapshots, not commands. `test-support.ts` escapes the
+      // `.test.ts` filter above by name only, and excluding it here keeps this
+      // guard about the production surface it was written for.
+      if (file.endsWith("/test-support.ts")) return false;
+      return READ.test(readFileSync(join(ROOT, file), "utf8"));
+    }).map((file) => relative(".", file));
+
+    expect(
+      offending,
+      "A module that builds commands must not read the snapshot's build targets. " +
+        "If a new site genuinely needs them, add it to BUILD_INTELLIGENCE_READERS " +
+        "with the argument — that list is the review record.",
+    ).toEqual([]);
+  });
+
+  it("keeps every reviewed entry pointing at a file that exists and still reads it", () => {
+    // An allowlist that outlives its reason is worse than no allowlist: it
+    // reads as a reviewed exception when it is really a leftover.
+    for (const [file, why] of Object.entries(BUILD_INTELLIGENCE_READERS)) {
+      expect(FILES.map((candidate) => relative(".", candidate))).toContain(file);
+      expect(READ.test(readFileSync(join(ROOT, file), "utf8"))).toBe(true);
+      expect(why.length).toBeGreaterThan(120);
+    }
+  });
+});

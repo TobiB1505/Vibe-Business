@@ -34,20 +34,63 @@ import { expect, test, type Page } from "@playwright/test";
  * ran) and could never address this one, because this one happens before any
  * request is made.
  *
- * `__reactFiber$…` is a React internal, used deliberately: it is the only
- * signal that says "React has attached to *this* element", which is exactly
- * the precondition. Nothing on these pages changes visibly on hydration, so
- * there is no product-level marker to wait for instead — and inventing one
- * would mean changing shipped code to suit a test.
+ * React internals are read deliberately: nothing on these pages changes
+ * visibly on hydration, so there is no product-level marker to wait for
+ * instead — and inventing one would mean changing shipped code to suit a test.
+ *
+ * What is read is the **form**, not the button, and that is the whole fix.
+ * A fiber on the button says React reached that node; it does not say React
+ * has taken the submission over, because the interception lives on the
+ * `<form>`. Waiting on the button left a window in which the button was
+ * hydrated and the form was not, and a click in that window still left the
+ * page — which is how this helper went on failing the race it was written to
+ * win, at roughly one run in four under two workers.
+ *
+ * The signal is precise rather than approximate: an unhydrated form carries a
+ * string `action` attribute, and a hydrated server-action form carries a
+ * *function* in its React props. A function there means the next click is
+ * React's, not the browser's.
  */
 async function waitForHydration(page: Page, testId: string): Promise<void> {
-  await page.waitForFunction(
-    (id) => {
-      const element = document.querySelector(`[data-testid="${id}"]`);
-      return Boolean(element) && Object.keys(element!).some((key) => key.startsWith("__reactFiber$"));
-    },
-    testId,
-  );
+  await page.waitForFunction((id) => {
+    const form = document.querySelector(`[data-testid="${id}"]`)?.closest("form");
+    if (!form) return false;
+
+    const key = Object.keys(form).find((candidate) => candidate.startsWith("__reactProps$"));
+    if (!key) return false;
+
+    return typeof (form as unknown as Record<string, { action?: unknown }>)[key].action ===
+      "function";
+  }, testId);
+}
+
+/**
+ * Hold the login screen's server action open, so a pending state can be read.
+ *
+ * ## Why the submission and not the network behind it
+ *
+ * Both tests below assert "one submission disables both routes in", which is
+ * true exactly while a submission is in flight. Left to run, that window is
+ * however long an unreachable Supabase takes to fail — long enough most of the
+ * time, and not long enough often enough to be a flake.
+ *
+ * An earlier version held the Supabase URL instead, which stops the browser
+ * leaving but leaves a *navigation pending* — and a pending navigation is
+ * precisely the state in which Playwright cannot resolve a locator. The first
+ * assertion won the race to run before the redirect was issued and the second
+ * waited out its timeout against a document on its way somewhere: received
+ * undefined, on a button that was on the screen the whole time.
+ *
+ * Holding the POST holds the state under test directly. Nothing navigates,
+ * both locators resolve, and the window stays open until the context closes.
+ */
+async function holdSubmission(page: Page): Promise<void> {
+  await page.route("**/login", async (route) => {
+    // Only the submission. The document and its RSC reads must go through, or
+    // the screen under test never renders.
+    if (route.request().method() === "POST") return;
+    await route.continue();
+  });
 }
 
 test.describe("the login screen at rest", () => {
@@ -81,13 +124,15 @@ test.describe("submitting the email form", () => {
   test("disables both routes in while the submission is in flight", async ({ page }) => {
     await page.goto("/login");
 
+    await holdSubmission(page);
+
     await page.getByLabel("Email address").fill("user@example.com");
     await page.getByLabel("Password").fill("hunter22");
     await waitForHydration(page, "email-signin");
     await page.getByTestId("email-signin").click();
 
-    // Supabase is unreachable here, so the pending window is long enough to
-    // observe — which is the point: a second click must not be possible.
+    // The point of the assertion: while one route in is submitting, a second
+    // click must not be able to post the credentials again.
     await expect(page.getByTestId("email-signin")).toBeDisabled();
     await expect(page.getByTestId("google-signin")).toBeDisabled();
   });
@@ -127,22 +172,7 @@ test.describe("starting Google sign-in", () => {
   test("disables both routes in while handing off", async ({ page }) => {
     await page.goto("/login");
 
-    /*
-     * Hold the hand-off at the network boundary. Without this the browser
-     * leaves for Supabase immediately and there is no page left to assert on
-     * — which is the correct product behaviour, but makes the pending state
-     * unobservable.
-     *
-     * Held open rather than released after three seconds. The two assertions
-     * below are only true *while* the request is in flight, so a three-second
-     * hold gave them a three-second window — and under two parallel workers
-     * that window occasionally closed first, which is exactly the shape of
-     * flake this suite exists to not have. Playwright discards the route when
-     * the context closes, so nothing is left hanging.
-     */
-    await page.route("**e2e-placeholder.supabase.co/**", () => {
-      // Deliberately never settled.
-    });
+    await holdSubmission(page);
 
     await waitForHydration(page, "google-signin");
 

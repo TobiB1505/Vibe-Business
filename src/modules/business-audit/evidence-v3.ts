@@ -87,10 +87,77 @@ export const EVIDENCE_PACK_V3_VERSION = "business-evidence.v3" as const;
  */
 export const EVIDENCE_PACK_V4_VERSION = "business-evidence.v4" as const;
 
+/**
+ * Evidence Pack **v5** — the same pack, minted by a corrected cross-checker.
+ *
+ * Structurally identical to v4: polarised surface ids, contradictions at
+ * priority 3, the same builder. What moved is underneath it.
+ * `buildIntelligenceCrossChecks` used to raise `payments-not-reachable` and
+ * `pricing-not-reachable` from the repository's view alone, so a site whose
+ * prices Vibe had *observed* was still reported as hiding them. That is
+ * corrected, and the correction **removes** ids rather than adding them.
+ *
+ * Which is exactly the case that forces a bump. Sprints 0079, 0081 and 0082 all
+ * declined one on the same reasoning — "a new id, not a changed one, and a
+ * stored pack rebuilt today mints nothing it never cited". The inverse does not
+ * hold. All four stored v4 audits cite `contradiction.payments_not_reachable`,
+ * and a rebuild that no longer mints it drops the citation; `validate.ts`
+ * discards an opportunity whose evidence cannot be verified, silently, as a
+ * data-quality note.
+ *
+ * **v5 does not make a v4 pack faithfully rebuildable again**, and pretending
+ * otherwise would be the more comfortable lie. `buildContradictionEvidence`
+ * calls today's cross-checker whatever version it is asked for, so a v4 rebuild
+ * gets today's answers. Restoring August's would mean versioning
+ * `buildIntelligenceCrossChecks` itself. That is not built, because the four
+ * affected audits all predate an analyzer correction and are already refused as
+ * stale — no new paid work can rest on them. What v5 buys is that the next
+ * cross-check correction cannot silently reinterpret the audits before it.
+ */
+export const EVIDENCE_PACK_V5_VERSION = "business-evidence.v5" as const;
+
+/**
+ * The version production builds, stamps and hashes.
+ *
+ * One constant for all three, because they were three and they drifted. From
+ * 2026-08-24 the audit built a **v4** pack and recorded `business-evidence.v3`
+ * on the row and in `computeAuditInputHash` — four audits, the newest a day
+ * old. Two consequences, both observed in production rather than reasoned
+ * about:
+ *
+ *  - ADR 0044's central promise — "the pack version is part of
+ *    `computeAuditInputHash`, so changing what the model sees invalidates audit
+ *    reuse by construction" — never took effect, because the constant in the
+ *    hash never moved. A v3-pack audit and a v4-pack audit share an identity
+ *    space.
+ *  - `buildEvidencePackForVersion(sources, audit.evidencePackVersion)` in the
+ *    Action Planner read the **row**, so it rebuilt a v3 pack for an audit that
+ *    cited one contradiction id and seven absence ids, then recorded the plan
+ *    as v4. Both stored plans cite zero ids from either v4-only namespace,
+ *    across twenty-six citations. That is the defect's fingerprint.
+ *
+ * So `buildCurrentEvidencePack` and this constant are the only things
+ * production may name, and `current-pack-version.test.ts` pins that the pack it
+ * builds carries this version.
+ */
+export const CURRENT_EVIDENCE_PACK_VERSION = EVIDENCE_PACK_V5_VERSION;
+
 /** Every pack version this module can build, newest first. */
 export type EvidencePackVersion =
+  | typeof EVIDENCE_PACK_V5_VERSION
   | typeof EVIDENCE_PACK_V4_VERSION
   | typeof EVIDENCE_PACK_V3_VERSION;
+
+/**
+ * Whether a version mints polarised surface ids and contradiction evidence.
+ *
+ * A predicate rather than an equality test, for the reason
+ * `HASH_VERIFIABLE_PACKS` gives about its own list: the last equality test on a
+ * pack version went quiet the day a newer pack shipped, and nothing failed.
+ */
+function carriesContradictions(version: string): boolean {
+  return version === EVIDENCE_PACK_V4_VERSION || version === EVIDENCE_PACK_V5_VERSION;
+}
 
 export type EvidenceCategoryV3 =
   | "product_profile"
@@ -338,6 +405,17 @@ export function buildEvidencePackV4(input: BuildEvidencePackV3Input): EvidencePa
 }
 
 /**
+ * The pack production builds — the only builder a paid path may name.
+ *
+ * Every caller that used to name a version directly now names this, so what is
+ * built, what is stamped on the row and what is hashed into the audit's
+ * identity move together or not at all.
+ */
+export function buildCurrentEvidencePack(input: BuildEvidencePackV3Input): EvidencePackV3 {
+  return buildEvidencePack(input, CURRENT_EVIDENCE_PACK_VERSION);
+}
+
+/**
  * Rebuilds the pack a stored artifact was written under.
  *
  * The version comes from the row, never from the newest constant. Handing this
@@ -349,8 +427,8 @@ export function buildEvidencePackForVersion(
   input: BuildEvidencePackV3Input,
   packVersion: string,
 ): EvidencePackV3 {
-  return packVersion === EVIDENCE_PACK_V4_VERSION
-    ? buildEvidencePackV4(input)
+  return carriesContradictions(packVersion)
+    ? buildEvidencePack(input, packVersion as EvidencePackVersion)
     : buildEvidencePackV3(input);
 }
 
@@ -382,8 +460,7 @@ function buildEvidencePack(
   input: BuildEvidencePackV3Input,
   version: EvidencePackVersion,
 ): EvidencePackV3 {
-  const scheme: SurfaceIdScheme =
-    version === EVIDENCE_PACK_V4_VERSION ? "polarised" : "polarity_free";
+  const scheme: SurfaceIdScheme = carriesContradictions(version) ? "polarised" : "polarity_free";
   const profileItems = buildProductProfileEvidence(input.productProfile);
   const intentItems = buildFounderIntentEvidence(input.founderIntent);
 
@@ -395,7 +472,7 @@ function buildEvidencePack(
     ...buildRepositoryEvidence(input.repository, scheme),
     ...buildLiveEvidence(input.liveProduct, scheme),
     ...(input.authenticatedProduct ? buildAuthenticatedEvidence(input.authenticatedProduct) : []),
-    ...(version === EVIDENCE_PACK_V4_VERSION ? buildContradictionEvidence(input) : []),
+    ...(carriesContradictions(version) ? buildContradictionEvidence(input) : []),
   ];
 
   const byId = new Map<string, EvidenceItemV3>();

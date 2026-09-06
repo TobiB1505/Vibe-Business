@@ -63,7 +63,7 @@ describe("analyzeLiveProduct — full SaaS site", () => {
     });
 
     expect(snapshot.schemaVersion).toBe("live-product-intelligence.v1");
-    expect(snapshot.source.analyzerVersion).toBe("live-product-analyzer-v3");
+    expect(snapshot.source.analyzerVersion).toBe("live-product-analyzer-v4");
     expect(snapshot.source.effectiveOrigin).toBe("https://acme.test");
 
     const detected = snapshot.productSurfaces.filter((surface) => surface.detected).map((surface) => surface.id);

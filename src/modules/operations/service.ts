@@ -8,7 +8,7 @@ import {
   checkOperationAffordability,
   holdOperationCredits,
 } from "./billing";
-import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
+import { CURRENT_EVIDENCE_PACK_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
@@ -112,7 +112,7 @@ async function resolveAuditIdentity(
       authenticatedSnapshotId: authenticated?.id ?? null,
       schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
       auditVersion: BUSINESS_AUDIT_VERSION,
-      evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
+      evidencePackVersion: CURRENT_EVIDENCE_PACK_VERSION,
       promptVersion: PROMPT_VERSION,
       rubricVersion: RUBRIC_VERSION,
       profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,

@@ -13,11 +13,11 @@ import { fakeAgenticResolution, fakeAgentSpec } from "./test-support";
  * fires.
  */
 
+/** Inside `launch-v1-budget`, which is the only budget policy there is. */
 const ECONOMICS = resolveAgentEconomics({
   pricingClass: "standard",
   projectId: "project-1",
-  at: new Date("2026-08-19T00:00:00.000Z"),
-  env: { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1" },
+  at: new Date("2026-09-01T00:00:00.000Z"),
 });
 
 function preflight(overrides: Partial<Parameters<typeof runAgentPreflight>[0]> = {}) {
@@ -55,7 +55,7 @@ describe("the happy path", () => {
     expect(result.authority.network).toBe("none");
     expect(result.authority.secrets).toBe("unavailable");
 
-    // Expected file/diff scope and the maximum dogfood budget.
+    // Expected file/diff scope and the run's own spend ceiling.
     expect(result.limits?.maxChangedFiles).toBeGreaterThan(0);
     expect(result.limits?.maxProviderSpendUsd).toBeGreaterThan(0);
 
@@ -63,11 +63,14 @@ describe("the happy path", () => {
     expect(result.doneWhen.length).toBeGreaterThan(0);
   });
 
-  it("renders a report that states the production pricing status plainly", () => {
+  it("renders a report that names the policy the run is authorized under", () => {
     const rendered = renderAgentPreflight(preflight());
 
     expect(rendered).toContain("PREFLIGHT: PASS");
-    expect(rendered).toContain("production price     NOT ACTIVATED");
+    // It used to say `production price     NOT ACTIVATED`, which was true for
+    // as long as no Agent price existed. The policy version is the honest
+    // replacement: it names the ceiling this run is actually bound by.
+    expect(rendered).toContain("policy               launch-v1-budget");
     expect(rendered).toContain("network              none");
   });
 });

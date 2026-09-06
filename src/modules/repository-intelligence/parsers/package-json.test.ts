@@ -62,7 +62,9 @@ describe("parsePackageJson", () => {
   });
 
   it("ignores non-string entries defensively", () => {
-    const parsed = parsePackageJson(JSON.stringify({ engines: { node: 20 }, workspaces: [1, "apps/*"] }));
+    const parsed = parsePackageJson(
+      JSON.stringify({ engines: { node: 20 }, workspaces: [1, "apps/*"] }),
+    );
     expect(parsed?.engines).toEqual({});
     expect(parsed?.workspaces).toEqual(["apps/*"]);
   });

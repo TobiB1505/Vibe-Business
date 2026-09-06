@@ -65,6 +65,14 @@ export const E2E_BILLING_SCENARIOS = {
       // Free has no included allowance to be a fraction of.
       monthlyAllowance: null,
       plan: { key: "free", name: "Free", renewsAt: null, endingAtPeriodEnd: false },
+      spendByProduct: [
+        {
+          projectId: "project_e2e",
+          name: "Acme",
+          credits: creditsToUnits(35),
+          displayCredits: "35",
+        },
+      ],
       recentActivity: [
         {
           id: "e1",
@@ -72,6 +80,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-35),
           displayAmount: "-35",
           at: "2026-08-17T10:00:00.000Z",
+          productName: "Acme",
         },
         {
           id: "e2",
@@ -79,6 +88,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(500),
           displayAmount: "+500",
           at: "2026-08-16T10:00:00.000Z",
+          productName: null,
         },
         {
           id: "e3",
@@ -86,6 +96,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(100),
           displayAmount: "+100",
           at: "2026-08-15T10:00:00.000Z",
+          productName: null,
         },
       ],
       welcomeGranted: true,
@@ -126,6 +137,14 @@ export const E2E_BILLING_SCENARIOS = {
         renewsAt: "2026-09-18T00:00:00.000Z",
         endingAtPeriodEnd: false,
       },
+      spendByProduct: [
+        {
+          projectId: "project_e2e",
+          name: "Acme",
+          credits: creditsToUnits(35),
+          displayCredits: "35",
+        },
+      ],
       recentActivity: [
         {
           id: "e1",
@@ -133,6 +152,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(1_000),
           displayAmount: "+1,000",
           at: "2026-08-18T10:00:00.000Z",
+          productName: null,
         },
       ],
       welcomeGranted: true,
@@ -150,6 +170,7 @@ export const E2E_BILLING_SCENARIOS = {
       nextExpiry: null,
       monthlyAllowance: null,
       plan: { key: "free", name: "Free", renewsAt: null, endingAtPeriodEnd: false },
+      spendByProduct: [],
       recentActivity: [],
       welcomeGranted: false,
     } satisfies BillingOverview,
@@ -166,6 +187,7 @@ export const E2E_BILLING_SCENARIOS = {
       nextExpiry: null,
       monthlyAllowance: null,
       plan: { key: "free", name: "Free", renewsAt: null, endingAtPeriodEnd: false },
+      spendByProduct: [],
       recentActivity: [],
       welcomeGranted: true,
     } satisfies BillingOverview,
@@ -183,6 +205,7 @@ export const E2E_BILLING_SCENARIOS = {
       nextExpiry: null,
       monthlyAllowance: null,
       plan: { key: "free", name: "Free", renewsAt: null, endingAtPeriodEnd: false },
+      spendByProduct: [],
       recentActivity: [],
       welcomeGranted: true,
     } satisfies BillingOverview,
@@ -235,6 +258,7 @@ export const E2E_BILLING_SCENARIOS = {
        * fixture whose labels contradict the projection — it makes the browser
        * suite agree with a screen production would never produce.
        */
+      spendByProduct: [],
       recentActivity: [
         {
           id: "l7",
@@ -242,6 +266,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(1_000),
           displayAmount: "+1,000",
           at: "2026-09-15T00:00:00.000Z",
+          productName: null,
         },
         {
           id: "l1",
@@ -249,6 +274,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-200),
           displayAmount: "-200",
           at: "2026-09-14T10:00:00.000Z",
+          productName: null,
         },
         {
           id: "l2",
@@ -256,6 +282,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-25),
           displayAmount: "-25",
           at: "2026-09-13T10:00:00.000Z",
+          productName: null,
         },
         {
           id: "l3",
@@ -263,6 +290,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(35),
           displayAmount: "+35",
           at: "2026-09-12T10:00:00.000Z",
+          productName: null,
         },
         {
           id: "l4",
@@ -270,6 +298,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-35),
           displayAmount: "-35",
           at: "2026-09-11T10:00:00.000Z",
+          productName: null,
         },
         {
           id: "l5",
@@ -277,6 +306,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-20),
           displayAmount: "-20",
           at: "2026-09-10T10:00:00.000Z",
+          productName: null,
         },
         {
           id: "l6",
@@ -284,6 +314,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(1_000),
           displayAmount: "+1,000",
           at: "2026-09-09T10:00:00.000Z",
+          productName: null,
         },
         {
           // The fallback, on screen on purpose: a charge whose operation row is
@@ -293,6 +324,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-20),
           displayAmount: "-20",
           at: "2026-09-08T10:00:00.000Z",
+          productName: null,
         },
       ],
       welcomeGranted: true,
@@ -329,6 +361,7 @@ export const E2E_BILLING_SCENARIOS = {
         renewsAt: "2026-10-15T00:00:00.000Z",
         endingAtPeriodEnd: false,
       },
+      spendByProduct: [],
       recentActivity: [
         {
           id: "low1",
@@ -336,6 +369,7 @@ export const E2E_BILLING_SCENARIOS = {
           creditDelta: creditsToUnits(-200),
           displayAmount: "-200",
           at: "2026-09-14T10:00:00.000Z",
+          productName: null,
         },
       ],
       welcomeGranted: true,

@@ -1,7 +1,13 @@
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { grantCreditLot } from "@/modules/credits/grants";
 import { creditsToUnits } from "@/modules/credits/units";
-import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "@/modules/operations/test-support";
+import {
+  FakeDatabase,
+  fakeSupabase,
+  seedProductUnderstanding,
+} from "@/modules/operations/test-support";
 import { auditBlockedByCredits, resolveAuditCreditGate } from "./entitlement";
 import { getAuditAccessStatus } from "./service";
 
@@ -32,6 +38,7 @@ function seedAuditableProject() {
     id: "repo_snapshot_1",
     project_id: PROJECT,
     status: "completed",
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     result: { schemaVersion: "repository_intelligence.v1" },
     created_at: "2026-08-01T00:00:00.000Z",
   });
@@ -39,6 +46,7 @@ function seedAuditableProject() {
     id: "live_snapshot_1",
     project_id: PROJECT,
     status: "completed",
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     result: { schemaVersion: "live-product-intelligence.v1" },
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",

@@ -27,6 +27,7 @@ const PREVIEW_VIEW: BusinessBrainView = {
     summary: null,
     scoredLenses: 0,
     eligibleLenses: BUSINESS_LENSES.length,
+    insufficientCoverageReason: null,
   },
   nodes: BUSINESS_LENSES.map((lens, index) => ({
     id: lens,
@@ -48,6 +49,7 @@ const PREVIEW_VIEW: BusinessBrainView = {
   })),
   relationships: [],
   primaryPriority: null,
+  priorities: [],
   additionalPriorityCount: 0,
   recentChanges: [],
   recentChangesUnavailableReason: "no_history",

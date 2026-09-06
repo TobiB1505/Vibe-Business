@@ -42,7 +42,10 @@ describe("determinism", () => {
 
   it("carries a stable policy version so a stored classification can be reproduced", () => {
     expect(classifyExecutionPricingClass(BASE).policyVersion).toBe(EXECUTION_PRICING_CLASS_POLICY_VERSION);
-    expect(EXECUTION_PRICING_CLASS_POLICY_VERSION).toBe("execution-pricing-class.v1");
+    // v2 is `build-chain-v1`: the same inputs can price differently now that a
+    // run may carry more than one delivery, and rule 65 says the semantics get
+    // a version rather than a silent reinterpretation.
+    expect(EXECUTION_PRICING_CLASS_POLICY_VERSION).toBe("execution-pricing-class.v2");
   });
 });
 

@@ -119,7 +119,7 @@ describe("what the database refuses", () => {
     // The Sprint 10B lesson, applied before it can bite again: a ledger written
     // from a request is one RLS refusal away from silence.
     expect(sql).toContain('create policy "select own review_browser_usage"');
-    expect(sql).not.toContain('insert own review_browser_usage');
+    expect(sql).not.toContain("insert own review_browser_usage");
   });
 
   it("lets a review outlive the preview it photographed", () => {

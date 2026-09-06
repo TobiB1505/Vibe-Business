@@ -45,7 +45,6 @@ async function ownedProject(
   return { productionUrl: (data as { production_url: string | null }).production_url ?? null };
 }
 
-
 /**
  * The review state for one prepared change (§24).
  *

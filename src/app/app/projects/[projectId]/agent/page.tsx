@@ -25,7 +25,7 @@ import { buildAgentFocus } from "@/modules/projects/agent-focus";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
 import {
-  resolveDogfoodPlanRoutes,
+  resolveAgentPlanRoutes,
   resolveRouteAgentEconomics,
 } from "@/modules/coding-agent/website-preflight";
 import {
@@ -37,12 +37,18 @@ import { AgentTrustPanel } from "./agent-header";
 import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
+import { ValidationDepthNote } from "./validation-depth-note";
 import { AgentValidateAction } from "./agent-validate-action";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveAgentInterruptAction } from "./interrupt-actions";
 import { AgentFileActivity } from "./agent-file-activity";
+import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
+import { CostLine } from "@/components/system/cost-line";
+import { MonoLabel } from "@/components/ui/typography";
+import { AgentRunHistory } from "./agent-run-history";
+import { listAgentRuns } from "@/modules/coding-agent/observability/run-view";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
@@ -52,7 +58,18 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { isFounderAttestable } from "@/modules/action-plans/completion";
+import { firstActionableStep } from "@/modules/action-plans/sequence";
+import { EXECUTION_REASON_LABELS, REFUSAL_SHAPES } from "@/modules/execution-contract/view";
+import { AgentPlanNextNotice } from "./agent-plan-next-notice";
+import { AgentStaleReadNotice } from "./agent-stale-read-notice";
+import { AgentWorkspaceChoice } from "./agent-workspace-choice";
+import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
+import { resolveBuildChain } from "@/modules/execution-contract/chain";
+import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
+import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 import type { Metadata } from "next";
@@ -283,7 +300,7 @@ async function AgentWorkspaceBody({
   /* The focus answer and start discoverability are independent. Keep them in
      one parallel read window so restoring the real start control does not
      reintroduce the old serial Agent-page latency. */
-  const [focusAction, agentRoutes] = await Promise.all([
+  const [focusAction, agentRoutes, measuredRuns, pastRuns] = await Promise.all([
     focusedMove
       ? (async () => {
           const [summaries, activeOperation, failedOperation] = await Promise.all(
@@ -318,8 +335,29 @@ async function AgentWorkspaceBody({
     readyTask !== null &&
     taskOpportunityId !== null &&
     !agentWorking
-      ? resolveDogfoodPlanRoutes(supabase, { projectId, userId })
+      ? resolveAgentPlanRoutes(supabase, { projectId, userId })
       : Promise.resolve(null),
+    /*
+     * The runs the forecast reasons from, read once and only when a forecast
+     * can exist.
+     *
+     * Inside the same window as everything else, so the sentence under the Run
+     * button costs no additional latency. Bounded and `.in()`-joined rather
+     * than walked, so it does not grow with how much a founder has used the
+     * product — the constraint `execution/workspace.test.ts` enforces one
+     * screen over.
+     */
+    readyTask !== null && !agentWorking
+      ? listMeasuredRunObservations(supabase)
+      : Promise.resolve([]),
+    /*
+     * Every run this product has had (audit R29).
+     *
+     * In the same window as everything else, so the list costs no additional
+     * latency, and bounded — a founder scanning for the run they mean does not
+     * need the eleventh page of them.
+     */
+    listAgentRuns(supabase, { projectId, limit: 20 }),
   ]);
 
   const focus = requestedTaskMatchesRun
@@ -340,20 +378,116 @@ async function AgentWorkspaceBody({
         ) ?? null)
       : null;
   /*
-   * The ceiling for the step that would actually run (launch-v1).
+   * The chain this step's run could carry, resolved once and used for both
+   * prices below.
+   *
+   * The screen never submits these members — the start action takes a boolean
+   * and the server re-derives them inside a fresh preflight. This resolution
+   * exists so the offer *says* what that run would contain, and so the two
+   * prices come from the same answer rather than from two.
+   */
+  const buildChain =
+    agentRoutes?.available && agenticStep
+      ? resolveBuildChain({
+          head: agenticStep,
+          steps: agentRoutes.plan.steps,
+          completed: agentRoutes.completedSteps,
+          capabilityContext: { repository: agentRoutes.snapshot },
+        })
+      : null;
+
+  /*
+   * The ceiling for the run that would actually start (launch-v1).
    *
    * Resolved here rather than carried on the route set, because the Agent price
-   * is per execution pricing class and the class is a property of this step —
-   * see `resolveRouteAgentEconomics`.
+   * is per execution pricing class and the class is a property of the steps the
+   * run delivers — see `resolveRouteAgentEconomics`.
+   *
+   * Two figures, from one function with different member sets, so a screen
+   * offering two buttons cannot show a price the spec would not build.
    */
   const routeEconomics =
     agenticStep && agenticResolution
       ? resolveRouteAgentEconomics({
           projectId,
-          step: agenticStep,
-          riskClass: agenticResolution.riskClass,
+          members: [agenticStep],
+          headRiskClass: agenticResolution.riskClass,
         })
       : null;
+  const chainEconomics =
+    buildChain && agenticResolution && buildChain.members.length > 1
+      ? resolveRouteAgentEconomics({
+          projectId,
+          members: buildChain.members,
+          headRiskClass: agenticResolution.riskClass,
+        })
+      : null;
+  /* The sentence beside the offer. Null when the chain simply ran out of plan. */
+  const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
+
+  /*
+   * The two refusals that are questions rather than dead ends (Stufe 4).
+   *
+   * Both land in the same place: the step does not resolve agentic, so
+   * `agenticStep` is null, so there is no start control — and `AgentReadyStage`
+   * draws an empty call-to-action block under a hero that still says Vibe
+   * understands this code. Every other refusal there is something the founder
+   * fixes in their repository. These two they settle here, in a second, free.
+   *
+   * A stale read comes first, and not only because the resolver reports them
+   * one at a time: a candidate list computed from an out-of-date scan is not a
+   * question worth asking.
+   *
+   * Only asked when nothing else is on offer. A screen showing both a Build
+   * button and a question about which app to build would be asking about the
+   * run it was simultaneously offering to start.
+   */
+  const workspaceChoice =
+    agentRoutes?.available && !agenticStep && agentRoutes.snapshot
+      ? await resolveProjectValidationTarget(supabase, {
+          projectId,
+          snapshot: agentRoutes.snapshot,
+        })
+      : null;
+  const staleRepositoryRead =
+    workspaceChoice !== null &&
+    !workspaceChoice.supported &&
+    workspaceChoice.reason === "repository_analysis_outdated";
+  const workspaceCandidates =
+    workspaceChoice &&
+    !workspaceChoice.supported &&
+    workspaceChoice.reason === "workspace_choice_required"
+      ? (workspaceChoice.candidates ?? [])
+      : [];
+
+  /*
+   * The third refusal that is a question rather than a dead end, and the one a
+   * founder actually hit (Sprint 0141).
+   *
+   * The two above are about the repository. This one is about the plan: its
+   * next step is a founder decision, real-world work, or Vibe's own work with
+   * no executor — so nothing resolves `agentic`, and the screen drew the same
+   * empty call-to-action block under the same confident hero. The caption said
+   * "an Agent run is not currently available for it", which named no step, no
+   * reason and no way on.
+   *
+   * `completedSteps` is the *routing* set, not the plan screen's display set,
+   * and that is the right one here: this notice answers "what is Vibe waiting
+   * for", which is the same question the router asked. For an attestable step
+   * the two sets agree by construction — neither a founder action nor Vibe
+   * work without an executor produces a commit that could sit unmerged.
+   */
+  const planNextStep =
+    agentRoutes?.available && !agenticStep
+      ? firstActionableStep([...agentRoutes.plan.steps], agentRoutes.completedSteps)
+      : null;
+  const planNextResolution =
+    planNextStep && agentRoutes?.available
+      ? (agentRoutes.resolutions.find(
+          (resolution) => resolution.stepOrder === planNextStep.order,
+        ) ?? null)
+      : null;
+
   /*
    * The ready hero names the step the button would start, not just the Move.
    *
@@ -370,11 +504,18 @@ async function AgentWorkspaceBody({
           steps: [
             ...(agentRoutes?.available ? agentRoutes.plan.steps : [])
               .filter((step) => agenticResolution.absorbedPreparation.includes(step.order))
-              .map((step) => ({ order: step.order, title: step.title })),
-            { order: agenticStep.order, title: agenticStep.title },
+              .map((step) => ({ order: step.order, title: step.title, kind: "preparation" as const })),
+            // Every step the offered run delivers, which is the head alone
+            // unless a chain resolved. The kinds are what let a founder read
+            // three bullets and know which are deliveries.
+            ...(buildChain?.members ?? [agenticStep]).map((step) => ({
+              order: step.order,
+              title: step.title,
+              kind: "delivery" as const,
+            })),
           ]
             .sort((a, b) => a.order - b.order)
-            .map((entry) => entry.title),
+            .map((entry) => ({ title: entry.title, kind: entry.kind })),
         }
       : readyTask;
 
@@ -397,6 +538,10 @@ async function AgentWorkspaceBody({
           step: agenticStep,
           riskClass: agenticResolution.riskClass,
           snapshot: agentRoutes?.available ? agentRoutes.snapshot : null,
+          // This account's completed runs, raw. The forecast adds Vibe's own
+          // published ones and does the arithmetic — nothing that costs
+          // nanodollars is assembled on a page.
+          observations: measuredRuns,
         })
       : null;
 
@@ -483,16 +628,89 @@ async function AgentWorkspaceBody({
                 planHref={planHref}
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
-                startAction={
-                  agenticStep ? (
-                    <AgentStartAction
-                      projectId={project.id}
-                      stepKey={agenticStep.id}
-                      /* Where a stale-code refusal sends the founder. Built here,
-                         never in the panel — the panel does not know what the
-                         workspace's segments are called. */
-                      repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                /* Three refusals that are questions, and none of them starts
+                   anything — so none goes through the control treatment. */
+                notice={
+                  staleRepositoryRead ? (
+                    <AgentStaleReadNotice
+                      /* Where a scan is started, anchored at the control that
+                         starts one. The notice does not know what a route
+                         segment is called, and should not. */
+                      productHref={`${projectSectionHref(project.id, "my-product")}#product-scan`}
                     />
+                  ) : workspaceCandidates.length > 0 ? (
+                    <AgentWorkspaceChoice
+                      candidates={workspaceCandidates}
+                      action={(candidate) => (
+                        <AgentWorkspaceChoiceAction
+                          projectId={project.id}
+                          candidate={candidate}
+                          chosen={false}
+                        />
+                      )}
+                    />
+                  ) : !agenticStep && planNextStep && planNextResolution ? (
+                    <AgentPlanNextNotice
+                      stepOrder={planNextStep.order}
+                      stepTitle={planNextStep.title}
+                      reasonLabel={EXECUTION_REASON_LABELS[planNextResolution.reason]}
+                      planHref={planHref}
+                      /* An attestable step is the founder's to close whatever
+                         the resolver said about it, so that answer wins over
+                         the reason's own shape (ADR 0090). */
+                      shape={
+                        isFounderAttestable(planNextStep)
+                          ? "capability"
+                          : REFUSAL_SHAPES[planNextResolution.reason]
+                      }
+                    />
+                  ) : undefined
+                }
+                startAction={
+                  agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0 ? (
+                    <div className="flex w-full flex-col gap-2">
+                      {/*
+                        The chain is offered, never imposed. Two controls rather
+                        than a checkbox: a founder who wanted to stop after this
+                        step must be able to, and both figures come from one
+                        pricing function with different member sets, so the
+                        number on a button is the number that gets charged.
+
+                        When no chain resolved there is one control and this is
+                        the screen exactly as it was.
+                      */}
+                      {chainEconomics && buildChain && (
+                        <AgentStartAction
+                          projectId={project.id}
+                          stepKey={agenticStep.id}
+                          chain
+                          label={`${buildChainOfferLabel(buildChain.members.length)} — ${formatCreditsForDisplay(chainEconomics.budget.maxCredits)}`}
+                          repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                        />
+                      )}
+                      <AgentStartAction
+                        projectId={project.id}
+                        stepKey={agenticStep.id}
+                        variant={chainEconomics ? "secondary" : "primary"}
+                        label={
+                          chainEconomics && creditEstimate
+                            ? `Build just this step — ${creditEstimate}`
+                            : undefined
+                        }
+                        /* Where a stale-code refusal sends the founder. Built here,
+                           never in the panel — the panel does not know what the
+                           workspace's segments are called. */
+                        repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                      />
+                      {chainEconomics && buildChain && chainBoundaryNote && (
+                        /* Why the chain stops where it does. Without it, a chain
+                           that ends at a Stripe step looks like a bug rather
+                           than the refusal it is. */
+                        <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                          {chainBoundaryNote}
+                        </p>
+                      )}
+                    </div>
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
@@ -507,8 +725,10 @@ async function AgentWorkspaceBody({
                     ? "This Move already has a prepared change. Review its checks, preview and approval here."
                     : agenticStep
                       ? `Run step ${String(agenticStep.order).padStart(2, "0")} of this Move here. Vibe carries that one step through a secure, reviewable flow.`
-                      : readyTask
-                        ? "This Move is selected, but an Agent run is not currently available for it."
+                      : planNextStep
+                        ? "This Move is selected. Its next step is not one Vibe can run, so nothing starts here yet."
+                        : readyTask
+                          ? "This Move is selected, but an Agent run is not currently available for it."
                         : "Choose a Move from your Action Plan, then return here to run it with Vibe."
                 }
               />
@@ -521,17 +741,35 @@ async function AgentWorkspaceBody({
                   <AgentCore
                     state={displayedWorkspace.core}
                     headline={live ? "Vibe is building your change" : "The build stage is complete"}
-                    caption={agentCoreCaption(displayedWorkspace.stages)}
+                    /*
+                      What the run is doing right now, when it has reported an
+                      action. The stage caption says which of five phases it is
+                      in, which does not change for minutes at a time; the
+                      current action is the half that moves, and it was
+                      observed and never rendered.
+                    */
+                    caption={
+                      (live ? displayedWorkspace.currentAction : null) ??
+                      agentCoreCaption(displayedWorkspace.stages)
+                    }
                     size="compact"
                   />
                 }
                 activity={
                   displayedWorkspace.fileEvents.length > 0 ? (
-                    <AgentFileActivity
-                      events={displayedWorkspace.fileEvents}
-                      title="Live activity"
-                      live={live}
-                    />
+                    <div className="flex flex-col gap-5">
+                      <AgentFileActivity
+                        events={displayedWorkspace.fileEvents}
+                        title="Live activity"
+                        live={live}
+                      />
+                      {/*
+                        What the run touched, once per file — including the
+                        paths policy refused, which the change itself cannot
+                        show because they are not in it.
+                      */}
+                      <AgentRunFiles files={displayedWorkspace.files} />
+                    </div>
                   ) : displayedWorkspace.timeline === null ? (
                     <Notice tone="info" label="Live activity">
                       Activity appears here when the run starts.
@@ -553,7 +791,14 @@ async function AgentWorkspaceBody({
                 running={live}
                 checks={
                   displayedWorkspace.checks.length > 0 ? (
-                    <AgentValidationChecks checks={displayedWorkspace.checks} />
+                    <div className="flex flex-col gap-3">
+                      <AgentValidationChecks checks={displayedWorkspace.checks} />
+                      {/*
+                        What was skipped, and why. The rows say which steps did
+                        not run; this says it was a decision.
+                      */}
+                      <ValidationDepthNote depth={displayedWorkspace.validationDepth} />
+                    </div>
                   ) : (
                     <Notice tone="info" label="Validation checks">
                       Checks appear here when a prepared change reaches validation.
@@ -590,7 +835,15 @@ async function AgentWorkspaceBody({
                     linesRemoved={change.lineStats?.removed}
                     filesHref={change.compareUrl ?? undefined}
                     reviewReady={change.review.state === "ready"}
-                    actions={<AgentPreviewActions projectId={project.id} change={change} />}
+                    actions={
+                      <AgentPreviewActions
+                        projectId={project.id}
+                        change={change}
+                        withheldPaths={displayedWorkspace.files
+                          .filter((file) => file.withheldBy !== null)
+                          .map((file) => file.path)}
+                      />
+                    }
                   />
                 </div>
               ),
@@ -611,13 +864,43 @@ async function AgentWorkspaceBody({
                     commitSha={change.commitSha}
                     compareUrl={change.compareUrl}
                     backHref={planHref}
-                    decision={<AgentReviewDecision projectId={project.id} change={change} />}
+                    decision={
+                      <div className="flex flex-col gap-3">
+                        <AgentReviewDecision projectId={project.id} change={change} />
+                        {/*
+                          What it cost, from the hold it ran against (audit
+                          R23). Beside the decision rather than after it: a
+                          founder about to merge is the person who wants to
+                          know what the run they are approving was charged.
+                        */}
+                        <CostLine cost={displayedWorkspace.cost} />
+                      </div>
+                    }
                     canMerge={change.merge.state === "ready"}
                   />
                 </div>
               ),
             }}
           />
+
+        {/*
+          The runs before this one (audit R29). The workspace shows the newest;
+          a product that has run the agent eleven times had ten it could no
+          longer reach, including the ones whose changes were merged.
+        */}
+        {pastRuns.length > 1 && (
+          <section className="flex flex-col gap-3" aria-labelledby="agent-run-history-title">
+            <MonoLabel as="h2" id="agent-run-history-title">
+              Earlier runs
+            </MonoLabel>
+            <AgentRunHistory
+              runs={pastRuns}
+              changeHref={(preparedChangeId) =>
+                `${projectSectionHref(project.id, "agent")}?change=${preparedChangeId}`
+              }
+            />
+          </section>
+        )}
       </div>
     </div>
   );

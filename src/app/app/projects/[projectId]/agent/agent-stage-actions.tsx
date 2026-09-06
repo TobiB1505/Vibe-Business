@@ -7,6 +7,8 @@ import { MergePanel } from "../merge-panel";
 import { OutcomePanel } from "../outcome-panel";
 import { PreviewPanel } from "../preview-panel";
 import { ReviewPanel } from "../review-panel";
+import { ChangeDiffSection } from "../change-diff-section";
+import { WithheldPaths } from "./withheld-paths";
 
 /**
  * Real preview and comparison actions, inside the stage that explains them.
@@ -18,9 +20,18 @@ import { ReviewPanel } from "../review-panel";
 export function AgentPreviewActions({
   projectId,
   change,
+  withheldPaths = [],
 }: {
   projectId: string;
   change: PreparedChangeWorkspaceItem;
+  /**
+   * Paths the run tried to write and policy refused.
+   *
+   * They are not in the change — that is what being refused means — so the
+   * diff cannot show them and their absence is indistinguishable from never
+   * having been touched. Named here, on the surface a person decides from.
+   */
+  withheldPaths?: readonly string[];
 }) {
   return (
     <section
@@ -37,6 +48,23 @@ export function AgentPreviewActions({
               what a visual approval binds to. */}
           Start the isolated preview and look at the change running.
         </p>
+      </div>
+
+      {/*
+        What changed, inline, on the stage the decision is made on (audit R30).
+        The diff lived only on `ChangeGates`, which this workspace replaced —
+        so the founder approved a change whose contents were one click away on
+        another surface, or on GitHub.
+      */}
+      <div className="border-line-2 flex flex-col gap-4 border-t pt-5">
+        <ChangeDiffSection
+          projectId={projectId}
+          preparedChangeId={change.id}
+          classification={change.reviewClassification}
+          filesChanged={change.filePaths.length}
+        />
+
+        <WithheldPaths paths={withheldPaths} />
       </div>
 
       <div className="border-line-2 flex flex-col gap-5 border-t pt-5">

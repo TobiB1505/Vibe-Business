@@ -1,6 +1,12 @@
 import { pathBasename, pathExtension } from "../path-policy";
 import type { DetectionContext } from "../context";
-import type { Detection, RouteIntelligence, RouteKind, RouteSummary } from "../schema";
+import type {
+  BuildIntelligence,
+  Detection,
+  RouteIntelligence,
+  RouteKind,
+  RouteSummary,
+} from "../schema";
 
 /**
  * Route inference from file paths (Sprint 2 §15).
@@ -17,13 +23,55 @@ import type { Detection, RouteIntelligence, RouteKind, RouteSummary } from "../s
 const ROUTE_FILE_EXTENSIONS = new Set(["ts", "tsx", "js", "jsx", "mjs"]);
 const MAX_ROUTES = 200;
 
-/** Locates the router directory, supporting both `src/app` and top-level `app`. */
-function findRouterRoot(context: DetectionContext, directory: "app" | "pages"): string | null {
-  const candidates = [`src/${directory}/`, `${directory}/`];
-  for (const prefix of candidates) {
-    if (context.sourcePaths.some((path) => path.startsWith(prefix))) return prefix;
+/**
+ * Where the applications are, for a router search that is not root-relative.
+ *
+ * The whole detector used to look in `src/app/` and `app/` and nowhere else, so
+ * a Next.js application in `frontend/` reported **zero routes** — not "we could
+ * not read it", but an empty route table indistinguishable from a project that
+ * has none. Everything downstream inherited that: no app root to write a
+ * `robots.ts` into, no route table for the review classifier, no surfaces
+ * derived from routes.
+ *
+ * Build targets are the answer already computed one detector over: directories
+ * holding a manifest Vibe could install and build. `.` when there are none, so
+ * a repository the build detector cannot describe still gets today's search.
+ */
+function applicationDirectories(build: BuildIntelligence): readonly string[] {
+  const next = build.targets.filter((target) => target.frameworks.includes("nextjs"));
+  const candidates = next.length > 0 ? next : build.targets;
+
+  return candidates.length > 0 ? candidates.map((target) => target.directory) : ["."];
+}
+
+/**
+ * The one router directory, or null when there is not exactly one.
+ *
+ * Within a single application `src/app/` wins over `app/`, which is Next.js's
+ * own resolution order rather than a preference of ours. **Across** applications
+ * nothing wins: two applications with routers is a question this detector
+ * cannot answer, and picking the first would put a guess where a fact belongs.
+ * That is the discipline `resolveAppRoot` already applied to writing, moved one
+ * layer earlier to where the evidence actually is.
+ */
+function findRouterRoot(
+  context: DetectionContext,
+  build: BuildIntelligence,
+  directory: "app" | "pages",
+): string | null {
+  const found = new Set<string>();
+
+  for (const application of applicationDirectories(build)) {
+    const base = application === "." ? "" : `${application}/`;
+    for (const prefix of [`${base}src/${directory}/`, `${base}${directory}/`]) {
+      if (context.sourcePaths.some((path) => path.startsWith(prefix))) {
+        found.add(prefix);
+        break;
+      }
+    }
   }
-  return null;
+
+  return found.size === 1 ? [...found][0] : null;
 }
 
 /**
@@ -125,22 +173,34 @@ function detectPagesRouterRoutes(context: DetectionContext, root: string): Route
 }
 
 /** Frameworks whose routes cannot be derived from paths without running code. */
-const CODE_ROUTED_FRAMEWORKS = new Set(["express", "nestjs", "fastapi", "django", "flask", "laravel", "rails"]);
+const CODE_ROUTED_FRAMEWORKS = new Set([
+  "express",
+  "nestjs",
+  "fastapi",
+  "django",
+  "flask",
+  "laravel",
+  "rails",
+]);
 
-export function detectRoutes(context: DetectionContext, frameworks: Detection[]): RouteIntelligence {
+export function detectRoutes(
+  context: DetectionContext,
+  frameworks: Detection[],
+  build: BuildIntelligence,
+): RouteIntelligence {
   const isNext = frameworks.some((framework) => framework.id === "nextjs");
 
   if (isNext) {
-    const appRoot = findRouterRoot(context, "app");
-    const pagesRoot = findRouterRoot(context, "pages");
+    const appRoot = findRouterRoot(context, build, "app");
+    const pagesRoot = findRouterRoot(context, build, "pages");
 
     // A project may contain both during a migration; App Router wins
     // because that is what Next.js itself prioritises.
     if (appRoot) {
-      return finalize("app_router", detectAppRouterRoutes(context, appRoot));
+      return finalize("app_router", detectAppRouterRoutes(context, appRoot), appRoot);
     }
     if (pagesRoot) {
-      return finalize("pages_router", detectPagesRouterRoutes(context, pagesRoot));
+      return finalize("pages_router", detectPagesRouterRoutes(context, pagesRoot), pagesRoot);
     }
     return { mode: "limited", routes: [], truncated: false };
   }
@@ -152,7 +212,11 @@ export function detectRoutes(context: DetectionContext, frameworks: Detection[])
   return { mode: "none", routes: [], truncated: false };
 }
 
-function finalize(mode: "app_router" | "pages_router", routes: RouteSummary[]): RouteIntelligence {
+function finalize(
+  mode: "app_router" | "pages_router",
+  routes: RouteSummary[],
+  root: string,
+): RouteIntelligence {
   const deduped = new Map<string, RouteSummary>();
   for (const route of routes) {
     // Layouts are useful structure but must never shadow a real page at
@@ -166,5 +230,6 @@ function finalize(mode: "app_router" | "pages_router", routes: RouteSummary[]): 
     mode,
     routes: sorted.slice(0, MAX_ROUTES),
     truncated: sorted.length > MAX_ROUTES,
+    root,
   };
 }

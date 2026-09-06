@@ -958,6 +958,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   private orderColumn: string | null = null;
   private orderAscending = true;
   private limitCount: number | null = null;
+  private rangeBounds: { from: number; to: number } | null = null;
   private countMode = false;
   private headOnly = false;
 
@@ -1026,6 +1027,35 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     this.limitCount = count;
     return this;
   }
+
+  /**
+   * PostgREST's inclusive `[from, to]` window, which is how a paged read asks
+   * for anything but the first page.
+   *
+   * Modelled rather than aliased to `limit`, because the offset is the half
+   * that matters: a double that ignored `from` would return page one for every
+   * page and a paging test would pass over a read that never moved.
+   */
+  range(from: number, to: number): this {
+    this.rangeBounds = { from, to };
+    return this;
+  }
+  /**
+   * PostgREST's `count` on a **write**, which `.update(values, { count: "exact" })`
+   * asks for and which the real client answers with the number of rows the
+   * statement actually touched.
+   *
+   * Modelled because a caller reads that number to tell "updated nothing" from
+   * "updated a row" — a distinction that carries ownership and lifecycle gates
+   * (a detached repository matches no row). A double that returned `undefined`
+   * there would report every such refusal as a success, which is the wrong way
+   * round for a gate to fail.
+   */
+  counting(options?: { count?: "exact" }): this {
+    if (options?.count === "exact") this.countMode = true;
+    return this;
+  }
+
   select(_columns?: string, options?: { count?: "exact"; head?: boolean }): this {
     // The entitlement's abuse window counts rows rather than reading them, so
     // the double has to answer `count` too — otherwise the gate is untestable
@@ -1083,6 +1113,9 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
       });
     }
 
+    if (this.rangeBounds !== null) {
+      rows = rows.slice(this.rangeBounds.from, this.rangeBounds.to + 1);
+    }
     if (this.limitCount !== null) rows = rows.slice(0, this.limitCount);
     return rows;
   }
@@ -1136,7 +1169,12 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         if (violation) return { data: null, error: violation };
         Object.assign(target, candidate);
       }
-      return { data: targets, error: null };
+      return this.countMode
+        ? ({ data: targets, error: null, count: targets.length } as {
+            data: unknown;
+            error: QueryError;
+          })
+        : { data: targets, error: null };
     }
 
     if (this.mode === "delete") {
@@ -1590,6 +1628,28 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
       ],
     };
   },
+
+  /**
+   * `list_ai_usage_events_for_run`. Modelled as the migration defines it: the
+   * row-level counterpart to `sum_agent_run_usage`, filtered by both the run
+   * and the project rather than relying on RLS the fake does not simulate.
+   */
+  list_ai_usage_events_for_run: (db, params) => ({
+    data: db
+      .rows("ai_usage_events")
+      .filter((row) => row.job_id === params.p_run_id && row.project_id === params.p_project_id)
+      .map((row) => ({
+        status: row.status,
+        input_tokens: row.input_tokens ?? null,
+        output_tokens: row.output_tokens ?? null,
+        cache_read_input_tokens: row.cache_read_input_tokens ?? null,
+        cache_creation_input_tokens: row.cache_creation_input_tokens ?? null,
+        thinking_tokens: row.thinking_tokens ?? null,
+        provider_cost_usd: row.provider_cost_usd ?? null,
+        latency_ms: row.latency_ms ?? null,
+        created_at: row.created_at ?? null,
+      })),
+  }),
 };
 
 /**
@@ -1663,7 +1723,8 @@ export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): Supaba
           read(table, columns, options),
         insert: (payload: Row | Row[]) =>
           write(table, () => new FakeQuery(db, table, "insert", payload)),
-        update: (payload: Row) => write(table, () => new FakeQuery(db, table, "update", payload)),
+        update: (payload: Row, options?: { count?: "exact" }) =>
+          write(table, () => new FakeQuery(db, table, "update", payload).counting(options)),
         delete: () => write(table, () => new FakeQuery(db, table, "delete")),
         upsert: (
           payload: Row | Row[],

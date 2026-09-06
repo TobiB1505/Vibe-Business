@@ -1,0 +1,403 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import {
+  preparedChangeHref,
+  projectSectionHref,
+} from "@/components/layout/project-shell";
+import {
+  agentChangeHref,
+  agentMoveHref,
+} from "@/modules/action-plans/source";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
+import { resolveReviewClassification } from "@/modules/review/classification-service";
+import { requireSession } from "@/modules/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import {
+  findOpenInterruptForRun,
+  listAgentActivity,
+  type StoredAgentActivity,
+  type StoredExecutionInterrupt,
+} from "@/modules/coding-agent/store";
+import {
+  getAgentExecutionStatus,
+  startAgentExecution,
+} from "@/modules/coding-agent/service";
+import type { AgentStartRefusal } from "@/modules/coding-agent/service";
+import { previewAgentStep } from "@/modules/coding-agent/website-preflight";
+import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
+import { startRefusalLabel } from "@/modules/coding-agent/view";
+import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
+import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
+import type { FounderInputRequest, FounderInputResponse } from "@/modules/founder-input/schema";
+import { getFounderInputRequest, getFounderInputRequestForInterrupt } from "@/modules/founder-input/store";
+import { resolveFounderInput } from "@/modules/operations/founder-input/server-writes";
+import {
+  buildAgentExecutionLiveModel,
+  type AgentExecutionLiveModel,
+} from "@/modules/coding-agent/observability/live-view";
+import { readAgentRunForLiveView } from "@/modules/coding-agent/observability/run-view";
+
+/**
+ * The Agent workspace's server actions (EXECUTION CORE-4 website gate, §7,
+ * §12, §13, §14, §18, §24).
+ *
+ * Every action here re-resolves ownership and eligibility from the session —
+ * none of it is trusted from a client argument, and the browser never submits
+ * anything beyond a project id, a step key and (for the interrupt action) an
+ * answer shaped to a schema Vibe already stored (§7, §8).
+ */
+
+export type StartAgentRunState =
+  | { ok: false; error: AgentStartRefusal | "spec_not_persisted" }
+  /**
+   * The chain refused before a run could be described, and says which gate.
+   *
+   * It used to answer `"not_eligible"` and nothing else, rendered as "the page
+   * will show why above" — a promise the page cannot keep, because its own
+   * render is what put the button there. The detail is closed enums only, so
+   * nothing model-authored crosses back to the browser (Rules 42, 57).
+   */
+  | { ok: false; error: "not_eligible"; detail: AgentStartRefusalDetail }
+  | null;
+
+/**
+ * The refusal, at the finest grain the chain actually established.
+ *
+ * `resolution` and `preflight` are present on the preview only once the step
+ * got far enough to have them, so an absent field here means "never decided"
+ * rather than "passed".
+ */
+function refusalDetail(
+  preview: Extract<Awaited<ReturnType<typeof previewAgentStep>>, { eligible: false }>,
+): AgentStartRefusalDetail {
+  return {
+    reason: preview.reason,
+    ...(preview.resolution
+      ? { resolutionReason: preview.resolution.reason, admission: preview.resolution.admission }
+      : {}),
+    ...(preview.preflight && preview.preflight.refusals.length > 0
+      ? { preflight: preview.preflight.refusals[0] }
+      : {}),
+  };
+}
+
+/**
+ * The one explicit user action that may start a paid run (§12).
+ *
+ * Re-runs the *entire* preflight chain fresh — not a cache of what the page
+ * rendered a moment ago (§14) — then hands the freshly resolved spec id to
+ * `startAgentExecution`, which is itself idempotent by identity (§13, §56):
+ * a double submission, a network retry, or two tabs open on the same step all
+ * resolve to the one active run.
+ *
+ * Redirects rather than returning a "success" state, so the URL itself is the
+ * durable pointer a reload recovers from (§18) — there is no in-memory step
+ * between "admitted" and "the status page is showing it".
+ */
+export async function startAgentRunAction(
+  projectId: string,
+  stepKey: string,
+  /**
+   * Whether the founder pressed "build all N steps" or "build this step".
+   *
+   * One boolean of intent, bound by the server component. Deliberately not a
+   * list of step keys: that would be caller-controlled input deciding what gets
+   * built and charged for, and this action's whole contract is that it re-runs
+   * the entire preflight fresh rather than trusting what the page rendered.
+   * The server derives the members from the stored plan, so a world that moved
+   * between render and click yields a shorter chain and a smaller charge —
+   * never a chain the founder was quoted for that no longer resolves.
+   */
+  chain: boolean,
+  previousState: StartAgentRunState,
+): Promise<StartAgentRunState> {
+  void previousState;
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  const preview = await previewAgentStep(supabase, {
+    projectId,
+    userId: session.userId,
+    stepKey,
+    chain,
+  });
+
+  if (!preview.eligible) {
+    return { ok: false, error: "not_eligible", detail: refusalDetail(preview) };
+  }
+
+  /*
+   * The write happens here, on the click, and nowhere else.
+   *
+   * The preview builds the spec; this persists it. Separated because an
+   * immutable audit row is not something a page render should mint, and
+   * because `execution_specs` accepts no insert from the caller's own client
+   * by design — the service-role writer lives in `operations/`, which is the
+   * only place Rule 53 permits it.
+   *
+   * Idempotent by the spec's identity: a double submission, a retry or two
+   * tabs on the same step all resolve to the same row, and then to the same
+   * run.
+   */
+  const persisted = await persistAgentExecutionSpec({
+    spec: preview.spec,
+    userId: session.userId,
+    repositoryConnectionId: preview.repositoryConnectionId,
+  });
+
+  if (!persisted.ok) {
+    return { ok: false, error: persisted.error === "project_not_found" ? "project_not_found" : "spec_not_persisted" };
+  }
+
+  const outcome = await startAgentExecution(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+    executionSpecId: persisted.executionSpecId,
+  });
+
+  if (outcome.kind === "failed") return { ok: false, error: outcome.error };
+
+  const agentHref = agentMoveHref(
+    projectSectionHref(projectId, "agent"),
+    preview.spec.opportunityId,
+  );
+
+  if (outcome.kind === "reused") {
+    redirect(
+      preparedChangeHref(
+        agentChangeHref(agentHref, outcome.preparedChangeId),
+        outcome.preparedChangeId,
+      ),
+    );
+  }
+
+  redirect(agentHref);
+}
+
+export type AgentRunStatus = {
+  /**
+   * Everything the reusable live view renders.
+   *
+   * Assembled by a module rather than by this page, so the same model can be
+   * mounted in the production dashboard later without any of this logic moving
+   * with it (EXECUTION CORE-4 observability).
+   */
+  live: AgentExecutionLiveModel;
+  activity: StoredAgentActivity[];
+  openInterrupt: StoredExecutionInterrupt | null;
+  founderInputRequest: FounderInputRequest | null;
+  /**
+   * Which review this change deserves (Sprint 0048).
+   *
+   * Present only once a change has been prepared, and null whenever it cannot
+   * be answered — a recommendation nobody can justify is worse than none.
+   * Recomputed on read rather than stored: every input is already persisted,
+   * and this gates nothing, so there is no second copy to keep in step.
+   */
+  recommendedReview: ReviewClassificationResult | null;
+};
+
+/** Durable status, re-read from the database on every call (§16, §18, §20). */
+export async function getAgentRunStatusAction(
+  projectId: string,
+  operationId: string,
+): Promise<AgentRunStatus | null> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  const operation = await getAgentExecutionStatus(supabase, {
+    projectId,
+    userId: session.userId,
+    operationId,
+  });
+  if (!operation) return null;
+
+  if (!operation.agentExecutionRunId) {
+    return {
+      live: await buildAgentExecutionLiveModel(supabase, { operation, projectId, run: null }),
+      activity: [],
+      openInterrupt: null,
+      founderInputRequest: null,
+      // No agent run yet, so no prepared change and nothing to recommend.
+      recommendedReview: null,
+    };
+  }
+
+  const [activity, openInterrupt, runView] = await Promise.all([
+    listAgentActivity(supabase, { runId: operation.agentExecutionRunId, projectId }),
+    findOpenInterruptForRun(supabase, {
+      projectId,
+      agentExecutionRunId: operation.agentExecutionRunId,
+    }),
+    readAgentRunForLiveView(supabase, {
+      runId: operation.agentExecutionRunId,
+      projectId,
+    }),
+  ]);
+
+  const live = await buildAgentExecutionLiveModel(supabase, {
+    operation,
+    projectId,
+    run: runView?.run ?? null,
+    limits: runView?.limits ?? null,
+    gatewayRequestCeiling: runView?.gatewayRequestCeiling ?? null,
+    validation: runView?.validation ?? "not_started",
+  });
+
+  // `resultId` is the prepared change id a completed run wrote. Classification
+  // is only meaningful once one exists, so it is not attempted before then.
+  //
+  // Through the shared service, which resolves the repository reader the
+  // render-impact probe needs. That probe is what proves a changed page file
+  // only altered metadata and so cannot have changed what a visitor sees;
+  // without a connected repository there is nothing to compare against, and the
+  // path-based answer — the more thorough one — stands.
+  const recommendedReview = operation.resultId
+    ? await resolveReviewClassification(supabase, {
+        projectId,
+        preparedChangeId: operation.resultId,
+      })
+    : null;
+
+  const founderInputRequest = openInterrupt
+    ? await getFounderInputRequestForInterrupt(supabase, {
+        projectId,
+        executionInterruptId: openInterrupt.id,
+      })
+    : null;
+
+  return { live, activity, openInterrupt, founderInputRequest, recommendedReview };
+}
+
+export type ResolveRuntimeFounderInputState =
+  | { ok: true }
+  | { ok: false; message: string }
+  | null;
+
+/** Resolves a runtime blocker, then performs a wholly fresh admission. */
+export async function resolveAgentFounderInputAction(
+  projectId: string,
+  requestId: string,
+  contextHash: string,
+  _previous: ResolveRuntimeFounderInputState,
+  formData: FormData,
+): Promise<ResolveRuntimeFounderInputState> {
+  const session = await requireSession();
+  const supabase = await createClient();
+  const request = await getFounderInputRequest(supabase, requestId);
+  if (
+    !request ||
+    request.projectId !== projectId ||
+    request.origin !== "execution_blocker" ||
+    request.contextHash !== contextHash ||
+    !request.executionInterruptId
+  ) {
+    return { ok: false, message: "This question is no longer available." };
+  }
+
+  const { data: interrupt } = await supabase
+    .from("execution_interrupts")
+    .select("execution_spec_id, founder_input_request_id")
+    .eq("id", request.executionInterruptId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!interrupt || interrupt.founder_input_request_id !== request.id) {
+    return { ok: false, message: "This question is no longer available." };
+  }
+
+  const { data: oldSpec } = await supabase
+    .from("execution_specs")
+    .select("step_key")
+    .eq("id", interrupt.execution_spec_id)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!oldSpec) return { ok: false, message: "The original execution could not be found." };
+
+  const choice = formData.get("choice");
+  let response: FounderInputResponse;
+  if (choice === "recommendation") {
+    response = { source: "recommendation" };
+  } else if (typeof choice === "string" && choice.startsWith("option:")) {
+    response = { source: "option", selectedOptionId: choice.slice("option:".length) };
+  } else if (choice === "custom") {
+    const rawAnswer = formData.get("customAnswer");
+    response = { source: "custom", rawAnswer: typeof rawAnswer === "string" ? rawAnswer : "" };
+  } else {
+    return { ok: false, message: "Choose an answer or provide your own." };
+  }
+
+  const resolved = await resolveFounderInput({
+    projectId,
+    userId: session.userId,
+    requestId,
+    expectedContextHash: contextHash,
+    response,
+  });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      message:
+        resolved.error === "secret_rejected"
+          ? "Do not paste passwords, API keys, tokens, or credentials here."
+          : resolved.error === "execution_not_settled"
+            ? "Vibe is still closing the previous attempt. Wait a moment, then try again."
+          : "Your answer could not be saved. Please try again.",
+    };
+  }
+
+  // Fresh admission is deliberately after the resolution transaction closed
+  // the old attempt. It re-reads current HEAD, plan state, permissions and
+  // active founder resolutions; no field from the old spec is reused.
+  const preview = await previewAgentStep(supabase, {
+    projectId,
+    userId: session.userId,
+    stepKey: oldSpec.step_key,
+  });
+  if (!preview.eligible) {
+    // The answer is safe; the run is not starting, and the founder is told
+    // which gate stopped it rather than only that one did.
+    return {
+      ok: false,
+      message: `Your answer was saved, but the run didn't start. ${startRefusalLabel(refusalDetail(preview))}`,
+    };
+  }
+
+  const persisted = await persistAgentExecutionSpec({
+    spec: preview.spec,
+    userId: session.userId,
+    repositoryConnectionId: preview.repositoryConnectionId,
+  });
+  if (!persisted.ok) {
+    return {
+      ok: false,
+      message: "Your answer was saved, but the new execution could not be prepared. Start the step again from Action Plan.",
+    };
+  }
+
+  const outcome = await startAgentExecution(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+    executionSpecId: persisted.executionSpecId,
+  });
+  if (outcome.kind === "failed") {
+    return {
+      ok: false,
+      message: "Your answer was saved, but the new execution could not start. Start the step again from Action Plan.",
+    };
+  }
+  const agentHref = agentMoveHref(
+    projectSectionHref(projectId, "agent"),
+    preview.spec.opportunityId,
+  );
+  if (outcome.kind === "reused") {
+    redirect(
+      preparedChangeHref(
+        agentChangeHref(agentHref, outcome.preparedChangeId),
+        outcome.preparedChangeId,
+      ),
+    );
+  }
+
+  redirect(agentHref);
+}

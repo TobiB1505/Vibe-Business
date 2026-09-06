@@ -497,14 +497,25 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
   });
 
   test("says what a plan buys, in work rather than in Credits", async ({ page }) => {
-    const text = await page.locator("body").innerText();
-
     // 1,000 ÷ 200 = 5 and 1,000 ÷ 35 = 28, both rounded down. Computed from the
     // catalog and the rate card, never typed, so it cannot drift from what is
     // actually charged.
-    expect(text).toContain("Builder buys");
-    expect(text).toContain("5 standard agent improvements, or 28 Business Audits each month");
-    expect(text).toContain("15 standard agent improvements, or 85 Business Audits each month");
+    //
+    // This used to read the whole body and also assert the label "Builder
+    // buys". The sentence lived in a `dl` under the plan list, so the name had
+    // to be repeated for a reader to know which plan it was about. It now sits
+    // inside the plan's own row, which is why the prefix is gone — and why
+    // this asserts something stronger than the old version could: each
+    // sentence is *in* the plan it describes, not merely somewhere on the page.
+    const plans = page.getByRole("region", { name: "Plans" });
+
+    await expect(plans.getByText("Builder", { exact: true })).toBeVisible();
+    await expect(
+      plans.getByText("5 standard agent improvements, or 28 Business Audits each month"),
+    ).toBeVisible();
+    await expect(
+      plans.getByText("15 standard agent improvements, or 85 Business Audits each month"),
+    ).toBeVisible();
   });
 
   test("still exposes no provider cost, token count or internal unit", async ({ page }) => {
@@ -524,3 +535,44 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
   });
 });
 
+/*
+ * Slice 5, R24. The ledger has carried `project_id` since it existed and the
+ * read never selected it, so Billing could show that 200 Credits left the
+ * account and not which of four products spent them.
+ */
+test.describe("where the Credits went", () => {
+  test("groups spend by product, and says what the total covers", async ({ page }) => {
+    await open(page, "billing-free");
+
+    const spend = page.getByTestId("spend-by-product");
+    await expect(spend).toBeVisible();
+    await expect(spend).toContainText("Acme");
+    await expect(spend).toContainText(/35 Credits/);
+
+    // The scope of the number is stated rather than left to be assumed.
+    await expect(page.getByText(/across the activity shown below/i)).toBeVisible();
+  });
+
+  test("names the product on the movement that belongs to one", async ({ page }) => {
+    await open(page, "billing-free");
+
+    await expect(page.getByText(/Acme ·/)).toBeVisible();
+  });
+});
+
+/*
+ * Slice 5's last acceptance line. `audit_events` is written per user, and the
+ * rows with no `project_id` — a Credit grant, a GitHub connection — could not
+ * be returned by the project-scoped read, which filters on exactly the column
+ * they have nothing in. They were recorded and shown nowhere.
+ */
+test.describe("the account's own record", () => {
+  test("shows the events that belong to no product", async ({ page }) => {
+    await open(page, "billing-free");
+
+    const section = page.getByRole("region", { name: /your account/i });
+    await expect(section).toBeVisible();
+    await expect(section).toContainText(/credits added/i);
+    await expect(section).toContainText(/github installation connected/i);
+  });
+});

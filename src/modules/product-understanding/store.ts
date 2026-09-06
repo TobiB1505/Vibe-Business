@@ -4,6 +4,7 @@ import { cache } from "react";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { applyCorrections } from "./assemble";
+import { derivedProductName, displayableLogoUrl } from "./identity-columns";
 import { UNDERSTANDING_EVIDENCE_VERSION } from "./evidence";
 import {
   EDITABLE_FIELDS,
@@ -351,6 +352,16 @@ export async function completeProfileRun(
       prompt_version: params.synthesized ? params.profile.promptVersion : null,
       provider: params.synthesized ? params.profile.provider : null,
       model: params.synthesized ? params.profile.model : null,
+      /*
+       * Denormalised out of the document being stored beside them, for list
+       * reads that must not ship one profile document per row.
+       *
+       * Derived values only. Corrections live in their own table and are
+       * applied on read, which is what stops a re-derivation from erasing a
+       * name a founder corrected — baking one in here would do exactly that.
+       */
+      product_name: derivedProductName(params.profile),
+      product_logo_url: displayableLogoUrl(params.profile),
       completed_at: new Date().toISOString(),
     })
     .eq("id", params.profileId);

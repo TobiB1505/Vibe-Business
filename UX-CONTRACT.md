@@ -82,17 +82,20 @@
 | Validate again | `Validate again` on an existing prepared change | stable busy action; active duplicate blocked; an exact prior pass is deliberately not reused | same Agent Validate stage with the new durable run | persistent inline failure; retry remains available | submitted action remains contextual | ADR 0015, rule 60 |
 | Open the Agent for a Move | `See this move in Agent` beside the start control, or the Agent rail item while a Move is selected | route navigation only, never a run | Agent focused on that Move, naming what Vibe can do about it | an unresolvable Move degrades to the unfocused Agent, naming none | destination page heading | ADR 0058 |
 | Return to a Move from the Agent | the focused card's back link, or a prepared change's Move title | route navigation only, never a run | that Move selected on the Action Plan, scrolled to its detail | the link is absent where the Move cannot be named | Move detail region | ADR 0058 |
-| Review the Move a card names | `Review this move` on project Home, `View action plan` on the account dashboard | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
+| Review the Move a card names | `View action plan` on the account dashboard's signal card | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
 
 ## Navigation and responsive behavior
 
 - Every route has a truthful metadata title.
 - Account sidebar becomes the established top strip below `lg`; project and account rails never nest.
-- On desktop, the project rail owns product identity, the bounded product switcher, project navigation and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
+- On desktop, the project rail owns product identity, the bounded product switcher, project navigation, the spendable Credit balance and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
 - Project routes render `My Products / {product}` — plus the route's own name on every section but Home — followed by one route-owned H1, description and action. Repository, branch and connection metadata do not repeat above every page.
 - `Project Settings` is a project destination. Profile, Account settings, Billing and Sign out live only in the account disclosure at the rail footer.
-- Project Home is the canonical Business Health surface at `/app/projects/:projectId`; `/health` is a compatibility alias and is never a second rail item.
-- `#business-audit` remains the stable recovery anchor and resolves on canonical project Home.
+- Every priced control states its price before it is pressed, from the rate card in force, and an operation that costs nothing says `Included` rather than staying silent ([ADR 0094](docs/decisions/0094-a-free-operation-says-so.md)). An operation the policy does not price says nothing at all — a refusal is not a price of nothing.
+- The spendable balance is readable from every project route and links to Billing. A balance that has not been read renders nothing; it is never shown as zero.
+- Project Home at `/app/projects/:projectId` is Nova: one focus, what is running, what else is true, and the business reading as context. It leads with exactly one control, and that control carries its price before it is pressed.
+- Business Health is its own rail destination at `/health`, which was already a live address before it became one. It remains the canonical diagnosis surface.
+- `#business-audit` remains the stable recovery anchor and resolves on Business Health.
 - The radial Business Brain becomes a horizontally browsable dimension rail plus the same detail panel on narrow screens. Labels, health, priority, selection and detail remain available; geometry is never the only interface.
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
@@ -108,11 +111,11 @@
 - `?plan=` names which Move a surface is about, and the Agent reads the same parameter as the Action Plan. It is untrusted text: sanitized, then resolved against that project's own Moves, so a stale, foreign or malformed value renders the ordinary unfocused surface rather than substituting a different Move. It carries no authority — no surface starts work, spends Credits or writes anything because a URL named a Move. Exactly one navigation item, Agent, carries the parameter onward, and only from the Action Plan; every other rail item is a plain section link.
 - The Agent start surface shows the Credit ceiling from the same server-owned economics policy used by the fresh start preflight, adjacent to `Run with Vibe` and formatted through the canonical Credit formatter. It never derives Credits from token use, a hypothetical economy scenario or client state; without an authorized value it shows no number.
 - The Agent names the Move a founder arrived with and states what Vibe can do about it using the Action Plan's own execution answer. For an exact selected Move that passes the existing allowlisted admission, `Run with Vibe` calls the same canonical server start as the Action Plan; the Agent never derives a second execution answer or starts from URL state alone.
-- Billing uses three equal overview panels at desktop, then asymmetric content/support grids. Below `lg`, every region returns to document order without hiding plan status, expiry, purchase actions or signed Credit movement. No Billing panel owns a viewport height or nested scroll area.
+- Billing opens with two overview panels at desktop — spendable Credits at twice the width of the plan — then a row per question: prices beside top-up packs, plans at full width, the two short histories paired when both exist, and the Credit ledger at full width. Below `lg`, every region returns to document order without hiding plan status, expiry, purchase actions or signed Credit movement. No Billing panel owns a viewport height or nested scroll area.
 
 ## Async and resilience
 
-- Every signed-in route paints a first frame before its reads finish, and that frame describes the screen it stands in for rather than a different one (`loading-coverage.test.ts` holds the rule; the two operator-only dogfood routes are the named exceptions). A workspace section's heading is the same before and after the wait, because both come from `WORKSPACE_SECTION_HEADINGS` rather than from a string each file passes.
+- Every signed-in route paints a first frame before its reads finish, and that frame describes the screen it stands in for rather than a different one (`loading-coverage.test.ts` holds the rule, and no longer exempts any route). A workspace section's heading is the same before and after the wait, because both come from `WORKSPACE_SECTION_HEADINGS` rather than from a string each file passes.
 - A Client Component never reads a clock or a locale while rendering. Times and dates come from `src/lib/utils/format-datetime.ts` in UTC, and a wall clock from `useBrowserClock`, which answers nothing until a browser is the one being asked — so the server's markup and the browser's first render always agree.
 - Index reads are server-owned. Failures reach the account route error boundary; the UI does not imply an empty dataset.
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.

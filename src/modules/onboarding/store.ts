@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import type { NovaWorkflowStatus } from "@/modules/nova/first-run";
 import { getLatestAuditStamp, getPausedAudit } from "@/modules/business-audit/store";
 import {
   getActiveBusinessAuditOperation,
@@ -11,11 +12,7 @@ import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { hasSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { liveConnections } from "@/modules/projects/repository-connection";
-import {
-  deriveOnboardingState,
-  type LiveSiteStatus,
-  type OnboardingState,
-} from "./state";
+import { deriveOnboardingState, type LiveSiteStatus, type OnboardingState } from "./state";
 
 export type StoredOnboarding = {
   projectId: string;
@@ -25,6 +22,9 @@ export type StoredOnboarding = {
   auditRevealedAt: string | null;
   firstMoveViewedAt: string | null;
   completedAt: string | null;
+  /** Nova's own first-run facts. Null and 'unseen' until she has spoken. */
+  novaIntroducedAt: string | null;
+  novaWorkflowStatus: NovaWorkflowStatus;
 };
 
 export type ProjectOnboarding = StoredOnboarding & {
@@ -59,10 +59,12 @@ type OnboardingRow = {
   audit_revealed_at: string | null;
   first_move_viewed_at: string | null;
   completed_at: string | null;
+  nova_introduced_at: string | null;
+  nova_workflow_status: NovaWorkflowStatus;
 };
 
 const COLUMNS =
-  "project_id, state, live_site_status, product_revealed_at, audit_revealed_at, first_move_viewed_at, completed_at";
+  "project_id, state, live_site_status, product_revealed_at, audit_revealed_at, first_move_viewed_at, completed_at, nova_introduced_at, nova_workflow_status";
 
 function mapRow(row: OnboardingRow): StoredOnboarding {
   return {
@@ -73,6 +75,8 @@ function mapRow(row: OnboardingRow): StoredOnboarding {
     auditRevealedAt: row.audit_revealed_at,
     firstMoveViewedAt: row.first_move_viewed_at,
     completedAt: row.completed_at,
+    novaIntroducedAt: row.nova_introduced_at,
+    novaWorkflowStatus: row.nova_workflow_status,
   };
 }
 
@@ -123,6 +127,54 @@ export async function markOnboardingMilestone(
     .update({ [params.milestone]: new Date().toISOString() })
     .eq("project_id", params.projectId)
     .is(params.milestone, null)
+    .select("project_id")
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
+ * Nova's introduction, written once and never rewritten.
+ *
+ * `.is(…, null)` rather than a blind update, exactly as
+ * `markOnboardingMilestone` does it: two tabs pressing "Continue" is an
+ * ordinary thing for a founder to do, and the second must not move the
+ * timestamp. Returns whether this call was the one that wrote it, so a caller
+ * can record the event once rather than once per press.
+ */
+export async function markNovaIntroduced(
+  supabase: SupabaseClient,
+  params: { projectId: string },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("project_onboarding")
+    .update({ nova_introduced_at: new Date().toISOString() })
+    .eq("project_id", params.projectId)
+    .is("nova_introduced_at", null)
+    .select("project_id")
+    .maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
+ * Whether the founder was walked through the loop, or chose not to be.
+ *
+ * Guarded on `unseen` for the same reason the introduction is guarded on null:
+ * the answer is the founder's first one, and a later press must not overwrite
+ * what they said the first time. The database refuses this write outright
+ * before an introduction exists, so a caller cannot record an answer to a
+ * question that was never asked.
+ */
+export async function setNovaWorkflowStatus(
+  supabase: SupabaseClient,
+  params: { projectId: string; status: Exclude<NovaWorkflowStatus, "unseen"> },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("project_onboarding")
+    .update({ nova_workflow_status: params.status })
+    .eq("project_id", params.projectId)
+    .eq("nova_workflow_status", "unseen")
     .select("project_id")
     .maybeSingle();
   if (error) throw error;
@@ -258,22 +310,35 @@ export async function getProjectOnboarding(
   if (projectError) throw projectError;
   if (!project) return null;
 
-  const [{ data: row, error: rowError }, { data: repositoryRow, error: repositoryError }, profile, snapshot, audit, pausedAudit, auditOperation, understandingOperation, opportunities] =
-    await Promise.all([
-      supabase.from("project_onboarding").select(COLUMNS).eq("project_id", params.projectId).maybeSingle(),
-      liveConnections(supabase, "full_name, default_branch, html_url")
-        .eq("project_id", params.projectId)
-        .maybeSingle(),
-      getLatestProfile(supabase, params.projectId),
-      // Existence and a timestamp, not the documents (VB-022). Onboarding is
-      // polled while a scan runs, and both of these are large JSONB.
-      hasSuccessfulSnapshot(supabase, params.projectId),
-      getLatestAuditStamp(supabase, params.projectId),
-      getPausedAudit(supabase, params.projectId),
-      getActiveBusinessAuditOperation(supabase, params.projectId),
-      getActiveProductScanOperation(supabase, params.projectId),
-      getLatestOpportunities(supabase, params.projectId),
-    ]);
+  const [
+    { data: row, error: rowError },
+    { data: repositoryRow, error: repositoryError },
+    profile,
+    snapshot,
+    audit,
+    pausedAudit,
+    auditOperation,
+    understandingOperation,
+    opportunities,
+  ] = await Promise.all([
+    supabase
+      .from("project_onboarding")
+      .select(COLUMNS)
+      .eq("project_id", params.projectId)
+      .maybeSingle(),
+    liveConnections(supabase, "full_name, default_branch, html_url")
+      .eq("project_id", params.projectId)
+      .maybeSingle(),
+    getLatestProfile(supabase, params.projectId),
+    // Existence and a timestamp, not the documents (VB-022). Onboarding is
+    // polled while a scan runs, and both of these are large JSONB.
+    hasSuccessfulSnapshot(supabase, params.projectId),
+    getLatestAuditStamp(supabase, params.projectId),
+    getPausedAudit(supabase, params.projectId),
+    getActiveBusinessAuditOperation(supabase, params.projectId),
+    getActiveProductScanOperation(supabase, params.projectId),
+    getLatestOpportunities(supabase, params.projectId),
+  ]);
   if (rowError) throw rowError;
   if (repositoryError) throw repositoryError;
 
@@ -292,9 +357,19 @@ export async function getProjectOnboarding(
     // Migration-safe fallback for a project created by an older application
     // instance during a rolling deploy. An existing completed audit is mature.
     const mature = audit !== null;
-    const completedAt = mature ? (audit?.completedAt ?? audit?.createdAt ?? new Date().toISOString()) : null;
-    const initialState: OnboardingState = mature ? "complete" : repository ? "add_live_product" : "connect_source";
-    const liveSiteStatus: LiveSiteStatus = project.production_url ? "provided" : mature ? "no_live_site_yet" : "undecided";
+    const completedAt = mature
+      ? (audit?.completedAt ?? audit?.createdAt ?? new Date().toISOString())
+      : null;
+    const initialState: OnboardingState = mature
+      ? "complete"
+      : repository
+        ? "add_live_product"
+        : "connect_source";
+    const liveSiteStatus: LiveSiteStatus = project.production_url
+      ? "provided"
+      : mature
+        ? "no_live_site_yet"
+        : "undecided";
     const initial = {
       project_id: params.projectId,
       state: initialState,
@@ -358,10 +433,10 @@ export async function getProjectOnboarding(
       nextState === "product_reveal"
         ? "onboarding.product_understanding_completed"
         : nextState === "audit_needs_user"
-        ? "onboarding.audit_needs_user"
-        : nextState === "audit_reveal"
-          ? "onboarding.audit_completed"
-          : null;
+          ? "onboarding.audit_needs_user"
+          : nextState === "audit_reveal"
+            ? "onboarding.audit_completed"
+            : null;
     if (eventType) {
       await recordAuditEvent(supabase, {
         userId: params.userId,

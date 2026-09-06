@@ -10,7 +10,7 @@ const NEXT: Detection[] = [{ id: "nextjs", name: "Next.js", confidence: "high", 
 function surfacesFor(files: FixtureFile[]) {
   const context = contextFrom(files);
   const signals = detectIntegrationSignals(context);
-  const routes = detectRoutes(context, NEXT);
+  const routes = detectRoutes(context, NEXT, { targets: [], truncated: false });
   return detectBusinessSurfaces(context, signals, routes);
 }
 
@@ -38,7 +38,10 @@ describe("detectBusinessSurfaces", () => {
     const surface = surfacesFor(files).find((entry) => entry.id === "pricing_page");
 
     expect(surface?.detected).toBe(true);
-    expect(surface?.evidence[0]).toMatchObject({ path: "src/app/pricing/page.tsx", detail: "/pricing" });
+    expect(surface?.evidence[0]).toMatchObject({
+      path: "src/app/pricing/page.tsx",
+      detail: "/pricing",
+    });
   });
 
   it.each([

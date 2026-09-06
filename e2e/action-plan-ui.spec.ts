@@ -299,6 +299,86 @@ test.describe("ready plan — founder action attestation", () => {
     ).toBeVisible();
     await expect(page.getByRole("button", { name: "Confirm this is complete" })).toBeVisible();
     await expect(page.getByRole("checkbox")).toHaveCount(0);
+
+    // Real-world work reports nothing: the sitemap is submitted or it is not,
+    // and there is no finding to write down.
+    await expect(page.getByTestId("attestation-finding")).toHaveCount(0);
+  });
+});
+
+test.describe("ready plan — a step no execution can finish", () => {
+  /*
+   * The dead end a founder actually hit, asserted where it was visible and
+   * nowhere else. Every unit test passed while this screen offered a step
+   * marked "Start here" with nothing under it to start.
+   */
+  test("offers a confirmation, and does not call Vibe's work the founder's", async ({ page }) => {
+    await page.goto("/e2e/action_plan_vibe_no_executor");
+
+    await expect(
+      page.getByRole("heading", { name: "Draft the search-facing copy for that segment" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Vibe can't run this one").first()).toBeVisible();
+    await expect(page.getByText("isn't a change to your product").first()).toBeVisible();
+    await expect(page.getByRole("button", { name: "Record this finding" })).toBeVisible();
+
+    // The claim it must never make. The founder is confirming the step's own
+    // completion criterion, not testifying that Vibe did the work.
+    await expect(page.getByText("does not claim Vibe did the work").first()).toBeVisible();
+    await expect(page.getByText("Your action")).toHaveCount(0);
+  });
+
+  /*
+   * The founder's objection, pinned (ADR 0093). The step asks whether billing
+   * is fully working, partially wired, or absent; a tick answers none of the
+   * three, and its successors are written to depend on which. So the step is
+   * closed with the answer, not with a boolean.
+   */
+  test("asks for the finding rather than a tick", async ({ page }) => {
+    await page.goto("/e2e/action_plan_vibe_no_executor");
+
+    const field = page.getByTestId("attestation-finding");
+    await expect(field).toBeVisible();
+    await expect(field).toHaveAttribute("required", "");
+    await expect(page.getByText("What did you find?")).toBeVisible();
+    await expect(page.getByText("The next plan is written with this in front of it.")).toBeVisible();
+
+    // No invented choices. The step's criterion is model-written prose and Vibe
+    // never turns it into options — it is shown, and the founder answers it.
+    await expect(page.getByRole("radio")).toHaveCount(0);
+    await expect(page.getByRole("combobox")).toHaveCount(0);
+    // The step's own criterion is shown beside the field — that is the
+    // question the founder is answering, in the plan's words rather than
+    // Vibe's.
+    await expect(page.getByText("Answer this")).toBeVisible();
+    await expect(
+      page.getByText("A drafted set of titles and descriptions exists.").first(),
+    ).toBeVisible();
+  });
+});
+
+test.describe("ready plan — a step a run covered rather than did", () => {
+  /*
+   * The distinction ADR 0091 turns on, asserted where a founder reads it.
+   * "Done" and "covered" are the same fact for sequencing and different facts
+   * for the record, and only the rendered row can show that the product keeps
+   * them apart.
+   */
+  test("names the run that covered it, and does not call it done", async ({ page }) => {
+    await page.goto("/e2e/action_plan_absorbed_step");
+    await openFullPlannedWork(page);
+
+    // `.first()` because a later row names this step in its own "Depends on"
+    // line; rows render in plan order, so the first match is step 01 itself.
+    const row = page
+      .getByTestId("plan-step")
+      .filter({ hasText: "Draft the search-facing copy for that segment" })
+      .first();
+
+    await expect(row).toContainText("Covered by step 03");
+    await expect(row).not.toContainText("Waiting");
+    // Its number stays a number. The tick belongs to work somebody carried out.
+    await expect(row).toContainText("01");
   });
 });
 
@@ -583,3 +663,50 @@ test.describe("a step the agent could build says so", () => {
     await expect(step.getByText("Needs your decision")).toBeVisible();
   });
 });
+
+/**
+ * And a step Vibe cannot build says which repository fact stands in the way.
+ *
+ * The counterpart of the suite above, and the half of its own argument that was
+ * never applied. The resolver is asked on this screen because the stored
+ * classification knows only the deterministic registry; when it answers *yes*
+ * the row says so, and when it answered **no** it also said why — which the
+ * screen dropped, so a founder one analyzer version behind read the same four
+ * words as one asking for something Vibe genuinely cannot do.
+ */
+test.describe("a step Vibe cannot build says why", () => {
+  test("names the repository fact instead of calling the work unautomated", async ({ page }) => {
+    await page.goto("/e2e/action_plan_repository_blocked");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    const step = plannedStep(page, "Build a dedicated pricing page");
+    await expect(step.getByText("predates this check")).toBeVisible();
+
+    // The sentence this replaces is not merely vague for a stale analysis — it
+    // is false. The work is automated; the read of the code is old.
+    await expect(step.getByText("Not automated yet")).toHaveCount(0);
+  });
+
+  test("says whose work it still is", async ({ page }) => {
+    // The headline does not move. Who owns the work is a different question
+    // from whether Vibe can currently start it, and only the second changed.
+    await page.goto("/e2e/action_plan_repository_blocked");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    const step = plannedStep(page, "Build a dedicated pricing page");
+    await expect(step.getByText("Vibe's work")).toBeVisible();
+  });
+
+  test("offers no control it cannot honour", async ({ page }) => {
+    await page.goto("/e2e/action_plan_repository_blocked");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    for (const label of FORBIDDEN_ACTION_LABELS) {
+      await expect(page.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+    }
+  });
+});
+

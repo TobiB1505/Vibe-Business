@@ -1,0 +1,708 @@
+import { readFileSync } from "node:fs";
+import { beforeEach, describe, expect, it } from "vitest";
+
+import {
+  FakeDatabase,
+  fakeSupabase,
+  newQueryRecorder,
+  readsOf,
+  type QueryRecorder,
+} from "@/modules/operations/test-support";
+
+import { readNovaFocus, readNovaFocusFacts, stageFromRows } from "./read";
+
+const USER = "user_1";
+const PROJECT = "project_1";
+const COMMIT = "a".repeat(40);
+const BASE_SHA = "b".repeat(40);
+
+/** A completed snapshot whose analyzer answered the build question. */
+function seedSnapshot(build: unknown) {
+  db.seed("repository_intelligence_snapshots", {
+    id: `snapshot_${(label += 1)}`,
+    project_id: PROJECT,
+    status: "completed",
+    source_commit_sha: COMMIT,
+    source_branch: "main",
+    analyzer_version: "v6",
+    completeness: "complete",
+    completeness_reasons: [],
+    failure_code: null,
+    result: { build },
+    created_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+    completed_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+  });
+}
+
+let label = 0;
+
+/** One installable application, in the shape the analyzer actually stores. */
+function buildTarget(directory: string) {
+  return {
+    directory,
+    buildScript: "next build",
+    frameworks: ["nextjs"],
+    moduleLinker: null,
+    lockfile: { inTargetDirectory: true, packageManager: "pnpm" },
+  };
+}
+
+/** Every table one prepared change makes Nova read. */
+const LIFECYCLE_TABLES = [
+  "prepared_changes",
+  "validation_runs",
+  "change_approvals",
+  "change_merges",
+  "change_outcome_verifications",
+];
+
+let db: FakeDatabase;
+let recorder: QueryRecorder;
+
+function client() {
+  return fakeSupabase(db, recorder);
+}
+
+function reset() {
+  db = new FakeDatabase();
+  recorder = newQueryRecorder();
+}
+
+beforeEach(reset);
+
+/**
+ * A project as one actually exists: with a live repository connection.
+ *
+ * Without one, `sourceDisconnected` is true and outranks every other
+ * candidate — correctly, because a project Vibe cannot reach has one problem
+ * and it is not the audit. The fixture said otherwise until Slice 7 made the
+ * question askable, and four tests failed the moment it did.
+ */
+function seedProject() {
+  seedProjectWithoutSource();
+  db.seed("repository_connections", {
+    id: "connection_1",
+    project_id: PROJECT,
+    user_id: USER,
+    status: "active",
+    detached_at: null,
+    workspace_root: null,
+  });
+}
+
+/** A project Vibe cannot reach. Only the disconnection tests want this. */
+function seedProjectWithoutSource() {
+  db.seed("projects", { id: PROJECT, user_id: USER, production_url: "https://acme.test" });
+}
+
+function seedChange(index: number, validationStatus: "passed" | "failed" | null): string {
+  const id = `prepared_${index}`;
+
+  db.seed("prepared_changes", {
+    id,
+    project_id: PROJECT,
+    user_id: USER,
+    operation_run_id: `run_${index}`,
+    opportunity_set_id: null,
+    opportunity_id: null,
+    execution_capability: "nextjs_seo_foundations_v2",
+    execution_version: "1",
+    repository_snapshot_id: "snapshot_1",
+    base_branch: "main",
+    base_sha: BASE_SHA,
+    branch_name: `vibe/change-${index}`,
+    commit_sha: COMMIT,
+    files: [{ path: "src/app/robots.ts", contentHash: "c".repeat(64), bytes: 400 }],
+    execution_identity: `identity_${index}`,
+    status: "prepared",
+    failure_code: null,
+    created_at: new Date(Date.UTC(2026, 0, index)).toISOString(),
+    completed_at: null,
+  });
+
+  if (validationStatus !== null) {
+    db.seed("validation_runs", {
+      id: `validation_${index}`,
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: id,
+      status: validationStatus,
+      prepared_commit_sha: COMMIT,
+      validation_profile: "next_app_router",
+      artifact_snapshot_id: `snapshot_${index}`,
+      artifact_expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      artifact_deleted_at: null,
+      created_at: new Date(Date.UTC(2026, 0, index, 1)).toISOString(),
+    });
+  }
+
+  return id;
+}
+
+function seedChanges(count: number, validationStatus: "passed" | "failed" | null = "passed") {
+  seedProject();
+  for (let index = 1; index <= count; index += 1) seedChange(index, validationStatus);
+}
+
+/**
+ * The stage precedence, tested where it lives rather than through the database.
+ *
+ * `stageFromRows` is the one piece of `read.ts` that makes a judgement, and it
+ * is pure, so every branch is reachable without seeding five tables. What the
+ * database tests below are for is the property only I/O has: what a render
+ * costs.
+ */
+describe("the stage of one change", () => {
+  const clean = {
+    commitSha: COMMIT,
+    validationStatus: null,
+    approval: null,
+    mergeStatus: null,
+    outcomeStatus: null,
+  } as const;
+
+  it("reads a merged change with no settled outcome as merged", () => {
+    expect(stageFromRows({ ...clean, mergeStatus: "merged" })).toBe("merged");
+  });
+
+  it.each(["verified", "partial", "not_observed", "failed"])(
+    "reads a merged change with a %s outcome as observed",
+    (outcomeStatus) => {
+      expect(stageFromRows({ ...clean, mergeStatus: "merged", outcomeStatus })).toBe("observed");
+    },
+  );
+
+  it("reads an outcome still being observed as merged, not observed", () => {
+    expect(stageFromRows({ ...clean, mergeStatus: "merged", outcomeStatus: "observing" })).toBe(
+      "merged",
+    );
+  });
+
+  it.each(["merging", "preflight"] as const)("reads %s as in flight", (mergeStatus) => {
+    expect(stageFromRows({ ...clean, mergeStatus })).toBe("merging");
+  });
+
+  it.each(["blocked", "failed"] as const)("reads a %s merge as stalled", (mergeStatus) => {
+    expect(stageFromRows({ ...clean, mergeStatus })).toBe("stalled");
+  });
+
+  it("reads a standing approval for this commit as ready to merge", () => {
+    const stage = stageFromRows({
+      ...clean,
+      validationStatus: "passed",
+      approval: { status: "approved", preparedCommitSha: COMMIT },
+    });
+
+    expect(stage).toBe("ready_to_merge");
+  });
+
+  /**
+   * The approval is bound to a commit, and Vibe re-derives the full identity
+   * before it writes anything. What must not happen here is the weaker error:
+   * showing a merge control for a commit nobody approved.
+   */
+  it("does not read an approval of a different commit as ready to merge", () => {
+    const stage = stageFromRows({
+      ...clean,
+      validationStatus: "passed",
+      approval: { status: "approved", preparedCommitSha: "d".repeat(40) },
+    });
+
+    expect(stage).toBe("awaiting_approval");
+  });
+
+  it.each(["revoked", "invalidated"] as const)(
+    "does not read a %s approval as ready to merge",
+    (status) => {
+      const stage = stageFromRows({
+        ...clean,
+        validationStatus: "passed",
+        approval: { status, preparedCommitSha: COMMIT },
+      });
+
+      expect(stage).toBe("awaiting_approval");
+    },
+  );
+
+  it("cannot reach ready to merge before a commit exists", () => {
+    const stage = stageFromRows({
+      ...clean,
+      commitSha: null,
+      validationStatus: "passed",
+      approval: { status: "approved", preparedCommitSha: COMMIT },
+    });
+
+    expect(stage).toBe("awaiting_approval");
+  });
+
+  it("reads a failed check as a failed validation", () => {
+    expect(stageFromRows({ ...clean, validationStatus: "failed" })).toBe("validation_failed");
+  });
+
+  it.each(["queued", "running"] as const)("reads a %s check as in flight", (validationStatus) => {
+    expect(stageFromRows({ ...clean, validationStatus })).toBe("validating");
+  });
+
+  /**
+   * A change nothing has checked must never read as one to look at — the
+   * founder would take "review this" as "Vibe checked this" (rule 66).
+   */
+  it.each([null, "cancelled" as const])(
+    "reads a change with %s validation as unvalidated",
+    (validationStatus) => {
+      expect(stageFromRows({ ...clean, validationStatus })).toBe("not_validated");
+    },
+  );
+
+  it("reads a checked, unapproved change as awaiting approval", () => {
+    expect(stageFromRows({ ...clean, validationStatus: "passed" })).toBe("awaiting_approval");
+  });
+
+  it("lets a landed merge outrank a failed check on the same change", () => {
+    const stage = stageFromRows({ ...clean, validationStatus: "failed", mergeStatus: "merged" });
+
+    expect(stage).toBe("merged");
+  });
+});
+
+describe("what a render costs", () => {
+  async function readWith(changes: number): Promise<QueryRecorder> {
+    reset();
+    seedChanges(changes);
+    await readNovaFocusFacts(client(), PROJECT);
+    return recorder;
+  }
+
+  it("reads each lifecycle table exactly once, however many changes there are", async () => {
+    const counts = await readWith(8);
+
+    for (const table of LIFECYCLE_TABLES) {
+      expect(readsOf(counts, table), `${table} was read more than once`).toBe(1);
+    }
+  });
+
+  it("does not grow with the number of prepared changes", async () => {
+    const one = await readWith(1);
+    const eight = await readWith(8);
+
+    for (const table of LIFECYCLE_TABLES) {
+      expect(readsOf(eight, table), table).toBe(readsOf(one, table));
+    }
+  });
+
+  it("asks the lifecycle tables nothing when a project has no prepared changes", async () => {
+    reset();
+    seedProject();
+
+    await readNovaFocusFacts(client(), PROJECT);
+
+    expect(readsOf(recorder, "prepared_changes")).toBe(1);
+    for (const table of LIFECYCLE_TABLES.filter((name) => name !== "prepared_changes")) {
+      expect(readsOf(recorder, table), table).toBe(0);
+    }
+  });
+
+  /** A read model that writes is a render with a side effect. */
+  it("writes nothing at all", async () => {
+    reset();
+    seedChanges(3);
+
+    await readNovaFocusFacts(client(), PROJECT);
+
+    expect(recorder.writes).toEqual([]);
+  });
+});
+
+describe("reading a project's focus", () => {
+  it("leads with a failed validation", async () => {
+    seedChanges(1, "failed");
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.primary.kind).toBe("validation_failed");
+    expect(focus.nextAction).toBe("nova.validate_again");
+  });
+
+  it("leads with a change to review when the check passed", async () => {
+    seedChanges(1, "passed");
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.primary.kind).toBe("review_change");
+  });
+
+  it("says nothing_to_do for an empty project", async () => {
+    seedProject();
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.primary.kind).toBe("nothing_to_do");
+    expect(focus.working).toBeNull();
+  });
+
+  it("keeps a second change visible rather than hiding it behind the first", async () => {
+    seedProject();
+    seedChange(1, "failed");
+    seedChange(2, "passed");
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.primary.kind).toBe("validation_failed");
+    expect(focus.secondary.map((candidate) => candidate.kind)).toEqual(["review_change"]);
+  });
+
+  /**
+   * A project that has never been audited is not one whose audit is out of
+   * date. Telling that founder to refresh something nobody ran would be a
+   * missing measurement rendered as a bad one (rule 44).
+   */
+  it("does not call a never-run audit outdated", async () => {
+    seedProject();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.auditOutdated).toBe(false);
+  });
+});
+
+/**
+ * The invariants that are properties of the *source*, not of a run.
+ *
+ * The same shape as `dashboard-contract.test.ts`: some costs can only be
+ * proven absent by looking at what the module is allowed to import, because a
+ * test that never hits the branch never sees the network call on it.
+ */
+describe("what this module may never reach for", () => {
+  const raw = readFileSync(new URL("./read.ts", import.meta.url), "utf8");
+  /*
+   * Comments stripped first, or the guard fires on the paragraph explaining
+   * why `resolvePlanExecutionRoutes` is *not* called — which would make
+   * documenting a deliberate omission the thing that fails the test.
+   */
+  const source = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+
+  it("never reaches for a provider, a sandbox or GitHub", () => {
+    for (const forbidden of [
+      "createVercelSandboxProvider",
+      "createGithubMergePort",
+      "createGithubRepositoryReader",
+      "VercelWorkflowExecutor",
+      "getPreviewStatus",
+      "getReviewImages",
+      "resolvePlanExecutionRoutes",
+    ]) {
+      expect(source, forbidden).not.toContain(forbidden);
+    }
+  });
+
+  /** It bypasses RLS, and every fact here is scoped by a project's owner. */
+  it("keeps the service-role client out", () => {
+    expect(source).not.toContain("createServiceClient");
+    expect(source).not.toContain("lib/supabase/service");
+  });
+
+  /**
+   * The networked workspace read is the one an unwary refactor would reach for
+   * to get a `ChangeProgress` — it is the reason `stageFromRows` exists.
+   */
+  it("does not assemble the full prepared-change workspace", () => {
+    expect(source).not.toContain("getPreparedChangeWorkspace");
+    expect(source).not.toContain("getMergeCard");
+  });
+
+  it("has no await inside a loop", () => {
+    const loops = source.match(/for\s*\(const[^)]*\)\s*\{[\s\S]*?\n {2}\}/g) ?? [];
+    for (const loop of loops) expect(loop).not.toContain("await ");
+  });
+});
+
+/**
+ * The two facts Stage 4 made answerable.
+ *
+ * Both were fixed at false while `chooseWorkspaceRootAction` lived on a branch
+ * and the belief was that answering them needed the network. Their resolver is
+ * pure over a stored snapshot, so they are read now — and these assert the
+ * distinctions that matter more than the happy path.
+ */
+describe("what the repository read says", () => {
+  it("calls nothing outdated for a project Vibe has never read", async () => {
+    seedProject();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.repositoryReadOutdated).toBe(false);
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  /**
+   * A snapshot from before the build question existed cannot answer it. That
+   * is `repository_analysis_outdated`, and it is the state a founder has to be
+   * told about — their code moved on and Vibe's reading did not.
+   */
+  it("reports an outdated read when the snapshot predates the build question", async () => {
+    seedProject();
+    seedSnapshot(undefined);
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.repositoryReadOutdated).toBe(true);
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  it("asks nothing when one application answers for the whole repository", async () => {
+    seedProject();
+    seedSnapshot({ truncated: false, targets: [buildTarget(".")] });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.repositoryReadOutdated).toBe(false);
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  /**
+   * The discriminating case, and the reason the one above is not enough on its
+   * own: a malformed fixture resolves to a *different* refusal, whose two
+   * booleans are the same two falses. Only a repository that genuinely raises
+   * the question proves the resolver was reached at all — the first version of
+   * this test had a `lockfile` string where the code reads an object, and
+   * passed.
+   */
+  it("asks which application when the repository holds two", async () => {
+    seedProject();
+    seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.workspaceChoiceRequired).toBe(true);
+    expect(facts.repositoryReadOutdated).toBe(false);
+  });
+
+  /**
+   * And it stops asking once the founder has answered. `selectValidationTarget`
+   * applies their stored choice inside the resolver; re-deriving the question
+   * here would ignore an answer they already gave.
+   */
+  it("stops asking once the founder has chosen", async () => {
+    /*
+     * One connection carrying the answer, not a second row beside the
+     * default fixture's — two live connections is not a state a project can
+     * be in, and the read would pick whichever came first.
+     */
+    seedProjectWithoutSource();
+    db.seed("repository_connections", {
+      id: "connection_1",
+      project_id: PROJECT,
+      user_id: USER,
+      status: "active",
+      detached_at: null,
+      workspace_root: "frontend",
+    });
+    seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.workspaceChoiceRequired).toBe(false);
+  });
+
+  /** A read model that writes is a render with a side effect — still true. */
+  it("writes nothing while answering either", async () => {
+    reset();
+    seedProject();
+    seedSnapshot(undefined);
+
+    await readNovaFocusFacts(client(), PROJECT);
+
+    expect(recorder.writes).toEqual([]);
+  });
+});
+
+describe("the failures Nova reads", () => {
+  function seedOperation(operationType: string, status: string) {
+    db.seed("operation_runs", {
+      id: `op_${(label += 1)}`,
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: operationType,
+      status,
+      stage: "queued",
+      failure_code: status === "failed" ? "provider_unavailable" : null,
+      result_id: null,
+      input_identity: `identity_${label}`,
+      started_at: null,
+      completed_at: null,
+      created_at: new Date(Date.UTC(2026, 0, label)).toISOString(),
+    });
+  }
+
+  it("reports a project with no live connection as disconnected", async () => {
+    seedProjectWithoutSource();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.sourceDisconnected).toBe(true);
+  });
+
+  it("reports a connected project as connected", async () => {
+    seedProject();
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.sourceDisconnected).toBe(false);
+  });
+
+  it("reads a detached connection as disconnected", async () => {
+    seedProjectWithoutSource();
+    db.seed("repository_connections", {
+      id: "connection_1",
+      project_id: PROJECT,
+      user_id: USER,
+      status: "detached",
+      detached_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+      workspace_root: null,
+    });
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.sourceDisconnected).toBe(true);
+  });
+
+  it("reports the last attempt of each kind when it failed", async () => {
+    seedProject();
+    seedOperation("business_audit", "failed");
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.failedOperations).toEqual({ agent: false, scan: false, audit: true });
+  });
+
+  /**
+   * The distinction that keeps a recovered founder from being told about a
+   * failure they already fixed: `getLastFailedOperation` returns the latest
+   * run only when *that* run failed, so a success after it reports nothing.
+   */
+  it("says nothing about a failure a later run recovered from", async () => {
+    seedProject();
+    seedOperation("business_audit", "failed");
+    seedOperation("business_audit", "succeeded");
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.failedOperations.audit).toBe(false);
+  });
+
+  it("keeps the three kinds apart", async () => {
+    seedProject();
+    seedOperation("product_scan", "failed");
+
+    const facts = await readNovaFocusFacts(client(), PROJECT);
+
+    expect(facts.failedOperations).toEqual({ agent: false, scan: true, audit: false });
+  });
+});
+
+/**
+ * The hole Slice 7 left: a run past `OPERATION_STALL_THRESHOLD_MS` was still
+ * reported as `working`, so a founder watching a lost run saw a stage label
+ * forever — and, with nothing else outstanding, "nothing needs you right now"
+ * printed beside it. `buildOperationView` had already decided it was stalled;
+ * nothing downstream acted on the answer.
+ */
+describe("a run that stopped answering", () => {
+  const LONG_AGO = new Date(Date.UTC(2026, 0, 1)).toISOString();
+
+  function seedRunning(operationType: string, startedAt: string) {
+    db.seed("operation_runs", {
+      id: `op_${(label += 1)}`,
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: operationType,
+      status: "running",
+      stage: "queued",
+      failure_code: null,
+      result_id: null,
+      input_identity: `identity_${label}`,
+      started_at: startedAt,
+      completed_at: null,
+      created_at: startedAt,
+    });
+  }
+
+  it("raises the restart Nova owns rather than saying nothing needs you", async () => {
+    seedProject();
+    seedRunning("product_scan", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.primary.kind).toBe("scan_stalled");
+    expect(focus.nextAction).toBe("nova.rescan_product");
+  });
+
+  /** Stated once: as a candidate, and therefore no longer as work in flight. */
+  it("stops calling a stalled run work in flight", async () => {
+    seedProject();
+    seedRunning("business_audit", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.working).toBeNull();
+    expect(focus.primary.kind).toBe("audit_stalled");
+  });
+
+  /**
+   * The other half of "exactly once". Nova owns no control that restarts a
+   * merge, so the run stays in `working` carrying `stalled`, where the
+   * progress entry says so and the merge panel offers its own way forward.
+   * Dropping it here would have been the same silence in a new place.
+   */
+  it("keeps a stall it cannot restart in working, saying it is stalled", async () => {
+    seedProject();
+    seedRunning("change_merge", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.working?.stalled).toBe(true);
+    expect(focus.primary.kind).toBe("nothing_to_do");
+  });
+
+  /** A run that is merely running is untouched: this changes nothing normal. */
+  it("leaves a live run alone", async () => {
+    seedProject();
+    seedRunning("product_scan", new Date().toISOString());
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect(focus.working?.stalled).toBe(false);
+    expect(focus.primary.kind).toBe("nothing_to_do");
+  });
+
+  /**
+   * A failed run and a stalled one of the same kind are two runs, and the
+   * founder is told about both — the observed failure first, because a stall
+   * is inferred from a clock rather than reported by anything.
+   */
+  it("tells a founder about a failure and a stall separately", async () => {
+    seedProject();
+    db.seed("operation_runs", {
+      id: "op_failed",
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: "agent_execution",
+      status: "failed",
+      stage: "queued",
+      failure_code: "provider_unavailable",
+      result_id: null,
+      input_identity: "identity_failed",
+      started_at: null,
+      completed_at: null,
+      created_at: new Date(Date.UTC(2026, 0, 2)).toISOString(),
+    });
+    seedRunning("product_scan", LONG_AGO);
+
+    const focus = await readNovaFocus(client(), PROJECT);
+
+    expect([focus.primary.kind, ...focus.secondary.map((entry) => entry.kind)]).toEqual([
+      "agent_failed",
+      "scan_stalled",
+    ]);
+  });
+});

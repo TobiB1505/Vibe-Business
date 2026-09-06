@@ -22,6 +22,7 @@ export type Database = {
           attestation_version: string
           attested_by_user_id: string
           created_at: string
+          finding: string | null
           id: string
           project_id: string
         }
@@ -32,6 +33,7 @@ export type Database = {
           attestation_version?: string
           attested_by_user_id: string
           created_at?: string
+          finding?: string | null
           id?: string
           project_id: string
         }
@@ -42,6 +44,7 @@ export type Database = {
           attestation_version?: string
           attested_by_user_id?: string
           created_at?: string
+          finding?: string | null
           id?: string
           project_id?: string
         }
@@ -1555,6 +1558,30 @@ export type Database = {
           },
         ]
       }
+      browser_runtime_images: {
+        Row: {
+          built_at: string
+          expires_at: string
+          id: string
+          runtime_version: string
+          snapshot_id: string
+        }
+        Insert: {
+          built_at?: string
+          expires_at: string
+          id?: string
+          runtime_version: string
+          snapshot_id: string
+        }
+        Update: {
+          built_at?: string
+          expires_at?: string
+          id?: string
+          runtime_version?: string
+          snapshot_id?: string
+        }
+        Relationships: []
+      }
       business_opportunities: {
         Row: {
           category: string
@@ -2266,10 +2293,14 @@ export type Database = {
       deep_scan_provider_usage: {
         Row: {
           access_mode: string
+          active_cpu_ms: number | null
+          cost_pricing_version: string | null
           created_at: string
           duration_ms: number
           ended_at: string
+          estimated_cost_nano_usd: number | null
           id: string
+          network_egress_bytes: number | null
           operation: string
           pages_inspected: number | null
           project_id: string | null
@@ -2278,13 +2309,18 @@ export type Database = {
           session_id: string | null
           started_at: string
           status: string
+          vcpus: number | null
         }
         Insert: {
           access_mode: string
+          active_cpu_ms?: number | null
+          cost_pricing_version?: string | null
           created_at?: string
           duration_ms: number
           ended_at: string
+          estimated_cost_nano_usd?: number | null
           id?: string
+          network_egress_bytes?: number | null
           operation: string
           pages_inspected?: number | null
           project_id?: string | null
@@ -2293,13 +2329,18 @@ export type Database = {
           session_id?: string | null
           started_at: string
           status: string
+          vcpus?: number | null
         }
         Update: {
           access_mode?: string
+          active_cpu_ms?: number | null
+          cost_pricing_version?: string | null
           created_at?: string
           duration_ms?: number
           ended_at?: string
+          estimated_cost_nano_usd?: number | null
           id?: string
+          network_egress_bytes?: number | null
           operation?: string
           pages_inspected?: number | null
           project_id?: string | null
@@ -2308,6 +2349,7 @@ export type Database = {
           session_id?: string | null
           started_at?: string
           status?: string
+          vcpus?: number | null
         }
         Relationships: [
           {
@@ -2408,11 +2450,15 @@ export type Database = {
       }
       execution_specs: {
         Row: {
+          absorbed_step_keys: string[]
+          absorbed_step_orders: number[]
           action_plan_id: string
           base_sha: string
           business_audit_id: string
           capability: string | null
           capability_version: string | null
+          chain_step_keys: string[]
+          chain_step_orders: number[]
           created_at: string
           credit_quote_id: string | null
           execution_class: string | null
@@ -2434,11 +2480,15 @@ export type Database = {
           step_order: number
         }
         Insert: {
+          absorbed_step_keys?: string[]
+          absorbed_step_orders?: number[]
           action_plan_id: string
           base_sha: string
           business_audit_id: string
           capability?: string | null
           capability_version?: string | null
+          chain_step_keys?: string[]
+          chain_step_orders?: number[]
           created_at?: string
           credit_quote_id?: string | null
           execution_class?: string | null
@@ -2460,11 +2510,15 @@ export type Database = {
           step_order: number
         }
         Update: {
+          absorbed_step_keys?: string[]
+          absorbed_step_orders?: number[]
           action_plan_id?: string
           base_sha?: string
           business_audit_id?: string
           capability?: string | null
           capability_version?: string | null
+          chain_step_keys?: string[]
+          chain_step_orders?: number[]
           created_at?: string
           credit_quote_id?: string | null
           execution_class?: string | null
@@ -2780,6 +2834,59 @@ export type Database = {
           },
           {
             foreignKeyName: "measurement_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nova_voice_messages: {
+        Row: {
+          claimed_at: string
+          fallback_reason: string | null
+          identity: string
+          locale: string
+          message: string | null
+          model: string
+          policy_version: string
+          project_id: string
+          prompt_version: string
+          resolved_at: string | null
+          slot: string
+          source: string | null
+        }
+        Insert: {
+          claimed_at?: string
+          fallback_reason?: string | null
+          identity: string
+          locale: string
+          message?: string | null
+          model: string
+          policy_version: string
+          project_id: string
+          prompt_version: string
+          resolved_at?: string | null
+          slot: string
+          source?: string | null
+        }
+        Update: {
+          claimed_at?: string
+          fallback_reason?: string | null
+          identity?: string
+          locale?: string
+          message?: string | null
+          model?: string
+          policy_version?: string
+          project_id?: string
+          prompt_version?: string
+          resolved_at?: string | null
+          slot?: string
+          source?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nova_voice_messages_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3208,6 +3315,8 @@ export type Database = {
           input_hash: string
           live_snapshot_id: string | null
           model: string | null
+          product_logo_url: string | null
+          product_name: string | null
           project_id: string
           prompt_version: string | null
           provider: string | null
@@ -3231,6 +3340,8 @@ export type Database = {
           input_hash: string
           live_snapshot_id?: string | null
           model?: string | null
+          product_logo_url?: string | null
+          product_name?: string | null
           project_id: string
           prompt_version?: string | null
           provider?: string | null
@@ -3254,6 +3365,8 @@ export type Database = {
           input_hash?: string
           live_snapshot_id?: string | null
           model?: string | null
+          product_logo_url?: string | null
+          product_name?: string | null
           project_id?: string
           prompt_version?: string | null
           provider?: string | null
@@ -3578,6 +3691,8 @@ export type Database = {
           created_at: string
           first_move_viewed_at: string | null
           live_site_status: string
+          nova_introduced_at: string | null
+          nova_workflow_status: string
           product_revealed_at: string | null
           project_id: string
           state: string
@@ -3589,6 +3704,8 @@ export type Database = {
           created_at?: string
           first_move_viewed_at?: string | null
           live_site_status?: string
+          nova_introduced_at?: string | null
+          nova_workflow_status?: string
           product_revealed_at?: string | null
           project_id: string
           state?: string
@@ -3600,6 +3717,8 @@ export type Database = {
           created_at?: string
           first_move_viewed_at?: string | null
           live_site_status?: string
+          nova_introduced_at?: string | null
+          nova_workflow_status?: string
           product_revealed_at?: string | null
           project_id?: string
           state?: string
@@ -3657,6 +3776,8 @@ export type Database = {
           private: boolean
           project_id: string
           updated_at: string
+          workspace_root: string | null
+          workspace_root_chosen_at: string | null
         }
         Insert: {
           created_at?: string
@@ -3672,6 +3793,8 @@ export type Database = {
           private: boolean
           project_id: string
           updated_at?: string
+          workspace_root?: string | null
+          workspace_root_chosen_at?: string | null
         }
         Update: {
           created_at?: string
@@ -3687,6 +3810,8 @@ export type Database = {
           private?: boolean
           project_id?: string
           updated_at?: string
+          workspace_root?: string | null
+          workspace_root_chosen_at?: string | null
         }
         Relationships: [
           {
@@ -4060,6 +4185,7 @@ export type Database = {
           failure_code: string | null
           failure_detail: string | null
           id: string
+          install_root: string
           operation_run_id: string
           package_manager: string
           prepared_change_id: string
@@ -4082,6 +4208,7 @@ export type Database = {
           validation_identity: string
           validation_profile: string
           validation_profile_version: string
+          workspace_root: string
         }
         Insert: {
           artifact_deleted_at?: string | null
@@ -4094,6 +4221,7 @@ export type Database = {
           failure_code?: string | null
           failure_detail?: string | null
           id?: string
+          install_root?: string
           operation_run_id: string
           package_manager: string
           prepared_change_id: string
@@ -4116,6 +4244,7 @@ export type Database = {
           validation_identity: string
           validation_profile: string
           validation_profile_version: string
+          workspace_root?: string
         }
         Update: {
           artifact_deleted_at?: string | null
@@ -4128,6 +4257,7 @@ export type Database = {
           failure_code?: string | null
           failure_detail?: string | null
           id?: string
+          install_root?: string
           operation_run_id?: string
           package_manager?: string
           prepared_change_id?: string
@@ -4150,6 +4280,7 @@ export type Database = {
           validation_identity?: string
           validation_profile?: string
           validation_profile_version?: string
+          workspace_root?: string
         }
         Relationships: [
           {
@@ -4201,11 +4332,14 @@ export type Database = {
         Args: {
           p_action_plan_id: string
           p_action_plan_step_key: string
+          p_finding?: string
           p_project_id: string
           p_user_id: string
         }
         Returns: string
       }
+      chain_keys_are_present: { Args: { p_keys: string[] }; Returns: boolean }
+      chain_orders_ascend: { Args: { p_orders: number[] }; Returns: boolean }
       claim_gateway_request: { Args: { p_run_id: string }; Returns: number }
       create_project_with_repository: {
         Args: {
@@ -4235,6 +4369,20 @@ export type Database = {
       erase_project_lifecycle: {
         Args: { p_project_id: string; p_user_id: string }
         Returns: boolean
+      }
+      list_ai_usage_events_for_run: {
+        Args: { p_project_id: string; p_run_id: string }
+        Returns: {
+          cache_creation_input_tokens: number
+          cache_read_input_tokens: number
+          created_at: string
+          input_tokens: number
+          latency_ms: number
+          output_tokens: number
+          provider_cost_usd: number
+          status: string
+          thinking_tokens: number
+        }[]
       }
       materialize_allocation_capacity: {
         Args: { p_allocation_id: string }
@@ -4293,6 +4441,13 @@ export type Database = {
         }
         Returns: string
       }
+      retention_sweep: {
+        Args: never
+        Returns: {
+          rows_deleted: number
+          swept_table: string
+        }[]
+      }
       scrub_audit_metadata: {
         Args: { m: Json; p_position?: number }
         Returns: Json
@@ -4307,6 +4462,13 @@ export type Database = {
       sum_ledger_deltas: {
         Args: { p_credit_account_id: string }
         Returns: number
+      }
+      sum_lot_allocation_capacity: {
+        Args: { p_grant_ids: string[] }
+        Returns: {
+          grant_id: string
+          occupied_units: number
+        }[]
       }
     }
     Enums: {
@@ -4326,12 +4488,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4355,11 +4517,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4380,11 +4542,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4405,11 +4567,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -4422,11 +4584,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

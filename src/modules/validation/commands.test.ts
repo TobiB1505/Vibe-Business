@@ -71,13 +71,18 @@ describe("step planning (§12, §19)", () => {
     // `npm test` on a repository with no test script exits non-zero. Reporting
     // that as a failure would be reporting a failure the user cannot act on.
     const plan = planValidationSteps({ packageManager: "npm", scripts: scriptsOf("build") });
-    const rendered = plan.filter((entry) => entry.run).map((entry) => describeCommand(entry.command));
+    const rendered = plan
+      .filter((entry) => entry.run)
+      .map((entry) => describeCommand(entry.command));
 
     expect(rendered.some((command) => /\btest\b/.test(command))).toBe(false);
   });
 
   it("accepts either spelling of a typecheck script", () => {
-    const plan = planValidationSteps({ packageManager: "pnpm", scripts: scriptsOf("type-check", "build") });
+    const plan = planValidationSteps({
+      packageManager: "pnpm",
+      scripts: scriptsOf("type-check", "build"),
+    });
     const typecheck = plan.find((entry) => entry.step === "typecheck");
 
     expect(typecheck?.run).toBe(true);
@@ -87,7 +92,10 @@ describe("step planning (§12, §19)", () => {
 
   it("treats an existing test script as required", () => {
     // Present but red is a real failure. It must not be softened into "skipped".
-    const plan = planValidationSteps({ packageManager: "pnpm", scripts: scriptsOf("test", "build") });
+    const plan = planValidationSteps({
+      packageManager: "pnpm",
+      scripts: scriptsOf("test", "build"),
+    });
     const test = plan.find((entry) => entry.step === "test");
 
     expect(test?.run).toBe(true);
@@ -125,8 +133,14 @@ describe("commands are structured, never shell strings (§13)", () => {
   });
 
   it("produces the same plan regardless of script declaration order", () => {
-    const forward = planValidationSteps({ packageManager: "pnpm", scripts: ["build", "test", "typecheck"] });
-    const reversed = planValidationSteps({ packageManager: "pnpm", scripts: ["typecheck", "test", "build"] });
+    const forward = planValidationSteps({
+      packageManager: "pnpm",
+      scripts: ["build", "test", "typecheck"],
+    });
+    const reversed = planValidationSteps({
+      packageManager: "pnpm",
+      scripts: ["typecheck", "test", "build"],
+    });
 
     expect(JSON.stringify(forward)).toBe(JSON.stringify(reversed));
   });

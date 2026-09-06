@@ -169,3 +169,86 @@ describe("the trend a card draws", () => {
     expect(busy?.score).toBe(89);
   });
 });
+
+describe("the name a card leads with", () => {
+  /*
+   * The card shows the product's own name, and the founder's correction
+   * outranks the derived one — the same authority order every other profile
+   * field has. Getting it wrong here is invisible until a founder corrects a
+   * name, sees /app/products obey and the dashboard ignore it.
+   */
+  function seedIdentity(
+    projectId: string,
+    columns: { product_name: string | null; product_logo_url: string | null },
+  ) {
+    seedProject(projectId, "invoicing-app");
+    seedAudit(projectId, 70, "2026-03-01T00:00:00.000Z");
+    db.seed("product_profiles", {
+      id: "profile_1",
+      project_id: projectId,
+      status: "completed",
+      ...columns,
+    });
+  }
+
+  it("is the derived name, over the label the founder typed", async () => {
+    seedIdentity(QUIET, {
+      product_name: "Payflow",
+      product_logo_url: "https://acme.test/logo.svg",
+    });
+
+    const overview = await getDashboardOverview(client(), USER);
+    const project = overview.projects.find((item) => item.id === QUIET);
+
+    expect(project?.name).toBe("invoicing-app");
+    expect(project?.productName).toBe("Payflow");
+    expect(project?.logoUrl).toBe("https://acme.test/logo.svg");
+  });
+
+  it("is the founder's correction, over the derived name", async () => {
+    seedIdentity(QUIET, { product_name: "Payflow", product_logo_url: null });
+    db.seed("product_profile_corrections", {
+      project_id: QUIET,
+      corrections: { name: "Payflow Invoicing" },
+    });
+
+    const overview = await getDashboardOverview(client(), USER);
+
+    expect(overview.projects.find((item) => item.id === QUIET)?.productName).toBe(
+      "Payflow Invoicing",
+    );
+  });
+
+  it("keeps the derived name when a correction touches some other field", async () => {
+    seedIdentity(QUIET, { product_name: "Payflow", product_logo_url: null });
+    db.seed("product_profile_corrections", {
+      project_id: QUIET,
+      corrections: { primaryAudience: "Independent studios" },
+    });
+
+    const overview = await getDashboardOverview(client(), USER);
+
+    expect(overview.projects.find((item) => item.id === QUIET)?.productName).toBe("Payflow");
+  });
+
+  it("is absent — never a stand-in — when no profile named the product", async () => {
+    seedIdentity(QUIET, { product_name: null, product_logo_url: null });
+
+    const overview = await getDashboardOverview(client(), USER);
+    const project = overview.projects.find((item) => item.id === QUIET);
+
+    // The card falls back to the project label itself. A read model that
+    // substituted it here would make "Vibe read a name" indistinguishable
+    // from "the founder typed one".
+    expect(project?.productName).toBeNull();
+    expect(project?.logoUrl).toBeNull();
+  });
+
+  it("costs no read at all for an account whose audits name no profile", async () => {
+    seedProject(BUSY, "Busy");
+
+    await getDashboardOverview(client(), USER);
+
+    expect(readsOf(recorder, "product_profiles")).toBe(0);
+  });
+});

@@ -11,8 +11,10 @@ import { auditSurface, canCompleteOnboarding } from "@/modules/onboarding/audit-
 import {
   completeProjectOnboarding,
   getProjectOnboarding,
+  markNovaIntroduced,
   markOnboardingMilestone,
   setLiveSiteStatus,
+  setNovaWorkflowStatus,
 } from "@/modules/onboarding/store";
 import type { OperationFailureCode } from "@/modules/operations/failures";
 import {
@@ -48,17 +50,14 @@ export type BeginUnderstandingState =
   | { ok: false; step: "understanding"; error: OperationFailureCode }
   | null;
 
-async function startDurableProductScan(
-  projectId: string,
-): Promise<BeginUnderstandingState> {
+async function startDurableProductScan(projectId: string): Promise<BeginUnderstandingState> {
   const session = await requireSession();
   const supabase = await createClient();
 
-  const outcome = await startProductScanOperation(
-    supabase,
-    new VercelWorkflowExecutor(),
-    { projectId, userId: session.userId },
-  );
+  const outcome = await startProductScanOperation(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+  });
   if (outcome.kind === "failed") {
     return { ok: false, step: "understanding", error: outcome.error };
   }
@@ -210,29 +209,68 @@ async function startFirstAudit(
   return { ok: true };
 }
 
-export async function confirmProductAndStartAuditAction(
-  projectId: string,
-  profileId: string,
-): Promise<ConfirmAndAuditState> {
-  const session = await requireSession();
+/**
+ * Confirming what Vibe understood, and starting an audit, are two decisions.
+ *
+ * §O.3: the split is right in the code and wrong on the screen. A founder who
+ * has just been shown what Vibe read should not be asked twice — *"is this
+ * right?"* then *"shall I audit it?"* is exactly the friction Nova exists to
+ * remove. So the two actions below write only the confirmation and start
+ * nothing, and the coupled pair underneath compose them with the audit for the
+ * one case where bundling is honest: while the first audit is free.
+ *
+ * Where the audit is priced, they stay apart, because rule 60 says a paid
+ * operation is never a side effect of a different question.
+ */
+export type ConfirmProductState = { ok: true } | { ok: false; error: "not_found" } | null;
+
+/** The ownership and profile checks both confirmations make, once. */
+async function confirmableProfile(projectId: string, profileId: string, userId: string) {
   const supabase = await createClient();
   const { data: project } = await supabase
     .from("projects")
     .select("id")
     .eq("id", projectId)
-    .eq("user_id", session.userId)
+    .eq("user_id", userId)
     .maybeSingle();
-  if (!project) return { ok: false, error: "not_found" };
+  if (!project) return null;
 
   const profile = await getProfileById(supabase, profileId);
-  if (!profile || profile.projectId !== projectId || profile.status !== "completed") {
-    return { ok: false, error: "not_found" };
-  }
-  const changed = await confirmProfile(supabase, { projectId, profileId });
+  if (!profile || profile.projectId !== projectId || profile.status !== "completed") return null;
+  return supabase;
+}
+
+async function recordConfirmation(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  params: { projectId: string; profileId: string; userId: string; corrected: boolean },
+): Promise<void> {
   const firstConfirmation = await markOnboardingMilestone(supabase, {
-    projectId,
+    projectId: params.projectId,
     milestone: "product_revealed_at",
   });
+  if (firstConfirmation) {
+    await recordAuditEvent(supabase, {
+      userId: params.userId,
+      projectId: params.projectId,
+      eventType: "onboarding.product_confirmed",
+      metadata: {
+        projectId: params.projectId,
+        profileId: params.profileId,
+        ...(params.corrected ? { corrected: true } : {}),
+      },
+    });
+  }
+}
+
+export async function confirmProductAction(
+  projectId: string,
+  profileId: string,
+): Promise<ConfirmProductState> {
+  const session = await requireSession();
+  const supabase = await confirmableProfile(projectId, profileId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
+
+  const changed = await confirmProfile(supabase, { projectId, profileId });
   if (changed) {
     await recordAuditEvent(supabase, {
       userId: session.userId,
@@ -241,38 +279,32 @@ export async function confirmProductAndStartAuditAction(
       metadata: { projectId, profileId },
     });
   }
-  if (firstConfirmation) {
-    await recordAuditEvent(supabase, {
-      userId: session.userId,
-      projectId,
-      eventType: "onboarding.product_confirmed",
-      metadata: { projectId, profileId },
-    });
-  }
+  await recordConfirmation(supabase, {
+    projectId,
+    profileId,
+    userId: session.userId,
+    corrected: false,
+  });
 
-  return startFirstAudit(supabase, { projectId, userId: session.userId });
+  revalidatePath(onboardingHref(projectId));
+  return { ok: true };
 }
 
-export async function correctProductAndStartAuditAction(
+export async function correctProductAction(
   projectId: string,
   profileId: string,
+  /*
+   * Typed as the wider state because one form drives either action depending
+   * on what the audit costs, and `useActionState` needs a single type for the
+   * pair. It is ignored either way — the previous result of a form is not an
+   * input to correcting a profile.
+   */
   _previous: ConfirmAndAuditState,
   formData: FormData,
-): Promise<ConfirmAndAuditState> {
+): Promise<ConfirmProductState> {
   const session = await requireSession();
-  const supabase = await createClient();
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("id", projectId)
-    .eq("user_id", session.userId)
-    .maybeSingle();
-  if (!project) return { ok: false, error: "not_found" };
-
-  const profile = await getProfileById(supabase, profileId);
-  if (!profile || profile.projectId !== projectId || profile.status !== "completed") {
-    return { ok: false, error: "not_found" };
-  }
+  const supabase = await confirmableProfile(projectId, profileId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
 
   const raw: Record<string, unknown> = {};
   for (const field of EDITABLE_FIELDS) {
@@ -282,24 +314,54 @@ export async function correctProductAndStartAuditAction(
   const corrections = sanitizeCorrections(raw);
   await saveCorrections(supabase, { projectId, corrections });
   await confirmProfile(supabase, { projectId, profileId });
-  const firstConfirmation = await markOnboardingMilestone(supabase, {
-    projectId,
-    milestone: "product_revealed_at",
-  });
   await recordAuditEvent(supabase, {
     userId: session.userId,
     projectId,
     eventType: "product_understanding.corrected",
     metadata: { projectId, profileId, fields: Object.keys(corrections) },
   });
-  if (firstConfirmation) {
-    await recordAuditEvent(supabase, {
-      userId: session.userId,
-      projectId,
-      eventType: "onboarding.product_confirmed",
-      metadata: { projectId, profileId, corrected: true },
-    });
-  }
+  await recordConfirmation(supabase, {
+    projectId,
+    profileId,
+    userId: session.userId,
+    corrected: true,
+  });
+
+  revalidatePath(onboardingHref(projectId));
+  return { ok: true };
+}
+
+/**
+ * The bundled pair, kept for the existing onboarding route and for Nova's
+ * free-first-audit path.
+ *
+ * They are compositions rather than copies: one implementation of "this
+ * profile is confirmed" means the two paths cannot drift into confirming
+ * differently, which is the failure a duplicated body invites.
+ */
+export async function confirmProductAndStartAuditAction(
+  projectId: string,
+  profileId: string,
+): Promise<ConfirmAndAuditState> {
+  const confirmed = await confirmProductAction(projectId, profileId);
+  if (confirmed && !confirmed.ok) return confirmed;
+
+  const session = await requireSession();
+  const supabase = await createClient();
+  return startFirstAudit(supabase, { projectId, userId: session.userId });
+}
+
+export async function correctProductAndStartAuditAction(
+  projectId: string,
+  profileId: string,
+  _previous: ConfirmAndAuditState,
+  formData: FormData,
+): Promise<ConfirmAndAuditState> {
+  const corrected = await correctProductAction(projectId, profileId, null, formData);
+  if (corrected && !corrected.ok) return corrected;
+
+  const session = await requireSession();
+  const supabase = await createClient();
   return startFirstAudit(supabase, { projectId, userId: session.userId });
 }
 
@@ -420,4 +482,76 @@ export async function completeOnboardingAction(projectId: string): Promise<void>
    * except the rail's own exit.
    */
   redirect("/app");
+}
+
+/**
+ * Nova's two first-run writes (NOVA-3).
+ *
+ * Positional identifiers and no `FormData`, deliberately: there is no form
+ * payload to read, and a parameter that exists only to be ignored is one the
+ * next person will reasonably start reading from
+ * (`validate-change-action.ts:40-47`).
+ *
+ * Neither starts anything, neither costs anything, and neither can be
+ * undone by the founder — nor needs to be. What they record is that a person
+ * saw a screen, which is the one class of fact Nova cannot derive from a
+ * canonical row on the next render.
+ */
+export type NovaFirstRunActionState = { ok: true } | { ok: false; error: "not_found" };
+
+async function ownedProject(projectId: string, userId: string) {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return data ? supabase : null;
+}
+
+export async function markNovaIntroducedAction(
+  projectId: string,
+): Promise<NovaFirstRunActionState> {
+  const session = await requireSession();
+  const supabase = await ownedProject(projectId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
+
+  /*
+   * The event is recorded only when this call was the one that wrote the
+   * timestamp. Two tabs pressing "Continue" is ordinary, and a trail that
+   * showed two introductions would be describing something that happened once.
+   */
+  if (await markNovaIntroduced(supabase, { projectId })) {
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      projectId,
+      eventType: "nova.introduced",
+      metadata: { projectId },
+    });
+  }
+
+  revalidatePath(onboardingHref(projectId));
+  return { ok: true };
+}
+
+export async function setNovaWorkflowStatusAction(
+  projectId: string,
+  status: "explained" | "skipped",
+): Promise<NovaFirstRunActionState> {
+  const session = await requireSession();
+  const supabase = await ownedProject(projectId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
+
+  if (await setNovaWorkflowStatus(supabase, { projectId, status })) {
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      projectId,
+      eventType: "nova.workflow_answered",
+      metadata: { projectId, answer: status },
+    });
+  }
+
+  revalidatePath(onboardingHref(projectId));
+  return { ok: true };
 }

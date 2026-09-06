@@ -95,22 +95,40 @@ const TASK: AgentTask = {
   lens: "revenue_economics",
   step: { order: 2, title: "Add a clear pricing section to your website" },
   steps: [
-    "Add a clear pricing section to your website",
-    "Connect your existing checkout flow",
-    "Make the paid path obvious for visitors",
-    "Ensure everything works for signed-in users",
+    { title: "Add a clear pricing section to your website", kind: "delivery" },
+    { title: "Connect your existing checkout flow", kind: "delivery" },
+    { title: "Make the paid path obvious for visitors", kind: "preparation" },
+    { title: "Ensure everything works for signed-in users", kind: "preparation" },
   ],
 };
 
 import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
+import type { ValidationSummary } from "@/modules/validation/view";
+import type { ChangeCost } from "@/components/system/cost-line";
+import { creditUnits } from "@/modules/credits/units";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
+import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
 
-/** The four checks the sandbox actually runs, mid-flight. */
+/**
+ * The validation's phases mid-flight, at the shape `validationChecks` now
+ * produces them (audit R32).
+ *
+ * The source-integrity phase leads because it is the one the founder cannot
+ * infer: it says what Vibe proved about the bytes the sandbox ran, before any
+ * of the commands below it means anything. And two phases are `skipped`, which
+ * is what the depth note beside this list exists to explain.
+ */
 const CHECKS: ValidationCheck[] = [
+  { name: "Source integrity", detail: "Source integrity", state: "passed" },
   { name: "Dependencies", detail: "Installing packages", state: "passed" },
-  { name: "Type safety", detail: "Checking TypeScript types", state: "passed" },
-  { name: "Tests", detail: "Running unit and integration tests", state: "passed" },
-  { name: "Production build", detail: "Building for production", state: "running" },
+  { name: "Type safety", detail: "Checking TypeScript types", state: "running" },
+  { name: "Tests", detail: "Skipped — not needed for this change", state: "skipped" },
+  {
+    name: "Production build",
+    detail: "Skipped — not needed for this change",
+    state: "skipped",
+  },
 ];
 
 const FILE_EVENTS: StoredExecutionEvent[] = ([
@@ -202,11 +220,19 @@ type Fixture = {
   activity: TimelineStep[];
   task: AgentTask | null;
   checks: ValidationCheck[];
+  /** How much of the profile ran, and why. Null before depth existed. */
+  validationDepth: ValidationSummary["depth"];
+  /** What the run cost, from the hold it ran against. */
+  cost: ChangeCost;
   previewChanges: PreviewChange[];
   mergeFiles: MergeFile[];
   mergeSummary: MergeSummary;
   previewImages: PreviewImages | null;
   fileEvents: StoredExecutionEvent[];
+  /** What the run reported doing last, or null between actions. */
+  currentAction: string | null;
+  /** Every path the run touched, including the ones policy refused. */
+  files: LiveFile[];
   /**
    * A start the founder asked for and did not get.
    *
@@ -216,6 +242,16 @@ type Fixture = {
    * so the notice is what the browser suite sees.
    */
   startRefusal: AgentStartRefusalDetail | null;
+  /**
+   * The chain offer, when there is one.
+   *
+   * A fixture rather than a live resolution, like everything else here — what
+   * this proves is that a screen offered two prices, named both, and left the
+   * single step reachable. Whether `resolveBuildChain` picks the right members
+   * is `chain.test.ts`'s question and is answered against the founder's real
+   * plan there.
+   */
+  chainOffer: { memberCount: number; chainCredits: string; stepCredits: string; boundary: string } | null;
 };
 
 function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
@@ -227,12 +263,36 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     activity: [...(input.timeline ?? [])],
     task: input.timeline === null ? null : TASK,
     checks: CHECKS,
+    /*
+     * A depth that skipped two steps, with the reason. The check rows can say
+     * a step was skipped; only this says it was a decision and which one.
+     */
+    cost: { kind: "settled", credits: creditUnits(200_000) },
+    validationDepth: {
+      depth: "fast",
+      label: "Fast",
+      reason: "a low-risk presentational change",
+      notRun: ["test", "build"],
+    },
     previewChanges: PREVIEW_CHANGES,
     mergeFiles: MERGE_FILES,
     mergeSummary: MERGE_SUMMARY,
     previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
+    currentAction: input.timeline === null ? null : "Editing src/app/pricing/page.tsx",
+    /*
+     * One refused path among the touched ones. It is the state the change
+     * itself cannot show — a file that is not in it because policy said no
+     * looks exactly like a file nobody touched.
+     */
+    files: [
+      { path: "src/app/pricing/page.tsx", kind: "generated", detail: null, bytes: 1840, withheldBy: null },
+      { path: "src/components/pricing-table.tsx", kind: "generated", detail: null, bytes: 920, withheldBy: null },
+      { path: "package.json", kind: "observed", detail: null, bytes: null, withheldBy: null },
+      { path: ".env.local", kind: "candidate", detail: null, bytes: null, withheldBy: "Sensitive path policy" },
+    ],
     startRefusal: null,
+    chainOffer: null,
   };
 }
 
@@ -243,7 +303,46 @@ const running = (status: OperationStatus = "running") => ({
   filesInspected: 6,
 });
 
+/**
+ * A run that would carry two steps, and the founder's two ways out of it.
+ *
+ * The failure this catches is a screen showing one price for two options — or
+ * offering a chain with no way to decline it, which turns "offered, never
+ * imposed" into a sentence nobody can act on.
+ */
+const CHAIN_OFFER = {
+  memberCount: 2,
+  chainCredits: "350",
+  stepCredits: "200",
+  boundary: BUILD_CHAIN_BOUNDARY_LABELS.successor_risk_ceiling!,
+};
+
 export const E2E_AGENT_STAGE_SCENARIOS = {
+  /** The chain, offered. Two controls, two figures, and the reason it stops. */
+  "agent-stages-chain-offered": () => ({
+    ...build({ timeline: null, runStatus: null, changeProgress: null }),
+    task: {
+      ...TASK,
+      steps: [
+        { title: "Add a clear pricing section to your website", kind: "delivery" as const },
+        { title: "Make the pricing page reachable", kind: "delivery" as const },
+      ],
+    },
+    chainOffer: CHAIN_OFFER,
+  }),
+
+  /** The same plan, one step. The screen exactly as it was before chains. */
+  "agent-stages-chain-declined": () => ({
+    ...build({ timeline: null, runStatus: null, changeProgress: null }),
+    task: {
+      ...TASK,
+      steps: [
+        { title: "Add a clear pricing section to your website", kind: "delivery" as const },
+      ],
+    },
+    chainOffer: null,
+  }),
+
   /** Nothing has ever run. Five pending stages and an idle core. */
   "agent-stages-idle": () =>
     build({ timeline: null, runStatus: null, changeProgress: null }),
@@ -377,6 +476,7 @@ export function agentReadyForecastNotes(): readonly string[] {
     step: { changeKind: "product_change", evidenceIds: ["live.seo.robots_meta_missing"] },
     riskClass: "moderate",
     snapshot: null,
+    observations: [],
   });
 
   return forecast ? [forecastEvidenceNote(forecast), ...forecastDriverNotes(forecast)] : [];

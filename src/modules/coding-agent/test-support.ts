@@ -101,6 +101,8 @@ export function fakeAgentSpec(overrides: Partial<Parameters<typeof buildExecutio
       profileVersion: validationProfileVersionFor("nextjs_node_v1"),
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       sandboxSteps: ["install", "typecheck", "test", "build"],
+    workspaceRoot: ".",
+      installRoot: ".",
     },
     budget: { budgetPolicyVersion: "fixture", ...fakeBudget() },
     credit: { quoteId: "quote-1", maxAuthorizedCredits: creditsToUnits(200) },

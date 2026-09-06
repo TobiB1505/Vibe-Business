@@ -173,8 +173,35 @@ describe("buildDeepScanViewModel — completed", () => {
       pagesInspected: 7,
       completeness: "complete",
       surfaces: [{ id: "dashboard", name: "Dashboard" }],
+      warnings: [],
       accessMode: "included_first_scan",
     });
+  });
+
+  /*
+   * The snapshot has carried warnings since it existed, and the view model
+   * dropped them — so a partial scan could say only "finished: only partly"
+   * about four specific things it had already written down.
+   */
+  it("carries what the scan could not check, in the words it recorded", () => {
+    const withWarnings = {
+      ...completed,
+      latestSnapshot: {
+        ...completed.latestSnapshot!,
+        result: {
+          ...completed.latestSnapshot!.result,
+          warnings: [
+            { code: "navigation_timeout", message: "One page took too long to load." },
+            { code: "surface_ambiguous", message: "Vibe could not tell two settings pages apart." },
+          ],
+        },
+      },
+    } as typeof completed;
+
+    expect(build(withWarnings).lastResult?.warnings).toEqual([
+      "One page took too long to load.",
+      "Vibe could not tell two settings pages apart.",
+    ]);
   });
 
   it("lists detected surfaces only, never the undetected ones", () => {

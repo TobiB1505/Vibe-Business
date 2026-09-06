@@ -1,4 +1,4 @@
-import { isSourcePath, pathBasename } from "./path-policy";
+import { isSourcePath, pathBasename, pathSegments } from "./path-policy";
 import { parsePackageJson, type ParsedPackageJson } from "./parsers/package-json";
 import type { TreeEntry } from "./reader";
 import type { Warning } from "./schema";
@@ -25,6 +25,22 @@ export type DetectionContext = {
   rootPackageJson: ParsedPackageJson | null;
   /** Union of dependency names across every parsed package.json. */
   allNodeDependencies: Set<string>;
+  /**
+   * Directories whose `pnpm-workspace.yaml` actually declares member packages.
+   *
+   * Presence of the file used to be the whole signal, and it over-claims:
+   * pnpm 10 moved `overrides`, `patchedDependencies` and `allowBuilds` into it,
+   * so a single-package repository pinning one transitive dependency has the
+   * file and no workspace. **This repository is one of those**, which is how
+   * the over-claim was found — while `declaresWorkspaces` had no consumer that
+   * acted on it, that was inert; the moment it decides where an install runs,
+   * it is a wrong answer with a sandbox behind it.
+   *
+   * The `packages:` key is what a workspace *is* to pnpm, so it is what gets
+   * read — a line-anchored key test, not a YAML parser, and the boolean is all
+   * that leaves this function. No file text travels further.
+   */
+  pnpmWorkspacePackages: Set<string>;
   /** Lowercased text of parsed Python/other dependency manifests, by path. */
   textManifests: { path: string; content: string }[];
   /**
@@ -39,6 +55,21 @@ export type DetectionContext = {
 export type FetchedFile = { path: string; content: string };
 
 const PYTHON_MANIFESTS = new Set(["requirements.txt", "pyproject.toml", "Pipfile"]);
+
+/**
+ * A top-level `packages:` key, quoted or not.
+ *
+ * Anchored to the start of a line so a `packages:` nested under another key —
+ * indented, and therefore not the workspace declaration — does not match. That
+ * is the whole of the YAML this reads.
+ */
+const PNPM_WORKSPACE_PACKAGES = /^["']?packages["']?[ \t]*:/m;
+
+/** The directory a repository-relative path sits in. `"."` for the root. */
+function directoryOfPath(path: string): string {
+  const segments = pathSegments(path);
+  return segments.length <= 1 ? "." : segments.slice(0, -1).join("/");
+}
 
 /** Files whose text is read for design tokens rather than dependencies. */
 const STYLE_EXTENSIONS = /\.css$|^tailwind\.config\.(js|cjs|mjs|ts|mts)$/i;
@@ -58,6 +89,7 @@ export function buildDetectionContext(
   const packageJsons: { path: string; parsed: ParsedPackageJson }[] = [];
   const textManifests: { path: string; content: string }[] = [];
   const styleSheets: { path: string; content: string }[] = [];
+  const pnpmWorkspacePackages = new Set<string>();
 
   for (const file of files) {
     const basename = pathBasename(file.path);
@@ -81,15 +113,26 @@ export function buildDetectionContext(
       continue;
     }
 
+    if (basename === "pnpm-workspace.yaml") {
+      if (PNPM_WORKSPACE_PACKAGES.test(file.content)) {
+        pnpmWorkspacePackages.add(directoryOfPath(file.path));
+      }
+      continue;
+    }
+
     // Other manifests are matched textually rather than fully parsed:
     // detecting a declared dependency does not require a TOML/INI parser,
     // and avoiding one keeps the dependency surface small.
-    if (PYTHON_MANIFESTS.has(basename) || ["composer.json", "Gemfile", "go.mod", "Cargo.toml"].includes(basename)) {
+    if (
+      PYTHON_MANIFESTS.has(basename) ||
+      ["composer.json", "Gemfile", "go.mod", "Cargo.toml"].includes(basename)
+    ) {
       textManifests.push({ path: file.path, content: file.content.toLowerCase() });
     }
   }
 
-  const rootPackageJson = packageJsons.find((entry) => entry.path === "package.json")?.parsed ?? null;
+  const rootPackageJson =
+    packageJsons.find((entry) => entry.path === "package.json")?.parsed ?? null;
 
   const allNodeDependencies = new Set<string>();
   for (const { parsed } of packageJsons) {
@@ -106,6 +149,7 @@ export function buildDetectionContext(
     packageJsons,
     rootPackageJson,
     allNodeDependencies,
+    pnpmWorkspacePackages,
     textManifests,
     styleSheets,
   };
@@ -120,11 +164,15 @@ export function hasNodeDependency(context: DetectionContext, name: string): bool
 
 /** The path of the first package.json declaring `name`, for evidence. */
 export function nodeDependencySource(context: DetectionContext, name: string): string | null {
-  return context.packageJsons.find((entry) => entry.parsed.allDependencies.includes(name))?.path ?? null;
+  return (
+    context.packageJsons.find((entry) => entry.parsed.allDependencies.includes(name))?.path ?? null
+  );
 }
 
 /** True when a non-Node manifest mentions `token` (already lowercased). */
 export function textManifestMentions(context: DetectionContext, token: string): string | null {
-  const match = context.textManifests.find((manifest) => manifest.content.includes(token.toLowerCase()));
+  const match = context.textManifests.find((manifest) =>
+    manifest.content.includes(token.toLowerCase()),
+  );
   return match ? match.path : null;
 }

@@ -7,6 +7,7 @@ import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import { resolveExecutionDependencies } from "./dependencies";
 import { classifyExecutionRisk } from "./risk";
+import type { ValidationBlockReason } from "@/modules/validation/schema";
 import { resolveExecutionValidation } from "./validation-requirements";
 import {
   CURRENT_AGENTIC_EXECUTION_CLASS,
@@ -113,10 +114,18 @@ export type PlanContext = {
   /**
    * Step orders recorded as finished.
    *
-   * Empty today — nothing in the product completes a step yet, exactly as
-   * `action-plans/sequence.ts` documents. Threaded through rather than assumed
-   * so that the moment completion exists, dependency resolution is already
-   * correct rather than needing to be rediscovered.
+   * Threaded through rather than assumed, and the caller decides what "finished"
+   * means. There are two honest answers and this is the narrower one: a step
+   * counts here when the next step could actually be built on top of it, which
+   * for an agent step means its change is on the default branch
+   * (`completedStepsForExecutionRouting`). The plan screen asks the wider
+   * question and answers it from a passed validation (ADR 0054).
+   *
+   * It was empty for a long time, and the comment saying so outlived the fact
+   * by several sprints: ADR 0054 shipped the projection, and nothing passed it
+   * here. A validated, merged step went on reading as an unfinished
+   * prerequisite, so its successor was permanently unstartable and the screen
+   * told the founder an earlier step had to finish first.
    */
   completedSteps: ReadonlySet<number>;
   /** Whether this plan is still the project's current one. */
@@ -342,7 +351,7 @@ function classifyIntrinsic(input: ResolveExecutionInput): Classification {
     // repository. No profile means no way to prove a change is anything, and
     // §31 forbids letting the agent's own claim stand in for one.
     const validation = resolveExecutionValidation(repository.snapshot);
-    if (!validation.supported) unmet.push("validation_profile_unsupported");
+    if (!validation.supported) unmet.push(unmetFor(validation.reason));
   }
 
   if (unmet.length > 0) {
@@ -373,10 +382,7 @@ function classifyIntrinsic(input: ResolveExecutionInput): Classification {
  * not "inadmissible" — the concept does not apply to it — so admission is
  * refused with `not_executable_mode` and no live state is consulted at all.
  */
-function evaluateAdmission(
-  input: ResolveExecutionInput,
-  mode: ExecutionMode,
-): ExecutionAdmission {
+function evaluateAdmission(input: ResolveExecutionInput, mode: ExecutionMode): ExecutionAdmission {
   if (mode !== "agentic" && mode !== "deterministic") {
     return { admissible: false, refusal: "not_executable_mode" };
   }
@@ -511,4 +517,36 @@ export function resolvePlanExecution(
   return [...input.plan.steps]
     .sort((a, b) => a.order - b.order)
     .map((step) => resolveStepExecution({ ...input, step }));
+}
+
+/**
+ * The specific thing a founder is missing, from the validation resolver's own
+ * vocabulary.
+ *
+ * A single `validation_profile_unsupported` used to cover all of these, which
+ * told a founder Vibe could not prove a change to their project and nothing
+ * about why. Every one of these is fixable, and most in a minute — but only if
+ * the screen says which one it is.
+ */
+function unmetFor(reason: ValidationBlockReason): ExecutionResolutionReason {
+  switch (reason) {
+    case "not_a_node_project":
+      return "no_node_project";
+    case "no_build_script":
+      return "no_build_script";
+    case "lockfile_missing":
+      return "no_lockfile";
+    case "package_manager_unsupported":
+      return "package_manager_unsupported";
+    case "workspace_choice_required":
+      return "workspace_choice_required";
+    case "repository_analysis_outdated":
+      return "repository_analysis_outdated";
+    default:
+      // `ambiguous_workspace`, `prepared_change_not_ready`,
+      // `repository_connection_invalid` and the residual
+      // `validation_not_supported` — none of which a plan screen can name more
+      // usefully than the general sentence does.
+      return "validation_profile_unsupported";
+  }
 }

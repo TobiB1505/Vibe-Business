@@ -209,16 +209,16 @@ export function checkBudgetMatchesScope(input: {
 }
 
 /**
- * The write scope the CORE-4 dogfood policy compiles (§17).
+ * The write scope an agent policy compiles (§17).
  *
  * Core-3 left `writeScope` as a constructor argument with fixture values,
  * because no approved budget existed to derive one from. This is that
- * derivation: the mutation half mirrors the dogfood budget exactly (so
+ * derivation: the mutation half mirrors the run's own budget exactly (so
  * `checkBudgetMatchesScope` passes by construction), and the discovery half is
  * generous within a bound for the reason `policy.ts` documents — an agent
  * cannot know which files it must change before it has looked.
  */
-export const CORE4_DOGFOOD_DISCOVERY = {
+export const AGENT_DISCOVERY_SCOPE = {
   /**
    * 300 file reads.
    *

@@ -13,7 +13,6 @@ import { prepareBenchmark, renderBenchmarkPreparation } from "./benchmark";
  * ```
  * NEXT_PUBLIC_SUPABASE_URL=… \
  * SUPABASE_SERVICE_ROLE_KEY=… \
- * VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS=<uuid> \
  * VIBE_DOGFOOD_PROJECT_ID=<uuid> \
  * VIBE_DOGFOOD_FIXTURE=low-ui-primary-cta \
  * pnpm agent:dogfood
@@ -33,13 +32,19 @@ import { prepareBenchmark, renderBenchmarkPreparation } from "./benchmark";
  * product action, and a benchmark that left rows behind every time somebody
  * checked its shape would pollute the very metrics it exists to produce.
  *
- * ## Starting the real run
+ * ## There is no longer a way to start a fixture run
  *
- * Through the existing internal dogfood surface, which is already gated by the
- * operator allowlist, already re-resolves ownership from the session, and
- * already goes through the one idempotent `startAgentExecution`. The step key
- * this probe prints is the URL segment that surface takes. A second start path
- * would be a second thing to audit, and this needs none.
+ * There used to be: the operator allowlist gated the website's Run button, and
+ * a fixture step key handed to it started a real, paid benchmark through the
+ * same idempotent `startAgentExecution` a founder reaches. [ADR 0092](../../../../docs/decisions/0092-the-agent-runs-as-the-product.md) removed
+ * that allowlist so every customer can run the agent — which also means a
+ * crafted step key would let any of them start a Vibe-authored task against
+ * their own repository. So `previewAgentStep` resolves plan steps only, and
+ * this harness is a dry run: it compiles a fixture through the production
+ * pipeline and prints what a run would be given.
+ *
+ * The measurement the fixtures existed to produce comes from real runs now
+ * ([ADR 0083](../../../../docs/decisions/0083-the-estimator-reads-the-runs.md)).
  */
 
 const PROJECT_ID = process.env.VIBE_DOGFOOD_PROJECT_ID;
@@ -107,12 +112,11 @@ describe("internal benchmark harness — dry run", () => {
     console.log("");
     console.log(renderBenchmarkPreparation(prepared));
     console.log("");
-    console.log("── To start the real, PAID run ─────────────────────────────");
-    console.log("  This command cannot. Open the internal dogfood surface and click Run with Vibe:");
+    console.log("── This is a dry run, and there is no way to start it ──────");
+    console.log("  A fixture step key no longer reaches the website's Run button (ADR 0092):");
+    console.log("  the start path resolves steps of the project's own plan only.");
     console.log("");
-    console.log(`    /app/projects/${PROJECT_ID}/agent-dogfood/${encodeURIComponent(prepared.stepKey)}`);
-    console.log("");
-    console.log(`  PAID EXECUTION · model ${prepared.compiled.model} · max provider spend ` +
+    console.log(`  Would have run · model ${prepared.compiled.model} · max provider spend ` +
       `$${prepared.preview.economics.budget.maxProviderSpendUsd} · base ${prepared.compiled.baseSha}`);
     console.log("");
 

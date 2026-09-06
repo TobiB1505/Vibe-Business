@@ -101,6 +101,15 @@ export type AuditDenialReason =
   | "audit_already_running"
   /** Too many recent starts — see AUDIT_START_LIMITS. */
   | "start_attempts_exhausted"
+  /**
+   * A scan underneath this audit was made by an analyzer Vibe has corrected.
+   *
+   * Ahead of the profile reasons on purpose: the profile hashes the snapshot's
+   * id, not the analyzer that produced it, so a profile sitting on a corrected
+   * scan reports itself current. Checking the profile first would let the
+   * audit start on evidence Vibe already knows is wrong.
+   */
+  | "scan_outdated"
   /** The Product Profile prerequisite is not satisfied (CORE-2 §8). */
   | "product_profile_missing"
   /** The profile is older than the evidence that exists now (CORE-2 §8). */
@@ -174,6 +183,8 @@ export type AuditEntitlementFacts = {
    */
   storedAudit: { contractVersion: string | null } | null;
   /** A completed Product Profile exists for this project (CORE-2 §3). */
+  /** Both scans were produced by the analyzers running now. */
+  scansCurrent: boolean;
   hasProductProfile: boolean;
   /**
    * The profile was built from the evidence that exists now.
@@ -196,6 +207,13 @@ export type AuditEntitlementFacts = {
  */
 export function authorizeAudit(facts: AuditEntitlementFacts): AuditAuthorization {
   // 1. Prerequisites. Nothing to reason from.
+  //
+  // The scan comes first because everything below it is derived from the scan,
+  // and none of those derivations can notice that the machine which produced
+  // it has since been corrected.
+  if (!facts.scansCurrent) {
+    return { allowed: false, reason: "scan_outdated" };
+  }
   if (!facts.hasProductProfile) {
     return { allowed: false, reason: "product_profile_missing" };
   }

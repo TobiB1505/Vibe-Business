@@ -507,30 +507,36 @@ export async function recordPreviewSandboxUsage(
     vcpus: PREVIEW_RESOURCES.vcpus,
   });
 
-  const { data, error } = await supabase.from("sandbox_usage_events").insert({
-    project_id: params.projectId,
-    user_id: params.userId,
-    preview_session_id: params.previewSessionId,
-    operation: "change_preview",
-    provider: params.provider,
-    runtime: params.runtime,
-    status: params.status,
-    sandbox_duration_ms: params.sandboxDurationMs,
-    active_cpu_ms: params.usage?.activeCpuDurationMs ?? null,
-    network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
-    network_egress_bytes: params.usage?.networkEgressBytes ?? null,
-    // What the provider said, which for a Vercel sandbox is nothing. Left
-    // exactly as it was: the estimate beside it is a different claim and gets
-    // its own columns (ADR 0073).
-    provider_cost_usd: params.usage?.costUsd ?? null,
-    estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
-    cost_pricing_version: estimate.pricingVersion,
-    vcpus: estimate.vcpus,
-    cleanup_status: params.cleanupStatus,
-    failure_code: params.failureCode,
-    // Deliberately no detail column: a preview's diagnostics belong on the
-    // session, and the ledger is for numbers.
-  }).select("id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at").single();
+  const { data, error } = await supabase
+    .from("sandbox_usage_events")
+    .insert({
+      project_id: params.projectId,
+      user_id: params.userId,
+      preview_session_id: params.previewSessionId,
+      operation: "change_preview",
+      provider: params.provider,
+      runtime: params.runtime,
+      status: params.status,
+      sandbox_duration_ms: params.sandboxDurationMs,
+      active_cpu_ms: params.usage?.activeCpuDurationMs ?? null,
+      network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
+      network_egress_bytes: params.usage?.networkEgressBytes ?? null,
+      // What the provider said, which for a Vercel sandbox is nothing. Left
+      // exactly as it was: the estimate beside it is a different claim and gets
+      // its own columns (ADR 0073).
+      provider_cost_usd: params.usage?.costUsd ?? null,
+      estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
+      cost_pricing_version: estimate.pricingVersion,
+      vcpus: estimate.vcpus,
+      cleanup_status: params.cleanupStatus,
+      failure_code: params.failureCode,
+      // Deliberately no detail column: a preview's diagnostics belong on the
+      // session, and the ledger is for numbers.
+    })
+    .select(
+      "id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at",
+    )
+    .single();
 
   /*
    * Into the billing ledger immediately (ADR 0073).

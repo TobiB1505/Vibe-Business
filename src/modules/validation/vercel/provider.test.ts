@@ -201,7 +201,12 @@ describe("command failures explain themselves (post-dogfood)", () => {
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/acme/p.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -234,7 +239,12 @@ describe("command failures explain themselves (post-dogfood)", () => {
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/acme/p.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -368,7 +378,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/a/b.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -413,7 +428,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/a/b.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -473,7 +493,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/a/b.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -520,7 +545,11 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
         },
         // What createSnapshot's response actually carried: the stop was
         // requested, not finished.
-        currentSession: () => ({ status: "snapshotting", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+        currentSession: () => ({
+          status: "snapshotting",
+          activeCpuUsageMs: undefined,
+          networkTransfer: undefined,
+        }),
         async stop() {
           throw new Error("sandbox is no longer running");
         },
@@ -543,7 +572,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
       const { createVercelSandboxProvider } = await import("./provider");
       const sandbox = await createVercelSandboxProvider().create({
         name: "vibe-validate-abc",
-        source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+        source: {
+          kind: "git",
+          repositoryUrl: "https://github.com/a/b.git",
+          revision: "abc",
+          credential: null,
+        },
         networkPolicy: { mode: "deny_all" },
         timeoutMs: 1000,
         env: {},
@@ -571,7 +605,11 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
         async snapshot() {
           return { snapshotId: "snap_6", sizeBytes: 1, expiresAt: null };
         },
-        currentSession: () => ({ status: "snapshotting", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+        currentSession: () => ({
+          status: "snapshotting",
+          activeCpuUsageMs: undefined,
+          networkTransfer: undefined,
+        }),
         async stop() {
           throw new Error("sandbox is no longer running");
         },
@@ -580,13 +618,22 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
       // Never converges: every re-read still reports snapshotting.
       get.mockResolvedValue({
         name: "vibe-validate-abc",
-        currentSession: () => ({ status: "snapshotting", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+        currentSession: () => ({
+          status: "snapshotting",
+          activeCpuUsageMs: undefined,
+          networkTransfer: undefined,
+        }),
       });
 
       const { createVercelSandboxProvider } = await import("./provider");
       const sandbox = await createVercelSandboxProvider().create({
         name: "vibe-validate-abc",
-        source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+        source: {
+          kind: "git",
+          repositoryUrl: "https://github.com/a/b.git",
+          revision: "abc",
+          credential: null,
+        },
         networkPolicy: { mode: "deny_all" },
         timeoutMs: 1000,
         env: {},
@@ -632,7 +679,11 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
         return { snapshotId: "snap_3", sizeBytes: 1, expiresAt: null };
       },
       // What run 1 actually saw: a record with no usage on it at all.
-      currentSession: () => ({ status: "running", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+      currentSession: () => ({
+        status: "running",
+        activeCpuUsageMs: undefined,
+        networkTransfer: undefined,
+      }),
       async stop() {
         throw new Error("sandbox is no longer running");
       },
@@ -641,7 +692,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/a/b.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -680,7 +736,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/a/b.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -698,7 +759,6 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     spy.mockRestore();
   });
 
-
   it("passes the explicit expiry through to the provider", async () => {
     const snapshot = vi.fn(async () => ({ snapshotId: "s", sizeBytes: 1, expiresAt: null }));
     create.mockResolvedValue({
@@ -713,7 +773,12 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      source: {
+        kind: "git",
+        repositoryUrl: "https://github.com/a/b.git",
+        revision: "abc",
+        credential: null,
+      },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -888,7 +953,13 @@ describe("attributing a session that ended early", () => {
     get.mockResolvedValue({ name: "vibe-validate-abc", status: "stopped", timeout: 900_000 });
     listSessions.mockResolvedValue({
       sessions: [
-        { status: "stopped", timeout: 900_000, startedAt: 1000, stoppedAt: 283_318, requestedStopAt: 283_000 },
+        {
+          status: "stopped",
+          timeout: 900_000,
+          startedAt: 1000,
+          stoppedAt: 283_318,
+          requestedStopAt: 283_000,
+        },
       ],
     });
 

@@ -140,11 +140,24 @@ test.describe("the conclusion comes first", () => {
     await expect(sources).toContainText("3/4");
   });
 
-  test("never shows a count of files, routes or detections", async ({ page }) => {
+  test("never shows a count of files, routes or detections as a finding", async ({ page }) => {
     await forbidExternalCalls(page);
     await page.goto(READY);
 
-    const body = (await page.locator("body").innerText()).toLowerCase();
+    /*
+     * Everything except the coverage list, which is where a count belongs.
+     *
+     * This asserted no file count anywhere, and against a page that led with
+     * "431 files scanned" that was right — a measurement is not an
+     * understanding. The audit's R6 asks each source to say how much of it was
+     * read, which is the opposite claim: not what Vibe found, but how far it
+     * got before it stopped. It is provenance beside the source, never a
+     * conclusion, and the rest of the page still may not carry one.
+     */
+    const visible = await page.locator("body").innerText();
+    const coverage = await page.getByTestId("source-coverage").innerText();
+    const body = visible.replace(coverage, "").toLowerCase();
+
     expect(body).not.toMatch(/\d+\s+(files?|routes?|detections?)/);
     expect(body).not.toContain("repository intelligence");
     expect(body).not.toContain("snapshot");
@@ -227,8 +240,14 @@ test.describe("did I get this right", () => {
 
     await page.getByRole("button", { name: "Let me fix it" }).click();
 
-    await expect(page.getByLabel("Who it's for")).toBeVisible();
-    await expect(page.getByLabel("What your product does")).toBeVisible();
+    /*
+     * By role, not by label alone. Every profile fact now renders its evidence
+     * drawer into the DOM — closed, `display: none`, and out of the
+     * accessibility tree — but a `<dialog>` labelled "Who it's for" still
+     * matches a bare label query, and the field is what this test means.
+     */
+    await expect(page.getByRole("textbox", { name: "Who it's for" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "What your product does" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Save what I changed" })).toBeVisible();
 
     // The editor starts from what Vibe said, not from blank.
@@ -351,5 +370,132 @@ test.describe("document structure", () => {
     for (let index = 1; index < levels.length; index += 1) {
       expect(levels[index] - levels[index - 1]).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+/*
+ * The profile is the one surface in the product with per-field confidence,
+ * and it was the one that could not show what the confidence rested on:
+ * `Attributed.evidence` carries the ids and `UnderstandingFact` dropped them.
+ * They open the same drawer as a score, a finding and a blocker.
+ */
+test.describe("a profile fact can be checked", () => {
+  test("opens the shared evidence drawer, in words rather than ids", async ({ page }) => {
+    await page.goto(READY);
+
+    const fact = page.getByRole("article").first();
+    await expect(fact).toBeVisible();
+    await fact.getByRole("button", { name: /sources?$/ }).click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/evidence/i);
+    await expect(drawer).toContainText("What it does");
+
+    // A citation is a sentence and a named source. The id behind it is not.
+    const text = await drawer.innerText();
+    expect(text).not.toMatch(/\b[a-z]+\.[a-z_]+\.[a-z_]+\b/);
+
+    await drawer.getByRole("button", { name: /close/i }).click();
+    await expect(drawer).toBeHidden();
+  });
+});
+
+/*
+ * Audit R6: one component for the four sources, saying five things about each
+ * — state, what Vibe did, why it stopped short, how much it read and when, and
+ * what the remedy costs. The grid of glyph cards it replaces could say the
+ * first two.
+ */
+test.describe("what the understanding rests on", () => {
+  test("gives every source a state, a reason, a measured count and a priced remedy", async ({
+    page,
+  }) => {
+    await page.goto(READY);
+
+    const list = page.getByTestId("source-coverage");
+    await expect(list).toBeVisible();
+    await expect(list.getByRole("listitem")).toHaveCount(4);
+
+    const code = list.locator('[data-source="repository"]');
+    await expect(code).toContainText("Read");
+    await expect(code).toContainText(/128 files/);
+    await expect(code).toContainText(/read 14 Aug 2026/);
+
+    // Partial is its own state, and it says why rather than only that.
+    const live = list.locator('[data-source="live"]');
+    await expect(live).toHaveAttribute("data-state", "partial");
+    await expect(live).toContainText("Partly read");
+    await expect(live).toContainText(/build themselves in your visitor's browser/i);
+
+    // The remedy carries its price before it is pressed.
+    const deepScan = list.locator('[data-source="deep_scan"]');
+    await expect(deepScan).toContainText("Deep Scan");
+    await expect(deepScan).toContainText(/\d+ Credits/);
+
+    /*
+     * A free remedy names itself rather than printing a zero (ADR 0094).
+     * Silence beside a priced sibling reads as a price that has not loaded.
+     */
+    await expect(code).toContainText("Included");
+    await expect(code).not.toContainText(/0 Credits/);
+
+    // And an operation the policy does not price still says nothing at all.
+    const founder = list.locator('[data-source="founder"]');
+    await expect(founder).not.toContainText(/Credits|Included/);
+  });
+
+  test("never prints a count for a source nothing measured", async ({ page }) => {
+    await page.goto(READY);
+
+    const deepScan = page.getByTestId("source-coverage").locator('[data-source="deep_scan"]');
+    await expect(deepScan).toHaveAttribute("data-state", "none");
+    await expect(deepScan).not.toContainText(/\b0 (files|pages)\b/);
+  });
+});
+
+/*
+ * The screen that asks a founder to check Vibe's work.
+ *
+ * It showed a label and a value per fact, so the question was being asked
+ * about a claim with no indication whether Vibe was confident or had inferred
+ * it from a single meta description — and "roughly right" and "wrong" are
+ * different corrections.
+ */
+test.describe("the product reveal", () => {
+  test("says how sure Vibe is about each fact, and what it rests on", async ({ page }) => {
+    await page.goto("/e2e/onboarding_product_reveal");
+
+    const facts = page.getByTestId("product-reveal-facts");
+    await expect(facts).toBeVisible();
+
+    const first = facts.locator("> div").first();
+    await expect(first).toContainText(/likely|confirmed|unclear|not found/i);
+
+    await first.getByRole("button", { name: /sources?$/ }).click();
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+    await expect(drawer).toContainText(/your live site/i);
+  });
+});
+
+/*
+ * Slice 5: the balance is readable from a project route, not only from
+ * Billing. Every priced control in this product states its price; none of
+ * them could state what the founder had to spend it from.
+ */
+test.describe("what the account can spend", () => {
+  test("carries the balance in the project rail, as a link to Billing", async ({ page }) => {
+    await page.goto(READY);
+
+    const chip = page.getByTestId("wallet-chip");
+    await expect(chip).toBeVisible();
+    await expect(chip).toContainText("Credits");
+    await expect(chip).toContainText("35");
+    await expect(chip).toHaveAttribute("href", "/app/billing");
+
+    // 35 is below the threshold, so it is worth noticing rather than selling.
+    await expect(chip).toHaveAttribute("data-low", "true");
+    await expect(chip).not.toContainText(/top up|buy|upgrade/i);
   });
 });

@@ -5,7 +5,13 @@ import {
   type DetectionContext,
 } from "../context";
 import { pathExtension } from "../path-policy";
-import type { Detection, Evidence, PackageManagerId, ProjectScriptId, ProjectScripts } from "../schema";
+import type {
+  Detection,
+  Evidence,
+  PackageManagerId,
+  ProjectScriptId,
+  ProjectScripts,
+} from "../schema";
 
 /**
  * Language and framework detection (Sprint 2 §12).
@@ -92,7 +98,9 @@ export function detectLanguages(context: DetectionContext): Detection[] {
     const items: Evidence[] = [];
     if (manifestEntry) {
       const [basename] = manifestEntry;
-      const manifestPath = context.findByBasename(new RegExp(`^${escapeRegExp(basename)}$`, "i"))[0];
+      const manifestPath = context.findByBasename(
+        new RegExp(`^${escapeRegExp(basename)}$`, "i"),
+      )[0];
       if (manifestPath) items.push(evidence("config_file", manifestPath));
     }
     for (const extension of language.extensions) {
@@ -146,7 +154,12 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
   { id: "svelte", name: "Svelte", dependencies: ["svelte"], configPattern: /^svelte\.config\./i },
   { id: "sveltekit", name: "SvelteKit", dependencies: ["@sveltejs/kit"] },
   { id: "astro", name: "Astro", dependencies: ["astro"], configPattern: /^astro\.config\./i },
-  { id: "remix", name: "Remix", dependencies: ["@remix-run/react"], configPattern: /^remix\.config\./i },
+  {
+    id: "remix",
+    name: "Remix",
+    dependencies: ["@remix-run/react"],
+    configPattern: /^remix\.config\./i,
+  },
   { id: "vite", name: "Vite", dependencies: ["vite"], configPattern: /^vite\.config\./i },
   { id: "angular", name: "Angular", dependencies: ["@angular/core"] },
   { id: "express", name: "Express", dependencies: ["express"] },
@@ -157,6 +170,27 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
   { id: "laravel", name: "Laravel", manifestToken: "laravel/framework" },
   { id: "rails", name: "Ruby on Rails", manifestToken: "rails" },
 ];
+
+/**
+ * The frameworks one manifest declares, from its dependencies alone.
+ *
+ * `detectFrameworks` answers "what is this repository built with?" over every
+ * manifest at once. This answers "what is *this* directory built with?", which
+ * is a different question the union cannot express: a repository with a Next.js
+ * app in `frontend/` and a Python service in `backend/` is a Next.js repository
+ * and `backend/` is not a Next.js directory.
+ *
+ * Dependencies only — no config file, no manifest token. A config file is a
+ * fact about the tree rather than about one manifest, and the callers of this
+ * are deciding what to start in one directory.
+ */
+export function frameworksForDependencies(dependencies: readonly string[]): string[] {
+  const declared = new Set(dependencies);
+
+  return FRAMEWORK_RULES.filter((rule) =>
+    (rule.dependencies ?? []).some((dependency) => declared.has(dependency)),
+  ).map((rule) => rule.id);
+}
 
 /**
  * A dependency plus its dedicated config file is the strongest signal we
@@ -215,7 +249,8 @@ export function detectPackageManager(context: DetectionContext): PackageManagerI
   const hint = context.rootPackageJson?.packageManagerHint;
   if (hint === "pnpm" || hint === "npm" || hint === "yarn" || hint === "bun") return hint;
 
-  if (context.hasBasename("pnpm-lock.yaml") || context.hasBasename("pnpm-workspace.yaml")) return "pnpm";
+  if (context.hasBasename("pnpm-lock.yaml") || context.hasBasename("pnpm-workspace.yaml"))
+    return "pnpm";
   if (context.hasBasename("bun.lockb") || context.hasBasename("bun.lock")) return "bun";
   if (context.hasBasename("yarn.lock")) return "yarn";
   if (context.hasBasename("package-lock.json")) return "npm";
@@ -280,7 +315,11 @@ export function detectRuntime(context: DetectionContext): Detection[] {
  * application runs on Bun rather than Node.
  */
 const NON_NODE_RUNTIMES: { id: string; name: string; manifest: RegExp }[] = [
-  { id: "python", name: "Python", manifest: /^(pyproject\.toml|requirements\.txt|Pipfile|manage\.py)$/i },
+  {
+    id: "python",
+    name: "Python",
+    manifest: /^(pyproject\.toml|requirements\.txt|Pipfile|manage\.py)$/i,
+  },
   { id: "go", name: "Go", manifest: /^go\.mod$/i },
   { id: "ruby", name: "Ruby", manifest: /^Gemfile$/i },
   { id: "rust", name: "Rust", manifest: /^Cargo\.toml$/i },

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  PROJECT_SECTIONS,
-  PROJECT_SUBSECTIONS,
-} from "@/components/layout/project-shell";
+import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
 import {
   ATTENTION_DISPLAY_LIMIT,
   buildAttentionItems,
@@ -15,13 +12,15 @@ function project(overrides: Partial<DashboardProject> = {}): DashboardProject {
     id: "p1",
     name: "alpha",
     repositoryFullName: "owner/alpha",
+    productName: null,
+    logoUrl: null,
     defaultBranch: "main",
     score: 40,
     scoreState: "scored",
     nextMovesCount: 0,
     topMove: null,
     lastAnalysedAt: null,
-  scoreHistory: [],
+    scoreHistory: [],
     preparedCount: 0,
     failedValidationCount: 0,
     ...overrides,
@@ -96,17 +95,13 @@ describe("one project can need attention more than once", () => {
   it("does not count a failed change as also waiting for review", () => {
     // One prepared change producing both "failed" and "waiting for you" would
     // have the dashboard contradict itself about the same object.
-    const items = buildAttentionItems([
-      project({ preparedCount: 1, failedValidationCount: 1 }),
-    ]);
+    const items = buildAttentionItems([project({ preparedCount: 1, failedValidationCount: 1 })]);
 
     expect(items.map((item) => item.kind)).toEqual(["validation_failed"]);
   });
 
   it("separates failed from waiting when a project has both", () => {
-    const items = buildAttentionItems([
-      project({ preparedCount: 3, failedValidationCount: 1 }),
-    ]);
+    const items = buildAttentionItems([project({ preparedCount: 3, failedValidationCount: 1 })]);
 
     expect(items.find((item) => item.kind === "prepared_waiting")?.title).toContain("2");
   });
@@ -213,7 +208,15 @@ describe("copy makes no promises", () => {
     ]);
 
     const copy = items.map((item) => `${item.title} ${item.detail} ${item.action.label}`).join(" ");
-    for (const forbidden of ["deploy", "publish", "ship", "live", "revenue", "guarantee", "will increase"]) {
+    for (const forbidden of [
+      "deploy",
+      "publish",
+      "ship",
+      "live",
+      "revenue",
+      "guarantee",
+      "will increase",
+    ]) {
       expect(copy.toLowerCase(), `copy contains "${forbidden}"`).not.toContain(forbidden);
     }
   });
@@ -258,7 +261,10 @@ describe("the product grid inherits the attention ordering", () => {
   });
 
   it("returns every product it was given, and mutates nothing", () => {
-    const input = [project({ id: "a", name: "a" }), project({ id: "b", name: "b", nextMovesCount: 3 })];
+    const input = [
+      project({ id: "a", name: "a" }),
+      project({ id: "b", name: "b", nextMovesCount: 3 }),
+    ];
     const before = input.map((entry) => entry.id);
 
     expect(orderProjectsByAttention(input)).toHaveLength(2);

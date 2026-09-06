@@ -4,7 +4,10 @@ import { useActionState, useState } from "react";
 import { TextAction } from "@/components/ui/button";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Surface } from "@/components/ui/surface";
-import type { ErasureFailureReason, ErasureViewState } from "@/modules/operations/account-erasure/view";
+import type {
+  ErasureFailureReason,
+  ErasureViewState,
+} from "@/modules/operations/account-erasure/view";
 import { deleteAccountAction, type DeleteAccountActionState } from "./delete-account-actions";
 
 /**
@@ -43,7 +46,10 @@ const FAILURE_MESSAGES: Record<ErasureFailureReason, string> = {
     "Your subscription could not be cancelled, so nothing was erased — Vibe will not delete an account it can still be charged for. Try again in a moment.",
   project_deletion_failed:
     "One of your projects is still busy, so nothing was erased. Try again once Vibe has finished working on it.",
-  erasure_start_failed: "The erasure could not be started. Nothing was changed. Try again in a moment.",
+  erasure_start_failed:
+    "The erasure could not be started. Nothing was changed. Try again in a moment.",
+  already_erased:
+    "This account has already been erased. Nothing further was started, and nothing was changed.",
   unknown: "The erasure did not complete, and your account is still here. Try again in a moment.",
 };
 

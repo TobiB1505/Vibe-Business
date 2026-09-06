@@ -246,9 +246,20 @@ export async function settleOperationBilling(
 
   await settleOperationCredits(supabase, {
     reservationId: reservation.id,
-    // The policy that priced the hold. Stored on the charge so history never
-    // re-rates under a future card (§38).
-    policyVersion: params.policyVersion ?? "retail-v1",
+    /*
+     * The policy that priced the hold, read from the hold (§38).
+     *
+     * This used to fall back to the literal `"retail-v1"`, and none of the
+     * three production callers passes a version — so every charge carried that
+     * stamp whatever priced it. Correct while `retail-v1` was the only policy,
+     * and wrong from the instant `launch-v1` took effect on 2026-09-01: eleven
+     * charges name a card that cannot explain their amount, among them two
+     * Action Plans at 20 Credits under a policy whose Action Plan price is 15.
+     *
+     * A null passes through as null rather than becoming a guess: a hold with
+     * no recorded policy is an anomaly to see, not one to paper over.
+     */
+    policyVersion: params.policyVersion ?? reservation.rateCardVersion,
   });
 }
 

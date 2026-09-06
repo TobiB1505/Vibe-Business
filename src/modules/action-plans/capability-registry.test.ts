@@ -56,6 +56,37 @@ describe("matchCapability", () => {
     expect(match).toBeNull();
   });
 
+  /*
+   * The framework is not the whole question — the generator also needs
+   * somewhere to write.
+   *
+   * `frameworks` is the repository-wide union, so it says "Next.js" for a
+   * repository whose application sits three directories down. That was enough
+   * to label the step as free work Vibe does, and the start then refused it as
+   * `unsupported_repository_layout`. A plan that promises what the button
+   * breaks is worse than a plan that says nothing.
+   */
+  it("does not match a Next.js repository with no resolvable app root", () => {
+    const match = matchCapability(
+      { changeKind: "product_change", evidenceIds: SEO_EVIDENCE },
+      { repository: fakeRepositorySnapshotFor({ appRoot: null }) },
+    );
+
+    expect(match).toBeNull();
+  });
+
+  it("matches an application in a subdirectory, now that one can be found", () => {
+    // The case this whole change exists for: a real Next.js App Router project
+    // whose routes live under `frontend/`, previously invisible to every layer
+    // that assumed the repository root.
+    const match = matchCapability(
+      { changeKind: "product_change", evidenceIds: SEO_EVIDENCE },
+      { repository: fakeRepositorySnapshotFor({ appRoot: "frontend/src/app/" }) },
+    );
+
+    expect(match?.capability).toBe(CURRENT_SEO_FOUNDATIONS_CAPABILITY);
+  });
+
   it("does not match without a repository snapshot", () => {
     const match = matchCapability(
       { changeKind: "product_change", evidenceIds: SEO_EVIDENCE },

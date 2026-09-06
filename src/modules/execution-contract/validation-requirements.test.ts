@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
-import {
-  EXECUTION_PRECONDITIONS,
-  resolveExecutionValidation,
-} from "./validation-requirements";
+import { EXECUTION_PRECONDITIONS, resolveExecutionValidation } from "./validation-requirements";
 import { fakeSnapshot } from "./test-support";
 
 /**
@@ -17,22 +14,29 @@ describe("validation requirements (§53)", () => {
 
     expect(requirement.supported).toBe(true);
     if (!requirement.supported) return;
-    expect(requirement.profile).toBe("nextjs_node_v1");
-    expect(requirement.profileVersion).toBe("nextjs-node-v1");
+    expect(requirement.profile).toBe("node_build_v1");
+    expect(requirement.profileVersion).toBe("node-build-v1");
     // Pinned to the same policy version a ValidationRun records, so a stored
     // spec can never be reinterpreted under rules it was not checked against.
     expect(requirement.sandboxPolicyVersion).toBe(SANDBOX_POLICY_VERSION);
     expect(requirement.sandboxSteps).toEqual(["install", "typecheck", "test", "build"]);
   });
 
-  it("reports no profile for a framework Vibe cannot validate", () => {
+  it("reports no profile for a repository with nothing Vibe can build", () => {
+    // A Python service has no `package.json`, so there is no build to check a
+    // change against. The refusal is about the absent contract, not about the
+    // framework's name: a framework Vibe has never heard of is validated fine
+    // if its manifest declares a build script and its lockfile is beside it.
     const requirement = resolveExecutionValidation(
-      fakeSnapshot({ frameworks: [{ id: "fastapi", name: "FastAPI" }] }),
+      fakeSnapshot({
+        frameworks: [{ id: "fastapi", name: "FastAPI" }],
+        build: { targets: [], truncated: false },
+      }),
     );
 
     expect(requirement.supported).toBe(false);
     if (requirement.supported) return;
-    expect(requirement.reason).toBe("validation_not_supported");
+    expect(requirement.reason).toBe("not_a_node_project");
   });
 
   it("reports no profile when the package manager is unknown", () => {
@@ -40,12 +44,50 @@ describe("validation requirements (§53)", () => {
     expect(requirement.supported).toBe(false);
   });
 
-  it("reports an ambiguous workspace for a monorepo", () => {
-    const requirement = resolveExecutionValidation(fakeSnapshot({ monorepo: true }));
+  it("asks which application when a repository holds more than one", () => {
+    // A monorepo is no longer refused for being one. The honest question was
+    // never "is this a monorepo" but "how many independently installable
+    // applications are there", and only the second has more than one answer.
+    const requirement = resolveExecutionValidation(
+      fakeSnapshot({
+        monorepo: true,
+        build: {
+          targets: [
+            {
+              directory: "apps/web",
+              manifestPath: "apps/web/package.json",
+              buildScript: true,
+              frameworks: ["nextjs"],
+              lockfile: {
+                path: "apps/web/pnpm-lock.yaml",
+                packageManager: "pnpm",
+                inTargetDirectory: true,
+              },
+              declaresWorkspaces: false,
+              moduleLinker: null,
+            },
+            {
+              directory: "apps/admin",
+              manifestPath: "apps/admin/package.json",
+              buildScript: true,
+              frameworks: ["vite"],
+              lockfile: {
+                path: "apps/admin/pnpm-lock.yaml",
+                packageManager: "pnpm",
+                inTargetDirectory: true,
+              },
+              declaresWorkspaces: false,
+              moduleLinker: null,
+            },
+          ],
+          truncated: false,
+        },
+      }),
+    );
 
     expect(requirement.supported).toBe(false);
     if (requirement.supported) return;
-    expect(requirement.reason).toBe("ambiguous_workspace");
+    expect(requirement.reason).toBe("workspace_choice_required");
   });
 
   it("keeps the preconditions unconditional, whether or not a profile exists", () => {

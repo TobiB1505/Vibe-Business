@@ -48,6 +48,28 @@ export function computeValidationIdentity(params: {
    */
   validationDepth: ValidationDepth;
   validationDepthPolicyVersion: string;
+  /**
+   * Which directory was validated (Stufe 4).
+   *
+   * An identity input for the same reason the profile is. Once a repository can
+   * hold more than one application and a founder can say which one Vibe works
+   * on, the same commit is a legitimate question at `apps/a` and at `apps/b` —
+   * and without this, a pass recorded for one would be reused to answer the
+   * other. "This commit validated" was never the claim; "this commit validated
+   * *here*" is.
+   */
+  workspaceRoot: string;
+  /**
+   * Which directory the install ran in (Stufe 8).
+   *
+   * Separate from `workspaceRoot` because it is a separate claim, and both are
+   * part of what a pass says. The same application can legitimately be a
+   * question twice — installed from its own directory, and installed from a
+   * workspace root above it — and those are different dependency trees, so a
+   * pass under one must not answer for the other. That difference is what the
+   * hash has to carry; a founder moving a lockfile is not a re-run request.
+   */
+  installRoot: string;
 }): string {
   // Fixed order rather than object key order, so a refactor cannot silently
   // rehash every stored identity.
@@ -59,6 +81,8 @@ export function computeValidationIdentity(params: {
     params.sandboxPolicyVersion,
     params.validationDepth,
     params.validationDepthPolicyVersion,
+    params.workspaceRoot,
+    params.installRoot,
   ]);
 
   return createHash("sha256").update(canonical).digest("hex");

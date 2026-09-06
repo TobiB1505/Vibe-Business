@@ -59,7 +59,9 @@ describe("brand assets", () => {
   });
 
   it("downgrades a name match found nowhere assets belong", () => {
-    const assets = detectBrandAssets(contextFrom([{ path: "docs/marketing/partner-logo-usage.png" }]));
+    const assets = detectBrandAssets(
+      contextFrom([{ path: "docs/marketing/partner-logo-usage.png" }]),
+    );
 
     expect(assets[0]?.confidence).toBe("low");
   });

@@ -156,7 +156,6 @@ export async function persistAgentExecutionSpec(params: {
   };
 }
 
-
 /**
  * Holds the Credits a run may spend, before any work is enqueued (§18, §55).
  *
@@ -178,17 +177,6 @@ export async function holdAgentExecutionCredits(params: {
   operationRunId: string;
   /** The class the spec was built at, and the class the price is taken from. */
   pricingClass: ExecutionPricingClass;
-  /**
-   * Which book governs this run, taken from the resolved economics rather than
-   * inferred here.
-   *
-   * `credits/internal.ts` and `credits/retail.ts` are deliberately separate
-   * books, and the caller has already asked `resolveAgentEconomics` which one
-   * applies. Re-deciding it here would be a second answer to a question that
-   * already has one, and the failure mode is a customer charged out of the
-   * internal dogfood ceiling — or, worse, a dogfood run charged at retail.
-   */
-  nonProduction: boolean;
   /** The quote recorded immediately before this hold, when one was written. */
   quoteId?: string | null;
   now?: Date;
@@ -207,7 +195,7 @@ export async function holdAgentExecutionCredits(params: {
 
   return authorizeOperationCredits(supabase, {
     projectId: params.projectId,
-    operation: params.nonProduction ? "agent_execution_dogfood" : "agent_execution",
+    operation: "agent_execution",
     pricingClass: params.pricingClass,
     quoteId: params.quoteId ?? null,
     idempotencyKey: params.operationRunId,
@@ -377,15 +365,13 @@ export async function expireStaleAgentExecution(params: {
     .eq("operation_run_id", params.operationRunId)
     .maybeSingle();
 
-  const run = data as
-    | {
-        id: string;
-        project_id: string;
-        status: string;
-        started_at: string | null;
-        credit_reservation_id: string | null;
-      }
-    | null;
+  const run = data as {
+    id: string;
+    project_id: string;
+    status: string;
+    started_at: string | null;
+    credit_reservation_id: string | null;
+  } | null;
 
   // Only a run that is genuinely mid-flight can be stale. `queued` is not: it
   // has taken no provider call yet and its workflow may simply not have picked

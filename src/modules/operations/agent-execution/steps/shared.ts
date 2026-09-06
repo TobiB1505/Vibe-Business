@@ -11,12 +11,18 @@ import {
   readAgentGatewayConfig,
 } from "@/modules/coding-agent/gateway-config";
 import { type WorkspaceObservation } from "@/modules/coding-agent/sandbox-runtime/changes";
-import { AGENT_RUNTIME_DIRNAME, type SandboxAgentRuntimeDeps } from "@/modules/coding-agent/sandbox-runtime/provider";
+import {
+  AGENT_RUNTIME_DIRNAME,
+  type SandboxAgentRuntimeDeps,
+} from "@/modules/coding-agent/sandbox-runtime/provider";
 import { type BaseContentPort, type BaseTreePort } from "@/modules/coding-agent/candidate";
 import { createLifecycleRecorder } from "@/modules/coding-agent/observability/lifecycle";
 import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
-import { findAgentRunByOperation, type StoredAgentExecutionRun } from "@/modules/coding-agent/store";
+import {
+  findAgentRunByOperation,
+  type StoredAgentExecutionRun,
+} from "@/modules/coding-agent/store";
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import { type SandboxHandle, type SandboxProvider } from "@/modules/validation/sandbox-port";
@@ -181,9 +187,7 @@ export async function recordWorkspaceFailure(
 export async function loadRun(
   deps: AgentExecutionDeps,
   operationId: string,
-): Promise<
-  StepOutcome<{ operation: ProjectOperationRun; run: StoredAgentExecutionRun }>
-> {
+): Promise<StepOutcome<{ operation: ProjectOperationRun; run: StoredAgentExecutionRun }>> {
   const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return { ok: false, failureCode: "operation_not_found" };
 
@@ -241,11 +245,18 @@ export type SandboxPaths = {
   workspaceCwd: string;
 };
 
-/** The workspace, relative to the sandbox home. `.` when the repo is the root. */
+/**
+ * The workspace, relative to the sandbox home. `.` when the repo is the root.
+ *
+ * Both spellings of "the root" are accepted, because both reach here: a spec
+ * writes `"."`, and a repository target that names no subdirectory writes `""`.
+ * Treating `"."` as a segment would produce `product/.` — which a filesystem
+ * resolves and an exact path comparison does not.
+ */
 export function workspaceCwdFor(sourceRoot: string, workspaceRoot: string): string {
   const joined = [sourceRoot, workspaceRoot]
     .map((segment) => segment.replace(/^\/+|\/+$/g, ""))
-    .filter((segment) => segment.length > 0)
+    .filter((segment) => segment.length > 0 && segment !== ".")
     .join("/");
 
   return joined.length > 0 ? joined : ".";

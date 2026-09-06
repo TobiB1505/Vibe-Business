@@ -174,9 +174,10 @@ const REAL_COMMIT = "61618ac8045263a5762021240316a4d54996115a";
 
 function resolveRealPlan(options: { budgetAuthorized?: boolean } = {}) {
   return resolvePlanExecution({
-    // Nothing in the product completes a step yet, so an empty set is the
-    // truthful state rather than a simplification — and it is the state the
-    // defect appeared in.
+    // Deliberately empty: this suite pins how a real plan resolves with no
+    // progress recorded, which is the state the defect appeared in. Completion
+    // does reach the router now — `dependencies.test.ts` is where that is
+    // asserted.
     plan: fakePlanContext(REAL_STEPS),
     repository: {
       connection: { id: "conn-vibe", fullName: "TobiB1505/Vibe-Business", defaultBranch: "main" },
@@ -362,7 +363,7 @@ describe("the fix changes dependency semantics and nothing else", () => {
     });
 
     expect(unvalidatable[2].mode).toBe("unsupported");
-    expect(unvalidatable[2].unmetRequirements).toContain("validation_profile_unsupported");
+    expect(unvalidatable[2].unmetRequirements).toContain("no_lockfile");
     expect(unvalidatable[2].absorbedPreparation).toEqual([]);
   });
 
@@ -388,7 +389,7 @@ describe("the fix changes dependency semantics and nothing else", () => {
     expect(unvalidatable[2].mode).toBe("blocked");
     expect(unvalidatable[2].intrinsicMode).toBe("unsupported");
     expect(unvalidatable[2].absorbedPreparation).toEqual([]);
-    expect(unvalidatable[2].unmetRequirements).toContain("validation_profile_unsupported");
+    expect(unvalidatable[2].unmetRequirements).toContain("no_lockfile");
   });
 
   it("still refuses when the repository has moved since the snapshot", () => {

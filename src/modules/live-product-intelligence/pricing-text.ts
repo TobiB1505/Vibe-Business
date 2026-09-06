@@ -49,11 +49,28 @@ const MAX_OBSERVED = 12;
 /** How far after an amount a period word still counts as attached to it. */
 const PERIOD_WINDOW = 24;
 
+/*
+ * `\/\s*` rather than `\/`: a slash may be followed by a space.
+ *
+ * Every other lead-in here consumes its own trailing whitespace ("per ", "pro
+ * "), and the slash was the one that did not — so `€19/month` was read and
+ * `€19 / month` was not. That is not an exotic shape. It is what a pricing
+ * card looks like when the amount and the period are separate elements, which
+ * is how every pricing card is built, and it is what Vibe Business's own page
+ * writes. The result was three prices read with no period attached, which is
+ * a large part of "nothing marks them as prices".
+ */
 const PERIOD_PATTERNS: ReadonlyArray<[RegExp, OfferPeriod]> = [
-  [/^\s*(?:\/|per\s+|a\s+|pro\s+|je\s+)?(?:mo\b|month|monat|mtl\.?|monthly|monatlich)/i, "month"],
-  [/^\s*(?:\/|per\s+|a\s+|pro\s+|je\s+)?(?:yr\b|year|jahr|jährlich|annually|annual|p\.?a\.?)/i, "year"],
-  [/^\s*(?:\/|per\s+|a\s+|pro\s+|je\s+)?(?:wk\b|week|woche|wöchentlich|weekly)/i, "week"],
-  [/^\s*(?:\/|per\s+|a\s+|pro\s+|je\s+)?(?:day|tag|täglich|daily)/i, "day"],
+  [
+    /^\s*(?:\/\s*|per\s+|a\s+|pro\s+|je\s+)?(?:mo\b|month|monat|mtl\.?|monthly|monatlich)/i,
+    "month",
+  ],
+  [
+    /^\s*(?:\/\s*|per\s+|a\s+|pro\s+|je\s+)?(?:yr\b|year|jahr|jährlich|annually|annual|p\.?a\.?)/i,
+    "year",
+  ],
+  [/^\s*(?:\/\s*|per\s+|a\s+|pro\s+|je\s+)?(?:wk\b|week|woche|wöchentlich|weekly)/i, "week"],
+  [/^\s*(?:\/\s*|per\s+|a\s+|pro\s+|je\s+)?(?:day|tag|täglich|daily)/i, "day"],
   [/^\s*(?:one[-\s]?time|einmalig|once)/i, "one_time"],
 ];
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { E2E_AUDIT_SCENARIOS } from "@/app/e2e/audit-scenarios";
 import { buildBusinessBrainView } from "./business-brain-view";
 import type { AuditReading } from "./score-series";
@@ -46,6 +47,40 @@ describe("buildBusinessBrainView", () => {
       impact: "high",
       effort: "medium",
     });
+  });
+
+  /*
+   * `BusinessLensAssessment.summary` is internal prose — its own schema says
+   * so — and the detail column used to fall back to it when a lens had no
+   * diagnosis. The fix is the boundary, not the call site: the field is not
+   * carried across, so no future renderer can reach for it.
+   */
+  it("leaves the internal lens summary on the other side of the boundary", () => {
+    const audit = E2E_AUDIT_SCENARIOS["audit-synthesis"]();
+    const synthesis = audit.synthesis;
+    if (!synthesis) throw new Error("fixture has no synthesis to mark");
+
+    const marked: BusinessReadinessAudit = {
+      ...audit,
+      synthesis: {
+        ...synthesis,
+        lenses: synthesis.lenses.map((lens) => ({
+          ...lens,
+          summary: "INTERNAL-PROSE-NOT-FOR-THE-FOUNDER",
+        })),
+      },
+    };
+
+    const view = buildBusinessBrainView({
+      audit: marked,
+      lastScanAt: "2026-08-16T09:00:00.000Z",
+      auditReadings: [],
+      movesByConclusion: {},
+      moveByConclusion: {},
+    });
+
+    expect(marked.synthesis?.lenses.every((lens) => lens.summary.length > 0)).toBe(true);
+    expect(JSON.stringify(view)).not.toContain("INTERNAL-PROSE-NOT-FOR-THE-FOUNDER");
   });
 
   it("shows only a change produced by two comparable scored readings", () => {

@@ -55,6 +55,64 @@ describe("starting one", () => {
   });
 });
 
+describe("starting one after the account is already gone", () => {
+  /*
+   * The production incident, reproduced.
+   *
+   * On 2026-08-27 a first erasure completed in eight seconds and a second was
+   * created eleven seconds after it. The active-status index could not refuse
+   * the second — nothing was active by then — and the run it created sat in
+   * `preparing` for over eight days, because the identity it would have erased
+   * was already deleted and the staleness backstop only fires on the settings
+   * page the erased person can no longer reach.
+   *
+   * It could be pressed at all because a session outlives its own account:
+   * `getSession()` verifies the JWT's signature, which stays valid for a user
+   * row that no longer exists.
+   */
+  it("refuses rather than creating a run with nothing to erase", async () => {
+    const executor = new FakeExecutor();
+
+    await startAccountErasure(supabase(), executor, { userId: USER });
+    const [first] = db.rows("operation_runs");
+    Object.assign(first, { status: "completed", stage: "completed" });
+
+    const second = await startAccountErasure(supabase(), executor, { userId: USER });
+
+    expect(second).toEqual({ kind: "already_erased" });
+    // No second row, and nothing enqueued: the refusal happens before either.
+    expect(db.rows("operation_runs")).toHaveLength(1);
+    expect(executor.starts).toHaveLength(1);
+  });
+
+  it("still allows a retry after a failed erasure", async () => {
+    // The reason the index is partial on the active statuses in the first
+    // place: a failed erasure must never lock somebody out of erasing.
+    const executor = new FakeExecutor();
+
+    await startAccountErasure(supabase(), executor, { userId: USER });
+    const [first] = db.rows("operation_runs");
+    Object.assign(first, { status: "failed", failure_code: "stripe_cancel_failed" });
+
+    const retry = await startAccountErasure(supabase(), executor, { userId: USER });
+
+    expect(retry.kind).toBe("started");
+    expect(db.rows("operation_runs")).toHaveLength(2);
+  });
+
+  it("does not refuse a different account", async () => {
+    const executor = new FakeExecutor();
+
+    await startAccountErasure(supabase(), executor, { userId: USER });
+    const [first] = db.rows("operation_runs");
+    Object.assign(first, { status: "completed", stage: "completed" });
+
+    expect((await startAccountErasure(supabase(), executor, { userId: OTHER })).kind).toBe(
+      "started",
+    );
+  });
+});
+
 describe("starting a second one", () => {
   it("reports the live erasure rather than starting another", async () => {
     const executor = new FakeExecutor();

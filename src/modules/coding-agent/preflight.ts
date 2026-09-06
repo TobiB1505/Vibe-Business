@@ -91,7 +91,6 @@ export type AgentPreflight = {
 
   economics: {
     authorized: boolean;
-    nonProduction: boolean;
     budgetPolicyVersion: string | null;
     /**
      * The Credit ceiling this run is authorized against (§17).
@@ -108,7 +107,6 @@ export type AgentPreflight = {
      * deliberately.
      */
     maxCredits: CreditUnits | null;
-    disclosure: string | null;
   };
 
   /** What "Done" means, in the step's own recorded words. */
@@ -188,10 +186,8 @@ export function runAgentPreflight(input: {
 
     economics: {
       authorized: economics !== null,
-      nonProduction: economics?.nonProduction ?? false,
       budgetPolicyVersion: economics?.budget.budgetPolicyVersion ?? null,
       maxCredits: economics?.budget.maxCredits ?? null,
-      disclosure: economics?.disclosure ?? null,
     },
 
     doneWhen: spec.objective.doneWhen,
@@ -257,9 +253,7 @@ export function renderAgentPreflight(preflight: AgentPreflight): string {
 
   lines.push("Economics");
   lines.push(`  authorized           ${preflight.economics.authorized ? "yes" : "no"}`);
-  lines.push(`  production price     NOT ACTIVATED`);
   lines.push(`  policy               ${preflight.economics.budgetPolicyVersion ?? "none"}`);
-  if (preflight.economics.disclosure) lines.push(`  note                 ${preflight.economics.disclosure}`);
   lines.push("");
 
   lines.push("Done when");

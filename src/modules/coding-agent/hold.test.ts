@@ -48,7 +48,8 @@ async function seedPreparedChange(): Promise<{ preparedChangeId: string; reserva
 
   const authorized = await authorizeOperationCredits(supabase(), {
     projectId: PROJECT,
-    operation: "agent_execution_dogfood",
+    operation: "agent_execution",
+    pricingClass: "standard",
     idempotencyKey: String(operation.id),
     operationRunId: String(operation.id),
   });

@@ -62,24 +62,103 @@ export const EXECUTION_RISK_LABELS: Record<ExecutionRiskClass, string> = {
   prohibited: "Touches payments — always yours to change",
 };
 
+/**
+ * What kind of answer a refusal is — and specifically, whether it has an end.
+ *
+ * Written because a screen got it wrong in production. The Agent workspace told
+ * a founder *"an earlier step comes first"* and *"Vibe's part of this Move
+ * becomes available once that step is done"* about a step that **was** Vibe's
+ * part and would never become available: a checkout build, refused by policy
+ * because it touches payments. Both sentences were false, and the second one
+ * promised something that cannot happen.
+ *
+ * The distinction a screen actually needs is not the reason but its shape:
+ *
+ *  * `policy` — Vibe will not do this, and nothing about the project changes
+ *    that. Never say "yet", never say "once".
+ *  * `repairable` — something about this project or its repository can be
+ *    fixed, and then Vibe can. Name the missing thing.
+ *  * `sequencing` — nothing is wrong; something else has to happen first.
+ *  * `capability` — Vibe's own work with no executor, which a founder may
+ *    close themselves (ADR 0090).
+ *  * `not_vibes` — the step belongs to a person or a third party.
+ *
+ * An exhaustive `Record` rather than a list, so a new reason is a compiler
+ * error here rather than a sentence that quietly reads as one of these.
+ */
+export type RefusalShape = "policy" | "repairable" | "sequencing" | "capability" | "not_vibes";
+
+export const REFUSAL_SHAPES: Record<ExecutionResolutionReason, RefusalShape> = {
+  // Not refusals at all — a step that resolved is never described by one.
+  deterministic_capability_matched: "sequencing",
+  agentic_v1_eligible: "sequencing",
+
+  founder_decision_required: "not_vibes",
+  founder_input_required: "not_vibes",
+  founder_action_required: "not_vibes",
+  external_party_required: "not_vibes",
+
+  dependency_unsatisfied: "sequencing",
+  dependency_cycle_detected: "sequencing",
+
+  no_executor_for_vibe_work: "capability",
+  change_kind_not_executable: "capability",
+
+  // The two that have no end. `risk_class_not_permitted` carries a "yet" in its
+  // own sentence, which is honest — it is Vibe's ceiling and Vibe may raise it
+  // — but it is still not something this founder can act on today.
+  risk_class_not_permitted: "policy",
+  risk_class_prohibited: "policy",
+
+  repository_not_connected: "repairable",
+  repository_snapshot_missing: "repairable",
+  validation_profile_unsupported: "repairable",
+  no_node_project: "repairable",
+  no_build_script: "repairable",
+  no_lockfile: "repairable",
+  package_manager_unsupported: "repairable",
+  workspace_choice_required: "repairable",
+  repository_analysis_outdated: "repairable",
+};
+
 /** Why a step resolved the way it did, without naming an internal concept. */
 export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> = {
   deterministic_capability_matched: "Vibe already knows how to make this exact change.",
   agentic_v1_eligible: "This is the kind of change Vibe could build for you.",
-  founder_decision_required: "Only you can settle this, and the work after it depends on the answer.",
-  founder_input_required: "Only you can provide this information, and the work after it depends on the answer.",
+  founder_decision_required:
+    "Only you can settle this, and the work after it depends on the answer.",
+  founder_input_required:
+    "Only you can provide this information, and the work after it depends on the answer.",
   founder_action_required: "This is real-world work that has to be done by a person.",
   external_party_required: "This is waiting on someone outside your business.",
   dependency_unsatisfied: "An earlier step has to finish first.",
-  dependency_cycle_detected: "The steps this depends on refer back to each other, so nothing can go first.",
-  no_executor_for_vibe_work: "This is Vibe's own thinking work rather than a change to your product.",
-  change_kind_not_executable: "This isn't a change to your product, so there is nothing for Vibe to build.",
+  dependency_cycle_detected:
+    "The steps this depends on refer back to each other, so nothing can go first.",
+  no_executor_for_vibe_work:
+    "This is Vibe's own thinking work rather than a change to your product.",
+  change_kind_not_executable:
+    "This isn't a change to your product, so there is nothing for Vibe to build.",
   risk_class_not_permitted: "Vibe doesn't yet make changes this sensitive on your behalf.",
   risk_class_prohibited: "Vibe never changes anything to do with taking payments.",
   repository_not_connected: "No code repository is connected to this project.",
   repository_snapshot_missing: "Vibe hasn't read your code yet.",
   validation_profile_unsupported:
     "Vibe can't independently prove a change to this project builds, so it won't make one.",
+  // Each names the missing thing and, where there is one, the move that fixes
+  // it. "Vibe can't prove a change builds" is true of all of them and useful
+  // for none.
+  no_node_project:
+    "Vibe checks a change by running your project's own build, and this project has no package.json — so there's nothing to check a change against.",
+  no_build_script:
+    "Your package.json has no build script, so Vibe has no way to tell whether a change still works.",
+  no_lockfile:
+    "There's no lockfile beside your app, so Vibe can't install exactly what you committed.",
+  package_manager_unsupported:
+    "Vibe found a lockfile it won't install from exactly. Yarn 1's locked install doesn't reliably fail on a dependency the lockfile doesn't know — Yarn 3 or later works.",
+  workspace_choice_required:
+    "This repository holds more than one app. Tell Vibe which one to work on.",
+  repository_analysis_outdated:
+    "Vibe's read of your code predates this check. Refresh it and Vibe will know what it can do here.",
 };
 
 /**
@@ -93,8 +172,10 @@ export const EXECUTION_ADMISSION_LABELS: Record<ExecutionAdmissionRefusal, strin
   source_revision_unverified: "Vibe couldn't confirm which version of your code is current.",
   repository_head_moved: "Your code has changed since Vibe last read it.",
   repository_snapshot_stale: "Vibe has a newer read of your code than this plan used.",
-  live_premise_no_longer_true: "This is already fixed on your live site, so there's nothing to change.",
-  live_premise_unverified: "Vibe couldn't finish checking your live site, so it won't start work it can't justify.",
+  live_premise_no_longer_true:
+    "This is already fixed on your live site, so there's nothing to change.",
+  live_premise_unverified:
+    "Vibe couldn't finish checking your live site, so it won't start work it can't justify.",
   action_plan_superseded: "This plan has been replaced by a newer one.",
   agentic_pricing_not_configured: "Vibe isn't building changes like this for anyone yet.",
   credit_reservation_required: "This needs Credits set aside before it can start.",
@@ -104,9 +185,11 @@ export const EXECUTION_ADMISSION_LABELS: Record<ExecutionAdmissionRefusal, strin
 
 /** Why a future run would stop completely. */
 export const EXECUTION_STOP_LABELS: Record<ExecutionStopReason, string> = {
-  source_revision_unverifiable: "Vibe couldn't confirm which version of your code it was working from.",
+  source_revision_unverifiable:
+    "Vibe couldn't confirm which version of your code it was working from.",
   policy_violation_required: "Finishing would have meant doing something Vibe isn't allowed to do.",
-  secret_access_required: "Finishing would have needed one of your secrets. Vibe never reads those.",
+  secret_access_required:
+    "Finishing would have needed one of your secrets. Vibe never reads those.",
   prohibited_side_effect_required: "Finishing would have changed something outside your code.",
   budget_exhausted: "This reached the Credit limit you approved.",
   repair_limit_reached: "Vibe couldn't get the change passing its checks.",

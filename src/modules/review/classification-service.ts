@@ -3,10 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { getProjectWithRepository } from "@/modules/projects/queries";
-import {
-  classifyReviewForPreparedChange,
-  type FileTextReader,
-} from "./classification-inputs";
+import { classifyReviewForPreparedChange, type FileTextReader } from "./classification-inputs";
 import type { ReviewClassificationResult } from "./classification";
 
 /**

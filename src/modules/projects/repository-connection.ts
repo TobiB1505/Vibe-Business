@@ -65,3 +65,30 @@ export function liveConnections(supabase: SupabaseClient, columns: string) {
 export function anyConnections(supabase: SupabaseClient, columns: string) {
   return supabase.from(TABLE).select(columns);
 }
+
+/**
+ * A write to the live connection of one project.
+ *
+ * Here for the same reason the reads are: the boundary owns the table name, so
+ * "live or historical?" is a question no caller can avoid answering. A write is
+ * where getting it wrong is worst — updating a detached row would be Vibe
+ * changing settings for a repository the founder told it to let go, and the row
+ * would be waiting if that repository were ever reconnected.
+ *
+ * What a caller may actually write is decided by column-level grants rather
+ * than by this function. `authenticated` holds UPDATE on exactly the columns a
+ * founder is allowed to set, because the row's RLS policy governs *which rows*
+ * and not which columns — so `detached_at` stays unwritable over PostgREST
+ * whatever a caller passes here.
+ */
+export function updateLiveConnection(
+  supabase: SupabaseClient,
+  projectId: string,
+  values: Record<string, unknown>,
+) {
+  return supabase
+    .from(TABLE)
+    .update(values, { count: "exact" })
+    .eq("project_id", projectId)
+    .is("detached_at", null);
+}

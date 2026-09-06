@@ -1,3 +1,5 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
+import { LIVE_PRODUCT_ANALYZER_VERSION } from "@/modules/live-product-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { OPPORTUNITY_GENERATION_CONFIG } from "@/modules/ai/operations";
 import {
@@ -7,7 +9,10 @@ import {
 } from "@/modules/business-audit/test-support";
 import { OPPORTUNITY_PROMPT_VERSION } from "@/modules/opportunities/prompt";
 import { OPPORTUNITY_RUBRIC_VERSION } from "@/modules/opportunities/rubric";
-import { OPPORTUNITY_ENGINE_VERSION, OPPORTUNITY_SET_SCHEMA_VERSION } from "@/modules/opportunities/schema";
+import {
+  OPPORTUNITY_ENGINE_VERSION,
+  OPPORTUNITY_SET_SCHEMA_VERSION,
+} from "@/modules/opportunities/schema";
 import { computeAuditInputHash } from "@/modules/business-audit/store";
 import { computeOpportunityInputHash } from "@/modules/opportunities/store";
 import { fakeAudit, fakeWireOpportunity } from "@/modules/opportunities/test-support";
@@ -65,7 +70,6 @@ const AUDIT_HASH = computeAuditInputHash({
   ...AUDIT_VERSIONS,
 });
 
-
 function identity() {
   return computeOpportunityInputHash({
     auditId: AUDIT,
@@ -105,6 +109,7 @@ function deps(): ExecutionDeps {
 function seed(options: { inputIdentity?: string } = {}) {
   db.seed("projects", { id: PROJECT, user_id: USER });
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "repo_snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -112,6 +117,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
   });
   db.seed("live_product_intelligence_snapshots", {
+    analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
     id: "live_snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -184,7 +190,11 @@ async function runPipeline() {
     return counted;
   }
 
-  const prioritized = await runPrioritizationStep(deps(), operationId, counted.estimatedInputTokens);
+  const prioritized = await runPrioritizationStep(
+    deps(),
+    operationId,
+    counted.estimatedInputTokens,
+  );
   if (!prioritized.ok) {
     await failOpportunityOperationStep(deps(), operationId, prioritized.failureCode);
     return prioritized;
@@ -296,7 +306,9 @@ describe("re-entry and idempotency (§40)", () => {
 
     await completeOpportunityOperationStep(deps(), operationId, outcome.setId);
 
-    expect(db.rows("audit_events").filter((row) => row.event_type === "operation.completed")).toHaveLength(1);
+    expect(
+      db.rows("audit_events").filter((row) => row.event_type === "operation.completed"),
+    ).toHaveLength(1);
   });
 });
 
@@ -341,10 +353,18 @@ describe("paid-call ambiguity (§26)", () => {
     });
 
     await prepareOpportunitiesStep(deps(), operationId);
-    const first = await runPrioritizationStep({ supabase: fakeSupabase(db), provider: invalid }, operationId, 9_000);
+    const first = await runPrioritizationStep(
+      { supabase: fakeSupabase(db), provider: invalid },
+      operationId,
+      9_000,
+    );
     expect(first.ok).toBe(false);
 
-    const second = await runPrioritizationStep({ supabase: fakeSupabase(db), provider: invalid }, operationId, 9_000);
+    const second = await runPrioritizationStep(
+      { supabase: fakeSupabase(db), provider: invalid },
+      operationId,
+      9_000,
+    );
     expect(second.ok).toBe(false);
     expect(invalid.requests).toHaveLength(1);
   });
@@ -361,7 +381,11 @@ describe("paid-call ambiguity (§26)", () => {
     });
 
     await prepareOpportunitiesStep(deps(), operationId);
-    await runPrioritizationStep({ supabase: fakeSupabase(db), provider: invalid }, operationId, 9_000);
+    await runPrioritizationStep(
+      { supabase: fakeSupabase(db), provider: invalid },
+      operationId,
+      9_000,
+    );
 
     const usage = db.rows("ai_usage_events");
     expect(usage).toHaveLength(1);
@@ -401,6 +425,7 @@ describe("guards", () => {
    */
   it("refuses when a repository scan finished between the click and the step", async () => {
     db.seed("repository_intelligence_snapshots", {
+      analyzer_version: REPOSITORY_ANALYZER_VERSION,
       id: "repo_snapshot_2",
       project_id: PROJECT,
       status: "completed",
@@ -422,6 +447,7 @@ describe("guards", () => {
 
   it("refuses when a live scan finished between the click and the step", async () => {
     db.seed("live_product_intelligence_snapshots", {
+      analyzer_version: LIVE_PRODUCT_ANALYZER_VERSION,
       id: "live_snapshot_2",
       project_id: PROJECT,
       status: "completed",

@@ -13,10 +13,10 @@ import {
   startRefusalLabel,
   startRefusalRecovery,
 } from "./view";
-import { DOGFOOD_STEP_REASONS } from "./start-refusal";
+import { AGENT_STEP_REASONS } from "./start-refusal";
 
 /**
- * What the dogfood surface tells a founder when it refuses.
+ * What the Agent workspace tells a founder when it refuses.
  *
  * `not_admissible` is one preflight refusal standing in for nine admission
  * answers. Rendering its generic label for all of them produced a screen that
@@ -83,7 +83,7 @@ describe("preflightRefusalLabel", () => {
  * render had resolved fine, which is why the button was there to press.
  */
 describe("startRefusalLabel", () => {
-  it.each(DOGFOOD_STEP_REASONS)("says something for %s on its own", (reason) => {
+  it.each(AGENT_STEP_REASONS)("says something for %s on its own", (reason) => {
     const label = startRefusalLabel({ reason });
 
     expect(label.length).toBeGreaterThan(0);
@@ -132,7 +132,7 @@ describe("startRefusalLabel", () => {
   });
 
   it("never promises an explanation the page cannot give", () => {
-    for (const reason of DOGFOOD_STEP_REASONS) {
+    for (const reason of AGENT_STEP_REASONS) {
       expect(startRefusalLabel({ reason })).not.toContain("above");
     }
   });
@@ -159,12 +159,38 @@ describe("startRefusalRecovery", () => {
     );
   });
 
+  /*
+   * The one that never reaches a click.
+   *
+   * `repository_analysis_outdated` refuses before a step resolves agentic, so
+   * no start control is rendered and nothing can be pressed to produce this
+   * detail. The Agent screen asks for the recovery directly, which is why the
+   * answer has to exist for a reason no start attempt can carry.
+   */
+  it("offers one when the stored read predates the check", () => {
+    const recovery = startRefusalRecovery({
+      reason: "not_agentic",
+      resolutionReason: "repository_analysis_outdated",
+    });
+
+    expect(recovery?.kind).toBe("repository_read");
+    expect(recovery?.note).toContain("never");
+  });
+
+  it("does not tell the founder a re-read costs them anything", () => {
+    // It does not: `product_scan` is free work. A note implying otherwise would
+    // make a free way forward look like a bill and stop people taking it.
+    const recovery = startRefusalRecovery({ reason: "repository_snapshot_missing" });
+
+    expect(recovery?.note.toLowerCase()).not.toContain("credit");
+  });
+
   /**
    * A paid scan offered against a permanent refusal is worse than offering
    * nothing: it spends the founder's Credits to arrive at the same wall.
    */
   it.each([
-    { reason: "not_dogfood_eligible" },
+    { reason: "plan_incomplete" },
     { reason: "preflight_refused", preflight: "risk_too_high" },
     { reason: "not_agentic", resolutionReason: "risk_class_prohibited" },
   ] as const)("offers nothing a re-read would not fix (%o)", (detail) => {

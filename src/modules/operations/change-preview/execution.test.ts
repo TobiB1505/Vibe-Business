@@ -1,11 +1,14 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
-import {
-  CURRENT_PREVIEW_PROFILE,
-} from "@/modules/change-preview/schema";
+import {} from "@/modules/change-preview/schema";
 import { clonedSandboxFiles } from "@/modules/change-preview/test-support";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
-import { FIXTURE_COMMIT_SHA, fakeSandboxProvider, fakeValidatableSnapshot } from "@/modules/validation/test-support";
+import {
+  FIXTURE_COMMIT_SHA,
+  fakeSandboxProvider,
+  fakeValidatableSnapshot,
+} from "@/modules/validation/test-support";
 import {
   cleanupFailedPreviewStep,
   completePreviewStep,
@@ -84,6 +87,7 @@ function seed(options: { sessionOverrides?: Record<string, unknown> } = {}) {
   });
 
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -98,7 +102,7 @@ function seed(options: { sessionOverrides?: Record<string, unknown> } = {}) {
     prepared_change_id: PREPARED,
     prepared_commit_sha: FIXTURE_COMMIT_SHA,
     operation_run_id: OPERATION,
-    preview_profile: CURRENT_PREVIEW_PROFILE,
+    preview_profile: "next_dev_v1",
     preview_identity: "p".repeat(64),
     status: "starting",
     stage: "preflight",
@@ -249,7 +253,8 @@ describe("refusals before repository code runs", () => {
   it("never records the credential it refused to leave behind", async () => {
     provider = fakeSandboxProvider({
       files: clonedSandboxFiles({
-        "product/.git/config": "url = https://x-access-token:ghs_secret@github.com/acme/product.git",
+        "product/.git/config":
+          "url = https://x-access-token:ghs_secret@github.com/acme/product.git",
       }),
       unremovablePaths: ["product/.git/config"],
       results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },

@@ -5,7 +5,8 @@ import {
 import type { ExecutionAdmission } from "@/modules/execution-contract/schema";
 import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
-import type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
+import type { AgentStartRefusalDetail, AgentStepReason } from "./start-refusal";
+import type { BuildChainBoundaryReason } from "@/modules/execution-contract/chain";
 import type { RunForecast, RunForecastDriver } from "./run-forecast";
 
 /**
@@ -53,7 +54,7 @@ export const AGENT_START_REFUSAL_LABELS: Record<AgentStartRefusal, string> = {
  * the kind of change Vibe can attempt", on a screen that had just said the
  * opposite in the sentence above it.
  */
-export const DOGFOOD_START_REFUSAL_LABELS = {
+export const AGENT_START_FAILURE_LABELS = {
   spec_not_persisted: "Vibe couldn't record what this run would do, so it didn't start one.",
   project_not_found: "That project couldn't be found.",
 } as const;
@@ -66,8 +67,7 @@ export const DOGFOOD_START_REFUSAL_LABELS = {
  * `preflight_refused` have their own, better sentences below and only fall back
  * here when the finer answer was not established.
  */
-export const DOGFOOD_STEP_REASON_LABELS: Record<DogfoodStepReason, string> = {
-  not_dogfood_eligible: "The coding agent isn't turned on for this project.",
+export const AGENT_STEP_REASON_LABELS: Record<AgentStepReason, string> = {
   no_action_plan: "There's no finished plan for Vibe to work from yet.",
   step_not_found: "That step isn't in your current plan any more.",
   repository_not_connected: "No code repository is connected to this project.",
@@ -115,7 +115,7 @@ export function startRefusalLabel(detail: AgentStartRefusalDetail): string {
     return EXECUTION_REASON_LABELS[detail.resolutionReason];
   }
 
-  return DOGFOOD_STEP_REASON_LABELS[detail.reason];
+  return AGENT_STEP_REASON_LABELS[detail.reason];
 }
 
 /** The one way forward a refused start can offer, when there is one. */
@@ -129,20 +129,29 @@ export type StartRefusalRecovery = {
 /**
  * The way forward, when a fresh read of the founder's code is it.
  *
- * Offered, never taken: a scan costs Credits, and Rule 60 is explicit that
- * blocked work explains what needs refreshing rather than spending on the
- * founder's behalf. So this returns copy and a kind — no URL, because a view
- * module has no business knowing what a route segment is called.
+ * **Offered, never taken.** Not because of what it costs — a Product Scan is
+ * free (`kill-switch.ts` files it under free work, and the rate card prices
+ * understanding at zero) — but because it is the founder's code, and Rule 60
+ * says blocked work explains what needs refreshing rather than reaching for it
+ * on their behalf. This returns copy and a kind, no URL: a view module has no
+ * business knowing what a route segment is called.
  *
  * Only for the refusals a re-read actually clears. A permanent refusal — this
  * step touches payments, the agent is not on for this project — gets nothing,
- * because offering a paid scan against a wall is worse than offering nothing.
+ * because a way forward that leads to the same wall is worse than none.
+ *
+ * Three of the four arrive after a start was refused. The fourth,
+ * `repository_analysis_outdated`, is the one that never gets that far: the step
+ * does not resolve agentic, so no start control renders and nothing can be
+ * clicked to produce it. The Agent screen asks the same question directly and
+ * uses this answer, which is why it is here rather than in a second copy table.
  */
 export function startRefusalRecovery(
   detail: AgentStartRefusalDetail,
 ): StartRefusalRecovery | null {
   const stale =
     detail.reason === "repository_snapshot_missing" ||
+    detail.resolutionReason === "repository_analysis_outdated" ||
     (detail.admission !== undefined &&
       !detail.admission.admissible &&
       (detail.admission.refusal === "repository_head_moved" ||
@@ -258,7 +267,63 @@ export function forecastEvidenceNote(forecast: RunForecast): string {
     return "No comparable run has been completed yet, so this is Vibe's policy ceiling rather than a measured one.";
   }
 
+  /*
+   * The wording did not move and that is deliberate — what moved is whether it
+   * is true.
+   *
+   * "Runs Vibe has completed" was counted against a constant that a person read
+   * out of the database on 2026-08-20 and typed into the repository, so the
+   * sentence froze on that date while the runs kept accumulating. It now counts
+   * Vibe's own published measured runs plus the ones this account has
+   * completed since, which is what the sentence always claimed (ADR 0083).
+   */
   return forecast.comparableRuns === 1
     ? "Based on 1 comparable run Vibe has completed."
     : `Based on ${forecast.comparableRuns} comparable runs Vibe has completed.`;
+}
+
+/**
+ * Why a build chain stopped where it did, in a founder's words.
+ *
+ * A chain shorter than someone expected, with nothing said about why, reads as
+ * a defect — and on the founder's own plan the very first chain stops at a
+ * Stripe step, which is the most alarming-looking correct refusal there is. So
+ * every boundary has a sentence, and `no_successor` deliberately has none: the
+ * chain reached the end of the plan, and there is nothing to explain.
+ */
+export const BUILD_CHAIN_BOUNDARY_LABELS: Record<BuildChainBoundaryReason, string | null> = {
+  no_successor: null,
+  successor_not_agentic: "The next step is yours to do, so Vibe stops here.",
+  successor_capability_matched:
+    "Vibe already knows how to make the next change exactly, so it runs on its own rather than in this build.",
+  successor_risk_ceiling:
+    "The next step is more sensitive than Vibe builds on your behalf — it stays yours.",
+  dependency_outside_chain: "The next step is also waiting on something this build does not cover.",
+  chain_length_ceiling: "Vibe builds at most three steps of a Move in one go.",
+  cycle_detected: "These steps refer back to each other, so none of them can go first.",
+};
+
+/**
+ * What one run will deliver, said before the click.
+ *
+ * Counts steps rather than naming them, because the names are already listed
+ * beside it and repeating them in a sentence makes the sentence unreadable at
+ * three members.
+ */
+export function buildChainOfferLabel(memberCount: number): string {
+  return memberCount === 1 ? "Build this step" : `Build all ${memberCount} steps`;
+}
+
+/**
+ * What a finished chained run actually produced.
+ *
+ * One change, one check, several steps — and it has to say exactly that. "3
+ * steps done" would imply three artifacts and three verdicts, where there is
+ * one of each: rule 66's standard, applied to the sentence a founder reads
+ * after paying for a chain.
+ */
+export function buildChainCompletionNote(memberCount: number): string {
+  return memberCount === 1
+    ? "One change, checked once."
+    : `One change, checked once, covering these ${memberCount} steps.`;
 }

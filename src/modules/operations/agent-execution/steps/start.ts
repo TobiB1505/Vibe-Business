@@ -7,7 +7,10 @@ import {
   loadAgentRunContext,
 } from "./shared";
 import { checkBudgetMatchesScope } from "@/modules/coding-agent/budget";
-import { captureWorkspaceBaseline, plantChangeMarker } from "@/modules/coding-agent/sandbox-runtime/changes";
+import {
+  captureWorkspaceBaseline,
+  plantChangeMarker,
+} from "@/modules/coding-agent/sandbox-runtime/changes";
 import { agentToolDescriptors, compileAgentInstruction } from "@/modules/coding-agent/prompt";
 import type { ExecutionBrief } from "@/modules/execution-context/brief";
 import {
@@ -15,14 +18,14 @@ import {
   loadAgentVerificationPlan,
   loadExecutionBrief,
 } from "@/modules/execution-context/service";
-import { toSandboxPolicy, type AgentVerificationPlan } from "@/modules/execution-context/verification";
+import {
+  toSandboxPolicy,
+  type AgentVerificationPlan,
+} from "@/modules/execution-context/verification";
 import { toSandboxCompletionPolicy } from "@/modules/execution-context/completion";
 import { assertPolicyConsistency } from "@/modules/execution-context/policy";
 import type { AgentCheckName } from "@/modules/coding-agent/schema";
-import {
-  markAgentRunStarted,
-  recordAgentRunObservations,
-} from "@/modules/coding-agent/store";
+import { markAgentRunStarted, recordAgentRunObservations } from "@/modules/coding-agent/store";
 import { setOperationStage } from "../../store";
 /* ---------------------------------------------------------------------------
  * Step 2a — start the harness, and return (§37, ADR 0029 A1)
@@ -105,7 +108,6 @@ export async function startAgentStep(
     await recordWorkspaceFailure(deps, context.run, marker);
     return { ok: false, failureCode: "sandbox_lost" };
   }
-
 
   /*
    * What Vibe already knows that bears on this step (EXECUTION CONTEXT
@@ -410,7 +412,6 @@ export async function startAgentStep(
    * disagree about how a paused run is settled, and only one of them could ever
    * execute.
    */
-
 
   if (!started.ok) {
     console.error("[agent-execution] the agent harness could not be started", {

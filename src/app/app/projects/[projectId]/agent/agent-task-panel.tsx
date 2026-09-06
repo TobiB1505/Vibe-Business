@@ -5,6 +5,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import { Well } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
 import { LENS_LABELS } from "@/modules/business-audit/map-view";
+import { buildChainCompletionNote } from "@/modules/coding-agent/view";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 
 /**
@@ -64,10 +65,18 @@ export type AgentTask = {
    */
   step: { order: number; title: string } | null;
   /**
-   * What this run will do: its absorbed preparation and its own step, in plan
-   * order. Not the whole plan — see `resolveTask`.
+   * What this run will do: its absorbed preparation and every step it delivers,
+   * in plan order. Not the whole plan — see `resolveTask`.
+   *
+   * The kinds are not decoration. Preparation is work the run performs on the
+   * way to its objective and the plan step for it is never marked done;
+   * a delivery is a step this one run completes. Before build chains the list
+   * was one delivery and its preparation, so a flat list of titles was
+   * unambiguous. With a chain it is not: three bullets could be one delivery
+   * with two preparations, or three deliveries, and those are different offers
+   * at different prices.
    */
-  steps: string[];
+  steps: { title: string; kind: "preparation" | "delivery" }[];
 };
 
 export function AgentTaskPanel({
@@ -169,7 +178,8 @@ export function AgentTaskPanel({
           <ul className="flex flex-col gap-3">
             {task.steps.map((step, index) => (
               <motion.li
-                key={step}
+                key={`${step.kind}:${step.title}`}
+                data-testid={`agent-task-step-${step.kind}`}
                 className="text-fg-body flex items-center gap-3 text-[0.9375rem]"
                 initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -181,14 +191,38 @@ export function AgentTaskPanel({
               >
                 <span
                   aria-hidden="true"
-                  className="border-mint-line bg-mint-tint text-mint flex size-5 flex-none items-center justify-center rounded-full border text-[11px]"
+                  className={cn(
+                    "flex size-5 flex-none items-center justify-center rounded-full border text-[11px]",
+                    step.kind === "delivery"
+                      ? "border-mint-line bg-mint-tint text-mint"
+                      : "border-line-3 text-fg-meta",
+                  )}
                 >
-                  ✓
+                  {step.kind === "delivery" ? "✓" : "·"}
                 </span>
-                {step}
+                {step.title}
+                {step.kind === "preparation" && (
+                  /* Named rather than left to the marker alone. A founder
+                     reading three bullets is deciding what they are paying
+                     for, and colour is not a word. */
+                  <span className="text-fg-meta text-xs">groundwork</span>
+                )}
               </motion.li>
             ))}
           </ul>
+          {task.steps.filter((step) => step.kind === "delivery").length > 1 && (
+            /*
+              What a chained run actually produces, said where the steps are
+              listed. "3 steps done" would imply three changes and three
+              verdicts; there is one of each, and rule 66 is the standard for
+              not letting a screen imply a stronger claim than was made.
+            */
+            <p className="text-fg-meta text-xs" data-testid="agent-task-chain-note">
+              {buildChainCompletionNote(
+                task.steps.filter((step) => step.kind === "delivery").length,
+              )}
+            </p>
+          )}
         </div>
       )}
 

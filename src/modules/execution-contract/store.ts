@@ -4,7 +4,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { CreditUnits } from "@/modules/credits/units";
 import { creditUnits } from "@/modules/credits/units";
-import type { ExecutionSpec } from "./spec";
+import {
+  absorbedStepKeysOf,
+  absorbedStepOrdersOf,
+  chainedStepKeysOf,
+  chainedStepOrdersOf,
+  type ExecutionSpec,
+} from "./spec";
 import type { ExecutionClass, ExecutionMode, ExecutionRiskClass } from "./schema";
 
 /**
@@ -32,7 +38,7 @@ import type { ExecutionClass, ExecutionMode, ExecutionRiskClass } from "./schema
  */
 
 const SPEC_COLUMNS =
-  "id, project_id, action_plan_id, step_key, step_order, business_audit_id, opportunity_id, spec_identity, mode, execution_class, risk_class, repository_connection_id, base_sha, repository_snapshot_id, capability, capability_version, credit_quote_id, max_authorized_credits, spec, schema_version, resolver_version, policy_version, risk_policy_version, created_at";
+  "id, project_id, action_plan_id, step_key, step_order, chain_step_keys, chain_step_orders, absorbed_step_keys, absorbed_step_orders, business_audit_id, opportunity_id, spec_identity, mode, execution_class, risk_class, repository_connection_id, base_sha, repository_snapshot_id, capability, capability_version, credit_quote_id, max_authorized_credits, spec, schema_version, resolver_version, policy_version, risk_policy_version, created_at";
 
 type SpecRow = {
   id: string;
@@ -40,6 +46,10 @@ type SpecRow = {
   action_plan_id: string;
   step_key: string;
   step_order: number;
+  chain_step_keys: string[];
+  chain_step_orders: number[];
+  absorbed_step_keys: string[];
+  absorbed_step_orders: number[];
   business_audit_id: string;
   opportunity_id: string;
   spec_identity: string;
@@ -158,6 +168,18 @@ export async function insertExecutionSpec(
       action_plan_id: spec.actionPlanId,
       step_key: spec.stepKey,
       step_order: spec.stepOrder,
+      /* Derived from the document rather than accepted as an argument, like
+         every other column here: a caller cannot store a chain that disagrees
+         with the spec it is storing (§54). A run of one writes `[]`, which is
+         what every row before build chains means. */
+      chain_step_keys: chainedStepKeysOf(spec),
+      chain_step_orders: chainedStepOrdersOf(spec),
+      /* What the run performs on its way to that delivery, from the same
+         document. Separate from the chain because it means the opposite thing:
+         these steps are covered, never delivered, and never completed (ADR
+         0089). */
+      absorbed_step_keys: absorbedStepKeysOf(spec),
+      absorbed_step_orders: absorbedStepOrdersOf(spec),
       business_audit_id: spec.businessAuditId,
       opportunity_id: spec.opportunityId,
       spec_identity: spec.identity,

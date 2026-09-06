@@ -1,5 +1,11 @@
+import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
-import { FIXTURE_COMMIT_SHA, fakeSandboxProvider, fakeValidatableSnapshot, healthySandboxFiles } from "@/modules/validation/test-support";
+import {
+  FIXTURE_COMMIT_SHA,
+  fakeSandboxProvider,
+  fakeValidatableSnapshot,
+  healthySandboxFiles,
+} from "@/modules/validation/test-support";
 import { SANDBOX_POLICY_VERSION, type ValidationStepName } from "@/modules/validation/schema";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import {
@@ -81,6 +87,7 @@ function seed(options: { preparedStatus?: string; commitSha?: string | null } = 
   });
 
   db.seed("repository_intelligence_snapshots", {
+    analyzer_version: REPOSITORY_ANALYZER_VERSION,
     id: "snapshot_1",
     project_id: PROJECT,
     status: "completed",
@@ -701,15 +708,19 @@ describe("refusing before spending (§34)", () => {
     expect(provider.createdWith()).toBeNull();
   });
 
-  it("creates no sandbox for an unsupported repository", async () => {
+  it("creates no sandbox for a repository with nothing to build", async () => {
+    // A Django project has no `package.json`, so there is no build for a change
+    // to be checked against. What matters here is *when* Vibe says so: before
+    // a VM exists, rather than after five minutes and a few cents of one.
     seed();
     db.rows("repository_intelligence_snapshots")[0].result = fakeValidatableSnapshot({
       frameworks: [{ id: "django", name: "Django" }],
+      build: { targets: [], truncated: false },
     });
 
     const outcome = await runPipeline();
 
-    expect(outcome).toMatchObject({ ok: false, failureCode: "validation_not_supported" });
+    expect(outcome).toMatchObject({ ok: false, failureCode: "not_a_node_project" });
     expect(provider.createdWith()).toBeNull();
   });
 });
@@ -832,7 +843,9 @@ describe("no secrets reach the sandbox (§8, §31, §37)", () => {
     await runPipeline();
 
     const created = provider.createdWith();
-    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe(CLONE_TOKEN);
+    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe(
+      CLONE_TOKEN,
+    );
     expect(JSON.stringify(created?.env)).not.toContain(CLONE_TOKEN);
   });
 

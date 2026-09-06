@@ -1,7 +1,7 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import {
-  buildEvidencePackV4,
+  buildCurrentEvidencePack,
   evidenceIdSetV3,
   renderEvidencePackV3,
   trimEvidencePackV3,
@@ -147,7 +147,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
    * version, every consumer rebuilds their pack at it, and
    * `describeEvidenceId` reads a v3 citation under v3 rules.
    */
-  let pack = buildEvidencePackV4(input);
+  let pack = buildCurrentEvidencePack(input);
   let request = buildAuditRequest(pack, config);
 
   // Cost gate: count before spending (Sprint 4 §14). The provider's own

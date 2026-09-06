@@ -207,7 +207,9 @@ describe("leaving and arriving are coherent", () => {
 
   /** Regression 8: a completed onboarding redirected back into onboarding. */
   it("sends a completed project to its workspace", () => {
-    expect(PAGE).toContain('onboarding.state === "complete") redirect(`/app/projects/${projectId}`)');
+    expect(PAGE).toContain(
+      'onboarding.state === "complete") redirect(`/app/projects/${projectId}`)',
+    );
   });
 
   it("names the final control after where it actually goes", () => {
@@ -221,7 +223,27 @@ describe("the reveal does not depend on a remote image", () => {
   it("falls back to the Vibe mark when the browser cannot load it", () => {
     expect(LOGO).toContain("onError");
     expect(LOGO).toContain("setFailed(true)");
-    expect(LOGO).toContain("if (failed) return <VibeMark");
+
+    // The claim, not the sentence: a failed load must leave the img behind,
+    // and with nothing else asked for it must be the Vibe mark. This pinned
+    // the exact line `if (failed) return <VibeMark` until the fallback became
+    // overridable for the product list, where Vibe's own mark would read as a
+    // claim about whose product a row is.
+    expect(LOGO).toContain("if (failed) return");
+    expect(LOGO).toContain("<VibeMark size={size} />");
+  });
+
+  it("is not what the reveal surfaces ask for — they take the default", () => {
+    // Which is what keeps the assertion above true *of the reveal*. A surface
+    // that passed its own fallback would leave this describing somewhere else.
+    for (const [name, source] of [
+      ["onboarding", PAGE],
+      ["understanding-panel", read("src/app/app/projects/[projectId]/understanding-panel.tsx")],
+    ] as const) {
+      const elements = source.match(/<ProductLogo[\s\S]*?\/>/g) ?? [];
+      expect(elements.length, name).toBeGreaterThan(0);
+      for (const element of elements) expect(element, name).not.toContain("fallback");
+    }
   });
 
   it("is what both reveal surfaces render", () => {
@@ -274,9 +296,7 @@ describe("the first journey speaks to a founder", () => {
       ["onboarding entry", read("src/app/app/onboarding/page.tsx")],
       ["project onboarding", PAGE],
     ] as const) {
-      expect(proseOf(source), name).toContain(
-        "GitHub will ask which repositories Vibe may access",
-      );
+      expect(proseOf(source), name).toContain("GitHub will ask which repositories Vibe may access");
     }
   });
 });
@@ -310,5 +330,47 @@ describe("the onboarding step reads in one wave", () => {
    */
   it("keeps the one genuinely dependent read after what it depends on", () => {
     expect(PAGE.indexOf("const surface =")).toBeLessThan(PAGE.indexOf("const auditFailure ="));
+  });
+});
+
+/**
+ * Onboarding ends on a decision (audit Slice 6).
+ *
+ * The last screen showed the founder the one Move Vibe would start with, its
+ * problem and why it comes first — and then offered only a way out of the
+ * flow. The whole of onboarding built to a recommendation nobody could act on
+ * from the screen that made it.
+ *
+ * Asserted against the source, like the rest of this file: the control binds a
+ * real Server Action and cannot be mounted in the fixture harness, so what a
+ * browser could prove here is the markup and not the wiring.
+ */
+describe("the last screen offers the Move it just recommended", () => {
+  const DECISION = read("src/app/app/onboarding/[projectId]/first-move-decision.tsx");
+
+  it("offers planning as a priced control, not a sentence", () => {
+    expect(PAGE).toContain("<FirstMoveDecision");
+    expect(DECISION).toContain("startPlanAction");
+    // The price rides on the control, from the rate card in force.
+    expect(DECISION).toContain("<ActionBlock");
+    expect(DECISION).toContain('operation="action_plan"');
+  });
+
+  it("never defaults a replan on", () => {
+    // Rule 60: a paid re-run is an explicit request, never a default.
+    expect(DECISION).toContain('name="force" value="false"');
+    expect(DECISION).not.toContain('value="true"');
+  });
+
+  it("keeps leaving free, and keeps naming where it goes", () => {
+    expect(PAGE).toContain("completeOnboardingAction");
+    expect(PAGE).toContain("Go to your workspace");
+    // Comments quote the phrase they explain, so the check reads the markup.
+    expect(copyOf(PAGE)).not.toContain("Go to dashboard");
+  });
+
+  it("offers the plain exit when there is no Move to decide about", () => {
+    // A screen with no recommendation has nothing to price.
+    expect(PAGE).toContain("{firstOpportunity ? (");
   });
 });

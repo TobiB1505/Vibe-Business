@@ -13,7 +13,12 @@ function nextAppFixture(): FixtureFile[] {
       content: packageJson({
         name: "demo",
         private: true,
-        dependencies: { next: "16.3.0", react: "19.2.8", "@supabase/supabase-js": "2", stripe: "16" },
+        dependencies: {
+          next: "16.3.0",
+          react: "19.2.8",
+          "@supabase/supabase-js": "2",
+          stripe: "16",
+        },
         devDependencies: { typescript: "^5" },
         engines: { node: ">=20.9.0" },
         packageManager: "pnpm@11.21.0",
@@ -154,7 +159,11 @@ describe("analyzeRepository", () => {
   });
 
   it("stops fetching once the byte budget is exhausted", async () => {
-    const large = packageJson({ dependencies: Object.fromEntries(Array.from({ length: 200 }, (_, i) => [`dep-${i}`, "1.0.0"])) });
+    const large = packageJson({
+      dependencies: Object.fromEntries(
+        Array.from({ length: 200 }, (_, i) => [`dep-${i}`, "1.0.0"]),
+      ),
+    });
     const files: FixtureFile[] = [
       { path: "package.json", content: large },
       { path: "apps/web/package.json", content: large },

@@ -9,6 +9,7 @@ import { evidenceIdSetV3, type EvidencePackV3 } from "@/modules/business-audit/e
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import { selectPlannerEvidence, trimPlannerEvidence } from "./evidence";
 import { ACTION_PLANNER_PROMPT_VERSION, buildActionPlannerSystemPrompt } from "./prompt";
+import type { PlannerFinding } from "./render";
 import { renderActionPlanInput } from "./render";
 import { ACTION_PLANNER_RUBRIC_VERSION } from "./rubric";
 import {
@@ -104,12 +105,20 @@ export type RunActionPlanInput = {
   repository: RepositoryIntelligenceSnapshot | null;
   provider: AIProvider;
   config: OperationConfig;
+  /**
+   * What the founder established on steps no run could finish (ADR 0093).
+   *
+   * Passed in rather than read here for the same reason the pack is: the runner
+   * makes a request, it does not decide what this project knows.
+   */
+  findings?: readonly PlannerFinding[];
 };
 
 export function buildActionPlanRequest(
   source: PlannerSource,
   pack: EvidencePackV3,
   config: OperationConfig,
+  findings: readonly PlannerFinding[] = [],
 ): StructuredRequest {
   return {
     operation: config.operation,
@@ -117,7 +126,7 @@ export function buildActionPlanRequest(
     // Authored entirely by us. No customer content is interpolated into the
     // system prompt (ADR 0011, Rule 42).
     system: buildActionPlannerSystemPrompt(),
-    userContent: renderActionPlanInput({ source, pack }),
+    userContent: renderActionPlanInput({ source, pack, findings }),
     outputSchema: ANTHROPIC_ACTION_PLAN_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     reasoning: config.reasoning,
@@ -140,9 +149,10 @@ export async function runActionPlanning(
   input: RunActionPlanInput,
 ): Promise<ActionPlanRunOutcome> {
   const { provider, config, source } = input;
+  const findings = input.findings ?? [];
 
   let pack = buildPlannerPack(input);
-  let request = buildActionPlanRequest(source, pack, config);
+  let request = buildActionPlanRequest(source, pack, config, findings);
 
   // Cost gate: count before spending.
   const firstCount = await provider.countInputTokens(request);
@@ -160,7 +170,7 @@ export async function runActionPlanning(
     const trimmed = trimPlannerEvidence(pack);
     if (trimmed !== pack) {
       pack = trimmed;
-      request = buildActionPlanRequest(source, pack, config);
+      request = buildActionPlanRequest(source, pack, config, findings);
 
       const recount = await provider.countInputTokens(request);
       if (!recount.ok) {
