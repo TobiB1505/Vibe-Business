@@ -1,159 +1,82 @@
-import { scoreDisplay } from "@/components/ui/score-display";
-import type {
-  BusinessBrainNode,
-  BusinessBrainView,
-} from "@/modules/projects/business-brain-view";
+"use client";
+
+import { useState } from "react";
+import { BusinessMap } from "@/app/app/projects/[projectId]/business-brain/business-map";
+import { FindingCard } from "@/components/system/finding-card";
+import type { BusinessLens } from "@/modules/business-audit/schema";
+import type { BusinessBrainView } from "@/modules/projects/business-brain-view";
 
 /**
  * The audit reading, as a render block's body.
  *
- * ## Why this is not the Business Brain page, shrunk
+ * ## What this used to be, and why that was wrong
  *
- * That page is a 780×690 solar system with stars behind it, and it is right
- * there: a founder who has opened the map came to read the map. A block in a
- * thread is a different job — it is the smallest picture that says *this
- * happened and here is what it found*, with a control beside it to the real
- * thing. Shrinking the page would produce nine unreadable planets and a
- * scrollbar.
+ * A hand-drawn SVG: nine dots on three rings, laid out from the domain's own
+ * `ring` and `angle`. It looked defensible and it was the exact failure the
+ * render block exists to prevent — a second UI for the same fact. It had
+ * already drifted, too, and in the way that is hardest to notice: the shipped
+ * map does **not** use `ring` and `angle`. It places the nine areas from a
+ * table of its own. So two maps of one business put the areas in two different
+ * places, and nothing would have caught it.
  *
- * ## The geometry is the domain's
+ * ## What it is now
  *
- * `BusinessBrainNode` carries `ring` and `angle`, computed in
- * `map-view.ts` — the same two values the full map lays out from. Inventing a
- * second arrangement here would mean a founder who looked at both saw two
- * different businesses.
+ * Two shipped components and no geometry.
  *
- * ## What it refuses to draw
+ * `BusinessMap` with `variant="block"`, which renders the compact layout the
+ * file already had for a phone — the score, the coverage line, and the nine
+ * areas as the same planets the radial map draws. Change the map and this
+ * changes; there is nothing here to keep in step.
  *
- * A `null` score is an em dash and never a zero, never an empty ring and never
- * a red one (rule 44). An audit that could not be scored has not scored badly,
- * and the block says the reason instead of colouring a non-answer.
+ * `FindingCard` for the leading blocker, which is a Vibe semantic component
+ * and never replaced by a generic equivalent. It already knows that a priority
+ * leads with what it costs rather than with what it is, which is a decision
+ * this file would otherwise have had to make again and would have got wrong.
+ *
+ * ## The one thing the block still decides
+ *
+ * How much of the stack to show: the first blocker, and a count of the rest.
+ * The audit page reads the whole ranked stack because a founder opened it to
+ * read it. A thread block is a glance, and the count is what sends them.
  */
-
-const RING_RADIUS: Record<BusinessBrainNode["ring"], number> = {
-  now: 30,
-  soon: 46,
-  later: 60,
-};
-
-function dotFor(node: BusinessBrainNode): string {
-  if (node.score === null) return "fill-fg-disabled";
-  if (node.health === "strong") return "fill-mint";
-  if (node.health === "adequate") return "fill-amber";
-  return "fill-coral";
-}
-
-function position(node: BusinessBrainNode): { x: number; y: number } {
-  const radians = (node.angle * Math.PI) / 180;
-  const radius = RING_RADIUS[node.ring];
-  return { x: 70 + radius * Math.cos(radians), y: 70 + radius * Math.sin(radians) };
-}
-
 export function AuditBlock({ view }: { view: BusinessBrainView }) {
-  const score = scoreDisplay(view.overall.score, { unscoredText: "—" });
-  const points = new Map(view.nodes.map((node) => [node.id, position(node)]));
+  /*
+    Selection is local and goes nowhere. The map is interactive by nature and
+    the block has no detail column to put a selected area into — so a press
+    highlights and nothing else. A block that swallowed a click silently would
+    be worse; a block that opened a panel would be the audit page, badly.
+  */
+  const [selected, setSelected] = useState<BusinessLens | null>(null);
+  const priority = view.primaryPriority;
 
   return (
-    <div className="flex flex-wrap items-start gap-5">
-      <svg
-        viewBox="0 0 140 140"
-        className="size-[140px] shrink-0"
-        role="img"
-        aria-label={`Nine business areas, ${view.overall.stateLabel}`}
-      >
-        {/* The three orbits, so the rings are legible as rings rather than as
-            three arbitrary distances from the middle. */}
-        {Object.values(RING_RADIUS).map((radius) => (
-          <circle
-            key={radius}
-            cx="70"
-            cy="70"
-            r={radius}
-            className="fill-none stroke-line-2"
-            strokeWidth="1"
-          />
-        ))}
+    <div className="flex flex-col gap-5">
+      <BusinessMap
+        view={view}
+        variant="block"
+        selected={selected}
+        onSelect={(lens) => setSelected((current) => (current === lens ? null : lens))}
+      />
 
-        {/* What the audit judged together. Its own relationships, not a mesh
-            drawn between everything for the look of it. */}
-        {view.relationships.map((relationship) => {
-          const from = points.get(relationship.from);
-          const to = points.get(relationship.to);
-          if (!from || !to) return null;
-          return (
-            <line
-              key={relationship.id}
-              x1={from.x}
-              y1={from.y}
-              x2={to.x}
-              y2={to.y}
-              className="stroke-line-2"
-              strokeWidth="1"
-            />
-          );
-        })}
+      {priority && (
+        <FindingCard
+          variant="priority"
+          rank={priority.rank}
+          title={priority.headline}
+          whyItMatters={priority.whyItMatters}
+          /* A priority is read for consequence; the diagnosis is the follow-up.
+             The component owns that ordering, and passing it here would be
+             restating a decision it already made. */
+          lead="why"
+        />
+      )}
 
-        {view.nodes.map((node) => {
-          const point = points.get(node.id);
-          if (!point) return null;
-          return (
-            <circle
-              key={node.id}
-              cx={point.x}
-              cy={point.y}
-              /* The blocker the audit ranked first is the only one drawn
-                 larger. A size scale over nine dots would be a ranking this
-                 block is not entitled to make. */
-              r={node.blockerRank === 1 ? 5.5 : 4}
-              className={dotFor(node)}
-            />
-          );
-        })}
-      </svg>
-
-      <div className="flex min-w-[16rem] flex-1 flex-col gap-2.5">
-        <div className="flex items-baseline gap-2">
-          <span className="text-headline font-semibold tabular-nums text-fg">{score.text}</span>
-          <span className="text-caption text-fg-meta">/ 100</span>
-          <span className="ml-auto text-caption text-fg-prose">{view.overall.stateLabel}</span>
-        </div>
-
-        {/* The reason a score is absent, which the Brain used to render as an
-            em dash with the explanation left unread. */}
-        {view.overall.score === null && view.overall.insufficientCoverageReason && (
-          <p className="text-caption text-fg-secondary">
-            {view.overall.insufficientCoverageReason}
-          </p>
-        )}
-
-        {view.primaryPriority && (
-          <div className="flex flex-col gap-1 border-t border-line-1 pt-2.5">
-            <p className="text-ui text-fg">{view.primaryPriority.headline}</p>
-            {view.primaryPriority.whyItMatters && (
-              <p className="text-caption text-fg-secondary">
-                {view.primaryPriority.whyItMatters}
-              </p>
-            )}
-          </div>
-        )}
-
-        {view.additionalPriorityCount > 0 && (
-          <p className="text-caption text-fg-meta">
-            and {view.additionalPriorityCount} more{" "}
-            {view.additionalPriorityCount === 1 ? "blocker" : "blockers"}
-          </p>
-        )}
-
-        {/*
-          What the reading rests on. Counts the audit itself recorded — never a
-          confidence percentage, which is the number this row would most like
-          to invent.
-        */}
-        <p className="font-mono text-caption text-fg-meta">
-          {view.signalCount} signals · {view.sourceCount}{" "}
-          {view.sourceCount === 1 ? "source" : "sources"}
+      {view.additionalPriorityCount > 0 && (
+        <p className="text-caption text-fg-meta">
+          and {view.additionalPriorityCount} more{" "}
+          {view.additionalPriorityCount === 1 ? "blocker" : "blockers"}
         </p>
-      </div>
+      )}
     </div>
   );
 }

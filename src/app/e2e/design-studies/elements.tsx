@@ -371,6 +371,21 @@ export function Bubble({
  * leaves the shape, and the difference is the whole reason the first version
  * read as a spike glued to a card.
  */
+/**
+ * A block's frame by register.
+ *
+ * Only a claim gets a colour. A block that shows what Vibe made is furniture
+ * and takes the neutral panel; a block that asks something of the founder is a
+ * status, and takes the amber the panel inside it gave up.
+ */
+const BLOCK_TONE: Record<StatusTone, string> = {
+  neutral: "border-line-2 bg-surface-1",
+  active: "border-line-2 bg-surface-1",
+  success: "border-line-2 bg-surface-1",
+  waiting: "border-amber-line bg-amber-tint-soft",
+  problem: "border-coral-line bg-coral-tint-soft",
+};
+
 function BubbleTail() {
   return (
     <svg
@@ -703,10 +718,30 @@ export function Thinking({ children }: { children: ReactNode }) {
  * showing the work instead of the outcome. That is what makes "watch it work"
  * possible without a spinner standing in for a screen nobody can see yet — and
  * it is the only place on this surface where dissolving lines belong.
+ *
+ * ## And it can be asked of, not only read
+ *
+ * The second kind is an **ask**: a block whose body is a shipped interactive
+ * panel rather than a view. It exists because the alternative was worse than
+ * ugly — "Answer in the Agent" sends a founder out of the conversation to
+ * answer a question the conversation just asked, while the run sits paused,
+ * and then expects them to come back.
+ *
+ * It is possible at all because the panels already separate *what is asked*
+ * from *how it is answered*: `AgentQuestionPanel` takes the interrupt and a
+ * control as children, `AgentWorkspaceChoice` takes candidates and a control
+ * per candidate. So the panel travels into the thread and the action stays
+ * with whoever can perform it.
+ *
+ * An ask carries a `tone`, because it is making a claim about status the way a
+ * bubble does — this is your turn — and the panel it holds has given up its
+ * own border to say so once instead of twice.
  */
 export function RenderBlock({
   /** What kind of work this is. The product's own word, never invented here. */
   label,
+  /** The register, for a block that makes a claim about status. */
+  tone = "neutral",
   /** When it finished, already formatted. Absent while it is still running. */
   at,
   /**
@@ -722,6 +757,7 @@ export function RenderBlock({
   index = 0,
 }: {
   label: string;
+  tone?: StatusTone;
   at?: string;
   namesItself?: boolean;
   children: ReactNode;
@@ -729,7 +765,7 @@ export function RenderBlock({
 }) {
   return (
     <section
-      className="study-rise flex w-full flex-col gap-3 rounded-panel border border-line-2 bg-surface-1 p-4"
+      className={`study-rise flex w-full flex-col gap-3 rounded-panel border p-4 ${BLOCK_TONE[tone]}`}
       style={{ "--i": index } as CSSProperties}
       aria-label={label}
     >

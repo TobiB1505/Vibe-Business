@@ -6,6 +6,8 @@ import {
 } from "@/modules/projects/business-brain-view";
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "./agent-block";
+import { AskBlock } from "./ask-block";
+import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "./audit-block";
 import { ScanBlock } from "./scan-block";
 import { E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
@@ -13,6 +15,8 @@ import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./elements";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
+import type { FounderInputRequest } from "@/modules/founder-input/schema";
+import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
 import type { Study } from "./studies";
 
 /**
@@ -72,6 +76,68 @@ function auditView(scenario: "audit-synthesis" | "audit-unscored"): BusinessBrai
   if (!view) throw new Error(`fixture ${scenario} produced no business brain view`);
   return view;
 }
+
+/**
+ * A paused run, and the question that paused it.
+ *
+ * Written here because no fixture carried one: the agent stage scenarios cover
+ * building, validating, preview and merge, and the interrupt is the state
+ * nobody had built a fixture for — which is some of why it kept being routed
+ * away from rather than designed.
+ */
+const ASK_INTERRUPT: StoredExecutionInterrupt = {
+  id: "interrupt_e2e",
+  projectId: "project_e2e",
+  userId: "user_e2e",
+  executionSpecId: "spec_e2e",
+  agentExecutionRunId: "run_e2e",
+  type: "business_decision_required",
+  question: "Which of the two checkout flows should stay?",
+  responseSchema: {
+    kind: "single_choice",
+    options: [
+      { id: "hosted", label: "The hosted checkout" },
+      { id: "embedded", label: "The embedded checkout" },
+    ],
+  },
+  status: "open",
+  answer: null,
+  createdAt: "2026-09-06T08:58:00.000Z",
+  answeredAt: null,
+};
+
+const ASK_REQUEST: FounderInputRequest = {
+  id: "request_e2e",
+  projectId: "project_e2e",
+  actionPlanId: "plan_e2e",
+  actionPlanStepKey: "checkout-flow",
+  executionInterruptId: "interrupt_e2e",
+  origin: "execution_blocker",
+  kind: "decision",
+  subjectKey: "checkout.flow",
+  question: "Which of the two checkout flows should stay?",
+  whyNeeded: "Both are wired up, and the change cannot land while either could be the live one.",
+  responseType: "single_select",
+  recommendation: {
+    id: "hosted",
+    label: "The hosted checkout",
+    value: "Keep the hosted checkout and remove the embedded one.",
+    explanation: "It is the one your pricing page already links to.",
+  },
+  alternatives: [
+    {
+      id: "embedded",
+      label: "The embedded checkout",
+      value: "Keep the embedded checkout and remove the hosted one.",
+      explanation: null,
+    },
+  ],
+  allowCustom: true,
+  contextHash: "e".repeat(64),
+  status: "open",
+  createdAt: "2026-09-06T08:58:00.000Z",
+  resolvedAt: null,
+};
 
 /** The agent fixture the workspace's own stage routes render from. */
 const AGENT = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
@@ -273,10 +339,16 @@ export function StudyBlock({ study }: { study: Study }) {
       <section className="flex flex-col gap-3">
         <Eyebrow>When it has finished</Eyebrow>
         <Context>
-          The smallest honest picture of the result, with the control beside it rather than in it.
-          Not the Business Brain page shrunk — that page is a 780-pixel map and a founder who opened
-          it came to read it. The geometry here is still the domain&rsquo;s: ring and angle come
-          from map-view.ts, so somebody who looks at both does not see two different businesses.
+          Two shipped components and no geometry of its own. The map is BusinessMap with a block
+          variant, which renders the compact layout that file already had for a phone; the blocker
+          is FindingCard, which already knows that a priority leads with what it costs.
+        </Context>
+        <Context>
+          This is the block that was wrong for longest. It used to be a hand-drawn SVG laid out from
+          the domain&rsquo;s ring and angle — and the shipped map does not use those at all, it
+          places the nine areas from a table of its own. Two maps of one business, in two different
+          arrangements, and nothing would have caught it. Change the map now and this changes with
+          it; there is nothing left here to keep in step.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble index={0}>
@@ -386,6 +458,42 @@ export function StudyBlock({ study }: { study: Study }) {
           profile&rsquo;s commands exited zero in an isolated VM — never that a change is safe,
           reviewed, mergeable or live (rule 66), which is why the control beside it goes to the
           review rather than to a merge.
+        </Context>
+      </section>
+
+      {/* ── The ask ──────────────────────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>A question answered where it was asked</Eyebrow>
+        <Context>
+          The second kind of block. &ldquo;Answer in the Agent&rdquo; sends a founder out of the
+          conversation to answer a question the conversation just asked, while the run sits paused,
+          and expects them to come back. That was on ten of the twenty-one moments and it is the one
+          interaction a surface meant to be <em>the</em> place somebody works cannot have.
+        </Context>
+        <Context>
+          It is composition rather than a rebuild because the shipped pieces already split the two
+          halves that had to be split: the panel renders what is asked and takes the control as
+          children; the control takes its server action as a prop. Neither knows where it is, so the
+          panel travels into the thread and the action stays with whoever can perform it.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble tone="waiting" open index={0}>
+            <Line>I stopped part-way and need something from you.</Line>
+          </Bubble>
+          <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
+            <AskBlock
+              interrupt={ASK_INTERRUPT}
+              request={ASK_REQUEST}
+              resolveAction={labResolveAction}
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          The block carries the amber and the panel gave up its own border to say it once instead of
+          twice. What the lab cannot show is the action: resolving writes a durable answer and
+          unblocks a paused run, and there is nothing here to unblock — so the control reports that
+          rather than pretending. In production Nova&rsquo;s route supplies the real one, the same
+          way the agent route supplies it today.
         </Context>
       </section>
 
