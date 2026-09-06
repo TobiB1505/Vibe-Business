@@ -18,17 +18,31 @@ import type { Study } from "./studies";
  * ## The argument, which is about familiarity rather than about novelty
  *
  * A founder arriving at Home has met this layout a thousand times: an avatar,
- * a message, options under it, a composer at the bottom. Borrowing it costs
- * nothing to teach. What Vibe adds is the one honest difference — the composer
- * is **there and disabled**, and Nova says why in her own words rather than
- * leaving a dead box for somebody to poke at.
+ * and messages coming out of it. Borrowing that costs nothing to teach.
  *
- * That is not a lie by omission, and the distinction matters enough to state:
- * a field that looked live and silently swallowed input would be one. A field
- * that is visibly unavailable, beside a sentence explaining that replies are
- * coming and are not here yet, is the product telling the truth about its own
- * version. It also puts the future affordance where it will eventually live,
- * so the day it turns on nothing about the screen has to move.
+ * ## The composer is gone, and its absence is the cleaner claim
+ *
+ * An earlier revision of this study put a text field at the bottom, visibly
+ * disabled, with Nova explaining that she could not read replies yet. It was
+ * honest and it was still wrong: a disabled input is an apology for something
+ * nobody asked for, and it spends the bottom of the surface on a capability
+ * that does not exist. Removing it says the same thing with less — there is
+ * nowhere to type, so nothing suggests typing.
+ *
+ * What stays is the part that carried the familiarity: an avatar that is
+ * plainly a speaker, and speech attached to it.
+ *
+ * ## The bubble comes out of the mark
+ *
+ * `NovaPresence` is not an icon beside the text; it is the thing the text is
+ * coming from. The tail joins them, so the four states the mark carries —
+ * idle, listening, working, settled — are read as *hers* rather than as a
+ * status dot that happens to sit nearby. When she is working, the speaker
+ * visibly is.
+ *
+ * The bubble takes anything: a sentence, a set of options, a stage name, a
+ * panel. That is the extension point — new things Nova has to say arrive as
+ * new bubbles rather than as new regions of the page.
  *
  * ## Why this renders `buildNovaFeed` rather than `buildNovaHomeView`
  *
@@ -46,8 +60,10 @@ import type { Study } from "./studies";
  * business reading, and the live record of what Vibe has done. It is the
  * context a chat has no room for and should not push into the conversation.
  *
- * **Right** is the conversation. Nova's messages, her options as pressable
- * tiles, and the disabled composer beneath them.
+ * **Right** is the conversation: Nova's mark, and everything she has to say
+ * hanging off it. The panel hugs its content — the 560px floor it used to
+ * carry existed to hold a composer against the bottom edge, and with the
+ * composer gone it was reserving space for nothing.
  *
  * ## What a press produces
  *
@@ -138,7 +154,17 @@ const FACTS: NovaFocusFacts = {
 
 /* ── Chat furniture ──────────────────────────────────────────────────── */
 
-/** One thing Nova says, with her mark beside it the first time she speaks. */
+/**
+ * One thing Nova says, joined to the mark it comes out of.
+ *
+ * The tail is what makes this a speaker rather than an icon with a caption. It
+ * is a rotated square sitting on the bubble's left edge with the same border
+ * and fill, so the two read as one shape — cheaper and sharper at any zoom
+ * than an SVG pointer, and it inherits the surface tokens for free.
+ *
+ * Only the first bubble in a run carries the mark, the way every chat does.
+ * The ones after it keep the gutter so the column stays straight.
+ */
 function NovaSays({
   children,
   mark,
@@ -147,25 +173,35 @@ function NovaSays({
   tone = "default",
 }: {
   children: ReactNode;
-  /** Only the first message in a run carries the avatar, as any chat does. */
   mark: boolean;
   seed: string;
   state: Parameters<typeof NovaPresence>[0]["state"];
   tone?: "default" | "note";
 }) {
+  const skin =
+    tone === "note"
+      ? "border-line-2 bg-surface-1 text-fg-secondary"
+      : "border-line-3 bg-surface-3 text-fg-body";
+
   return (
-    <div className="flex items-start gap-3">
-      <span className="w-11 shrink-0">
-        {mark && <NovaPresence state={state} seed={seed} size="md" />}
+    <div className="flex items-start gap-4">
+      <span className="w-[72px] shrink-0">
+        {mark && <NovaPresence state={state} seed={seed} size="lg" />}
       </span>
-      <div
-        className={`min-w-0 max-w-[46ch] rounded-card rounded-tl-sm border px-4 py-3 ${
-          tone === "note"
-            ? "border-line-2 bg-surface-1 text-fg-secondary"
-            : "border-line-3 bg-surface-3 text-fg-body"
-        }`}
-      >
-        {children}
+
+      <div className={`relative min-w-0 max-w-[46ch] rounded-card border px-4 py-3 ${skin}`}>
+        {/*
+          The join. Positioned on the bubble's edge and clipped by its own
+          border so only the two outward sides show — a triangle drawn with
+          two borders rather than a third element to keep aligned.
+        */}
+        {mark && (
+          <span
+            aria-hidden
+            className={`absolute top-6 -left-[7px] size-3 rotate-45 border-b border-l ${skin}`}
+          />
+        )}
+        <span className="relative block">{children}</span>
       </div>
     </div>
   );
@@ -311,7 +347,7 @@ export function StudyChat({ study, answered }: { study: Study; answered?: boolea
 
         {/* ── Right: the conversation ────────────────────────────────── */}
         <section
-          className={`study-rise flex min-h-[560px] flex-col gap-5 p-6 max-sm:p-4 ${panel}`}
+          className={`study-rise flex flex-col gap-5 p-6 max-sm:p-4 ${panel}`}
           style={rise(1)}
           aria-label="Nova"
         >
@@ -360,7 +396,7 @@ export function StudyChat({ study, answered }: { study: Study; answered?: boolea
               (() => {
                 const entry = choice;
                 return (
-                  <div key={entry.id} className="flex flex-col gap-3 pl-14 max-sm:pl-0">
+                  <div key={entry.id} className="flex flex-col gap-3 pl-[88px] max-sm:pl-0">
                     <p className="text-caption text-fg-meta">{entry.prompt}</p>
                     <div className="flex flex-wrap gap-2.5">
                       {entry.options.map((option) => (
@@ -390,45 +426,6 @@ export function StudyChat({ study, answered }: { study: Study; answered?: boolea
                 </NovaSays>
               </>
             )}
-
-            {/*
-              Nova on her own limits, in her own voice. This is the sentence
-              that makes the dead composer honest rather than broken, and it is
-              deliberately hers rather than a system notice in grey.
-            */}
-            <NovaSays mark={false} seed={seed} state={presence} tone="note">
-              <p className="text-caption">
-                I can&rsquo;t read what you type yet — this is my first version, and talking back is
-                what I am being built for next. Press one of my options and I will get to work.
-              </p>
-            </NovaSays>
-          </div>
-
-          {/*
-            The composer, present and unavailable.
-
-            `disabled` and `aria-disabled` rather than a styled div: assistive
-            technology should reach the same conclusion an eye does, and a
-            focusable box that swallows keystrokes is the failure this is
-            avoiding. The label above it says why in Nova's own words.
-          */}
-          <div className="mt-auto flex flex-col gap-2 pt-2">
-            <div className="flex items-center gap-3 rounded-nav border border-line-2 bg-field px-4 py-3 opacity-60">
-              <input
-                type="text"
-                disabled
-                aria-disabled="true"
-                placeholder="Writing to Nova is coming in a later version"
-                className="min-w-0 flex-1 cursor-not-allowed bg-transparent text-ui text-fg-body placeholder:text-fg-disabled focus:outline-none"
-              />
-              <span
-                aria-hidden
-                className="grid size-8 shrink-0 place-items-center rounded-nav bg-surface-2 text-fg-disabled"
-              >
-                ↑
-              </span>
-            </div>
-            <p className="text-caption text-fg-meta">Version 1 answers by doing, not by typing.</p>
           </div>
         </section>
       </div>
@@ -448,12 +445,12 @@ function ChatChrome({ answered }: { answered?: boolean }) {
       <p className="study-measure text-caption text-fg-prose">
         Rendered from buildNovaFeed — the transcript projection that has existed since the Nova
         slice and has never been mounted outside onboarding. Left: the project and the live record.
-        Right: the conversation.
+        Right: her mark, and everything she has to say hanging off it.
       </p>
       <p className="study-measure text-caption text-fg-secondary">
         {answered
           ? "A press becomes the founder's own message, and Nova answers with the sentence her own table holds for what is true next."
-          : "The composer is present and disabled, with Nova saying why. A box that looked live and swallowed input would be the dishonest version of this."}
+          : "No composer: there is nowhere to type, so nothing suggests typing. What carries the familiarity is the mark and the speech coming out of it — and the bubble takes anything, so what Nova has to say next arrives as another bubble rather than as another region of the page."}
       </p>
     </div>
   );
