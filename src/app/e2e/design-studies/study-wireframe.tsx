@@ -438,32 +438,45 @@ export function StudyWireframe({
             <div className="pt-3">
               <Arriving
                 items={[
-                  ...bubbles.map((bubble) => (
-                    <Bubble
-                      key={bubble.key}
-                      tone={status.tone}
-                      open={status.open}
-                      aside={bubble.aside}
-                      tail={bubble.tail}
-                    >
-                      {bubble.paragraphs.map((text) =>
-                        bubble.aside ? (
-                          <Context key={text}>{text}</Context>
-                        ) : (
-                          <Line key={text}>{text}</Line>
-                        ),
-                      )}
-                    </Bubble>
-                  )),
+                  ...bubbles.map((bubble, position) => ({
+                    key: bubble.key,
+                    /* Only the first line opens a turn. The rest follow the
+                       way a person sends three quick lines and then stops. */
+                    beat: position === 0,
+                    node: (
+                      <Bubble
+                        tone={status.tone}
+                        open={status.open}
+                        aside={bubble.aside}
+                        tail={bubble.tail}
+                      >
+                        {bubble.paragraphs.map((text) =>
+                          bubble.aside ? (
+                            <Context key={text}>{text}</Context>
+                          ) : (
+                            <Line key={text}>{text}</Line>
+                          ),
+                        )}
+                      </Bubble>
+                    ),
+                  })),
                   /*
                     What she made. A block, not a bubble — the same rule that
                     put the control outside one. It arrives in the thread like
                     everything else, because it is one of the things she is
                     showing rather than a panel bolted to the bottom.
                   */
-                  <RenderBlock key="audit" label="Business audit" at="16h">
-                    <AuditBlock view={auditView()} />
-                  </RenderBlock>,
+                  {
+                    key: "audit",
+                    /* A thing she made is a different kind of arrival from a
+                       thing she said, so it gets its own beat. */
+                    beat: true,
+                    node: (
+                      <RenderBlock label="Business audit" at="16h">
+                        <AuditBlock view={auditView()} />
+                      </RenderBlock>
+                    ),
+                  },
                 ]}
               >
                 {choice && (

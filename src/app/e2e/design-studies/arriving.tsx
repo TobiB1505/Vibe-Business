@@ -18,6 +18,18 @@ import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode 
  * appear for a beat and are immediately replaced by the line they preceded
  * assert only that the next line is coming — which is true, because it is.
  *
+ * ## Not one beat per bubble
+ *
+ * The beat marks a *turn*, not a line. Nova saying three sentences in a row is
+ * one turn, and pausing to compose between each of them takes five seconds to
+ * deliver something a founder could have read in two — the choreography stops
+ * being a nicety and starts being a wait.
+ *
+ * So a caller marks which items open a turn. The first sentence does, and so
+ * does the block, because a thing she *made* is a different kind of arrival
+ * from a thing she said. The sentences between them follow immediately, the
+ * way a person sends three quick lines and then stops.
+ *
  * ## Why this appends instead of reserving
  *
  * The motion obligation is that nothing moves under a reader. Reserving the
@@ -52,18 +64,29 @@ import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode 
  * later as a surprise.
  */
 
-/** How long a message rests before the next composing beat starts. */
-const REST_MS = 520;
+/** How long the thread rests before Nova starts composing the next turn. */
+const REST_MS = 420;
 
-/** How long Nova composes before the next message lands. */
+/** How long she composes before the message lands. */
 const BEAT_MS = 620;
+
+/** Between lines of one turn. Quick, because nobody pauses mid-thought. */
+const LINE_MS = 220;
+
+/** One arrival: a node, and whether Nova pauses to compose before it. */
+export type ArrivingItem = {
+  key: string;
+  node: ReactNode;
+  /** True when this opens a turn — the first line, or something she made. */
+  beat?: boolean;
+};
 
 export function Arriving({
   items,
   /** Rendered under the thread once every message has arrived. */
   children,
 }: {
-  items: ReactNode[];
+  items: ArrivingItem[];
   children?: ReactNode;
 }) {
   const [arrived, setArrived] = useState(0);
@@ -75,26 +98,35 @@ export function Arriving({
   const settled = shown >= items.length;
 
   useEffect(() => {
-    if (!staged || shown >= items.length) return;
+    if (!staged || settled) return;
 
-    const compose = window.setTimeout(() => setComposing(true), shown === 0 ? 0 : REST_MS);
-    const land = window.setTimeout(
-      () => {
-        setComposing(false);
-        setArrived((count) => count + 1);
-      },
-      (shown === 0 ? 0 : REST_MS) + BEAT_MS,
-    );
+    const next = items[shown];
+    if (!next) return;
+
+    /* A line of the same turn follows immediately; a new turn is composed. */
+    if (!next.beat) {
+      const land = window.setTimeout(() => setArrived((count) => count + 1), LINE_MS);
+      return () => window.clearTimeout(land);
+    }
+
+    const rest = shown === 0 ? 0 : REST_MS;
+    const compose = window.setTimeout(() => setComposing(true), rest);
+    const land = window.setTimeout(() => {
+      setComposing(false);
+      setArrived((count) => count + 1);
+    }, rest + BEAT_MS);
 
     return () => {
       window.clearTimeout(compose);
       window.clearTimeout(land);
     };
-  }, [items.length, shown, staged]);
+  }, [items, settled, shown, staged]);
 
   return (
     <div className="flex flex-col gap-1.5">
-      {items.slice(0, shown)}
+      {items.slice(0, shown).map((item) => (
+        <div key={item.key}>{item.node}</div>
+      ))}
 
       {/*
         At the end, in the slot the next message takes, so its arrival replaces

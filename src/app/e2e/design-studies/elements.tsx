@@ -490,9 +490,16 @@ export function Header({
           {online ? "Online" : `Offline — ${availability.because}`}
         </p>
       </div>
-      <div className="flex min-w-0 shrink-0 flex-col items-end gap-0.5 max-sm:hidden">
+      {/*
+        One line, not two. Stacked, the project and its connection read as a
+        name with a caption under it and left the status row half empty; side
+        by side they read as one fact — *this project, and it is reachable* —
+        and they give the row something to hold.
+      */}
+      <div className="flex min-w-0 shrink-0 items-center gap-2.5 max-sm:hidden">
         <span className="truncate text-caption text-fg-secondary">{subject}</span>
-        <span className="flex items-center gap-1.5 text-caption text-fg-meta">
+        <span aria-hidden className="h-3 w-px shrink-0 bg-line-3" />
+        <span className="flex shrink-0 items-center gap-1.5 text-caption text-fg-meta">
           <span
             aria-hidden
             className={`size-1.5 shrink-0 rounded-full ${connected ? "bg-mint" : "bg-coral"}`}
