@@ -166,6 +166,9 @@ export const BACKGROUND_SCENARIO = "study-background";
 /** The Credit: a mark for it, and a price that looks like money. */
 export const CREDITS_SCENARIO = "study-credits";
 
+/** The form controls: the well that converged, and the two that are not fields. */
+export const FORMS_SCENARIO = "study-forms";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
