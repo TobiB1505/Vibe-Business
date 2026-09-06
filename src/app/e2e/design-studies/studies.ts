@@ -250,3 +250,17 @@ export const MOVE_SCENARIO = "study-move";
  * one element is how a lab stops being an answer to anything.
  */
 export const BUBBLE_SCENARIO = "study-bubble";
+
+/**
+ * The wireframe, assembled from the elements.
+ *
+ * Two scenarios, because availability is an operator switch and the state that
+ * matters is the one nobody sees in normal use — a study that only ever showed
+ * "Online" would be shipping an offline notice nobody looked at.
+ */
+export const WIREFRAME_SCENARIO = "study-wireframe";
+export const WIREFRAME_OFFLINE_SCENARIO = "study-wireframe-offline";
+
+export function isWireframeScenario(scenario: string): boolean {
+  return scenario === WIREFRAME_SCENARIO || scenario === WIREFRAME_OFFLINE_SCENARIO;
+}

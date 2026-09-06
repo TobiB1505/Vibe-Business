@@ -193,7 +193,12 @@ export function Bubble({
    * people talking at once.
    */
   tail = true,
-  /** Full measure rather than hugging. True whenever a Move is inside. */
+  /**
+   * Fill the reading measure rather than hugging. True whenever a Move is
+   * inside — and it is the *measure*, never the column: at a thread's full
+   * width the control inside became a seven-hundred-pixel button, which is a
+   * bubble that stopped being a bubble.
+   */
   wide = false,
   /** Stagger position, so a thread arrives in order rather than at once. */
   index = 0,
@@ -213,7 +218,7 @@ export function Bubble({
     <div
       className={`bubble bubble-arrive ${aside ? "bubble-aside" : TONE_CLASS[tone]} ${
         open && !aside ? "bubble-open" : ""
-      } ${hasTail ? "bubble-tailed" : ""} ${wide ? "w-full" : "w-fit max-w-[46ch]"} ${
+      } ${hasTail ? "bubble-tailed" : ""} ${wide ? "w-full" : "w-fit"} max-w-[46ch] ${
         aside ? "px-1 py-1" : "px-4 py-3.5"
       } flex min-w-0 flex-col gap-2`}
       style={{ "--i": index } as CSSProperties}
@@ -286,4 +291,176 @@ export function Line({ children }: { children: ReactNode }) {
 /** The explanation under a Line. Quieter, and never a box of its own. */
 export function Context({ children }: { children: ReactNode }) {
   return <p className="study-measure text-caption text-fg-secondary">{children}</p>;
+}
+
+/* ── The Header ───────────────────────────────────────────────────────── */
+
+/**
+ * Whether Nova is available at all.
+ *
+ * Not derived, and deliberately so. Every other state on this screen is a
+ * reading of what the product observed; this one is an operator switch, and it
+ * answers a question none of the derived states can: *is the service up*. A
+ * founder who arrives during maintenance needs to be told that before they
+ * read anything else, and no amount of focus ranking says it.
+ *
+ * `online` is the resting state and carries no explanation. `offline` carries
+ * one, because a product that goes quiet without saying why is a product the
+ * founder assumes is broken.
+ */
+export type NovaAvailability = { state: "online" } | { state: "offline"; because: string };
+
+/**
+ * The chat header — who you are talking to, and whether they are there.
+ *
+ * ## Why this is the one piece of glass
+ *
+ * The direction spends glass on chrome and keeps it off the surfaces text sits
+ * on, because `backdrop-filter` under a scrolling list is what makes a product
+ * judder. A header is chrome by definition: it does not scroll, it holds no
+ * dense data, and it is the frame the thread moves behind. So it is where the
+ * material actually gets to be seen.
+ *
+ * ## Why the dot does not pulse
+ *
+ * Because it would be the first thing on the screen to read as *she is doing
+ * something*, and it is not saying that — it is saying the service is
+ * reachable. The work state lives beside the mark in the rail and has its own
+ * word. A breathing dot here would be a claim about activity nobody observed,
+ * which is the one thing `DESIGN.md` calls a lie rather than a style.
+ *
+ * ## Why the word is always rendered
+ *
+ * A green dot alone is a colour carrying a state, which this design system
+ * does not do anywhere else and will not start doing in its most visible row.
+ */
+export function Header({
+  availability,
+  /** What this conversation is about. The project's own name, never Nova's. */
+  subject,
+  /** The mark, passed in so this element never decides which state it is in. */
+  mark,
+}: {
+  availability: NovaAvailability;
+  subject: string;
+  mark: ReactNode;
+}) {
+  const online = availability.state === "online";
+
+  return (
+    <header className="study-glass study-glass-sheen sticky top-0 z-10 flex items-center gap-3.5 rounded-panel px-4 py-3">
+      {mark}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-ui font-semibold text-fg">Nova</p>
+        <p className="flex items-center gap-1.5 truncate text-caption text-fg-meta">
+          <span
+            aria-hidden
+            className={`size-1.5 shrink-0 rounded-full ${online ? "bg-mint" : "bg-fg-disabled"}`}
+          />
+          {online ? "Online" : `Offline — ${availability.because}`}
+        </p>
+      </div>
+      <span className="shrink-0 truncate text-caption text-fg-meta max-sm:hidden">{subject}</span>
+    </header>
+  );
+}
+
+/* ── The past ─────────────────────────────────────────────────────────── */
+
+/**
+ * Something that happened, with the time it happened at.
+ *
+ * ## Why this is not a bubble
+ *
+ * Because a tail means *somebody is saying this now*, and nothing here is
+ * being said. These are rows the product wrote when it acted — `audit_events`
+ * through `buildActivityFeed` — and they were already true before the founder
+ * opened the page.
+ *
+ * That is also the answer to whether Nova's sentences carry timestamps. **They
+ * do not, and these do.** A logged event happened at a moment and the row
+ * records it; Nova's present-tense sentence is re-derived every time the page
+ * loads, so "sent at 14:47" would be a fact about a render rather than about
+ * anything that occurred. Time appears exactly where there is a time.
+ *
+ * ## Why the past is not stored as Nova's words
+ *
+ * The obvious way to give this surface a history is to append her sentences to
+ * a table as she says them. It is the wrong way: her sentences describe the
+ * present, so yesterday's *"There is a change waiting for you to look at"* is
+ * simply false today, and a transcript that replays it is a screen lying about
+ * the past in the founder's own scrollback.
+ *
+ * The event log has none of that problem. It records what *occurred*, which
+ * stays true, and its labels are already written in the product's voice. So
+ * the past is the log and the present is the projection — two readings, one
+ * persisted source each, and neither can drift from the other.
+ */
+export function Happened({
+  title,
+  at,
+  tone = "neutral",
+  facts,
+}: {
+  title: string;
+  /** Already formatted by the caller. This element does no clock arithmetic. */
+  at: string;
+  tone?: "success" | "waiting" | "problem" | "neutral";
+  facts?: { label: string; value: string }[];
+}) {
+  const dot =
+    tone === "success"
+      ? "bg-mint"
+      : tone === "waiting"
+        ? "bg-amber"
+        : tone === "problem"
+          ? "bg-coral"
+          : "bg-fg-disabled";
+
+  return (
+    <div className="flex items-start gap-3 py-1.5">
+      <span aria-hidden className={`mt-1.5 size-1.5 shrink-0 rounded-full ${dot}`} />
+      <div className="min-w-0 flex-1">
+        <p className="text-caption text-fg-secondary">{title}</p>
+        {facts && facts.length > 0 && (
+          <p className="truncate font-mono text-caption text-fg-meta">
+            {facts.map((fact) => `${fact.label} ${fact.value}`).join("  ·  ")}
+          </p>
+        )}
+      </div>
+      <span className="shrink-0 font-mono text-caption text-fg-meta tabular-nums">{at}</span>
+    </div>
+  );
+}
+
+/**
+ * The line that says where the founder got to.
+ *
+ * ## Why this is the piece that had to be invented
+ *
+ * Everything else on this screen already survives a reload, because all of it
+ * is derived from rows: the operations, the prepared changes, the plan, the
+ * events. A founder who comes back tomorrow is looking at exactly the state
+ * they left. What they cannot tell is **which of it is new**, and no amount of
+ * derivation answers that — it is a fact about a person, not about a project.
+ *
+ * So it is the one thing the product has to remember on their behalf: the last
+ * moment they looked. One timestamp per founder per project, read here and
+ * written when the page is opened.
+ *
+ * It is deliberately a *divider* and not a badge. A count would have to be
+ * right, and "3 new" over a list somebody already scrolled past is worse than
+ * nothing; a line simply marks a place, and a founder who reads past it has
+ * lost nothing.
+ */
+export function SinceDivider({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3 py-2" role="separator">
+      <span aria-hidden className="h-px flex-1 bg-line-2" />
+      <span className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">
+        {children}
+      </span>
+      <span aria-hidden className="h-px flex-1 bg-line-2" />
+    </div>
+  );
 }
