@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -56,6 +55,7 @@ import {
 import { getOperationStatusAction } from "../run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "../plan-action";
 import { PrepareChangePanel } from "../prepare-change-panel";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
@@ -800,14 +800,7 @@ export function PlanDetailPanel({
             <Notice
               tone="waiting"
               label="Why this is blocked"
-              action={
-                <a
-                  href={blockHref}
-                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {blockNotice.actionLabel}
-                </a>
-              }
+              action={<StandaloneLink href={blockHref}>{blockNotice.actionLabel}</StandaloneLink>}
             >
               {OPERATION_FAILURE_MESSAGES[blockNotice.reason]}
             </Notice>
@@ -863,12 +856,9 @@ export function PlanDetailPanel({
         capability.
       */}
       {!running && !planView?.founderInputRequest && executionOpportunityId ? (
-        <Link
-          href={agentMoveHref(preparedHref, executionOpportunityId)}
-          className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
-        >
+        <StandaloneLink href={agentMoveHref(preparedHref, executionOpportunityId)}>
           Open this move in Agent
-        </Link>
+        </StandaloneLink>
       ) : null}
 
       {planView && !running ? (

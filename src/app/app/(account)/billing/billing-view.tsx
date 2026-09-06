@@ -44,6 +44,7 @@ import {
   ManageBillingForm,
   StartPlanForm,
 } from "./purchase-forms";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /** Checkout return states. A redirect never grants Credits; the webhook does. */
 export const CHECKOUT_NOTICES: Record<
@@ -315,13 +316,10 @@ export function BillingView({
               Buy Credits
               <PlusIcon size={16} />
             </a>
-            <a
-              href="#credit-prices"
-              className="text-mint inline-flex items-center gap-2 self-start rounded-sm text-sm font-semibold underline-offset-4 hover:underline sm:self-auto"
-            >
+            <StandaloneLink href="#credit-prices">
               See what Credits buy
               <ArrowRightIcon size={15} />
-            </a>
+            </StandaloneLink>
           </div>
         </Surface>
 

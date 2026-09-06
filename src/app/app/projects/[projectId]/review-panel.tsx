@@ -9,6 +9,7 @@ import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { getReviewStatusAction } from "./review-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Before/after review, as the user sees it (Sprint 11A §24, §25, §29, §30).
@@ -85,17 +86,13 @@ function Panel({
     <figure className="min-w-0 space-y-2">
       <figcaption className="flex items-baseline justify-between gap-2">
         <span className="text-xs font-medium uppercase tracking-wide text-fg-prose">{label}</span>
+        {/* `external` carries rel="noreferrer", which is what keeps Vibe's
+            project URL — and the project id in it — out of the opened page's
+            Referer header. */}
         {href && (
-          <a
-            href={href}
-            target="_blank"
-            // Without this the opened page receives Vibe's project URL — and the
-            // project id in it — in a Referer header.
-            rel="noreferrer noopener"
-            className="text-xs text-fg-secondary underline underline-offset-2 hover:text-fg-body"
-          >
+          <StandaloneLink href={href} external>
             Open
-          </a>
+          </StandaloneLink>
         )}
       </figcaption>
 

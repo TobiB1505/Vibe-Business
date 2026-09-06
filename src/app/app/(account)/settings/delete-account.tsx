@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TextAction } from "@/components/ui/button";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Surface } from "@/components/ui/surface";
 import type {
@@ -9,6 +8,8 @@ import type {
   ErasureViewState,
 } from "@/modules/operations/account-erasure/view";
 import { deleteAccountAction, type DeleteAccountActionState } from "./delete-account-actions";
+import { DeleteIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * Erasing an account (ADR 0056 §4, §9).
@@ -116,15 +117,14 @@ export function DeleteAccountSection({ state }: { state: ErasureViewState }) {
         </form>
       ) : (
         <div>
-          <TextAction
+          <InlineAction
             ref={openerRef}
-            type="button"
             tone="danger"
-            className="text-sm"
+            icon={<DeleteIcon size={14} />}
             onClick={() => setConfirming(true)}
           >
             Delete account
-          </TextAction>
+          </InlineAction>
         </div>
       )}
 

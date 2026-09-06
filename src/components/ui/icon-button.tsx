@@ -49,13 +49,15 @@ const TONE_CLASSES: Record<IconButtonTone, string> = {
     "active:bg-surface-pressed active:text-fg",
   /*
    * Destructive controls do not advertise. The container is neutral at rest and
-   * only becomes coral once somebody is on it — so a delete never reads as the
-   * most inviting thing on a screen, which is the same argument `TextAction`'s
-   * danger tone already makes by darkening rather than lightening on hover.
+   * carries its warning at rest, for the reason set out at length on
+   * `InlineAction`: a finger never reaches a hover state, so a danger tone
+   * that only appears on hover never appears on a phone. Kept identical to
+   * that component's, so a destructive mark and a destructive pill are the
+   * same object at two sizes.
    */
   danger:
-    "bg-surface-3 text-fg-secondary hover:bg-coral-tint-soft hover:text-coral " +
-    "active:bg-coral-tint active:text-coral",
+    "border border-coral-line bg-coral-tint-soft text-coral " +
+    "hover:bg-coral-tint active:bg-coral-pressed",
 };
 
 const SIZE_CLASSES = {

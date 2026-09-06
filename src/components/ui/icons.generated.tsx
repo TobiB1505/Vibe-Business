@@ -159,3 +159,13 @@ export function SignOutIcon(props: IconProps) {
     </IconFrame>
   );
 }
+
+/** Lucide `arrow-up-right`. */
+export function ExternalLinkIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M7 7h10v10" />
+      <path d="M7 17 17 7" />
+    </IconFrame>
+  );
+}

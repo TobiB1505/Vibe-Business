@@ -10,6 +10,7 @@ import {
 } from "@/modules/onboarding/state";
 import { SignOutIcon } from "@/components/ui/icons.generated";
 import { InlineAction } from "@/components/ui/inline-action";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 export function OnboardingShell({
   children,
@@ -57,14 +58,7 @@ export function OnboardingShell({
             </span>
           )}
           <div className="ml-auto flex items-center gap-4">
-            {canLeave && (
-              <Link
-                href="/app"
-                className="text-fg-muted hover:text-fg-body text-xs underline underline-offset-4"
-              >
-                Back to your projects
-              </Link>
-            )}
+            {canLeave && <StandaloneLink href="/app">Back to your projects</StandaloneLink>}
             {email && <span className="text-fg-meta hidden text-xs sm:inline">{email}</span>}
             <form action={signOut}>
               <InlineAction type="submit" icon={<SignOutIcon size={14} />}>

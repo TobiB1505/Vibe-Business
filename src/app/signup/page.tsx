@@ -3,6 +3,7 @@ import { AuthShell } from "@/components/layout/auth-shell";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { SignupForm } from "./signup-form";
 import type { Metadata } from "next";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Create account",
@@ -55,11 +56,11 @@ export default async function SignupPage({
           someone agrees to something (UI-S1 §7, §8). */}
       <p className="text-fg-muted text-xs leading-relaxed">
         By creating an account you agree to the{" "}
-        <Link href="/terms" className="text-fg-muted hover:text-fg-body underline underline-offset-4">
+        <Link href="/terms" className={proseLinkClasses()}>
           terms
         </Link>{" "}
         and the{" "}
-        <Link href="/privacy" className="text-fg-muted hover:text-fg-body underline underline-offset-4">
+        <Link href="/privacy" className={proseLinkClasses()}>
           privacy notice
         </Link>
         .

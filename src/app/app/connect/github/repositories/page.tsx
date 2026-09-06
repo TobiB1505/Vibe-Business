@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
@@ -15,6 +14,7 @@ import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { RepositoryPicker } from "./repository-picker";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 import type { Metadata } from "next";
+import { StandaloneLink, proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Choose a repository",
@@ -95,12 +95,7 @@ export default async function ConnectGithubRepositoriesPage({
               Vibe can&apos;t see this account&apos;s repositories right now. GitHub may have paused
               or removed Vibe&apos;s access — reconnecting will ask GitHub for it again.
             </p>
-            <Link
-              href="/app/connect/github?new=1"
-              className="text-fg-body hover:text-fg inline-block text-sm underline underline-offset-2"
-            >
-              Reconnect GitHub
-            </Link>
+            <StandaloneLink href="/app/connect/github?new=1">Reconnect GitHub</StandaloneLink>
           </div>
         )}
 
@@ -131,12 +126,7 @@ export default async function ConnectGithubRepositoriesPage({
             what Vibe Business can already see. */}
         <p className="text-fg-meta text-sm">
           Don&apos;t see your repository?{" "}
-          <a
-            href={manageAccessUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-fg-body hover:text-fg underline underline-offset-2"
-          >
+          <a href={manageAccessUrl} target="_blank" rel="noreferrer" className={proseLinkClasses()}>
             Manage GitHub repository access
           </a>
         </p>

@@ -1,10 +1,7 @@
-import Link from "next/link";
 import { Notice } from "@/components/ui/states";
 import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
-import {
-  startRefusalLabel,
-  startRefusalRecovery,
-} from "@/modules/coding-agent/view";
+import { startRefusalLabel, startRefusalRecovery } from "@/modules/coding-agent/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Why a run the founder asked for did not start.
@@ -48,12 +45,7 @@ export function AgentStartRefusalNotice({
         label="couldn't start"
         action={
           recovery ? (
-            <Link
-              href={repositoryReadHref}
-              className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-            >
-              {recovery.label}
-            </Link>
+            <StandaloneLink href={repositoryReadHref}>{recovery.label}</StandaloneLink>
           ) : undefined
         }
         footnote={recovery?.note}

@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { Notice } from "@/components/ui/states";
 import type { RefusalShape } from "@/modules/execution-contract/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * "This Move's next step isn't one Vibe can run" — said where it blocks.
@@ -97,13 +97,9 @@ export function AgentPlanNextNotice({
         tone={shape === "policy" ? "info" : "waiting"}
         label={outlook.label}
         action={
-          <Link
-            href={planHref}
-            className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-            data-testid="agent-plan-next-link"
-          >
+          <StandaloneLink href={planHref} data-testid="agent-plan-next-link">
             {outlook.link}
-          </Link>
+          </StandaloneLink>
         }
         footnote={outlook.footnote}
       >

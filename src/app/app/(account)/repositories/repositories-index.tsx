@@ -31,6 +31,7 @@ import {
   type RepositoryFilter,
   type RepositorySort,
 } from "./repository-list-state";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -89,7 +90,7 @@ function AccessRevokedNotice() {
   return (
     <p className="text-coral flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
       <span>Vibe can no longer read this repository — the GitHub App was removed.</span>
-      <Link href="/app/connect/github?new=1" className="underline underline-offset-2">
+      <Link href="/app/connect/github?new=1" className={proseLinkClasses()}>
         Reconnect
       </Link>
     </p>
@@ -336,7 +337,12 @@ export function RepositoriesIndex({
                           <div className="flex min-w-0 items-center gap-3">
                             <RepositoryTile repository={repository} />
                             <div className="min-w-0">
-                              <a href={repository.htmlUrl} target="_blank" rel="noreferrer noopener" className="text-fg-body hover:text-mint block truncate text-sm font-semibold transition-interactive">
+                              <a
+                                href={repository.htmlUrl}
+                                target="_blank"
+                                rel="noreferrer noopener"
+                                className="text-fg-body hover:text-mint block truncate text-sm font-semibold transition-interactive"
+                              >
                                 {repository.name}
                               </a>
                               <span className="text-fg-meta block truncate font-mono text-meta">{repository.owner}/{repository.name}</span>
@@ -361,7 +367,13 @@ export function RepositoriesIndex({
                         </td>
                         <td className="text-fg-muted px-5 py-4 text-sm">{formatTimestamp(repository.connectedAt)}</td>
                         <td className="px-5 py-4 text-right">
-                          <Link href={`/app/projects/${repository.projectId}`} aria-label={`Open ${repository.projectName}`} className="border-line-2 text-fg-muted hover:border-mint-line hover:text-mint rounded-nav inline-flex size-9 items-center justify-center border transition-interactive"><ArrowRightIcon size={15} /></Link>
+                          <Link
+                            href={`/app/projects/${repository.projectId}`}
+                            aria-label={`Open ${repository.projectName}`}
+                            className="border-line-2 text-fg-muted hover:border-mint-line hover:text-mint rounded-nav inline-flex size-9 items-center justify-center border transition-interactive"
+                          >
+                            <ArrowRightIcon size={15} />
+                          </Link>
                         </td>
                       </tr>
                     ))}
@@ -377,8 +389,20 @@ export function RepositoriesIndex({
                       <div className="min-w-0 flex-1">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
-                            <a href={repository.htmlUrl} target="_blank" rel="noreferrer noopener" className="text-fg-body hover:text-mint block truncate text-sm font-semibold">{repository.fullName}</a>
-                            <Link href={`/app/projects/${repository.projectId}`} className="text-fg-muted hover:text-mint mt-1 block text-xs">{repository.projectName}</Link>
+                            <a
+                              href={repository.htmlUrl}
+                              target="_blank"
+                              rel="noreferrer noopener"
+                              className="text-fg-body hover:text-mint block truncate text-sm font-semibold"
+                            >
+                              {repository.fullName}
+                            </a>
+                            <Link
+                              href={`/app/projects/${repository.projectId}`}
+                              className="text-fg-muted hover:text-mint mt-1 block text-xs"
+                            >
+                              {repository.projectName}
+                            </Link>
                           </div>
                           <StatusPill tone={repository.accessRevokedAt ? "problem" : "neutral"}>
                             {repository.accessRevokedAt

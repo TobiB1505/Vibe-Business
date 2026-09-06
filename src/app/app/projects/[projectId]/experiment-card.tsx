@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import type { ProjectImpactEntry } from "@/modules/business-measurement/project-impact";
 import type { OutcomeCardState } from "@/modules/outcome-verification/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * One change Vibe made, and what became true afterwards (CORE-5).
@@ -128,12 +128,9 @@ export function ExperimentCard({
       </div>
 
       <div>
-        <Link
-          href={agentHref}
-          className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-interactive"
-        >
+        <StandaloneLink href={agentHref}>
           See this change and everything checked about it
-        </Link>
+        </StandaloneLink>
       </div>
     </Surface>
   );

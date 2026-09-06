@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { InfoIcon } from "@/components/ui/dashboard-icons";
@@ -30,6 +29,7 @@ import { MoveStepper } from "./move-stepper";
 import { PlanDetailPanel } from "./plan-detail-panel";
 import { PlanGenerating } from "./plan-generating";
 import { OperationProgress } from "@/components/system/operation-progress";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 const POLL_INTERVAL_MS = 3_000;
 const SWIPE_DISTANCE = 72;
@@ -193,12 +193,7 @@ export function ActionPlanWorkspace({
                 ? "1 move addresses this"
                 : `${movesContext.moveIds.length} moves address this`}
             </p>
-            <Link
-              href={movesHref}
-              className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4"
-            >
-              See the full priority order
-            </Link>
+            <StandaloneLink href={movesHref}>See the full priority order</StandaloneLink>
           </div>
         </Surface>
       ) : null}
@@ -357,12 +352,7 @@ export function ActionPlanWorkspace({
               tone="waiting"
               label="Why a refresh is blocked"
               action={
-                <a
-                  href={auditHref}
-                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {movesBlockNotice.actionLabel}
-                </a>
+                <StandaloneLink href={auditHref}>{movesBlockNotice.actionLabel}</StandaloneLink>
               }
             >
               {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}
@@ -385,12 +375,7 @@ export function ActionPlanWorkspace({
               label="Why this is blocked"
               className="text-left"
               action={
-                <a
-                  href={auditHref}
-                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {movesBlockNotice.actionLabel}
-                </a>
+                <StandaloneLink href={auditHref}>{movesBlockNotice.actionLabel}</StandaloneLink>
               }
             >
               {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}

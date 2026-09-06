@@ -118,6 +118,11 @@
   --color-coral-tint: rgb(255 122 92 / 0.13);
   --color-coral-tint-soft: rgb(255 122 92 / 0.07);
   --color-coral-line: rgb(255 122 92 / 0.26);
+  /* The press step for a destructive control, answering
+     `--color-surface-pressed` for the neutral one. A destructive pill is
+     tinted at rest and deepens on hover, so the press needs a third value
+     above both or the last state a finger reaches says nothing. */
+  --color-coral-pressed: rgb(255 122 92 / 0.22);
 
   /* ── Type ────────────────────────────────────────────────────────────
      Product UI uses the operating system's native interface family. On

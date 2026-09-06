@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ChangeOrigin as ChangeOriginData } from "@/modules/execution/change-origin";
+import { StandaloneLink, proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * What a change was asked to do, when nothing can say what it did (UI-5 dogfood).
@@ -60,12 +61,7 @@ export function ChangeOrigin({
         <h4 className="text-sm font-medium text-fg-body">What this change was for</h4>
         {moveHref ? (
           <p className="text-sm text-fg-prose">
-            <Link
-              href={moveHref}
-              className="rounded-sm underline underline-offset-4 hover:text-fg transition-interactive"
-            >
-              {origin.title}
-            </Link>
+            <StandaloneLink href={moveHref}>{origin.title}</StandaloneLink>
           </p>
         ) : (
           <p className="text-sm text-fg-prose">{origin.title}</p>
@@ -104,10 +100,7 @@ export function MoveBacklink({ title, href }: { title: string; href: string }) {
   return (
     <p className="text-xs text-fg-muted">
       Answers your move{" "}
-      <Link
-        href={href}
-        className="rounded-sm underline underline-offset-4 hover:text-fg-body transition-interactive"
-      >
+      <Link href={href} className={proseLinkClasses()}>
         {title}
       </Link>
     </p>

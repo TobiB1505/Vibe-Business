@@ -58,6 +58,8 @@ import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
+import { ArrowRightIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 export const metadata: Metadata = {
   title: "Setting up your product",
@@ -624,13 +626,13 @@ export default async function ProjectOnboardingPage({
                   opportunityId={firstOpportunity.id}
                   balance={balance}
                   skip={
-                    <button
+                    <InlineAction
                       type="submit"
                       formAction={completeOnboardingAction.bind(null, projectId)}
-                      className="text-fg-secondary hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                      icon={<ArrowRightIcon size={14} />}
                     >
                       Go to your workspace
-                    </button>
+                    </InlineAction>
                   }
                 />
               ) : (

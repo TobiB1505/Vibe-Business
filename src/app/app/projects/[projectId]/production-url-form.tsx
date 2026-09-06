@@ -6,6 +6,7 @@ import type { SetProductionUrlFailure } from "@/modules/projects/production-url"
 import { setProductionUrlAction, type ProductionUrlActionState } from "./production-url-action";
 import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
 import { InlineAction } from "@/components/ui/inline-action";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Production URL configuration (Sprint 3 §3, §30).
@@ -43,14 +44,9 @@ export function ProductionUrlForm({
   if (!editing && currentUrl !== null) {
     return (
       <div className="flex items-baseline gap-3">
-        <a
-          href={currentUrl}
-          target="_blank"
-          rel="noreferrer nofollow"
-          className="text-sm text-fg-body underline underline-offset-2 hover:text-fg"
-        >
+        <StandaloneLink href={currentUrl} external>
           {currentUrl}
-        </a>
+        </StandaloneLink>
         <InlineAction icon={<EditIcon size={14} />} onClick={() => setEditing(true)}>
           Change
         </InlineAction>

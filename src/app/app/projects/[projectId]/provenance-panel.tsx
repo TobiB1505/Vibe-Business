@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { projectSectionHref, type WorkspaceSectionId } from "@/components/layout/project-shell";
 import { formatDate } from "@/lib/utils/format-datetime";
 import type { ActionProvenance } from "@/modules/provenance/actions";
@@ -10,6 +8,7 @@ import {
   PROVENANCE_REASONS,
   PROVENANCE_REMEDY_LABELS,
 } from "@/modules/provenance/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * What a paid action will be built on, before a founder buys it.
@@ -110,13 +109,12 @@ export function ProvenancePanel({
 
       {remedy !== null && (
         <div className="border-line-2 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2">
-          <Link
+          <StandaloneLink
             href={projectSectionHref(projectId, REMEDY_SECTION[remedy])}
-            className="text-fg-prose hover:text-fg text-sm underline underline-offset-2"
             data-testid="provenance-remedy"
           >
             {PROVENANCE_REMEDY_LABELS[remedy]}
-          </Link>
+          </StandaloneLink>
           {FREE_REMEDIES.includes(remedy) && (
             <span className="text-fg-meta text-[0.65rem] tracking-[0.12em] uppercase">Free</span>
           )}

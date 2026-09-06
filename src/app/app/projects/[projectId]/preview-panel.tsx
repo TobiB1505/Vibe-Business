@@ -19,6 +19,7 @@ import {
   type StopPreviewActionState,
 } from "./preview-actions";
 import { formatTime } from "@/lib/utils/format-datetime";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * Temporary preview, as the user sees it (Sprint 10B-3 §2, §4, §8, §10, §17).
@@ -529,8 +530,8 @@ export function PreviewPanel({
             Vibe cannot tell which application to run for this project. Scan your product again
             from{" "}
             <Link
-              className="underline"
               href={`${projectSectionHref(projectId, "my-product")}#product-scan`}
+              className={proseLinkClasses()}
             >
               My Product
             </Link>

@@ -14,15 +14,16 @@ import type { Study } from "./studies";
  *
  * ## Question 1 — the links
  *
- * Forty-eight elements write a bare `underline` by hand. Counted by element:
- * thirty-eight `Link`, ten `a`, one `button`. So they are navigation, not
- * actions, and the underline on them is the web's own convention rather than a
- * dated action treatment.
+ * Fifty elements write a bare `underline` by hand — the count read 48 while
+ * this page was being made, because the scanner's `[^>]*?>` stopped at the
+ * `>` of an arrow function and silently missed two tags with an `onClick`.
+ * Counted properly: forty-two `Link` or `a`, and two `button`s that belong to
+ * the by-role split for actions rather than here.
  *
  * Counted again by *context*, which is what actually decides this:
  *
- *   39  standalone   a card header, a row, a page header
- *    9  in prose     "By creating an account you agree to the Terms"
+ *   38  standalone   a card header, a row, a page header
+ *   11  in prose     "By creating an account you agree to the Terms"
  *
  * That split is the finding. For the nine, the underline is the only signal
  * besides colour that the words are a link, and WCAG 1.4.1 is explicit that
@@ -98,7 +99,7 @@ const LINK_TREATMENTS: readonly LinkTreatment[] = [
     name: "1 · Wie heute",
     argument:
       "A full-contrast underline at rest, in both places. It is the web's oldest link signal, it needs no colour to work, and it is the only treatment here that is already correct for a screen reader and for somebody who cannot separate the link's colour from the text around it.",
-    cost: "On a card header it is the loudest thing in a quiet row — a line under two words beside a number that is the actual content. Thirty-nine of these are that.",
+    cost: "On a card header it is the loudest thing in a quiet row — a line under two words beside a number that is the actual content. Thirty-eight of these are that.",
     standalone: (
       <a
         href="#0"
@@ -333,19 +334,20 @@ export function StudyLinks({ study }: { study: Study }) {
 
       <div className="border-t border-line-3 pt-8">
         <p className="eyebrow text-mint">Frage 1 · Die Unterstreichungen der Links</p>
-        <h2 className="mt-3 text-title font-semibold text-fg">Achtundvierzig, in zwei Gruppen</h2>
+        <h2 className="mt-3 text-title font-semibold text-fg">Neunundvierzig, in zwei Gruppen</h2>
         <p className="mt-3 max-w-[66ch] text-caption text-fg-prose">
-          Counted by element: 38 <code className="font-mono text-ui text-fg-secondary">Link</code>,
-          10 <code className="font-mono text-ui text-fg-secondary">a</code>, one{" "}
-          <code className="font-mono text-ui text-fg-secondary">button</code>. So these are
-          navigation, not actions — the underline on them is the web&rsquo;s convention rather than
-          a dated action treatment, which is why the TextAction decision does not reach them.
+          Counted by element: 42 <code className="font-mono text-ui text-fg-secondary">Link</code>{" "}
+          or <code className="font-mono text-ui text-fg-secondary">a</code>, and two{" "}
+          <code className="font-mono text-ui text-fg-secondary">button</code>s that belong to the
+          by-role split for actions rather than here. So these are navigation, not actions — the
+          underline on them is the web&rsquo;s convention rather than a dated action treatment,
+          which is why the TextAction decision does not reach them.
         </p>
         <p className="mt-3 max-w-[66ch] text-caption text-fg-prose">
-          Counted by context, which is what decides it: <b className="text-fg">39 stand alone</b> in
-          a card header or a row, and <b className="text-fg">9 continue a sentence</b>. For the
-          nine, the line is the only signal besides colour, and colour alone is not allowed to carry
-          a link inside text. Every treatment below is drawn in both places.
+          Counted by context, which is what decides it: <b className="text-fg">38 stand alone</b> in
+          a card header or a row, and <b className="text-fg">11 continue a sentence</b>. For the
+          eleven, the line is the only signal besides colour, and colour alone is not allowed to
+          carry a link inside text. Every treatment below is drawn in both places.
         </p>
       </div>
 

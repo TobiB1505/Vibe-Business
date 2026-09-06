@@ -83,6 +83,12 @@ const MANIFEST = {
    * `log-out` is the mark that means leaving.
    */
   SignOutIcon: "log-out",
+  /*
+   * A standalone link takes a mark that says where it goes, and "away from
+   * this site" is not the same destination as "further into it". The arrow
+   * turns to say so.
+   */
+  ExternalLinkIcon: "arrow-up-right",
 };
 
 const HEADER = `import type { SVGProps } from "react";

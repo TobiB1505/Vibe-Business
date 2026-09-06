@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { CoverageLine } from "@/components/system/confidence";
 import { Surface } from "@/components/ui/surface";
 import { scoreDisplay } from "@/components/ui/score-display";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * The business reading, small (UI Sourcing Spec C6).
@@ -62,12 +62,7 @@ export function HealthScore({
         <MonoLabel as="h2" id="nova-health">
           Business health
         </MonoLabel>
-        <Link
-          href={healthHref}
-          className="text-fg-muted hover:text-fg-body text-ui underline underline-offset-4 transition-interactive"
-        >
-          See the nine areas
-        </Link>
+        <StandaloneLink href={healthHref}>See the nine areas</StandaloneLink>
       </div>
 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -124,12 +119,7 @@ export function HealthScoreAbsent({
       <p className="text-fg-prose text-sm">
         Vibe has not audited this product yet, so there is no reading to show.
       </p>
-      <Link
-        href={healthHref}
-        className="text-fg-muted hover:text-fg-body self-start text-ui underline underline-offset-4 transition-interactive"
-      >
-        Go to Business Health
-      </Link>
+      <StandaloneLink href={healthHref}>Go to Business Health</StandaloneLink>
     </Surface>
   );
 }

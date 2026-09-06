@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { RatingChip } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Whose product this is (UI Sourcing Spec C4).
@@ -61,12 +61,7 @@ export function ProductIdentity({
       {category && <RatingChip>{category}</RatingChip>}
 
       {understood === "not_read" ? (
-        <Link
-          href={productHref}
-          className="text-fg-muted hover:text-fg-body text-ui underline underline-offset-4 transition-interactive"
-        >
-          Vibe has not read this product yet
-        </Link>
+        <StandaloneLink href={productHref}>Vibe has not read this product yet</StandaloneLink>
       ) : (
         <MonoLabel>
           {understood === "confirmed" ? "Confirmed by you" : "Not confirmed yet"}

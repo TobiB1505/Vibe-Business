@@ -78,6 +78,7 @@
   --color-coral-tint: rgb(255 122 92 / 0.14);
   --color-coral-tint-soft: rgb(255 122 92 / 0.06);
   --color-coral-line: rgb(255 122 92 / 0.32);
+  --color-coral-pressed: rgb(255 122 92 / 0.24);
 
   /* ── Foreground ramp ─────────────────────────────────────────────────
      Near-neutral, very slightly warm. Six steps carry text and every one

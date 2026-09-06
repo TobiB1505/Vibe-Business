@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { projectSectionHref } from "@/components/layout/project-shell";
 import { Disclosure, FoundList, TechnicalDetails } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/states";
@@ -20,6 +19,7 @@ import {
 import type { AuthenticatedProductIntelligenceSnapshot } from "@/modules/authenticated-product-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * What Vibe learned from your code (Sprint UI-3.6).
@@ -64,14 +64,7 @@ function nextStepHref(step: CapabilityNextStep, projectId: string): string {
 }
 
 function NextStepLink({ step, projectId }: { step: CapabilityNextStep; projectId: string }) {
-  return (
-    <Link
-      href={nextStepHref(step, projectId)}
-      className="text-fg-prose hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
-    >
-      {step.label}
-    </Link>
-  );
+  return <StandaloneLink href={nextStepHref(step, projectId)}>{step.label}</StandaloneLink>;
 }
 
 function Capability({

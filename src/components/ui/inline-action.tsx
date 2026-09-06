@@ -28,12 +28,26 @@ import { cn } from "@/lib/utils/cn";
  * already names the thing, `IconButton size="sm"` is the lighter answer and
  * this is the wrong component.
  *
- * ## Destruction does not advertise
+ * ## Destruction announces, and the reason is the same one
  *
- * The `danger` tone is neutral at rest and only becomes coral once somebody is
- * on it, so a delete is never the most inviting thing on a screen. That is the
- * same argument `TextAction` already makes by darkening rather than lightening
- * on hover, and the same one `IconButton` makes.
+ * This tone was built neutral at rest, becoming coral under the pointer, on
+ * the argument that a delete should never be the most inviting thing on a
+ * screen. Applying it to a real "Delete account" showed the argument is wrong,
+ * and it is the container rule that breaks it: **touch has no hover.** A
+ * finger never reaches the coral state, so the quiet version is not quiet on a
+ * phone — it is absent, and "Delete account" and "Change" become the same
+ * grey object.
+ *
+ * So `danger` carries its warning at rest: a coral-tinted fill, a coral line
+ * and coral text and mark, from the first frame. It is the only version that
+ * still reads as destructive with the colour removed entirely, because the
+ * fill and the line are doing work that the hue is not.
+ *
+ * Hover deepens the fill and the press deepens it again — the same three-step
+ * shape as the neutral tone, for the same reason. That is what
+ * `--color-coral-pressed` exists for; without it hover and press were the same
+ * value, which is a control that stops responding exactly where a finger is
+ * looking hardest.
  */
 export type InlineActionTone = "neutral" | "danger";
 
@@ -43,7 +57,10 @@ const BASE_CLASSES = cn(
   // which are what a phone gets and what survives reduced motion.
   "vibe-control inline-flex min-h-7 items-center gap-1.5 rounded-full px-3",
   "text-ui transition-interactive select-none",
-  "disabled:pointer-events-none disabled:bg-surface-2 disabled:text-fg-disabled",
+  // `disabled:border-line-2` because the danger tone draws a coral line: a
+  // control that cannot be pressed must not still be warning about what
+  // pressing it would do.
+  "disabled:pointer-events-none disabled:border-line-2 disabled:bg-surface-2 disabled:text-fg-disabled",
 );
 
 const TONE_CLASSES: Record<InlineActionTone, string> = {
@@ -51,8 +68,8 @@ const TONE_CLASSES: Record<InlineActionTone, string> = {
     "bg-surface-3 text-fg-secondary hover:bg-surface-hover hover:text-fg " +
     "active:bg-surface-pressed active:text-fg",
   danger:
-    "bg-surface-3 text-fg-secondary hover:bg-coral-tint-soft hover:text-coral " +
-    "active:bg-coral-tint active:text-coral",
+    "border border-coral-line bg-coral-tint-soft text-coral " +
+    "hover:bg-coral-tint active:bg-coral-pressed",
 };
 
 /**

@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TextAction } from "@/components/ui/button";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import {
   deleteProjectAction,
   type DeleteProjectActionState,
   type DeleteProjectFailure,
 } from "./actions";
+import { DeleteIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * Deleting a project (ADR 0056 §1).
@@ -93,15 +94,14 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
     // full-width child would wrap the control onto its own line. The column
     // keeps the failure directly under the control that caused it.
     <div className="flex flex-col items-end gap-2">
-      <TextAction
+      <InlineAction
         ref={openerRef}
-        type="button"
         tone="danger"
-        className="text-sm"
+        icon={<DeleteIcon size={14} />}
         onClick={() => setConfirming(true)}
       >
         Delete project
-      </TextAction>
+      </InlineAction>
       {failure && (
         <p role="alert" className="text-sm text-amber">
           {FAILURE_MESSAGES[failure]}

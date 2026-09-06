@@ -6,6 +6,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import { planMoveHref } from "@/modules/action-plans/source";
 import { IMPACT_LABELS } from "@/modules/opportunities/schema";
 import type { HomeView } from "@/modules/projects/command-center";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * The one thing Home is for (CORE-5).
@@ -73,10 +74,7 @@ export function HomeStatus({
           <p className="text-fg-muted max-w-[62ch] text-sm">
             It reads your code and visits your product, then tells you in one paragraph what it
             thinks you built.{" "}
-            <Link
-              href={productHref}
-              className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-            >
+            <Link href={productHref} className={proseLinkClasses()}>
               Start there
             </Link>
             .
@@ -107,10 +105,7 @@ export function HomeStatus({
           {health.kind === "not_analyzed" && (
             <p className="text-fg-muted max-w-[62ch] text-sm">
               Vibe hasn&apos;t judged this as a business yet.{" "}
-              <Link
-                href={healthHref}
-                className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-              >
+              <Link href={healthHref} className={proseLinkClasses()}>
                 Business Health
               </Link>{" "}
               is where that starts.

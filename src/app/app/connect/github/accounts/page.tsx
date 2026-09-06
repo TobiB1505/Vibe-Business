@@ -6,6 +6,7 @@ import { listVerifiedInstallations } from "@/modules/github/connections";
 import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 import type { Metadata } from "next";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Choose a GitHub account",
@@ -74,12 +75,9 @@ export default async function ChooseGithubAccountPage() {
         </ul>
 
         <p className="text-fg-meta text-sm">
-          <Link
-            href="/app/connect/github?new=1"
-            className="text-fg-body hover:text-fg underline underline-offset-2"
-          >
+          <StandaloneLink href="/app/connect/github?new=1">
             Connect a different GitHub account or organization
-          </Link>
+          </StandaloneLink>
         </p>
       </section>
     </OnboardingShell>

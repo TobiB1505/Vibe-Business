@@ -16,6 +16,7 @@ import {
   type FounderIntent,
 } from "@/modules/projects/founder-intent";
 import type { ConfidenceTone, UnderstandingView } from "@/modules/product-understanding/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Evidence ids to citations, resolved through the one table that knows how to
@@ -293,9 +294,38 @@ export function UnderstandingPanel({
         {view.limitations.length > 0 && <ul className="border-line-1 flex flex-col gap-1.5 border-t pt-4">{view.limitations.map((limitation) => <li key={limitation} className="text-fg-meta text-xs">{limitation}</li>)}</ul>}
       </Surface>
 
-      <Surface id="product-evidence" level="section" padding="lg" className="scroll-mt-32 flex flex-col gap-4">
-        <Disclosure label="See what Vibe found"><div className="flex flex-col gap-3">{view.businessSignals.length > 0 ? <ul className="flex flex-col gap-2">{view.businessSignals.map((signal) => <li key={signal.id} className={`${TONE_TEXT[signal.tone]} text-sm`}>{signal.statement}</li>)}</ul> : <p className="text-fg-muted text-sm">No business observations were established yet.</p>}<Link href={projectSectionHref(projectId, "my-product")} className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-xs underline underline-offset-4 transition-interactive">Code and public product findings</Link></div></Disclosure>
-        {view.technical.length > 0 && <TechnicalDetails label="Technical details" entries={view.technical.map((row) => ({ key: row.label, value: row.value }))} />}
+      <Surface
+        id="product-evidence"
+        level="section"
+        padding="lg"
+        className="scroll-mt-32 flex flex-col gap-4"
+      >
+        <Disclosure label="See what Vibe found">
+          <div className="flex flex-col gap-3">
+            {view.businessSignals.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {view.businessSignals.map((signal) => (
+                  <li key={signal.id} className={`${TONE_TEXT[signal.tone]} text-sm`}>
+                    {signal.statement}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-fg-muted text-sm">
+                No business observations were established yet.
+              </p>
+            )}
+            <StandaloneLink href={projectSectionHref(projectId, "my-product")}>
+              Code and public product findings
+            </StandaloneLink>
+          </div>
+        </Disclosure>
+        {view.technical.length > 0 && (
+          <TechnicalDetails
+            label="Technical details"
+            entries={view.technical.map((row) => ({ key: row.label, value: row.value }))}
+          />
+        )}
       </Surface>
 
       <Surface level="panel" tone={confirmedAt === null ? "mint" : undefined} padding="lg" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">

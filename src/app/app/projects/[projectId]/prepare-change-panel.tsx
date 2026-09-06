@@ -33,6 +33,7 @@ import {
 } from "./prepare-change-action";
 import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
 import { InlineAction } from "@/components/ui/inline-action";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * The execution affordance on an opportunity card (Sprint 9C §2, §3, §11, §14).
@@ -262,14 +263,9 @@ export function PrepareChangePanel({
             Preview the diff here
           </InlineAction>
           {branchUrl && (
-            <a
-              href={branchUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-            >
+            <StandaloneLink href={branchUrl} external>
               Open branch on GitHub
-            </a>
+            </StandaloneLink>
           )}
         </div>
 
@@ -315,12 +311,7 @@ export function PrepareChangePanel({
           blocked state has scrolled nowhere since the workspace was split.
         */}
         {action.kind !== "none" && blockedHref && (
-          <Link
-            href={blockedHref}
-            className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-          >
-            {BLOCKED_ACTION_LABELS[action.kind]}
-          </Link>
+          <StandaloneLink href={blockedHref}>{BLOCKED_ACTION_LABELS[action.kind]}</StandaloneLink>
         )}
       </div>
     );

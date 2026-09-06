@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
@@ -10,6 +9,7 @@ import { DeleteProjectButton } from "../delete-project-button";
 import { FounderIntentForm } from "../founder-intent-form";
 import { ProductionUrlForm } from "../production-url-form";
 import type { Metadata } from "next";
+import { proseLinkClasses, StandaloneLink } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Project settings",
@@ -120,7 +120,7 @@ export default async function ProjectSettingsPage({
                   href={project.repository.htmlUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-fg-body hover:text-fg rounded-sm font-mono text-xs underline underline-offset-4 transition-interactive"
+                  className={proseLinkClasses()}
                 >
                   {project.repository.fullName}
                 </a>{" "}
@@ -134,12 +134,7 @@ export default async function ProjectSettingsPage({
                   Vibe is not reading any repository for this project. Connect one to resume
                   analysis and execution — everything the project already knows is kept.
                 </p>
-                <Link
-                  href={reconnectHref}
-                  className="text-fg-body hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  Connect a repository
-                </Link>
+                <StandaloneLink href={reconnectHref}>Connect a repository</StandaloneLink>
               </div>
             )}
           </div>
@@ -178,23 +173,15 @@ export default async function ProjectSettingsPage({
               <span className="text-fg-secondary text-sm">
                 Credits, your plan and what things cost
               </span>
-              <Link
-                href="/app/billing"
-                className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-interactive"
-              >
-                Credits and billing
-              </Link>
+              <StandaloneLink href="/app/billing">Credits and billing</StandaloneLink>
             </li>
             <li className="flex flex-wrap items-baseline justify-between gap-3">
               <span className="text-fg-secondary text-sm">
                 Everything Vibe has done on this project
               </span>
-              <Link
-                href={projectSectionHref(project.id, "activity")}
-                className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-interactive"
-              >
+              <StandaloneLink href={projectSectionHref(project.id, "activity")}>
                 Activity
-              </Link>
+              </StandaloneLink>
             </li>
           </ul>
         </Surface>

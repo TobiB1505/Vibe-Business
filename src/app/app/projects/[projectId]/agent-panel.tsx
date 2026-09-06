@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ElementType } from "react";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { STATUS_GLYPHS, StatusDot, statusToneText, type StatusTone } from "@/components/ui/status-pill";
@@ -9,6 +8,7 @@ import type { OpportunityActionState } from "@/modules/execution/view";
 import type { AgentFocus } from "@/modules/projects/agent-focus";
 import type { AgentContext, AgentReadiness } from "@/modules/projects/command-center";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Vibe's engineer, as a presence rather than a status bar (CORE-5).
@@ -143,19 +143,13 @@ function FocusBlock({
       <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{detail}</p>
       <p className="text-fg-muted text-sm">
         {preparedChangeId ? (
-          <Link
-            href={preparedChangeHref(agentHref, preparedChangeId)}
-            className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-          >
+          <StandaloneLink href={preparedChangeHref(agentHref, preparedChangeId)}>
             Review the prepared change
-          </Link>
+          </StandaloneLink>
         ) : (
-          <Link
-            href={planMoveHref(planHref, focus.move.id)}
-            className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-          >
+          <StandaloneLink href={planMoveHref(planHref, focus.move.id)}>
             Open this move in your Action Plan
-          </Link>
+          </StandaloneLink>
         )}
       </p>
     </div>
@@ -254,36 +248,18 @@ export function AgentPanel({
           {context.rows.every((row) => row.ready) ? (
             <>
               Pick what it works on from your{" "}
-              <Link
-                href={planHref}
-                className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-              >
-                Action Plan
-              </Link>
-              .
+              <StandaloneLink href={planHref}>Action Plan</StandaloneLink>.
             </>
           ) : (
             <>
               Fill in what it&apos;s missing on{" "}
-              <Link
-                href={productHref}
-                className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-              >
-                My Product
-              </Link>
-              .
+              <StandaloneLink href={productHref}>My Product</StandaloneLink>.
             </>
           )}
           {executionHref && (
             <>
               {" "}
-              <Link
-                href={executionHref}
-                className="text-fg-muted hover:text-fg-body rounded-sm underline underline-offset-4 transition-interactive"
-              >
-                Run a step directly
-              </Link>
-              .
+              <StandaloneLink href={executionHref}>Run a step directly</StandaloneLink>.
             </>
           )}
         </p>

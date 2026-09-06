@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { AuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * The Deep Scan evidence notice above the Business Audit (Sprint 6 §11).
@@ -46,12 +46,7 @@ export function AuditEvidenceNotice({
         Your audit can still run, but a Deep Scan may provide additional product evidence.
       </p>
       {notice.canStartDeepScan && (
-        <Link
-          href={deepScanHref}
-          className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-        >
-          Run included Deep Scan
-        </Link>
+        <StandaloneLink href={deepScanHref}>Run included Deep Scan</StandaloneLink>
       )}
     </div>
   );

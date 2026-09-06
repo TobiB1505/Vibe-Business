@@ -12,6 +12,7 @@ import {
 } from "@/modules/review/classification";
 import { mergeApprovedChangeAction, type MergeActionState } from "./merge-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * The merge section (Sprint 11C §15, §25, §26, §29, §30).
@@ -90,12 +91,9 @@ function ReviewedAs({
 
   return (
     <p className="text-fg-secondary">
-      Reviewed as: {REVIEW_CLASSIFICATION_LABELS[classification.classification]} ·{" "}
-      {filesChanged} file{filesChanged === 1 ? "" : "s"} ·{" "}
-      <a
-        href={`#${preparedChangeAnchorId(preparedChangeId)}`}
-        className="underline underline-offset-2 hover:text-fg-body"
-      >
+      Reviewed as: {REVIEW_CLASSIFICATION_LABELS[classification.classification]} · {filesChanged}{" "}
+      file{filesChanged === 1 ? "" : "s"} ·{" "}
+      <a href={`#${preparedChangeAnchorId(preparedChangeId)}`} className={proseLinkClasses()}>
         see what changed
       </a>
     </p>

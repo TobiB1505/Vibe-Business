@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils/cn";
 import type { SourceCoverage, SourceCoverageState } from "@/modules/provenance/source-coverage";
 import { firstCoverageGap } from "@/modules/provenance/source-coverage";
 import { CostDisclosure, type CostBalance } from "./cost-disclosure";
+import { StandaloneLink, proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * What Vibe's understanding rests on (audit R6, sourcing spec S8).
@@ -116,12 +117,7 @@ export function SourceCoverageList({
 
             {source.remedy && (
               <div className="flex flex-col gap-1">
-                <Link
-                  href={source.remedy.href}
-                  className="text-fg-secondary hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {source.remedy.label}
-                </Link>
+                <StandaloneLink href={source.remedy.href}>{source.remedy.label}</StandaloneLink>
                 <CostDisclosure operation={source.remedy.operation} balance={balance} />
               </div>
             )}
@@ -177,10 +173,7 @@ export function SourceCoverageStrip({
         </span>
       ))}
       {gap?.remedy && (
-        <Link
-          href={gap.remedy.href}
-          className="text-fg-secondary hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-        >
+        <Link href={gap.remedy.href} className={proseLinkClasses()}>
           {gap.remedy.label}
         </Link>
       )}

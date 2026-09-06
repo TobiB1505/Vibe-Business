@@ -1,13 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import { useStageNavigation } from "./agent-stage-navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Stage four — before and after (UI-19, artboard 2d).
@@ -299,12 +299,7 @@ export function AgentPreviewStage({
             Nothing is live yet. You&rsquo;re in control.
           </p>
           {filesHref !== undefined && (
-            <Link
-              href={filesHref}
-              className="text-fg-muted hover:text-fg-body text-center text-[0.8125rem] underline underline-offset-4"
-            >
-              View changed files ({filesChanged})
-            </Link>
+            <StandaloneLink href={filesHref}>View changed files ({filesChanged})</StandaloneLink>
           )}
         </div>
       </aside>

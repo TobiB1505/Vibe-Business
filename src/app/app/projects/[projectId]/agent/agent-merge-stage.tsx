@@ -5,6 +5,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Stage five — review and merge (UI-19, artboard 2e).
@@ -208,14 +209,9 @@ export function AgentMergeStage({
               Files changed ({summary.filesChanged})
             </MonoLabel>
             {compareUrl !== null && (
-              <Link
-                href={compareUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-mint hover:text-mint-hover text-[0.8125rem] underline underline-offset-4"
-              >
+              <StandaloneLink href={compareUrl} external>
                 View all files
-              </Link>
+              </StandaloneLink>
             )}
           </div>
           <ul className="flex flex-col divide-y divide-[var(--color-line-1)]">

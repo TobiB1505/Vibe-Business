@@ -18,6 +18,8 @@ import type {
   BusinessBrainView,
 } from "@/modules/projects/business-brain-view";
 import { BusinessLensIcon, BusinessMap } from "./business-map";
+import { ArrowRightIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /*
  * No `evidence` tab.
@@ -159,13 +161,13 @@ function PriorityCard({
           </div>
         )}
         {lens && (
-          <button
-            type="button"
+          <InlineAction
             onClick={() => onExplore(lens)}
-            className="text-fg-secondary hover:text-fg w-fit rounded-sm text-xs underline decoration-line-strong underline-offset-4 transition-interactive"
+            icon={<ArrowRightIcon size={14} />}
+            className="w-fit"
           >
             Explore this area
-          </button>
+          </InlineAction>
         )}
       </div>
       <Link

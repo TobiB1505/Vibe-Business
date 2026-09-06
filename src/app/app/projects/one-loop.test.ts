@@ -392,7 +392,13 @@ describe("a refused run says which gate stopped it", () => {
       "src/app/app/projects/[projectId]/agent/agent-start-refusal-notice.tsx",
     );
 
-    expect(notice).toContain("<Link");
+    // `StandaloneLink` since the underline work: it renders a `Link`, so this
+    // is still navigation and still costs nothing until the user arrives.
+    expect(notice).toContain("<StandaloneLink");
+    // The half that actually enforces rule 60 — no control here starts the
+    // re-read, so a button or a form action in this file is the regression.
+    expect(notice).not.toContain("<button");
+    expect(notice).not.toContain("InlineAction");
     expect(notice).not.toContain("startUnderstandingAction");
     expect(notice).not.toContain("useActionState");
   });
