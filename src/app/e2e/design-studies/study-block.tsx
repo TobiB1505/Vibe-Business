@@ -7,10 +7,12 @@ import {
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "./agent-block";
 import { AskBlock, PlanAskBlock, WorkspaceAskBlock } from "./ask-block";
+import { ReviewBlock } from "./review-block";
 import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "./audit-block";
 import { ScanBlock } from "./scan-block";
 import { E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
+import { E2E_SCENARIOS } from "../scenarios";
 import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./elements";
@@ -575,6 +577,45 @@ export function StudyBlock({ study }: { study: Study }) {
           change it later, nothing starts running</em> — which is the sentence that stops a founder
           reading this as the moment a priced run begins. A block that rebuilt the list would have
           had to remember to write it.
+        </Context>
+      </section>
+
+      {/* ── The change, read where it was announced ──────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Look at the change, without going anywhere</Eyebrow>
+        <Context>
+          The last of the send-you-away controls, and the only one that was
+          <em> honest</em> as a link: there was genuinely nothing here to look at. A block changes
+          that. ChangeGates is the component the Agent route mounts, and it renders the whole review
+          gate from one card — so the change is read where it was announced.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble tone="waiting" index={0}>
+            <Line>There is a change waiting for you to look at.</Line>
+          </Bubble>
+          <Bubble aside tail={false} index={1}>
+            <Context>Two files changed on a branch of their own.</Context>
+          </Bubble>
+          <RenderBlock label="The change" tone="waiting" at="32m" index={2}>
+            <ReviewBlock
+              change={E2E_SCENARIOS.change_code_review_ready()}
+              planHref="/app/projects/project_e2e/plan"
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          I said last time I would not put a merge control in a thread, and the reason this is not
+          that is that a <em>button</em> is not what arrives. The gate brings its own order —
+          evidence, then approval, then merge, then outcome, each reachable only through the one
+          above it. Its own comment says it: <em>a merge needs an approval, an approval needs a
+          review, a review needs a preview, a preview needs a validation.</em>
+        </Context>
+        <Context>
+          That ordering is rule 67 in component form. An approval binds to one immutable identity —
+          this change, this commit, this base, this validation run — and the panels carry the
+          change&rsquo;s own approval and merge cards rather than a latest lookup. Lifting a merge
+          button out of the sequence would be a yes to commit A applied to commit B. Lifting the
+          sequence itself is not, and the block adds nothing to it.
         </Context>
       </section>
 
