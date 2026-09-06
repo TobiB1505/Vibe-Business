@@ -18,6 +18,7 @@ import {
 } from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import { Bubble, Context, Line, Moves } from "./elements";
+import { BLOCK_FOR_MOMENT } from "./block-registry";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
 
@@ -248,6 +249,13 @@ export function StudyMoments({ study }: { study: Study }) {
           founder tell these apart?&rdquo; by fiat, and the thread has no pill.
         </p>
         <p className="study-measure text-caption text-fg-secondary">
+          Each row also says which block that moment shows, read from
+          block-registry.ts rather than decided here. The registry is total over both unions, so an
+          operation type or a moment added to the domain fails the build until somebody decides
+          what a founder sees — which is the difference between a state that was decided to show
+          nothing and one nobody got to.
+        </p>
+        <p className="study-measure text-caption text-fg-secondary">
           So there is no status word anywhere below. That is the claim being tested rather than an
           omission: colour is never the only signal here, and the other signal is the sentence.
           <em> My last audit did not finish</em> and <em>my audit has been running far longer than
@@ -278,7 +286,20 @@ export function StudyMoments({ study }: { study: Study }) {
             <ul className={`flex flex-col divide-y divide-line-1 ${panel}`}>
               {rows.map(({ kind, entry }) => (
                 <li key={kind} className="flex flex-col gap-2.5 px-5 py-5">
-                  <code className="font-mono text-caption text-fg-meta">{kind}</code>
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <code className="font-mono text-caption text-fg-meta">{kind}</code>
+                    {/*
+                      Which block this moment shows, read from the registry
+                      rather than decided here. That is the point of the
+                      registry: the gallery asks the same question a screen
+                      asks, and gets the same answer.
+                    */}
+                    <code className="font-mono text-caption text-fg-disabled">
+                      {BLOCK_FOR_MOMENT[kind] === "none"
+                        ? "no block — the sentence is the whole of it"
+                        : `block: ${BLOCK_FOR_MOMENT[kind]}`}
+                    </code>
+                  </div>
                   <Moment entry={entry} />
                 </li>
               ))}
