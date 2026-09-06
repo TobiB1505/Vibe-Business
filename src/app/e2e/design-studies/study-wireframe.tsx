@@ -5,6 +5,7 @@ import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { firstActionableStep } from "@/modules/action-plans/sequence";
 import { stepDisplayState, stepSequenceStatus } from "@/modules/action-plans/view";
 import { buildActivityFeed } from "@/modules/audit-log/view";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
 import { creditsToUnits } from "@/modules/credits/units";
 import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
@@ -19,10 +20,13 @@ import {
   Line,
   Move,
   type NovaAvailability,
+  RenderBlock,
   SinceDivider,
   Thinking,
 } from "./elements";
+import { AuditBlock } from "./audit-block";
 import { Clock } from "./clock";
+import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import { NO_FACTS } from "./moment-fixtures";
 import { speechBubbles } from "./speech-bubbles";
 import type { Study } from "./studies";
@@ -245,6 +249,33 @@ function ago(at: string): string {
 
 const AVAILABILITY: NovaAvailability = { state: "online" };
 
+/**
+ * The audit the log says completed sixteen hours ago.
+ *
+ * Not a second fixture invented for this screen: `E2E_AUDIT_SCENARIOS` is what
+ * the audit-synthesis route renders from, and `buildBusinessBrainView` is what
+ * the Business Brain page renders from. The block in the thread is a third
+ * reading of the same two, which is the point — a founder who opens the map
+ * must not find a different business there.
+ *
+ * It is also why `auditOutdated` is true above and "Run the audit again" is on
+ * the list: the reading exists, the product has moved since, and the thread
+ * shows what was found rather than pretending nothing was.
+ */
+function auditView() {
+  const audit = E2E_AUDIT_SCENARIOS["audit-synthesis"]();
+  const view = buildBusinessBrainView({
+    audit,
+    lastScanAt: audit.generatedAt,
+    auditReadings: [],
+    movesByConclusion: {},
+    moveByConclusion: {},
+    usedSignedInEvidence: true,
+  });
+  if (!view) throw new Error("the audit fixture produced no business brain view");
+  return view;
+}
+
 export function StudyWireframe({
   study,
   offline,
@@ -382,6 +413,15 @@ export function StudyWireframe({
               ))}
 
               {/*
+                What she made. A block, not a bubble — the same rule that put
+                the control outside one. It sits after the sentences because
+                that is the wireframe's order: she says it, then shows it.
+              */}
+              <RenderBlock label="Business audit" at="16h" index={bubbles.length}>
+                <AuditBlock view={auditView()} />
+              </RenderBlock>
+
+              {/*
                 She is composing, and the product observed it. Bound to the
                 operations view's own `working` phase and unreachable on any
                 other, so a borrowed chat idiom never implies somebody is at a
@@ -402,7 +442,7 @@ export function StudyWireframe({
                       tone={status.tone}
                       open={status.open}
                       tail={bubbles.at(-1)?.aside ?? true}
-                      index={bubbles.length}
+                      index={bubbles.length + 1}
                     >
                       <Line>{choice.prompt}</Line>
                     </Bubble>

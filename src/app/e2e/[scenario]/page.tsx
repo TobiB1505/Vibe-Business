@@ -40,6 +40,7 @@ import { StudyBlocked } from "../design-studies/study-blocked";
 import { StudyMove } from "../design-studies/study-move";
 import { StudyBubble } from "../design-studies/study-bubble";
 import { StudyWireframe } from "../design-studies/study-wireframe";
+import { StudyBlock } from "../design-studies/study-block";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -54,6 +55,7 @@ import {
   BLOCKED_SCENARIO,
   MOVE_SCENARIO,
   BUBBLE_SCENARIO,
+  BLOCK_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
   CHAT_ANSWERED_SCENARIO,
@@ -286,6 +288,15 @@ export default async function E2eScenarioPage({
     return (
       <StudyShell study={chosen}>
         <StudyWireframe study={chosen} offline={scenario === WIREFRAME_OFFLINE_SCENARIO} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === BLOCK_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyBlock study={chosen} />
       </StudyShell>
     );
   }

@@ -529,3 +529,134 @@ export function Thinking({ children }: { children: ReactNode }) {
     </p>
   );
 }
+
+/* ── The Render Block ─────────────────────────────────────────────────── */
+
+/**
+ * Where a piece of work shows itself.
+ *
+ * ## The third kind of object in the thread
+ *
+ * A bubble means Nova is **saying** something. A Move means the founder can
+ * **do** something. A render block means Vibe **made** something — an audit
+ * reading, a scan, a change, a map — and this is where it appears.
+ *
+ * Three kinds, and none of them nests inside another. That is the same rule
+ * that took the Move out of the bubble, applied one object further: a business
+ * map is not a remark, so it does not get a speech bubble, and it does not
+ * carry its own control either. The control that follows it sits beside it in
+ * the thread, as every other control does.
+ *
+ * ## Why it is square where the bubble is round
+ *
+ * Not decoration. The bubble is round because a founder already learned that
+ * shape somewhere else and what they learned is *this is speech*. A block is
+ * not speech, and giving it the same silhouette would spend the one signal the
+ * thread has. So it takes the system's own panel geometry — tight corners,
+ * hairline, opaque — which is what every other surface holding real content in
+ * this product looks like.
+ *
+ * ## It exists before its result does
+ *
+ * A block in flight is not a placeholder for a block: it is the same object,
+ * showing the work instead of the outcome. That is what makes "watch it work"
+ * possible without a spinner standing in for a screen nobody can see yet — and
+ * it is the only place on this surface where dissolving lines belong.
+ */
+export function RenderBlock({
+  /** What kind of work this is. The product's own word, never invented here. */
+  label,
+  /** When it finished, already formatted. Absent while it is still running. */
+  at,
+  children,
+  index = 0,
+}: {
+  label: string;
+  at?: string;
+  children: ReactNode;
+  index?: number;
+}) {
+  return (
+    <section
+      className="study-rise flex w-full flex-col gap-3 rounded-panel border border-line-2 bg-surface-1 p-4"
+      style={{ "--i": index } as CSSProperties}
+      aria-label={label}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{label}</p>
+        {/*
+          A time only where there is one. A finished block happened at a moment
+          and the row records it; a running one has not happened yet, and a
+          clock beside it would be counting something nobody measured.
+        */}
+        {at && (
+          <span className="shrink-0 font-mono text-caption text-fg-meta tabular-nums">{at}</span>
+        )}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * The lines a block writes while it runs, and then forgets.
+ *
+ * ## What these are, exactly
+ *
+ * The **stages** of the operation in flight — `OPERATION_STAGE_LABELS[stage]`,
+ * the value the executor wrote to the row. The current one is bright; the ones
+ * before it fade out behind it and are gone.
+ *
+ * That they may vanish is not a liberty taken with the record. It is what the
+ * record already says: the event log stores that a run started and that it
+ * finished, and the stages in between were true for a moment and were never
+ * written down. A surface that kept them would be inventing a history the
+ * product does not have, and one that shows them going is telling the truth
+ * about what they were — snapshots.
+ *
+ * ## Three rules, and the first is the one that makes it usable
+ *
+ * - **Nothing carrying a decision or a price is ever in here.** A control that
+ *   goes away under a cursor is the worst thing an interface can do, so the
+ *   dissolving surface holds no controls at all — not by convention, by
+ *   construction: this element renders text.
+ * - **A line goes because it stopped being true, never on a timer.** A timer
+ *   is a claim about how fast somebody reads. The stage changing is a fact.
+ * - **Under `prefers-reduced-motion` the faded lines are not rendered.** They
+ *   do not appear and then vanish without animating, which would be a flicker
+ *   with no meaning; the current stage stands alone, which is the whole of the
+ *   information anyway.
+ */
+export function Dissolving({
+  /** Newest first. Only the first is current; the rest are on their way out. */
+  stages,
+}: {
+  stages: readonly string[];
+}) {
+  const [current, ...fading] = stages;
+  if (!current) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="study-thinking text-ui font-medium" role="status">
+        {current}
+      </p>
+      {/*
+        `aria-hidden`, and not only because they are decorative: a screen
+        reader announcing three past stages every time one changes would be
+        reading out a history the product deliberately does not keep.
+      */}
+      <div aria-hidden className="study-dissolve flex flex-col gap-1">
+        {fading.slice(0, 2).map((stage, index) => (
+          <p
+            key={stage}
+            className="text-caption text-fg-meta"
+            style={{ opacity: index === 0 ? 0.55 : 0.28 }}
+          >
+            {stage}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}

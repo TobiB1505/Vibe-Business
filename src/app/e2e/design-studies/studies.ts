@@ -259,6 +259,9 @@ export const BUBBLE_SCENARIO = "study-bubble";
  * "Online" would be shipping an offline notice nobody looked at.
  */
 export const WIREFRAME_SCENARIO = "study-wireframe";
+
+/** The Render Block element sheet: in flight, settled, and unscorable. */
+export const BLOCK_SCENARIO = "study-block";
 export const WIREFRAME_OFFLINE_SCENARIO = "study-wireframe-offline";
 
 export function isWireframeScenario(scenario: string): boolean {

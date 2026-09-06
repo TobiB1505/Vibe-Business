@@ -935,3 +935,17 @@
     color: var(--color-fg-body);
   }
 }
+
+/*
+   The lines a render block forgets.
+
+   Only the fading stack is hidden under reduced motion, never the current
+   stage: what a founder needs is the sentence, and the sentence stays. Lines
+   that appeared and then blinked out with no transition would be a flicker
+   carrying no information, which is worse than not drawing them.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .study-dissolve {
+    display: none;
+  }
+}
