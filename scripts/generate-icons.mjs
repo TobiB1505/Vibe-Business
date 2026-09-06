@@ -60,6 +60,23 @@ const MANIFEST = {
    */
   ChevronDownIcon: "chevron-down",
   ArrowRightIcon: "arrow-right",
+  /*
+   * The rest of the generic set, migrated in one pass rather than one at a
+   * time. Leaving eight hand-drawn marks beside seven generated ones is the
+   * same "two icon sets in one row" defect the pair above was fixing, just
+   * spread thinner and harder to notice.
+   *
+   * `triangle-alert` rather than `alert-triangle`: both resolve at this pinned
+   * version, and the first is the name Lucide kept.
+   */
+  CheckIcon: "check",
+  PlusIcon: "plus",
+  SearchIcon: "search",
+  RefreshIcon: "refresh-cw",
+  InfoIcon: "info",
+  AlertIcon: "triangle-alert",
+  ChevronRightIcon: "chevron-right",
+  ArrowLeftIcon: "arrow-left",
 };
 
 const HEADER = `import type { SVGProps } from "react";

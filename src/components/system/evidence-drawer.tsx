@@ -1,13 +1,12 @@
 "use client";
 
 import { useId, useState } from "react";
+import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
 import { IconButton } from "@/components/ui/icon-button";
-import { DismissIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 import { Sheet } from "@/components/ui/sheet";
-import { TextAction } from "@/components/ui/button";
 import { RatingChip } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
-import { cn } from "@/lib/utils/cn";
 import { ConfidenceIndicator, type ConfidenceViewModel } from "./confidence";
 
 /**
@@ -177,15 +176,20 @@ export function CitationCount({
 
   return (
     <>
-      <TextAction
-        type="button"
+      {/*
+        A container at rest rather than an underline. This is the disclosure
+        role: nothing around it says what it opens, so the word stays inside
+        the control and the chevron says the direction.
+      */}
+      <InlineAction
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className={cn("text-ui", className)}
+        icon={<ChevronDownIcon size={14} />}
+        className={className}
       >
         {total === 1 ? "1 source" : `${total} sources`}
-      </TextAction>
+      </InlineAction>
       <EvidenceDrawer
         open={open}
         onClose={() => setOpen(false)}

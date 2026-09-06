@@ -9,11 +9,26 @@ import { IconFrame, type IconProps } from "./icon-frame";
  * as two icon sets. Re-exporting rather than renaming means the twenty-three
  * call sites did not have to be touched to fix that.
  *
- * The eight remaining generic marks here — Check, Plus, Search, Refresh, Info,
- * Alert, ChevronRight, ArrowLeft — have the same problem and are not migrated
- * yet. Doing them is a follow-up, not a side effect of this one.
+ * All ten generic marks now come from there. Leaving eight hand-drawn beside
+ * two generated ones would have been the same defect spread thinner and harder
+ * to notice, so they moved in one pass. Fifty-five call sites, none of them
+ * touched: the names did not change.
+ *
+ * What is left in this file is the part no catalogue has — Nova's aperture,
+ * the wordmark, and the nine navigation marks that carry Vibe's own vocabulary.
  */
-export { ArrowRightIcon, ChevronDownIcon } from "./icons.generated";
+export {
+  AlertIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  InfoIcon,
+  PlusIcon,
+  RefreshIcon,
+  SearchIcon,
+} from "./icons.generated";
 
 export type DashboardIconName =
   | "nova"
@@ -175,30 +190,6 @@ export function SignOutIcon(props: IconProps) {
   );
 }
 
-export function ChevronRightIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m10 7 5 5-5 5" />
-    </IconFrame>
-  );
-}
-
-export function ArrowLeftIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M20 12H4m6-6-6 6 6 6" />
-    </IconFrame>
-  );
-}
-
-export function CheckIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m5 12.5 4.2 4.2L19 7" />
-    </IconFrame>
-  );
-}
-
 export function RocketIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -206,32 +197,6 @@ export function RocketIcon(props: IconProps) {
       <path d="m8.2 11.8-3.5.7L3 15l4.2.4M12.2 15.8l-.7 3.5L9 21l-.4-4.2" />
       <circle cx="14.8" cy="9.2" r="1.6" />
       <path d="M5 19c1.1-2.1 2.3-2.8 4-3" />
-    </IconFrame>
-  );
-}
-
-export function PlusIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M12 4v16M4 12h16" />
-    </IconFrame>
-  );
-}
-
-export function InfoIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 10.8V17M12 7.3h.01" />
-    </IconFrame>
-  );
-}
-
-export function SearchIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <circle cx="10.8" cy="10.8" r="6.8" />
-      <path d="m16 16 4.5 4.5" />
     </IconFrame>
   );
 }
@@ -249,15 +214,6 @@ export function TrendIcon(props: IconProps) {
     <IconFrame {...props}>
       <path d="m4 16 5-5 3 3 7-7" />
       <path d="M15 7h4v4" />
-    </IconFrame>
-  );
-}
-
-export function AlertIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M10.1 4.4 2.8 18a2 2 0 0 0 1.8 3h14.8a2 2 0 0 0 1.8-3L13.9 4.4a2.2 2.2 0 0 0-3.8 0Z" />
-      <path d="M12 9v5M12 17.5h.01" />
     </IconFrame>
   );
 }
@@ -336,17 +292,6 @@ export function SparklesIcon(props: IconProps) {
  * same meaning, so nothing on that screen depends on a symbol any more than it
  * depends on a colour.
  * ------------------------------------------------------------------------ */
-
-export function RefreshIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M20 11.5A8 8 0 0 0 6.3 6.3L3.5 9" />
-      <path d="M4 12.5a8 8 0 0 0 13.7 5.2l2.8-2.7" />
-      <path d="M3.5 4.5V9H8" />
-      <path d="M20.5 19.5V15H16" />
-    </IconFrame>
-  );
-}
 
 export function BoltIcon(props: IconProps) {
   return (
