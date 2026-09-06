@@ -208,3 +208,16 @@ export const CHAT_ANSWERED_SCENARIO = "study-chat-answered";
 export function isChatScenario(scenario: string): boolean {
   return scenario === CHAT_SCENARIO || scenario === CHAT_ANSWERED_SCENARIO;
 }
+
+/**
+ * The console studies: Nova as a standing presence rather than a speaker in
+ * the thread. Two scenarios, because the box's whole argument is the present
+ * tense and an idle project has none — and a study that only ever showed the
+ * working state would be hiding the case where the box has least to say.
+ */
+export const CONSOLE_SCENARIO = "study-console";
+export const CONSOLE_IDLE_SCENARIO = "study-console-idle";
+
+export function isConsoleScenario(scenario: string): boolean {
+  return scenario === CONSOLE_SCENARIO || scenario === CONSOLE_IDLE_SCENARIO;
+}
