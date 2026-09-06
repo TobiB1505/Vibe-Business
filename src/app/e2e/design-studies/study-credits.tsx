@@ -1,6 +1,9 @@
 import type { ReactNode } from "react";
 import { buttonClasses } from "@/components/ui/button";
+import { CreditAmount } from "@/components/ui/credit-amount";
 import { CreditCoin } from "@/components/ui/credit-coin";
+import { inlineActionClasses } from "@/components/ui/inline-action";
+import { creditsToUnits } from "@/modules/credits/units";
 import type { Study } from "./studies";
 
 /**
@@ -153,29 +156,37 @@ const COMPOSITIONS: readonly Composition[] = [
   },
   {
     key: "weighted",
-    name: "2 · Marke und Zahl über dem Knopf",
+    name: "2 · Nur der Preis, über dem Knopf",
     argument:
-      "The price becomes one thing rather than four words — the coin and the number set together and brighter, the balance demoted to a quieter line — and the whole block sits above the control. Reading order becomes cost, then coverage, then the action, which is the order a person actually needs them in. It is also the order a screen reader gets, unchanged, for free.",
-    cost: "Two lines where there was one, above every priced control in the product. On a dense screen with three of them that is six lines of billing, which is how a disclosure turns into an accounting page. And a block above a button pushes the button down — on a short viewport the thing to press moves further from the thumb.",
+      "The coin and the number as one object, above the control. Reading order becomes cost, then action — the order a person needs, and the order a screen reader already gets from the DOM. The balance is gone entirely: Vibe says what a thing costs and never what is left.",
+    cost: "A price with no balance beside it is a price you cannot check against anything. Somebody reads “35 Credits”, has no idea whether they hold 35, presses, and finds out. That is the trade being made deliberately — see the third state.",
     render: (state) => (
       <div className="flex flex-col items-start gap-2.5">
-        <div className="flex flex-col gap-0.5">
-          {state === "included" ? (
-            <span className="text-ui text-fg-meta">Included</span>
-          ) : (
-            <>
-              <span className="inline-flex items-center gap-2 text-fg font-medium tabular-nums">
-                {M(18)}35 Credits
-              </span>
-              <span className={`text-caption ${state === "short" ? "text-amber" : "text-fg-meta"}`}>
-                {state === "short" ? "You have 12. Not enough for this." : "of 420 available"}
-              </span>
-            </>
-          )}
-        </div>
+        {state === "included" ? (
+          <span className="text-ui text-fg-meta">Included</span>
+        ) : (
+          <CreditAmount credits={creditsToUnits(35)} />
+        )}
         <button type="button" className={buttonClasses()}>
           {CTA}
         </button>
+        {state === "short" && (
+          /*
+            The upsell, and it only exists after the press. Nothing before the
+            click says the balance is short, so this is the first moment the
+            product mentions it — which is why it has to carry the whole
+            message and the way out in one block.
+          */
+          <div className="mt-1 flex flex-col items-start gap-2 rounded-panel border border-amber-line bg-amber-tint-soft px-4 py-3">
+            <span className="text-caption text-amber">
+              Your monthly Credits are used up. Vibe didn&rsquo;t charge you.
+            </span>
+            <button type="button" className={inlineActionClasses()}>
+              <CreditCoin size={14} />
+              Top up
+            </button>
+          </div>
+        )}
       </div>
     ),
   },
@@ -241,7 +252,7 @@ const COMPOSITIONS: readonly Composition[] = [
 const STATES: readonly { key: Money; label: string }[] = [
   { key: "priced", label: "Kostet" },
   { key: "included", label: "Inklusive" },
-  { key: "short", label: "Reicht nicht" },
+  { key: "short", label: "Aufgebraucht — nach dem Klick" },
 ];
 
 function CompositionRow({ composition }: { composition: Composition }) {
