@@ -6,7 +6,7 @@ import {
 } from "@/modules/projects/business-brain-view";
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "./agent-block";
-import { AskBlock } from "./ask-block";
+import { AskBlock, PlanAskBlock, WorkspaceAskBlock } from "./ask-block";
 import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "./audit-block";
 import { ScanBlock } from "./scan-block";
@@ -17,6 +17,7 @@ import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./e
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
+import type { WorkspaceCandidate } from "@/modules/validation/profile";
 import type { Study } from "./studies";
 
 /**
@@ -138,6 +139,49 @@ const ASK_REQUEST: FounderInputRequest = {
   createdAt: "2026-09-06T08:58:00.000Z",
   resolvedAt: null,
 };
+
+/** The same question, asked by the plan rather than by a paused run. */
+const PLAN_REQUEST: FounderInputRequest = {
+  ...ASK_REQUEST,
+  id: "request_plan_e2e",
+  executionInterruptId: null,
+  origin: "planner",
+  subjectKey: "pricing.model",
+  question: "Who is the pricing page for?",
+  whyNeeded: "The page cannot be written until it knows who it is talking to.",
+  recommendation: {
+    id: "solo",
+    label: "Solo developers shipping side projects",
+    value: "Write the pricing page for solo developers shipping side projects.",
+    explanation: "It is who your README and your examples already speak to.",
+  },
+  alternatives: [
+    {
+      id: "teams",
+      label: "Small engineering teams",
+      value: "Write the pricing page for small engineering teams.",
+      explanation: null,
+    },
+  ],
+};
+
+/** Two applications in one repository, which is the state that raises the choice. */
+const WORKSPACES: WorkspaceCandidate[] = [
+  {
+    workspaceRoot: "apps/web",
+    installRoot: ".",
+    packageManager: "pnpm",
+    frameworks: ["next"],
+    moduleLinker: null,
+  },
+  {
+    workspaceRoot: "apps/docs",
+    installRoot: ".",
+    packageManager: "pnpm",
+    frameworks: ["astro"],
+    moduleLinker: null,
+  },
+];
 
 /** The agent fixture the workspace's own stage routes render from. */
 const AGENT = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
@@ -494,6 +538,43 @@ export function StudyBlock({ study }: { study: Study }) {
           unblocks a paused run, and there is nothing here to unblock — so the control reports that
           rather than pretending. In production Nova&rsquo;s route supplies the real one, the same
           way the agent route supplies it today.
+        </Context>
+      </section>
+
+      {/* ── The same move, twice more ────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Two more that used to send you away</Eyebrow>
+        <Context>
+          <em>Answer in the plan</em> and <em>Choose in the Agent</em>. Both are the same mechanism
+          as the one above, and both were <code className="font-mono">elsewhere</code> controls for
+          a reason home-view.ts states plainly: Home did not hold the arguments the action needed.
+          A block that mounts the panel does hold them, because the panel is where they live.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble tone="waiting" open index={0}>
+            <Line>The plan needs a decision only you can make.</Line>
+          </Bubble>
+          <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
+            <PlanAskBlock request={PLAN_REQUEST} resolveAction={labResolveAction} />
+          </RenderBlock>
+        </div>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble tone="waiting" open index={0}>
+            <Line>There is more than one app here, and I do not know which one to work on.</Line>
+          </Bubble>
+          <RenderBlock label="Needs your choice" tone="waiting" namesItself index={1}>
+            {/* No `action`: a render prop cannot cross from a server
+                component to a client one, so the block supplies the lab's
+                placeholder itself. In production the owning route is a client
+                component and passes the real control. */}
+            <WorkspaceAskBlock candidates={WORKSPACES} />
+          </RenderBlock>
+        </div>
+        <Context>
+          The workspace list brings its own notice with it — <em>choosing is free and you can
+          change it later, nothing starts running</em> — which is the sentence that stops a founder
+          reading this as the moment a priced run begins. A block that rebuilt the list would have
+          had to remember to write it.
         </Context>
       </section>
 
