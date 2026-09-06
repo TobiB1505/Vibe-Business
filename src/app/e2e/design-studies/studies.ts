@@ -163,6 +163,9 @@ export const LINKS_SCENARIO = "study-links";
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 
+/** The Credit: a mark for it, and a price that looks like money. */
+export const CREDITS_SCENARIO = "study-credits";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
