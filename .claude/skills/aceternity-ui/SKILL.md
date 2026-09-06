@@ -35,9 +35,23 @@ Vibe. "It is a gradient" is not a ground. Neither is "it looks like marketing".
 ## Where it may be considered
 
 The landing page, and the signature surfaces with an argument already made —
-Business Brain, Product Scan, Agent, Nova. **Nowhere inside `/app` otherwise.**
+Business Brain, Product Scan, Agent, Nova.
 
-Never on: dashboards, billing, profile, settings, tables, index pages, forms.
+Elsewhere in `/app`, judge rather than refuse. This section used to carry a list
+— *never on dashboards, billing, profile, settings, tables, index pages, forms*
+— which is a category refusal of the kind `DESIGN.md` retired for itself: "no
+visual technique is refused by category… that list is retired as a list, and its
+judgement is kept as a test." The list also named the wrong thing. What makes an
+aurora wrong behind a settings form is not that the route is `/settings`; it is
+that the treatment is decorative there, borrows a signature surface's language,
+and spends continuous GPU work on a page somebody opens daily. Those are the
+grounds, and they are the five questions above.
+
+Expect the answer to stay no most of the time, for the two reasons `DESIGN.md`
+keeps while retiring the list: contrast — a technique stamped across every card
+leaves the product nothing to emphasise with — and the cost measured below. An
+ordinary surface that wants presence should reach for composition, hierarchy and
+depth first. This registry is the last thing to try, never the first.
 
 ## Porting
 
