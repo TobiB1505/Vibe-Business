@@ -224,6 +224,161 @@ describe("buildDeepScanViewModel — completed", () => {
   });
 });
 
+/**
+ * The bug this file did not have a case for.
+ *
+ * Every `completed` fixture above sets `blockedReason: "credits_required"` — a
+ * policy that prices no additional scan — so the question "what may be started
+ * *after* a successful scan" was never asked of a project that could buy one.
+ * Under `launch-v1` an additional scan costs 25 Credits, and a founder with a
+ * finished scan and 5,330 Credits was shown a summary card with no control on
+ * it, permanently.
+ */
+describe("buildDeepScanViewModel — what may be started after a result", () => {
+  const finished = {
+    result: snapshotResult(),
+    accessMode: "included_first_scan" as const,
+    completedAt: "2026-08-11T22:30:00.000Z",
+    createdAt: "2026-08-11T22:28:00.000Z",
+    pagesInspected: 6,
+  };
+
+  it("offers a priced scan while showing a finished one", () => {
+    const model = build({
+      latestSnapshot: finished,
+      accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: null }),
+    });
+
+    // Both are true and neither is discarded: the result is what the section
+    // shows, and another scan is what it may offer.
+    expect(model.state).toBe("completed");
+    expect(model.nextScan).toEqual({ kind: "priced", price: 25_000 });
+  });
+
+  it("says a scan is not for sale rather than going silent", () => {
+    const model = build({
+      latestSnapshot: finished,
+      accessStatus: accessStatus({
+        includedScanAvailable: false,
+        additionalScanPrice: null,
+        blockedReason: "credits_required",
+      }),
+    });
+
+    expect(model.state).toBe("completed");
+    expect(model.nextScan).toEqual({ kind: "not_for_sale" });
+  });
+
+  it("names the price when the balance is short, because that state has a checkout", () => {
+    const model = build({
+      latestSnapshot: finished,
+      accessStatus: accessStatus({
+        includedScanAvailable: false,
+        blockedReason: "insufficient_credits",
+      }),
+    });
+
+    expect(model.nextScan).toEqual({ kind: "insufficient_credits", price: 25_000 });
+  });
+
+  it("reports a cooldown as a cooldown, with when it lifts", () => {
+    const model = build({
+      latestSnapshot: finished,
+      accessStatus: accessStatus({
+        includedScanAvailable: false,
+        blockedReason: "cooldown_active",
+        retryAvailableAt: "2026-08-11T22:32:00.000Z",
+      }),
+    });
+
+    expect(model.nextScan).toEqual({
+      kind: "blocked",
+      reason: "cooldown_active",
+      retryAvailableAt: "2026-08-11T22:32:00.000Z",
+    });
+  });
+
+  it("does not invent a top-up towards a price that does not exist", () => {
+    // `insufficient_credits` is the state with a checkout behind it, and a
+    // checkout needs a figure. Without one it degrades to the honest answer.
+    const model = build({
+      accessStatus: accessStatus({
+        includedScanAvailable: false,
+        additionalScanPrice: null,
+        blockedReason: "insufficient_credits",
+      }),
+    });
+
+    expect(model.nextScan).toEqual({ kind: "not_for_sale" });
+  });
+
+  it("reports the missing provider as Vibe's gap, even with a result on screen", () => {
+    const model = build({
+      latestSnapshot: finished,
+      accessStatus: accessStatus({ includedScanAvailable: false }),
+      providerConfigured: false,
+    });
+
+    expect(model.state).toBe("completed");
+    expect(model.nextScan).toEqual({ kind: "unavailable", reason: "provider_not_configured" });
+  });
+});
+
+describe("the offer and the state cannot describe different terms", () => {
+  /*
+   * `state` and `nextScan` answer two questions off one set of facts. They are
+   * allowed to differ — a completed result outranks a purchasable state, which
+   * is the whole point — but they must never *contradict*: a panel that says
+   * "not for sale" while holding a price, or offers a start the domain refuses.
+   */
+  const denials = [
+    null,
+    "credits_required",
+    "insufficient_credits",
+    "cooldown_active",
+    "scan_already_running",
+    "start_attempts_exhausted",
+    "production_origin_missing",
+  ] as const;
+
+  it.each(denials)("agrees with the domain's answer for %s", (blockedReason) => {
+    for (const includedScanAvailable of [true, false]) {
+      for (const additionalScanPrice of [25_000, null]) {
+        const model = build({
+          accessStatus: accessStatus({ blockedReason, includedScanAvailable, additionalScanPrice }),
+        });
+
+        const offersStart = model.nextScan.kind === "included" || model.nextScan.kind === "priced";
+
+        /*
+         * One direction, not equality, and the direction is the safe one: a
+         * start is never offered where the domain would refuse it.
+         *
+         * The converse is deliberately not asserted. `canStart` is
+         * `blockedReason === null && providerConfigured` — it trusts the
+         * access status and asks nothing about entitlement — so the
+         * unreachable combination "included scan used, nothing blocking, no
+         * price in force" leaves it true while `nextScan` answers
+         * `not_for_sale`. `authorizeDeepScan` returns `credits_required` for
+         * exactly those facts, so no real project produces them; where the two
+         * fields can disagree at all, the refusing one is the one that renders.
+         */
+        if (offersStart) expect(model.canStart).toBe(true);
+
+        if (model.state === "additional_available") {
+          expect(model.nextScan.kind).toBe("priced");
+        }
+        if (model.state === "credits_required") {
+          expect(model.nextScan.kind).toBe("not_for_sale");
+        }
+        if (model.state === "insufficient_credits") {
+          expect(model.nextScan.kind).toBe("insufficient_credits");
+        }
+      }
+    }
+  });
+});
+
 describe("buildDeepScanViewModel — credits", () => {
   it("reports credits_required when no policy prices an additional scan", () => {
     const model = build({

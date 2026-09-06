@@ -6,7 +6,10 @@ import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
 import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
-import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
+import type {
+  DeepScanNextScan,
+  DeepScanViewModel,
+} from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScanAction,
   cancelDeepScanAction,
@@ -314,6 +317,97 @@ function useElapsedSeconds(running: boolean): number {
   return Math.max(0, Math.floor((span.now - span.startedAt) / 1000));
 }
 
+/**
+ * The offer to run a scan, rendered from the one derived answer.
+ *
+ * Every terms decision — free, priced, short, not for sale, blocked — was made
+ * in `buildDeepScanViewModel`. This maps each to a control or to a sentence,
+ * and it never renders a heading with neither: a state with no action and no
+ * reason is indistinguishable from a broken page, which is exactly how the
+ * missing re-run was reported.
+ */
+function NextScan({
+  next,
+  rerun,
+  onStart,
+  disabled,
+  now,
+}: {
+  next: DeepScanNextScan;
+  /** True when a finished result is already on screen, which changes the verb. */
+  rerun?: boolean;
+  onStart: () => void;
+  disabled: boolean;
+  now: number | null;
+}) {
+  switch (next.kind) {
+    case "included":
+      return (
+        <Button type="button" onClick={onStart} disabled={disabled} busy={disabled}>
+          {disabled ? "Starting…" : rerun ? "Run included Deep Scan" : "Run free Deep Scan"}
+        </Button>
+      );
+
+    case "priced":
+      return (
+        <div className="space-y-2">
+          {/*
+            Said before the click, not after it. A Deep Scan that fails, is
+            cancelled, or expires costs nothing — the hold is released — and a
+            customer deciding whether to spend deserves to know that while they
+            are deciding.
+          */}
+          <p className="text-xs text-fg-muted">
+            You&apos;re only charged if Vibe comes back with a result.
+          </p>
+          <Button type="button" onClick={onStart} disabled={disabled} busy={disabled}>
+            {disabled
+              ? "Starting…"
+              : `${rerun ? "Scan again" : "Run Deep Scan"} · ${formatCreditsForDisplay(next.price)} Credits`}
+          </Button>
+        </div>
+      );
+
+    case "insufficient_credits":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-fg-secondary">
+            Another Deep Scan costs {formatCreditsForDisplay(next.price)} Credits, and your
+            balance doesn&apos;t cover it yet.
+          </p>
+          <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+            Top up Credits
+          </Link>
+        </div>
+      );
+
+    case "not_for_sale":
+      // No policy prices another scan. The honest terminal answer, and not a
+      // route into a checkout that cannot help.
+      return (
+        <p className="text-xs text-fg-muted">
+          Additional Deep Scans aren&apos;t available right now.
+        </p>
+      );
+
+    case "blocked":
+      return (
+        <p className="text-xs text-fg-muted">
+          {waitHint(next.retryAvailableAt, now) ?? messageFor(next.reason)}
+        </p>
+      );
+
+    case "unavailable":
+      return (
+        <p className="text-xs text-fg-muted">
+          {next.reason === "provider_not_configured"
+            ? "Deep Scan is not switched on here yet. That is a gap on Vibe's side — it says nothing about your product."
+            : "Add your production website URL above to run another Deep Scan."}
+        </p>
+      );
+  }
+}
+
 function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["lastResult"]> }) {
   return (
     <div className="space-y-3">
@@ -498,9 +592,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           <>
             <Heading title="Look inside your signed-in product" status="Ready" />
             <ResultSummary result={model.lastResult} />
-            <p className="text-xs text-fg-muted">
-              Additional Deep Scans will use Vibe Credits.
-            </p>
+            {/*
+              A finished result is not the end of the section. A product changes
+              after it is scanned, and this branch used to render a summary and
+              nothing else — no button, no price, no reason — because `state`
+              ranks `completed` above every purchasable state. One successful
+              scan turned the panel into a read-only card permanently. The offer
+              is a separate question and is answered by `model.nextScan`.
+            */}
+            <NextScan next={model.nextScan} rerun onStart={handleStart} disabled={disabled} now={browserNow} />
           </>
         ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
           <>

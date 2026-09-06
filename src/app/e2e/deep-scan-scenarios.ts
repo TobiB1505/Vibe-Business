@@ -35,6 +35,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: null,
     canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
   } satisfies DeepScanViewModel,
 
   /** Priced, and the balance does not cover it. A refusal the customer can act on. */
@@ -46,6 +47,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: "insufficient_credits",
     canStart: false,
+    nextScan: { kind: "insufficient_credits", price: creditUnits(25_000) },
   } satisfies DeepScanViewModel,
 
   /**
@@ -63,6 +65,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: null,
     canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
     lastResult: {
       analyzedAt: "2026-08-30T09:12:00.000Z",
       pagesInspected: 7,
@@ -88,6 +91,59 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: null,
     blockedReason: "credits_required",
     canStart: false,
+    nextScan: { kind: "not_for_sale" },
+  } satisfies DeepScanViewModel,
+
+  /**
+   * A finished result, with another scan buyable — the state the founder was
+   * actually in, and the one nothing rendered.
+   *
+   * It is here rather than only in a unit test because the defect was invisible
+   * to the domain: the view model was right, the entitlement was right, and the
+   * panel drew a summary card with no control on it. Only a browser says
+   * whether a person can start a scan (rule 69).
+   */
+  "deep-scan-completed-rerunnable": {
+    ...BASE,
+    state: "completed",
+    includedScanAvailable: false,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
+    lastResult: {
+      analyzedAt: "2026-08-11T22:30:00.000Z",
+      pagesInspected: 6,
+      completeness: "complete",
+      surfaces: [
+        { id: "dashboard", name: "Dashboard" },
+        { id: "project_workspace", name: "Project workspace" },
+        { id: "integrations", name: "Integrations" },
+      ],
+      warnings: [],
+      accessMode: "included_first_scan",
+    },
+  } satisfies DeepScanViewModel,
+
+  /** A finished result while a cooldown is in force: a reason, never silence. */
+  "deep-scan-completed-blocked": {
+    ...BASE,
+    state: "completed",
+    includedScanAvailable: false,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: "cooldown_active",
+    canStart: false,
+    nextScan: { kind: "blocked", reason: "cooldown_active", retryAvailableAt: null },
+    lastResult: {
+      analyzedAt: "2026-08-11T22:30:00.000Z",
+      pagesInspected: 6,
+      completeness: "complete",
+      surfaces: [{ id: "dashboard", name: "Dashboard" }],
+      warnings: [],
+      accessMode: "included_first_scan",
+    },
   } satisfies DeepScanViewModel,
 } as const satisfies Record<string, DeepScanViewModel>;
 

@@ -84,6 +84,55 @@ test.describe("an additional Deep Scan that is not for sale", () => {
   });
 });
 
+/**
+ * A finished Deep Scan, and another one buyable.
+ *
+ * The state that shipped broken. `state` ranks `completed` above every
+ * purchasable state — correctly, because once a scan exists that is what the
+ * section is about — and the branch that renders it drew a summary card with no
+ * control, no price and no reason. One successful scan and the panel was
+ * read-only for good.
+ *
+ * Nothing below the browser could see it: the entitlement resolved `credits`,
+ * the view model was right, and every unit fixture for `completed` happened to
+ * use a policy that priced no additional scan. Rule 69's third question,
+ * answered.
+ */
+test.describe("running another Deep Scan after one has finished", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/e2e/deep-scan-completed-rerunnable");
+  });
+
+  test("still shows the finished result", async ({ page }) => {
+    await expect(page.getByText("Pages Vibe looked at")).toBeVisible();
+    await expect(page.getByText("Dashboard")).toBeVisible();
+  });
+
+  test("offers a way to run another one", async ({ page }) => {
+    // The defect, stated as the thing a person could not do.
+    await expect(page.getByRole("button", { name: /Scan again · 25 Credits/ })).toBeEnabled();
+  });
+
+  test("states the price on the control that spends it", async ({ page }) => {
+    await expect(page.getByRole("button", { name: /25 Credits/ })).toBeVisible();
+  });
+
+  test("says that a scan which finds nothing is not charged", async ({ page }) => {
+    await expect(page.getByText("You're only charged if Vibe comes back with a result.")).toBeVisible();
+  });
+});
+
+test.describe("a finished Deep Scan while a cooldown is in force", () => {
+  test("gives a reason instead of an empty card", async ({ page }) => {
+    // A heading and a summary with no action and no explanation is
+    // indistinguishable from a broken page — which is how this was reported.
+    await page.goto("/e2e/deep-scan-completed-blocked");
+
+    await expect(page.getByRole("button", { name: /Scan again/ })).toHaveCount(0);
+    await expect(page.getByText(/Please wait a moment before starting another Deep Scan\./)).toBeVisible();
+  });
+});
+
 /*
  * Slice 3: a finished scan says what it could not check, behind a disclosure.
  * The snapshot has carried these warnings since it existed and the view model
