@@ -51,6 +51,8 @@ Since [ADR 0096](docs/decisions/0096-the-second-design-system-arrives-scoped.md)
 
 v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, opaque panels with bright hairlines and tight corners, glass spent on chrome and signature moments rather than on dense data, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
 
+v2 also moves the eyebrow into the interface family, which is what this document asked for and what 289 uses of `MonoLabel` were contradicting, and sets identifiers in DM Mono rather than JetBrains Mono — with the JetBrains subsets kept behind it in the stack for the scripts DM Mono does not ship.
+
 Both palettes are measured by `design-tokens.test.ts` against `--color-surface-4`, and both must hold 4.5:1 on every load-bearing ramp step. When v2 is everywhere, its values move into `@theme`, the scope is deleted, and this section goes with it.
 
 ## Colors

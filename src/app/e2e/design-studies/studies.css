@@ -290,6 +290,16 @@
 
   --font-sans: var(--font-study-geist), ui-sans-serif, system-ui, sans-serif;
 
+  /* The identifier face, mirroring `theme-v2.css` exactly. The lab scopes on
+     `data-vibe-study` and the product layer on `data-vibe`, so this value has
+     to be repeated rather than inherited — and it was caught by a render that
+     showed JetBrains where DM Mono was supposed to be. A study that quietly
+     disagrees with the palette it claims to preview is worse than none. */
+  --font-mono:
+    var(--font-dm-mono), var(--font-dm-mono-latin-ext), var(--font-jetbrains-mono-cyrillic),
+    var(--font-jetbrains-mono-cyrillic-ext), var(--font-jetbrains-mono-greek),
+    var(--font-jetbrains-mono-vietnamese), ui-monospace, SFMono-Regular, Menlo, monospace;
+
   /* B's scale, not A's. The tighter display sizes are part of what makes
      the direction read as precise, and they are the half being kept. Geist
      carries them at a slightly larger title size than Switzer needed. */

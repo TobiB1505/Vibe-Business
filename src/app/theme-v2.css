@@ -123,6 +123,17 @@
     var(--font-geist-cyrillic-ext), var(--font-geist-vietnamese), ui-sans-serif, system-ui,
     -apple-system, "Segoe UI", Arial, sans-serif;
 
+  /* The identifier face. DM Mono for Latin — which is every SHA, branch and
+     repository name in practice — with the JetBrains subsets behind it for
+     the scripts DM Mono does not ship. Each face carries its own
+     `unicode-range`, so the fallback is per character rather than per family,
+     and Greek does not end up on a system font in a palette whose interface
+     face has already given it up. */
+  --font-mono:
+    var(--font-dm-mono), var(--font-dm-mono-latin-ext), var(--font-jetbrains-mono-cyrillic),
+    var(--font-jetbrains-mono-cyrillic-ext), var(--font-jetbrains-mono-greek),
+    var(--font-jetbrains-mono-vietnamese), ui-monospace, SFMono-Regular, Menlo, monospace;
+
   /* The display sizes are tighter than v1's, which is part of what makes
      this direction read as precise rather than as generous. */
   --text-hero: 2.875rem;

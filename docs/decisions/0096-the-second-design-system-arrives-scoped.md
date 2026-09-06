@@ -49,6 +49,19 @@ One value moved after the decision. Study B's ground was tuned around signal blu
 
 `--glass-*`, `--atmos-*`, `--ease-out`/`--ease-inout` and `--dur-*` exist because the product has never had a lit ground or a shared motion curve. S1 lands them as values; S2 spends them inside the primitives, where the three motion obligations — reduced motion, hidden-tab pause, reserved geometry — are structural rather than remembered per component.
 
+### The eyebrow leaves the mono, and the mono gets a different face
+
+`MonoLabel` set ordinary labels in JetBrains Mono, uppercase, at 0.16em tracking — 289 uses across 51 files. `DESIGN.md` says the opposite and always did: "repository names, branches and SHAs may use mono, but ordinary scores and labels stay in the interface family", and "technical identifiers use the mono family sparingly". A product line reading CONFIRMED BY YOU in a monospace face is a sentence about what a person did, printed as though a machine emitted it. `typography.tsx`'s own docblock had drifted the same way: it still named Space Grotesk as the interface face, which UI-6 removed and `design-tokens.test.ts` asserts cannot return, and assigned "scores, counts, credits" to mono.
+
+Four treatments were rendered and compared. **v2 sets the eyebrow in the interface family at 11px, 600, 0.10em.** The component's four hard-coded literals became four tokens — `--font-label`, `--eyebrow-size`, `--eyebrow-tracking`, `--eyebrow-weight` — composed by an `eyebrow` utility, so v1 answers them with exactly what it shipped and its 51 files were not edited. Verified in the browser rather than assumed: 10.5px / 400 / 1.68px / JetBrains Mono before and after. The utility sets no `line-height`, because `MonoLabel` never did and adding one would move every block it sits above.
+
+That leaves mono doing only what `DESIGN.md` keeps it for, so the face was chosen for that job alone. Four candidates — IBM Plex Mono, DM Mono, Martian Mono, Source Code Pro — were rendered on real SHAs, branches, repository names and paths, plus the pairs a hex SHA puts in collision (`0`/`O`, `1`/`l`/`I`, `5`/`S`, `8`/`B`, `2`/`Z`, `rn`/`m`). A pangram flatters every monospace equally and would have answered nothing. Geist Mono was excluded by instruction. **DM Mono** was chosen: geometric, low-contrast, the same construction logic as Geist, so an identifier reads as the same voice as the interface one notch more technical. Its weakest pair is `1`/`l`, named before the choice rather than discovered after it.
+
+Two consequences were handled rather than accepted:
+
+- **DM Mono ships latin and latin-ext only**, against JetBrains Mono's six writing systems. Since Geist has no Greek either, dropping JetBrains Mono outright would have left v2 with no Greek in *either* family. So `--font-mono` lists DM Mono first and the JetBrains subsets behind it; each face declares its own `unicode-range`, so the fallback is per character rather than per family, and the bytes are already in the repository.
+- **DM Mono has no 600**, and three places in the product set mono at `font-semibold`. Shipping 400 alone would have produced a synthesised faux bold, so 500 ships too and CSS font matching resolves the request to it.
+
 ### The palette is measured, not trusted
 
 `design-tokens.test.ts` now measures **both** palettes under the same rules. That is the whole reason `theme-v2.css` is a separate file: the test resolves a token by first regex match in `globals.css`, so a second block of the same names there would have left every assertion still measuring v1 while v2 shipped unchecked — which is exactly how `--color-fg-meta` reached production at 3.38:1 and stayed there for the life of the design system.

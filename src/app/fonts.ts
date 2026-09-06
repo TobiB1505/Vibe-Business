@@ -234,6 +234,71 @@ const geistVietnamese = localFont({
   ],
 });
 
+/* DM Mono ----------------------------------------------------------- */
+/**
+ * The v2 identifier face (S1 follow-up, ADR 0096).
+ *
+ * Chosen at review from four candidates on the strings mono is actually kept
+ * for — repository names, branches and SHAs — rather than on a pangram, which
+ * flatters every monospace equally.
+ *
+ * ## Two static weights rather than a variable axis
+ *
+ * DM Mono ships 300/400/500 as separate files and no variable axis. 400 and
+ * 500 are enough: three places in the product set mono at `font-semibold`, and
+ * CSS font matching resolves a requested 600 to the nearest available face
+ * above-then-below — 500 — rather than synthesising a faux bold, which is what
+ * shipping 400 alone would have produced.
+ *
+ * ## Why JetBrains Mono stays in the stack behind it
+ *
+ * DM Mono ships **latin and latin-ext only**. JetBrains Mono covers six
+ * writing systems including Greek, Cyrillic and Vietnamese, and Geist — the v2
+ * interface face — has no Greek either. Dropping JetBrains Mono outright would
+ * have left v2 with no Greek coverage in *either* family, so every Greek
+ * character in the product fell to a system font.
+ *
+ * Instead `--font-mono` in `theme-v2.css` lists DM Mono first and the
+ * JetBrains subsets behind it. Each face declares its own `unicode-range`, so
+ * a browser takes DM Mono for every identifier that is Latin — which is
+ * effectively all of them — and falls through per character for the scripts DM
+ * Mono does not ship. The bytes are already in the repository.
+ */
+const dmMonoLatin = localFont({
+  src: [
+    { path: "./fonts/dm-mono-latin-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/dm-mono-latin-500.woff2", weight: "500", style: "normal" },
+  ],
+  display: "swap",
+  variable: "--font-dm-mono",
+  preload: true,
+  adjustFontFallback: "Arial",
+  declarations: [
+    {
+      prop: "unicode-range",
+      value:
+        "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD",
+    },
+  ],
+});
+const dmMonoLatinExt = localFont({
+  src: [
+    { path: "./fonts/dm-mono-latin-ext-400.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/dm-mono-latin-ext-500.woff2", weight: "500", style: "normal" },
+  ],
+  display: "swap",
+  variable: "--font-dm-mono-latin-ext",
+  preload: false,
+  adjustFontFallback: false,
+  declarations: [
+    {
+      prop: "unicode-range",
+      value:
+        "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF",
+    },
+  ],
+});
+
 /**
  * Every face's class, for `<html>`.
  *
@@ -242,6 +307,8 @@ const geistVietnamese = localFont({
  * `unicode-range` falls through to the system stack.
  */
 export const fontVariables = [
+  dmMonoLatin.variable,
+  dmMonoLatinExt.variable,
   geistLatin.variable,
   geistLatinExt.variable,
   geistCyrillic.variable,
