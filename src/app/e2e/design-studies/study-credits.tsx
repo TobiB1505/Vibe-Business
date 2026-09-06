@@ -153,22 +153,19 @@ const COMPOSITIONS: readonly Composition[] = [
   },
   {
     key: "weighted",
-    name: "2 · Marke und Zahl als ein Objekt, Deckung darunter",
+    name: "2 · Marke und Zahl über dem Knopf",
     argument:
-      "The price becomes one thing rather than four words: the mark and the number set together and brighter, with the balance demoted to a second, quieter line. The hierarchy says what it is — a charge, and then a reassurance about it.",
-    cost: "Two lines where there was one, under every priced control in the product. On a dense screen with three of them that is six lines of billing, which is how a disclosure turns into an accounting page.",
+      "The price becomes one thing rather than four words — the coin and the number set together and brighter, the balance demoted to a quieter line — and the whole block sits above the control. Reading order becomes cost, then coverage, then the action, which is the order a person actually needs them in. It is also the order a screen reader gets, unchanged, for free.",
+    cost: "Two lines where there was one, above every priced control in the product. On a dense screen with three of them that is six lines of billing, which is how a disclosure turns into an accounting page. And a block above a button pushes the button down — on a short viewport the thing to press moves further from the thumb.",
     render: (state) => (
-      <div className="flex flex-col items-start gap-2">
-        <button type="button" className={buttonClasses()}>
-          {CTA}
-        </button>
+      <div className="flex flex-col items-start gap-2.5">
         <div className="flex flex-col gap-0.5">
           {state === "included" ? (
             <span className="text-ui text-fg-meta">Included</span>
           ) : (
             <>
-              <span className="inline-flex items-center gap-1.5 text-fg font-medium tabular-nums">
-                {M(15)}35 Credits
+              <span className="inline-flex items-center gap-2 text-fg font-medium tabular-nums">
+                {M(18)}35 Credits
               </span>
               <span className={`text-caption ${state === "short" ? "text-amber" : "text-fg-meta"}`}>
                 {state === "short" ? "You have 12. Not enough for this." : "of 420 available"}
@@ -176,6 +173,9 @@ const COMPOSITIONS: readonly Composition[] = [
             </>
           )}
         </div>
+        <button type="button" className={buttonClasses()}>
+          {CTA}
+        </button>
       </div>
     ),
   },
