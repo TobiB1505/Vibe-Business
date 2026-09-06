@@ -46,9 +46,9 @@ export default async function ChooseGithubAccountPage() {
     <OnboardingShell email={session.email} state="connect_source" canLeave={canLeave}>
       <section className="flex max-w-[48rem] flex-col gap-5 py-4 sm:py-10">
         <div className="space-y-2">
-          <p className="text-mint font-mono text-xs tracking-[0.12em] uppercase">Connect · Product source</p>
+          <p className="text-mint font-mono text-caption tracking-[0.12em] uppercase">Connect · Product source</p>
           <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">Where is the product you built?</h1>
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             You have connected more than one GitHub account or organization.
           </p>
         </div>
@@ -61,20 +61,20 @@ export default async function ChooseGithubAccountPage() {
                 className="hover:bg-surface-hover flex items-center justify-between gap-4 px-4 py-3"
               >
                 <span className="min-w-0">
-                  <span className="text-fg-body block truncate text-sm font-medium">
+                  <span className="text-fg-body block truncate text-body font-medium">
                     {installation.accountLogin}
                   </span>
-                  <span className="text-fg-meta block text-xs">
+                  <span className="text-fg-meta block text-caption">
                     {installation.accountType === "Organization" ? "Organization" : "Personal account"}
                   </span>
                 </span>
-                <span className="text-fg-meta shrink-0 text-xs">Choose</span>
+                <span className="text-fg-meta shrink-0 text-caption">Choose</span>
               </Link>
             </li>
           ))}
         </ul>
 
-        <p className="text-fg-meta text-sm">
+        <p className="text-fg-meta text-body">
           <StandaloneLink href="/app/connect/github?new=1">
             Connect a different GitHub account or organization
           </StandaloneLink>

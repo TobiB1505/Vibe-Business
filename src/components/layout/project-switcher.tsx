@@ -23,7 +23,7 @@ function ProjectTile({ name }: { name: string }) {
       aria-hidden
       className={cn(
         "from-mint/90 to-mint-deep flex size-9 shrink-0 items-center justify-center rounded-lg",
-        "bg-gradient-to-br text-xs font-bold tracking-[-0.02em] text-mint-ink shadow-[0_10px_26px_-14px_rgb(0_229_160/0.8)]",
+        "bg-gradient-to-br text-caption font-bold tracking-[-0.02em] text-mint-ink shadow-[0_10px_26px_-14px_rgb(0_229_160/0.8)]",
       )}
     >
       {initialsFrom(name)}
@@ -70,7 +70,7 @@ export function ProjectSwitcher({
       >
         <ProjectTile name={current.name} />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="text-fg truncate text-sm font-semibold">{current.name}</span>
+          <span className="text-fg truncate text-body font-semibold">{current.name}</span>
           {repositoryFullName && (
             <span className="text-fg-muted truncate text-meta">{repositoryFullName}</span>
           )}
@@ -100,7 +100,7 @@ export function ProjectSwitcher({
                 {selected ? (
                   <div className="bg-mint-tint text-fg rounded-nav flex items-center gap-3 px-2.5 py-2.5">
                     <ProjectTile name={item.name} />
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-body font-semibold">{item.name}</span>
                     <CheckIcon size={17} className="text-mint shrink-0" />
                   </div>
                 ) : (
@@ -112,7 +112,7 @@ export function ProjectSwitcher({
                     )}
                   >
                     <ProjectTile name={item.name} />
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-body font-medium">{item.name}</span>
                   </Link>
                 )}
               </li>
@@ -125,7 +125,7 @@ export function ProjectSwitcher({
             href="/app/products"
             className={cn(
               "text-fg-secondary hover:bg-surface-hover hover:text-fg rounded-nav",
-              "flex items-center gap-3 px-3 py-2.5 text-sm font-medium transition-interactive",
+              "flex items-center gap-3 px-3 py-2.5 text-body font-medium transition-interactive",
             )}
           >
             <ProductsIcon size={17} />

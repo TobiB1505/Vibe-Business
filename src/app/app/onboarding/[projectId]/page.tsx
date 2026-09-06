@@ -339,10 +339,10 @@ export default async function ProjectOnboardingPage({
               padding="md"
               className="flex flex-wrap items-center justify-between gap-3"
             >
-              <span className="text-fg-body text-sm font-medium">
+              <span className="text-fg-body text-body font-medium">
                 {onboarding.repository.fullName}
               </span>
-              <span className="text-fg-meta font-mono text-xs">
+              <span className="text-fg-meta font-mono text-caption">
                 {onboarding.repository.defaultBranch} · connected
               </span>
             </Surface>
@@ -385,7 +385,7 @@ export default async function ProjectOnboardingPage({
               <VibeMark size={40} />
               <div className="flex flex-col gap-2">
                 <h2 className="text-fg text-xl font-semibold">Your product is still connected.</h2>
-                <p className="text-fg-muted text-sm">
+                <p className="text-fg-muted text-body">
                   Vibe does not yet have a picture of your product. Nothing else needs repeating —
                   your repository stays connected.
                 </p>
@@ -552,20 +552,20 @@ export default async function ProjectOnboardingPage({
                 {onboarding.opportunities.set.opportunities[0].problem}
               </p>
               <div className="border-line-2 border-t pt-4">
-                <p className="text-fg-meta mb-1 text-xs">Why this comes first</p>
-                <p className="text-fg-secondary text-sm leading-relaxed">
+                <p className="text-fg-meta mb-1 text-caption">Why this comes first</p>
+                <p className="text-fg-secondary text-body leading-relaxed">
                   {onboarding.opportunities.set.opportunities[0].whyNow}
                 </p>
               </div>
               {firstMovePlan?.firstActionableStep && (
                 <div className="border-line-2 border-t pt-4">
-                  <p className="text-fg-meta mb-1 text-xs">
+                  <p className="text-fg-meta mb-1 text-caption">
                     Vibe already has a plan — starting with
                   </p>
-                  <p className="text-fg-body text-sm font-medium">
+                  <p className="text-fg-body text-body font-medium">
                     {firstMovePlan.firstActionableStep.title}
                   </p>
-                  <p className="text-fg-muted mt-1 text-xs">
+                  <p className="text-fg-muted mt-1 text-caption">
                     {ACTOR_LABELS[firstMovePlan.firstActionableStep.actor]} ·{" "}
                     {EXECUTION_SUPPORT_LABELS[firstMovePlan.firstActionableStep.executionSupport]}
                   </p>
@@ -577,7 +577,7 @@ export default async function ProjectOnboardingPage({
               <h2 className="text-fg text-xl font-semibold">
                 Vibe is finding your highest-impact opportunity.
               </h2>
-              <p className="text-fg-muted text-sm">
+              <p className="text-fg-muted text-body">
                 You can leave and come back. No Move will be invented while this runs.
               </p>
             </Surface>

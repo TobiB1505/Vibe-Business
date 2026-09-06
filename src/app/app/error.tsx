@@ -74,7 +74,7 @@ export default function AppError({
             <h1 className="text-fg text-title max-w-[28ch] font-bold text-balance">
               Vibe couldn&rsquo;t load this page.
             </h1>
-            <p className="text-fg-prose max-w-[60ch] text-sm leading-relaxed">
+            <p className="text-fg-prose max-w-[60ch] text-body leading-relaxed">
               Your work is safe — nothing was changed by this. Some of these failures clear on
               their own within a few seconds, so trying again is usually worth it.
             </p>
@@ -90,7 +90,7 @@ export default function AppError({
           </div>
 
           {error.digest && (
-            <p className="text-fg-meta text-xs">
+            <p className="text-fg-meta text-caption">
               If it keeps happening, this reference identifies what failed:{" "}
               <span className="font-mono">{error.digest}</span>
             </p>

@@ -103,7 +103,7 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <ul className="text-fg-muted flex flex-wrap justify-center gap-x-6 gap-y-3 text-xs">
+          <ul className="text-fg-muted flex flex-wrap justify-center gap-x-6 gap-y-3 text-caption">
             <li className="flex items-center gap-2">
               <CheckIcon size={15} /> No credit card to start
             </li>
@@ -128,7 +128,7 @@ export default function HomePage() {
 
         <div className="mt-12 flex flex-col items-center gap-3">
           <MonoLabel>Built for products made with</MonoLabel>
-          <div className="text-fg-secondary flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-semibold">
+          <div className="text-fg-secondary flex flex-wrap justify-center gap-x-6 gap-y-2 text-body font-semibold">
             {["Cursor", "Replit", "Lovable", "Bolt", "Claude Code", "Codex"].map((tool) => (
               <span key={tool}>{tool}</span>
             ))}
@@ -142,12 +142,12 @@ export default function HomePage() {
           {["GitHub", "Next.js", "Stripe", "Vercel", "Supabase"].map((tool) => (
             <span
               key={tool}
-              className="border-line-2 bg-surface-2 text-fg-secondary rounded-nav border px-4 py-2 text-sm font-medium"
+              className="border-line-2 bg-surface-2 text-fg-secondary rounded-nav border px-4 py-2 text-body font-medium"
             >
               {tool}
             </span>
           ))}
-          <span className="border-line-1 text-fg-muted rounded-nav border px-4 py-2 text-sm">
+          <span className="border-line-1 text-fg-muted rounded-nav border px-4 py-2 text-body">
             + more
           </span>
         </div>
@@ -225,7 +225,7 @@ export default function HomePage() {
               </span>
               <div>
                 <p className="text-fg font-semibold">Built for control</p>
-                <p className="text-fg-secondary mt-1 text-sm">
+                <p className="text-fg-secondary mt-1 text-body">
                   No change reaches the default branch without approval.
                 </p>
               </div>
@@ -240,7 +240,7 @@ export default function HomePage() {
                 </span>
                 <span className="text-fg font-semibold">AI Agent</span>
               </div>
-              <span className="text-mint flex items-center gap-2 text-xs">
+              <span className="text-mint flex items-center gap-2 text-caption">
                 <span className="size-1.5 rounded-full bg-mint" /> Prepared for review
               </span>
             </div>
@@ -258,8 +258,8 @@ export default function HomePage() {
                       {index + 1}
                     </span>
                     <span>
-                      <span className="text-fg-body block text-sm font-semibold">{title}</span>
-                      <span className="text-fg-muted mt-1 block text-xs leading-relaxed sm:hidden">
+                      <span className="text-fg-body block text-body font-semibold">{title}</span>
+                      <span className="text-fg-muted mt-1 block text-caption leading-relaxed sm:hidden">
                         {detail}
                       </span>
                     </span>
@@ -274,7 +274,7 @@ export default function HomePage() {
                     className="border-line-1 bg-app/50 rounded-nav flex items-start gap-3 border p-3.5"
                   >
                     <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
-                    <p className="text-fg-secondary text-sm leading-relaxed">
+                    <p className="text-fg-secondary text-body leading-relaxed">
                       <span className="text-fg-body font-semibold">{title}:</span> {detail}
                     </p>
                   </div>
@@ -323,23 +323,23 @@ export default function HomePage() {
                 <div className="flex items-center justify-between gap-4">
                   <h3 className="text-fg text-xl font-semibold">{plan.name}</h3>
                   {featured && (
-                    <span className="text-mint rounded-full border border-mint-line bg-mint-tint px-3 py-1 text-xs font-semibold">
+                    <span className="text-mint rounded-full border border-mint-line bg-mint-tint px-3 py-1 text-caption font-semibold">
                       For active builders
                     </span>
                   )}
                 </div>
                 <p className="text-fg mt-7 text-4xl font-bold tracking-[-0.05em]">
                   {plan.priceCents === 0 ? "€0" : `€${plan.priceCents / 100}`}
-                  <span className="text-fg-muted ml-2 text-sm font-normal tracking-normal">
+                  <span className="text-fg-muted ml-2 text-body font-normal tracking-normal">
                     / month
                   </span>
                 </p>
-                <p className="text-fg-secondary mt-3 text-sm">
+                <p className="text-fg-secondary mt-3 text-body">
                   {credits} {plan.key === "free" ? "Welcome Credits once" : "Credits each paid month"}
                 </p>
                 <ul className="my-7 flex flex-col gap-3">
                   {PLAN_FEATURES[plan.key]?.map((feature) => (
-                    <li key={feature} className="text-fg-body flex items-start gap-3 text-sm">
+                    <li key={feature} className="text-fg-body flex items-start gap-3 text-body">
                       <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
                       {feature}
                     </li>

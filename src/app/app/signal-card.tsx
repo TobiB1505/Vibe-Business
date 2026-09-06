@@ -104,7 +104,7 @@ function ScoreRing({ score }: { score: number }) {
         >
           {score}
         </span>
-        <span className="text-fg-meta mt-1 text-sm font-medium">/ 100</span>
+        <span className="text-fg-meta mt-1 text-body font-medium">/ 100</span>
       </div>
     </div>
   );
@@ -113,7 +113,7 @@ function ScoreRing({ score }: { score: number }) {
 /** The delta as a word and a number. Never a percentage — this is a score. */
 function TrendPill({ delta }: { delta: number | null }) {
   if (delta === null) {
-    return <span className="text-fg-meta text-xs">No comparable reading before this one</span>;
+    return <span className="text-fg-meta text-caption">No comparable reading before this one</span>;
   }
 
   const tone = delta > 0 ? "success" : delta < 0 ? "problem" : "neutral";
@@ -122,7 +122,7 @@ function TrendPill({ delta }: { delta: number | null }) {
   return (
     <span
       className={cn(
-        "w-fit rounded-full border px-3 py-1 text-xs font-semibold tabular-nums",
+        "w-fit rounded-full border px-3 py-1 text-caption font-semibold tabular-nums",
         tone === "success" && "bg-mint-tint border-mint-line text-mint",
         tone === "problem" && "bg-coral-tint border-coral-line text-coral",
         tone === "neutral" && "bg-surface-hover border-line-4 text-fg-muted",
@@ -171,12 +171,12 @@ function ScoreChart({
         </div>
       </div>
       {(firstDate || lastDate) && (
-        <div className="text-fg-meta flex justify-between pt-2 pl-9 text-xs">
+        <div className="text-fg-meta flex justify-between pt-2 pl-9 text-caption">
           <span>{firstDate !== lastDate ? firstDate : null}</span>
           <span>{lastDate}</span>
         </div>
       )}
-      {caption && <p className="text-fg-meta pt-2 pl-9 text-xs leading-relaxed">{caption}</p>}
+      {caption && <p className="text-fg-meta pt-2 pl-9 text-caption leading-relaxed">{caption}</p>}
     </div>
   );
 }
@@ -209,13 +209,13 @@ function NextMove({ project }: { project: DashboardProject }) {
             <p className="text-fg text-lg font-semibold tracking-[-0.02em] text-balance">
               {move.title}
             </p>
-            <p className="text-fg-prose max-w-[58ch] text-sm leading-relaxed">{move.problem}</p>
+            <p className="text-fg-prose max-w-[58ch] text-body leading-relaxed">{move.problem}</p>
             <div className="flex flex-wrap gap-2 pt-1">
               {/* The maps carry the noun already — appending one read "High impact impact". */}
-              <span className="bg-mint-tint text-mint border-mint-line rounded-full border px-3 py-1 text-xs font-semibold">
+              <span className="bg-mint-tint text-mint border-mint-line rounded-full border px-3 py-1 text-caption font-semibold">
                 {IMPACT_LABELS[move.impact]}
               </span>
-              <span className="bg-amber-tint text-amber border-amber-line rounded-full border px-3 py-1 text-xs font-semibold">
+              <span className="bg-amber-tint text-amber border-amber-line rounded-full border px-3 py-1 text-caption font-semibold">
                 {EFFORT_LABELS[move.effort]}
               </span>
             </div>
@@ -235,7 +235,7 @@ function NextMove({ project }: { project: DashboardProject }) {
          * second button opening an action plan that holds nothing is the dead
          * end this card was merged to remove.
          */
-        <p className="text-fg-muted max-w-[58ch] text-sm leading-relaxed">
+        <p className="text-fg-muted max-w-[58ch] text-body leading-relaxed">
           {project.nextMovesCount === null
             ? "The business audit turns Vibe's findings into a prioritised action plan. Nothing is ranked until it has run."
             : "Vibe looked and didn't find a move worth putting ahead of the others right now."}
@@ -278,7 +278,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
-          <h2 id="signal-heading" className="text-fg text-sm font-semibold">
+          <h2 id="signal-heading" className="text-fg text-body font-semibold">
             Business signal
           </h2>
           <span title="The latest comparable business-readiness readings">
@@ -290,7 +290,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
           the body as a link and the header carried only a date, so the reading
           and the thing it was a reading of were three lines apart.
         */}
-        <p className="text-fg-meta text-xs" id="signal-product">
+        <p className="text-fg-meta text-caption" id="signal-product">
           <Link
             href={`/app/projects/${project.id}`}
             className="text-fg-secondary hover:text-mint font-medium transition-interactive"
@@ -317,7 +317,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
             </p>
             <TrendPill delta={series.delta} />
             {!drawChart && (
-              <p className="text-fg-meta text-xs">
+              <p className="text-fg-meta text-caption">
                 {series.readingCount === 1
                   ? "One reading so far. A trend line needs a few more."
                   : `${series.readingCount} readings so far. A trend line needs a few more.`}
@@ -333,7 +333,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
               ? "More evidence is needed"
               : "Your first signal is waiting"}
           </p>
-          <p className="text-fg-prose max-w-[58ch] text-sm leading-relaxed">
+          <p className="text-fg-prose max-w-[58ch] text-body leading-relaxed">
             {project.scoreState === "insufficient_coverage"
               ? "Vibe looked and there wasn't enough evidence to score this product. Connecting more of it, or publishing a live site, gives the audit something to read."
               : "Vibe hasn't analysed this product yet. The business audit produces the first score and the moves that follow from it."}

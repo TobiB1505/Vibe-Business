@@ -99,7 +99,7 @@ export function EvidenceDrawer({
         <h2 id={titleId} className="text-fg text-title font-bold">
           {title}
         </h2>
-        {conclusion && <p className="text-fg-prose max-w-[62ch] text-sm">{conclusion}</p>}
+        {conclusion && <p className="text-fg-prose max-w-[62ch] text-body">{conclusion}</p>}
         {confidence && <ConfidenceIndicator model={confidence} className="self-start" />}
       </header>
 
@@ -111,7 +111,7 @@ export function EvidenceDrawer({
            * opinion" — closing the drawer on an empty list would leave a
            * citation count the founder could press and learn nothing from.
            */
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             No evidence survived validation for this. Nothing here rests on it.
           </p>
         ) : (
@@ -121,7 +121,7 @@ export function EvidenceDrawer({
                 key={`${citation.source}:${citation.detail}:${index}`}
                 className="border-line-2 bg-well rounded-well flex flex-col gap-2 border p-4"
               >
-                <p className="text-fg-body text-sm leading-relaxed">{citation.detail}</p>
+                <p className="text-fg-body text-body leading-relaxed">{citation.detail}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <MonoLabel>{citation.source}</MonoLabel>
                   {citation.certainty === "derived" && (

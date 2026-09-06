@@ -26,12 +26,12 @@ export function AgentRunTaskHeader({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-none">
         <div className="rounded-well border-line-2 bg-well flex min-w-[11.75rem] flex-col gap-2 border px-5 py-4">
-          <span className="text-fg-body text-sm font-semibold">Current stage</span>
-          <span className="text-fg-muted font-mono text-xs">{stage}</span>
+          <span className="text-fg-body text-body font-semibold">Current stage</span>
+          <span className="text-fg-muted font-mono text-caption">{stage}</span>
         </div>
         <div className="rounded-well border-line-2 bg-well flex min-w-[11.75rem] flex-col gap-2 border px-5 py-4">
-          <span className="text-fg-body text-sm font-semibold">Measured change</span>
-          <span className="text-fg-muted font-mono text-xs">
+          <span className="text-fg-body text-body font-semibold">Measured change</span>
+          <span className="text-fg-muted font-mono text-caption">
             {filesChanged === null
               ? "Not measured yet"
               : `${filesChanged} ${filesChanged === 1 ? "file" : "files"}`}

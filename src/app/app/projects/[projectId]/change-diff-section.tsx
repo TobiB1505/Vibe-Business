@@ -105,21 +105,21 @@ export function ChangeDiffSection({
       {/* A direct child of the section, like every other panel's heading. The
           browser suite scopes each panel by exactly that relationship, so a
           heading nested inside a layout wrapper is a panel no test can name. */}
-      <h4 className="text-sm font-medium text-fg-body">What changed</h4>
+      <h4 className="text-body font-medium text-fg-body">What changed</h4>
 
       {classification && (
         <div className="space-y-1">
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             {REVIEW_CLASSIFICATION_LABELS[classification.classification]} ·{" "}
             {REVIEW_CLASSIFICATION_NOTES[classification.classification]}
           </p>
           {classification.routes.length > 0 && (
-            <p className="text-xs text-fg-muted">Pages affected: {classification.routes.join(", ")}</p>
+            <p className="text-caption text-fg-muted">Pages affected: {classification.routes.join(", ")}</p>
           )}
           {/* Why a page file did not earn a screenshot. Without this the reader
               has to guess whether the classifier missed it. */}
           {classification.downgradedPaths.length > 0 && (
-            <p className="text-xs text-fg-muted">{REVIEW_DOWNGRADE_NOTE}</p>
+            <p className="text-caption text-fg-muted">{REVIEW_DOWNGRADE_NOTE}</p>
           )}
         </div>
       )}
@@ -141,8 +141,8 @@ export function ChangeDiffSection({
         </InlineAction>
       )}
 
-      {loading && <p className="text-sm text-fg-secondary">Reading the change…</p>}
-      {open && error && <p className="text-sm text-coral">{error}</p>}
+      {loading && <p className="text-body text-fg-secondary">Reading the change…</p>}
+      {open && error && <p className="text-body text-coral">{error}</p>}
       {open && diff && <DiffView diff={diff} />}
     </section>
   );

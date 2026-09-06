@@ -141,7 +141,7 @@ export function AccountSidebar({
             href="/app/billing"
             className={cn(
               "rounded-nav text-fg-muted hover:text-fg-body hover:bg-surface-2 hidden px-3 py-2.5",
-              "items-baseline gap-1.5 text-sm transition-interactive lg:flex",
+              "items-baseline gap-1.5 text-body transition-interactive lg:flex",
             )}
           >
             <span className="text-fg-body font-semibold tabular-nums">{credits}</span>

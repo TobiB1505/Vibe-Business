@@ -122,7 +122,7 @@ export function AgentMergeStage({
           </p>
         </div>
         {canMerge && (
-          <span className="border-mint-line bg-mint-tint text-mint flex-none rounded-full border px-3 py-1 text-xs font-semibold">
+          <span className="border-mint-line bg-mint-tint text-mint flex-none rounded-full border px-3 py-1 text-caption font-semibold">
             Ready to merge
           </span>
         )}
@@ -133,7 +133,7 @@ export function AgentMergeStage({
           <MonoLabel as="h4" className="text-fg-secondary">
             Change summary
           </MonoLabel>
-          <dl className="flex flex-col text-sm">
+          <dl className="flex flex-col text-body">
             <div className="border-line-2 flex items-baseline justify-between gap-3 border-b py-3">
               <dt className="text-fg-muted">Files changed</dt>
               <dd className="text-fg font-mono">{summary.filesChanged}</dd>
@@ -195,7 +195,7 @@ export function AgentMergeStage({
                   in an isolated VM — never that a change is safe, correct or
                   production ready (rule 66).
                 */}
-                <span className="text-fg-muted text-sm leading-relaxed">
+                <span className="text-fg-muted text-body leading-relaxed">
                   Every check Vibe ran on this change exited cleanly.
                 </span>
               </span>
@@ -274,7 +274,7 @@ export function AgentMergeStage({
           <p className="text-fg text-[1.0625rem] leading-snug font-semibold tracking-[-0.02em] text-pretty">
             {branchName}
           </p>
-          <p className="text-fg-muted text-sm leading-relaxed">
+          <p className="text-fg-muted text-body leading-relaxed">
             Vibe prepared one exact change for{" "}
             <span className="border-line-2 bg-well text-fg-body rounded-full border px-2 py-0.5 font-mono text-[0.6875rem]">
               {baseBranch}
@@ -332,7 +332,7 @@ export function AgentMergeStage({
                   )}
                 </span>
               </div>
-              <p className="text-fg-meta px-3 py-4 text-xs leading-relaxed">
+              <p className="text-fg-meta px-3 py-4 text-caption leading-relaxed">
                 Open the comparison to inspect the exact source diff on GitHub.
               </p>
             </div>
@@ -364,7 +364,7 @@ export function AgentMergeStage({
             untrue, because moving that branch can trigger the customer's own
             pipeline, and they are entitled to know before the click.
           */}
-          <span className="text-fg-muted text-sm leading-relaxed">
+          <span className="text-fg-muted text-body leading-relaxed">
             Merging moves {baseBranch} to this commit. Vibe does not deploy anything — but if your
             repository builds or releases from {baseBranch}, merging will start it.
           </span>
@@ -375,7 +375,7 @@ export function AgentMergeStage({
         </Link>
       </div>
 
-      <p className="text-fg-meta text-center text-xs">
+      <p className="text-fg-meta text-center text-caption">
         You&rsquo;re in control. Nothing is merged without your approval.
       </p>
     </div>

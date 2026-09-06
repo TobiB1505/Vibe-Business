@@ -64,7 +64,7 @@ export function LiveSiteStep({
           />
           <span className="flex flex-1 flex-col gap-1">
             <span className="text-fg-body font-medium">My product is live</span>
-            <span className="text-fg-muted text-sm">Vibe will compare what is built with what customers can reach.</span>
+            <span className="text-fg-muted text-body">Vibe will compare what is built with what customers can reach.</span>
           </span>
         </label>
 
@@ -98,7 +98,7 @@ export function LiveSiteStep({
           />
           <span className="flex flex-1 flex-col gap-1">
             <span className="text-fg-body font-medium">I don&apos;t have a live site yet</span>
-            <span className="text-fg-muted text-sm">That is useful context. Vibe will get to know the product from your code.</span>
+            <span className="text-fg-muted text-body">That is useful context. Vibe will get to know the product from your code.</span>
           </span>
         </label>
 

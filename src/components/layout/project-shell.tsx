@@ -337,7 +337,7 @@ export function ProjectSidebar({
           href="/app/products"
           className={cn(
             "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav mt-3",
-            "flex items-center gap-2.5 px-3 py-2.5 text-sm transition-interactive",
+            "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
           )}
         >
           <ArrowLeftIcon size={17} className="shrink-0" />
@@ -380,7 +380,7 @@ export function ProjectBreadcrumb({
 }) {
   return (
     <nav aria-label="Breadcrumb">
-      <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-sm">
+      <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-body">
         <li>
           <Link
             href="/app/products"

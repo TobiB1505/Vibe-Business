@@ -102,8 +102,8 @@ function Heading({ title, status }: { title: string; status?: string }) {
       {/* `h3`: the workspace section that wraps this panel owns the `h2`
           (UI-1), so this is a level below it. Two `h2`s with the same text
           inside one section made the outline claim two Deep Scans. */}
-      <h3 className="text-fg-body text-sm font-medium">{title}</h3>
-      {status && <span className="text-fg-muted text-xs">{status}</span>}
+      <h3 className="text-fg-body text-body font-medium">{title}</h3>
+      {status && <span className="text-fg-muted text-caption">{status}</span>}
     </div>
   );
 }
@@ -213,10 +213,10 @@ function LiveViewDialog({
         className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-line-2 bg-app p-4 focus:outline-none"
       >
         <div className="space-y-1">
-          <h3 id="deep-scan-dialog-title" className="text-sm font-medium text-fg">
+          <h3 id="deep-scan-dialog-title" className="text-body font-medium text-fg">
             Sign in to your product
           </h3>
-          <p id="deep-scan-dialog-description" className="text-xs text-fg-secondary">
+          <p id="deep-scan-dialog-description" className="text-caption text-fg-secondary">
             Sign in normally inside this temporary browser. Vibe does not store your password or a
             reusable login session.
           </p>
@@ -228,12 +228,12 @@ function LiveViewDialog({
             other than where they aimed. */}
         <div className="aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
           {loading && (
-            <p role="status" className="p-4 text-sm text-fg-secondary">
+            <p role="status" className="p-4 text-body text-fg-secondary">
               Opening a temporary browser…
             </p>
           )}
           {error && (
-            <p role="alert" className="p-4 text-sm text-amber">
+            <p role="alert" className="p-4 text-body text-amber">
               {error}
             </p>
           )}
@@ -246,7 +246,7 @@ function LiveViewDialog({
           )}
         </div>
 
-        <p className="text-xs text-fg-muted">Deep Scan works best on a desktop browser.</p>
+        <p className="text-caption text-fg-muted">Deep Scan works best on a desktop browser.</p>
 
         {busy && (
           /*
@@ -257,10 +257,10 @@ function LiveViewDialog({
            * the same lie as a progress bar that sits at 60%.
            */
           <div role="status" className="space-y-1 rounded-md border border-line-2 bg-surface-2 p-3">
-            <p className="text-sm text-fg-prose">
+            <p className="text-body text-fg-prose">
               Vibe is looking around your signed-in product.
             </p>
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               This usually takes up to about 90 seconds. Keep this window open — the scan runs
               while it is here, and closing it stops the browser Vibe is signed in to.
             </p>
@@ -319,7 +319,7 @@ function useElapsedSeconds(running: boolean): number {
 function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["lastResult"]> }) {
   return (
     <div className="space-y-3">
-      <dl className="space-y-1 text-sm">
+      <dl className="space-y-1 text-body">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-fg-muted">Last checked</dt>
           <dd className="text-fg-prose">
@@ -340,14 +340,14 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
 
       {result.surfaces.length > 0 && (
         <div className="space-y-1">
-          <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
+          <p className="text-caption font-medium tracking-wide text-fg-muted uppercase">
             Pages Vibe found after signing in
           </p>
           <ul className="flex flex-wrap gap-1.5">
             {result.surfaces.map((surface) => (
               <li
                 key={surface.id}
-                className="rounded border border-line-2 px-2 py-0.5 text-xs text-fg-prose"
+                className="rounded border border-line-2 px-2 py-0.5 text-caption text-fg-prose"
               >
                 {surface.name}
               </li>
@@ -373,7 +373,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
         >
           <ul className="flex flex-col gap-2">
             {result.warnings.map((warning) => (
-              <li key={warning} className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+              <li key={warning} className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
                 {warning}
               </li>
             ))}
@@ -382,7 +382,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
       )}
 
       {result.accessMode === "included_first_scan" && (
-        <p className="text-xs text-fg-muted">Included Deep Scan used.</p>
+        <p className="text-caption text-fg-muted">Included Deep Scan used.</p>
       )}
     </div>
   );
@@ -500,14 +500,14 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           <>
             <Heading title="Look inside your signed-in product" status="Ready" />
             <ResultSummary result={model.lastResult} />
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               Additional Deep Scans will use Vibe Credits.
             </p>
           </>
         ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
           <>
             <Heading title="Additional Deep Scan" />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               Your included Deep Scan for this project has been used. Another one costs{" "}
               {formatCreditsForDisplay(model.additionalScanPrice)} Credits.
             </p>
@@ -517,7 +517,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               and a customer deciding whether to spend deserves to know that
               while they are deciding.
             */}
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               You&apos;re only charged if Vibe comes back with a result.
             </p>
             <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
@@ -529,7 +529,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         ) : model.state === "insufficient_credits" && model.additionalScanPrice !== null ? (
           <>
             <Heading title="Additional Deep Scan" />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               Another Deep Scan costs {formatCreditsForDisplay(model.additionalScanPrice)}{" "}
               Credits, and your balance doesn&apos;t cover it yet.
             </p>
@@ -545,7 +545,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               the honest terminal answer, not a route into a checkout that
               cannot help — the same reason this state has always existed.
             */}
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               Your included Deep Scan for this project has been used. Additional Deep Scans
               aren&apos;t available right now.
             </p>
@@ -554,12 +554,12 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           <>
             <Heading title="Deep Scan" status="Unavailable" />
             {model.unavailableReason === "provider_not_configured" ? (
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 Deep Scan is not switched on here yet. That is a gap on Vibe&apos;s side — it says
                 nothing about your product, and nothing else about your project is affected.
               </p>
             ) : (
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 Add your production website URL above to enable Deep Scan.
               </p>
             )}
@@ -567,7 +567,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         ) : model.state === "analyzing" ? (
           <>
             <Heading title="Look inside your signed-in product" status="Vibe is looking around" />
-            <p role="status" className="text-sm text-fg-secondary">
+            <p role="status" className="text-body text-fg-secondary">
               Analyzing your signed-in product…
             </p>
             <Button type="button" disabled>
@@ -577,7 +577,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         ) : model.state === "waiting_for_login" ? (
           <>
             <Heading title="Look inside your signed-in product" status="Waiting for you to sign in" />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               A temporary browser is open. Sign in to continue.
             </p>
             <Button type="button" onClick={handleReopen} disabled={disabled}>
@@ -587,7 +587,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         ) : model.state === "blocked" ? (
           <>
             <Heading title="Deep Scan" />
-            <p className="text-sm text-amber">
+            <p className="text-body text-amber">
               {messageFor(model.blockedReason ?? "analysis_failed")}
             </p>
           </>
@@ -603,7 +603,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
                     : "Didn't finish"
               }
             />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               {model.lastFailure?.failureCode
                 ? messageFor(model.lastFailure.failureCode)
                 : model.lastFailure?.status === "expired"
@@ -611,7 +611,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
                   : "The last Deep Scan didn't finish."}
             </p>
             {model.includedScanAvailable && (
-              <p className="text-xs text-fg-muted">
+              <p className="text-caption text-fg-muted">
                 Your included Deep Scan for this project is still available.
               </p>
             )}
@@ -623,7 +623,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               // Retrying is blocked by policy (usually the short cooldown after
               // an abandoned attempt). Saying nothing here reads as "retry is
               // broken", which is exactly how it was reported.
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 {waitHint(model.retryAvailableAt, browserNow) ??
                   (model.blockedReason ? messageFor(model.blockedReason) : "Deep Scan can't be started right now.")}
               </p>
@@ -632,7 +632,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         ) : model.state === "recommended" ? (
           <>
             <Heading title="Look inside your signed-in product" />
-            <div className="space-y-1 text-sm text-fg-secondary">
+            <div className="space-y-1 text-body text-fg-secondary">
               <p>
                 Vibe can see your code and public website, but some of your product is behind a
                 login.
@@ -642,7 +642,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
                 in.
               </p>
               {model.recommendationReason && (
-                <p className="text-xs text-fg-muted">{model.recommendationReason}</p>
+                <p className="text-caption text-fg-muted">{model.recommendationReason}</p>
               )}
               <p className="text-fg-prose">Your first Deep Scan for this project is included.</p>
             </div>
@@ -650,13 +650,13 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Run free Deep Scan"}
               </Button>
-              <span className="text-sm text-fg-muted">Not now</span>
+              <span className="text-body text-fg-muted">Not now</span>
             </div>
           </>
         ) : (
           <>
             <Heading title="Deep Scan" />
-            <p className="text-sm text-fg-muted">
+            <p className="text-body text-fg-muted">
               Optional deeper analysis of what users experience after signing in.
             </p>
             {model.canStart ? (
@@ -666,7 +666,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
             ) : (
               // Never a heading and a sentence with no action and no reason:
               // that state is indistinguishable from a broken page.
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 {model.blockedReason
                   ? messageFor(model.blockedReason)
                   : "Deep Scan isn't available on this deployment yet."}
@@ -676,7 +676,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         )}
 
         {error && !dialogOpen && (
-          <p role="alert" className="text-sm text-amber">
+          <p role="alert" className="text-body text-amber">
             {error}
           </p>
         )}

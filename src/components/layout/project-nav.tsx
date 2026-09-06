@@ -125,7 +125,7 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
               href={hrefFor(item)}
               aria-current={current ? "page" : undefined}
               className={cn(
-                "rounded-nav flex items-center gap-3 px-3 py-3 text-sm",
+                "rounded-nav flex items-center gap-3 px-3 py-3 text-body",
                 "transition-[color,background-color,border-color] duration-150 ease-vibe",
                 current
                   ? "bg-mint-tint border-mint-line text-fg border font-semibold shadow-[inset_2px_0_0_var(--color-mint)]"

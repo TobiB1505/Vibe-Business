@@ -187,8 +187,28 @@
      palette is for. */
   --text-card-title: 0.9375rem;
   --text-card-title--line-height: 1.375;
-  --text-caption: 0.78125rem;
-  --text-caption--line-height: 1.55;
+  /*
+   * The size the product actually writes prose at (UI-7).
+   *
+   * Measured before it was named: 455 elements carried `text-sm`, 292 of them
+   * a `<p>`, across the whole foreground range. It is the product's body size
+   * and the scale had no name for it — which is why two thirds of the type in
+   * this repository was written in Tailwind's vocabulary rather than Vibe's.
+   *
+   * 0.875rem exactly, because that is what `text-sm` is. Naming what ships
+   * makes the sweep a rename and moves nothing; naming 0.8125rem would have
+   * shrunk 455 elements by a pixel to match a number nobody had looked at —
+   * the same argument `--text-card-title` above records for its leading.
+   */
+  --text-body: 0.875rem;
+  /* 20/14, which is what `text-sm` renders. 378 of the 465 sites take
+     Tailwind's default leading rather than setting their own, so any other
+     number here turns a rename into a re-typesetting of the product. Loosening
+     it is a real decision and v2 takes it; v1 names what ships. */
+  --text-body--line-height: 1.25rem;
+  --text-caption: 0.75rem;
+  /* 16/12, for the same reason: 251 of 293 take the default. */
+  --text-caption--line-height: 1rem;
   --text-label: 0.65625rem;
   --text-label--line-height: 1.4;
   --text-label--letter-spacing: 0.16em;

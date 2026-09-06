@@ -85,9 +85,9 @@ function Capability({
           </StatusPill>
         </div>
         <h4 className="text-fg text-[0.9375rem] font-semibold">{capability.title}</h4>
-        <p className="text-fg-prose max-w-[70ch] text-sm leading-relaxed">{capability.basis}</p>
+        <p className="text-fg-prose max-w-[70ch] text-body leading-relaxed">{capability.basis}</p>
         {capability.whyItMatters && (
-          <p className="text-fg-muted max-w-[70ch] text-sm leading-relaxed">
+          <p className="text-fg-muted max-w-[70ch] text-body leading-relaxed">
             <span className="text-fg-secondary">Why it matters: </span>
             {capability.whyItMatters}
           </p>
@@ -151,10 +151,10 @@ export function IntelligenceSummary({
             answers (§12). */}
         <MonoLabel>What Vibe learned from your code</MonoLabel>
         <h3 className="text-fg text-title font-bold">{view.headline}</h3>
-        <p className="text-fg-muted max-w-[70ch] text-sm">{view.subhead}</p>
+        <p className="text-fg-muted max-w-[70ch] text-body">{view.subhead}</p>
         {/* The line that keeps every "Likely" below honest, so it is set at
             the readable end of the muted ramp rather than the faint one. */}
-        <p className="text-fg-muted max-w-[70ch] text-xs leading-relaxed">{CONFIDENCE_DISCLAIMER}</p>
+        <p className="text-fg-muted max-w-[70ch] text-caption leading-relaxed">{CONFIDENCE_DISCLAIMER}</p>
       </div>
 
       {/* Real counts only — each is the length of a list rendered below. */}
@@ -165,8 +165,8 @@ export function IntelligenceSummary({
           { label: "Not found", value: view.counts.notFound },
         ].map((count) => (
           <div key={count.label} className="flex items-baseline gap-2">
-            <dt className="text-fg-muted text-sm">{count.label}</dt>
-            <dd className="text-fg font-mono text-sm font-semibold">{count.value}</dd>
+            <dt className="text-fg-muted text-body">{count.label}</dt>
+            <dd className="text-fg font-mono text-body font-semibold">{count.value}</dd>
           </div>
         ))}
       </dl>
@@ -211,7 +211,7 @@ export function IntelligenceSummary({
               the list is empty this time, not wonder whether it ran. It claims
               only what was compared.
             */
-            <p className="text-fg-prose max-w-[70ch] text-sm leading-relaxed">
+            <p className="text-fg-prose max-w-[70ch] text-body leading-relaxed">
               Everything Vibe compared lines up. What your code contains and what your live
               product shows a visitor agreed on every surface it checked.
             </p>
@@ -231,7 +231,7 @@ export function IntelligenceSummary({
       ))}
 
       <div className="flex flex-col gap-3">
-        <p className="text-fg-prose text-sm">{view.stackSummary}</p>
+        <p className="text-fg-prose text-body">{view.stackSummary}</p>
         <p className="text-fg-meta font-mono text-meta">
           Code last read {formatTimestamp(analyzedAt) ?? analyzedAt}
         </p>
@@ -240,7 +240,7 @@ export function IntelligenceSummary({
           <Disclosure label={`Pages Vibe found in the code (${view.routePaths.length})`}>
             <ul className="flex flex-wrap gap-x-4 gap-y-1">
               {view.routePaths.map((path) => (
-                <li key={path} className="text-fg-muted [overflow-wrap:anywhere] font-mono text-xs">
+                <li key={path} className="text-fg-muted [overflow-wrap:anywhere] font-mono text-caption">
                   {path}
                 </li>
               ))}
@@ -252,7 +252,7 @@ export function IntelligenceSummary({
           <Disclosure label={`Notes from this analysis (${snapshot.warnings.length})`}>
             <ul className="flex flex-col gap-1">
               {snapshot.warnings.map((warning) => (
-                <li key={`${warning.code}-${warning.path ?? ""}`} className="text-fg-muted text-xs leading-relaxed">
+                <li key={`${warning.code}-${warning.path ?? ""}`} className="text-fg-muted text-caption leading-relaxed">
                   {warning.message}
                 </li>
               ))}

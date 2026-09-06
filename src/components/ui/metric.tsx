@@ -32,7 +32,7 @@ export function Metric({
       <MonoLabel className="tracking-[0.14em]">{label}</MonoLabel>
       <span
         className={cn(
-          "truncate text-sm",
+          "truncate text-body",
           mono && "font-mono text-ui",
           missing ? "text-fg-muted" : "text-fg-body",
         )}

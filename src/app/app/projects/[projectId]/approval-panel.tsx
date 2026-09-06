@@ -60,13 +60,13 @@ function NotMerged({ merged }: { merged: boolean }) {
    */
   if (merged) {
     return (
-      <p className="text-xs text-fg-muted">
+      <p className="text-caption text-fg-muted">
         Merged into your default branch. Vibe never deploys.
       </p>
     );
   }
 
-  return <p className="text-xs text-fg-muted">Nothing has been merged or deployed.</p>;
+  return <p className="text-caption text-fg-muted">Nothing has been merged or deployed.</p>;
 }
 
 function ApproveDialog({
@@ -215,7 +215,7 @@ export function ApprovalPanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-sm font-medium text-fg-body">Approval</h4>
+      <h4 className="text-body font-medium text-fg-body">Approval</h4>
 
       {confirming === "approve" ? (
         <ApproveDialog
@@ -232,14 +232,14 @@ export function ApprovalPanel({
         />
       ) : card.state === "approved" ? (
         <div className="space-y-2">
-          <p className="text-sm text-mint">Change approved</p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-mint">Change approved</p>
+          <p className="text-body text-fg-secondary">
             Approved by you{card.approvedAt ? ` · ${localTime(card.approvedAt)}` : ""}
           </p>
           {/* The commit is the whole point of the record: an approval that
               cannot say what it applies to is not an approval (§3, §21). */}
           {card.approvedCommitSha && (
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               This approval applies only to commit{" "}
               <code className="text-fg-prose">{shortSha(card.approvedCommitSha)}</code>.
             </p>
@@ -269,12 +269,12 @@ export function ApprovalPanel({
         </div>
       ) : card.state === "invalidated" ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber">Previous approval no longer applies</p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-amber">Previous approval no longer applies</p>
+          <p className="text-body text-fg-secondary">
             The prepared change has changed since it was approved.
           </p>
           {card.approvedCommitSha && (
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               That approval was for commit{" "}
               <code className="text-fg-prose">{shortSha(card.approvedCommitSha)}</code>
               {card.currentCommitSha ? (
@@ -298,13 +298,13 @@ export function ApprovalPanel({
               Approve change
             </Button>
           ) : (
-            card.blockMessage && <p className="text-xs text-fg-muted">{card.blockMessage}</p>
+            card.blockMessage && <p className="text-caption text-fg-muted">{card.blockMessage}</p>
           )}
         </div>
       ) : card.state === "revoked" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Approval revoked</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Approval revoked</p>
+          <p className="text-caption text-fg-muted">
             You withdrew your approval{card.revokedAt ? ` on ${localTime(card.revokedAt)}` : ""}.
           </p>
           {card.canApprove && (
@@ -322,8 +322,8 @@ export function ApprovalPanel({
         </div>
       ) : card.state === "not_approved" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Not approved</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Not approved</p>
+          <p className="text-caption text-fg-muted">
             Approving records that you reviewed this exact change. Nothing is merged or deployed.
           </p>
           <Button
@@ -339,15 +339,15 @@ export function ApprovalPanel({
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Not approved</p>
+          <p className="text-body text-fg-secondary">Not approved</p>
           {/* Never offers to produce the missing evidence itself: a validation
               and a comparison both cost provider time, and the user starts
               those deliberately from their own sections (CLAUDE.md rule 60). */}
-          {card.blockMessage && <p className="text-xs text-fg-muted">{card.blockMessage}</p>}
+          {card.blockMessage && <p className="text-caption text-fg-muted">{card.blockMessage}</p>}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
+      {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
     </section>
   );
 }

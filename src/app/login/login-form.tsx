@@ -75,7 +75,7 @@ export function LoginForm({
 
         <div className="flex items-center gap-3" aria-hidden>
           <span className="bg-line-2 h-px flex-1" />
-          <span className="text-fg-meta text-xs">or</span>
+          <span className="text-fg-meta text-caption">or</span>
           <span className="bg-line-2 h-px flex-1" />
         </div>
 
@@ -122,7 +122,7 @@ export function LoginForm({
 
         <Link
           href="/forgot-password"
-          className="text-fg-muted hover:text-fg rounded-sm text-sm"
+          className="text-fg-muted hover:text-fg rounded-sm text-body"
         >
           Forgot password?
         </Link>

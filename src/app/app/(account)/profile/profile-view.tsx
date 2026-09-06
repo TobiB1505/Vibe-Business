@@ -109,7 +109,7 @@ export function ProfileView({
             facts about a person Vibe has one fact about.
           */}
           {email && email !== identity.displayName && (
-            <p className="text-fg-muted truncate text-sm">{email}</p>
+            <p className="text-fg-muted truncate text-body">{email}</p>
           )}
         </div>
       </Surface>
@@ -145,7 +145,7 @@ export function ProfileView({
                   <StatusPill tone="neutral">Not connected</StatusPill>
                 )}
               </span>
-              <span className="text-fg-muted max-w-[54ch] text-sm leading-relaxed">
+              <span className="text-fg-muted max-w-[54ch] text-body leading-relaxed">
                 {github ? (
                   <>
                     Signed in as <span className="text-fg-body font-mono">{github.githubLogin}</span>
@@ -189,7 +189,7 @@ export function ProfileView({
         </div>
         <ul className="flex flex-col gap-2">
           {notStored(identity.avatarUrl !== null).map((line) => (
-            <li key={line} className="text-fg-prose flex items-start gap-3 text-sm leading-relaxed">
+            <li key={line} className="text-fg-prose flex items-start gap-3 text-body leading-relaxed">
               <span aria-hidden className="bg-fg-faint mt-2 size-1 shrink-0 rounded-full" />
               {line}
             </li>

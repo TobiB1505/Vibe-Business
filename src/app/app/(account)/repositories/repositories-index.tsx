@@ -45,14 +45,14 @@ function Metric({ value, label }: { value: number; label: string }) {
   return (
     <div className="border-line-2 min-w-24 border-l pl-5 first:border-l-0 first:pl-0">
       <strong className="text-fg block text-xl font-bold tabular-nums">{value}</strong>
-      <span className="text-fg-meta mt-0.5 block text-xs">{label}</span>
+      <span className="text-fg-meta mt-0.5 block text-caption">{label}</span>
     </div>
   );
 }
 
 function RepositoryTile({ repository }: { repository: ConnectedRepository }) {
   return (
-    <span className="from-mint-tint to-surface-hover border-mint-line rounded-nav text-mint flex size-10 shrink-0 items-center justify-center border bg-gradient-to-br text-sm font-bold">
+    <span className="from-mint-tint to-surface-hover border-mint-line rounded-nav text-mint flex size-10 shrink-0 items-center justify-center border bg-gradient-to-br text-body font-bold">
       {repository.name.slice(0, 2).toUpperCase()}
     </span>
   );
@@ -65,8 +65,8 @@ function TrustItem({ icon, title, description }: { icon: ReactNode; title: strin
         {icon}
       </span>
       <span>
-        <strong className="text-fg-body block text-sm font-semibold">{title}</strong>
-        <span className="text-fg-muted mt-1 block text-xs leading-5">{description}</span>
+        <strong className="text-fg-body block text-body font-semibold">{title}</strong>
+        <span className="text-fg-muted mt-1 block text-caption leading-5">{description}</span>
       </span>
     </div>
   );
@@ -88,7 +88,7 @@ function TrustItem({ icon, title, description }: { icon: ReactNode; title: strin
  */
 function AccessRevokedNotice() {
   return (
-    <p className="text-coral flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+    <p className="text-coral flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption">
       <span>Vibe can no longer read this repository — the GitHub App was removed.</span>
       <Link href="/app/connect/github?new=1" className={proseLinkClasses()}>
         Reconnect
@@ -196,7 +196,7 @@ export function RepositoriesIndex({
                 </h2>
                 {isConnected && <StatusPill tone="success">Connected</StatusPill>}
               </div>
-              <p className="text-fg-muted mt-1 text-sm">
+              <p className="text-fg-muted mt-1 text-body">
                 {githubLogin
                   ? `Vibe Business is connected to @${githubLogin}.`
                   : isConnected
@@ -234,7 +234,7 @@ export function RepositoriesIndex({
             <RepositoriesIcon size={22} />
           </span>
           <h2 className="text-fg mt-4 text-lg font-semibold">No repositories connected</h2>
-          <p className="text-fg-muted mt-2 max-w-md text-sm leading-6">
+          <p className="text-fg-muted mt-2 max-w-md text-body leading-6">
             Connect a GitHub repository to create a product and give Vibe the bounded context it needs.
           </p>
           <Link href="/app/connect/github" className={cn(buttonClasses({ size: "sm" }), "mt-5")}>
@@ -246,7 +246,7 @@ export function RepositoriesIndex({
           <div className="border-line-2 flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-fg text-base font-semibold">Connected repositories</h2>
-              <p className="text-fg-meta mt-1 text-xs">Stored connection details, without unverified live activity.</p>
+              <p className="text-fg-meta mt-1 text-caption">Stored connection details, without unverified live activity.</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="border-line-2 bg-field focus-within:border-mint-line rounded-nav flex min-w-0 items-center gap-2.5 border px-3.5 py-2.5 sm:w-64">
@@ -265,7 +265,7 @@ export function RepositoriesIndex({
                     });
                   }}
                   placeholder="Search repositories…"
-                  className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-sm outline-none"
+                  className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-body outline-none"
                 />
                 {currentQuery && (
                   <button
@@ -286,13 +286,13 @@ export function RepositoriesIndex({
               </label>
 
               {/* Native popup geometry is deliberate for these short, platform-standard option sets. */}
-              <label className="border-line-2 bg-field rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-sm">
+              <label className="border-line-2 bg-field rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-body">
                 <FilterIcon size={15} />
                 <span className="sr-only">Filter repository visibility</span>
                 <select
                   value={filter}
                   onChange={(event) => setFilter(event.target.value as RepositoryFilter)}
-                  className="text-fg-body bg-transparent text-sm font-medium outline-none"
+                  className="text-fg-body bg-transparent text-body font-medium outline-none"
                   aria-label="Filter repository visibility"
                 >
                   <option value="all">All visibility</option>
@@ -302,11 +302,11 @@ export function RepositoriesIndex({
               </label>
 
               <label className="border-line-2 bg-field rounded-nav flex items-center gap-2 border px-3 py-2.5">
-                <span className="text-fg-meta text-xs font-medium">Sort:</span>
+                <span className="text-fg-meta text-caption font-medium">Sort:</span>
                 <select
                   value={sort}
                   onChange={(event) => setSort(event.target.value as RepositorySort)}
-                  className="text-fg-body bg-transparent text-sm font-semibold outline-none"
+                  className="text-fg-body bg-transparent text-body font-semibold outline-none"
                   aria-label="Sort repositories"
                 >
                   <option value="recent">Connected</option>
@@ -322,7 +322,7 @@ export function RepositoriesIndex({
               <div className="hidden overflow-x-auto md:block">
                 <table className="w-full min-w-[760px] border-collapse text-left">
                   <thead>
-                    <tr className="text-fg-meta text-xs">
+                    <tr className="text-fg-meta text-caption">
                       <th scope="col" className="px-5 py-3 font-medium">Repository</th>
                       <th scope="col" className="px-5 py-3 font-medium">Product</th>
                       <th scope="col" className="px-5 py-3 font-medium">Connection</th>
@@ -341,7 +341,7 @@ export function RepositoriesIndex({
                                 href={repository.htmlUrl}
                                 target="_blank"
                                 rel="noreferrer noopener"
-                                className="text-fg-body hover:text-mint block truncate text-sm font-semibold transition-interactive"
+                                className="text-fg-body hover:text-mint block truncate text-body font-semibold transition-interactive"
                               >
                                 {repository.name}
                               </a>
@@ -351,7 +351,7 @@ export function RepositoriesIndex({
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <Link href={`/app/projects/${repository.projectId}`} className="text-fg-body hover:text-mint text-sm font-medium transition-interactive">{repository.projectName}</Link>
+                          <Link href={`/app/projects/${repository.projectId}`} className="text-fg-body hover:text-mint text-body font-medium transition-interactive">{repository.projectName}</Link>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-col gap-1.5">
@@ -365,7 +365,7 @@ export function RepositoriesIndex({
                             <span className="text-fg-meta flex items-center gap-1.5 font-mono text-meta"><BranchIcon size={13} />{repository.defaultBranch}</span>
                           </div>
                         </td>
-                        <td className="text-fg-muted px-5 py-4 text-sm">{formatTimestamp(repository.connectedAt)}</td>
+                        <td className="text-fg-muted px-5 py-4 text-body">{formatTimestamp(repository.connectedAt)}</td>
                         <td className="px-5 py-4 text-right">
                           <Link
                             href={`/app/projects/${repository.projectId}`}
@@ -393,13 +393,13 @@ export function RepositoriesIndex({
                               href={repository.htmlUrl}
                               target="_blank"
                               rel="noreferrer noopener"
-                              className="text-fg-body hover:text-mint block truncate text-sm font-semibold"
+                              className="text-fg-body hover:text-mint block truncate text-body font-semibold"
                             >
                               {repository.fullName}
                             </a>
                             <Link
                               href={`/app/projects/${repository.projectId}`}
-                              className="text-fg-muted hover:text-mint mt-1 block text-xs"
+                              className="text-fg-muted hover:text-mint mt-1 block text-caption"
                             >
                               {repository.projectName}
                             </Link>
@@ -417,7 +417,7 @@ export function RepositoriesIndex({
                             <AccessRevokedNotice />
                           </div>
                         )}
-                        <div className="text-fg-meta mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
+                        <div className="text-fg-meta mt-4 flex flex-wrap items-center justify-between gap-2 text-caption">
                           <span className="flex items-center gap-1.5 font-mono"><BranchIcon size={13} />{repository.defaultBranch}</span>
                           <span>{formatTimestamp(repository.connectedAt)}</span>
                         </div>
@@ -427,7 +427,7 @@ export function RepositoriesIndex({
                 ))}
               </ul>
 
-              <div className="border-line-2 flex flex-col gap-3 border-t px-5 py-4 text-xs sm:flex-row sm:items-center sm:justify-between">
+              <div className="border-line-2 flex flex-col gap-3 border-t px-5 py-4 text-caption sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-fg-meta" aria-live="polite">
                   Showing {pagination.start + 1}–{pagination.end} of {filtered.length} repositories
                 </p>
@@ -444,8 +444,8 @@ export function RepositoriesIndex({
             <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center" aria-live="polite">
               <SearchIcon size={22} className="text-fg-meta" />
               <h3 className="text-fg mt-4 text-base font-semibold">No matching repositories</h3>
-              <p className="text-fg-muted mt-2 max-w-md text-sm">Try another repository, product or branch name, or reset the visibility filter.</p>
-              <button type="button" onClick={clearSearchAndFilters} className="text-mint hover:text-mint-hover mt-5 rounded-sm text-sm font-semibold transition-interactive">Clear search and filters</button>
+              <p className="text-fg-muted mt-2 max-w-md text-body">Try another repository, product or branch name, or reset the visibility filter.</p>
+              <button type="button" onClick={clearSearchAndFilters} className="text-mint hover:text-mint-hover mt-5 rounded-sm text-body font-semibold transition-interactive">Clear search and filters</button>
             </div>
           )}
         </Surface>

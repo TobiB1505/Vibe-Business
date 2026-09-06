@@ -133,7 +133,7 @@ export function AgentFileActivity({
 
               <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-fg-body text-sm font-medium">{event.summary}</span>
+                  <span className="text-fg-body text-body font-medium">{event.summary}</span>
                   {clock !== null && (
                     <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
                       {clock}
@@ -178,7 +178,7 @@ export function AgentFileActivity({
                     <span className="w-[18px] flex-none" aria-hidden="true" />
                     <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <span className="flex items-baseline justify-between gap-3">
-                        <span className="text-fg-body text-sm font-medium">{event.summary}</span>
+                        <span className="text-fg-body text-body font-medium">{event.summary}</span>
                         {clock !== null && (
                           <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
                             {clock}

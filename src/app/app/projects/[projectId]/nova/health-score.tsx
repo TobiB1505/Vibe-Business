@@ -74,7 +74,7 @@ export function HealthScore({
         >
           {display.text}
         </span>
-        <span className="text-fg-prose text-sm">{stateLabel}</span>
+        <span className="text-fg-prose text-body">{stateLabel}</span>
       </div>
 
       {/*
@@ -116,7 +116,7 @@ export function HealthScoreAbsent({
       <MonoLabel as="h2" id="nova-health-absent">
         Business health
       </MonoLabel>
-      <p className="text-fg-prose text-sm">
+      <p className="text-fg-prose text-body">
         Vibe has not audited this product yet, so there is no reading to show.
       </p>
       <StandaloneLink href={healthHref}>Go to Business Health</StandaloneLink>

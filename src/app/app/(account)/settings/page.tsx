@@ -74,7 +74,7 @@ export default async function SettingsPage() {
             </span>
             <div className="flex flex-1 flex-col gap-2">
               <h2 className="text-fg text-title font-bold">{title}</h2>
-              <p className="text-fg-muted text-sm leading-6">{description}</p>
+              <p className="text-fg-muted text-body leading-6">{description}</p>
             </div>
             <Link
               href={href}

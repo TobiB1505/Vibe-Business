@@ -33,13 +33,13 @@ function ScoreValue({ project }: { project: DashboardProject }) {
     return (
       <span className="flex items-baseline gap-1 font-semibold tabular-nums">
         <span className={statusToneText(statusForScoreTone(tone))}>{project.score}</span>
-        <span className="text-fg-meta text-xs">/100</span>
+        <span className="text-fg-meta text-caption">/100</span>
       </span>
     );
   }
 
   return (
-    <span className="text-fg-muted text-xs">
+    <span className="text-fg-muted text-caption">
       {project.scoreState === "insufficient_coverage" ? "Not enough evidence" : "Not analysed"}
     </span>
   );
@@ -78,7 +78,7 @@ export function ProductCard({ project }: { project: DashboardProject }) {
           aria-hidden
           className={cn(
             "bg-mint-tint text-mint border-mint-line flex size-11 shrink-0 items-center",
-            "justify-center rounded-nav border text-sm font-bold tracking-[-0.02em]",
+            "justify-center rounded-nav border text-body font-bold tracking-[-0.02em]",
           )}
         >
           {/*
@@ -101,11 +101,11 @@ export function ProductCard({ project }: { project: DashboardProject }) {
         </span>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="text-fg truncate text-sm font-semibold" title={displayName}>
+          <h3 className="text-fg truncate text-body font-semibold" title={displayName}>
             {displayName}
           </h3>
           <p
-            className="text-fg-meta truncate text-xs"
+            className="text-fg-meta truncate text-caption"
             title={project.repositoryFullName ?? undefined}
           >
             {project.repositoryFullName ?? "Setup not finished"}
@@ -127,7 +127,7 @@ export function ProductCard({ project }: { project: DashboardProject }) {
         </div>
       </div>
 
-      <dl className="flex flex-1 flex-col gap-3 px-5 pb-5 text-xs">
+      <dl className="flex flex-1 flex-col gap-3 px-5 pb-5 text-caption">
         <div className="flex items-center justify-between gap-4">
           <dt className="text-fg-muted">Business signal</dt>
           <dd className="text-fg-body text-right">
@@ -151,7 +151,7 @@ export function ProductCard({ project }: { project: DashboardProject }) {
         href={action.href}
         className={cn(
           "border-line-2 text-fg-body hover:bg-surface-hover hover:text-fg flex items-center",
-          "justify-between border-t px-5 py-4 text-sm font-semibold transition-interactive",
+          "justify-between border-t px-5 py-4 text-body font-semibold transition-interactive",
         )}
       >
         {action.label}

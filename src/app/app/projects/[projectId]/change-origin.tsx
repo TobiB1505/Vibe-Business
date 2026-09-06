@@ -58,24 +58,24 @@ export function ChangeOrigin({
   return (
     <section className="space-y-3 border-t border-line-2 pt-4">
       <div className="space-y-1">
-        <h4 className="text-sm font-medium text-fg-body">What this change was for</h4>
+        <h4 className="text-body font-medium text-fg-body">What this change was for</h4>
         {moveHref ? (
-          <p className="text-sm text-fg-prose">
+          <p className="text-body text-fg-prose">
             <StandaloneLink href={moveHref}>{origin.title}</StandaloneLink>
           </p>
         ) : (
-          <p className="text-sm text-fg-prose">{origin.title}</p>
+          <p className="text-body text-fg-prose">{origin.title}</p>
         )}
       </div>
 
       <div className="space-y-1">
-        <p className="text-sm text-fg-prose">{origin.problem}</p>
-        <p className="text-sm text-fg-secondary">{origin.whyNow}</p>
+        <p className="text-body text-fg-prose">{origin.problem}</p>
+        <p className="text-body text-fg-secondary">{origin.whyNow}</p>
       </div>
 
       {/* Never conditional: the sentence that keeps the paragraphs above from
           reading as a description of what the change achieved. */}
-      <p className="text-xs text-fg-muted">
+      <p className="text-caption text-fg-muted">
         This is the next move Vibe was asked to work on, written before the change existed. It does
         not describe what the change did.
       </p>
@@ -98,7 +98,7 @@ export function ChangeOrigin({
  */
 export function MoveBacklink({ title, href }: { title: string; href: string }) {
   return (
-    <p className="text-xs text-fg-muted">
+    <p className="text-caption text-fg-muted">
       Answers your move{" "}
       <Link href={href} className={proseLinkClasses()}>
         {title}

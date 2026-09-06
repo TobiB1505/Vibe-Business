@@ -97,7 +97,7 @@ function LensConstellation({ active }: { active: boolean }) {
         {BUSINESS_LENSES.map((lens, index) => (
           <li
             key={lens}
-            className={`border-line-2 bg-app/70 text-fg-secondary rounded-lg border px-3 py-2.5 text-sm ${
+            className={`border-line-2 bg-app/70 text-fg-secondary rounded-lg border px-3 py-2.5 text-body ${
               active ? "motion-safe:animate-pulse" : ""
             }`}
             style={
@@ -163,7 +163,7 @@ export function AuditPreparing() {
   return (
     <Shell label="Business audit · preparing" headline="Vibe is checking what it already knows.">
       <LensConstellation active={false} />
-      <p className="text-fg-muted max-w-[58ch] text-sm">
+      <p className="text-fg-muted max-w-[58ch] text-body">
         Nothing has been judged yet. Vibe is gathering what it has about your product before it
         looks at the business.
       </p>
@@ -182,7 +182,7 @@ export function AuditAnalyzing() {
   return (
     <Shell label="Business audit · analyzing" headline="Vibe is reading the whole business.">
       <LensConstellation active />
-      <p className="text-fg-muted max-w-[58ch] text-sm">
+      <p className="text-fg-muted max-w-[58ch] text-body">
         All nine areas are judged together, so there is no order to watch. This usually takes a
         couple of minutes — you can leave this page and come back.
       </p>
@@ -210,7 +210,7 @@ export function AuditWaitingHeader() {
       <p className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em]">
         Vibe found the one part of the business only you can clarify.
       </p>
-      <p className="text-fg-muted max-w-[58ch] text-sm leading-relaxed">
+      <p className="text-fg-muted max-w-[58ch] text-body leading-relaxed">
         Vibe has everything else it needs. Answer this and the audit carries on — nothing has been
         spent while it waits.
       </p>

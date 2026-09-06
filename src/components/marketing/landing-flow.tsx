@@ -180,7 +180,7 @@ const TABS: FlowTab[] = [
               <span className="text-fg-meta shrink-0 font-mono text-meta tabular-nums">
                 {String(index + 1).padStart(2, "0")}
               </span>
-              <span className="text-fg-body text-sm">{step.title}</span>
+              <span className="text-fg-body text-body">{step.title}</span>
             </span>
             {/* Ownership, never a percentage or a due date — the product has neither. */}
             <StatusPill tone={step.tone === "waiting" ? "waiting" : "active"}>
@@ -219,13 +219,13 @@ const TABS: FlowTab[] = [
         <div className="border-line-1 bg-surface-3 rounded-well flex flex-col gap-3 border p-5">
           <div className="flex flex-wrap items-center gap-3">
             <StatusPill tone="success">Observed</StatusPill>
-            <span className="text-fg-body text-sm">
+            <span className="text-fg-body text-body">
               A pricing page is now reachable from your homepage.
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <StatusPill tone="neutral">Not measured</StatusPill>
-            <span className="text-fg-body text-sm">
+            <span className="text-fg-body text-body">
               Whether more people paid. Vibe reads your public product, not your revenue.
             </span>
           </div>

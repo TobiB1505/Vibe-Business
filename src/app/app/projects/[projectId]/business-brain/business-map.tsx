@@ -231,8 +231,8 @@ function MobileBrain({ view, selected, onSelect }: {
     <div className="flex flex-col gap-6 md:hidden" data-testid="business-map-list">
       <div className="business-brain-mobile-core mx-auto flex size-48 flex-col items-center justify-center rounded-full text-center">
         <span className="text-fg text-5xl leading-none font-semibold tracking-[-0.05em]">{view.overall.score ?? "—"}</span>
-        <span className="text-fg mt-2 text-sm font-semibold">Business Health</span>
-        <span className={cn("mt-2 text-xs", SCORE_STATE_TEXT[view.overall.state])}>{view.overall.stateLabel}</span>
+        <span className="text-fg mt-2 text-body font-semibold">Business Health</span>
+        <span className={cn("mt-2 text-caption", SCORE_STATE_TEXT[view.overall.state])}>{view.overall.stateLabel}</span>
       </div>
 
       <CoverageLine
@@ -256,7 +256,7 @@ function MobileBrain({ view, selected, onSelect }: {
                 className="business-brain-planet flex size-36 cursor-pointer flex-col items-center justify-center rounded-full border text-center outline-none focus-visible:ring-2 focus-visible:ring-mint"
               >
                 <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
-                <span className="text-fg mt-2 max-w-28 text-xs font-semibold leading-tight">{node.label}</span>
+                <span className="text-fg mt-2 max-w-28 text-caption font-semibold leading-tight">{node.label}</span>
                 <span className="text-fg mt-1 text-xl font-semibold tabular-nums">{node.score ?? "—"}</span>
                 <span className={cn("mt-1 text-[0.65rem]", statusTone(node))}>{node.healthLabel}</span>
               </button>
@@ -264,7 +264,7 @@ function MobileBrain({ view, selected, onSelect }: {
           ))}
         </ul>
       </div>
-      <p className="text-fg-muted text-center text-xs">Swipe through the nine business areas.</p>
+      <p className="text-fg-muted text-center text-caption">Swipe through the nine business areas.</p>
     </div>
   );
 }

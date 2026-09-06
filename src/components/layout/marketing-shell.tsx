@@ -54,7 +54,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className="text-fg-secondary hover:text-fg rounded-sm text-sm font-medium transition-interactive"
+                className="text-fg-secondary hover:text-fg rounded-sm text-body font-medium transition-interactive"
               >
                 {label}
               </Link>
@@ -63,7 +63,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <Link
               href="/login"
-              className="text-fg-secondary hover:text-fg-body rounded-sm px-2 text-sm transition-interactive"
+              className="text-fg-secondary hover:text-fg-body rounded-sm px-2 text-body transition-interactive"
             >
               Sign in
             </Link>
@@ -84,7 +84,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           the links wrapping around it.
         */}
         <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-4 px-5 py-8 sm:px-10">
-          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
+          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-caption">
             <span className="text-fg-muted font-mono">Vibe Business</span>
             {[
               ["Privacy", "/privacy"],
@@ -100,7 +100,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
               </Link>
             ))}
           </nav>
-          <p className="text-fg-muted text-xs">The business layer for AI-built products.</p>
+          <p className="text-fg-muted text-caption">The business layer for AI-built products.</p>
         </div>
       </footer>
     </div>

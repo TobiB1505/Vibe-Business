@@ -46,7 +46,7 @@ function Finding({ finding }: { finding: HumanFinding }) {
           <MonoLabel className="tracking-[0.14em]">{TONE_WORD[finding.tone]}</MonoLabel>
         </div>
         {finding.whyItMatters && (
-          <p className="text-fg-prose max-w-[70ch] text-sm leading-relaxed">
+          <p className="text-fg-prose max-w-[70ch] text-body leading-relaxed">
             {finding.whyItMatters}
           </p>
         )}
@@ -78,7 +78,7 @@ export function LiveIntelligenceSummary({
             unrelated scanners (UI-3.6 §10). */}
         <MonoLabel>What Vibe sees when it visits your product</MonoLabel>
         <h3 className="text-fg text-title font-bold">{view.headline}</h3>
-        <p className="text-fg-muted max-w-[70ch] text-sm">{view.subhead}</p>
+        <p className="text-fg-muted max-w-[70ch] text-body">{view.subhead}</p>
       </div>
 
       {/* An unfinished check says so before its results are read, not after. */}
@@ -103,7 +103,7 @@ export function LiveIntelligenceSummary({
           <Disclosure label={`Pages Vibe checked (${view.pagesChecked.length})`}>
             <ul className="flex flex-wrap gap-x-4 gap-y-1">
               {view.pagesChecked.map((path) => (
-                <li key={path} className="text-fg-muted [overflow-wrap:anywhere] font-mono text-xs">
+                <li key={path} className="text-fg-muted [overflow-wrap:anywhere] font-mono text-caption">
                   {path}
                 </li>
               ))}
@@ -115,7 +115,7 @@ export function LiveIntelligenceSummary({
           <Disclosure label={`Notes from this check (${snapshot.warnings.length})`}>
             <ul className="flex flex-col gap-1">
               {snapshot.warnings.map((warning) => (
-                <li key={warning.code} className="text-fg-muted text-xs leading-relaxed">
+                <li key={warning.code} className="text-fg-muted text-caption leading-relaxed">
                   {warning.message}
                 </li>
               ))}

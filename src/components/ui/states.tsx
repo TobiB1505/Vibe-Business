@@ -36,7 +36,7 @@ export function EmptyState({
       className={cn("flex flex-col items-start gap-3", className)}
     >
       <p className="text-fg text-title font-bold">{title}</p>
-      {description && <p className="text-fg-muted max-w-[62ch] text-sm">{description}</p>}
+      {description && <p className="text-fg-muted max-w-[62ch] text-body">{description}</p>}
       {action && <div className="mt-1 flex flex-wrap items-center gap-3">{action}</div>}
     </Surface>
   );
@@ -85,9 +85,9 @@ export function Notice({
       className={cn("flex flex-col items-start gap-3", className)}
     >
       {label && <MonoLabel className={labelColour}>{label}</MonoLabel>}
-      <div className="text-fg-prose max-w-[70ch] text-sm leading-relaxed">{children}</div>
+      <div className="text-fg-prose max-w-[70ch] text-body leading-relaxed">{children}</div>
       {action && <div className="flex flex-wrap items-center gap-3">{action}</div>}
-      {footnote && <p className="text-fg-muted text-xs">{footnote}</p>}
+      {footnote && <p className="text-fg-muted text-caption">{footnote}</p>}
     </Surface>
   );
 }

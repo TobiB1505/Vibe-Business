@@ -69,9 +69,9 @@ export function HomeStatus({
           </h3>
         )}
         {identity.purpose ? (
-          <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{identity.purpose}</p>
+          <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{identity.purpose}</p>
         ) : (
-          <p className="text-fg-muted max-w-[62ch] text-sm">
+          <p className="text-fg-muted max-w-[62ch] text-body">
             It reads your code and visits your product, then tells you in one paragraph what it
             thinks you built.{" "}
             <Link href={productHref} className={proseLinkClasses()}>
@@ -88,7 +88,7 @@ export function HomeStatus({
           {health.kind === "scored" && (
             <p className="text-fg text-title font-bold">
               <span className="font-mono tabular-nums">{health.score}</span>
-              <span className="text-fg-muted font-mono text-sm"> / 100</span>
+              <span className="text-fg-muted font-mono text-body"> / 100</span>
             </p>
           )}
           {/*
@@ -98,12 +98,12 @@ export function HomeStatus({
           */}
           {health.kind === "unscored" && (
             <>
-              <p className="text-fg-body text-sm font-medium">Not enough to score yet</p>
-              {health.reason && <p className="text-fg-muted max-w-[62ch] text-sm">{health.reason}</p>}
+              <p className="text-fg-body text-body font-medium">Not enough to score yet</p>
+              {health.reason && <p className="text-fg-muted max-w-[62ch] text-body">{health.reason}</p>}
             </>
           )}
           {health.kind === "not_analyzed" && (
-            <p className="text-fg-muted max-w-[62ch] text-sm">
+            <p className="text-fg-muted max-w-[62ch] text-body">
               Vibe hasn&apos;t judged this as a business yet.{" "}
               <Link href={healthHref} className={proseLinkClasses()}>
                 Business Health
@@ -112,7 +112,7 @@ export function HomeStatus({
             </p>
           )}
           {health.kind !== "not_analyzed" && health.conclusion && (
-            <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+            <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
               {health.conclusion}
             </p>
           )}
@@ -121,9 +121,9 @@ export function HomeStatus({
         {finding && (
           <section className="flex flex-col gap-2">
             <MonoLabel>Current focus</MonoLabel>
-            <p className="text-fg-body text-sm leading-relaxed font-medium">{finding.headline}</p>
+            <p className="text-fg-body text-body leading-relaxed font-medium">{finding.headline}</p>
             {finding.whyItMatters && (
-              <p className="text-fg-muted max-w-[62ch] text-sm leading-relaxed">
+              <p className="text-fg-muted max-w-[62ch] text-body leading-relaxed">
                 {finding.whyItMatters}
               </p>
             )}
@@ -139,7 +139,7 @@ export function HomeStatus({
                 <StatusDot tone="active" />
                 <p className="text-fg text-base leading-snug font-semibold">{nextMove.title}</p>
               </div>
-              <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+              <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
                 {nextMove.problem}
               </p>
               {/* The engine's own rating, named rather than re-derived here. */}
@@ -148,13 +148,13 @@ export function HomeStatus({
           )}
 
           {nextMove.kind === "none_found" && (
-            <p className="text-fg-muted max-w-[62ch] text-sm">
+            <p className="text-fg-muted max-w-[62ch] text-body">
               Vibe looked and didn&apos;t find a move worth putting ahead of the others right now.
             </p>
           )}
 
           {nextMove.kind === "not_identified" && (
-            <p className="text-fg-muted max-w-[62ch] text-sm">
+            <p className="text-fg-muted max-w-[62ch] text-body">
               Vibe hasn&apos;t worked out what to do next yet. That comes from the business audit.
             </p>
           )}

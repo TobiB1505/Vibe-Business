@@ -64,7 +64,7 @@ function EmptyDashboard() {
         <h2 className="text-fg text-headline max-w-[24ch] font-bold text-balance">
           Turn what you built into a business.
         </h2>
-        <p className="text-fg-prose max-w-[60ch] text-sm leading-relaxed">
+        <p className="text-fg-prose max-w-[60ch] text-body leading-relaxed">
           Connect a repository you have already built. Vibe reads the product, scores the business
           around it, and shows you what to do next. Anything it prepares later lands on its own
           branch — the branch you ship from moves only when you approve a change.
@@ -74,7 +74,7 @@ function EmptyDashboard() {
         <Link href="/app/connect/github" className={buttonClasses()}>
           Connect GitHub
         </Link>
-        <span className="text-fg-meta text-xs">Opens GitHub · takes about a minute</span>
+        <span className="text-fg-meta text-caption">Opens GitHub · takes about a minute</span>
       </div>
     </Surface>
   );

@@ -249,7 +249,7 @@ export function BillingView({
             {overview.displayAvailable}
             <span className="sr-only"> Credits</span>
           </p>
-          <p className="text-fg-muted mt-2 text-sm">Credits available</p>
+          <p className="text-fg-muted mt-2 text-body">Credits available</p>
 
           {/*
             Rendered only when there is something to say.
@@ -261,7 +261,7 @@ export function BillingView({
             thing on the page.
           */}
           {hasBalanceFacts && (
-            <dl className="mt-6 flex flex-col gap-2.5 text-sm">
+            <dl className="mt-6 flex flex-col gap-2.5 text-body">
               {overview.monthlyAllowance && (
                 <BalanceFact term="Included this month">
                   <span className="text-fg font-semibold tabular-nums">
@@ -349,20 +349,20 @@ export function BillingView({
               {formatPrice(currentPlan.priceCents)}
             </span>
             {currentPlan.priceCents > 0 && (
-              <span className="text-fg-muted text-sm">/ month</span>
+              <span className="text-fg-muted text-body">/ month</span>
             )}
           </p>
           <p
             className={
               overview.plan.endingAtPeriodEnd
-                ? "text-amber mt-2 text-sm"
-                : "text-fg-muted mt-2 text-sm"
+                ? "text-amber mt-2 text-body"
+                : "text-fg-muted mt-2 text-body"
             }
           >
             {planTiming(overview)}
           </p>
 
-          <p className="text-fg-prose mt-4 text-sm">
+          <p className="text-fg-prose mt-4 text-body">
             {overview.plan.key === "free"
               ? "Your first Business Audit and first Deep Scan for each product are included."
               : `${formatCreditsForDisplay(currentPlan.monthlyCreditUnits)} Credits included every month.`}
@@ -404,7 +404,7 @@ export function BillingView({
             <p className="text-fg mt-2 font-semibold">
               Your account is eligible for 100 Welcome Credits.
             </p>
-            <p className="text-fg-muted mt-1 text-sm">
+            <p className="text-fg-muted mt-1 text-body">
               They are valid for 30 days.
             </p>
           </div>
@@ -452,13 +452,13 @@ export function BillingView({
               <p className="text-fg mt-2 font-semibold">
                 Know the cost before you start
               </p>
-              <p className="text-fg-prose mt-1.5 max-w-[46ch] text-sm">
+              <p className="text-fg-prose mt-1.5 max-w-[46ch] text-body">
                 Credits power Vibe&rsquo;s business intelligence and Agent
                 work. Every task shows what it costs beside the button that
                 starts it.
               </p>
             </div>
-            <span className="text-fg-meta hidden shrink-0 items-center gap-1.5 pt-1 text-xs sm:inline-flex">
+            <span className="text-fg-meta hidden shrink-0 items-center gap-1.5 pt-1 text-caption sm:inline-flex">
               <InfoIcon size={14} /> Known before you start
             </span>
           </div>
@@ -487,7 +487,7 @@ export function BillingView({
                     >
                       <SparklesIcon size={16} />
                     </span>
-                    <span className="text-fg-body text-sm">
+                    <span className="text-fg-body text-body">
                       {OPERATION_NAMES[operation]}
                       {resolved.basis !== "measured" && (
                         <sup className="text-fg-meta ml-0.5 text-[0.65rem]">
@@ -504,10 +504,10 @@ export function BillingView({
                           key={pricingClass}
                           className="flex items-baseline justify-between gap-2 sm:justify-end"
                         >
-                          <span className="text-fg-meta text-xs">
+                          <span className="text-fg-meta text-caption">
                             {EXECUTION_CLASS_NAMES[pricingClass]}
                           </span>
-                          <span className="text-fg text-sm font-semibold tabular-nums">
+                          <span className="text-fg text-body font-semibold tabular-nums">
                             {formatCreditsForDisplay(
                               price.creditUnitsByClass[pricingClass],
                             )}{" "}
@@ -517,7 +517,7 @@ export function BillingView({
                       ))}
                     </span>
                   ) : (
-                    <span className="text-fg shrink-0 pl-12 text-sm font-semibold tabular-nums sm:pl-0">
+                    <span className="text-fg shrink-0 pl-12 text-body font-semibold tabular-nums sm:pl-0">
                       {price.kind === "free"
                         ? "Free"
                         : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
@@ -552,7 +552,7 @@ export function BillingView({
           this says.
         */}
           {hasQualifiedPrice && (
-            <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
+            <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-caption sm:px-6">
               <span aria-hidden="true">*</span> Agent prices scale with how
               broad a change is, and Vibe tells you which before you start.
               You are charged only if the Agent delivers a change &mdash; if
@@ -711,8 +711,8 @@ export function BillingView({
                 key={product.projectId}
                 className="flex items-baseline justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
               >
-                <span className="text-fg-body truncate text-sm">{product.name}</span>
-                <span className="text-fg-secondary text-sm tabular-nums">
+                <span className="text-fg-body truncate text-body">{product.name}</span>
+                <span className="text-fg-secondary text-body tabular-nums">
                   {product.displayCredits} Credits
                 </span>
               </li>
@@ -742,7 +742,7 @@ export function BillingView({
               Latest Credit activity
             </p>
           </div>
-          <span className="text-fg-meta text-xs">Newest first</span>
+          <span className="text-fg-meta text-caption">Newest first</span>
         </div>
         {overview.recentActivity.length === 0 ? (
           /*
@@ -751,10 +751,10 @@ export function BillingView({
           happened yet" rather than "something failed to load".
         */
           <div className="px-5 py-8 sm:px-6">
-            <p className="text-fg-body text-sm font-medium">
+            <p className="text-fg-body text-body font-medium">
               No Credit activity yet
             </p>
-            <p className="text-fg-muted mt-1.5 max-w-[42ch] text-sm">
+            <p className="text-fg-muted mt-1.5 max-w-[42ch] text-body">
               Credits you add and tasks you run will appear here.
             </p>
           </div>
@@ -773,10 +773,10 @@ export function BillingView({
                     {activityIcon(entry)}
                   </span>
                   <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-fg-body truncate text-sm font-medium">
+                    <span className="text-fg-body truncate text-body font-medium">
                       {entry.label}
                     </span>
-                    <span className="text-fg-meta text-xs">
+                    <span className="text-fg-meta text-caption">
                       {/* Which product, when the movement belongs to one. */}
                       {entry.productName ? `${entry.productName} · ` : ""}
                       {formatDate(entry.at)}
@@ -791,8 +791,8 @@ export function BillingView({
                 <span
                   className={
                     entry.creditDelta > 0
-                      ? "text-mint shrink-0 text-sm font-semibold tabular-nums"
-                      : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"
+                      ? "text-mint shrink-0 text-body font-semibold tabular-nums"
+                      : "text-fg-body shrink-0 text-body font-semibold tabular-nums"
                   }
                 >
                   {entry.displayAmount}
@@ -803,7 +803,7 @@ export function BillingView({
         )}
       </Surface>
 
-      <footer className="text-fg-meta flex items-center justify-center gap-2 px-4 pb-2 text-center text-xs">
+      <footer className="text-fg-meta flex items-center justify-center gap-2 px-4 pb-2 text-center text-caption">
         <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe
         never stores your card details.
       </footer>

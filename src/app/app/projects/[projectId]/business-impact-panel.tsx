@@ -91,18 +91,18 @@ function BeforeAfter({ card }: { card: BusinessImpactCard }) {
   return (
     <dl className="grid grid-cols-3 gap-3" data-testid="business-impact-values">
       <div>
-        <dt className="text-xs text-fg-muted">Before</dt>
-        <dd className="text-sm text-fg-body">{formatValue(card.baselineValue)}</dd>
+        <dt className="text-caption text-fg-muted">Before</dt>
+        <dd className="text-body text-fg-body">{formatValue(card.baselineValue)}</dd>
       </div>
       <div>
-        <dt className="text-xs text-fg-muted">After</dt>
-        <dd className="text-sm text-fg-body">{formatValue(card.observedValue)}</dd>
+        <dt className="text-caption text-fg-muted">After</dt>
+        <dd className="text-body text-fg-body">{formatValue(card.observedValue)}</dd>
       </div>
       <div>
         {/* "Observed change", never "impact" and never "uplift". The label is
             part of the causality safeguard, not decoration (§10, §24). */}
-        <dt className="text-xs text-fg-muted">Observed change</dt>
-        <dd className="text-sm text-fg-body">
+        <dt className="text-caption text-fg-muted">Observed change</dt>
+        <dd className="text-body text-fg-body">
           {card.observedRelativeChange === null ? "—" : formatRelative(card.observedRelativeChange)}
         </dd>
       </div>
@@ -116,17 +116,17 @@ function Windows({ card }: { card: BusinessImpactCard }) {
   return (
     <dl className="space-y-1" data-testid="business-impact-windows">
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-fg-muted">Baseline</dt>
-        <dd className="text-xs text-fg-prose">{windowRange(card.baselineWindow)}</dd>
+        <dt className="text-caption text-fg-muted">Baseline</dt>
+        <dd className="text-caption text-fg-prose">{windowRange(card.baselineWindow)}</dd>
       </div>
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-fg-muted">Measurement window</dt>
-        <dd className="text-xs text-fg-prose">{windowRange(card.measurementWindow)}</dd>
+        <dt className="text-caption text-fg-muted">Measurement window</dt>
+        <dd className="text-caption text-fg-prose">{windowRange(card.measurementWindow)}</dd>
       </div>
       {card.resultAvailableAt && (
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-xs text-fg-muted">Result available after</dt>
-          <dd className="text-xs text-fg-prose">{localDate(card.resultAvailableAt)}</dd>
+          <dt className="text-caption text-fg-muted">Result available after</dt>
+          <dd className="text-caption text-fg-prose">{localDate(card.resultAvailableAt)}</dd>
         </div>
       )}
     </dl>
@@ -138,8 +138,8 @@ function MeasuredMetric({ card }: { card: BusinessImpactCard }) {
 
   return (
     <div className="space-y-1">
-      <p className="text-sm text-fg-body">{card.metricLabel}</p>
-      {card.businessGoal && <p className="text-xs text-fg-muted">{card.businessGoal}</p>}
+      <p className="text-body text-fg-body">{card.metricLabel}</p>
+      {card.businessGoal && <p className="text-caption text-fg-muted">{card.businessGoal}</p>}
     </div>
   );
 }
@@ -199,8 +199,8 @@ export function BusinessImpactPanel({
             : "space-y-2 border-t border-line-2 pt-4"
         }
       >
-        <h4 className="text-sm font-medium text-fg-secondary">Impact tracking</h4>
-        <p className="text-sm text-fg-muted">Long-term impact has not been measured.</p>
+        <h4 className="text-body font-medium text-fg-secondary">Impact tracking</h4>
+        <p className="text-body text-fg-muted">Long-term impact has not been measured.</p>
 
         {/* Kept, but demoted: planning is free and deterministic — no analytics
             connection, no provider call, no model — and it records the intent
@@ -217,7 +217,7 @@ export function BusinessImpactPanel({
           </Button>
         )}
 
-        {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
+        {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
       </section>
     );
   }
@@ -230,11 +230,11 @@ export function BusinessImpactPanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-sm font-medium text-fg-body">Business impact</h4>
+      <h4 className="text-body font-medium text-fg-body">Business impact</h4>
 
       {card.state === "scheduled" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">{card.headline}</p>
+          <p className="text-body text-fg-prose">{card.headline}</p>
           <MeasuredMetric card={card} />
           <Windows card={card} />
           {/* No interim conclusion. The result does not exist yet, and saying
@@ -253,36 +253,36 @@ export function BusinessImpactPanel({
         </div>
       ) : card.state === "measuring" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">{card.headline}</p>
+          <p className="text-body text-fg-prose">{card.headline}</p>
           <MeasuredMetric card={card} />
           {/* Factual progress only — days, never a percentage, and never
               "looking good" before the window closes (§23). */}
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             {card.daysObserved ?? 0} of {card.daysExpected ?? 0} complete days observed
           </p>
           <Windows card={card} />
         </div>
       ) : card.state === "insufficient_data" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">{card.headline}</p>
+          <p className="text-body text-fg-prose">{card.headline}</p>
           <MeasuredMetric card={card} />
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             Not enough traffic was observed to make a meaningful comparison.
           </p>
           {/* What was required and what was seen, so the user can tell "this
               did not work" from "we cannot yet tell" (§26). */}
           <dl className="grid grid-cols-3 gap-3" data-testid="business-impact-samples">
             <div>
-              <dt className="text-xs text-fg-muted">Needed each period</dt>
-              <dd className="text-sm text-fg-body">{card.minimumObservations ?? "—"}</dd>
+              <dt className="text-caption text-fg-muted">Needed each period</dt>
+              <dd className="text-body text-fg-body">{card.minimumObservations ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Observed before</dt>
-              <dd className="text-sm text-fg-body">{card.sampleSizeBefore ?? "—"}</dd>
+              <dt className="text-caption text-fg-muted">Observed before</dt>
+              <dd className="text-body text-fg-body">{card.sampleSizeBefore ?? "—"}</dd>
             </div>
             <div>
-              <dt className="text-xs text-fg-muted">Observed after</dt>
-              <dd className="text-sm text-fg-body">{card.sampleSizeAfter ?? "—"}</dd>
+              <dt className="text-caption text-fg-muted">Observed after</dt>
+              <dd className="text-body text-fg-body">{card.sampleSizeAfter ?? "—"}</dd>
             </div>
           </dl>
           <Windows card={card} />
@@ -290,9 +290,9 @@ export function BusinessImpactPanel({
       ) : card.state === "failed" ? (
         <div className="space-y-2">
           {/* A statement about Vibe's measurement, never about the metric (§33). */}
-          <p className="text-sm text-amber">{card.headline}</p>
-          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-amber">{card.headline}</p>
+          {card.failureMessage && <p className="text-body text-fg-secondary">{card.failureMessage}</p>}
+          <p className="text-caption text-fg-muted">
             This says nothing about whether the metric moved — only that Vibe could not read it.
           </p>
         </div>
@@ -300,24 +300,24 @@ export function BusinessImpactPanel({
         <div className="space-y-2">
           {/* improved / degraded / neutral. A negative result is shown exactly
               as prominently as a positive one (§25). */}
-          <p className={`text-sm ${RESULT_TONE[card.state] ?? "text-fg-prose"}`}>{card.headline}</p>
+          <p className={`text-body ${RESULT_TONE[card.state] ?? "text-fg-prose"}`}>{card.headline}</p>
           <MeasuredMetric card={card} />
           <BeforeAfter card={card} />
           <Windows card={card} />
           {card.dataQuality && card.dataQuality !== "complete" && (
-            <p className="text-xs text-amber">
+            <p className="text-caption text-amber">
               Some days were missing from the data, so this comparison is not built on full periods.
             </p>
           )}
           {/* Required on every stated movement. A field on the card, so it
               cannot be dropped in a redesign (§24). */}
           {card.observedChangeDisclaimer && (
-            <p className="text-xs text-fg-muted">{card.observedChangeDisclaimer}</p>
+            <p className="text-caption text-fg-muted">{card.observedChangeDisclaimer}</p>
           )}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
+      {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
     </section>
   );
 }

@@ -243,7 +243,7 @@ export default async function E2eScenarioPage({
   /* The scenario name is rendered so a failing trace says which fixture was on
      screen, rather than leaving that to be inferred. */
   const label = (
-    <p className="mb-4 text-xs text-zinc-600" data-testid="e2e-scenario">
+    <p className="text-fg-faint mb-4 text-meta" data-testid="e2e-scenario">
       {scenario}
     </p>
   );
@@ -1142,7 +1142,7 @@ export default async function E2eScenarioPage({
                         : "Run with Vibe"}
                     </button>
                     {chainOffer && (
-                      <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                      <p className="text-fg-meta text-caption" data-testid="agent-chain-boundary">
                         {chainOffer.boundary}
                       </p>
                     )}

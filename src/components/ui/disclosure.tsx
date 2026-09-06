@@ -140,18 +140,18 @@ export function FoundList({
       <MonoLabel className="tracking-[0.14em]">{label}</MonoLabel>
       <ul className="flex flex-col gap-1.5">
         {found.map((item) => (
-          <li key={item} className="text-fg-prose flex items-baseline gap-2.5 text-sm">
+          <li key={item} className="text-fg-prose flex items-baseline gap-2.5 text-body">
             {/* The glyph is decorative; the two groups are separated by a
                 labelled heading, so nothing depends on colour or icon alone. */}
-            <span aria-hidden className="text-mint text-xs">
+            <span aria-hidden className="text-mint text-caption">
               ✓
             </span>
             {item}
           </li>
         ))}
         {(missing ?? []).map((item) => (
-          <li key={item} className="text-fg-muted flex items-baseline gap-2.5 text-sm">
-            <span aria-hidden className="text-fg-meta text-xs">
+          <li key={item} className="text-fg-muted flex items-baseline gap-2.5 text-body">
+            <span aria-hidden className="text-fg-meta text-caption">
               —
             </span>
             Not found: {item}

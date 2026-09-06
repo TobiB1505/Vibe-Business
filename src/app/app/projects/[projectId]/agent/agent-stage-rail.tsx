@@ -183,7 +183,7 @@ export function AgentStageRail({
               >
                 <span
                   className={cn(
-                    "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-sm",
+                    "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-body",
                     RING[step.state],
                   )}
                   style={

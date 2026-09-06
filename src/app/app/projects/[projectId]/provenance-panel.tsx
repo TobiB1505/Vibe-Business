@@ -50,8 +50,8 @@ function LinkRow({ link }: { link: ActionProvenance["links"][number] }) {
       data-provenance-state={link.state}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-        <span className="text-fg-prose text-sm">{PROVENANCE_LINK_LABELS[link.kind]}</span>
-        <span className="text-fg-meta text-xs tabular-nums">{produced ?? "—"}</span>
+        <span className="text-fg-prose text-body">{PROVENANCE_LINK_LABELS[link.kind]}</span>
+        <span className="text-fg-meta text-caption tabular-nums">{produced ?? "—"}</span>
       </div>
 
       {/*
@@ -72,7 +72,7 @@ function LinkRow({ link }: { link: ActionProvenance["links"][number] }) {
       )}
 
       {link.reason !== null && (
-        <p className="text-fg-muted mt-1 text-xs leading-relaxed">
+        <p className="text-fg-muted mt-1 text-caption leading-relaxed">
           {PROVENANCE_REASONS[link.reason]}
         </p>
       )}

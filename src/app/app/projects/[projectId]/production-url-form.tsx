@@ -63,7 +63,7 @@ export function ProductionUrlForm({
           defaultValue={currentUrl ?? ""}
           placeholder="https://example.com"
           required
-          className="min-w-64 flex-1 rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
+          className="min-w-64 flex-1 rounded-md border border-line-strong bg-field px-3 py-1.5 text-body text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
         />
         <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
@@ -75,7 +75,7 @@ export function ProductionUrlForm({
         )}
       </form>
 
-      {state && !state.ok && <p className="text-sm text-amber">{ERROR_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-body text-amber">{ERROR_MESSAGES[state.error]}</p>}
     </div>
   );
 }

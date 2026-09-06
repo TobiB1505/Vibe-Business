@@ -76,7 +76,7 @@ export function SignupForm({ next }: { next: string }) {
 
         <div className="flex items-center gap-3" aria-hidden>
           <span className="bg-line-2 h-px flex-1" />
-          <span className="text-fg-meta text-xs">or</span>
+          <span className="text-fg-meta text-caption">or</span>
           <span className="bg-line-2 h-px flex-1" />
         </div>
 

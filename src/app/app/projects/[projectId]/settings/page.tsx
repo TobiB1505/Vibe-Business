@@ -88,7 +88,7 @@ export default async function ProjectSettingsPage({
         <Surface id="founder-intent" level="section" padding="lg" className="scroll-mt-32 flex flex-col gap-3">
           <div className="flex flex-col gap-2">
             <h3 className="text-fg text-base font-semibold">What you told Vibe</h3>
-            <p className="text-fg-muted max-w-[65ch] text-sm">
+            <p className="text-fg-muted max-w-[65ch] text-body">
               Vibe works out what your product is on its own. This is the part only you know — and
               it changes which problems Vibe puts first.
             </p>
@@ -99,12 +99,12 @@ export default async function ProjectSettingsPage({
         <Surface level="section" padding="lg" className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
             <h3 className="text-fg text-base font-semibold">Production website</h3>
-            <p className="text-fg-muted max-w-[65ch] text-sm">
+            <p className="text-fg-muted max-w-[65ch] text-body">
               The address a visitor reaches. Vibe checks what is actually served there, which is
               the only way to confirm what your code suggests.
             </p>
             {project.productionUrl === null && (
-              <p className="text-fg-muted text-sm">Not configured</p>
+              <p className="text-fg-muted text-body">Not configured</p>
             )}
           </div>
           <ProductionUrlForm projectId={project.id} currentUrl={project.productionUrl} />
@@ -114,7 +114,7 @@ export default async function ProjectSettingsPage({
           <div className="flex flex-col gap-2">
             <h3 className="text-fg text-base font-semibold">Repository</h3>
             {project.repository ? (
-              <p className="text-fg-muted max-w-[65ch] text-sm">
+              <p className="text-fg-muted max-w-[65ch] text-body">
                 Vibe reads{" "}
                 <a
                   href={project.repository.htmlUrl}
@@ -125,12 +125,12 @@ export default async function ProjectSettingsPage({
                   {project.repository.fullName}
                 </a>{" "}
                 and writes prepared changes to isolated branches off{" "}
-                <span className="font-mono text-xs">{project.repository.defaultBranch}</span>.
+                <span className="font-mono text-caption">{project.repository.defaultBranch}</span>.
               </p>
             ) : (
               <div className="flex flex-col items-start gap-3">
                 <StatusPill tone="neutral">No repository connected</StatusPill>
-                <p className="text-fg-muted text-sm">
+                <p className="text-fg-muted text-body">
                   Vibe is not reading any repository for this project. Connect one to resume
                   analysis and execution — everything the project already knows is kept.
                 </p>
@@ -140,7 +140,7 @@ export default async function ProjectSettingsPage({
           </div>
           {project.repository && (
             <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-              <p className="text-fg-muted text-xs">
+              <p className="text-fg-muted text-caption">
                 Disconnecting stops Vibe reading this repository. The project and everything it has
                 learned stay.
               </p>
@@ -154,7 +154,7 @@ export default async function ProjectSettingsPage({
             disconnected is exactly the one somebody is most likely to want gone.
           */}
           <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-            <p className="text-fg-muted text-xs">
+            <p className="text-fg-muted text-caption">
               Deleting removes the project and everything Vibe has learned about it. This cannot be
               undone.
             </p>
@@ -170,13 +170,13 @@ export default async function ProjectSettingsPage({
           <h3 className="text-fg text-base font-semibold">Elsewhere</h3>
           <ul className="flex flex-col gap-2">
             <li className="flex flex-wrap items-baseline justify-between gap-3">
-              <span className="text-fg-secondary text-sm">
+              <span className="text-fg-secondary text-body">
                 Credits, your plan and what things cost
               </span>
               <StandaloneLink href="/app/billing">Credits and billing</StandaloneLink>
             </li>
             <li className="flex flex-wrap items-baseline justify-between gap-3">
-              <span className="text-fg-secondary text-sm">
+              <span className="text-fg-secondary text-body">
                 Everything Vibe has done on this project
               </span>
               <StandaloneLink href={projectSectionHref(project.id, "activity")}>

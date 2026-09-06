@@ -62,7 +62,7 @@ function shortSha(sha: string | null): string | null {
  */
 function NotDeployed() {
   return (
-    <p className="text-xs text-fg-muted">
+    <p className="text-caption text-fg-muted">
       Vibe never deploys. It moved your default branch and nothing else — if your repository
       builds and releases on its own, that is what happens next, and Vibe neither triggers nor
       observes it.
@@ -220,7 +220,7 @@ export function MergePanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-sm font-medium text-fg-body">Merge</h4>
+      <h4 className="text-body font-medium text-fg-body">Merge</h4>
 
       {confirming ? (
         <MergeDialog
@@ -236,13 +236,13 @@ export function MergePanel({
         />
       ) : card.state === "merged" ? (
         <div className="space-y-2">
-          <p className="text-sm text-mint">Merged</p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-mint">Merged</p>
+          <p className="text-body text-fg-secondary">
             Repository default branch updated successfully
             {card.mergedAt ? ` · ${localTime(card.mergedAt)}` : ""}
           </p>
           {card.resultingDefaultHeadSha && (
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               {card.defaultBranch ? (
                 <>
                   <code className="text-fg-prose">{card.defaultBranch}</code> now points at{" "}
@@ -258,15 +258,15 @@ export function MergePanel({
         </div>
       ) : card.state === "merging" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Merging…</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-prose">Merging…</p>
+          <p className="text-caption text-fg-muted">
             Vibe is revalidating the repository state and updating the default branch.
           </p>
         </div>
       ) : card.state === "ready" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Ready to merge</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-prose">Ready to merge</p>
+          <p className="text-caption text-fg-muted">
             {card.defaultBranch ? (
               <>
                 <code className="text-fg-prose">{card.defaultBranch}</code> is still at{" "}
@@ -294,18 +294,18 @@ export function MergePanel({
         </div>
       ) : card.state === "blocked" || card.state === "failed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber">
+          <p className="text-body text-amber">
             {card.state === "blocked" ? "Merge blocked" : "Merge did not complete"}
           </p>
-          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-body text-fg-secondary">{card.failureMessage}</p>}
           {/* Said explicitly for the blocked case, because "we stopped" is the
               fact a user most needs after a refused write — and it is only true
               for `blocked`, which the database guarantees wrote nothing (§29). */}
           {card.state === "blocked" && (
-            <p className="text-xs text-fg-muted">Vibe did not modify the repository.</p>
+            <p className="text-caption text-fg-muted">Vibe did not modify the repository.</p>
           )}
           {card.state === "failed" && card.resultingDefaultHeadSha && (
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               The default branch was last observed at{" "}
               <code className="text-fg-prose">{shortSha(card.resultingDefaultHeadSha)}</code>.
             </p>
@@ -313,15 +313,15 @@ export function MergePanel({
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Not available</p>
+          <p className="text-body text-fg-secondary">Not available</p>
           {/* Never offers to fix the cause itself: re-preparing, re-validating
               and re-reviewing all cost provider time, and starting them on the
               user's behalf is what CLAUDE.md rule 60 forbids (§29). */}
-          {card.failureMessage && <p className="text-xs text-fg-muted">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-caption text-fg-muted">{card.failureMessage}</p>}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
+      {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
     </section>
   );
 }

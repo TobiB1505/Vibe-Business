@@ -142,12 +142,12 @@ export function ConfirmPanel({
         id={titleId}
         ref={headingRef}
         tabIndex={-1}
-        className="text-sm font-medium text-fg focus-visible:outline-none"
+        className="text-body font-medium text-fg focus-visible:outline-none"
       >
         {title}
       </h5>
 
-      <div className="space-y-2 text-sm text-fg-prose">{children}</div>
+      <div className="space-y-2 text-body text-fg-prose">{children}</div>
 
       <div className="flex gap-2">
         <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>

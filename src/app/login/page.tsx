@@ -71,14 +71,14 @@ export default async function LoginPage({
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Sign in</h1>
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           With Google, or the email and password you signed up with.
         </p>
       </div>
 
       <LoginForm next={next} initialError={error} />
 
-      <p className="text-fg-muted text-sm">
+      <p className="text-fg-muted text-body">
         No account yet?{" "}
         <Link href="/signup" className="text-mint hover:text-mint-hover rounded-sm">
           Create one

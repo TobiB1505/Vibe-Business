@@ -81,7 +81,7 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
           </>
         </ConfirmPanel>
         {failure && (
-          <p role="alert" className="mt-3 text-sm text-amber">
+          <p role="alert" className="mt-3 text-body text-amber">
             {FAILURE_MESSAGES[failure]}
           </p>
         )}
@@ -103,7 +103,7 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
         Delete project
       </InlineAction>
       {failure && (
-        <p role="alert" className="text-sm text-amber">
+        <p role="alert" className="text-body text-amber">
           {FAILURE_MESSAGES[failure]}
         </p>
       )}

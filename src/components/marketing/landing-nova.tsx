@@ -117,7 +117,7 @@ export function LandingNova() {
                 <NovaPresence state={entry.state} seed="vibe" size="lg" still />
                 <div className="flex flex-col gap-1.5">
                   <span className="text-fg text-ui font-semibold">{entry.label}</span>
-                  <span className="text-fg-muted text-sm leading-relaxed">{entry.meaning}</span>
+                  <span className="text-fg-muted text-body leading-relaxed">{entry.meaning}</span>
                 </div>
               </li>
             ))}

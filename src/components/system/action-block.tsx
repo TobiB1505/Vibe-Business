@@ -74,7 +74,7 @@ export function ActionBlock({
 
       {consequence && (
         <Disclosure label={consequenceLabel}>
-          <div className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{consequence}</div>
+          <div className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{consequence}</div>
         </Disclosure>
       )}
     </div>

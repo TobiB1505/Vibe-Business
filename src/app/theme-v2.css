@@ -160,6 +160,15 @@
   /* D5's own number. v1 keeps `leading-snug` because that is what its eleven
      card headings already render; here there is nothing to preserve. */
   --text-card-title--line-height: 1.35;
+  /* v2 answers v1's body step. Same size — the direction is tighter in the
+     display range and unchanged where a founder reads. */
+  --text-body: 0.875rem;
+  /* v1 keeps Tailwind's 1.4286 so the sweep moves nothing there. Loosening
+     prose is one of the things a second palette is for, and this is where
+     that decision lives. */
+  --text-body--line-height: 1.58;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.45;
 
   /* ── The eyebrow ─────────────────────────────────────────────────────
      Treatment 2, chosen at review: the interface family, uppercase, and

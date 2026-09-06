@@ -65,7 +65,7 @@ export function FirstMoveDecision({
       />
 
       {state?.ok === false && (
-        <p className="text-amber text-sm" role="status">
+        <p className="text-amber text-body" role="status">
           Vibe could not start planning. Nothing was charged — you can try again from your
           workspace.
         </p>

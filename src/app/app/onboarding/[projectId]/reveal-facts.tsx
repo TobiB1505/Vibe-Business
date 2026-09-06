@@ -36,8 +36,8 @@ export function ProductRevealFacts({ facts }: { facts: readonly UnderstandingFac
           key={fact.label}
           className="border-line-2 bg-surface-2 flex flex-col gap-1 rounded-xl border p-4"
         >
-          <p className="text-fg-meta text-xs">{fact.label}</p>
-          <p className="text-fg-body text-sm">{fact.value}</p>
+          <p className="text-fg-meta text-caption">{fact.label}</p>
+          <p className="text-fg-body text-body">{fact.value}</p>
           <p className="text-fg-muted text-ui">{fact.note}</p>
           <CitationCount
             citations={fact.evidence.map((id) => {

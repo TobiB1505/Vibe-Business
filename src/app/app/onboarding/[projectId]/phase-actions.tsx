@@ -29,7 +29,7 @@ export function RetryProductScan({ projectId }: { projectId: string }) {
         </Button>
       </form>
       {state?.ok && state.alreadyRunning && (
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           The run already in progress is still going, so Vibe has not started a second one. Leave
           this page and come back — it will be here when it finishes.
         </p>

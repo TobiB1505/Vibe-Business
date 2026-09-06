@@ -43,7 +43,7 @@ export function AgentPreviewActions({
         <MonoLabel as="h4" id="agent-preview-actions-title" className="text-mint">
           Preview controls
         </MonoLabel>
-        <p className="text-fg-muted text-sm leading-relaxed">
+        <p className="text-fg-muted text-body leading-relaxed">
           {/* No comparison to capture any more (ADR 0065): the preview itself is
               what a visual approval binds to. */}
           Start the isolated preview and look at the change running.
@@ -163,7 +163,7 @@ export function AgentReviewDecision({
 
       {(change.progress.merged || change.outcome.state !== "unavailable") && (
         <details className="rounded-well border-line-2 bg-well group border px-4 py-3">
-          <summary className="text-fg-secondary hover:text-fg-body cursor-pointer list-none text-sm font-medium">
+          <summary className="text-fg-secondary hover:text-fg-body cursor-pointer list-none text-body font-medium">
             <span className="group-open:hidden">After the merge</span>
             <span className="hidden group-open:inline">Hide post-merge record</span>
           </summary>

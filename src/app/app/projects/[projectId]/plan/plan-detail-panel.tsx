@@ -98,7 +98,7 @@ const POLL_INTERVAL_MS = 3_000;
  */
 function ExpandableText({ text }: { text: string }) {
   return (
-    <SeeMore lines={2} textClassName="text-fg-prose text-sm leading-relaxed">
+    <SeeMore lines={2} textClassName="text-fg-prose text-body leading-relaxed">
       {text}
     </SeeMore>
   );
@@ -175,13 +175,13 @@ function PlanStepRow({
             {done && !covered ? <CheckIcon size={12} /> : String(index + 1).padStart(2, "0")}
           </span>
 
-          <span className="text-fg min-w-0 flex-1 text-sm leading-snug font-medium">
+          <span className="text-fg min-w-0 flex-1 text-body leading-snug font-medium">
             {step.title}
           </span>
 
           <span
             className={cn(
-              "shrink-0 text-right text-xs",
+              "shrink-0 text-right text-caption",
               isCurrent
                 ? "text-mint"
                 : sequence.state === "waiting"
@@ -202,20 +202,20 @@ function PlanStepRow({
         </summary>
 
         <div className="flex flex-col gap-4 px-2 pt-1 pb-5 pl-12">
-          <p className="text-fg-muted text-sm leading-relaxed">{step.description}</p>
+          <p className="text-fg-muted text-body leading-relaxed">{step.description}</p>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-fg-secondary text-xs font-medium">
+            <span className="text-fg-secondary text-caption font-medium">
               {responsibility.headline}
             </span>
             {responsibility.sublabel && (
-              <span className="text-fg-muted text-xs">{responsibility.sublabel}</span>
+              <span className="text-fg-muted text-caption">{responsibility.sublabel}</span>
             )}
           </div>
 
           <span
             className={cn(
-              "text-xs",
+              "text-caption",
               sequence.state === "waiting" ? "text-amber" : "text-fg-meta",
             )}
           >
@@ -225,25 +225,25 @@ function PlanStepRow({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <MonoLabel className="tracking-[0.14em]">Why this step exists</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">{step.purpose}</p>
+              <p className="text-fg-secondary text-body leading-relaxed">{step.purpose}</p>
             </div>
             <div className="flex flex-col gap-1">
               <MonoLabel className="tracking-[0.14em]">Done when</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">{step.completionCriteria}</p>
+              <p className="text-fg-secondary text-body leading-relaxed">{step.completionCriteria}</p>
             </div>
           </div>
 
           {dependencyTitles.length > 0 && (
             <div className="flex flex-col gap-1">
               <MonoLabel className="tracking-[0.14em]">Depends on</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">
+              <p className="text-fg-secondary text-body leading-relaxed">
                 {dependencyTitles.join(", ")}
               </p>
             </div>
           )}
 
           {step.requiresApproval && (
-            <p className="text-fg-muted text-xs">Approval required before Vibe acts on this.</p>
+            <p className="text-fg-muted text-caption">Approval required before Vibe acts on this.</p>
           )}
         </div>
       </details>
@@ -325,7 +325,7 @@ function PlanBody({
               <MonoLabel className="text-amber tracking-[0.14em]">{moveEyebrow}</MonoLabel>
             )}
             <h3 className="text-fg text-xl leading-tight font-semibold">Vibe needs your input</h3>
-            <p className="text-fg-muted text-sm leading-relaxed">
+            <p className="text-fg-muted text-body leading-relaxed">
               Answer the current question so Vibe can finish planning{" "}
               {moveTitle ? `“${moveTitle}”` : "this move"}.
             </p>
@@ -356,7 +356,7 @@ function PlanBody({
           <Disclosure label={`See the full planned work · ${planMetaSummary(steps)}`}>
             <div className="flex flex-col gap-4">
               {plan.goal && (
-                <h4 className="text-fg text-sm leading-snug font-semibold">{plan.goal}</h4>
+                <h4 className="text-fg text-body leading-snug font-semibold">{plan.goal}</h4>
               )}
               {plan.whyNow && <ExpandableText text={plan.whyNow} />}
               {plannedSteps}
@@ -447,7 +447,7 @@ function PlanBody({
       {plan.expectedOutcome && (
         <div className="border-line-2 flex flex-col gap-2 border-t pt-4">
           <MonoLabel className="tracking-[0.14em]">If this plan works</MonoLabel>
-          <p className="text-fg-body text-sm leading-relaxed">{plan.expectedOutcome}</p>
+          <p className="text-fg-body text-body leading-relaxed">{plan.expectedOutcome}</p>
         </div>
       )}
 
@@ -464,7 +464,7 @@ function PlanBody({
           {plan.addressesRootProblem && (
             <div className="flex flex-col gap-1.5">
               <MonoLabel className="tracking-[0.14em]">The problem this addresses</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">
+              <p className="text-fg-secondary text-body leading-relaxed">
                 {plan.addressesRootProblem}
               </p>
             </div>
@@ -475,7 +475,7 @@ function PlanBody({
               <MonoLabel className="tracking-[0.14em]">What this plan assumes</MonoLabel>
               <ul className="flex flex-col gap-1">
                 {plan.assumptions.map((assumption) => (
-                  <li key={assumption} className="text-fg-secondary text-xs leading-relaxed">
+                  <li key={assumption} className="text-fg-secondary text-caption leading-relaxed">
                     {assumption}
                   </li>
                 ))}
@@ -490,7 +490,7 @@ function PlanBody({
                 {evidenceIds.map((id) => {
                   const { source, detail } = describeEvidenceId(id);
                   return (
-                    <li key={id} className="text-fg-muted text-xs leading-relaxed" title={id}>
+                    <li key={id} className="text-fg-muted text-caption leading-relaxed" title={id}>
                       <span className="text-fg-secondary font-mono">{source}:</span> {detail}
                     </li>
                   );
@@ -504,7 +504,7 @@ function PlanBody({
               <MonoLabel className="tracking-[0.14em]">Notes</MonoLabel>
               <ul className="flex flex-col gap-1">
                 {plan.validationNotes.map((note) => (
-                  <li key={note} className="text-fg-muted text-xs leading-relaxed">
+                  <li key={note} className="text-fg-muted text-caption leading-relaxed">
                     {note}
                   </li>
                 ))}
@@ -539,14 +539,14 @@ function FounderActionCard({
         <StatusPill tone="waiting" dot>
           {prompt.pill}
         </StatusPill>
-        <span className="text-fg-muted text-xs">Step {step.order}</span>
+        <span className="text-fg-muted text-caption">Step {step.order}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
         <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
-        <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+        <p className="text-fg-prose text-body leading-relaxed">{step.description}</p>
         {prompt.lead && (
-          <p className="text-fg-muted text-sm leading-relaxed">{prompt.lead}</p>
+          <p className="text-fg-muted text-body leading-relaxed">{prompt.lead}</p>
         )}
       </div>
 
@@ -557,7 +557,7 @@ function FounderActionCard({
         {/* The step's own criterion, in its own element. Vibe writes the
             prompt beside it and never parses it into choices — it is model
             output, and model wording is not a machine API. */}
-        <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
+        <p className="text-fg-body mt-1.5 text-body leading-relaxed">{step.completionCriteria}</p>
       </div>
 
       <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
@@ -565,7 +565,7 @@ function FounderActionCard({
           <div className="flex w-full flex-col gap-1.5">
             <label
               htmlFor={`finding-${step.id}`}
-              className="text-fg-secondary text-sm font-medium"
+              className="text-fg-secondary text-body font-medium"
             >
               {prompt.finding.label}
             </label>
@@ -575,10 +575,10 @@ function FounderActionCard({
               required
               rows={4}
               maxLength={1200}
-              className="border-line-2 bg-surface-2 text-fg-body rounded-well w-full resize-y border px-3 py-2 text-sm leading-relaxed"
+              className="border-line-2 bg-surface-2 text-fg-body rounded-well w-full resize-y border px-3 py-2 text-body leading-relaxed"
               data-testid="attestation-finding"
             />
-            <p className="text-fg-muted text-xs">{prompt.finding.help}</p>
+            <p className="text-fg-muted text-caption">{prompt.finding.help}</p>
           </div>
         )}
         <Button type="submit" disabled={pending || state?.ok === true} busy={pending}>
@@ -588,11 +588,11 @@ function FounderActionCard({
               ? "Recorded"
               : prompt.submitLabel}
         </Button>
-        <p className="text-fg-muted text-xs">{prompt.footnote}</p>
+        <p className="text-fg-muted text-caption">{prompt.footnote}</p>
       </form>
 
       {state && !state.ok && (
-        <p role="alert" className="text-coral text-sm">
+        <p role="alert" className="text-coral text-body">
           {state.message}
         </p>
       )}
@@ -763,7 +763,7 @@ export function PlanDetailPanel({
           <h3 id="why-this-move" className="text-fg text-base font-semibold">Why this move</h3>
           <ExpandableText text={whyThisMove} />
           {lineageHeadline ? (
-            <p className="text-fg-muted text-xs leading-relaxed" data-testid="move-lineage">
+            <p className="text-fg-muted text-caption leading-relaxed" data-testid="move-lineage">
               <span className="text-fg-meta">From your audit: </span>{lineageHeadline}
             </p>
           ) : null}
@@ -807,7 +807,7 @@ export function PlanDetailPanel({
           ) : executionOwnsPrimary ? (
             <div className="flex flex-col gap-1.5">
               <h3 className="text-fg text-xl font-semibold">Ready for the next step</h3>
-              <p className="text-fg-prose text-sm leading-relaxed">
+              <p className="text-fg-prose text-body leading-relaxed">
                 Vibe has enough grounded context to act on this Move. Review the action below
                 before anything is prepared.
               </p>
@@ -816,7 +816,7 @@ export function PlanDetailPanel({
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <h3 className="text-fg text-xl font-semibold">Plan the work</h3>
-                <p className="text-fg-prose text-sm leading-relaxed">
+                <p className="text-fg-prose text-body leading-relaxed">
                   {moveTitle
                     ? `Vibe can work out how to do “${moveTitle}” — what changes, who owns each part, and where to start.`
                     : "Vibe can work out what changes, who owns each part, and where to start."}
@@ -882,18 +882,18 @@ export function PlanDetailPanel({
       ) : null}
 
       {operation?.status === "failed" && operation.failureCode && (
-        <p className="text-amber text-sm">
+        <p className="text-amber text-body">
           Vibe couldn&apos;t work out a plan for this move.{" "}
           {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
         </p>
       )}
 
       {actionState && !actionState.ok && (
-        <p className="text-amber text-sm">{OPERATION_FAILURE_MESSAGES[actionState.error]}</p>
+        <p className="text-amber text-body">{OPERATION_FAILURE_MESSAGES[actionState.error]}</p>
       )}
 
       {actionState?.ok && actionState.kind === "reused" && (
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           Nothing has changed since the last plan, so the existing one is shown.
         </p>
       )}

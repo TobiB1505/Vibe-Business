@@ -58,7 +58,7 @@ export function AuthShell({
           <p className="text-fg text-hero font-bold text-balance">{headline}</p>
           {intro && <p className="text-fg-secondary max-w-[38ch] text-base leading-relaxed">{intro}</p>}
           {assurances && assurances.length > 0 && (
-            <ul className="text-fg-prose flex flex-col gap-3 text-sm">
+            <ul className="text-fg-prose flex flex-col gap-3 text-body">
               {assurances.map((assurance) => (
                 <li key={assurance} className="flex items-center gap-3">
                   <span
@@ -74,7 +74,7 @@ export function AuthShell({
           )}
         </div>
 
-        <p className="text-fg-muted relative font-mono text-xs">
+        <p className="text-fg-muted relative font-mono text-caption">
           The business layer for AI-built products.
         </p>
       </div>

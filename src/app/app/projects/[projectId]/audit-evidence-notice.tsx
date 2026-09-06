@@ -28,8 +28,8 @@ export function AuditEvidenceNotice({
   if (notice.kind === "deep_scan_stale") {
     return (
       <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
-        <p className="text-sm text-fg-prose">New product evidence available</p>
-        <p className="text-sm text-fg-muted">
+        <p className="text-body text-fg-prose">New product evidence available</p>
+        <p className="text-body text-fg-muted">
           A Deep Scan has run since this audit was produced. Re-running the audit spends another AI
           call and may change the result in either direction.
         </p>
@@ -39,10 +39,10 @@ export function AuditEvidenceNotice({
 
   return (
     <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
-      <p className="text-sm text-fg-prose">
+      <p className="text-body text-fg-prose">
         Vibe has not analyzed your signed-in product experience yet.
       </p>
-      <p className="text-sm text-fg-muted">
+      <p className="text-body text-fg-muted">
         Your audit can still run, but a Deep Scan may provide additional product evidence.
       </p>
       {notice.canStartDeepScan && (

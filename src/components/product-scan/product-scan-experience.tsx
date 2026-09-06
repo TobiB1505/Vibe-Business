@@ -622,7 +622,7 @@ function DiscoveringPanel({
   return (
     <aside className="flex h-[31rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-fg">What we&apos;re discovering</h3>
+        <h3 className="text-body font-semibold text-fg">What we&apos;re discovering</h3>
         <SparklesIcon size={17} className="text-mint" />
       </div>
 
@@ -652,8 +652,8 @@ function DiscoveringPanel({
           </AnimatePresence>
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-fg">{productName}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
+          <p className="truncate text-body font-semibold text-fg">{productName}</p>
+          <p className="mt-1 line-clamp-2 text-caption leading-5 text-fg-muted">
             {presentation?.description ?? "Vibe is assembling a grounded product picture."}
           </p>
         </div>
@@ -667,11 +667,11 @@ function DiscoveringPanel({
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <Icon size={16} className={facet.ready ? "text-fg-body" : "text-fg-muted"} />
-              <span className="truncate text-xs text-fg-muted">{facet.label}</span>
+              <span className="truncate text-caption text-fg-muted">{facet.label}</span>
             </div>
             <div className="flex min-w-0 max-w-[9.5rem] items-center gap-2">
               <span
-                className={`truncate text-right text-xs ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+                className={`truncate text-right text-caption ${facet.ready ? "text-mint" : "text-fg-meta"}`}
               >
                 {facet.summary}
               </span>
@@ -685,7 +685,7 @@ function DiscoveringPanel({
         ))}
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-2 text-xs text-mint">
+      <div className="mt-3 flex items-center justify-end gap-2 text-caption text-mint">
         <span>{presentation ? "Product profile ready" : "Live discovery"}</span>
         <span aria-hidden="true">→</span>
       </div>
@@ -711,14 +711,14 @@ function LiveActivity({
         <span
           className={`size-2 rounded-full ${active ? "bg-mint shadow-[0_0_10px_var(--color-mint)]" : "bg-mint/70"}`}
         />
-        <h3 className="text-sm font-semibold text-fg">Live activity</h3>
+        <h3 className="text-body font-semibold text-fg">Live activity</h3>
       </div>
       <ol className="mt-3 grid flex-1 grid-rows-8 overflow-hidden">
         {visibleEvents.length ? (
           visibleEvents.map((event) => (
             <motion.li
               key={event.id}
-              className={`grid min-h-0 grid-cols-[1.25rem_1fr_auto] items-center gap-2 rounded-lg px-1.5 text-xs ${
+              className={`grid min-h-0 grid-cols-[1.25rem_1fr_auto] items-center gap-2 rounded-lg px-1.5 text-caption ${
                 event.id === pulseEventId ? "bg-mint/[0.07] text-mint" : "text-fg-muted"
               }`}
               initial={false}
@@ -742,7 +742,7 @@ function LiveActivity({
             </motion.li>
           ))
         ) : (
-          <li className="col-span-full row-span-8 flex items-center justify-center text-center text-xs text-fg-muted">
+          <li className="col-span-full row-span-8 flex items-center justify-center text-center text-caption text-fg-muted">
             {active
               ? "The first grounded discovery will appear here."
               : "Start a scan to build the activity trail."}
@@ -769,7 +769,7 @@ function DiscoveriesGrid({
   return (
     <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-fg">What we&apos;ve discovered so far</h3>
+        <h3 className="text-body font-semibold text-fg">What we&apos;ve discovered so far</h3>
         <span className="rounded-full border border-mint/25 bg-mint/[0.06] px-2.5 py-1 font-mono text-[0.66rem] text-mint">
           {found} found
         </span>
@@ -811,7 +811,7 @@ function DiscoveriesGrid({
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-fg">{facet.label}</p>
+                <p className="truncate text-caption font-semibold text-fg">{facet.label}</p>
                 <p
                   className={`mt-1 line-clamp-2 text-[0.68rem] leading-4 ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}
                 >
@@ -846,7 +846,7 @@ function ScanFooter({
         <SparklesIcon size={20} />
       </div>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-fg">
+        <p className="text-body font-medium text-fg">
           {failed
             ? "The scan needs attention"
             : active
@@ -855,7 +855,7 @@ function ScanFooter({
                 ? `${eventCount} individual discoveries saved`
                 : "Ready to understand your product"}
         </p>
-        <p className="mt-0.5 text-xs text-fg-muted">
+        <p className="mt-0.5 text-caption text-fg-muted">
           {active
             ? "You can leave this page — every discovery is stored as it arrives."
             : failed
@@ -1055,7 +1055,7 @@ export function ProductScanExperience({
                 >
                   Your product picture is ready
                 </h2>
-                <p className="mt-1 text-xs text-fg-muted">
+                <p className="mt-1 text-caption text-fg-muted">
                   {savedDiscoveryCount} individual discoveries saved for {productName}.
                 </p>
               </div>
@@ -1093,7 +1093,7 @@ export function ProductScanExperience({
                 >
                   Understanding <span className="text-mint">your product</span>
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
+                <p className="mt-2 max-w-2xl text-body leading-6 text-fg-muted sm:text-base">
                   Vibe is learning what you built, how it works, and what kind of business it could
                   become.
                 </p>
@@ -1113,7 +1113,7 @@ export function ProductScanExperience({
                       </Button>
                     ) : null}
                     {blockedReason ? (
-                      <p className="max-w-xs text-right text-xs text-fg-muted max-lg:text-center">
+                      <p className="max-w-xs text-right text-caption text-fg-muted max-lg:text-center">
                         {blockedReason}
                       </p>
                     ) : (
@@ -1139,7 +1139,7 @@ export function ProductScanExperience({
               {displayFailure ? (
                 <div
                   role="alert"
-                  className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-sm text-coral"
+                  className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-body text-coral"
                 >
                   {displayFailure}
                 </div>

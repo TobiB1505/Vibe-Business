@@ -73,13 +73,13 @@ export function DeleteAccountSection({ state }: { state: ErasureViewState }) {
     >
       <div className="flex flex-col gap-2">
         <h2 className="text-fg text-title font-bold">Delete your account</h2>
-        <p className="text-fg-muted text-sm leading-6">
+        <p className="text-fg-muted text-body leading-6">
           Erase your Vibe account, every project in it, and your sign-in.
         </p>
       </div>
 
       {state.kind === "running" ? (
-        <p role="status" className="text-fg-muted text-sm leading-6">
+        <p role="status" className="text-fg-muted text-body leading-6">
           Your account is being erased. Vibe has stopped starting new work, and you will be signed
           out once it finishes.
         </p>
@@ -129,7 +129,7 @@ export function DeleteAccountSection({ state }: { state: ErasureViewState }) {
       )}
 
       {failure && (
-        <p role="alert" className="text-sm text-amber">
+        <p role="alert" className="text-body text-amber">
           {FAILURE_MESSAGES[failure]}
         </p>
       )}

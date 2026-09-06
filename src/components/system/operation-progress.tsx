@@ -78,7 +78,7 @@ export function ProgressSteps({
                 <div className="flex items-center justify-between gap-3">
                   <span
                     className={cn(
-                      "text-sm font-medium",
+                      "text-body font-medium",
                       step.state === "pending" ? "text-fg-muted" : "text-fg-body",
                     )}
                   >
@@ -93,7 +93,7 @@ export function ProgressSteps({
                   )}
                 </div>
                 {STAGE_DESCRIPTIONS[step.label] && (
-                  <span className="text-fg-meta text-xs leading-relaxed">
+                  <span className="text-fg-meta text-caption leading-relaxed">
                     {STAGE_DESCRIPTIONS[step.label]}
                   </span>
                 )}
@@ -191,7 +191,7 @@ export function OperationProgress({
   if (operation.status === "failed") {
     return (
       <div className={cn("flex flex-col gap-3", className)} data-testid="operation-progress">
-        <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+        <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
           {operation.failureCode
             ? OPERATION_FAILURE_MESSAGES[operation.failureCode]
             : "This run stopped before it finished."}
@@ -203,7 +203,7 @@ export function OperationProgress({
 
   return (
     <div className={cn("flex flex-col gap-3", className)} data-testid="operation-progress">
-      <p className="text-fg-prose text-sm leading-relaxed">
+      <p className="text-fg-prose text-body leading-relaxed">
         {operation.stalled
           ? "This is taking much longer than expected."
           : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
@@ -211,7 +211,7 @@ export function OperationProgress({
 
       <ProgressSteps steps={operationProgressSteps(sequence, operation)} variant={variant} />
 
-      <p className="text-fg-muted text-xs leading-relaxed">
+      <p className="text-fg-muted text-caption leading-relaxed">
         {operation.stalled
           ? "You can start again if this attempt never finishes."
           : (runningNote ?? "You can leave this page. Vibe will continue.")}

@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils/cn";
  */
 
 export const inputClassName =
-  "rounded-field bg-field border-line-strong text-fg-body placeholder:text-fg-meta w-full border px-4 py-3 text-sm " +
+  "rounded-field bg-field border-line-strong text-fg-body placeholder:text-fg-meta w-full border px-4 py-3 text-body " +
   "transition-interactive " +
   "focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none " +
   "disabled:text-fg-disabled disabled:cursor-not-allowed";
@@ -56,12 +56,12 @@ export function Field({
       </div>
       {children}
       {hint && (
-        <p id={`${id}-hint`} className="text-fg-muted text-xs">
+        <p id={`${id}-hint`} className="text-fg-muted text-caption">
           {hint}
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} className="text-coral text-xs">
+        <p id={`${id}-error`} className="text-coral text-caption">
           {error}
         </p>
       )}

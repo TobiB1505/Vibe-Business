@@ -40,14 +40,14 @@ export default async function ResetPasswordPage() {
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Set a new password</h1>
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           You&apos;ll stay signed in on this device once it&apos;s saved.
         </p>
       </div>
 
       <ResetPasswordForm />
 
-      <p className="text-fg-muted text-sm">
+      <p className="text-fg-muted text-body">
         Changed your mind?{" "}
         <Link href="/app" className="text-mint hover:text-mint-hover rounded-sm">
           Back to Vibe

@@ -94,7 +94,7 @@ function Frame({
         )}
       >
         {src === null ? (
-          <div className="bg-well text-fg-muted flex h-full items-center justify-center px-6 text-center text-sm">
+          <div className="bg-well text-fg-muted flex h-full items-center justify-center px-6 text-center text-body">
             No capture available for this change.
           </div>
         ) : (
@@ -241,7 +241,7 @@ export function AgentPreviewStage({
                     </svg>
                   </span>
                   <span className="flex min-w-0 flex-col gap-1">
-                    <span className="text-fg-body text-sm font-semibold">{change.title}</span>
+                    <span className="text-fg-body text-body font-semibold">{change.title}</span>
                     <span className="text-fg-muted text-[0.8125rem] leading-relaxed">
                       {change.detail}
                     </span>
@@ -258,19 +258,19 @@ export function AgentPreviewStage({
           </MonoLabel>
           <dl className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-fg-muted text-sm">Files changed</dt>
-              <dd className="text-fg font-mono text-sm">{filesChanged}</dd>
+              <dt className="text-fg-muted text-body">Files changed</dt>
+              <dd className="text-fg font-mono text-body">{filesChanged}</dd>
             </div>
             {linesAdded !== undefined && (
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-fg-muted text-sm">Lines added</dt>
-                <dd className="text-mint font-mono text-sm">+{linesAdded}</dd>
+                <dt className="text-fg-muted text-body">Lines added</dt>
+                <dd className="text-mint font-mono text-body">+{linesAdded}</dd>
               </div>
             )}
             {linesRemoved !== undefined && (
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-fg-muted text-sm">Lines removed</dt>
-                <dd className="text-coral font-mono text-sm">−{linesRemoved}</dd>
+                <dt className="text-fg-muted text-body">Lines removed</dt>
+                <dd className="text-coral font-mono text-body">−{linesRemoved}</dd>
               </div>
             )}
           </dl>
@@ -295,7 +295,7 @@ export function AgentPreviewStage({
               Review and approve
             </button>
           )}
-          <p className="text-fg-meta text-center text-xs">
+          <p className="text-fg-meta text-center text-caption">
             Nothing is live yet. You&rsquo;re in control.
           </p>
           {filesHref !== undefined && (

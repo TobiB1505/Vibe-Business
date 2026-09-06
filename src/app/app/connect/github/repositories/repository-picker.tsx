@@ -38,7 +38,7 @@ export function RepositoryPicker({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search repositories…"
-          className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 rounded-md border px-3 py-2 text-sm focus:ring-4 focus:outline-none"
+          className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 rounded-md border px-3 py-2 text-body focus:ring-4 focus:outline-none"
         />
       )}
 
@@ -65,22 +65,22 @@ export function RepositoryPicker({
                 className="shrink-0"
               />
               <span className="min-w-0 flex-1">
-                <span className="text-fg-body block truncate text-sm font-medium">{repo.fullName}</span>
-                <span className="text-fg-meta block text-xs">
+                <span className="text-fg-body block truncate text-body font-medium">{repo.fullName}</span>
+                <span className="text-fg-meta block text-caption">
                   {repo.private ? "Private" : "Public"} · default branch {repo.defaultBranch}
                 </span>
               </span>
               {repo.alreadyConnected && (
-                <span className="text-fg-meta shrink-0 text-xs">Already connected</span>
+                <span className="text-fg-meta shrink-0 text-caption">Already connected</span>
               )}
             </label>
           </li>
         ))}
       </ul>
 
-      {filtered.length === 0 && <p className="text-fg-meta text-sm">No repositories match your search.</p>}
+      {filtered.length === 0 && <p className="text-fg-meta text-body">No repositories match your search.</p>}
 
-      {state && !state.ok && <p className="text-coral text-sm">{state.error}</p>}
+      {state && !state.ok && <p className="text-coral text-body">{state.error}</p>}
 
       <div>
         <Button

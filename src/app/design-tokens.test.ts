@@ -327,3 +327,133 @@ function* walk(dir: string): Generator<string> {
     else yield path;
   }
 }
+
+/**
+ * A `text-*` class that names no token renders nothing and says so to nobody.
+ *
+ * `text-ui-lg` was written on Nova's question and Nova's prompt — two of the
+ * most prominent sentences in the product — and is declared in neither
+ * palette. Measured in a browser it computed to 16px, which is exactly what no
+ * class at all computes to. It survived because 16px happens to be larger than
+ * body text, so it looked approximately intentional.
+ *
+ * Tailwind cannot warn about this: an unknown utility is simply not emitted.
+ * Only a comparison of what is written against what is declared can catch it.
+ */
+describe("every type class names a token that exists", () => {
+  const declared = new Set(
+    [...CSS.matchAll(/--text-([a-z0-9-]+):/g)]
+      .map((match) => match[1])
+      // `--text-x--line-height` and friends are modifiers of a size, not sizes.
+      .filter((name) => !name.includes("--")),
+  );
+
+  /** Tailwind's own scale, which is legitimate even where Vibe has its own. */
+  const TAILWIND = new Set([
+    "xs",
+    "sm",
+    "base",
+    "lg",
+    "xl",
+    "2xl",
+    "3xl",
+    "4xl",
+    "5xl",
+    "6xl",
+    "7xl",
+    "8xl",
+    "9xl",
+  ]);
+
+  it("finds the declared sizes at all", () => {
+    expect(declared.size).toBeGreaterThan(6);
+    expect(declared).toContain("caption");
+  });
+
+  it("writes no size the theme cannot resolve", () => {
+    // Colour tokens share the `text-` prefix, so a name is fine if the theme
+    // declares it as either a size or a colour.
+    const colours = new Set([...CSS.matchAll(/--color-([a-z0-9-]+):/g)].map((m) => m[1]));
+    const KEYWORDS = new Set([
+      "balance",
+      "pretty",
+      "wrap",
+      "nowrap",
+      "clip",
+      "ellipsis",
+      "left",
+      "right",
+      "center",
+      "justify",
+      "start",
+      "end",
+      "white",
+      "black",
+      "transparent",
+      "current",
+      "inherit",
+    ]);
+
+    const unknown = new Map<string, string>();
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const source = readFileSync(file, "utf8");
+      // Only inside a className, so an import path like `ui/text-link` is not
+      // mistaken for a utility.
+      for (const [, attribute] of source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
+        for (const [, name] of (attribute ?? "").matchAll(/\btext-([a-z][a-z0-9-]*)\b/g)) {
+          if (declared.has(name) || TAILWIND.has(name)) continue;
+          if (colours.has(name) || KEYWORDS.has(name)) continue;
+          if (!unknown.has(name)) unknown.set(name, file.replace(process.cwd() + "/", ""));
+        }
+      }
+    }
+
+    expect(
+      [...unknown.keys()],
+      [...unknown].map(([name, file]) => `text-${name} in ${file}`).join("; "),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The two steps the sweep created must keep rendering what they replaced.
+ *
+ * `text-sm` and `text-xs` were written 809 times against a scale that had no
+ * name for either. `--text-body` and `--text-caption` name them, and the whole
+ * argument for the sweep was that it moves nothing — so these values are not
+ * free to drift. Changing one is re-typesetting most of the product, which is
+ * a decision and belongs in a commit that says so.
+ *
+ * v2 is deliberately different and is not pinned here: loosening prose is one
+ * of the things a second palette is for.
+ */
+describe("the body and caption steps name what they replaced", () => {
+  const value = (name: string) => CSS.match(new RegExp(`--text-${name}:\\s*([^;]+);`))?.[1].trim();
+  const leading = (name: string) =>
+    CSS.match(new RegExp(`--text-${name}--line-height:\\s*([^;]+);`))?.[1].trim();
+
+  it("is Tailwind's text-sm, exactly", () => {
+    expect(value("body")).toBe("0.875rem");
+    expect(leading("body")).toBe("1.25rem");
+  });
+
+  it("is Tailwind's text-xs, exactly", () => {
+    expect(value("caption")).toBe("0.75rem");
+    expect(leading("caption")).toBe("1rem");
+  });
+
+  it("leaves no raw size behind in the product", () => {
+    const stragglers: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx") || file.includes("design-studies")) continue;
+      if (/\btext-(sm|xs)\b/.test(readFileSync(file, "utf8"))) {
+        stragglers.push(file.replace(process.cwd() + "/", ""));
+      }
+    }
+    expect(
+      stragglers,
+      "`text-sm` and `text-xs` are Tailwind's names for steps Vibe now owns.",
+    ).toEqual([]);
+  });
+});

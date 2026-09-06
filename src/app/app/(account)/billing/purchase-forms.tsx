@@ -75,7 +75,7 @@ export function BuyCreditPackForm({
           <p className="text-fg font-semibold tabular-nums">
             {credits} Credits
           </p>
-          <p className="text-fg-muted mt-1 text-sm">
+          <p className="text-fg-muted mt-1 text-body">
             <span>{price}</span> one time
           </p>
         </div>
@@ -136,14 +136,14 @@ export function StartPlanForm({
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <p className="text-fg font-semibold">{planName}</p>
-          <p className="text-fg-muted mt-1 text-sm">{price}</p>
-          <p className="text-fg-prose mt-1 text-xs tabular-nums">
+          <p className="text-fg-muted mt-1 text-body">{price}</p>
+          <p className="text-fg-prose mt-1 text-caption tabular-nums">
             {credits} Credits each month
           </p>
-          {buys && <p className="text-fg-secondary mt-2 text-sm">{buys} each month</p>}
+          {buys && <p className="text-fg-secondary mt-2 text-body">{buys} each month</p>}
         </div>
         {current ? (
-          <span className="bg-mint-tint text-mint border-mint-line shrink-0 rounded-full border px-3 py-1 text-xs font-semibold">
+          <span className="bg-mint-tint text-mint border-mint-line shrink-0 rounded-full border px-3 py-1 text-caption font-semibold">
             Current<span className="sr-only"> plan</span>
           </span>
         ) : disabled ? (

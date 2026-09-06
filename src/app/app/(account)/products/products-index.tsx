@@ -45,7 +45,7 @@ function SummaryMetric({
       </span>
       <span className="flex min-w-0 flex-col">
         <strong className="text-fg text-lg font-bold tabular-nums">{value}</strong>
-        <span className="text-fg-meta text-xs">{label}</span>
+        <span className="text-fg-meta text-caption">{label}</span>
       </span>
     </Surface>
   );
@@ -79,17 +79,17 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search products…"
-                className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-body outline-none"
               />
             </label>
 
-            <label className="border-line-2 bg-surface-2 rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-sm">
+            <label className="border-line-2 bg-surface-2 rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-body">
               <FilterIcon size={15} className="shrink-0" />
               <span className="sr-only">Filter products</span>
               <select
                 value={filter}
                 onChange={(event) => setFilter(event.target.value as ProductFilter)}
-                className="text-fg-body bg-transparent text-sm font-medium outline-none"
+                className="text-fg-body bg-transparent text-body font-medium outline-none"
                 aria-label="Filter products"
               >
                 <option value="all">All</option>
@@ -99,12 +99,12 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
               </select>
             </label>
 
-            <label className="border-line-2 bg-surface-2 rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-sm">
-              <span className="text-fg-meta text-xs font-medium">Sort:</span>
+            <label className="border-line-2 bg-surface-2 rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-body">
+              <span className="text-fg-meta text-caption font-medium">Sort:</span>
               <select
                 value={sort}
                 onChange={(event) => setSort(event.target.value as ProductSort)}
-                className="text-fg-body bg-transparent text-sm font-semibold outline-none"
+                className="text-fg-body bg-transparent text-body font-semibold outline-none"
                 aria-label="Sort products"
               >
                 <option value="priority">Priority</option>
@@ -141,8 +141,8 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
             <PlusIcon size={18} />
           </span>
           <span className="flex flex-col">
-            <strong className="text-sm font-semibold">Connect product</strong>
-            <span className="text-mint-dim text-xs">Add from GitHub</span>
+            <strong className="text-body font-semibold">Connect product</strong>
+            <span className="text-mint-dim text-caption">Add from GitHub</span>
           </span>
         </Link>
       </section>
@@ -161,7 +161,7 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
         >
           <SearchIcon size={24} className="text-fg-meta" />
           <h2 className="text-fg mt-4 text-base font-semibold">No matching products</h2>
-          <p className="text-fg-muted mt-2 max-w-md text-sm">
+          <p className="text-fg-muted mt-2 max-w-md text-body">
             Try another search or reset the filter to see every connected product.
           </p>
           <button
@@ -170,7 +170,7 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
               setQuery("");
               setFilter("all");
             }}
-            className="text-mint hover:text-mint-hover mt-5 rounded-sm text-sm font-semibold transition-interactive"
+            className="text-mint hover:text-mint-hover mt-5 rounded-sm text-body font-semibold transition-interactive"
           >
             Clear search and filters
           </button>

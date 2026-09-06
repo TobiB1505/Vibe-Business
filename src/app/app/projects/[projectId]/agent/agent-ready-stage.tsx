@@ -81,7 +81,7 @@ export function AgentReadyStage({
                 Your Action Plan holds the prioritized Moves. Pick one there and this workspace
                 will carry that exact task through build, validation, preview and review.
               </p>
-              <p className="text-fg-muted text-sm leading-relaxed">
+              <p className="text-fg-muted text-body leading-relaxed">
                 Opening the Agent starts nothing and spends nothing.
               </p>
             </div>

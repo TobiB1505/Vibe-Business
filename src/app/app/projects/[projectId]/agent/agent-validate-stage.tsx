@@ -60,7 +60,7 @@ export function AgentValidateStage({
               <span className="text-fg-body text-[0.9375rem] font-semibold">
                 What happens next?
               </span>
-              <span className="text-fg-muted max-w-[48ch] text-sm leading-relaxed">
+              <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">
                 Once the checks are done you can preview the change and compare it against your
                 live product, before deciding anything.
               </span>
@@ -76,7 +76,7 @@ export function AgentValidateStage({
       </div>
 
       <div className="border-line-2 mt-2 flex min-h-[5.25rem] flex-wrap items-center justify-between gap-4 border-t px-1 py-7">
-        <span className="text-fg-muted flex items-center gap-3 text-sm">
+        <span className="text-fg-muted flex items-center gap-3 text-body">
           <svg
             viewBox="0 0 24 24"
             width="18"
@@ -94,7 +94,7 @@ export function AgentValidateStage({
           </svg>
           Validation runs in an isolated environment. Nothing is live.
         </span>
-        <span className="text-fg-meta font-mono text-xs">
+        <span className="text-fg-meta font-mono text-caption">
           {running ? "Checks in progress" : "Checks recorded"}
         </span>
       </div>

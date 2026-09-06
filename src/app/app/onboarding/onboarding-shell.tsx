@@ -53,13 +53,13 @@ export function OnboardingShell({
             <VibeLockup />
           </Link>
           {projectName && (
-            <span className="text-fg-muted border-line-2 hidden border-l pl-4 text-sm sm:inline">
+            <span className="text-fg-muted border-line-2 hidden border-l pl-4 text-body sm:inline">
               {projectName}
             </span>
           )}
           <div className="ml-auto flex items-center gap-4">
             {canLeave && <StandaloneLink href="/app">Back to your projects</StandaloneLink>}
-            {email && <span className="text-fg-meta hidden text-xs sm:inline">{email}</span>}
+            {email && <span className="text-fg-meta hidden text-caption sm:inline">{email}</span>}
             <form action={signOut}>
               <InlineAction type="submit" icon={<SignOutIcon size={14} />}>
                 Sign out

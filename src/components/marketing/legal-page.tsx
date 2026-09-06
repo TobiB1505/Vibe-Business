@@ -73,7 +73,7 @@ export function LegalSection({ heading, children }: { heading: string; children:
   return (
     <section className="flex flex-col gap-3">
       <h2 className="text-fg text-title font-semibold">{heading}</h2>
-      <div className="text-fg-prose flex flex-col gap-3 text-sm leading-relaxed [&_a]:underline [&_a]:underline-offset-4 [&_li]:leading-relaxed [&_ul]:flex [&_ul]:list-disc [&_ul]:flex-col [&_ul]:gap-1.5 [&_ul]:pl-5">
+      <div className="text-fg-prose flex flex-col gap-3 text-body leading-relaxed [&_a]:underline [&_a]:underline-offset-4 [&_li]:leading-relaxed [&_ul]:flex [&_ul]:list-disc [&_ul]:flex-col [&_ul]:gap-1.5 [&_ul]:pl-5">
         {children}
       </div>
     </section>

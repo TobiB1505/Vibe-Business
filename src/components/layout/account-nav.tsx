@@ -65,7 +65,7 @@ export function AccountNav({
               href={href}
               aria-current={current ? "page" : undefined}
               className={cn(
-                "rounded-nav flex items-center gap-3 px-3 py-3 text-sm font-medium",
+                "rounded-nav flex items-center gap-3 px-3 py-3 text-body font-medium",
                 "transition-[color,background-color,border-color] duration-150 ease-vibe",
                 current
                   ? "bg-mint-tint border-mint-line text-mint border font-semibold shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]"
@@ -84,7 +84,7 @@ export function AccountNav({
       {soon.map((item) => (
         <li
           key={item.id}
-          className="text-fg-disabled flex items-center gap-3 px-3 py-3 text-sm font-medium lg:w-full"
+          className="text-fg-disabled flex items-center gap-3 px-3 py-3 text-body font-medium lg:w-full"
         >
           <DashboardIcon name={item.icon} size={19} className="shrink-0" />
           <span className="whitespace-nowrap">{item.label}</span>

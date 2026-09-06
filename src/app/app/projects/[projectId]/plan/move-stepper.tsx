@@ -126,7 +126,7 @@ export function MoveStepper({
                 >
                   <span
                     className={cn(
-                      "flex size-10 items-center justify-center rounded-full border bg-app font-mono text-sm tabular-nums transition-interactive",
+                      "flex size-10 items-center justify-center rounded-full border bg-app font-mono text-body tabular-nums transition-interactive",
                       active && "border-mint bg-mint-tint-soft text-mint shadow-dot-mint",
                       previous && !active && "border-mint-line text-fg-body",
                       !previous && !active && "border-line-3 text-fg-meta group-hover:border-line-strong group-hover:text-fg-secondary",
@@ -159,7 +159,7 @@ export function MoveStepper({
                   <span
                     title={opportunity.title}
                     className={cn(
-                      "line-clamp-2 max-w-44 text-xs text-balance",
+                      "line-clamp-2 max-w-44 text-caption text-balance",
                       active ? "text-fg-body" : "text-fg-muted",
                     )}
                   >

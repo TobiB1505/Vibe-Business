@@ -54,7 +54,7 @@ function SignalRow({ evidenceId }: { evidenceId: string }) {
       <span className="text-fg-meta shrink-0 font-mono text-[0.625rem] tracking-[0.08em] uppercase sm:w-[8.5rem]">
         {source ?? described.source}
       </span>
-      <span className="text-fg-secondary text-sm">{described.detail}</span>
+      <span className="text-fg-secondary text-body">{described.detail}</span>
     </li>
   );
 }
@@ -108,7 +108,7 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
         </p>
 
         {conclusion.whyItMatters && (
-          <p className="text-fg-muted max-w-[62ch] text-sm">
+          <p className="text-fg-muted max-w-[62ch] text-body">
             <span className="text-fg-secondary">Why it matters:</span> {conclusion.whyItMatters}
           </p>
         )}
@@ -131,7 +131,7 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
         does not make. What is true is narrower and still the point: the
         evidence survives, and the grouping is what changed.
       */}
-      <p className="text-fg-meta max-w-[62ch] text-xs">
+      <p className="text-fg-meta max-w-[62ch] text-caption">
         No supporting evidence was lost. Related signals were grouped into one business
         conclusion, and every one of them is still cited in the full breakdown.
       </p>

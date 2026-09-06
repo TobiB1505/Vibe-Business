@@ -94,7 +94,7 @@ export function NeedsUserPanel({
           perceptive is worse than no premise at all.
         */}
         {question.context && (
-          <p className="text-fg-secondary max-w-[62ch] text-sm leading-relaxed">
+          <p className="text-fg-secondary max-w-[62ch] text-body leading-relaxed">
             {question.context}
           </p>
         )}
@@ -126,26 +126,26 @@ export function NeedsUserPanel({
                   onChange={() => setValue(option)}
                   className="accent-mint"
                 />
-                <span className="text-fg-body text-sm">{labels?.[option] ?? option}</span>
+                <span className="text-fg-body text-body">{labels?.[option] ?? option}</span>
               </label>
             ))}
           </fieldset>
         ) : (
           <label className="flex flex-col gap-1">
-            <span className="text-fg-muted text-xs">Your answer</span>
+            <span className="text-fg-muted text-caption">Your answer</span>
             <input
               name="value"
               value={value}
               onChange={(event) => setValue(event.target.value)}
               autoComplete="off"
-              className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 w-full rounded-md border px-3 py-1.5 text-sm focus:ring-4 focus:outline-none"
+              className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 w-full rounded-md border px-3 py-1.5 text-body focus:ring-4 focus:outline-none"
               placeholder="Solo founders who already shipped something"
             />
           </label>
         )}
 
         {state && !state.ok && (
-          <p role="alert" className="text-amber text-sm">
+          <p role="alert" className="text-amber text-body">
             {ERROR_MESSAGES[state.error]}
           </p>
         )}

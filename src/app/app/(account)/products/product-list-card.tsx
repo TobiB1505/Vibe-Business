@@ -29,10 +29,10 @@ const TILE_TONE: Record<ScoreTone, string> = {
 function ProfileFact({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="min-w-0">
-      <dt className="text-fg-body text-xs font-semibold">{label}</dt>
+      <dt className="text-fg-body text-caption font-semibold">{label}</dt>
       <dd
         className={cn(
-          "mt-1.5 line-clamp-2 text-xs leading-5",
+          "mt-1.5 line-clamp-2 text-caption leading-5",
           value ? "text-fg-muted" : "text-fg-meta",
         )}
       >
@@ -128,9 +128,9 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                     </StatusPill>
                   </div>
                   {projectLabelDiffers ? (
-                    <p className="text-fg-meta mt-1 truncate text-xs">Project: {product.name}</p>
+                    <p className="text-fg-meta mt-1 truncate text-caption">Project: {product.name}</p>
                   ) : null}
-                  <p className="text-fg-muted mt-2 line-clamp-2 max-w-[56ch] text-sm leading-6">
+                  <p className="text-fg-muted mt-2 line-clamp-2 max-w-[56ch] text-body leading-6">
                     {product.shortDescription ?? "No product summary is available yet."}
                   </p>
                 </div>
@@ -143,7 +143,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
               </dl>
             </div>
 
-            <dl className="grid gap-2.5 text-xs sm:grid-cols-3 xl:grid-cols-1">
+            <dl className="grid gap-2.5 text-caption sm:grid-cols-3 xl:grid-cols-1">
               <div className="text-fg-muted flex min-w-0 items-center gap-2.5">
                 <GlobeIcon size={15} className="text-fg-meta shrink-0" />
                 <dt className="sr-only">Product type</dt>
@@ -183,10 +183,10 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                     <span className={cn("text-lg", statusToneText(statusForScoreTone(display.tone)))}>
                       {product.score}
                     </span>
-                    <span className="text-fg-meta text-xs">/100</span>
+                    <span className="text-fg-meta text-caption">/100</span>
                   </p>
                 ) : (
-                  <p className="text-fg-muted mt-1 text-xs">
+                  <p className="text-fg-muted mt-1 text-caption">
                     {product.scoreState === "insufficient_coverage"
                       ? "Not enough evidence"
                       : "No data yet"}

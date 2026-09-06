@@ -122,9 +122,9 @@ export function FindingCard({
             : [explanation, whyItMatters];
         return (
           <>
-            {first && <p className="text-fg-prose max-w-[68ch] text-sm leading-relaxed">{first}</p>}
+            {first && <p className="text-fg-prose max-w-[68ch] text-body leading-relaxed">{first}</p>}
             {second && (
-              <p className="text-fg-secondary max-w-[68ch] text-sm leading-relaxed">{second}</p>
+              <p className="text-fg-secondary max-w-[68ch] text-body leading-relaxed">{second}</p>
             )}
           </>
         );

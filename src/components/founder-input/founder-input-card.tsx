@@ -105,8 +105,8 @@ export function FounderInputCard({
             </span>
             <div className="flex min-w-0 flex-col gap-1">
               <h3 className="text-fg text-lg font-semibold">Got it</h3>
-              <p className="text-fg-body text-sm">{resolvedAnswer}</p>
-              <p className="text-fg-muted text-xs leading-relaxed">
+              <p className="text-fg-body text-body">{resolvedAnswer}</p>
+              <p className="text-fg-muted text-caption leading-relaxed">
                 {openRequestCount > 1
                   ? "Your answer is saved. Vibe has another question for this Move."
                   : "Your answer is saved. Vibe can continue planning this Move."}
@@ -126,7 +126,7 @@ export function FounderInputCard({
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between gap-4">
-            <p className="text-fg-secondary text-xs font-medium">
+            <p className="text-fg-secondary text-caption font-medium">
               {openRequestCount === 1 ? "1 open question" : `${openRequestCount} open questions`}
             </p>
             <span className="text-fg-meta text-meta">Your answer becomes project context</span>
@@ -135,7 +135,7 @@ export function FounderInputCard({
 
         <div className="flex flex-col gap-2">
           <h3 className="text-fg text-xl leading-snug font-semibold">{request.question}</h3>
-          <p className="text-fg-prose text-sm leading-relaxed">
+          <p className="text-fg-prose text-body leading-relaxed">
             Choose the direction that fits your business right now.
           </p>
         </div>
@@ -178,7 +178,7 @@ export function FounderInputCard({
                   {selected && <span className="bg-mint size-2.5 rounded-full" />}
                 </span>
                 <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-fg-body flex flex-wrap items-center gap-2 text-sm font-semibold">
+                  <span className="text-fg-body flex flex-wrap items-center gap-2 text-body font-semibold">
                     {option.label}
                     {option.recommended && (
                       <span className="bg-mint-tint text-mint rounded-full px-2 py-0.5 text-meta font-medium">
@@ -187,7 +187,7 @@ export function FounderInputCard({
                     )}
                   </span>
                   {option.explanation && (
-                    <span className="text-fg-muted text-xs leading-relaxed">
+                    <span className="text-fg-muted text-caption leading-relaxed">
                       {option.explanation}
                     </span>
                   )}
@@ -227,15 +227,15 @@ export function FounderInputCard({
                 {selectedChoice === "custom" && <span className="bg-mint size-2.5 rounded-full" />}
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-1">
-                <span className="text-fg-body text-sm font-semibold">Something else</span>
-                <span className="text-fg-muted text-xs">Give Vibe a different answer</span>
+                <span className="text-fg-body text-body font-semibold">Something else</span>
+                <span className="text-fg-muted text-caption">Give Vibe a different answer</span>
               </span>
             </label>
           )}
 
           {customOpen && selectedChoice === "custom" && (
             <div className="flex flex-col gap-2 pt-1">
-              <label htmlFor={customInputId} className="text-fg-secondary text-sm font-medium">
+              <label htmlFor={customInputId} className="text-fg-secondary text-body font-medium">
                 Your answer
               </label>
               <textarea
@@ -245,10 +245,10 @@ export function FounderInputCard({
                 rows={4}
                 disabled={pending}
                 aria-describedby={customHelpId}
-                className="border-line-3 bg-field text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 resize-none rounded-field border px-3 py-2 text-sm leading-relaxed outline-none focus:ring-1 disabled:opacity-60"
+                className="border-line-3 bg-field text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 resize-none rounded-field border px-3 py-2 text-body leading-relaxed outline-none focus:ring-1 disabled:opacity-60"
                 placeholder="Write the direction or information Vibe should use."
               />
-              <p id={customHelpId} className="text-fg-muted text-xs leading-relaxed">
+              <p id={customHelpId} className="text-fg-muted text-caption leading-relaxed">
                 Do not include passwords, credentials, API keys, or tokens.
               </p>
             </div>
@@ -261,7 +261,7 @@ export function FounderInputCard({
                 setSelectedChoice("recommendation");
                 setCustomOpen(false);
               }}
-              className="mt-1 self-start text-xs"
+              className="mt-1 self-start text-caption"
             >
               I&apos;m not sure — use Vibe&apos;s recommendation
             </TextAction>
@@ -269,7 +269,7 @@ export function FounderInputCard({
 
           <div className="border-line-2 mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
             <Disclosure label="Why is Vibe asking?" className="max-w-xl">
-              <p className="text-fg-muted text-xs leading-relaxed">{request.whyNeeded}</p>
+              <p className="text-fg-muted text-caption leading-relaxed">{request.whyNeeded}</p>
             </Disclosure>
             <Button type="submit" disabled={pending || selectedChoice === null} busy={pending}>
               {pending ? "Saving…" : "Continue"}
@@ -277,7 +277,7 @@ export function FounderInputCard({
           </div>
 
           {state && !state.ok && (
-            <p role="alert" aria-live="polite" className="text-amber text-sm">
+            <p role="alert" aria-live="polite" className="text-amber text-body">
               {state.message}
             </p>
           )}
@@ -303,9 +303,9 @@ export function FounderInputCard({
           </StatusPill>
         </div>
         <h3 className="text-fg text-xl leading-snug font-semibold">{request.question}</h3>
-        <p className="text-fg-prose max-w-2xl text-sm leading-relaxed">{request.whyNeeded}</p>
+        <p className="text-fg-prose max-w-2xl text-body leading-relaxed">{request.whyNeeded}</p>
         {runtime ? (
-          <p className="text-fg-muted text-xs leading-relaxed">
+          <p className="text-fg-muted text-caption leading-relaxed">
             After you answer, Vibe checks the project again and starts a fresh attempt.
           </p>
         ) : null}
@@ -318,7 +318,7 @@ export function FounderInputCard({
             <div className="flex flex-col gap-1">
               <p className="text-fg font-semibold">{request.recommendation.label}</p>
               {request.recommendation.explanation ? (
-                <p className="text-fg-secondary text-sm leading-relaxed">
+                <p className="text-fg-secondary text-body leading-relaxed">
                   {request.recommendation.explanation}
                 </p>
               ) : null}
@@ -338,7 +338,7 @@ export function FounderInputCard({
 
         {request.alternatives.length > 0 ? (
           <div className="flex flex-col gap-2">
-            <p className="text-fg-secondary text-sm font-medium">Other options</p>
+            <p className="text-fg-secondary text-body font-medium">Other options</p>
             <div className="grid gap-2 sm:grid-cols-2">
               {request.alternatives.map((option) => (
                 <button
@@ -349,9 +349,9 @@ export function FounderInputCard({
                   disabled={pending}
                   className="border-line-3 bg-surface-2 hover:border-mint-line focus-visible:ring-mint flex cursor-pointer flex-col gap-1 rounded-xl border p-3 text-left transition-interactive focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <span className="text-fg text-sm font-medium">{option.label}</span>
+                  <span className="text-fg text-body font-medium">{option.label}</span>
                   {option.explanation ? (
-                    <span className="text-fg-muted text-xs leading-relaxed">
+                    <span className="text-fg-muted text-caption leading-relaxed">
                       {option.explanation}
                     </span>
                   ) : null}
@@ -376,7 +376,7 @@ export function FounderInputCard({
 
         {customOpen ? (
           <div className="flex flex-col gap-2">
-            <label htmlFor={customInputId} className="text-fg-secondary text-sm font-medium">
+            <label htmlFor={customInputId} className="text-fg-secondary text-body font-medium">
               Your answer
             </label>
             <textarea
@@ -386,10 +386,10 @@ export function FounderInputCard({
               rows={4}
               disabled={pending}
               aria-describedby={customHelpId}
-              className="border-line-3 bg-surface-1 text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 resize-none rounded-xl border px-3 py-2 text-sm leading-relaxed outline-none focus:ring-1 disabled:opacity-60"
+              className="border-line-3 bg-surface-1 text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 resize-none rounded-xl border px-3 py-2 text-body leading-relaxed outline-none focus:ring-1 disabled:opacity-60"
               placeholder="Write the direction or information Vibe should use."
             />
-            <p id={customHelpId} className="text-fg-muted text-xs leading-relaxed">
+            <p id={customHelpId} className="text-fg-muted text-caption leading-relaxed">
               Do not include passwords, credentials, API keys, or tokens.
             </p>
             <Button
@@ -406,7 +406,7 @@ export function FounderInputCard({
         ) : null}
 
         {state && !state.ok ? (
-          <p role="alert" aria-live="polite" className="text-amber text-sm">
+          <p role="alert" aria-live="polite" className="text-amber text-body">
             {state.message}
           </p>
         ) : null}

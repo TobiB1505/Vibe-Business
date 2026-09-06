@@ -136,7 +136,7 @@ export function ProductConfirmation({
       <form action={correctionAction} className="flex flex-col gap-5" noValidate>
         <div className="flex flex-col gap-1">
           <h3 className="text-fg text-lg font-semibold">Fix the meaning, not the evidence.</h3>
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             Change only what Vibe misunderstood. Your words become the canonical Product Profile.
           </p>
         </div>

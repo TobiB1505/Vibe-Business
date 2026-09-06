@@ -132,7 +132,7 @@ export function AgentValidateAction({
       </div>
 
       {running && (
-        <p role="status" className="text-fg-muted text-xs">
+        <p role="status" className="text-fg-muted text-caption">
           Vibe is validating this exact change in an isolated environment. You can leave this page.
         </p>
       )}

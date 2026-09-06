@@ -90,7 +90,7 @@ export function SourceCoverageList({
               <StatusPill tone={STATE_TONE[source.state]}>{STATE_WORD[source.state]}</StatusPill>
             </div>
 
-            <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{source.detail}</p>
+            <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{source.detail}</p>
 
             {/*
               Why it stopped short. Already worded by the module that owns the

@@ -91,7 +91,7 @@ export function ExperimentCard({
             the change and a founder still has to recognise it. The commit and
             base branch below it are machine output and stay mono.
           */}
-          <p className="text-fg-body truncate text-sm font-medium">{entry.branchName}</p>
+          <p className="text-fg-body truncate text-body font-medium">{entry.branchName}</p>
         </div>
         <StatusPill tone={OUTCOME_TONE[entry.outcome.state]}>
           {OUTCOME_LABELS[entry.outcome.state]}
@@ -124,7 +124,7 @@ export function ExperimentCard({
       */}
       <div className="border-line-1 flex flex-col gap-1 border-t pt-3">
         <MonoLabel>What the business did</MonoLabel>
-        <p className="text-fg-prose text-sm leading-relaxed">{entry.businessImpact.headline}</p>
+        <p className="text-fg-prose text-body leading-relaxed">{entry.businessImpact.headline}</p>
       </div>
 
       <div>

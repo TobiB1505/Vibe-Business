@@ -103,7 +103,7 @@ export function AgentPlanNextNotice({
         }
         footnote={outlook.footnote}
       >
-        <span className="text-fg-secondary font-mono text-xs">
+        <span className="text-fg-secondary font-mono text-caption">
           Step {String(stepOrder).padStart(2, "0")}
         </span>{" "}
         <span className="text-fg">{stepTitle}</span> — {reasonLabel}

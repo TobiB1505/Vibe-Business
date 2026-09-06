@@ -706,7 +706,7 @@ async function AgentWorkspaceBody({
                         /* Why the chain stops where it does. Without it, a chain
                            that ends at a Stripe step looks like a bug rather
                            than the refusal it is. */
-                        <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                        <p className="text-fg-meta text-caption" data-testid="agent-chain-boundary">
                           {chainBoundaryNote}
                         </p>
                       )}

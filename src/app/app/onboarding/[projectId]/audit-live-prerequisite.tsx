@@ -104,7 +104,7 @@ export function AuditLivePrerequisite({
         />
       </Field>
       {error?.step === "live" && (
-        <p className="text-amber text-sm">
+        <p className="text-amber text-body">
           Vibe could not reach that address. Check it and try again, or carry on without it.
         </p>
       )}
@@ -128,12 +128,12 @@ export function AuditLivePrerequisite({
           <h2 className="text-fg text-title font-semibold">
             No live product yet? That&apos;s fine.
           </h2>
-          <p className="text-fg-prose text-sm leading-relaxed">
+          <p className="text-fg-prose text-body leading-relaxed">
             Vibe already understands what you built from your project. The business audit also
             compares that with what a customer can actually reach, so it stays set aside until your
             product is live — it has not run, and nothing has been scored against you for it.
           </p>
-          <p className="text-fg-muted text-sm leading-relaxed">
+          <p className="text-fg-muted text-body leading-relaxed">
             You can go to your workspace now. When you launch, add the address there and the audit
             becomes available.
           </p>
@@ -174,7 +174,7 @@ export function AuditLivePrerequisite({
         </p>
         {addressForm}
         <div className="border-line-2 border-t pt-4">
-          <p className="text-fg-muted mb-3 text-sm">Not live yet?</p>
+          <p className="text-fg-muted mb-3 text-body">Not live yet?</p>
           <form action={parkLiveProductAction.bind(null, projectId)} noValidate>
             <SubmitButton variant="secondary" pendingLabel="Saving…">
               I don&apos;t have a live product yet

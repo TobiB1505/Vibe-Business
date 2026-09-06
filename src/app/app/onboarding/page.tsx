@@ -53,7 +53,7 @@ export default async function NewProjectOnboardingPage() {
         <Surface level="card" padding="lg" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1.5">
             <h2 className="text-fg text-lg font-semibold">Connect your code</h2>
-            <p className="text-fg-muted max-w-[44ch] text-sm">
+            <p className="text-fg-muted max-w-[44ch] text-body">
               GitHub will ask which repositories Vibe may access. You choose — Vibe only ever sees
               the ones you pick, and you can change that in GitHub at any time.
             </p>

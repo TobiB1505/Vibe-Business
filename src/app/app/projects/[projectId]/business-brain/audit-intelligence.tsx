@@ -139,14 +139,14 @@ function PriorityCard({
         {lens ? <BusinessLensIcon lens={lens} className="size-11" /> : <span className="text-4xl">!</span>}
       </span>
       <div className="relative flex flex-col gap-4 pr-12">
-        <span className={cn("text-xs font-semibold", critical ? "text-coral" : "text-mint")}>
+        <span className={cn("text-caption font-semibold", critical ? "text-coral" : "text-mint")}>
           #1 Priority
         </span>
         <div className="flex flex-col gap-2">
           <h3 className="text-fg text-[1.15rem] leading-snug font-semibold tracking-[-0.025em]">
             {priority.headline}
           </h3>
-          <p className="text-fg-muted line-clamp-3 text-sm leading-relaxed">
+          <p className="text-fg-muted line-clamp-3 text-body leading-relaxed">
             {priority.whyItMatters ?? priority.explanation}
           </p>
         </div>
@@ -172,7 +172,7 @@ function PriorityCard({
       </div>
       <Link
         href={actionHref(priority, movesHref)}
-        className="bg-surface-4 border-line-strong text-fg hover:border-mint/45 mt-5 flex min-h-11 items-center justify-between rounded-xl border px-4 text-sm font-semibold transition-interactive"
+        className="bg-surface-4 border-line-strong text-fg hover:border-mint/45 mt-5 flex min-h-11 items-center justify-between rounded-xl border px-4 text-body font-semibold transition-interactive"
       >
         {actionLabel(priority.moveCount, hasMoves)}
         <ArrowIcon />
@@ -186,7 +186,7 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
 
   return (
     <section className="business-brain-side-card flex flex-col gap-4 p-5" data-testid="recent-changes">
-      <h3 className="text-fg text-sm font-semibold">Recent changes</h3>
+      <h3 className="text-fg text-body font-semibold">Recent changes</h3>
       {change ? (
         <div className="flex items-start gap-3">
           <span
@@ -202,18 +202,18 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
             <ArrowIcon direction={change.direction === "same" ? "right" : change.direction} />
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-fg-body text-sm font-medium">
+            <p className="text-fg-body text-body font-medium">
               Business Health {change.direction === "up" ? "increased" : change.direction === "down" ? "decreased" : "held steady"}
             </p>
-            <p className="text-fg-muted mt-1 text-xs leading-relaxed">
+            <p className="text-fg-muted mt-1 text-caption leading-relaxed">
               {change.delta > 0 ? "+" : ""}{change.delta} points under the same scoring contract · {formatTimestamp(change.recordedAt) ?? change.recordedAt}
             </p>
           </div>
         </div>
       ) : (
         <div className="border-line-1 flex flex-col gap-1.5 border-t pt-4">
-          <p className="text-fg-body text-sm font-medium">No comparable history yet</p>
-          <p className="text-fg-muted text-xs leading-relaxed">
+          <p className="text-fg-body text-body font-medium">No comparable history yet</p>
+          <p className="text-fg-muted text-caption leading-relaxed">
             {view.recentChangesUnavailableReason === "not_comparable"
               ? "The scoring contract changed, so Vibe will not present the difference as business progress."
               : view.recentChangesUnavailableReason === "unscored"
@@ -286,7 +286,7 @@ function DefaultPanel({
                       action={
                         <Link
                           href={actionHref(priority, movesHref)}
-                          className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-sm text-sm transition-interactive"
+                          className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-sm text-body transition-interactive"
                         >
                           {actionLabel(priority.moveCount, hasMoves)}
                           <ArrowIcon />
@@ -299,7 +299,7 @@ function DefaultPanel({
             )}
           </>
         ) : (
-          <p className="text-fg-muted text-sm leading-relaxed">
+          <p className="text-fg-muted text-body leading-relaxed">
             Vibe did not find one real blocker it would place ahead of everything else.
           </p>
         )}
@@ -409,7 +409,7 @@ function SelectedPanel({
             <h2 className="text-fg text-2xl leading-tight font-semibold tracking-[-0.035em]">
               {node.label}
             </h2>
-            <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", node.health === "weak" ? "border-coral/25 bg-coral/[0.08] text-coral" : node.health === "strong" ? "border-mint/25 bg-mint/[0.08] text-mint" : "border-amber/25 bg-amber/[0.08] text-amber")}>
+            <span className={cn("rounded-full border px-3 py-1 text-caption font-medium", node.health === "weak" ? "border-coral/25 bg-coral/[0.08] text-coral" : node.health === "strong" ? "border-mint/25 bg-mint/[0.08] text-mint" : "border-amber/25 bg-amber/[0.08] text-amber")}>
               {stateLabel}
             </span>
             {/*
@@ -459,8 +459,8 @@ function SelectedPanel({
               <div className="business-brain-insight-card flex gap-3 p-4">
                 <DetailInsightIcon kind="found" />
                 <div className="min-w-0">
-                  <h3 className="text-fg text-sm font-semibold">What we found</h3>
-                  <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
+                  <h3 className="text-fg text-body font-semibold">What we found</h3>
+                  <p className="text-fg-secondary mt-1.5 text-body leading-relaxed">
                     {node.problem?.explanation ??
                       "The available evidence did not support a concise diagnosis for this area."}
                   </p>
@@ -470,8 +470,8 @@ function SelectedPanel({
               <div className="business-brain-insight-card flex gap-3 p-4">
                 <DetailInsightIcon kind="matter" />
                 <div className="min-w-0">
-                  <h3 className="text-fg text-sm font-semibold">Why it matters</h3>
-                  <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
+                  <h3 className="text-fg text-body font-semibold">Why it matters</h3>
+                  <p className="text-fg-secondary mt-1.5 text-body leading-relaxed">
                     {node.problem?.whyItMatters ?? "This audit did not record a separate impact explanation for this area."}
                   </p>
                 </div>
@@ -480,8 +480,8 @@ function SelectedPanel({
               <div className="business-brain-insight-card flex gap-3 p-4">
                 <DetailInsightIcon kind="connected" />
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-fg text-sm font-semibold">Connected areas</h3>
-                  <p className="text-fg-muted mt-1 text-xs">Areas joined by the same audit conclusion.</p>
+                  <h3 className="text-fg text-body font-semibold">Connected areas</h3>
+                  <p className="text-fg-muted mt-1 text-caption">Areas joined by the same audit conclusion.</p>
                   {relationships.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {relationships.map((relationship) => {
@@ -489,14 +489,14 @@ function SelectedPanel({
                         const other = view.nodes.find((candidate) => candidate.id === otherId);
                         if (!other) return null;
                         return (
-                          <button type="button" key={relationship.id} onClick={() => onSelect(other.id)} aria-label={`Explore connected area ${other.label}`} className="border-mint/20 bg-mint/[0.045] text-fg-secondary hover:border-mint/50 hover:text-mint min-h-9 cursor-pointer rounded-full border px-3 text-xs transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+                          <button type="button" key={relationship.id} onClick={() => onSelect(other.id)} aria-label={`Explore connected area ${other.label}`} className="border-mint/20 bg-mint/[0.045] text-fg-secondary hover:border-mint/50 hover:text-mint min-h-9 cursor-pointer rounded-full border px-3 text-caption transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
                             {other.label}
                           </button>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-fg-muted mt-3 text-sm">No evidence-grounded relationship was recorded for this area.</p>
+                    <p className="text-fg-muted mt-3 text-body">No evidence-grounded relationship was recorded for this area.</p>
                   )}
                 </div>
               </div>
@@ -506,14 +506,14 @@ function SelectedPanel({
                   <DetailInsightIcon kind="move" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-fg text-sm font-semibold">What to do next</h3>
+                      <h3 className="text-fg text-body font-semibold">What to do next</h3>
                       {node.problem && <span className="text-coral text-[0.65rem] font-semibold tracking-[0.08em] uppercase">#{node.problem.rank} priority</span>}
                     </div>
                     <p className="text-fg mt-2 text-lg font-semibold tracking-[-0.02em]">
                       {node.problem?.move?.title ?? node.problem?.headline ?? "No next move is linked yet"}
                     </p>
                     {node.problem?.move && (
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-caption">
                         <span className="text-fg-secondary">{IMPACT_LABELS[node.problem.move.impact]}</span>
                         <span aria-hidden="true" className="text-fg-disabled">•</span>
                         <span className="text-amber">{EFFORT_LABELS[node.problem.move.effort]}</span>
@@ -521,7 +521,7 @@ function SelectedPanel({
                     )}
                   </div>
                 </div>
-                <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-xl px-4 text-sm font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
+                <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-xl px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
                   {node.problem ? actionLabel(node.problem.moveCount, hasMoves) : "View action plan"}
                   <ArrowIcon />
                 </Link>
@@ -529,13 +529,13 @@ function SelectedPanel({
 
               {node.missingContext.length > 0 && (
                 <details className="group border-line-1 border-t pt-4">
-                  <summary className="text-fg-secondary hover:text-fg flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm text-sm focus-visible:ring-2 focus-visible:ring-mint">
+                  <summary className="text-fg-secondary hover:text-fg flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm text-body focus-visible:ring-2 focus-visible:ring-mint">
                     <span>Learn more about this dimension</span>
                     <span aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</span>
                   </summary>
                   <div className="border-amber/20 bg-amber/[0.035] mt-3 rounded-xl border p-4">
-                    <h3 className="text-amber text-xs font-medium">Only you can answer</h3>
-                    <ul className="text-fg-muted mt-2 flex list-disc flex-col gap-1.5 pl-4 text-sm">
+                    <h3 className="text-amber text-caption font-medium">Only you can answer</h3>
+                    <ul className="text-fg-muted mt-2 flex list-disc flex-col gap-1.5 pl-4 text-body">
                       {node.missingContext.map((item) => <li key={item}>{item}</li>)}
                     </ul>
                   </div>
@@ -553,13 +553,13 @@ function SelectedPanel({
                     <h3 id={`${tabId}-score-heading`} className="text-fg mt-1 text-base font-semibold">{node.label}</h3>
                   </div>
                   <p className={cn("shrink-0 text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", scoreTone)}>
-                    {node.score ?? "—"}<span className="text-fg-meta ml-1 text-xs font-normal tracking-normal">/100</span>
+                    {node.score ?? "—"}<span className="text-fg-meta ml-1 text-caption font-normal tracking-normal">/100</span>
                   </p>
                 </div>
                 <div className="bg-surface-1 mt-4 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
                   <span className={cn("block h-full rounded-full", scoreBar)} style={{ width: `${node.score ?? 0}%` }} />
                 </div>
-                <p className="text-fg-muted mt-4 text-xs leading-relaxed">
+                <p className="text-fg-muted mt-4 text-caption leading-relaxed">
                   Vibe judged the recorded signals below together at lens level. Individual signals do not carry invented point values.
                 </p>
               </section>
@@ -568,20 +568,20 @@ function SelectedPanel({
                 <section aria-labelledby={`${tabId}-signals-heading`}>
                   <div className="mb-3 flex items-end justify-between gap-3">
                     <div>
-                      <h3 id={`${tabId}-signals-heading`} className="text-fg text-sm font-semibold">Signals behind this score</h3>
-                      <p className="text-fg-muted mt-1 text-xs">{evidence.length} recorded across {signalsBySource.length} {signalsBySource.length === 1 ? "source" : "sources"}</p>
+                      <h3 id={`${tabId}-signals-heading`} className="text-fg text-body font-semibold">Signals behind this score</h3>
+                      <p className="text-fg-muted mt-1 text-caption">{evidence.length} recorded across {signalsBySource.length} {signalsBySource.length === 1 ? "source" : "sources"}</p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-3">
                     {signalsBySource.map(([source, signals]) => (
                       <div key={source} className="business-brain-insight-card overflow-hidden">
                         <div className="border-line-1 flex items-center justify-between gap-4 border-b px-4 py-3">
-                          <span className="text-fg-secondary text-xs font-medium">{source}</span>
-                          <span className="text-fg-meta text-xs tabular-nums">{signals.length}</span>
+                          <span className="text-fg-secondary text-caption font-medium">{source}</span>
+                          <span className="text-fg-meta text-caption tabular-nums">{signals.length}</span>
                         </div>
                         <ul className="divide-y divide-[var(--color-line-1)]">
                           {signals.map((signal) => (
-                            <li key={signal.id} className="text-fg-secondary px-4 py-3 text-xs leading-relaxed">{signal.detail}</li>
+                            <li key={signal.id} className="text-fg-secondary px-4 py-3 text-caption leading-relaxed">{signal.detail}</li>
                           ))}
                         </ul>
                       </div>
@@ -609,7 +609,7 @@ function HonestTabEmpty({ title, body }: { title: string; body: string }) {
     <div className="business-brain-insight-card flex min-h-48 flex-col items-center justify-center p-6 text-center">
       <span aria-hidden="true" className="border-line-2 bg-surface-4 text-fg-muted flex size-11 items-center justify-center rounded-full border">—</span>
       <h3 className="text-fg mt-4 text-base font-semibold">{title}</h3>
-      <p className="text-fg-muted mt-2 max-w-[42ch] text-sm leading-relaxed">{body}</p>
+      <p className="text-fg-muted mt-2 max-w-[42ch] text-body leading-relaxed">{body}</p>
     </div>
   );
 }
@@ -648,20 +648,20 @@ export function AuditIntelligence({
             {node ? (
               <div className="flex flex-col gap-2">
                 <h2 className="sr-only">Business Map — {node.label}</h2>
-                <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+                <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-body font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
                   <span aria-hidden="true">←</span>
                   Back to overview
                 </button>
-                <p className="text-fg-muted text-xs">Exploring {node.label} and its evidence-grounded connections.</p>
+                <p className="text-fg-muted text-caption">Exploring {node.label} and its evidence-grounded connections.</p>
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
                 <h2 className="text-fg text-xl font-semibold tracking-[-0.03em]">Business Map</h2>
-                <p className="text-fg-muted text-sm">Select any area to explore how the pieces connect.</p>
+                <p className="text-fg-muted text-body">Select any area to explore how the pieces connect.</p>
               </div>
             )}
             {!node && (
-              <div className="text-fg-meta flex flex-col items-end gap-1 text-xs">
+              <div className="text-fg-meta flex flex-col items-end gap-1 text-caption">
                 <span>{view.nodes.length} business areas</span>
                 {view.lastScanAt && <span>Last scan {formatTimestamp(view.lastScanAt) ?? view.lastScanAt}</span>}
               </div>
@@ -677,13 +677,13 @@ export function AuditIntelligence({
           </div>
 
           <footer className="border-line-1 relative z-10 mt-2 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-            <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs" aria-label="Business health legend">
+            <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption" aria-label="Business health legend">
               <li className="text-mint flex items-center gap-2"><span className="bg-mint size-2 rounded-full shadow-[0_0_10px_rgb(0_229_160/0.8)]" /><span>Strong <span className="text-fg-meta">70–100</span></span></li>
               <li className="text-amber flex items-center gap-2"><span className="bg-amber size-2 rounded-full" /><span>Adequate <span className="text-fg-meta">50–69</span></span></li>
               <li className="text-coral flex items-center gap-2"><span className="bg-coral size-2 rounded-full" /><span>Weak <span className="text-fg-meta">0–49</span></span></li>
               <li className="text-fg-muted flex items-center gap-2"><span className="bg-fg-disabled size-2 rounded-full" />Not scored —</li>
             </ul>
-            <p className="text-fg-meta text-xs">Missing evidence is never scored as zero.</p>
+            <p className="text-fg-meta text-caption">Missing evidence is never scored as zero.</p>
           </footer>
       </section>
 

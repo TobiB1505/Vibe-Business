@@ -140,8 +140,8 @@ function FocusBlock({
         </span>{" "}
         {focus.move.title}
       </p>
-      <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{detail}</p>
-      <p className="text-fg-muted text-sm">
+      <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{detail}</p>
+      <p className="text-fg-muted text-body">
         {preparedChangeId ? (
           <StandaloneLink href={preparedChangeHref(agentHref, preparedChangeId)}>
             Review the prepared change
@@ -198,7 +198,7 @@ export function AgentPanel({
           <StatusDot tone={tone} />
           <h3 className="text-fg text-title font-bold">{READINESS_HEADLINE[context.readiness]}</h3>
         </div>
-        <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+        <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
           {READINESS_DETAIL[context.readiness]}
         </p>
       </div>
@@ -214,14 +214,14 @@ export function AgentPanel({
             */}
             <span
               aria-hidden
-              className={cn("mt-px shrink-0 text-sm", row.ready ? statusToneText("success") : "text-fg-faint")}
+              className={cn("mt-px shrink-0 text-body", row.ready ? statusToneText("success") : "text-fg-faint")}
             >
               {row.ready ? STATUS_GLYPHS.confirmed : STATUS_GLYPHS.pending}
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
               <span
                 className={cn(
-                  "text-sm font-medium",
+                  "text-body font-medium",
                   row.ready ? "text-fg-body" : "text-fg-muted",
                 )}
               >
@@ -234,7 +234,7 @@ export function AgentPanel({
       </ul>
 
       <div className="border-line-2 flex flex-col gap-2 border-t pt-5">
-        <p className="text-fg-prose text-sm leading-relaxed">
+        <p className="text-fg-prose text-body leading-relaxed">
           {preparedCount > 0
             ? `${preparedCount} ${preparedCount === 1 ? "change is" : "changes are"} below, each with what Vibe checked and what still needs you.`
             : "Nothing is in progress. Work is chosen from your Action Plan, one move at a time."}
@@ -244,7 +244,7 @@ export function AgentPanel({
           preparing a change is priced and confirmed, and it happens beside the
           Move it belongs to.
         */}
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           {context.rows.every((row) => row.ready) ? (
             <>
               Pick what it works on from your{" "}

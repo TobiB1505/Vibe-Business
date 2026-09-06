@@ -37,7 +37,7 @@ export function OnboardingAuditReveal({
           {synthesis?.overall ?? "Your Business Audit is ready."}
         </h1>
         {audit.overall.score !== null && (
-          <p className="text-fg-meta font-mono text-xs">{audit.overall.score} / 100 readiness</p>
+          <p className="text-fg-meta font-mono text-caption">{audit.overall.score} / 100 readiness</p>
         )}
       </header>
 
@@ -57,7 +57,7 @@ export function OnboardingAuditReveal({
         <section className="border-mint/30 bg-mint/[0.035] flex max-w-[50rem] flex-col gap-2 rounded-xl border p-5">
           <MonoLabel className="text-mint">What matters first</MonoLabel>
           <h2 className="text-fg text-xl font-semibold">{blocker.headline}</h2>
-          <p className="text-fg-prose text-sm leading-relaxed">{blocker.explanation}</p>
+          <p className="text-fg-prose text-body leading-relaxed">{blocker.explanation}</p>
         </section>
       )}
 

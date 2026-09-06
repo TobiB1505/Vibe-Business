@@ -51,7 +51,7 @@ export function LandingTrust() {
               <p className="text-fg text-lead font-semibold">
                 Every reading says what it rests on.
               </p>
-              <p className="text-fg-muted max-w-[52ch] text-sm leading-relaxed">
+              <p className="text-fg-muted max-w-[52ch] text-body leading-relaxed">
                 A source that could not be finished says why. One that was never run is not counted
                 as evidence — and the line under every priced action tells you which is which.
               </p>
@@ -66,7 +66,7 @@ export function LandingTrust() {
             <div className="flex flex-col gap-2">
               <MonoLabel>Your branch, your call</MonoLabel>
               <p className="text-fg text-lead font-semibold">One exact commit waits for you.</p>
-              <p className="text-fg-muted text-sm leading-relaxed">
+              <p className="text-fg-muted text-body leading-relaxed">
                 Vibe writes to an isolated branch. Your approval binds to that commit and no other
                 — if the branch moves, the merge stops rather than guessing.
               </p>
@@ -82,16 +82,16 @@ export function LandingTrust() {
             <div className="flex flex-col gap-2">
               <MonoLabel>Before you press</MonoLabel>
               <p className="text-fg text-lead font-semibold">Never a surprise charge.</p>
-              <p className="text-fg-muted text-sm leading-relaxed">
+              <p className="text-fg-muted text-body leading-relaxed">
                 Every paid action states its price and your balance first. Free ones say so instead
                 of staying quiet.
               </p>
             </div>
             <div className="border-line-1 bg-surface-3 rounded-well flex flex-wrap items-center gap-x-4 gap-y-2 border p-4">
-              <span className="text-fg-secondary text-sm">Deep Scan</span>
+              <span className="text-fg-secondary text-body">Deep Scan</span>
               <CostDisclosure operation="deep_scan" />
               <span className="text-line-strong">·</span>
-              <span className="text-fg-secondary text-sm">Scan again</span>
+              <span className="text-fg-secondary text-body">Scan again</span>
               <CostDisclosure operation="product_understanding" />
             </div>
           </article>
@@ -99,7 +99,7 @@ export function LandingTrust() {
           <article className="border-line-2 bg-surface-2 rounded-card flex flex-col gap-2 border p-6">
             <MonoLabel>Your code</MonoLabel>
             <p className="text-fg text-lead font-semibold">No stored copy.</p>
-            <p className="text-fg-muted text-sm leading-relaxed">
+            <p className="text-fg-muted text-body leading-relaxed">
               Vibe keeps what it concluded and the paths that justify it. Not your source, not your
               README, not your configs.
             </p>
@@ -110,7 +110,7 @@ export function LandingTrust() {
             <p className="text-fg text-lead font-semibold">
               A dash, <span className="text-fg-muted">—</span> not a zero.
             </p>
-            <p className="text-fg-muted text-sm leading-relaxed">
+            <p className="text-fg-muted text-body leading-relaxed">
               An area Vibe could not assess is left unscored and kept out of the average. Missing
               evidence is never counted as a bad result.
             </p>

@@ -148,7 +148,7 @@ export function AgentActivity({
               <span className="flex min-w-0 flex-col gap-0.5">
                 <span
                   className={cn(
-                    "text-sm leading-snug",
+                    "text-body leading-snug",
                     step.state === "active"
                       ? "text-fg font-semibold"
                       : step.state === "pending"

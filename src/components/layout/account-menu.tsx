@@ -46,8 +46,8 @@ function AccountActions() {
         >
           <Icon size={19} className="shrink-0" />
           <span className="flex min-w-0 flex-col">
-            <span className="text-fg-body text-sm font-semibold">{label}</span>
-            <span className="text-fg-meta hidden text-xs lg:block">{description}</span>
+            <span className="text-fg-body text-body font-semibold">{label}</span>
+            <span className="text-fg-meta hidden text-caption lg:block">{description}</span>
           </span>
         </Link>
       ))}
@@ -58,13 +58,13 @@ function AccountActions() {
             type="submit"
             className={cn(
               "rounded-nav text-coral hover:bg-coral-tint-soft flex w-full items-center gap-3",
-              "px-3 py-2.5 text-left text-sm font-semibold transition-interactive",
+              "px-3 py-2.5 text-left text-body font-semibold transition-interactive",
             )}
           >
             <SignOutIcon size={19} className="shrink-0" />
             <span className="flex flex-col">
               <span>Sign out</span>
-              <span className="text-fg-meta hidden text-xs font-normal lg:block">
+              <span className="text-fg-meta hidden text-caption font-normal lg:block">
                 Log out of Vibe Business
               </span>
             </span>
@@ -116,12 +116,12 @@ export function AccountMenu({
         />
         <span className="flex min-w-0 flex-1 flex-col">
           <span
-            className="text-fg-body truncate text-sm font-semibold"
+            className="text-fg-body truncate text-body font-semibold"
             title={identity.displayName}
           >
             {identity.displayName}
           </span>
-          <span className="text-fg-meta text-xs">
+          <span className="text-fg-meta text-caption">
             {subtitle ?? (identity.fromGithub ? "GitHub account" : "Signed in")}
           </span>
         </span>

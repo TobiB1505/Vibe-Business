@@ -112,7 +112,7 @@ export function AgentTaskPanel({
         is being approved matters most.
       */}
       {task.step !== null && (
-        <p className="text-fg-muted text-sm" data-testid="agent-task-move">
+        <p className="text-fg-muted text-body" data-testid="agent-task-move">
           Step {String(task.step.order).padStart(2, "0")} · {task.title}
         </p>
       )}
@@ -150,12 +150,12 @@ export function AgentTaskPanel({
         {/* Ratings are the Move's own. A task recovered from a stored origin
             has none, and guessing "medium" would be an assessment nobody made. */}
         {task.impact !== null && (
-          <span className="rounded-full border-mint-line bg-mint-tint text-mint border px-3 py-1 text-xs font-semibold">
+          <span className="rounded-full border-mint-line bg-mint-tint text-mint border px-3 py-1 text-caption font-semibold">
             {IMPACT_LABELS[task.impact]}
           </span>
         )}
         {task.effort !== null && (
-          <span className="rounded-full border-amber-line bg-amber-tint text-amber border px-3 py-1 text-xs font-semibold">
+          <span className="rounded-full border-amber-line bg-amber-tint text-amber border px-3 py-1 text-caption font-semibold">
             {EFFORT_LABELS[task.effort]}
           </span>
         )}
@@ -205,7 +205,7 @@ export function AgentTaskPanel({
                   /* Named rather than left to the marker alone. A founder
                      reading three bullets is deciding what they are paying
                      for, and colour is not a word. */
-                  <span className="text-fg-meta text-xs">groundwork</span>
+                  <span className="text-fg-meta text-caption">groundwork</span>
                 )}
               </motion.li>
             ))}
@@ -217,7 +217,7 @@ export function AgentTaskPanel({
               verdicts; there is one of each, and rule 66 is the standard for
               not letting a screen imply a stronger claim than was made.
             */
-            <p className="text-fg-meta text-xs" data-testid="agent-task-chain-note">
+            <p className="text-fg-meta text-caption" data-testid="agent-task-chain-note">
               {buildChainCompletionNote(
                 task.steps.filter((step) => step.kind === "delivery").length,
               )}
@@ -245,7 +245,7 @@ export function AgentTaskPanel({
           </svg>
           <span className="flex flex-col gap-1.5">
             <span className="text-fg-body text-[0.9375rem] font-semibold">Why this task?</span>
-            <span className="text-fg-muted max-w-[48ch] text-sm leading-relaxed">
+            <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">
               {task.whyNow}
             </span>
           </span>

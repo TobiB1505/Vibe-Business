@@ -38,12 +38,12 @@ const ERROR_MESSAGES: Record<SaveFounderIntentFailure, string> = {
 };
 
 const inputClass =
-  "w-full rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none";
+  "w-full rounded-md border border-line-strong bg-field px-3 py-1.5 text-body text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="text-xs text-fg-muted">{label}</span>
+      <span className="text-caption text-fg-muted">{label}</span>
       {children}
     </label>
   );
@@ -66,7 +66,7 @@ export function FounderIntentForm({
   if (!editing && !empty) {
     return (
       <div className="space-y-2">
-        <dl className="space-y-1 text-sm">
+        <dl className="space-y-1 text-body">
           {intent.stage && (
             <div className="flex gap-2">
               <dt className="w-32 shrink-0 text-fg-muted">Stage</dt>
@@ -95,7 +95,7 @@ export function FounderIntentForm({
 
   return (
     <form action={formAction} className="max-w-xl space-y-3">
-      <p className="text-sm text-fg-muted">
+      <p className="text-body text-fg-muted">
         Vibe works out what your product is on its own. These are the things it can&rsquo;t see from
         your code or your site — all optional.
       </p>
@@ -154,7 +154,7 @@ export function FounderIntentForm({
           whatever colour it inherited — invisible as an error, on the one
           message telling a founder their answer did not save. */}
       {state?.ok === false && (
-        <p role="alert" className="text-sm text-coral">
+        <p role="alert" className="text-body text-coral">
           {ERROR_MESSAGES[state.error]}
         </p>
       )}

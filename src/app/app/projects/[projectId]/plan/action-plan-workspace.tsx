@@ -186,9 +186,9 @@ export function ActionPlanWorkspace({
           data-testid="moves-context"
         >
           <MonoLabel className="text-mint">From your audit</MonoLabel>
-          <p className="text-fg-body text-sm leading-relaxed">{movesContext.headline}</p>
+          <p className="text-fg-body text-body leading-relaxed">{movesContext.headline}</p>
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <p className="text-fg-muted text-xs">
+            <p className="text-fg-muted text-caption">
               {movesContext.moveIds.length === 1
                 ? "1 move addresses this"
                 : `${movesContext.moveIds.length} moves address this`}
@@ -228,7 +228,7 @@ export function ActionPlanWorkspace({
 
           <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
-            <p className="text-fg-muted text-xs leading-relaxed">
+            <p className="text-fg-muted text-caption leading-relaxed">
               Moves are ordered by impact and by what has to happen first. Choose a step or swipe
               the active Move to explore the plan.
             </p>
@@ -361,7 +361,7 @@ export function ActionPlanWorkspace({
 
           <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
-            <p className="text-fg-muted text-xs leading-relaxed">
+            <p className="text-fg-muted text-caption leading-relaxed">
               Priorities can change as your business evolves. Re-scanning re-orders this plan
               against current evidence.
             </p>
@@ -385,7 +385,7 @@ export function ActionPlanWorkspace({
       )}
 
       {movesOperationView?.status === "failed" && movesOperationView.failureCode ? (
-        <p className="text-amber text-sm">
+        <p className="text-amber text-body">
           Vibe couldn&apos;t work out your next Moves.{" "}
           {OPERATION_FAILURE_MESSAGES[movesOperationView.failureCode]}
         </p>

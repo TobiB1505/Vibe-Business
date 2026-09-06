@@ -92,16 +92,16 @@ export function LandingBusinessBrain() {
           </span>
           <div className="flex flex-col gap-2">
             <p className="text-fg font-semibold">{activeLabel}</p>
-            <p className="text-fg-secondary text-sm leading-relaxed">{activePrompt}</p>
+            <p className="text-fg-secondary text-body leading-relaxed">{activePrompt}</p>
           </div>
-          <p className="text-fg-muted flex items-center gap-2 text-xs sm:max-w-40">
+          <p className="text-fg-muted flex items-center gap-2 text-caption sm:max-w-40">
             {active ? "Select again to return to the overview" : "Explore the nine business areas"}
             <ArrowRightIcon size={14} />
           </p>
         </aside>
       </div>
 
-      <p className="text-fg-muted relative mt-3 text-center text-xs leading-relaxed">
+      <p className="text-fg-muted relative mt-3 text-center text-caption leading-relaxed">
         Preview only. Scores and relationships appear only after Vibe has evidence from your own product.
       </p>
     </div>

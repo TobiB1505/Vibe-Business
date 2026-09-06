@@ -73,7 +73,7 @@ export function WorkingStrip({
           {status.word}
         </span>
       </span>
-      {stage && <span className="text-fg-prose min-w-0 text-sm">{stage}</span>}
+      {stage && <span className="text-fg-prose min-w-0 text-body">{stage}</span>}
       {working.phase === "stalled" && (
         <span className="text-fg-muted text-ui">
           It has been running far longer than it should.
