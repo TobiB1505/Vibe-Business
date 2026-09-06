@@ -53,6 +53,8 @@ v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driv
 
 v2 also moves the eyebrow into the interface family, which is what this document asked for and what 289 uses of `MonoLabel` were contradicting, and sets identifiers in DM Mono rather than JetBrains Mono — with the JetBrains subsets kept behind it in the stack for the scripts DM Mono does not ship.
 
+The three motion obligations this document asks for — reduced motion, hidden-tab pause, reserved geometry — are no longer asked of each component. `Reveal` in `src/components/ui/motion.tsx` cannot skip them: the first is a media query on the class, the second one attribute on `<html>`, and the third is the keyframes, which have no layout property to animate.
+
 Both palettes are measured by `design-tokens.test.ts` against `--color-surface-4`, and both must hold 4.5:1 on every load-bearing ramp step. When v2 is everywhere, its values move into `@theme`, the scope is deleted, and this section goes with it.
 
 ## Colors

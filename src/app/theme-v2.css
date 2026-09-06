@@ -200,13 +200,23 @@
   --glass-sheen: rgb(255 255 255 / 0.07);
 
   /* ── Motion ──────────────────────────────────────────────────────────
-     Curves and durations only. The three obligations — reduced motion,
-     hidden-tab pause, reserved geometry — belong to the motion primitives
-     S2 builds, where they are structural rather than remembered. */
-  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
-  --ease-inout: cubic-bezier(0.7, 0, 0.3, 1);
-  --dur-entrance: 480ms;
-  --dur-press: 130ms;
+     v1's names, answered differently — not a second vocabulary beside them.
+     An earlier draft of this file invented `--ease-out`, `--dur-entrance`
+     and `--dur-press`, which would have left the product with two ways to
+     say the same thing and no rule about which one a component picks. The
+     colour tokens are held to that discipline by a test; motion deserves
+     the same and had drifted from it inside one file.
+
+     `--ease-emphasis` is the one genuinely new name: an overshoot-free
+     curve for a press, where `--ease-vibe` is tuned for a fade. It is
+     declared in v1 too, at v1's own curve, so nothing depends on the scope
+     being on. The three obligations are not tokens — they live in the
+     motion CSS in `globals.css`, structurally. */
+  --ease-vibe: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-emphasis: cubic-bezier(0.34, 1.2, 0.64, 1);
+  --duration-hover: 130ms;
+  --duration-reveal: 480ms;
+  --stagger-row: 70ms;
 }
 
 /*
@@ -244,4 +254,116 @@
   pointer-events: none;
   opacity: var(--atmos-grain);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Material (S2)
+
+   The primitives emit `vibe-*` hooks that match nothing in v1. Here they
+   acquire the direction's material, which is why S2 edits no call site and
+   why v1 renders unchanged with every one of these rules present.
+
+   Each rule is scoped, so the whole layer is still switched off until an
+   element carries `data-vibe="v2"`.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/*
+ * Glass is spent on the card and nowhere else.
+ *
+ * `Surface` documents the card as "one primary object per view, or a modal",
+ * which is exactly the chrome-and-signature budget the chosen direction gives
+ * glass. Panels and sections stay opaque on purpose: `backdrop-filter` on
+ * stacked dense content is what makes a product judder, and a table is the
+ * densest thing in this product.
+ *
+ * The blur is smaller than v1's `backdrop-blur-xl` (24px). This direction
+ * spends its contrast on edges, so the pane is a pane rather than a fog.
+ */
+[data-vibe="v2"] .vibe-surface-card {
+  background: var(--glass-fill);
+  border-color: var(--glass-line);
+  position: relative;
+}
+
+/*
+ * The single specular edge that reads as "this is a pane, not a fill".
+ *
+ * A masked one-pixel inset rather than a border, so it follows whatever radius
+ * the card was given and never doubles the border the card already has.
+ * `aria-hidden` is unnecessary — a pseudo-element is not in the tree — and it
+ * cannot take pointer events.
+ */
+[data-vibe="v2"] .vibe-surface-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Panels and sections: opaque, and edge-carried. The line does the work the
+   fill used to do, which is the whole of "Precision & Light". */
+[data-vibe="v2"] .vibe-surface-panel,
+[data-vibe="v2"] .vibe-surface-section {
+  backdrop-filter: none;
+}
+
+/* A recess stays a recess: cut into the surface, never stacked on it. */
+[data-vibe="v2"] .vibe-well {
+  box-shadow: inset 0 1px 0 rgb(0 0 0 / 0.35);
+}
+
+/*
+ * The press.
+ *
+ * "Every click should feel expensive" is a microinteraction, which
+ * `motion-design` already permits everywhere including quiet surfaces — what
+ * it forbids is choreography on an ordinary screen, and a 130ms settle is not
+ * choreography. Transform and shadow only: no layout property, so a pressed
+ * control never nudges its neighbours.
+ *
+ * `:not(:disabled)` because an unavailable control that still depresses is
+ * telling the user something happened when nothing did.
+ */
+[data-vibe="v2"] .vibe-control {
+  transition:
+    transform var(--duration-hover) var(--ease-emphasis),
+    box-shadow var(--duration-hover) var(--ease-emphasis),
+    background-color var(--duration-hover) var(--ease-vibe),
+    border-color var(--duration-hover) var(--ease-vibe),
+    color var(--duration-hover) var(--ease-vibe);
+}
+
+[data-vibe="v2"] .vibe-control:active:not(:disabled) {
+  transform: translate3d(0, 1px, 0) scale(0.994);
+}
+
+[data-vibe="v2"] .vibe-control-text:active:not(:disabled) {
+  transform: translate3d(0, 1px, 0);
+}
+
+/*
+ * Obligation 1 again, for the material rather than for the keyframes.
+ *
+ * The press is a transition, not an animation, so the reduced-motion block in
+ * `globals.css` does not reach it. Stated here rather than assumed: a rule
+ * that only covers half the motion in the system is worse than none, because
+ * it reads as though the question was already answered.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-vibe="v2"] .vibe-control,
+  [data-vibe="v2"] .vibe-control-text {
+    transition: none;
+  }
+  [data-vibe="v2"] .vibe-control:active:not(:disabled),
+  [data-vibe="v2"] .vibe-control-text:active:not(:disabled) {
+    transform: none;
+  }
 }

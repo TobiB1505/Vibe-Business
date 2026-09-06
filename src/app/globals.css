@@ -172,6 +172,15 @@
   --text-meta: 0.6875rem;
   --text-ui: 0.8125rem;
 
+  /* ── Glass ───────────────────────────────────────────────────────────
+     v1's card blurred at 24px through a Tailwind blur utility and saturated
+     not at all. Those are exactly these values, so moving the blur off the
+     utility and onto the surface hook changes nothing here — and makes
+     `--glass-blur` mean something, which it did not while a utility was
+     hard-coding the number beside it. */
+  --glass-blur: 24px;
+  --glass-sat: 100%;
+
   /* ── The eyebrow ─────────────────────────────────────────────────────
      The small caps rule above a block, as four tokens rather than four
      literals in `MonoLabel`. The values here are exactly what that
@@ -213,6 +222,11 @@
      flow loops are decorative only, and every one of them is behind a
      reduced-motion check in the component that owns it. */
   --ease-vibe: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* A press wants a different curve from a fade: it should arrive and settle,
+     not decelerate forever. Declared here at v1's own curve so the motion
+     primitives work identically with the scope off — a primitive that needs
+     v2 to be switched on before it moves is a primitive nobody can trust. */
+  --ease-emphasis: cubic-bezier(0.2, 0.7, 0.2, 1);
   --duration-hover: 150ms;
   --duration-reveal: 400ms;
   --duration-pulse: 1.4s;
@@ -701,6 +715,82 @@
  * a glow or a lift on hover, and splitting those into a second transition
  * would put two durations on one gesture.
  */
+/*
+ * The card's blur, from the palette rather than from a utility.
+ *
+ * This is the one `vibe-*` rule that lives outside the v2 scope, and it is
+ * here so the two palettes cannot disagree with their own tokens. Both declare
+ * `--glass-blur` and `--glass-sat`; v1 declares the values the blur utility
+ * used to produce, so this renders v1 exactly as before.
+ *
+ * Fill, border and sheen stay scoped — those are where the directions actually
+ * differ, and v1 keeps drawing them from `bg-surface-4` and `border-line-4`.
+ *
+ * Unprefixed only. Writing the `-webkit-` twin beside it made Lightning CSS
+ * keep the prefixed declaration and drop the standard one, so the card
+ * computed `backdrop-filter: none` in both palettes — found by measuring the
+ * rendered page, not by reading this file. The build adds prefixes from the
+ * configured targets; hand-writing them fights it.
+ */
+.vibe-surface-card {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Motion primitives (S2)
+
+   The three obligations from `DESIGN.md` live here, in the mechanism,
+   rather than in each component that animates. A component opts in by
+   using the class; it cannot opt out of reduced motion, it cannot forget
+   the hidden-tab pause, and it cannot animate a layout property, because
+   the keyframes it gets do not have one.
+
+   CSS rather than the `motion` library, which is already a dependency and
+   stays for orchestrated and layout-driven animation. An entrance needs no
+   state, and expressing it in React would put a `"use client"` boundary
+   over every subtree that wants one — the opposite of pushing the client
+   boundary to the leaf.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Obligation 3, reserved geometry: opacity and transform only. Nothing here
+   touches height, margin, padding or any property that reflows a sibling, so
+   an entrance can never move text somebody is already reading. */
+@keyframes vibe-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--vibe-rise, 10px), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@utility vibe-reveal {
+  animation: vibe-reveal var(--duration-reveal) var(--ease-vibe) both;
+  animation-delay: calc(var(--vibe-index, 0) * var(--stagger-row));
+}
+
+/* Obligation 2, the hidden tab. `MotionProvider` stamps the root, so one
+   listener covers every animation in the product rather than one per
+   component. Paused, not stopped: it resumes where it left off, so nothing
+   jumps when somebody comes back to the tab. */
+:root[data-motion="paused"] .vibe-reveal,
+:root[data-motion="paused"] .vibe-breathe {
+  animation-play-state: paused;
+}
+
+/* Obligation 1, reduced motion. The settled state arrives immediately —
+   never a hidden element, which is how a reduced-motion user ends up with a
+   blank page instead of a still one. */
+@media (prefers-reduced-motion: reduce) {
+  .vibe-reveal {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /**
  * The eyebrow, composed from tokens so a palette can redefine it.
  *
