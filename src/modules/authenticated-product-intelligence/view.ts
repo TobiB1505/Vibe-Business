@@ -52,6 +52,35 @@ export type DeepScanUnavailableReason =
   /** This deployment has no browser provider configured. */
   | "provider_not_configured";
 
+/**
+ * What the panel may offer **next**, independent of what it is showing now.
+ *
+ * This exists because those two questions were answered by one value and they
+ * are not the same question. `state` ranks a completed result above every
+ * purchasable state — deliberately, because once a Deep Scan exists that is
+ * what the section is about — and the panel then had nothing left to render a
+ * control from. A founder with 5,330 Credits, a 25-Credit price in force and
+ * one finished scan was shown a summary card and no way to run another one.
+ *
+ * So the offer is derived once, here, and is valid in every state including
+ * `completed`. A component that wants to know whether a scan can be started
+ * asks this; it never re-reads `includedScanAvailable`, `additionalScanPrice`
+ * and `blockedReason` and reaches its own conclusion (§13).
+ */
+export type DeepScanNextScan =
+  /** The project's included scan is still available, and nothing is blocking. */
+  | { kind: "included" }
+  /** Priced, the balance covers it, and nothing is blocking. */
+  | { kind: "priced"; price: CreditUnits }
+  /** Priced, and the balance is short. There is a checkout behind this one. */
+  | { kind: "insufficient_credits"; price: CreditUnits }
+  /** The included scan is used and the policy in force prices no other. */
+  | { kind: "not_for_sale" }
+  /** Temporarily refused: a live session, a cooldown, an attempt limit. */
+  | { kind: "blocked"; reason: DeepScanDenialReason; retryAvailableAt: string | null }
+  /** Nothing to sign in to, or no browser provider on this deployment. */
+  | { kind: "unavailable"; reason: DeepScanUnavailableReason };
+
 export type DeepScanSurface = { id: string; name: string };
 
 export type DeepScanResultSummary = {
@@ -96,6 +125,11 @@ export type DeepScanViewModel = {
   recommendationReason: string | null;
   /** Whether the primary start action should be offered at all. */
   canStart: boolean;
+  /**
+   * What may be started next, in every state — including while a finished
+   * result is on screen. See `DeepScanNextScan`.
+   */
+  nextScan: DeepScanNextScan;
   lastResult: DeepScanResultSummary | null;
   lastFailure: DeepScanLastFailure | null;
   /** False when the server has no browser provider configured. */
@@ -155,6 +189,53 @@ export type BuildViewModelInput = {
   providerConfigured: boolean;
 };
 
+/**
+ * The single answer to "can a scan be started, and on what terms".
+ *
+ * Order matters and mirrors `authorizeDeepScan`: the reasons a person cannot
+ * act on come first, then the reasons they can. Reading a denial reason rather
+ * than recomputing the entitlement is deliberate — the service already decided,
+ * and a second opinion here is how a UI comes to disagree with its own domain.
+ */
+function nextScanFor(
+  accessStatus: DeepScanAccessStatus,
+  providerConfigured: boolean,
+): DeepScanNextScan {
+  const priced = accessStatus.additionalScanPrice;
+
+  if (accessStatus.blockedReason === "production_origin_missing") {
+    return { kind: "unavailable", reason: "production_url_missing" };
+  }
+  if (!providerConfigured) {
+    return { kind: "unavailable", reason: "provider_not_configured" };
+  }
+  if (accessStatus.blockedReason === "credits_required") {
+    return { kind: "not_for_sale" };
+  }
+  if (accessStatus.blockedReason === "insufficient_credits") {
+    // A price is what makes this state different from `not_for_sale`: it is the
+    // one with a checkout behind it. Without a figure there is nothing to top
+    // up towards, so it degrades rather than rendering "top up for null".
+    return priced === null
+      ? { kind: "not_for_sale" }
+      : { kind: "insufficient_credits", price: creditUnits(priced) };
+  }
+  if (accessStatus.blockedReason !== null) {
+    return {
+      kind: "blocked",
+      reason: accessStatus.blockedReason,
+      retryAvailableAt: accessStatus.retryAvailableAt,
+    };
+  }
+
+  // Nothing is blocking. The included scan is checked first for the same reason
+  // the entitlement checks it first: a project that still has its free scan is
+  // never told about a price it does not have to pay.
+  if (accessStatus.includedScanAvailable) return { kind: "included" };
+
+  return priced === null ? { kind: "not_for_sale" } : { kind: "priced", price: creditUnits(priced) };
+}
+
 export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanViewModel {
   const { accessStatus, latestSnapshot, latestSession, surfaceDetection } = input;
 
@@ -193,6 +274,8 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
         ? "provider_not_configured"
         : null;
 
+  const nextScan = nextScanFor(accessStatus, input.providerConfigured);
+
   const state: DeepScanUiState = (() => {
     if (accessStatus.blockedReason === "production_origin_missing") return "unavailable";
     // A missing provider is reported rather than silently hidden. It ranks
@@ -203,14 +286,14 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
     // A successful result outranks everything below it: once a Deep Scan
     // exists, that is what the section is about.
     if (lastResult) return "completed";
-    if (accessStatus.blockedReason === "credits_required") return "credits_required";
-    if (accessStatus.blockedReason === "insufficient_credits") return "insufficient_credits";
+    // Read off the one offer rather than recomputed, so a state and the
+    // control the panel renders can never describe different terms.
+    if (nextScan.kind === "not_for_sale") return "credits_required";
+    if (nextScan.kind === "insufficient_credits") return "insufficient_credits";
     // The included scan is gone, an additional one is priced, and nothing is
     // blocking. Ranked below the failure and blocked branches below so a
     // cooldown or a live session is still reported as itself.
-    if (!accessStatus.includedScanAvailable && accessStatus.additionalScanPrice !== null && canStart) {
-      return "additional_available";
-    }
+    if (nextScan.kind === "priced") return "additional_available";
     if (lastFailure) return "last_attempt_failed";
     if (accessStatus.blockedReason !== null) return "blocked";
     return showRecommendation ? "recommended" : "not_recommended";
@@ -229,6 +312,7 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
     showRecommendation,
     recommendationReason: showRecommendation ? recommendationReasonFor(surfaceDetection) : null,
     canStart,
+    nextScan,
     lastResult,
     lastFailure,
     providerConfigured: input.providerConfigured,
