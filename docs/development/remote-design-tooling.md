@@ -34,11 +34,23 @@ Names only. Never commit a value; never write one into `.mcp.json` or
 |---|---|---|---|
 | `API_KEY_21ST` | The `21st` MCP | `21st.dev/settings/api-keys` | 21st.dev is unreachable; every other source still works |
 | `REUI_PAT_TOKEN` | The `reui` MCP | ReUI → Account → MCP. Free with an account | ReUI degrades to its public docs and index |
-| `REUI_LICENSE_KEY` | `@reui` registry **item downloads** | A ReUI licence | The index reads; individual items return 401 |
+| `REUI_LICENSE_KEY` | `@reui` registry **item downloads** | A ReUI licence | Every `@reui` CLI command fails — see below |
 
 The two ReUI credentials are different things. The MCP token is free and
-authenticates the server; the licence key authorises fetching component source.
-`https://reui.io/r/registry.json` is public either way.
+authenticates the server; the licence key authorises fetching **premium**
+component source. `https://reui.io/r/registry.json` is public either way.
+
+`REUI_LICENSE_KEY` is required to be *set*, not to be *valid*. `components.json`
+declares an `Authorization` header for `@reui`, and the shadcn CLI validates that
+every `${VAR}` in a registry's config resolves before it makes any request — so
+without the variable, `shadcn add`/`view @reui/...` aborts with `MISSING_ENV_VARS`
+and no HTTP call happens at all. That is not a 401, and it is not limited to
+premium items: it blocks the free components and `c-*` examples too. Those free
+items are themselves served unauthenticated — `curl` returns 200 for
+`https://reui.io/r/default/c-data-grid-1.json` with no header — so on a machine
+without a licence, any non-empty placeholder value restores access to everything
+that is free, and only premium blocks and Motion Icons stay out of reach.
+*(Verified 2026-09-06 against shadcn 4.x and reui.io.)*
 
 PATs expire — 90 days by default. An expired one returns 401; regenerate it.
 
