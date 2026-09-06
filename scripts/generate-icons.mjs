@@ -77,6 +77,12 @@ const MANIFEST = {
   AlertIcon: "triangle-alert",
   ChevronRightIcon: "chevron-right",
   ArrowLeftIcon: "arrow-left",
+  /*
+   * "Sign out" is the navigation role's real case, and an arrow pointing
+   * right would say "next" on a control that ends the session. Lucide's
+   * `log-out` is the mark that means leaving.
+   */
+  SignOutIcon: "log-out",
 };
 
 const HEADER = `import type { SVGProps } from "react";

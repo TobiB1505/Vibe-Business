@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, TextAction, buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -31,6 +31,8 @@ import {
   prepareChangeAction,
   type PrepareChangeActionState,
 } from "./prepare-change-action";
+import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * The execution affordance on an opportunity card (Sprint 9C §2, §3, §11, §14).
@@ -81,9 +83,9 @@ function ConfirmDialog({
             {pending ? "Starting…" : "Prepare change"}
           </Button>
         </form>
-        <TextAction type="button" onClick={onCancel} className="text-sm">
+        <InlineAction icon={<DismissIcon size={14} />} onClick={onCancel}>
           Cancel
-        </TextAction>
+        </InlineAction>
       </div>
     </div>
   );
@@ -253,9 +255,12 @@ export function PrepareChangePanel({
           >
             Review prepared change
           </Link>
-          <TextAction type="button" onClick={() => loadDiff(preparedChangeId)} className="text-sm">
+          <InlineAction
+            icon={<ChevronDownIcon size={14} />}
+            onClick={() => loadDiff(preparedChangeId)}
+          >
             Preview the diff here
-          </TextAction>
+          </InlineAction>
           {branchUrl && (
             <a
               href={branchUrl}

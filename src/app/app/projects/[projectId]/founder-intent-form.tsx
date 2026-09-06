@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button, TextAction } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
   GOAL_LABELS,
   MONETIZATION_LABELS,
@@ -14,6 +14,8 @@ import {
 } from "@/modules/projects/founder-intent";
 import type { SaveFounderIntentFailure } from "@/modules/projects/founder-intent-store";
 import { saveFounderIntentAction, type FounderIntentActionState } from "./founder-intent-action";
+import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * Founder intent form (CORE-2 §4).
@@ -84,9 +86,9 @@ export function FounderIntentForm({
             </div>
           )}
         </dl>
-        <TextAction type="button" onClick={() => setEditing(true)} className="text-xs">
+        <InlineAction icon={<EditIcon size={14} />} onClick={() => setEditing(true)}>
           Edit what you&rsquo;re working toward
-        </TextAction>
+        </InlineAction>
       </div>
     );
   }
@@ -142,9 +144,9 @@ export function FounderIntentForm({
           {pending ? "Saving…" : "Save"}
         </Button>
         {!empty && (
-          <TextAction type="button" onClick={() => setEditing(false)} className="text-xs">
+          <InlineAction icon={<DismissIcon size={14} />} onClick={() => setEditing(false)}>
             Cancel
-          </TextAction>
+          </InlineAction>
         )}
       </div>
 

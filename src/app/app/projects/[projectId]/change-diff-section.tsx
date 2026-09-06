@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { DiffView } from "@/components/change/diff-view";
-import { TextAction } from "@/components/ui/button";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import {
   REVIEW_CLASSIFICATION_LABELS,
@@ -11,6 +10,9 @@ import {
   type ReviewClassificationResult,
 } from "@/modules/review/classification";
 import { getPreparedDiffAction } from "./prepare-change-action";
+import { ChevronDownIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
+import { cn } from "@/lib/utils/cn";
 
 /**
  * What changed, on the card a person decides from (Sprint 0055 §2, ADR 0063).
@@ -123,11 +125,20 @@ export function ChangeDiffSection({
       )}
 
       {!isCodeReview && (
-        <TextAction type="button" className="text-xs" onClick={() => setOpen((was) => !was)}>
+        <InlineAction
+          icon={
+            <ChevronDownIcon
+              size={14}
+              className={cn("transition-transform duration-150", open && "rotate-180")}
+            />
+          }
+          onClick={() => setOpen((was) => !was)}
+          aria-expanded={open}
+        >
           {open
             ? "Hide the diff"
             : `Show the diff — ${filesChanged} file${filesChanged === 1 ? "" : "s"}`}
-        </TextAction>
+        </InlineAction>
       )}
 
       {loading && <p className="text-sm text-fg-secondary">Reading the change…</p>}

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { signOut } from "@/modules/auth/actions";
 import {
@@ -9,6 +8,8 @@ import {
   phasePosition,
   type OnboardingState,
 } from "@/modules/onboarding/state";
+import { SignOutIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 export function OnboardingShell({
   children,
@@ -66,7 +67,9 @@ export function OnboardingShell({
             )}
             {email && <span className="text-fg-meta hidden text-xs sm:inline">{email}</span>}
             <form action={signOut}>
-              <TextAction className="text-xs">Sign out</TextAction>
+              <InlineAction type="submit" icon={<SignOutIcon size={14} />}>
+                Sign out
+              </InlineAction>
             </form>
           </div>
         </div>

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
-import { Button, TextAction, buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import {
@@ -16,6 +16,8 @@ import {
 import { Disclosure } from "@/components/ui/disclosure";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
+import { DismissIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * Deep Scan panel (Sprint 5 §3, §7, §16, §17).
@@ -272,9 +274,9 @@ function LiveViewDialog({
           <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
             {busy ? "Looking around…" : "I'm logged in — Analyze"}
           </Button>
-          <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
+          <InlineAction icon={<DismissIcon size={14} />} onClick={onCancel} disabled={busy}>
             Cancel
-          </TextAction>
+          </InlineAction>
         </div>
       </div>
     </div>

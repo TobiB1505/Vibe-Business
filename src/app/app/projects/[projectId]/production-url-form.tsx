@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button, TextAction } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import type { SetProductionUrlFailure } from "@/modules/projects/production-url";
 import { setProductionUrlAction, type ProductionUrlActionState } from "./production-url-action";
+import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * Production URL configuration (Sprint 3 §3, §30).
@@ -49,9 +51,9 @@ export function ProductionUrlForm({
         >
           {currentUrl}
         </a>
-        <TextAction type="button" onClick={() => setEditing(true)} className="text-xs">
+        <InlineAction icon={<EditIcon size={14} />} onClick={() => setEditing(true)}>
           Change
-        </TextAction>
+        </InlineAction>
       </div>
     );
   }
@@ -71,9 +73,9 @@ export function ProductionUrlForm({
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
         </Button>
         {currentUrl !== null && (
-          <TextAction type="button" onClick={() => setEditing(false)} className="text-xs">
+          <InlineAction icon={<DismissIcon size={14} />} onClick={() => setEditing(false)}>
             Cancel
-          </TextAction>
+          </InlineAction>
         )}
       </form>
 

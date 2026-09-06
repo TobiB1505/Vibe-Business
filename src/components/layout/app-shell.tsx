@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
-import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/modules/auth/actions";
+import { cn } from "@/lib/utils/cn";
+import { SignOutIcon } from "@/components/ui/icons.generated";
+import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * The signed-in application shell (UI-0).
@@ -91,9 +92,9 @@ export function AppShell({
               </span>
             )}
             <form action={signOut}>
-              <TextAction type="submit" className="text-ui">
+              <InlineAction type="submit" icon={<SignOutIcon size={14} />}>
                 Sign out
-              </TextAction>
+              </InlineAction>
             </form>
           </div>
         </div>
