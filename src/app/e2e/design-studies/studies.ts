@@ -241,3 +241,6 @@ export const BLOCKED_SCENARIO = "study-blocked";
 
 /** The Move element sheet: one control, three designs, four states each. */
 export const MOVE_SCENARIO = "study-move";
+
+/** The Line element sheet: four registers, tested with hue removed. */
+export const LINE_SCENARIO = "study-line";

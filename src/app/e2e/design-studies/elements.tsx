@@ -112,37 +112,77 @@ export function moveShowsCost(operation: RetailOperationKind | null): boolean {
 /**
  * What Nova says. One sentence, at reading weight rather than display weight.
  *
- * The register carries the difference between moments — a concern, a guess, a
- * quiet statement — so a blocked moment and a settled one are the same element
- * with a different word beside them, not two components. That is what stops
- * twenty-one moments becoming twenty-one designs.
+ * ## Why the register is not a colour
  *
- * `register` tints only the eyebrow, never the sentence: the words stay at the
- * foreground ramp so nothing a founder has to read is rendered in an accent.
+ * The obvious version of this element tints an eyebrow four ways and calls the
+ * moments distinguished. It is not enough, and the greyscale row in
+ * `study-line` is the proof: with hue removed, four tinted eyebrows are one
+ * eyebrow. `DESIGN.md` says colour is never the only signal, and the ten
+ * blocked moments are the case that punishes it — a founder scanning a screen
+ * needs to know *what kind of stop this is* before they read a word.
+ *
+ * So a register carries three things, and only the first is hue:
+ *
+ * - **A word.** From `statusForFocusTier`, so the vocabulary is the product's.
+ *   A screen reader gets exactly what an eye gets.
+ * - **An edge, or none.** `statement` is the neutral default and carries no
+ *   marker; the three registers that make a claim about status carry a rule at
+ *   the sentence's left. Emphasis is spent only where a claim is being made.
+ * - **Whether that edge is solid or dashed**, which is the semantic one below.
+ *
+ * ## Solid means observed; dashed means inferred
+ *
+ * `focus.ts` separates the two and says why: *a failure is something Vibe
+ * observed, and a stall is something it inferred from a clock.* Until now that
+ * distinction reached the screen as amber-instead-of-coral, which reads as
+ * *less bad* rather than as *less certain* — a different claim entirely.
+ *
+ * A dashed rule is the drawn form of an incomplete observation. It is the one
+ * property here doing semantic work rather than decorative, which is why it is
+ * a rule of the element rather than a choice a call site makes.
  */
+export type LineRegister = "statement" | "concern" | "guess" | "quiet";
+
+const REGISTER: Record<LineRegister, { tint: string; edge: string | null; dashed: boolean }> = {
+  /* The neutral default. No edge: nothing is being claimed about status. */
+  statement: { tint: "text-mint", edge: null, dashed: false },
+  /* Observed and wrong. */
+  concern: { tint: "text-coral", edge: "border-coral", dashed: false },
+  /* Inferred from a clock. Dashed, because the observation is incomplete. */
+  guess: { tint: "text-amber", edge: "border-amber", dashed: true },
+  /* Nothing needed. An edge, because "nothing" is still a claim — and the
+     quietest one, so it is drawn at the foreground ramp's own colour. */
+  quiet: { tint: "text-fg-meta", edge: "border-line-3", dashed: false },
+};
+
 export function Line({
   children,
   register = "statement",
   eyebrow,
 }: {
   children: ReactNode;
-  register?: "statement" | "concern" | "guess" | "quiet";
+  register?: LineRegister;
+  /** The status word. From the product's vocabulary, never written here. */
   eyebrow?: string;
 }) {
-  const tint =
-    register === "concern"
-      ? "text-coral"
-      : register === "guess"
-        ? "text-amber"
-        : register === "quiet"
-          ? "text-fg-meta"
-          : "text-mint";
+  const { tint, edge, dashed } = REGISTER[register];
 
   return (
-    <div className="flex flex-col gap-2">
+    <div
+      className={
+        edge
+          ? `flex flex-col gap-2 border-l-2 pl-4 ${edge} ${dashed ? "border-dashed" : "border-solid"}`
+          : "flex flex-col gap-2"
+      }
+    >
       {eyebrow && (
         <p className={`text-label font-mono tracking-[0.16em] uppercase ${tint}`}>{eyebrow}</p>
       )}
+      {/*
+        The sentence stays at the foreground ramp in every register. Nothing a
+        founder has to read is rendered in an accent — the register is carried
+        by the eyebrow and the edge, which are furniture.
+      */}
       <p className="study-measure text-title font-semibold text-balance text-fg">{children}</p>
     </div>
   );
