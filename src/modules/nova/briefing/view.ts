@@ -58,6 +58,15 @@ export const BRIEFING_SOURCE_NOTE =
 /** How the goal on file is introduced. The label itself is Vibe's own. */
 export const BRIEFING_GOAL_PREFIX = "Working toward";
 
+/**
+ * What opens the facts behind the paragraph.
+ *
+ * Phrased as what Nova is *reading* rather than as "details" or "evidence",
+ * because that is the question somebody clicking it has: not "is there more",
+ * but "what is she going on".
+ */
+export const BRIEFING_EVIDENCE_LABEL = "What Nova is reading";
+
 /** Whether anything is waiting, said without restating the card that says it. */
 export const BRIEFING_STANDING = {
   clear: "Nothing is waiting on you right now.",
@@ -78,16 +87,7 @@ export type BriefingRead =
   | {
       kind: "repair";
       subject: ProvenanceLinkKind;
-      sentence: string;
-      /**
-       * Vibe's own account of what is wrong, from the chain's reason table.
-       *
-       * Nullable because the type is: every non-current link the chain builds
-       * carries a reason, and defaulting to one of the five rather than
-       * showing none would put a specific, checkable claim on screen that
-       * nothing decided.
-       */
-      because: string | null;
+      sentences: readonly string[];
       remedy: ProvenanceRemedy;
       remedyLabel: string;
       free: boolean;
@@ -96,16 +96,21 @@ export type BriefingRead =
   | {
       kind: "age";
       subject: ProvenanceLinkKind;
-      sentence: string;
-      advice: string;
+      sentences: readonly string[];
       remedy: ProvenanceRemedy;
       remedyLabel: string;
       free: boolean;
     }
-  /** The evidence is sound, so the thing to talk about is the work. */
-  | { kind: "move"; sentence: string; title: string; whyNow: string }
+  /**
+   * The evidence is sound, so the thing to talk about is the work.
+   *
+   * The Move's own words are kept out of `sentences` deliberately. Nova's
+   * paragraph says where to look; the Move is then quoted beneath it, in the
+   * engine's wording, visibly not hers.
+   */
+  | { kind: "move"; sentences: readonly string[]; title: string; whyNow: string }
   /** Sound, and nothing ranked. Saying so is better than finding something. */
-  | { kind: "settled"; sentence: string };
+  | { kind: "settled"; sentences: readonly string[] };
 
 export type BriefingRow = {
   kind: ProvenanceLinkKind;
@@ -128,6 +133,21 @@ export type BriefingView = {
   /** Vibe's own label for the goal on file. Null when none is. */
   goalLabel: string | null;
   standing: string;
+  /**
+   * Everything Nova says, as one paragraph.
+   *
+   * The standing line and the read's own sentences, joined — because a founder
+   * asked for a person telling them where they are, and a stack of labelled
+   * blocks is not that. It carries no name: the panel sets the founder's own
+   * as a lead-in, so every string in here stays Vibe's own words and stays
+   * sweepable by `view.test.ts`.
+   *
+   * This is also the seam a model would take over. A written paragraph would
+   * replace this field and nothing else — which is why the deterministic one
+   * has to be good enough to ship on its own, and is what runs when a written
+   * one is missing.
+   */
+  paragraph: string;
   rows: readonly BriefingRow[];
   read: BriefingRead;
 };
@@ -135,13 +155,15 @@ export type BriefingView = {
 export function buildBriefingView(briefing: NovaBriefing): BriefingView {
   const read = readOf(briefing);
   const subject = "subject" in read ? read.subject : null;
+  const standing =
+    briefing.open.kind === "nothing_to_do" ? BRIEFING_STANDING.clear : BRIEFING_STANDING.waiting;
 
   return {
     founderName: briefing.founder.name,
     projectName: briefing.project.name,
     goalLabel: briefing.goal?.label ?? null,
-    standing:
-      briefing.open.kind === "nothing_to_do" ? BRIEFING_STANDING.clear : BRIEFING_STANDING.waiting,
+    standing,
+    paragraph: [standing, ...read.sentences].join(" "),
     rows: briefing.evidence.map((entry) => ({
       kind: entry.kind,
       label: PROVENANCE_LINK_LABELS[entry.kind],
@@ -174,13 +196,21 @@ function readOf(briefing: NovaBriefing): BriefingRead {
     return {
       kind: "repair",
       subject: fix.link,
-      /*
-       * "Where to start" rather than "everything after it rests on this",
-       * which is true of four links and false of the fifth. The chain's own
-       * reason sentence carries the why, and it is right for all five.
-       */
-      sentence: `${PROVENANCE_LINK_LABELS[fix.link]} is where to start.`,
-      because: fix.reason === null ? null : PROVENANCE_REASONS[fix.reason],
+      sentences: [
+        /*
+         * "Where to start" rather than "everything after it rests on this",
+         * which is true of four links and false of the fifth. The chain's own
+         * reason sentence carries the why, and it is right for all five.
+         */
+        `${PROVENANCE_LINK_LABELS[fix.link]} is where to start.`,
+        /*
+         * Dropped rather than defaulted when the chain gave no reason. Every
+         * non-current link it builds carries one; inventing a specific,
+         * checkable claim to fill the slot would be worse than a shorter
+         * paragraph.
+         */
+        ...(fix.reason === null ? [] : [PROVENANCE_REASONS[fix.reason]]),
+      ],
       ...remedyOf(fix.link),
     };
   }
@@ -190,14 +220,16 @@ function readOf(briefing: NovaBriefing): BriefingRead {
     return {
       kind: "age",
       subject: old.link,
-      sentence: `${PROVENANCE_LINK_LABELS[old.link]} was last produced ${FRESHNESS_LABELS[old.freshness]}.`,
-      /*
-       * Conditional, and deliberately. Nova cannot see whether the product
-       * moved — that is what `BRIEFING_SOURCE_NOTE` admits — so the sentence
-       * that follows an age has to be an offer rather than an instruction.
-       */
-      advice:
-        "Nothing about it is wrong. If your product has moved since, a fresh run would give Vibe something newer to read.",
+      sentences: [
+        `${PROVENANCE_LINK_LABELS[old.link]} was last produced ${FRESHNESS_LABELS[old.freshness]}.`,
+        /*
+         * Conditional, and deliberately. Nova cannot see whether the product
+         * moved — that is what `BRIEFING_SOURCE_NOTE` admits — so what follows
+         * an age has to be an offer rather than an instruction, and it says
+         * nothing is wrong before it says anything else.
+         */
+        "Nothing about it is wrong, but if your product has moved since, a fresh run would give Vibe something newer to read.",
+      ],
       ...remedyOf(old.link),
     };
   }
@@ -206,8 +238,11 @@ function readOf(briefing: NovaBriefing): BriefingRead {
   if (move !== null) {
     return {
       kind: "move",
-      sentence: "This is the Move at the top of your list.",
-      /* The engine's own words. Nova quotes them; she does not rewrite them. */
+      sentences: [
+        "Everything Vibe reads from is current, so the top of your list is where to look next.",
+      ],
+      /* The engine's own words, quoted beneath rather than folded into Nova's
+         paragraph. She points at the Move; she does not restate it. */
       title: move.title,
       whyNow: move.whyNow,
     };
@@ -215,6 +250,6 @@ function readOf(briefing: NovaBriefing): BriefingRead {
 
   return {
     kind: "settled",
-    sentence: "Everything Vibe reads from is current, and no Move is waiting on your list.",
+    sentences: ["Everything Vibe reads from is current, and no Move is waiting on your list."],
   };
 }

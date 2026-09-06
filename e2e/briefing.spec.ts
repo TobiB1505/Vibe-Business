@@ -11,9 +11,10 @@ import { expect, test } from "@playwright/test";
  * corrected analyzer *and* a stale date leaves a founder with two problems
  * where there is one, and reads as noise rather than as a read.
  *
- * So the claims here are properties of a rendered page: exactly one row is
- * marked, exactly one thing is offered, the age is in words while the date is a
- * date, and Nova's account of her own limits is on screen whatever the state.
+ * So the claims here are properties of a rendered page: Nova says it as one
+ * paragraph rather than a table, exactly one row is marked behind it, exactly
+ * one thing is offered, the age is in words while the date is a date, and
+ * Nova's account of her own limits is on screen whatever the state.
  */
 
 const AGEING = "/e2e/briefing-audit-ageing";
@@ -42,16 +43,25 @@ test.describe("the founder's own example: nothing wrong, and it has been sitting
   test("offers rather than instructs", async ({ page }) => {
     await page.goto(AGEING);
 
-    const panel = page.getByTestId("briefing-panel");
-    await expect(panel.getByText(/nothing about it is wrong/i)).toBeVisible();
-    await expect(panel.getByText(/if your product has moved since/i)).toBeVisible();
+    const paragraph = page.getByTestId("briefing-paragraph");
+    await expect(paragraph).toContainText("Nothing about it is wrong");
+    await expect(paragraph).toContainText("if your product has moved since");
   });
 
-  /** The bucket is the words; the exact day is rendered from the timestamp. */
-  test("shows a real date beside the words", async ({ page }) => {
+  /**
+   * The facts are behind the answer, not instead of it: the paragraph is the
+   * surface, and the chain opens for anyone who wants to check her.
+   *
+   * The bucket is the words; the exact day is rendered from the timestamp.
+   */
+  test("shows a real date beside the words, once the evidence is opened", async ({ page }) => {
     await page.goto(AGEING);
 
+    await expect(page.locator('[data-briefing-link="business_audit"]')).toBeHidden();
+    await page.getByText(/what nova is reading/i).click();
+
     const audit = page.locator('[data-briefing-link="business_audit"]');
+    await expect(audit).toBeVisible();
     await expect(audit).toContainText("1 Sep 2026");
     await expect(audit).toContainText("about a week ago");
   });
@@ -104,6 +114,11 @@ test.describe("when the evidence is sound", () => {
     await expect(panel).toHaveAttribute("data-briefing-read", "move");
     await expect(panel.getByText("Put a price on the pricing page")).toBeVisible();
     await expect(panel.getByText(/pricing page with no amount on it/i)).toBeVisible();
+
+    /* Nova points at it; the Move's own words sit outside her paragraph. */
+    await expect(page.getByTestId("briefing-paragraph")).not.toContainText(
+      "Put a price on the pricing page",
+    );
   });
 
   /** Nothing to repair, so nothing is offered beside the Move. */
@@ -118,7 +133,9 @@ test.describe("when the evidence is sound", () => {
 
     const panel = page.getByTestId("briefing-panel");
     await expect(panel).toHaveAttribute("data-briefing-read", "settled");
-    await expect(panel.getByText(/no move is waiting on your list/i)).toBeVisible();
+    await expect(page.getByTestId("briefing-paragraph")).toContainText(
+      "no Move is waiting on your list",
+    );
   });
 });
 
@@ -142,6 +159,8 @@ test.describe("a project on its first day", () => {
     await page.goto(EMPTY);
 
     await expect(page.getByTestId("briefing-panel").getByText("Untitled product")).toBeVisible();
+    /* No name, no lead-in: the paragraph simply starts at the sentence. */
+    await expect(page.getByTestId("briefing-paragraph")).toHaveText(/^Nothing is waiting/);
   });
 });
 
@@ -156,7 +175,9 @@ test.describe("what Nova admits about herself", () => {
   test("points at what is waiting instead of repeating it", async ({ page }) => {
     await page.goto(WAITING);
 
-    await expect(page.getByText(/one thing is waiting on you, above/i)).toBeVisible();
+    await expect(page.getByTestId("briefing-paragraph")).toContainText(
+      "One thing is waiting on you, above",
+    );
   });
 });
 

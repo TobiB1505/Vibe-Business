@@ -1,13 +1,15 @@
 import Link from "next/link";
 
 import { projectSectionHref, type WorkspaceSectionId } from "@/components/layout/project-shell";
-import { Surface, Well } from "@/components/ui/surface";
+import { Disclosure } from "@/components/ui/disclosure";
+import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import type { ProvenanceRemedy, ProvenanceState } from "@/modules/provenance/chain";
 import {
+  BRIEFING_EVIDENCE_LABEL,
   BRIEFING_GOAL_PREFIX,
   BRIEFING_HEADING,
   BRIEFING_SOURCE_NOTE,
@@ -16,7 +18,7 @@ import {
 } from "@/modules/nova/briefing/view";
 
 /**
- * The briefing — where a founder stands, in one panel.
+ * The briefing — where a founder stands, said in a paragraph.
  *
  * ## The gap it fills
  *
@@ -27,18 +29,24 @@ import {
  * themselves that the audit they were about to re-run rested on a scan from
  * three weeks ago.
  *
- * ## Why it is a list of facts with one sentence under it
+ * ## Why a paragraph and not a table
  *
- * The same argument the provenance panel makes: a summary a founder cannot
- * check is worth less than the facts it summarises. So the chain is drawn with
- * real dates, and Nova's read sits *beneath* it — visibly derived from what is
- * above, rather than replacing it.
+ * Because the first build of this panel was a table, and the founder's reaction
+ * to it settled the question: five labelled rows with dates on them is the raw
+ * material for the answer, not the answer. What was asked for was somebody
+ * saying it — "we're through your Moves, your audit is about a week old, a
+ * fresh scan first would give it something newer to read". Every fact in that
+ * sentence was already on the table; none of it was being *said*.
+ *
+ * So Nova speaks first and the facts sit behind a disclosure, where somebody
+ * who wants to check her can open them. Nothing is hidden — it is ordered
+ * behind what the founder actually asked.
  *
  * ## What it does not do
  *
  * Re-rank anything, restate the Focus Card's sentence, or offer more than one
- * thing to do. `buildBriefingView` decided the read; the Focus Card above owns
- * what is open, and this only points at it.
+ * thing to do. `buildBriefingView` composed the paragraph and chose the read;
+ * this draws it.
  */
 const REMEDY_SECTION: Record<ProvenanceRemedy, WorkspaceSectionId> = {
   product_scan: "my-product",
@@ -100,53 +108,6 @@ function EvidenceRow({ row }: { row: BriefingRow }) {
   );
 }
 
-/**
- * Nova's read, and the one thing she offers.
- *
- * One offer, at the top of the chain, for the reason the provenance panel
- * gives: everything below a broken link is derived from it, so replacing the
- * third while the first is wrong buys a fresh document built on the same
- * mistake. A row of buttons would invite exactly that.
- */
-function Read({ view, projectId }: { view: BriefingView; projectId: string }) {
-  const read = view.read;
-
-  return (
-    <Well className="flex flex-col gap-2">
-      <p className="text-fg-body text-sm leading-relaxed">{read.sentence}</p>
-
-      {read.kind === "repair" && read.because !== null && (
-        <p className="text-fg-muted text-xs leading-relaxed">{read.because}</p>
-      )}
-
-      {read.kind === "age" && (
-        <p className="text-fg-muted text-xs leading-relaxed">{read.advice}</p>
-      )}
-
-      {read.kind === "move" && (
-        <>
-          {/* The engine's own words, quoted. Nova never rewrites a Move. */}
-          <p className="text-fg text-sm font-semibold">{read.title}</p>
-          <p className="text-fg-muted text-xs leading-relaxed">{read.whyNow}</p>
-        </>
-      )}
-
-      {(read.kind === "repair" || read.kind === "age") && (
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 pt-0.5">
-          <Link
-            href={projectSectionHref(projectId, REMEDY_SECTION[read.remedy])}
-            className="text-fg-prose hover:text-fg text-sm underline underline-offset-4 transition-interactive"
-            data-testid="briefing-remedy"
-          >
-            {read.remedyLabel}
-          </Link>
-          {read.free && <MonoLabel>Free</MonoLabel>}
-        </div>
-      )}
-    </Well>
-  );
-}
-
 export function BriefingPanel({
   view,
   projectId,
@@ -156,6 +117,9 @@ export function BriefingPanel({
   projectId: string;
   className?: string;
 }) {
+  const read = view.read;
+  const offer = read.kind === "repair" || read.kind === "age" ? read : null;
+
   return (
     <Surface
       as="section"
@@ -164,38 +128,69 @@ export function BriefingPanel({
       padding="md"
       className={cn("flex flex-col gap-3", className)}
       data-testid="briefing-panel"
-      data-briefing-read={view.read.kind}
+      data-briefing-read={read.kind}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <MonoLabel as="h2" id="nova-briefing">
           {BRIEFING_HEADING}
         </MonoLabel>
-        {/*
-          Addressed, when Vibe has been told what to call them. No placeholder
-          and no "there" — an account that has not given a name is a normal
-          state, and the panel simply names the product instead.
-        */}
-        <span className="text-fg-meta text-xs">
-          {view.founderName ? `${view.founderName} · ${view.projectName}` : view.projectName}
-        </span>
+        <span className="text-fg-meta text-xs">{view.projectName}</span>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <p className="text-fg-body text-sm">{view.standing}</p>
-        {view.goalLabel !== null && (
-          <p className="text-fg-muted text-xs">
-            {BRIEFING_GOAL_PREFIX} · <span className="text-fg-prose">{view.goalLabel}</span>
-          </p>
+      {/*
+        Nova's own paragraph, addressed. The name is a lead-in here rather than
+        part of the sentence so that every word `buildBriefingView` produces
+        stays Vibe's own and stays sweepable; an account that has not given one
+        simply starts at the sentence, with no placeholder and no "there".
+      */}
+      <p className="text-fg-body text-sm leading-relaxed" data-testid="briefing-paragraph">
+        {view.founderName !== null && (
+          <span className="text-fg font-semibold">{view.founderName} — </span>
         )}
-      </div>
+        {view.paragraph}
+      </p>
 
-      <ul className="mt-1">
-        {view.rows.map((row) => (
-          <EvidenceRow key={row.kind} row={row} />
-        ))}
-      </ul>
+      {read.kind === "move" && (
+        /* The engine's words, set apart because they are quoted rather than
+           written. Nova points at the Move; she never rewrites it. */
+        <div className="border-line-3 flex flex-col gap-1 border-l-2 pl-3">
+          <p className="text-fg text-sm font-semibold">{read.title}</p>
+          <p className="text-fg-muted text-xs leading-relaxed">{read.whyNow}</p>
+        </div>
+      )}
 
-      <Read view={view} projectId={projectId} />
+      {offer !== null && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <Link
+            href={projectSectionHref(projectId, REMEDY_SECTION[offer.remedy])}
+            className="text-fg-prose hover:text-fg text-sm underline underline-offset-4 transition-interactive"
+            data-testid="briefing-remedy"
+          >
+            {offer.remedyLabel}
+          </Link>
+          {offer.free && <MonoLabel>Free</MonoLabel>}
+        </div>
+      )}
+
+      {view.goalLabel !== null && (
+        <p className="text-fg-meta text-xs">
+          {BRIEFING_GOAL_PREFIX} · <span className="text-fg-muted">{view.goalLabel}</span>
+        </p>
+      )}
+
+      {/*
+        The facts, behind the answer rather than instead of it. Closed by
+        default: this is the layer somebody opens to check Nova, and a founder
+        who trusts the paragraph should not have to scroll past its evidence
+        every time they open Home.
+      */}
+      <Disclosure label={BRIEFING_EVIDENCE_LABEL} className="pt-1">
+        <ul>
+          {view.rows.map((row) => (
+            <EvidenceRow key={row.kind} row={row} />
+          ))}
+        </ul>
+      </Disclosure>
 
       {/*
         What Nova is, on every render rather than only when something is wrong.

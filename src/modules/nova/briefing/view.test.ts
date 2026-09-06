@@ -12,6 +12,7 @@ import { ANALYZER_VERSION as REPOSITORY_ANALYZER_VERSION } from "@/modules/repos
 import type { NovaFocus } from "../focus";
 import { buildNovaBriefing, type BriefingInputs } from "./briefing";
 import {
+  BRIEFING_EVIDENCE_LABEL,
   BRIEFING_GOAL_PREFIX,
   BRIEFING_HEADING,
   BRIEFING_SOURCE_NOTE,
@@ -175,9 +176,7 @@ describe("Nova's read, and what outranks what", () => {
   it("carries the chain's own account of what is wrong", () => {
     const read = view({ chain: buildProvenanceChain(chainInputs(corrected)) }).read;
 
-    expect(read).toMatchObject({
-      because: "Vibe has corrected how it reads this since the last run.",
-    });
+    expect(read.sentences).toContain("Vibe has corrected how it reads this since the last run.");
   });
 
   /** The founder's own example: nothing wrong, and it has been sitting. */
@@ -194,10 +193,7 @@ describe("Nova's read, and what outranks what", () => {
       remedy: "business_audit",
       free: false,
     });
-    expect(read).toHaveProperty(
-      "sentence",
-      "Your business audit was last produced about a week ago.",
-    );
+    expect(read.sentences[0]).toBe("Your business audit was last produced about a week ago.");
   });
 
   /**
@@ -205,24 +201,21 @@ describe("Nova's read, and what outranks what", () => {
    * product moved. That is advice; an imperative would be a push.
    */
   it("offers rather than instructs", () => {
-    const read = view({
+    const paragraph = view({
       chain: buildProvenanceChain(
         chainInputs({ businessAudit: { producedAt: daysAgo(8), upToDate: true } }),
       ),
-    }).read;
+    }).paragraph;
 
-    expect(read.kind).toBe("age");
-    if (read.kind !== "age") return;
-    expect(read.advice).toMatch(/^Nothing about it is wrong\./);
-    expect(read.advice).toContain("If ");
+    expect(paragraph).toContain("Nothing about it is wrong");
+    expect(paragraph).toContain("if your product has moved since");
   });
 
   it("quotes the engine's Move when the evidence is sound", () => {
     const move = { title: "Make the price visible", whyNow: "It blocks the signup step." };
 
-    expect(view({ topMove: move }).read).toEqual({
+    expect(view({ topMove: move }).read).toMatchObject({
       kind: "move",
-      sentence: "This is the Move at the top of your list.",
       title: move.title,
       whyNow: move.whyNow,
     });
@@ -279,11 +272,10 @@ describe("the sentences claim nothing they cannot show", () => {
     BRIEFING_HEADING,
     BRIEFING_SOURCE_NOTE,
     BRIEFING_GOAL_PREFIX,
+    BRIEFING_EVIDENCE_LABEL,
     ...Object.values(BRIEFING_STANDING),
     ...composed.flatMap((read) => [
-      read.sentence,
-      "because" in read ? read.because : null,
-      "advice" in read ? read.advice : null,
+      ...read.sentences,
       "remedyLabel" in read ? read.remedyLabel : null,
     ]),
   ].filter((text): text is string => typeof text === "string");
@@ -326,5 +318,67 @@ describe("the sentences claim nothing they cannot show", () => {
 
   it("admits what Nova does not see", () => {
     expect(BRIEFING_SOURCE_NOTE).toContain("does not watch");
+  });
+});
+
+/**
+ * The paragraph is the surface.
+ *
+ * The first build of this panel rendered these fields as a table of labelled
+ * rows, and the founder's answer settled what the module is for: the facts
+ * were all there and none of them was being *said*. So the property worth
+ * pinning is that the paragraph is one piece of prose carrying the standing
+ * and the read together — and that it stays Vibe's own words, with the
+ * founder's name left to the panel.
+ */
+describe("the paragraph Nova actually says", () => {
+  it("opens with where things stand and continues with the read", () => {
+    const built = view({
+      chain: buildProvenanceChain(
+        chainInputs({ businessAudit: { producedAt: daysAgo(8), upToDate: true } }),
+      ),
+    });
+
+    expect(built.paragraph).toBe(
+      "Nothing is waiting on you right now. " +
+        "Your business audit was last produced about a week ago. " +
+        "Nothing about it is wrong, but if your product has moved since, a fresh run would give Vibe something newer to read.",
+    );
+  });
+
+  it("says every sentence the read carries, and only those", () => {
+    for (const built of [
+      view(),
+      view({ topMove: { title: "T", whyNow: "W" } }),
+      view({ chain: buildProvenanceChain(chainInputs({ liveScan: null })) }),
+    ]) {
+      expect(built.paragraph).toBe([built.standing, ...built.read.sentences].join(" "));
+    }
+  });
+
+  /**
+   * The name is the panel's to set as a lead-in. Keeping it out is what lets
+   * every string the builder produces be swept for figures and claims — and
+   * what will let a written paragraph be checked the same way.
+   */
+  it("carries no name, however the founder is addressed", () => {
+    expect(view({ founderName: "Tobi" }).paragraph).not.toContain("Tobi");
+    expect(view({ founderName: "Tobi" }).paragraph).toBe(view({ founderName: null }).paragraph);
+  });
+
+  /** The Move is quoted beside the paragraph, never folded into it. */
+  it("points at the Move without restating it", () => {
+    const move = { title: "Put a price on the pricing page", whyNow: "It blocks signup." };
+    const built = view({ topMove: move });
+
+    expect(built.paragraph).not.toContain(move.title);
+    expect(built.paragraph).not.toContain(move.whyNow);
+    expect(built.paragraph).toContain("the top of your list");
+  });
+
+  it("reads as sentences rather than fragments", () => {
+    for (const built of [view(), view({ topMove: { title: "T", whyNow: "W" } })]) {
+      expect(built.paragraph, built.paragraph).toMatch(/^[A-Z][^\n]*\.$/);
+    }
   });
 });
