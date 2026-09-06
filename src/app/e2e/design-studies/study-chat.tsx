@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode } from "react";
-import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { creditsToUnits } from "@/modules/credits/units";
@@ -9,6 +8,7 @@ import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
 import { buildNovaHomeView } from "@/modules/nova/home-view";
 import { deriveNovaFocus, type NovaFocusFacts } from "@/modules/nova/focus";
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
+import { Move } from "./elements";
 import { novaScenarioHealth } from "../nova-scenarios";
 import type { Study } from "./studies";
 
@@ -398,15 +398,16 @@ export function StudyChat({ study, answered }: { study: Study; answered?: boolea
                 return (
                   <div key={entry.id} className="flex flex-col gap-3 pl-[88px] max-sm:pl-0">
                     <p className="text-caption text-fg-meta">{entry.prompt}</p>
-                    <div className="flex flex-wrap gap-2.5">
+                    {/* The shared Move — the same element the console uses,
+                        so the two layouts differ by layout alone. */}
+                    <div className="flex max-w-[26rem] flex-col gap-2.5">
                       {entry.options.map((option) => (
-                        <span
+                        <Move
                           key={option.actionId}
-                          className="study-press flex items-center gap-3 rounded-nav border border-mint-line bg-mint-tint-soft px-4 py-2.5 text-ui font-semibold text-mint"
-                        >
-                          {option.label}
-                          <CostDisclosure operation={option.price} balance={STUDY_BALANCE} />
-                        </span>
+                          label={option.label}
+                          operation={option.price}
+                          balance={STUDY_BALANCE}
+                        />
                       ))}
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { creditsToUnits } from "@/modules/credits/units";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import type { RetailOperationKind } from "@/modules/credits/retail";
+import { Move } from "./elements";
 import type { Study } from "./studies";
 
 /**
@@ -134,31 +135,19 @@ function MoveLine({ state, label }: { state: MoveState; label: string }) {
   );
 }
 
-/* ── B — Weight from light ────────────────────────────────────────────── */
+/* ── B — Weight from light (chosen) ───────────────────────────────────── */
 
 /**
- * A dark surface with one lit edge, and mint only as line and label.
+ * B now renders the shared `Move` from `elements.tsx` rather than a copy.
  *
- * The direction's sentence taken literally. `study-nova-home` already uses a
- * single directional band to say *this one* about the focused card; the Move
- * is the other place a screen has exactly one of something, so it can carry
- * the same device at control scale without spending the emphasis twice — the
- * card's band and the Move's are never both on screen in the same region.
- *
- * On hover the band brightens and widens to the full edge. Nothing moves
- * position, so there is no reflow and nothing to reserve.
+ * That is the point of choosing: the winning variant stops being a drawing in
+ * a comparison sheet and becomes the element every study reaches for. A and C
+ * keep their local implementations because they exist only to be compared
+ * against — a losing variant that stayed importable would eventually get used.
  */
 function MoveLit({ state, label }: { state: MoveState; label: string }) {
-  return (
-    <span className="move-lit relative flex w-full items-center justify-between gap-4 overflow-hidden rounded-nav border border-line-3 bg-surface-2 px-4 py-3">
-      <span
-        aria-hidden
-        className="move-lit-band pointer-events-none absolute inset-x-0 top-0 h-px"
-      />
-      <span className="text-ui font-semibold text-mint">{label}</span>
-      <Cost state={state} />
-    </span>
-  );
+  if (state.kind === "away") return <Move label={label} leavesTo={state.where} />;
+  return <Move label={label} operation={state.operation} balance={BALANCE} />;
 }
 
 /* ── C — The switch ───────────────────────────────────────────────────── */
@@ -211,7 +200,7 @@ const VARIANTS = [
   },
   {
     id: "b",
-    name: "Weight from light",
+    name: "Weight from light — chosen",
     thesis: "Dark surface, one lit edge. Emphasis from luminance, not from area of colour.",
     press: "The band brightens to full and the surface lifts a step. Nothing moves position.",
     Move: MoveLit,
