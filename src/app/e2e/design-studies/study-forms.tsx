@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import { Field, Input, Select, Textarea } from "@/components/ui/field";
-import { CheckIcon, ChevronDownIcon } from "@/components/ui/icons.generated";
+import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
+import { ChevronDownIcon } from "@/components/ui/icons.generated";
 import { FilterIcon } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/utils/cn";
 import type { Study } from "./studies";
@@ -266,51 +268,45 @@ function FilterAsControl() {
 }
 
 /**
- * F3 — the segment.
+ * F3 — the segment. **Chosen**, and rendered from the shipped component.
  *
- * Three options is few enough to show all of them, so nothing has to be opened
- * to find out what the alternatives are. Trades width for that, and stops
- * working the moment a filter has eight options — which is the question this
- * variant is really asking: will these lists ever have more?
+ * All the options visible at once, so the alternatives do not have to be
+ * opened to be discovered, and the current one reads as a state rather than as
+ * a value somebody typed. It costs width and stops working past about four
+ * options, which is the bet: these lists have three and four.
+ *
+ * Sort keeps the pill it had. The orders are interchangeable and nobody scans
+ * them, so showing them all buys nothing — and two identical rows of chips
+ * would say the two controls do the same job.
+ *
+ * This renders `SegmentedControl` and `SortSelect` themselves rather than a
+ * copy, so the picture cannot drift away from the product.
  */
-function FilterAsSegments() {
+function FilterDecided() {
   const [visibility, setVisibility] = useState("all");
+  const [sort, setSort] = useState("recent");
   return (
     <div className="flex flex-wrap items-center gap-3">
-      <div
-        role="group"
-        aria-label="Filter repository visibility"
-        className="border-line-2 bg-field rounded-nav inline-flex items-center gap-0.5 border p-0.5"
-      >
-        {VISIBILITY.map((option) => (
-          <button
-            key={option.value}
-            type="button"
-            onClick={() => setVisibility(option.value)}
-            aria-pressed={visibility === option.value}
-            className={cn(
-              "rounded-[calc(var(--radius-nav)-2px)] px-3 py-1.5 text-ui font-medium",
-              "transition-interactive",
-              visibility === option.value
-                ? "bg-surface-3 text-fg shadow-raise"
-                : "text-fg-muted hover:text-fg-body",
-            )}
-          >
-            {option.label === "All visibility" ? "All" : option.label}
-          </button>
-        ))}
-      </div>
-      <label className="text-fg-muted flex items-center gap-1.5 text-ui">
-        <span className="text-fg-meta text-caption">Sort:</span>
-        <select
-          defaultValue="recent"
-          className="text-fg-body appearance-none bg-transparent text-ui font-medium outline-none"
-        >
-          <option value="recent">Connected</option>
-          <option value="name">Repository</option>
-        </select>
-        <ChevronDownIcon aria-hidden size={14} className="text-fg-meta pointer-events-none" />
-      </label>
+      <SegmentedControl
+        label="Filter repository visibility"
+        value={visibility}
+        onChange={setVisibility}
+        options={[
+          { value: "all", label: "All" },
+          { value: "private", label: "Private" },
+          { value: "public", label: "Public" },
+        ]}
+      />
+      <SortSelect
+        label="Sort repositories"
+        value={sort}
+        onChange={setSort}
+        options={[
+          { value: "recent", label: "Connected" },
+          { value: "name", label: "Repository" },
+          { value: "product", label: "Product" },
+        ]}
+      />
     </div>
   );
 }
@@ -409,57 +405,35 @@ function ChoiceAsCard() {
 }
 
 /**
- * C2 — the card with a mark.
+ * C2 — the card with the dot. **Chosen**, and rendered from the shipped
+ * component.
  *
- * The objection to C1 is that a tinted border is the entire selected state, so
- * on a colour-blind reading, a dim screen or a screenshot, "selected" and
- * "hovered" are close. This keeps the card and puts back the one thing the
- * platform's dot was actually doing — a mark that is either there or not — as
- * a check in a mint disc, which is how the product already says done.
+ * Not new artwork: `founder-input-card` has always drawn exactly this, and
+ * three of the six screens already used it. The decision was to stop having
+ * two conventions, not to invent a third — so the ring and the `size-2.5` dot
+ * are the ones that were already there.
+ *
+ * What the dot is for: a tinted border is a *comparative* signal and means
+ * selected only against the unselected cards beside it. A dot is absolute.
+ *
+ * This renders `ChoiceCard` itself, so the picture cannot drift.
  */
-function ChoiceAsMarkedCard() {
+function ChoiceDecided() {
   const [choice, setChoice] = useChoice();
   return (
     <fieldset className="flex flex-col gap-2">
       <legend className="sr-only">What should Vibe do</legend>
-      {CHOICES.map((option) => {
-        const selected = choice === option.value;
-        return (
-          <label
-            key={option.value}
-            className={cn(
-              "flex cursor-pointer items-start gap-3 rounded-well border px-4 py-3",
-              "transition-interactive",
-              selected
-                ? "border-mint bg-mint-tint-soft"
-                : "border-line-3 bg-surface-2 hover:border-line-strong hover:bg-surface-hover",
-            )}
-          >
-            <input
-              type="radio"
-              name="marked"
-              value={option.value}
-              checked={selected}
-              onChange={() => setChoice(option.value)}
-              className="sr-only"
-            />
-            <span
-              aria-hidden
-              className={cn(
-                "mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full border",
-                "transition-interactive",
-                selected ? "border-mint bg-mint text-ink" : "border-line-strong bg-surface-1",
-              )}
-            >
-              {selected && <CheckIcon size={12} strokeWidth={2.5} />}
-            </span>
-            <span className="flex flex-col gap-1">
-              <span className="text-fg text-body font-medium">{option.label}</span>
-              <span className="text-fg-muted text-caption">{option.detail}</span>
-            </span>
-          </label>
-        );
-      })}
+      {CHOICES.map((option) => (
+        <ChoiceCard
+          key={option.value}
+          name="decided"
+          value={option.value}
+          checked={choice === option.value}
+          onChange={() => setChoice(option.value)}
+          label={option.label}
+          detail={option.detail}
+        />
+      ))}
     </fieldset>
   );
 }
@@ -555,10 +529,10 @@ export function StudyForms({ study }: { study: Study }) {
             <FilterAsControl />
           </Variant>
           <Variant
-            label="F3 — the segment"
-            note="All the options visible at once. Costs width, and stops working past about four options."
+            label="F3 — the segment · chosen"
+            note="All the options visible at once; sort keeps its pill. Rendered from SegmentedControl and SortSelect themselves."
           >
-            <FilterAsSegments />
+            <FilterDecided />
           </Variant>
         </div>
       </Section>
@@ -581,10 +555,10 @@ export function StudyForms({ study }: { study: Study }) {
             <ChoiceAsCard />
           </Variant>
           <Variant
-            label="C2 — the card with a mark"
-            note="C1 plus the one thing the dot was doing: a mark that is there or is not."
+            label="C2 — the card with the dot · chosen"
+            note="What three of the six already drew, made the convention. Rendered from ChoiceCard itself."
           >
-            <ChoiceAsMarkedCard />
+            <ChoiceDecided />
           </Variant>
           <Variant
             label="C3 — the rail"
