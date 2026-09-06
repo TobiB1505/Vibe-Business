@@ -568,11 +568,21 @@ export function RenderBlock({
   label,
   /** When it finished, already formatted. Absent while it is still running. */
   at,
+  /**
+   * The body already carries this name, so the frame does not repeat it.
+   *
+   * True whenever a shipped surface is composed in: the Product Scan writes
+   * its own "PRODUCT SCAN · COMPLETE" eyebrow, and a frame that wrote it again
+   * above put the same two words on screen twice. The label stays as the
+   * region's accessible name either way — a screen reader still needs it.
+   */
+  namesItself = false,
   children,
   index = 0,
 }: {
   label: string;
   at?: string;
+  namesItself?: boolean;
   children: ReactNode;
   index?: number;
 }) {
@@ -583,7 +593,11 @@ export function RenderBlock({
       aria-label={label}
     >
       <div className="flex items-baseline justify-between gap-3">
-        <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{label}</p>
+        {namesItself ? (
+          <span aria-hidden />
+        ) : (
+          <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{label}</p>
+        )}
         {/*
           A time only where there is one. A finished block happened at a moment
           and the row records it; a running one has not happened yet, and a

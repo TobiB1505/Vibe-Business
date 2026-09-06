@@ -6,6 +6,9 @@ import {
 } from "@/modules/projects/business-brain-view";
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AuditBlock } from "./audit-block";
+import { ScanBlock } from "./scan-block";
+import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
+import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { Bubble, Context, Dissolving, Line, Move, RenderBlock } from "./elements";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import type { Study } from "./studies";
@@ -68,12 +71,143 @@ function auditView(scenario: "audit-synthesis" | "audit-unscored"): BusinessBrai
   return view;
 }
 
+/** The scan fixture the product's own reveal route renders from. */
+const SCAN = E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete;
+
 /** A run part-way through, newest stage first. Real labels, real order. */
 const STAGES = [
   OPERATION_STAGE_LABELS.running_ai,
   OPERATION_STAGE_LABELS.preparing,
   OPERATION_STAGE_LABELS.preflight,
 ];
+
+/**
+ * The moves this moment actually offers, so the four arrangements are compared
+ * on real controls rather than on three copies of one button.
+ *
+ * One navigation with no price, one priced action, and one that leaves the
+ * product for somewhere else. That mixture is the case a stack hides: three
+ * identical rows make a free look, a 20-Credit spend and a trip to GitHub
+ * read as the same size of decision.
+ */
+const MOVES = [
+  { label: "Look at the change", operation: null, leavesTo: undefined },
+  { label: "Plan this move", operation: "action_plan" as const, leavesTo: undefined },
+  { label: "Open the business map", operation: null, leavesTo: "Business health" },
+];
+
+const CTA_VARIANTS: { id: string; what: string }[] = [
+  {
+    id: "A · stacked",
+    what: "What the thread does today. Every option the same weight, the column taller with each one, and nothing saying which is the thing to do.",
+  },
+  {
+    id: "B · one leads",
+    what: "The first move keeps the full control; the rest become quiet text links under it. The ranking is the domain's — deriveNovaFocus already put them in order — so this renders a decision that was already made rather than making one.",
+  },
+  {
+    id: "C · side by side",
+    what: "Equal weight, one row. Honest when the options genuinely are equal, and it stops the column growing — but it wraps badly past three and puts a priced action beside a free one at the same size.",
+  },
+  {
+    id: "D · one, and a menu",
+    what: "One control and a disclosure holding the rest. Keeps the thread short at any number of options, and hides a price behind a click — which is the one thing a cost disclosure exists to prevent.",
+  },
+];
+
+function CtaVariant({ id }: { id: string }) {
+  const [lead, ...rest] = MOVES;
+  if (!lead) return null;
+
+  if (id.startsWith("A")) {
+    return (
+      <div className="flex max-w-[24rem] flex-col gap-2.5">
+        {MOVES.map((move) => (
+          <Move
+            key={move.label}
+            label={move.label}
+            operation={move.operation}
+            leavesTo={move.leavesTo}
+            balance={STUDY_BALANCE}
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (id.startsWith("B")) {
+    return (
+      <div className="flex max-w-[24rem] flex-col gap-3">
+        <Move
+          label={lead.label}
+          operation={lead.operation}
+          leavesTo={lead.leavesTo}
+          balance={STUDY_BALANCE}
+        />
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
+          {rest.map((move) => (
+            <span key={move.label} className="flex items-baseline gap-2">
+              <span className="text-caption font-medium text-mint underline decoration-mint-line underline-offset-4">
+                {move.label}
+              </span>
+              {/*
+                The price still shows. A secondary option that hid its cost
+                would be the cheapest way to make a spend look like a link.
+              */}
+              <span className="text-caption text-fg-meta">
+                <CostDisclosure operation={move.operation} balance={STUDY_BALANCE} />
+              </span>
+            </span>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (id.startsWith("C")) {
+    return (
+      <div className="flex flex-wrap gap-2.5">
+        {MOVES.map((move) => (
+          <div key={move.label} className="min-w-[13rem] flex-1">
+            <Move
+              label={move.label}
+              operation={move.operation}
+              leavesTo={move.leavesTo}
+              balance={STUDY_BALANCE}
+            />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex max-w-[24rem] flex-col gap-2.5">
+      <Move
+        label={lead.label}
+        operation={lead.operation}
+        leavesTo={lead.leavesTo}
+        balance={STUDY_BALANCE}
+      />
+      <details className="rounded-nav border border-line-2 bg-surface-1">
+        <summary className="cursor-pointer list-none px-4 py-2.5 text-caption text-fg-secondary">
+          {rest.length} more {rest.length === 1 ? "thing" : "things"} I can do
+        </summary>
+        <div className="flex flex-col gap-2 border-t border-line-1 p-2.5">
+          {rest.map((move) => (
+            <Move
+              key={move.label}
+              label={move.label}
+              operation={move.operation}
+              leavesTo={move.leavesTo}
+              balance={STUDY_BALANCE}
+            />
+          ))}
+        </div>
+      </details>
+    </div>
+  );
+}
 
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
@@ -165,6 +299,57 @@ export function StudyBlock({ study }: { study: Study }) {
           <RenderBlock label="Business audit" at="2h" index={0}>
             <AuditBlock view={auditView("audit-unscored")} />
           </RenderBlock>
+        </div>
+      </section>
+
+      {/* ── A shipped surface, composed ──────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>The Product Scan, not redrawn</Eyebrow>
+        <Context>
+          This one is the block&rsquo;s actual argument. The scan is a shipped component with its
+          own animation and its own reading of the event stream, so the block mounts it rather than
+          reproducing it — a compressed copy would be a second scan UI to keep in step with the
+          first, and it would be out of step the first time anybody touched either.
+        </Context>
+        <Context>
+          The variant drops exactly two things and nothing else: the panel frame, because the block
+          already is one, and the component&rsquo;s own buttons, because a thread carries its
+          controls beside a block. Change the scan and this changes with it.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble index={0}>
+            <Line>I read your product.</Line>
+          </Bubble>
+          <RenderBlock label="Product scan" at="1h" namesItself index={1}>
+            <ScanBlock
+              operation={SCAN.operation}
+              events={SCAN.events}
+              presentation={SCAN.presentation}
+            />
+          </RenderBlock>
+          <div className="max-w-[24rem]">
+            <Move label="Open the product scan" leavesTo="My product" />
+          </div>
+        </div>
+      </section>
+
+      {/* ── More than one thing to do ────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Four ways to offer more than one move</Eyebrow>
+        <Context>
+          A stack of full-width buttons is what the thread does today and it is the weakest of the
+          four: every option gets the same weight, the column gets taller with every one, and
+          nothing says which is the thing to do. These are the alternatives, on the real moves for
+          this moment — one navigation, one priced action, one that leaves the product.
+        </Context>
+        <div className={`flex flex-col divide-y divide-line-1 ${panel}`}>
+          {CTA_VARIANTS.map(({ id, what }) => (
+            <div key={id} className="flex flex-col gap-3 p-6">
+              <p className="font-mono text-caption text-fg-meta">{id}</p>
+              <CtaVariant id={id} />
+              <p className="study-measure font-mono text-caption text-fg-meta">{what}</p>
+            </div>
+          ))}
         </div>
       </section>
 
