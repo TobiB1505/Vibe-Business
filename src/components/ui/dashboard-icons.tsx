@@ -28,6 +28,14 @@ export {
   PlusIcon,
   RefreshIcon,
   SearchIcon,
+  /*
+   * Hand-drawn until the sign-out control took a mark. Measured, the two
+   * disagreed: this set's door spanned eleven grid units against Lucide's six,
+   * and its arrow started inside the door. Two sign-out marks in one product
+   * is the defect ADR 0097 exists to prevent, so the drawn one is gone and the
+   * name resolves here — `account-menu.tsx` did not change.
+   */
+  SignOutIcon,
 } from "./icons.generated";
 
 export type DashboardIconName =
@@ -177,15 +185,6 @@ export function AgentIcon(props: IconProps) {
     <IconFrame {...props}>
       <rect x="4" y="7" width="16" height="13" rx="3" />
       <path d="M12 3v4M9 3h6M8.5 12h.01M15.5 12h.01M8.5 16h7" />
-    </IconFrame>
-  );
-}
-
-export function SignOutIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M14 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
-      <path d="M10 12h11m-4-4 4 4-4 4" />
     </IconFrame>
   );
 }
