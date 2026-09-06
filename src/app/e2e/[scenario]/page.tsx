@@ -38,7 +38,7 @@ import { StudyConsole } from "../design-studies/study-console";
 import { StudyMoments } from "../design-studies/study-moments";
 import { StudyBlocked } from "../design-studies/study-blocked";
 import { StudyMove } from "../design-studies/study-move";
-import { StudyLine } from "../design-studies/study-line";
+import { StudyBubble } from "../design-studies/study-bubble";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -52,7 +52,7 @@ import {
   MOMENTS_SCENARIO,
   BLOCKED_SCENARIO,
   MOVE_SCENARIO,
-  LINE_SCENARIO,
+  BUBBLE_SCENARIO,
   CHAT_ANSWERED_SCENARIO,
   CONSOLE_IDLE_SCENARIO,
   LABELS_SCENARIO,
@@ -278,11 +278,11 @@ export default async function E2eScenarioPage({
   /* The composition studies vary rank rather than material, so they are always
      drawn in the direction that won — otherwise a reader cannot tell which of
      the two axes moved. */
-  if (scenario === LINE_SCENARIO) {
+  if (scenario === BUBBLE_SCENARIO) {
     const chosen = chosenStudy();
     return (
       <StudyShell study={chosen}>
-        <StudyLine study={chosen} />
+        <StudyBubble study={chosen} />
       </StudyShell>
     );
   }

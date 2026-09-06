@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import type { CostBalance } from "@/components/system/cost-disclosure";
@@ -107,88 +107,158 @@ export function moveShowsCost(operation: RetailOperationKind | null): boolean {
   return priceDisplayFor(operation).kind !== "silent";
 }
 
+/* ── The Bubble ───────────────────────────────────────────────────────── */
+
+/**
+ * What Nova says, and the container everything else sits in.
+ *
+ * ## Why this replaced the Line's registers
+ *
+ * The first attempt put the register *inside* the sentence: a coloured rule at
+ * the text's left edge, four ways. It was rejected on sight, and the reason it
+ * deserved to be is that a rule beside a paragraph is a document grammar —
+ * a pull quote, a blockquote, a changebar. This surface is not a document. It
+ * is somebody speaking, and the wireframe says so: every line of text sits in
+ * a bubble that arrives.
+ *
+ * A bubble already carries its own nature, so the register belongs to it. That
+ * is the whole move, and it is why `Line` and `Context` below are now plain
+ * text with no markers of their own.
+ *
+ * ## The four registers, and what makes them tell apart without hue
+ *
+ * `DESIGN.md` says colour is never the only signal, and the ten blocked
+ * moments are the case that punishes a design that forgets it. A register here
+ * is four properties and only the last is hue:
+ *
+ * - **Fill.** An aside has none and no contour either — it is a bubble with no
+ *   walls, which is the one register a greyscale screenshot cannot confuse. A
+ *   concern is the only tinted one. The other two share a fill, because a
+ *   difference small enough to mean *thinner* is too small to see and one
+ *   large enough to see stops a bubble reading as raised at all.
+ * - **Contour weight.** None, hairline, or double. The one register asking to
+ *   be looked at first is the only one drawn at 2px.
+ * - **Contour style.** Solid means Vibe observed it. Dashed means it inferred
+ *   it from a clock — `focus.ts`'s own distinction, which until now reached
+ *   the screen only as amber-instead-of-coral: a claim about severity where
+ *   the domain was making one about certainty.
+ * - **Hue**, last.
+ *
+ * The greyscale row in `study-bubble` is what holds this honest. If the four
+ * collapse there, the design was colour and nothing else.
+ *
+ * ## Geometry
+ *
+ * A bubble hugs its content up to a reading measure, the way every chat a
+ * founder has ever used does — a three-word remark should not be a banner. The
+ * exception is a bubble carrying a Move: a decision takes the full measure,
+ * because the Move's own rule is that its geometry never depends on its state,
+ * and a control that changed width with the length of the sentence above it
+ * would break that from the outside.
+ */
+export type BubbleRegister = "statement" | "concern" | "guess" | "quiet";
+
+const BUBBLE: Record<BubbleRegister, { klass: string; tint: string; tail: boolean }> = {
+  statement: { klass: "bubble-statement", tint: "text-fg-meta", tail: true },
+  concern: { klass: "bubble-concern", tint: "text-coral", tail: true },
+  guess: { klass: "bubble-guess", tint: "text-amber", tail: true },
+  /* An aside is a note, not an utterance. Nothing points at a speaker. */
+  quiet: { klass: "bubble-quiet", tint: "text-fg-meta", tail: false },
+};
+
+export function Bubble({
+  children,
+  register = "statement",
+  /** The status word, from `statusForFocusTier`. Never written at a call site. */
+  eyebrow,
+  /**
+   * Whether this one points at the speaker. Only the first of a run does, the
+   * way a phone does it — a tail on every bubble in a group reads as four
+   * people talking at once.
+   */
+  tail = true,
+  /** Full measure rather than hugging. True whenever a Move is inside. */
+  wide = false,
+  /** Stagger position, so a thread arrives in order rather than at once. */
+  index = 0,
+}: {
+  children: ReactNode;
+  register?: BubbleRegister;
+  eyebrow?: string;
+  tail?: boolean;
+  wide?: boolean;
+  index?: number;
+}) {
+  const spec = BUBBLE[register];
+  const hasTail = tail && spec.tail;
+
+  return (
+    <div
+      className={`bubble bubble-arrive ${spec.klass} ${hasTail ? "bubble-tailed" : ""} ${
+        wide ? "w-full" : "w-fit max-w-[46ch]"
+      } ${register === "quiet" ? "px-1 py-1" : "px-4 py-3.5"} flex min-w-0 flex-col gap-2`}
+      style={{ "--i": index } as CSSProperties}
+    >
+      {hasTail && <BubbleTail />}
+      {eyebrow && (
+        <p className={`text-label font-mono tracking-[0.16em] uppercase ${spec.tint}`}>{eyebrow}</p>
+      )}
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The tail, drawn rather than faked.
+ *
+ * Two paths, and the order matters. The **fill** overlaps the body by two
+ * pixels, which is what hides the body's own left border across the joint —
+ * and it only hides it because the register fills are opaque. The **stroke**
+ * then runs the two edges that are genuinely outside: the top, collinear with
+ * the bubble's top border, and the diagonal, which stops exactly at the
+ * bubble's left edge so the bubble's own border continues the line downward.
+ * The third edge is interior and must never be drawn.
+ *
+ * Both read the register's custom properties, so a dashed bubble gets a dashed
+ * tail and a 2px bubble a 2px one, without either side knowing about the other.
+ */
+function BubbleTail() {
+  return (
+    <svg
+      aria-hidden
+      className="bubble-tail"
+      width="11"
+      height="12"
+      viewBox="0 0 11 12"
+      fill="none"
+    >
+      <path d="M11 0.5 L0 0.5 L11 12 Z" fill="var(--bubble-fill)" />
+      <path
+        d="M11 0.5 L0 0.5 L9.5 10.4"
+        stroke="var(--bubble-line)"
+        strokeWidth="var(--bubble-width)"
+        strokeDasharray="var(--bubble-dash)"
+        strokeLinecap="butt"
+      />
+    </svg>
+  );
+}
+
 /* ── The Line and the Context ─────────────────────────────────────────── */
 
 /**
  * What Nova says. One sentence, at reading weight rather than display weight.
  *
- * ## Why the register is not a colour
- *
- * The obvious version of this element tints an eyebrow four ways and calls the
- * moments distinguished. It is not enough, and the greyscale row in
- * `study-line` is the proof: with hue removed, four tinted eyebrows are one
- * eyebrow. `DESIGN.md` says colour is never the only signal, and the ten
- * blocked moments are the case that punishes it — a founder scanning a screen
- * needs to know *what kind of stop this is* before they read a word.
- *
- * So a register carries three things, and only the first is hue:
- *
- * - **A word.** From `statusForFocusTier`, so the vocabulary is the product's.
- *   A screen reader gets exactly what an eye gets.
- * - **An edge, or none.** `statement` is the neutral default and carries no
- *   marker; the three registers that make a claim about status carry a rule at
- *   the sentence's left. Emphasis is spent only where a claim is being made.
- * - **Whether that edge is solid or dashed**, which is the semantic one below.
- *
- * ## Solid means observed; dashed means inferred
- *
- * `focus.ts` separates the two and says why: *a failure is something Vibe
- * observed, and a stall is something it inferred from a clock.* Until now that
- * distinction reached the screen as amber-instead-of-coral, which reads as
- * *less bad* rather than as *less certain* — a different claim entirely.
- *
- * A dashed rule is the drawn form of an incomplete observation. It is the one
- * property here doing semantic work rather than decorative, which is why it is
- * a rule of the element rather than a choice a call site makes.
+ * Deliberately unadorned. It carried the register until the bubble took it
+ * over, and everything it used to draw — an eyebrow, a rule, a tint — now
+ * belongs to the container. A sentence that has to mark itself is a sentence
+ * in the wrong box.
  */
-export type LineRegister = "statement" | "concern" | "guess" | "quiet";
-
-const REGISTER: Record<LineRegister, { tint: string; edge: string | null; dashed: boolean }> = {
-  /* The neutral default. No edge: nothing is being claimed about status. */
-  statement: { tint: "text-mint", edge: null, dashed: false },
-  /* Observed and wrong. */
-  concern: { tint: "text-coral", edge: "border-coral", dashed: false },
-  /* Inferred from a clock. Dashed, because the observation is incomplete. */
-  guess: { tint: "text-amber", edge: "border-amber", dashed: true },
-  /* Nothing needed. An edge, because "nothing" is still a claim — and the
-     quietest one, so it is drawn at the foreground ramp's own colour. */
-  quiet: { tint: "text-fg-meta", edge: "border-line-3", dashed: false },
-};
-
-export function Line({
-  children,
-  register = "statement",
-  eyebrow,
-}: {
-  children: ReactNode;
-  register?: LineRegister;
-  /** The status word. From the product's vocabulary, never written here. */
-  eyebrow?: string;
-}) {
-  const { tint, edge, dashed } = REGISTER[register];
-
-  return (
-    <div
-      className={
-        edge
-          ? `flex flex-col gap-2 border-l-2 pl-4 ${edge} ${dashed ? "border-dashed" : "border-solid"}`
-          : "flex flex-col gap-2"
-      }
-    >
-      {eyebrow && (
-        <p className={`text-label font-mono tracking-[0.16em] uppercase ${tint}`}>{eyebrow}</p>
-      )}
-      {/*
-        The sentence stays at the foreground ramp in every register. Nothing a
-        founder has to read is rendered in an accent — the register is carried
-        by the eyebrow and the edge, which are furniture.
-      */}
-      <p className="study-measure text-title font-semibold text-balance text-fg">{children}</p>
-    </div>
-  );
+export function Line({ children }: { children: ReactNode }) {
+  return <p className="text-title font-semibold text-balance text-fg">{children}</p>;
 }
 
-/** The explanation under a Line. Narrower, quieter, and never a box. */
+/** The explanation under a Line. Quieter, and never a box of its own. */
 export function Context({ children }: { children: ReactNode }) {
   return <p className="study-measure text-caption text-fg-secondary">{children}</p>;
 }

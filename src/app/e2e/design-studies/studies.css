@@ -731,3 +731,129 @@
     opacity: 1;
   }
 }
+
+/* ── The Bubble (element sheet) ───────────────────────────────────────────
+   The container the wireframe is made of, and the reason the Line failed.
+   There the register was a rule drawn *inside* the sentence — a document
+   grammar, on a surface that is not a document. Here the register belongs to
+   the bubble, so a sentence is just a sentence again.
+
+   Each register is a set of four custom properties rather than a set of
+   utility classes, because the tail is a separate element that has to agree
+   with the body exactly. One source per register is what makes disagreement
+   impossible instead of merely unlikely.
+
+   Three of the four properties are visible with hue removed — fill weight,
+   contour weight, contour style — which is the test `study-bubble` runs.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.bubble {
+  position: relative;
+  background: var(--bubble-fill);
+  border: var(--bubble-width) var(--bubble-stroke) var(--bubble-line);
+  border-radius: var(--radius-card);
+}
+
+/* The tail squares off the corner it grows from. Without this the triangle
+   meets a curve and reads as a chip stuck to the side of a pill. */
+.bubble-tailed {
+  border-top-left-radius: 3px;
+}
+
+/*
+   Offset by the contour's own width, because an absolutely positioned child is
+   placed against the *padding* box — `top: 0` puts the tail a border-width
+   below the outline it is supposed to continue, which is a one-pixel step at
+   exactly the joint a reader looks at.
+*/
+.bubble-tail {
+  position: absolute;
+  top: calc(var(--bubble-width) * -1);
+  left: calc(-9px - var(--bubble-width));
+  overflow: visible;
+  pointer-events: none;
+}
+
+/*
+   Every fill here is opaque, and that is not a stylistic preference — it is
+   what makes the tail possible. A translucent fill painted over the bubble's
+   own left border does not hide it, it composites with it, and the joint shows
+   as a hairline running through the middle of the tail. Opaque panels are also
+   this direction's own sentence: glass is spent on chrome, never on the
+   surfaces text sits on.
+*/
+
+/* Nova's ordinary voice. A fact, with nothing wrong in it. */
+.bubble-statement {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-line-3);
+  --bubble-width: 1px;
+  --bubble-stroke: solid;
+  --bubble-dash: none;
+}
+
+/* Observed and wrong. The heaviest contour on the sheet, because this is the
+   one register that is asking to be looked at before the others. */
+.bubble-concern {
+  --bubble-fill: color-mix(in srgb, var(--color-app), var(--color-coral) 13%);
+  --bubble-line: var(--color-coral-line);
+  --bubble-width: 2px;
+  --bubble-stroke: solid;
+  --bubble-dash: none;
+}
+
+/* Inferred from a clock. Dashed, because the observation is incomplete.
+   It is *not* paler than a statement, though the first draft made it so: a
+   fill difference small enough to read as "thinner" is too small to see, and
+   one large enough to see stops the bubble reading as raised off its panel at
+   all. The tail is what proved it — at 4% white the silhouette vanished and
+   the register lost its ability to speak. The dash carries this on its own. */
+.bubble-guess {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-amber-line);
+  --bubble-width: 1px;
+  --bubble-stroke: dashed;
+  /* Tighter than the body's default dash. The tail's outline is barely twenty
+     pixels long, and at the browser's own dash length it drew one mark and a
+     gap — a tail that disappears on one register is a register that cannot
+     speak. */
+  --bubble-dash: 3 2.5;
+}
+
+/* An aside: something also true, never something to do. A bubble with no
+   walls, which is the one register a greyscale screenshot cannot confuse. */
+.bubble-quiet {
+  --bubble-fill: transparent;
+  --bubble-line: transparent;
+  --bubble-width: 0px;
+  --bubble-stroke: solid;
+  --bubble-dash: none;
+}
+
+/* Arrival. Opacity and transform only, so nothing below a bubble moves while
+   somebody is reading it, and the origin is the tail — she speaks from there,
+   so that is the point the message grows out of. */
+@keyframes bubble-arrive {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.bubble-arrive {
+  transform-origin: top left;
+  animation: bubble-arrive var(--dur-entrance) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 90ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-arrive {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}

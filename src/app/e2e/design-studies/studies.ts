@@ -242,5 +242,11 @@ export const BLOCKED_SCENARIO = "study-blocked";
 /** The Move element sheet: one control, three designs, four states each. */
 export const MOVE_SCENARIO = "study-move";
 
-/** The Line element sheet: four registers, tested with hue removed. */
-export const LINE_SCENARIO = "study-line";
+/**
+ * The Bubble element sheet: four registers, tested with hue removed.
+ *
+ * It replaced a Line sheet that put the register inside the sentence. That
+ * scenario is gone rather than kept beside this one: two element sheets for
+ * one element is how a lab stops being an answer to anything.
+ */
+export const BUBBLE_SCENARIO = "study-bubble";
