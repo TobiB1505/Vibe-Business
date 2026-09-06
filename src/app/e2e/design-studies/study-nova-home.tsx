@@ -101,25 +101,19 @@ export function StudyNovaHome({ study }: { study: Study }) {
   const priceKind = retailKindOf(primary);
   const action = controlLabel(primary);
 
-  const glass = study.id === "a";
-  const serif = study.id === "c";
-  /* Study C's display face, applied where the study argues type carries the
-     material. Declared inline because it is one study's exception, not a
-     token every direction has. */
-  const displayFont = serif ? { fontFamily: "var(--font-serif)" } : undefined;
-
   /*
-    Study C is not a box direction. Its own thesis is hairline rules and almost
-    no fill, and the first render contradicted it — three rounded panels with
-    a serif headline inside, which reads as A with a different font rather than
-    as a third direction. A study that argues one thing and shows another is
-    worse than no study, so C separates with rules and spends its contrast on
-    the type.
+    Read from the study's declared traits, never from its id. The direction
+    chosen at review takes B's material, A's typeface and mint, so a branch on
+    `study.id === "b"` would have had to grow an `|| "chosen"` in four places
+    and would silently miss the fifth.
   */
-  const editorial = study.id === "c";
+  const glass = study.skin === "glass";
+  const editorial = study.skin === "rule";
+  const displayFont = study.display === "serif" ? { fontFamily: "var(--font-serif)" } : undefined;
+
   const cardSkin = glass
     ? "study-glass study-glass-sheen rounded-card"
-    : study.id === "b"
+    : study.skin === "panel"
       ? "study-panel rounded-card"
       : "border-t border-line-3 bg-transparent";
   const sectionSkin = editorial
@@ -163,7 +157,7 @@ export function StudyNovaHome({ study }: { study: Study }) {
             focused element. Not ambience — it exists to say *this one*, and it
             appears on exactly one card per screen.
           */}
-          {study.id === "b" && (
+          {study.focusLight && (
             <span
               aria-hidden
               className="pointer-events-none absolute inset-x-0 top-0 h-px"
@@ -323,7 +317,7 @@ function StudyChrome({ study }: { study: Study }) {
     <div className="flex flex-col gap-3 rounded-panel border border-dashed border-line-3 bg-well p-5">
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <span className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">
-          Study {study.id.toUpperCase()}
+          {study.chosen ? "Chosen direction" : `Study ${study.id.toUpperCase()}`}
         </span>
         <span className="text-title font-semibold text-fg">{study.name}</span>
       </div>

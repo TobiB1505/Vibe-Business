@@ -21,6 +21,7 @@ const STUDIES = [
   ["a-depth", "/e2e/study-a-depth"],
   ["b-precision", "/e2e/study-b-precision"],
   ["c-editorial", "/e2e/study-c-editorial"],
+  ["chosen", "/e2e/study-chosen"],
 ];
 
 const VIEWPORTS = [

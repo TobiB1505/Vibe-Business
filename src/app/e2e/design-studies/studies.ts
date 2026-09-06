@@ -28,7 +28,24 @@
  * judging none of them.
  */
 
-export type StudyId = "a" | "b" | "c";
+export type StudyId = "a" | "b" | "c" | "chosen";
+
+/**
+ * The material a study builds its surfaces from.
+ *
+ * A separate field rather than a branch on the id, because the three axes a
+ * study varies — material, accent, typeface — turned out to be chosen
+ * *independently*: the direction picked at review was B's material with A's
+ * typeface and mint. An id-shaped conditional cannot express that, and the
+ * fourth study is what proved it.
+ */
+export type StudySkin =
+  /** Layered glass over a lit field. Needs atmosphere behind it to refract. */
+  | "glass"
+  /** Opaque panel, bright hairline, tight corner. Safe under dense data. */
+  | "panel"
+  /** No box at all — a rule and space. Type carries the structure. */
+  | "rule";
 
 export type Study = {
   id: StudyId;
@@ -43,6 +60,16 @@ export type Study = {
   /** Named so a reviewer can say "the violet one" and be understood. */
   accentName: string;
   typeface: string;
+  skin: StudySkin;
+  /**
+   * A single directional light across the top of the focused card. It says
+   * *this one*, so it appears on exactly one element per screen or not at all.
+   */
+  focusLight: boolean;
+  /** Which face sets headlines. `serif` is study C's whole argument. */
+  display: "sans" | "serif";
+  /** Set on the direction chosen at review, so a reader knows which won. */
+  chosen?: true;
 };
 
 export const STUDIES: readonly Study[] = [
@@ -56,6 +83,9 @@ export const STUDIES: readonly Study[] = [
     accent: "#00e5a0",
     accentName: "Mint — unchanged",
     typeface: "Geist",
+    skin: "glass",
+    focusLight: false,
+    display: "sans",
   },
   {
     id: "b",
@@ -67,6 +97,9 @@ export const STUDIES: readonly Study[] = [
     accent: "#5b9dff",
     accentName: "Signal blue",
     typeface: "Switzer",
+    skin: "panel",
+    focusLight: true,
+    display: "sans",
   },
   {
     id: "c",
@@ -78,6 +111,25 @@ export const STUDIES: readonly Study[] = [
     accent: "#a98bff",
     accentName: "Orchid",
     typeface: "Instrument Sans + Instrument Serif",
+    skin: "rule",
+    focusLight: false,
+    display: "serif",
+  },
+  {
+    id: "chosen",
+    scenario: "study-chosen",
+    name: "Precision & Light, in Mint",
+    thesis:
+      "The direction picked at review: B's material, A's typeface, and the brand colour Vibe already has.",
+    material:
+      "Study B's surfaces unchanged — opaque panels, bright hairlines, tight corners, glass kept for chrome, one light band on the focused card. What moved is the accent and the face. Mint is far more saturated than signal blue and sits on a cool ground here rather than a tinted one, which is a combination none of the first three showed.",
+    accent: "#00e5a0",
+    accentName: "Mint — unchanged",
+    typeface: "Geist",
+    skin: "panel",
+    focusLight: true,
+    display: "sans",
+    chosen: true,
   },
 ] as const;
 
