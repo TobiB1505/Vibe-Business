@@ -55,6 +55,17 @@ import type { StatusTone } from "@/components/ui/status-pill";
  * disappeared would change size as a project changed, which is the reflow the
  * motion obligations exist to prevent — and it would make the priced and free
  * versions of the same decision look like different kinds of thing.
+ *
+ * ## Two layouts, and why the second one exists
+ *
+ * `row` puts the cost beside the label and is right for a single control at
+ * reading width. `tile` stacks them, which is what lets three of them stand
+ * side by side without any of them wrapping — and wrapping was the whole
+ * failure of the first side-by-side attempt: a priced control broke onto two
+ * lines beside a free one and the row stopped being a row.
+ *
+ * A tile is taller and narrower on purpose. Three tiles fill the block they
+ * sit under rather than stacking a column that grows with every option.
  */
 export function Move({
   label,
@@ -62,6 +73,8 @@ export function Move({
   balance,
   /** Where it goes, when pressing leaves the product. Said before the click. */
   leavesTo,
+  /** `tile` stacks the cost under the label, so three can stand side by side. */
+  layout = "row",
   className,
 }: {
   label: string;
@@ -69,11 +82,21 @@ export function Move({
   operation?: RetailOperationKind | null;
   balance?: CostBalance | null;
   leavesTo?: string;
+  layout?: "row" | "tile";
   className?: string;
 }) {
+  const tile = layout === "tile";
+
   return (
     <span
-      className={`move-lit relative flex w-full items-center justify-between gap-4 overflow-hidden rounded-nav border border-line-3 bg-surface-2 px-4 py-3 ${className ?? ""}`}
+      className={`move-lit relative flex w-full overflow-hidden rounded-nav border border-line-3 bg-surface-2 ${
+        tile
+          ? // A tile on a wide screen and a row on a phone. Three tiles in one
+            // column is three short controls with an empty line under each,
+            // which is the shape the stacking was meant to avoid.
+            "min-h-[5.25rem] flex-col justify-between gap-2 px-4 py-3.5 max-sm:min-h-0 max-sm:flex-row max-sm:items-center max-sm:gap-4 max-sm:px-4 max-sm:py-3"
+          : "items-center justify-between gap-4 px-4 py-3"
+      } ${className ?? ""}`}
     >
       {/*
         The control's only light. A hairline at partial width at rest, reaching
@@ -84,13 +107,75 @@ export function Move({
         aria-hidden
         className="move-lit-band pointer-events-none absolute inset-x-0 top-0 h-px"
       />
-      <span className="text-ui font-semibold text-mint">{label}</span>
-      {leavesTo ? (
-        <span className="shrink-0 text-caption text-fg-meta">{leavesTo}</span>
-      ) : (
-        <CostDisclosure operation={operation} balance={balance} />
-      )}
+      <span className={`text-ui font-semibold text-mint ${tile ? "text-balance" : ""}`}>
+        {label}
+      </span>
+      {/*
+        A tile always reserves the second line, priced or not. Three tiles whose
+        heights depended on whether each one cost something would be three
+        different sizes of decision on one row, which is the thing a row of
+        equals is for saying they are not.
+      */}
+      <span className={tile ? "min-h-[1.25rem] max-sm:min-h-0" : "contents"}>
+        {leavesTo ? (
+          <span className="shrink-0 text-caption text-fg-meta">{leavesTo}</span>
+        ) : (
+          <CostDisclosure operation={operation} balance={balance} />
+        )}
+      </span>
     </span>
+  );
+}
+
+/**
+ * The moves a moment offers, side by side.
+ *
+ * ## Three, and never four
+ *
+ * A cap rather than a scroll or a wrap. Past three the row stops being
+ * scannable and starts being a menu, and a founder reading a thread is not
+ * shopping. The ranking is `deriveNovaFocus`'s, so the three shown are the
+ * three it put first — this renders a decision that was already made rather
+ * than making one.
+ *
+ * Nothing is hidden by the cap: the rail lists everything open, with the same
+ * words, which is the surface built for the full set. A thread shows what to
+ * do next; a list shows what there is.
+ *
+ * ## Why they are tiles
+ *
+ * So none of them wraps. The first side-by-side attempt used rows and a priced
+ * control broke onto two lines beside a free one, which made a spend and a
+ * navigation read as two different sizes of thing. Stacked, they are one shape
+ * at one height, and three of them fill the width of the block above.
+ */
+export function Moves({
+  moves,
+  balance,
+}: {
+  moves: readonly {
+    label: string;
+    operation?: RetailOperationKind | null;
+    leavesTo?: string;
+  }[];
+  balance?: CostBalance | null;
+}) {
+  const shown = moves.slice(0, 3);
+  if (shown.length === 0) return null;
+
+  return (
+    <div className="grid gap-2.5 max-sm:grid-cols-1 sm:grid-cols-3">
+      {shown.map((move) => (
+        <Move
+          key={move.label}
+          label={move.label}
+          operation={move.operation ?? null}
+          leavesTo={move.leavesTo}
+          balance={balance}
+          layout="tile"
+        />
+      ))}
+    </div>
   );
 }
 

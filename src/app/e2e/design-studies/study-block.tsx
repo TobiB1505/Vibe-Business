@@ -9,7 +9,7 @@ import { AuditBlock } from "./audit-block";
 import { ScanBlock } from "./scan-block";
 import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
-import { Bubble, Context, Dissolving, Line, Move, RenderBlock } from "./elements";
+import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./elements";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import type { Study } from "./studies";
 
@@ -106,8 +106,8 @@ const CTA_VARIANTS: { id: string; what: string }[] = [
     what: "The first move keeps the full control; the rest become quiet text links under it. The ranking is the domain's — deriveNovaFocus already put them in order — so this renders a decision that was already made rather than making one.",
   },
   {
-    id: "C · side by side",
-    what: "Equal weight, one row. Honest when the options genuinely are equal, and it stops the column growing — but it wraps badly past three and puts a priced action beside a free one at the same size.",
+    id: "C · side by side — chosen",
+    what: "Equal shape, one row, capped at three. The first attempt used rows and a priced control broke onto two lines beside a free one, which made a spend and a navigation read as two different sizes of thing. Stacked into tiles they are one shape at one height, and three of them fill the width of the block above. Nothing is hidden by the cap: the rail lists everything open, which is the surface built for the full set.",
   },
   {
     id: "D · one, and a menu",
@@ -165,20 +165,7 @@ function CtaVariant({ id }: { id: string }) {
   }
 
   if (id.startsWith("C")) {
-    return (
-      <div className="flex flex-wrap gap-2.5">
-        {MOVES.map((move) => (
-          <div key={move.label} className="min-w-[13rem] flex-1">
-            <Move
-              label={move.label}
-              operation={move.operation}
-              leavesTo={move.leavesTo}
-              balance={STUDY_BALANCE}
-            />
-          </div>
-        ))}
-      </div>
-    );
+    return <Moves moves={MOVES} balance={STUDY_BALANCE} />;
   }
 
   return (

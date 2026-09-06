@@ -1,4 +1,8 @@
+import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import { Avatar } from "@/components/ui/avatar";
+import { WalletChip } from "@/components/system/wallet-chip";
+import { buildAccountIdentity } from "@/modules/auth/identity-view";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
@@ -18,8 +22,8 @@ import {
   Happened,
   Header,
   Line,
-  Move,
   type NovaAvailability,
+  Moves,
   RenderBlock,
   SinceDivider,
   Thinking,
@@ -250,6 +254,23 @@ function ago(at: string): string {
 const AVAILABILITY: NovaAvailability = { state: "online" };
 
 /**
+ * The three moves this moment offers, ordered as the domain ordered them.
+ *
+ * The mixture is the case a row of equals has to survive: a free navigation, a
+ * priced action, and one that leaves the product for somewhere else. Three
+ * rows would have made them look like the same size of decision; three tiles
+ * make them the same *shape* and let the second line say what each costs.
+ */
+const THREAD_MOVES = [
+  { label: "Look at the change" },
+  { label: "Plan this move", operation: "action_plan" as const },
+  { label: "Open the business map", leavesTo: "Business health" },
+];
+
+/** Who is signed in, through the product's own identity view. */
+const IDENTITY = buildAccountIdentity({ email: "founder@payflow.dev", github: null });
+
+/**
  * The audit the log says completed sixteen hours ago.
  *
  * Not a second fixture invented for this screen: `E2E_AUDIT_SCENARIOS` is what
@@ -347,6 +368,15 @@ export function StudyWireframe({
             <Earlier seen={seen} since={since} />
           </div>
 
+          {/*
+            The foot of the rail: the project this is about, what the account
+            can spend, and who is signed in.
+
+            All three are context rather than conversation, which is why they
+            are here and not in the thread. A Move belongs beside the sentence
+            that explains it; a balance belongs in one fixed place a founder
+            can find without reading anything.
+          */}
           <div className={`flex flex-col gap-3 p-4 ${panel}`}>
             <div className="flex items-center gap-3">
               <span
@@ -360,6 +390,29 @@ export function StudyWireframe({
                 <p className="truncate text-caption text-fg-meta">Developer tool</p>
               </div>
             </div>
+
+            {/*
+              The shipped chip, not a second one. It already decides what a
+              null balance renders (nothing, because unread is not zero) and
+              when a low balance is worth colouring — and it does not offer to
+              sell anything, which is the thing a redraw would have added.
+            */}
+            <WalletChip balance={STUDY_BALANCE} href="/app/billing" />
+
+            <Link
+              href="/app/account"
+              className="-mx-1.5 flex items-center gap-2.5 rounded-nav px-1.5 py-1.5 transition-interactive hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-mint"
+            >
+              <Avatar
+                src={IDENTITY.avatarUrl}
+                initials={IDENTITY.initials}
+                label={IDENTITY.displayName}
+                size={26}
+              />
+              <span className="min-w-0 flex-1 truncate text-caption text-fg-secondary">
+                {IDENTITY.displayName}
+              </span>
+            </Link>
           </div>
         </aside>
 
@@ -447,15 +500,11 @@ export function StudyWireframe({
                       <Line>{choice.prompt}</Line>
                     </Bubble>
                   )}
-                  <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">
-                    {choice.options.map((option) => (
-                      <Move
-                        key={option.actionId}
-                        label={option.label}
-                        operation={option.price}
-                        balance={STUDY_BALANCE}
-                      />
-                    ))}
+                  <div className="pt-1">
+                    <Moves
+                      moves={THREAD_MOVES}
+                      balance={STUDY_BALANCE}
+                    />
                   </div>
                 </>
               )}
