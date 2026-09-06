@@ -136,6 +136,9 @@ export const STUDIES: readonly Study[] = [
 /** The label-treatment comparison, rendered in the chosen direction. */
 export const LABELS_SCENARIO = "study-labels";
 
+/** The identifier-face comparison, rendered in the chosen direction. */
+export const MONO_SCENARIO = "study-mono";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
