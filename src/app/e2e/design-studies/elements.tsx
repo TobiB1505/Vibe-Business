@@ -149,14 +149,20 @@ export function moveShowsCost(operation: RetailOperationKind | null): boolean {
  * Within "nothing is wrong", available and waiting-on-you are separated by hue
  * and by the word, and the sheet says that rather than claiming more.
  *
+ * ## A bubble is speech, and only speech
+ *
+ * Nothing executable goes inside one. A bubble exists to show that Nova is
+ * *saying* something; a Move is something the founder can *do*, and putting a
+ * button in a speech bubble makes those one object when they are two. The
+ * question goes in the bubble and the control sits under it, unwrapped.
+ *
+ * The first draft had a `wide` prop that existed solely to hold a Move, which
+ * is the shape of the mistake showing through the API.
+ *
  * ## Geometry
  *
  * A bubble hugs its content up to a reading measure, the way every chat a
- * founder has ever used does — a three-word remark should not be a banner. The
- * exception is a bubble carrying a Move: a decision takes the full measure,
- * because the Move's own rule is that its geometry never depends on its state,
- * and a control that changed width with the length of the sentence above it
- * would break that from the outside.
+ * founder has ever used does — a three-word remark should not be a banner.
  */
 const TONE_CLASS: Record<StatusTone, string> = {
   neutral: "bubble-neutral",
@@ -193,13 +199,6 @@ export function Bubble({
    * people talking at once.
    */
   tail = true,
-  /**
-   * Fill the reading measure rather than hugging. True whenever a Move is
-   * inside — and it is the *measure*, never the column: at a thread's full
-   * width the control inside became a seven-hundred-pixel button, which is a
-   * bubble that stopped being a bubble.
-   */
-  wide = false,
   /** Stagger position, so a thread arrives in order rather than at once. */
   index = 0,
 }: {
@@ -209,7 +208,6 @@ export function Bubble({
   aside?: boolean;
   eyebrow?: string;
   tail?: boolean;
-  wide?: boolean;
   index?: number;
 }) {
   const hasTail = tail && !aside;
@@ -218,7 +216,7 @@ export function Bubble({
     <div
       className={`bubble bubble-arrive ${aside ? "bubble-aside" : TONE_CLASS[tone]} ${
         open && !aside ? "bubble-open" : ""
-      } ${hasTail ? "bubble-tailed" : ""} ${wide ? "w-full" : "w-fit"} max-w-[46ch] ${
+      } ${hasTail ? "bubble-tailed" : ""} w-fit max-w-[46ch] ${
         aside ? "px-1 py-1" : "px-4 py-3.5"
       } flex min-w-0 flex-col gap-2`}
       style={{ "--i": index } as CSSProperties}
@@ -333,6 +331,14 @@ export type NovaAvailability = { state: "online" } | { state: "offline"; because
  *
  * A green dot alone is a colour carrying a state, which this design system
  * does not do anywhere else and will not start doing in its most visible row.
+ *
+ * ## The clock
+ *
+ * The founder's own, from their browser. It is the one number on the screen
+ * that is not about the project, and it is here for the same reason a phone
+ * puts it in the status bar: everything else on this surface is relative
+ * — *32m ago*, *while you were away* — and a relative time is unreadable
+ * without an absolute one somewhere in view.
  */
 export function Header({
   availability,
@@ -340,10 +346,13 @@ export function Header({
   subject,
   /** The mark, passed in so this element never decides which state it is in. */
   mark,
+  /** The viewer's clock. Passed in, because only a client component has one. */
+  now,
 }: {
   availability: NovaAvailability;
   subject: string;
   mark: ReactNode;
+  now?: ReactNode;
 }) {
   const online = availability.state === "online";
 
@@ -361,6 +370,7 @@ export function Header({
         </p>
       </div>
       <span className="shrink-0 truncate text-caption text-fg-meta max-sm:hidden">{subject}</span>
+      {now}
     </header>
   );
 }

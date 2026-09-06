@@ -5,12 +5,15 @@ import {
   statusForCandidate,
   statusForOperationPhase,
 } from "@/components/system/status-vocabulary";
+import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import { firstActionableStep } from "@/modules/action-plans/sequence";
+import { stepDisplayState, stepSequenceStatus } from "@/modules/action-plans/view";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
 import { creditsToUnits } from "@/modules/credits/units";
 import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
 import { deriveNovaFocus, type NovaFocusFacts } from "@/modules/nova/focus";
-import { buildNovaHomeView, type NovaHomeEntry } from "@/modules/nova/home-view";
+import { buildNovaHomeView } from "@/modules/nova/home-view";
 import type { OperationView } from "@/modules/operations/view";
 import {
   Bubble,
@@ -22,6 +25,7 @@ import {
   type NovaAvailability,
   SinceDivider,
 } from "./elements";
+import { Clock } from "./clock";
 import { NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
 
@@ -62,6 +66,29 @@ import type { Study } from "./studies";
  * this the founder has already seen. That is a fact about a person rather than
  * about a project, so no derivation produces it — it is one timestamp per
  * founder per project, and it is the whole of the new state this screen needs.
+ *
+ * ## What a bubble is for, which is narrower than it was
+ *
+ * Nothing executable goes inside one. A bubble exists to show that Nova is
+ * *saying* something; a Move is something the founder can *do*. The question
+ * she asks is speech and sits in a bubble; the control sits under it,
+ * unwrapped. The same will hold for the render blocks when they arrive — a
+ * business map or a scan is not a remark.
+ *
+ * ## The one piece of motion this screen has not grown yet
+ *
+ * Messages that dissolve. They belong to exactly one situation and it is not
+ * this one: while a render block is running, Nova can narrate what she is
+ * doing at that moment, and those lines are snapshots — once the block has
+ * finished they were never events, so they may remove themselves. What stays
+ * is the log, which is why this is safe at all.
+ *
+ * Three rules travel with it, and the first is the one that makes it usable:
+ * nothing carrying a decision or a price ever dissolves. A control that goes
+ * away under a cursor is the worst interaction a surface can have. Second, a
+ * line dissolves because it stopped being true, never on a timer — a timer is
+ * a claim about how fast somebody reads. Third, under `prefers-reduced-motion`
+ * it never appears rather than appearing and vanishing.
  *
  * ## What is a fixture here and what is not
  *
@@ -157,24 +184,58 @@ const FACTS: NovaFocusFacts = {
 };
 
 /**
- * What this item asks of the founder, in the catalog's own words.
+ * A plan, as `action-plans` already models one.
  *
- * A to-do list has to name a task, and `entry.message` is a sentence Nova
- * says rather than a thing to do. The control's label is the thing to do, and
- * it is the same string the button in the thread carries — a rail that invented
- * its own second vocabulary is a rail nobody can match against the thread.
+ * The rail's list is not a second ranking somebody invented for this screen.
+ * `ActionPlanStep` carries `order` and `dependsOn`; `firstActionableStep`
+ * decides which one is the entry point; `stepDisplayState` and
+ * `stepSequenceStatus` say what each row reads. All four already exist and
+ * already drive the Action Plan page — this is the same answer, at rail width.
+ *
+ * That is what makes the list a *sequence* rather than a bag of open items.
+ * "Waiting for step 2" is a fact about dependencies, not a status somebody
+ * assigned, and it is why a founder can read down the column and see the order
+ * the work has to happen in.
  */
-function taskOf(entry: NovaHomeEntry): string | null {
-  switch (entry.control.kind) {
-    case "server_action":
-    case "navigation":
-      return entry.control.option.label;
-    case "elsewhere":
-      return entry.control.label;
-    case "none":
-      return null;
-  }
+function step(
+  order: number,
+  title: string,
+  actor: ActionPlanStep["actor"],
+  dependsOn: number[],
+): ActionPlanStep {
+  return {
+    id: `step_${order}`,
+    order,
+    title,
+    description: "",
+    purpose: "",
+    actor,
+    changeKind: actor === "vibe" ? "product_change" : "decision",
+    completionCriteria: "",
+    dependsOn,
+    evidenceIds: [],
+    founderInputRequirement: null,
+    executionSupport:
+      actor === "vibe"
+        ? "vibe_executes_now"
+        : actor === "founder_decision"
+          ? "founder_decides"
+          : "founder_acts",
+    capability: null,
+    requiresApproval: false,
+  };
 }
+
+const PLAN: ActionPlanStep[] = [
+  step(1, "Read what the site promises today", "vibe", []),
+  step(2, "Decide who the pricing page is for", "founder_decision", [1]),
+  step(3, "Write the pricing page", "vibe", [2]),
+  step(4, "Put the price on the home page", "vibe", [3]),
+  step(5, "Tell your existing customers", "founder_action", [4]),
+];
+
+/** Steps already carried out. A fixture here, a stored set in the product. */
+const DONE = new Set([1]);
 
 function ago(at: string): string {
   const minutes = Math.round((NOW - Date.parse(at)) / 60_000);
@@ -225,9 +286,6 @@ export function StudyWireframe({
   const seen = past.filter((entry) => Date.parse(entry.at) <= LAST_SEEN);
   const since = past.filter((entry) => Date.parse(entry.at) > LAST_SEEN);
 
-  /* Everything the founder could act on, which is what the rail lists. */
-  const open = [view.primary, ...view.secondary];
-
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8 max-sm:px-3 max-sm:py-4">
       <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-start">
@@ -270,48 +328,7 @@ export function StudyWireframe({
               is the action catalog's own label, which is also what the control
               in the thread says: one vocabulary, not two.
             */}
-            <div className="flex flex-col gap-2.5">
-              <Label>Open · {open.length}</Label>
-              <ul className="flex flex-col gap-2">
-                {open.map((entry) => {
-                  const entryStatus = statusForCandidate(entry.kind);
-                  return (
-                    <li key={entry.id} className="flex items-start gap-2.5">
-                      {/*
-                        The same two axes the Bubble draws, at list scale: a
-                        square for a settled item, a hollow one for an open
-                        loop. Colour is the third signal, never the only one.
-                      */}
-                      <span
-                        aria-hidden
-                        className={`mt-1 size-2 shrink-0 rounded-[2px] border ${
-                          entryStatus.tone === "problem"
-                            ? "border-coral"
-                            : entryStatus.tone === "waiting"
-                              ? "border-amber"
-                              : entryStatus.tone === "active"
-                                ? "border-mint"
-                                : "border-line-strong"
-                        } ${
-                          entryStatus.open
-                            ? ""
-                            : entryStatus.tone === "problem"
-                              ? "bg-coral"
-                              : entryStatus.tone === "waiting"
-                                ? "bg-amber"
-                                : entryStatus.tone === "active"
-                                  ? "bg-mint"
-                                  : "bg-line-strong"
-                        }`}
-                      />
-                      <span className="min-w-0 flex-1 text-caption text-fg-secondary">
-                        {taskOf(entry) ?? entryStatus.word}
-                      </span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
+            <Plan />
           </div>
 
           <div className={`flex flex-col gap-3 p-4 ${panel}`}>
@@ -340,6 +357,7 @@ export function StudyWireframe({
             }
             subject="Payflow"
             mark={<NovaPresence state={presence} seed="project_e2e" size="sm" />}
+            now={<Clock />}
           />
 
           <div className={`flex flex-col gap-1 p-5 max-sm:p-3.5 ${panel}`}>
@@ -404,15 +422,24 @@ export function StudyWireframe({
               {working?.phase === "working" && <Typing />}
 
               {choice && (
-                <Bubble
-                  tone={status.tone}
-                  open={status.open}
-                  tail={messages.at(-1)?.emphasis === "aside"}
-                  wide
-                  index={messages.length}
-                >
-                  {choice.prompt && <Context>{choice.prompt}</Context>}
-                  <div className="flex flex-col gap-2.5">
+                /*
+                  The control is **outside** the bubble. A bubble means Nova is
+                  saying something; a Move is something the founder can do, and
+                  a button inside a speech bubble makes those one object when
+                  they are two. Only the question is speech.
+                */
+                <>
+                  {choice.prompt && (
+                    <Bubble
+                      tone={status.tone}
+                      open={status.open}
+                      tail={messages.at(-1)?.emphasis === "aside"}
+                      index={messages.length}
+                    >
+                      <Line>{choice.prompt}</Line>
+                    </Bubble>
+                  )}
+                  <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">
                     {choice.options.map((option) => (
                       <Move
                         key={option.actionId}
@@ -422,12 +449,88 @@ export function StudyWireframe({
                       />
                     ))}
                   </div>
-                </Bubble>
+                </>
               )}
             </div>
           </div>
         </section>
       </div>
+    </div>
+  );
+}
+
+/**
+ * The to-do list, in plan order.
+ *
+ * ## Why this is a sequence and not a list of open things
+ *
+ * The rail used to show the focus candidates — three rows saying what needed
+ * attention. That is a set, and a founder reading it cannot tell what has to
+ * happen before what. A plan is ordered, and the order is the useful part:
+ * *decide who this is for, then write it, then put the price on the home page,
+ * then tell your customers.*
+ *
+ * None of that ordering is invented here. `dependsOn` is the plan's own,
+ * `firstActionableStep` picks the entry point the Action Plan page picks, and
+ * `stepSequenceStatus` writes "Waiting for step 2: …" — a fact about
+ * dependencies rather than a status somebody assigned.
+ *
+ * ## The three marks, and why none of them is a percentage
+ *
+ * A filled square is carried out. A ring is the step to work on now. A hollow
+ * outline is waiting, and its row says what for. There is no bar and no "2 of
+ * 5 complete" figure, because a plan whose steps are a decision, a piece of
+ * writing and a phone call has no honest fraction — and `planMetaSummary`
+ * already refuses to invent one.
+ */
+function Plan() {
+  const current = firstActionableStep(PLAN, DONE);
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <Label>To do</Label>
+      <ol className="flex flex-col gap-2">
+        {PLAN.map((entry) => {
+          const display = stepDisplayState(entry, current?.order ?? null, DONE);
+          const sequence = stepSequenceStatus(entry, PLAN, display);
+          const here = display === "start_here";
+          const done = display === "done" || display === "covered";
+
+          return (
+            <li key={entry.id} className="flex items-start gap-2.5">
+              <span
+                aria-hidden
+                className={`mt-1 size-2.5 shrink-0 rounded-[3px] border ${
+                  done
+                    ? "border-mint bg-mint"
+                    : here
+                      ? "border-mint bg-mint-tint"
+                      : "border-line-strong"
+                }`}
+              />
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`text-caption ${
+                    here ? "font-semibold text-fg" : done ? "text-fg-meta" : "text-fg-secondary"
+                  }`}
+                >
+                  {entry.title}
+                </p>
+                {/*
+                  Only where it says something the title does not. "Ready now"
+                  under every waiting row would be noise; "Waiting for step 2"
+                  is the sequencing a founder came here to read.
+                */}
+                {(here || sequence.state === "waiting" || done) && (
+                  <p className="text-caption text-fg-meta">
+                    {here ? "Working on this" : sequence.label}
+                  </p>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

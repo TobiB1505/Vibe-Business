@@ -97,6 +97,36 @@ export function formatClockTime(iso: string | null | undefined): string | null {
 }
 
 /**
+ * `13:34` — the reader's own wall clock, and the only local time in this file.
+ *
+ * ## Why an exception exists at all
+ *
+ * Everything else here renders UTC because it is *machine output about a
+ * moment that happened*, and a capture time that moves with the reader's zone
+ * is a capture time that lies. A header clock is the opposite claim: it says
+ * **what time it is where you are**, which is the one value that would be
+ * wrong in UTC. `formatTime` would render 16:34 to somebody whose own clock
+ * says 18:34, beside relative labels — "32m ago", "while you were away" —
+ * that are anchored to their clock and not to ours.
+ *
+ * ## Why it is still safe
+ *
+ * The two hazards this file exists to prevent are hydration mismatch and ICU
+ * drift, and neither can reach here. There is no `Intl`: the arithmetic is on
+ * `Date`'s local getters, so every runtime produces the same string for the
+ * same zone. And it must be called only after mount, from a client component
+ * that renders nothing on the server — there is no server output for a client
+ * render to disagree with.
+ *
+ * Twenty-four hours, unlike a locale formatter, because the alternative is
+ * `Intl` and this file's whole argument is that `Intl` is where runtimes
+ * diverge. It also matches every other time this product prints.
+ */
+export function formatLocalClock(date: Date): string {
+  return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+/**
  * `1,240` / `12.5` — grouped integers, two decimals otherwise.
  *
  * `Number.prototype.toLocaleString()` has the same split-brain problem as the

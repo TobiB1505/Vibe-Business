@@ -184,16 +184,18 @@ function Thread() {
 
       {choice && (
         /*
-          The CTA beat. A bubble carrying a Move takes the full measure — the
-          Move's own rule is that its geometry never depends on its state, and
-          a container that hugged would break that from the outside.
+          The CTA beat, and the control is **outside** the bubble. A bubble
+          means Nova is saying something; a Move is something the founder can
+          do. Wrapping one in the other makes them a single object when they
+          are two, and the question she asks is the only half that is speech.
         */
-        <Bubble tone={status.tone} open={status.open} tail={!lastSpoke} wide index={spoken.length}>
-          {/* Never an empty line above a control: not every candidate asks a
-              question, and a blank one reads as a sentence that failed to
-              load. */}
-          {choice.prompt && <Context>{choice.prompt}</Context>}
-          <div className="flex flex-col gap-2.5">
+        <>
+          {choice.prompt && (
+            <Bubble tone={status.tone} open={status.open} tail={!lastSpoke} index={spoken.length}>
+              <Line>{choice.prompt}</Line>
+            </Bubble>
+          )}
+          <div className="flex max-w-[26rem] flex-col gap-2.5 pt-1">
             {choice.options.map((option) => (
               <Move
                 key={option.actionId}
@@ -203,7 +205,7 @@ function Thread() {
               />
             ))}
           </div>
-        </Bubble>
+        </>
       )}
     </div>
   );
@@ -290,8 +292,9 @@ export function StudyBubble({ study }: { study: Study }) {
           Statement, the asides that qualify it, then the move it leads to. Every sentence comes
           from buildNovaFeed over one set of facts — a sheet that wrote its own copy would be
           testing the copy. Only the first bubble of a run points at the speaker; an aside has no
-          tail at all, so the bubble after it starts a new run. This move is a navigation, so
-          nothing is asked before it; the section below shows the priced case, which is.
+          tail at all, so the bubble after it starts a new run. The control sits outside the last
+          bubble rather than inside it. This move is a navigation, so nothing is asked before it —
+          which is why no bubble precedes it here at all.
         </Context>
         <div className={`p-6 max-sm:p-4 ${panel}`}>
           <Thread />
@@ -303,9 +306,9 @@ export function StudyBubble({ study }: { study: Study }) {
         <Eyebrow>Three words, forty words, and a decision</Eyebrow>
         <Context>
           A bubble hugs its content up to a reading measure, the way every chat a founder has used
-          does — a three-word remark is not a banner. The exception is a bubble carrying a Move:
-          that one takes the full measure, because the control&rsquo;s own rule is that its geometry
-          never depends on its state.
+          does — a three-word remark is not a banner. And nothing executable is ever inside one: a
+          bubble means Nova is <em>saying</em> something, a Move is something you can <em>do</em>,
+          and a button in a speech bubble makes those one object when they are two.
         </Context>
         <div className={`flex flex-col gap-3 p-6 ${panel}`}>
           <Bubble index={0}>
@@ -318,10 +321,12 @@ export function StudyBubble({ study }: { study: Study }) {
               next few moves are, and none of what follows was written by guessing at either half.
             </Context>
           </Bubble>
-          <Bubble tail={false} wide index={2}>
-            <Context>Re-run the audit against what changed?</Context>
-            <Move label="Run the audit" operation="business_audit" balance={STUDY_BALANCE} />
+          <Bubble tail={false} index={2}>
+            <Line>Re-run the audit against what changed?</Line>
           </Bubble>
+          <div className="max-w-[26rem]">
+            <Move label="Run the audit" operation="business_audit" balance={STUDY_BALANCE} />
+          </div>
         </div>
       </section>
     </div>
