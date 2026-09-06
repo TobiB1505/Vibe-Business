@@ -1,4 +1,4 @@
-import type { SVGProps } from "react";
+import { IconFrame, type IconProps } from "./icon-frame";
 
 export type DashboardIconName =
   | "nova"
@@ -11,27 +11,6 @@ export type DashboardIconName =
   | "settings"
   | "experiments"
   | "team";
-
-type IconProps = SVGProps<SVGSVGElement> & { size?: number };
-
-function IconFrame({ size = 18, children, ...props }: IconProps) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
 
 /**
  * Nova, as a navigation icon.
@@ -185,21 +164,6 @@ export function ChevronDownIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
       <path d="m7 10 5 5 5-5" />
-    </IconFrame>
-  );
-}
-
-/**
- * Dismiss.
- *
- * The set had no close mark, which is why every dismissal in the product is a
- * word — "Close", "Cancel" — including the one in a drawer header, where a
- * word is the least conventional answer available.
- */
-export function CloseIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m7 7 10 10M17 7 7 17" />
     </IconFrame>
   );
 }

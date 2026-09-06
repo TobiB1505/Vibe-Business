@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { ArrowRightIcon, ChevronDownIcon, CloseIcon } from "@/components/ui/dashboard-icons";
+import { ArrowRightIcon, ChevronDownIcon } from "@/components/ui/dashboard-icons";
+import { DismissIcon } from "@/components/ui/icons.generated";
 import type { Study } from "./studies";
 
 /**
@@ -113,7 +114,7 @@ const TREATMENTS: readonly Treatment[] = [
     cost: "Uniform again: a chip says 'pressable', not what pressing does. And a fill on hover is invisible to a keyboard user until focus lands.",
     dismiss: (
       <Chip className="px-2" aria-label="Close">
-        <CloseIcon size={16} />
+        <DismissIcon size={16} />
       </Chip>
     ),
     destructive: <Chip tone="danger">Delete project</Chip>,
@@ -129,7 +130,7 @@ const TREATMENTS: readonly Treatment[] = [
     cost: "Five treatments to maintain instead of one, and the variant has to be chosen correctly at every call site. It is the most work and the most information.",
     dismiss: (
       <Chip className="px-2" aria-label="Close">
-        <CloseIcon size={16} />
+        <DismissIcon size={16} />
       </Chip>
     ),
     destructive: (

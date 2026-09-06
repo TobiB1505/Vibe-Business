@@ -1,6 +1,6 @@
 # 0095 - Design tooling is repo-native, and a registry cannot reach Vibe's primitives
 
-Status: Accepted
+Status: Accepted — amended in part by [ADR 0097](0097-icon-paths-come-from-lucide-the-frame-stays-vibes.md), which narrows the icon rule: still no icon package and no catalogue import in a component, but common marks are now Lucide path data generated into Vibe's own frame rather than hand-drawn. Everything else here stands.
 Date: 2026-09-05
 
 Introduces `components.json`, `.mcp.json` and `.claude/skills/` as tracked files. Changes no application code, adds no runtime dependency, and installs no component.

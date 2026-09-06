@@ -142,6 +142,9 @@ export const MONO_SCENARIO = "study-mono";
 /** The inline-action comparison, rendered in the chosen direction. */
 export const ACTIONS_SCENARIO = "study-actions";
 
+/** The icon-led follow-up to it. */
+export const ICON_ACTIONS_SCENARIO = "study-icon-actions";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }

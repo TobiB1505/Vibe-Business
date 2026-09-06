@@ -34,8 +34,10 @@ import { StudyNovaHome } from "../design-studies/study-nova-home";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import { StudyActions } from "../design-studies/study-actions";
+import { StudyIconActions } from "../design-studies/study-icon-actions";
 import {
   ACTIONS_SCENARIO,
+  ICON_ACTIONS_SCENARIO,
   LABELS_SCENARIO,
   MONO_SCENARIO,
   STUDIES,
@@ -243,6 +245,7 @@ export default async function E2eScenarioPage({
     [LABELS_SCENARIO]: StudyLabels,
     [MONO_SCENARIO]: StudyMono,
     [ACTIONS_SCENARIO]: StudyActions,
+    [ICON_ACTIONS_SCENARIO]: StudyIconActions,
   } as const;
   const FollowUp = FOLLOW_UPS[scenario as keyof typeof FOLLOW_UPS];
   if (FollowUp) {
