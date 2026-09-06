@@ -7,11 +7,13 @@ import {
 import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "./agent-block";
 import { AskBlock, PlanAskBlock, WorkspaceAskBlock } from "./ask-block";
+import { MoveBlock } from "./move-block";
 import { ReviewBlock } from "./review-block";
 import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "./audit-block";
 import { ScanBlock } from "./scan-block";
 import { E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
+import { E2E_MOVES_SCENARIOS } from "../moves-scenarios";
 import { E2E_SCENARIOS } from "../scenarios";
 import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
@@ -184,6 +186,11 @@ const WORKSPACES: WorkspaceCandidate[] = [
     moduleLinker: null,
   },
 ];
+
+/** The top-ranked Move, from the fixture the plan's own route renders. */
+const MOVES_FIXTURE = E2E_MOVES_SCENARIOS.moves_ranked();
+const MOVE = MOVES_FIXTURE.opportunities[0]!;
+const MOVE_EXECUTION = MOVES_FIXTURE.executionStates[MOVE.id] ?? null;
 
 /** The agent fixture the workspace's own stage routes render from. */
 const AGENT = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
@@ -598,7 +605,7 @@ export function StudyBlock({ study }: { study: Study }) {
           </Bubble>
           <RenderBlock label="The change" tone="waiting" at="32m" index={2}>
             <ReviewBlock
-              change={E2E_SCENARIOS.change_code_review_ready()}
+              change={E2E_SCENARIOS.change_awaiting_approval()}
               planHref="/app/projects/project_e2e/plan"
             />
           </RenderBlock>
@@ -616,6 +623,71 @@ export function StudyBlock({ study }: { study: Study }) {
           change&rsquo;s own approval and merge cards rather than a latest lookup. Lifting a merge
           button out of the sequence would be a yes to commit A applied to commit B. Lifting the
           sequence itself is not, and the block adds nothing to it.
+        </Context>
+        <Context>
+          One property of composing an <em>interactive</em> component that a read-only one never
+          had: it may reach for data on mount. A code-classified change loads its diff immediately,
+          because there the diff is the review — and in a lab with no session that request bounces
+          to the sign-in page and takes the study with it. The fixture here is a change awaiting
+          approval, which fetches on the click. Worth knowing before Nova&rsquo;s route mounts this
+          for real: the blocks inherit the components&rsquo; data appetite along with their looks.
+        </Context>
+      </section>
+
+      {/* ── What was merged, and what it did ─────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Check what changed</Eyebrow>
+        <Context>
+          The same gate, one stage further on. The change reached the default branch and no outcome
+          has been read back — so the block shows what a founder needs to decide whether to look,
+          and the check sits where the approval used to.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble open index={0}>
+            <Line>A change reached your default branch. I have not looked at what changed yet.</Line>
+          </Bubble>
+          <RenderBlock label="The change" at="2h" index={1}>
+            <ReviewBlock
+              change={E2E_SCENARIOS.outcome_not_started()}
+              planHref="/app/projects/project_e2e/plan"
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          Merged means one sentence here, the same as everywhere: the default branch points at the
+          approved commit and Vibe read it back. Not deployed, not released, not live — and the
+          block adds no word that says otherwise.
+        </Context>
+      </section>
+
+      {/* ── The Move, before it is paid for ──────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>A Move, before twenty Credits</Eyebrow>
+        <Context>
+          &ldquo;Plan this&rdquo; costs twenty Credits and &ldquo;Look at this move&rdquo; is a
+          navigation, and both were offered with nothing but their own label — so a founder either
+          pressed the first without seeing the problem it addresses, or took the second trip to find
+          out what the thread would not say.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
+          <Bubble tone="active" index={0}>
+            <Line>There is a move here without a plan behind it.</Line>
+          </Bubble>
+          <RenderBlock label="Next move" index={1}>
+            <MoveBlock opportunity={MOVE} execution={MOVE_EXECUTION} />
+          </RenderBlock>
+          <Moves
+            moves={[
+              { label: "Plan this", operation: "action_plan" },
+              { label: "Look at this move", leavesTo: "Action plan" },
+            ]}
+            balance={STUDY_BALANCE}
+          />
+        </div>
+        <Context>
+          The control is outside, as every control is. A Move block is a view, so a founder reading
+          it is never a mis-click away from spending inside the thing they are reading — and the
+          card gives up its own surface rather than the block giving up its frame.
         </Context>
       </section>
 
