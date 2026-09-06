@@ -24,6 +24,7 @@ import {
 } from "./elements";
 import { Clock } from "./clock";
 import { NO_FACTS } from "./moment-fixtures";
+import { speechBubbles } from "./speech-bubbles";
 import type { Study } from "./studies";
 
 /**
@@ -272,9 +273,11 @@ export function StudyWireframe({
   const choice = entries.find(
     (entry): entry is Extract<NovaEntry, { kind: "nova.choice" }> => entry.kind === "nova.choice",
   );
-  const messages = entries.filter(
-    (entry): entry is Extract<NovaEntry, { kind: "nova.message" }> =>
-      entry.kind === "nova.message",
+  const bubbles = speechBubbles(
+    entries.filter(
+      (entry): entry is Extract<NovaEntry, { kind: "nova.message" }> =>
+        entry.kind === "nova.message",
+    ),
   );
 
   /* Oldest first: a thread reads downward, and the log arrives newest first. */
@@ -359,23 +362,24 @@ export function StudyWireframe({
           <div className={`flex flex-col gap-1 p-5 max-sm:p-3.5 ${panel}`}>
             {/* ── Now: what she has to say about it ───────────────────── */}
             <div className="flex flex-col gap-1.5 pt-3">
-              {messages.map((entry, position) => {
-                const aside = entry.emphasis === "aside";
-                const previous = messages[position - 1];
-                const speaking = previous ? previous.emphasis !== "aside" : false;
-                return (
-                  <Bubble
-                    key={entry.id}
-                    tone={status.tone}
-                    open={status.open}
-                    aside={aside}
-                    tail={!speaking}
-                    index={position}
-                  >
-                    {aside ? <Context>{entry.text}</Context> : <Line>{entry.text}</Line>}
-                  </Bubble>
-                );
-              })}
+              {bubbles.map((bubble, position) => (
+                <Bubble
+                  key={bubble.key}
+                  tone={status.tone}
+                  open={status.open}
+                  aside={bubble.aside}
+                  tail={bubble.tail}
+                  index={position}
+                >
+                  {bubble.paragraphs.map((text) =>
+                    bubble.aside ? (
+                      <Context key={text}>{text}</Context>
+                    ) : (
+                      <Line key={text}>{text}</Line>
+                    ),
+                  )}
+                </Bubble>
+              ))}
 
               {/*
                 She is composing, and the product observed it. Bound to the
@@ -397,8 +401,8 @@ export function StudyWireframe({
                     <Bubble
                       tone={status.tone}
                       open={status.open}
-                      tail={messages.at(-1)?.emphasis === "aside"}
-                      index={messages.length}
+                      tail={bubbles.at(-1)?.aside ?? true}
+                      index={bubbles.length}
                     >
                       <Line>{choice.prompt}</Line>
                     </Bubble>

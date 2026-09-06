@@ -6,6 +6,7 @@ import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
 import { buildNovaHomeView } from "@/modules/nova/home-view";
 import { Bubble, Context, Line, Move } from "./elements";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
+import { speechBubbles } from "./speech-bubbles";
 import type { Study } from "./studies";
 
 /**
@@ -83,6 +84,33 @@ const APPEARANCES: { kind: FocusCandidateKind; what: string }[] = [
   },
 ];
 
+/**
+ * Two runs either side of the line, so the rule can be seen rather than read.
+ *
+ * The short run is the product's — three real candidate sentences that arrive
+ * together. The long run is lab copy and is labelled as such: the feed has no
+ * message long enough to cross the threshold today, and a sheet that padded a
+ * product sentence to make its point would be testing the padding.
+ */
+const SPEECH_RUNS: { label: string; texts: string[] }[] = [
+  {
+    label: "remarks — three bubbles",
+    texts: [
+      "There is a change waiting for you to look at.",
+      "This plan has nothing left in it that I can act on.",
+      "My last audit did not finish.",
+    ],
+  },
+  {
+    label: "prose (lab copy) — one bubble, three paragraphs",
+    texts: [
+      "I read the repository at the commit your default branch points at, and looked at what the site says about the product.",
+      "The gap between the two is where the next few moves are. None of what follows was written by guessing at either half.",
+      "Where I could not read something, I have said so rather than filling it in.",
+    ],
+  },
+];
+
 function Eyebrow({ children }: { children: ReactNode }) {
   return (
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
@@ -141,46 +169,29 @@ function Thread() {
     (entry): entry is Extract<NovaEntry, { kind: "nova.choice" }> => entry.kind === "nova.choice",
   );
 
-  /*
-    Grouping resolved up front rather than inside the map. A tail depends on
-    what came before it, and a fold is the honest shape for that — a counter
-    mutated during render is the same answer written as a bug.
-  */
-  const messages = entries.filter(
-    (entry): entry is Extract<NovaEntry, { kind: "nova.message" }> =>
-      entry.kind === "nova.message",
+  const bubbles = speechBubbles(
+    entries.filter(
+      (entry): entry is Extract<NovaEntry, { kind: "nova.message" }> =>
+        entry.kind === "nova.message",
+    ),
   );
-  const spoken = messages.reduce<{ entry: (typeof messages)[number]; tail: boolean }[]>(
-    (rows, entry) => {
-      const previous = rows.at(-1);
-      /* An aside does not speak, so it never opens or continues a run. */
-      const speaking = previous ? previous.entry.emphasis !== "aside" : false;
-      return [...rows, { entry, tail: !speaking }];
-    },
-    [],
-  );
-  const lastSpoke = spoken.length > 0 && spoken.at(-1)?.entry.emphasis !== "aside";
 
   return (
     <div className="flex flex-col gap-1.5">
-      {spoken.map(({ entry, tail }, position) => {
-        const aside = entry.emphasis === "aside";
-        return (
-          <Bubble
-            key={entry.id}
-            /* Only the leading sentence carries the moment's register. An
-               aside is not a second claim about status, it is something also
-               true — and four coloured contours down one thread would be. */
-            tone={status.tone}
-            open={status.open}
-            aside={aside}
-            tail={tail}
-            index={position}
-          >
-            {aside ? <Context>{entry.text}</Context> : <Line>{entry.text}</Line>}
-          </Bubble>
-        );
-      })}
+      {bubbles.map((bubble, position) => (
+        <Bubble
+          key={bubble.key}
+          tone={status.tone}
+          open={status.open}
+          aside={bubble.aside}
+          tail={bubble.tail}
+          index={position}
+        >
+          {bubble.paragraphs.map((text) =>
+            bubble.aside ? <Context key={text}>{text}</Context> : <Line key={text}>{text}</Line>,
+          )}
+        </Bubble>
+      ))}
 
       {choice && (
         /*
@@ -191,7 +202,12 @@ function Thread() {
         */
         <>
           {choice.prompt && (
-            <Bubble tone={status.tone} open={status.open} tail={!lastSpoke} index={spoken.length}>
+            <Bubble
+              tone={status.tone}
+              open={status.open}
+              tail={bubbles.at(-1)?.aside ?? true}
+              index={bubbles.length}
+            >
               <Line>{choice.prompt}</Line>
             </Bubble>
           )}
@@ -302,6 +318,44 @@ export function StudyBubble({ study }: { study: Study }) {
         <div className={`p-6 max-sm:p-4 ${panel}`}>
           <Thread />
         </div>
+      </section>
+
+      {/* ── Remarks or prose ─────────────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Several bubbles, or one with paragraphs</Eyebrow>
+        <Context>
+          Separate bubbles are right for short lines — each one reading as its own beat is the
+          texture of the form. They are wrong the moment the lines stop being remarks: three
+          paragraphs as three bubbles is three heavy blocks with gutters between them, and the
+          gutters claim &ldquo;separate utterances&rdquo; about text that is plainly one thought. So
+          a run merges when any line is longer than one line at the bubble&rsquo;s own measure, when
+          the run is prose in total, or when there are more than four of them.
+        </Context>
+        <div className={`grid gap-6 p-6 sm:grid-cols-2 ${panel}`}>
+          {SPEECH_RUNS.map(({ label, texts }) => (
+            <div key={label} className="flex flex-col gap-2.5">
+              <p className="font-mono text-caption text-fg-meta">{label}</p>
+              {speechBubbles(
+                texts.map((text, index) => ({
+                  id: `${label}-${index}`,
+                  text,
+                  emphasis: "primary" as const,
+                })),
+              ).map((bubble, position) => (
+                <Bubble key={bubble.key} tail={bubble.tail} index={position}>
+                  {bubble.paragraphs.map((text) => (
+                    <Line key={text}>{text}</Line>
+                  ))}
+                </Bubble>
+              ))}
+            </div>
+          ))}
+        </div>
+        <Context>
+          Nothing merges across a register. Nova&rsquo;s leading statement and the asides under it
+          are different candidates saying different things about different facts, and a bubble is
+          one utterance — so the split happens first and the grouping only ever runs inside it.
+        </Context>
       </section>
 
       {/* ── Geometry ─────────────────────────────────────────────────── */}

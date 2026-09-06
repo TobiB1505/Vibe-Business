@@ -163,6 +163,12 @@ export function moveShowsCost(operation: RetailOperationKind | null): boolean {
  *
  * A bubble hugs its content up to a reading measure, the way every chat a
  * founder has ever used does — a three-word remark should not be a banner.
+ *
+ * It may hold more than one paragraph, and `speech.ts` decides when: short
+ * lines stay several bubbles, prose becomes one. The gap between children is
+ * a paragraph break rather than a list gap, which is why it is larger than the
+ * spacing between bubbles — inside one utterance the sentences belong closer
+ * to each other than two utterances do, and only the container says so.
  */
 const TONE_CLASS: Record<StatusTone, string> = {
   neutral: "bubble-neutral",
@@ -219,7 +225,7 @@ export function Bubble({
     <div
       className={`bubble bubble-arrive ${aside ? "bubble-neutral" : TONE_CLASS[tone]} ${
         open && !aside ? "bubble-open" : ""
-      } ${hasTail ? "bubble-tailed" : ""} flex w-fit min-w-0 max-w-[46ch] flex-col gap-1.5 px-3.5 py-2.5`}
+      } ${hasTail ? "bubble-tailed" : ""} flex w-fit min-w-0 max-w-[46ch] flex-col gap-2.5 px-3.5 py-2.5`}
       style={{ "--i": index } as CSSProperties}
     >
       {hasTail && <BubbleTail />}
