@@ -193,3 +193,18 @@ export function chosenStudy(): Study {
   if (!study) throw new Error("no chosen study is marked in STUDIES");
   return study;
 }
+
+/**
+ * The chat studies: Home in the shape a founder has already learned.
+ *
+ * A fourth axis, and the one the user named as the core idea of Nova's UI —
+ * that a founder should see they are being spoken to. Two scenarios, because
+ * what a press produces is half the argument and cannot be seen in a still of
+ * the resting state.
+ */
+export const CHAT_SCENARIO = "study-chat";
+export const CHAT_ANSWERED_SCENARIO = "study-chat-answered";
+
+export function isChatScenario(scenario: string): boolean {
+  return scenario === CHAT_SCENARIO || scenario === CHAT_ANSWERED_SCENARIO;
+}

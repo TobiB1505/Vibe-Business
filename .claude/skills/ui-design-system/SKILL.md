@@ -12,6 +12,20 @@ to it, and where one appears to license something this forbids, this wins.
 procedure for working inside it. **Read `DESIGN.md` before significant UI work** —
 it carries the surface-by-surface argument that cannot be compressed to a rule.
 
+## Which rules you may rewrite
+
+**Design rules are revisable in place** — composition, register, material, motion
+character, restraint, which technique suits which surface. Better argument, better
+rule; rewrite it and say why. No ADR.
+
+**Truth rules are not.** No fabricated metric or progress, no motion asserting an
+unobserved state, `null` is not zero, no label that misdescribes its control, no
+affordance that looks available and is not. Those are invariants.
+
+[ADR 0097](../../../docs/decisions/0097-design-rules-are-revisable-truth-rules-are-not.md)
+records why the distinction is written down: three aesthetic rules in these skills
+had gone stale because they read as invariants and nobody argued with them.
+
 ## The one sentence
 
 Vibe owns its semantic product UI; external sources supply primitives, patterns
