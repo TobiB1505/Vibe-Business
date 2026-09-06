@@ -18,6 +18,7 @@ import { WorkingStrip } from "./working-strip";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AtmosphereField } from "@/components/layout/atmosphere";
 
 /**
  * Nova Home (UI Sourcing Spec §15; audit E1, ADR 0085).
@@ -106,6 +107,13 @@ export async function NovaHome({
 
   return (
     <div className="flex flex-col gap-8">
+      {/*
+        The one screen that earns the contained field. Nova's answer is the
+        thing a founder arrives for, and it is the primary glass card in the
+        product — the ground under it is the difference between a pane and a
+        translucent grey rectangle. Every other route keeps the ramp.
+      */}
+      <AtmosphereField />
       <NovaRise>
         <ProductIdentity
           name={data.identity.name}

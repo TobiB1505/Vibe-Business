@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { MetaPixel } from "@/components/analytics/meta-pixel";
+import { Atmosphere } from "@/components/layout/atmosphere";
 import { MotionProvider } from "@/components/ui/motion-provider";
 import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
 import { getAppUrl } from "@/lib/env/app-url";
@@ -48,6 +49,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={`h-full antialiased ${fontVariables}`}>
       <body className="bg-app text-fg-body h-full font-sans">
+        {/*
+          The ground, before anything that stands on it. Two inert fixed
+          layers that match no rule in v1, so this is dead weight of two empty
+          divs until the palette is switched on — and connected now rather
+          than at switch-on, because the version of this that was written and
+          never rendered is exactly why the glass had nothing to refract.
+        */}
+        <Atmosphere />
         {children}
         {/*
           One listener for every animation in the product: it stamps

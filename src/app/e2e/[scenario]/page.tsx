@@ -173,6 +173,7 @@ import {
   isE2eOnboardingScenario,
   isE2eOnboardingStaticScenario,
 } from "../onboarding-scenarios";
+import { AtmosphereField } from "@/components/layout/atmosphere";
 
 /**
  * The browser harness's only entry point (Sprint 11C.1).
@@ -305,6 +306,14 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
         {label}
+
+        {/*
+          Mirrors `nova-home.tsx`, which opts this one screen into the
+          contained field. The fixture composes Nova Home's parts by hand, so
+          a part it leaves out is a part no browser test can see — and the
+          ground is the part that decides whether the glass above it is glass.
+        */}
+        <AtmosphereField />
 
         <ProductIdentity
           name="Payflow"
