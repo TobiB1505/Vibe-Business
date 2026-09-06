@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState, type ReactNode } from "react";
 import {
   AlertIcon,
-  FilterIcon,
   PlusIcon,
   ProductsIcon,
   SearchIcon,
@@ -12,6 +11,7 @@ import {
 } from "@/components/ui/dashboard-icons";
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
+import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { cn } from "@/lib/utils/cn";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { ProductListCard } from "./product-list-card";
@@ -70,8 +70,12 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
         title="My Products"
         description="All products you're building and growing."
         actions={
-          <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-            <label className="border-line-2 bg-surface-2 focus-within:border-mint-line rounded-nav flex min-w-0 flex-1 items-center gap-2.5 border px-3.5 py-2.5 sm:w-64 sm:flex-none">
+          /* `items-stretch` rather than `items-center`: the three controls
+             have different intrinsic heights — an input, a pill of pills and a
+             select — and a toolbar where they disagree by two pixels reads as
+             a misalignment nobody can name. The tallest sets the row. */
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+            <label className="border-line-2 bg-surface-2 focus-within:border-mint-line rounded-nav flex min-w-0 flex-1 basis-full items-center gap-2.5 border px-3.5 py-2.5 sm:w-64 sm:flex-none sm:basis-auto">
               <SearchIcon size={16} className="text-fg-meta shrink-0" />
               <span className="sr-only">Search products</span>
               <input
@@ -83,36 +87,29 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
               />
             </label>
 
-            <label className="border-line-2 bg-surface-2 rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-body">
-              <FilterIcon size={15} className="shrink-0" />
-              <span className="sr-only">Filter products</span>
-              <select
-                value={filter}
-                onChange={(event) => setFilter(event.target.value as ProductFilter)}
-                className="text-fg-body bg-transparent text-body font-medium outline-none"
-                aria-label="Filter products"
-              >
-                <option value="all">All</option>
-                <option value="attention">Need attention</option>
-                <option value="analysed">Analysed</option>
-                <option value="setup">Setup</option>
-              </select>
-            </label>
+            <SegmentedControl
+              label="Filter products"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: "all", label: "All" },
+                { value: "attention", label: "Attention" },
+                { value: "analysed", label: "Analysed" },
+                { value: "setup", label: "Setup" },
+              ]}
+            />
 
-            <label className="border-line-2 bg-surface-2 rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-body">
-              <span className="text-fg-meta text-caption font-medium">Sort:</span>
-              <select
-                value={sort}
-                onChange={(event) => setSort(event.target.value as ProductSort)}
-                className="text-fg-body bg-transparent text-body font-semibold outline-none"
-                aria-label="Sort products"
-              >
-                <option value="priority">Priority</option>
-                <option value="recent">Recent</option>
-                <option value="signal">Signal</option>
-                <option value="name">Name</option>
-              </select>
-            </label>
+            <SortSelect
+              label="Sort products"
+              value={sort}
+              onChange={setSort}
+              options={[
+                { value: "priority", label: "Priority" },
+                { value: "recent", label: "Recent" },
+                { value: "signal", label: "Signal" },
+                { value: "name", label: "Name" },
+              ]}
+            />
           </div>
         }
       />

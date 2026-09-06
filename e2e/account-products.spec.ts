@@ -63,7 +63,9 @@ test.describe("My Products", () => {
   test("filters setup products and can reset the result", async ({ page }) => {
     await page.goto(PRODUCTS);
 
-    await page.getByRole("combobox", { name: "Filter products" }).selectOption("setup");
+    // The pill is the click target; the radio behind it is `sr-only`.
+    await page.getByRole("group", { name: "Filter products" }).getByText("Setup").click();
+    await expect(page.getByRole("radio", { name: "Setup" })).toBeChecked();
     await expect(page.getByTestId("product-list-card")).toHaveCount(1);
     await expect(page.getByRole("heading", { name: "Half Set Up" })).toBeVisible();
 

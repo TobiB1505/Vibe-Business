@@ -54,22 +54,19 @@ const TSX = sourceFiles("src")
 const SOURCE = readFileSync(FIELD, "utf8");
 
 /**
- * The two `<select>`s that are not fields.
+ * The one `<select>` that is not a field.
  *
- * These filter a list rather than collect an answer, and they are drawn as
- * bare text on the surface — no well, no border. That is a different control
- * with a different job, and putting it in a field's clothes would say the list
- * is something you fill in.
+ * A list filter changes what you are looking at. It collects no answer, is
+ * never submitted, and cannot be wrong — so it is drawn as a segmented control
+ * now, and the sort order that sits beside it keeps a native popup because
+ * four interchangeable orderings are not worth showing all at once.
  *
- * They are named here rather than exempted by a pattern, so the list can only
- * grow by someone editing this file and saying why. The filter treatment is
- * still open; when it is decided these move to whatever it produces and this
- * array goes back to being empty.
+ * That popup is the exception, and it is exactly one file: `list-controls.tsx`
+ * is where the pattern lives. It used to be two — a copy on each index screen,
+ * with two different fills — which is the shape of every divergence this test
+ * exists to stop.
  */
-const NOT_FIELDS = [
-  "src/app/app/(account)/products/products-index.tsx",
-  "src/app/app/(account)/repositories/repositories-index.tsx",
-];
+const NOT_FIELDS = ["src/components/ui/list-controls.tsx"];
 
 describe("every text-entry surface comes from one place", () => {
   it.each(["textarea", "select"])("no .tsx outside field.tsx writes its own <%s>", (tag) => {
@@ -83,7 +80,7 @@ describe("every text-entry surface comes from one place", () => {
     ).toEqual([]);
   });
 
-  it("keeps the named exceptions honest", () => {
+  it("keeps the named exception honest", () => {
     // An allowance for a file that no longer has the thing it allows is an
     // allowance nobody will notice has become a licence.
     for (const path of NOT_FIELDS) {

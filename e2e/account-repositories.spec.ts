@@ -23,9 +23,37 @@ test.describe("Repositories", () => {
     await expect(page.getByRole("link", { name: "Team Monitor", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Clear repository search" }).click();
-    await page.getByRole("combobox", { name: "Filter repository visibility" }).selectOption("public");
+    // The filter is a segmented control, not a popup: the options are on
+    // screen, so this clicks the pill the way a reader does. The input behind
+    // it is `sr-only` — 1px and clipped — which is exactly why the label is
+    // the target here and in the product.
+    await page
+      .getByRole("group", { name: "Filter repository visibility" })
+      .getByText("Public")
+      .click();
+    await expect(page.getByRole("radio", { name: "Public" })).toBeChecked();
     await expect(page).toHaveURL(/visibility=public/);
     await expect(page.getByText("Showing 1–3 of 3 repositories")).toBeVisible();
+  });
+
+  test("filters from the keyboard, because the segment is a real radio group", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    // The whole reason the pills are labels over inputs rather than buttons
+    // with `aria-pressed`: arrow keys, grouping and the announcement come
+    // from the browser. If this stops working the control has been rebuilt
+    // out of divs and the keyboard has been dropped with it.
+    await page.getByRole("radio", { name: "All" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("radio", { name: "Private" })).toBeChecked();
+    await expect(page).toHaveURL(/visibility=private/);
+
+    // And the focus is drawn on something a sighted keyboard user can see —
+    // the input itself is 1px and clipped, so the ring has to be on the pill.
+    const ring = await page
+      .getByRole("radio", { name: "Private" })
+      .evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow);
+    expect(ring).toMatch(/rgba?\(0, 229, 160/);
   });
 
   test("paginates the bounded repository ledger", async ({ page }) => {

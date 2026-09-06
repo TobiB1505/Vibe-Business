@@ -7,7 +7,6 @@ import {
   ArrowRightIcon,
   BranchIcon,
   CodeIcon,
-  FilterIcon,
   LockIcon,
   PlusIcon,
   ProductsIcon,
@@ -32,6 +31,7 @@ import {
   type RepositorySort,
 } from "./repository-list-state";
 import { proseLinkClasses } from "@/components/ui/text-link";
+import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -285,35 +285,33 @@ export function RepositoriesIndex({
                 )}
               </label>
 
-              {/* Native popup geometry is deliberate for these short, platform-standard option sets. */}
-              <label className="border-line-2 bg-field rounded-nav text-fg-muted flex items-center gap-2 border px-3 py-2.5 text-body">
-                <FilterIcon size={15} />
-                <span className="sr-only">Filter repository visibility</span>
-                <select
-                  value={filter}
-                  onChange={(event) => setFilter(event.target.value as RepositoryFilter)}
-                  className="text-fg-body bg-transparent text-body font-medium outline-none"
-                  aria-label="Filter repository visibility"
-                >
-                  <option value="all">All visibility</option>
-                  <option value="private">Private</option>
-                  <option value="public">Public</option>
-                </select>
-              </label>
+              {/* Three options, so all three are shown. A filter changes what
+                  you are looking at rather than collecting an answer, and a
+                  well said the opposite. */}
+              <SegmentedControl
+                label="Filter repository visibility"
+                value={filter}
+                onChange={setFilter}
+                options={[
+                  { value: "all", label: "All" },
+                  { value: "private", label: "Private" },
+                  { value: "public", label: "Public" },
+                ]}
+              />
 
-              <label className="border-line-2 bg-field rounded-nav flex items-center gap-2 border px-3 py-2.5">
-                <span className="text-fg-meta text-caption font-medium">Sort:</span>
-                <select
-                  value={sort}
-                  onChange={(event) => setSort(event.target.value as RepositorySort)}
-                  className="text-fg-body bg-transparent text-body font-semibold outline-none"
-                  aria-label="Sort repositories"
-                >
-                  <option value="recent">Connected</option>
-                  <option value="name">Repository</option>
-                  <option value="product">Product</option>
-                </select>
-              </label>
+              {/* Sort keeps the pill: the orders are interchangeable and
+                  nobody scans them, so there is nothing to gain by showing
+                  them all. */}
+              <SortSelect
+                label="Sort repositories"
+                value={sort}
+                onChange={setSort}
+                options={[
+                  { value: "recent", label: "Connected" },
+                  { value: "name", label: "Repository" },
+                  { value: "product", label: "Product" },
+                ]}
+              />
             </div>
           </div>
 
