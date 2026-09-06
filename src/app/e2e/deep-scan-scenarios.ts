@@ -65,6 +65,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: null,
     canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
     lastResult: {
       analyzedAt: "2026-08-30T09:12:00.000Z",
       pagesInspected: 7,
@@ -120,6 +121,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
         { id: "project_workspace", name: "Project workspace" },
         { id: "integrations", name: "Integrations" },
       ],
+      warnings: [],
       accessMode: "included_first_scan",
     },
   } satisfies DeepScanViewModel,
@@ -139,6 +141,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
       pagesInspected: 6,
       completeness: "complete",
       surfaces: [{ id: "dashboard", name: "Dashboard" }],
+      warnings: [],
       accessMode: "included_first_scan",
     },
   } satisfies DeepScanViewModel,
