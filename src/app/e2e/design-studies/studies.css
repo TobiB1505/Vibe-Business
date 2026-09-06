@@ -738,13 +738,28 @@
    grammar, on a surface that is not a document. Here the register belongs to
    the bubble, so a sentence is just a sentence again.
 
-   Each register is a set of four custom properties rather than a set of
-   utility classes, because the tail is a separate element that has to agree
-   with the body exactly. One source per register is what makes disagreement
-   impossible instead of merely unlikely.
+   A register is two axes, and they come from `statusForCandidate` rather than
+   from a choice made here:
 
-   Three of the four properties are visible with hue removed — fill weight,
-   contour weight, contour style — which is the test `study-bubble` runs.
+     · TONE   — what kind of thing this is. Coral wrong, amber your turn,
+                mint available, neutral a plain fact.
+     · OPEN   — whether a loop is still hanging. Drawn as a dashed contour.
+
+   That split is the fix for a real defect. A stalled run used to be drawn
+   amber where a failed one was coral, which reads as *less bad* when the
+   domain was saying *less certain*. Now it is coral **and** dashed: something
+   is wrong, and it is not over.
+
+   Three of the four appearances survive with hue removed — hairline solid,
+   hairline dashed, double solid, double dashed — which is the test
+   `study-bubble` runs. Within "nothing is wrong", hue and the word separate
+   available from waiting-on-you, and the sheet says so rather than claiming
+   an axis it does not have.
+
+   Each register is a set of custom properties rather than utility classes,
+   because the tail is a separate element that has to agree with the body
+   exactly. One source per register is what makes disagreement impossible
+   instead of merely unlikely.
    ──────────────────────────────────────────────────────────────────────── */
 
 .bubble {
@@ -752,6 +767,8 @@
   background: var(--bubble-fill);
   border: var(--bubble-width) var(--bubble-stroke) var(--bubble-line);
   border-radius: var(--radius-card);
+  --bubble-stroke: solid;
+  --bubble-dash: none;
 }
 
 /* The tail squares off the corner it grows from. Without this the triangle
@@ -783,51 +800,54 @@
    surfaces text sits on.
 */
 
-/* Nova's ordinary voice. A fact, with nothing wrong in it. */
-.bubble-statement {
+/* A plain fact. Nothing is being claimed beyond the sentence itself. */
+.bubble-neutral {
   --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
   --bubble-line: var(--color-line-3);
   --bubble-width: 1px;
-  --bubble-stroke: solid;
-  --bubble-dash: none;
 }
 
-/* Observed and wrong. The heaviest contour on the sheet, because this is the
-   one register that is asking to be looked at before the others. */
-.bubble-concern {
-  --bubble-fill: color-mix(in srgb, var(--color-app), var(--color-coral) 13%);
-  --bubble-line: var(--color-coral-line);
-  --bubble-width: 2px;
-  --bubble-stroke: solid;
-  --bubble-dash: none;
+/* Something is available to start. */
+.bubble-active {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-mint-line);
+  --bubble-width: 1px;
 }
 
-/* Inferred from a clock. Dashed, because the observation is incomplete.
-   It is *not* paler than a statement, though the first draft made it so: a
-   fill difference small enough to read as "thinner" is too small to see, and
-   one large enough to see stops the bubble reading as raised off its panel at
-   all. The tail is what proved it — at 4% white the silhouette vanished and
-   the register lost its ability to speak. The dash carries this on its own. */
-.bubble-guess {
+/* Your turn. */
+.bubble-waiting {
   --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
   --bubble-line: var(--color-amber-line);
   --bubble-width: 1px;
+}
+
+/*
+   Something is wrong. The only tinted fill and the only double contour — the
+   one register that has to be found before the others are read.
+*/
+.bubble-problem {
+  --bubble-fill: color-mix(in srgb, var(--color-app), var(--color-coral) 13%);
+  --bubble-line: var(--color-coral-line);
+  --bubble-width: 2px;
+}
+
+/*
+   Nothing has concluded. Dashed, and the dash is tighter than the browser's
+   default: the tail's outline is barely twenty pixels long, and at the default
+   length it drew one mark and a gap — a tail that disappears on one register
+   is a register that cannot speak.
+*/
+.bubble-open {
   --bubble-stroke: dashed;
-  /* Tighter than the body's default dash. The tail's outline is barely twenty
-     pixels long, and at the browser's own dash length it drew one mark and a
-     gap — a tail that disappears on one register is a register that cannot
-     speak. */
   --bubble-dash: 3 2.5;
 }
 
 /* An aside: something also true, never something to do. A bubble with no
    walls, which is the one register a greyscale screenshot cannot confuse. */
-.bubble-quiet {
+.bubble-aside {
   --bubble-fill: transparent;
   --bubble-line: transparent;
   --bubble-width: 0px;
-  --bubble-stroke: solid;
-  --bubble-dash: none;
 }
 
 /* Arrival. Opacity and transform only, so nothing below a bubble moves while

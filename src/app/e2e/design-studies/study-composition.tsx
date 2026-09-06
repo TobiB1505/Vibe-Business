@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
-import { statusForFocusTier } from "@/components/system/status-vocabulary";
+import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildActivityFeed } from "@/modules/audit-log/view";
@@ -51,7 +51,7 @@ import type { Study } from "./studies";
  * scans without reading still knows what the screen thinks is important.
  *
  * Nothing here re-decides a product claim. The ranking is `deriveNovaFocus`'s,
- * the status words are `statusForFocusTier`'s, the prices resolve through
+ * the status words are `statusForCandidate`'s, the prices resolve through
  * `CostDisclosure`, and the activity titles come out of `buildActivityFeed`'s
  * own table rather than being written for the picture.
  *
@@ -249,7 +249,7 @@ export function StudyComposition({
     : novaScenarioView(scenario);
   const health = novaScenarioHealth(scenario);
   const primary = view.primary;
-  const status = statusForFocusTier(primary.tier);
+  const status = statusForCandidate(primary.kind);
   const priceKind = retailKindOf(primary);
   const action = controlLabel(primary);
   const activity = buildActivityFeed(ACTIVITY_RECORDS);
@@ -348,7 +348,7 @@ export function StudyComposition({
                 </Label>
                 <ul className={`flex flex-col divide-y divide-line-1 ${sectionSkin}`}>
                   {view.secondary.map((entry) => {
-                    const entryStatus = statusForFocusTier(entry.tier);
+                    const entryStatus = statusForCandidate(entry.kind);
                     return (
                       <li
                         key={entry.id}

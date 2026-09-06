@@ -1,6 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
-import { statusForFocusTier, novaPresenceState } from "@/components/system/status-vocabulary";
+import { statusForCandidate, novaPresenceState } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
@@ -54,7 +54,7 @@ import type { Study } from "./studies";
  * The three ranks from `study-composition` survive; what changes is the first
  * one's grammar. Rank 1 is Nova saying one thing. Rank 2 is what else is true,
  * subordinate to her. Rank 3 is the record. Nothing about the ranking moved —
- * `deriveNovaFocus` still decides, `statusForFocusTier` still supplies every
+ * `deriveNovaFocus` still decides, `statusForCandidate` still supplies every
  * status word, and `novaPresenceState` derives the mark's state from the tier
  * and the operation phase rather than the study picking one for effect.
  */
@@ -191,7 +191,7 @@ export function StudyVoice({
     : novaScenarioView(scenario);
   const health = novaScenarioHealth(scenario);
   const primary = view.primary;
-  const status = statusForFocusTier(primary.tier);
+  const status = statusForCandidate(primary.kind);
   const action = controlLabelOf(primary);
   const activity = buildActivityFeed(ACTIVITY_RECORDS);
 
@@ -307,7 +307,7 @@ export function StudyVoice({
               </Label>
               <ul className={`flex flex-col divide-y divide-line-1 ${sectionSkin}`}>
                 {view.secondary.map((entry) => {
-                  const entryStatus = statusForFocusTier(entry.tier);
+                  const entryStatus = statusForCandidate(entry.kind);
                   return (
                     <li
                       key={entry.id}

@@ -207,7 +207,7 @@ describe("Nova Home", () => {
   describe("status", () => {
     it("takes every word from the shared vocabulary", () => {
       for (const name of ["working-strip.tsx", "attention-stack.tsx", "focus-card.tsx"]) {
-        expect(component(name), name).toMatch(/statusFor(OperationPhase|FocusTier)/);
+        expect(component(name), name).toMatch(/statusFor(OperationPhase|FocusTier|Candidate)/);
       }
     });
 

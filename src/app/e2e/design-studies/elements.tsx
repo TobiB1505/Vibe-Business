@@ -3,6 +3,7 @@ import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import type { CostBalance } from "@/components/system/cost-disclosure";
 import type { RetailOperationKind } from "@/modules/credits/retail";
+import type { StatusTone } from "@/components/ui/status-pill";
 
 /**
  * The design system's vocabulary, as elements rather than as screens.
@@ -125,27 +126,28 @@ export function moveShowsCost(operation: RetailOperationKind | null): boolean {
  * is the whole move, and it is why `Line` and `Context` below are now plain
  * text with no markers of their own.
  *
- * ## The four registers, and what makes them tell apart without hue
+ * ## The register is two axes, and neither is chosen here
  *
- * `DESIGN.md` says colour is never the only signal, and the ten blocked
- * moments are the case that punishes a design that forgets it. A register here
- * is four properties and only the last is hue:
+ * Both come from `statusForCandidate`, so a bubble cannot describe a moment
+ * differently from the pill beside it:
  *
- * - **Fill.** An aside has none and no contour either — it is a bubble with no
- *   walls, which is the one register a greyscale screenshot cannot confuse. A
- *   concern is the only tinted one. The other two share a fill, because a
- *   difference small enough to mean *thinner* is too small to see and one
- *   large enough to see stops a bubble reading as raised at all.
- * - **Contour weight.** None, hairline, or double. The one register asking to
- *   be looked at first is the only one drawn at 2px.
- * - **Contour style.** Solid means Vibe observed it. Dashed means it inferred
- *   it from a clock — `focus.ts`'s own distinction, which until now reached
- *   the screen only as amber-instead-of-coral: a claim about severity where
- *   the domain was making one about certainty.
- * - **Hue**, last.
+ * - **`tone`** — what kind of thing this is. Coral wrong, amber your turn,
+ *   mint available, neutral a plain fact.
+ * - **`open`** — whether a loop is still hanging. Drawn as a dashed contour.
  *
- * The greyscale row in `study-bubble` is what holds this honest. If the four
- * collapse there, the design was colour and nothing else.
+ * The second axis is the fix for a defect the first design had. A stalled run
+ * was drawn amber where a failed one was coral, which reads as *less bad* when
+ * the domain was saying *less certain* — a different claim entirely. Coral and
+ * dashed says both halves: something is wrong, and it is not over.
+ *
+ * ## What survives with the colour removed
+ *
+ * `DESIGN.md` says colour is never the only signal. Four appearances survive
+ * greyscale — hairline solid, hairline dashed, double solid, double dashed —
+ * and they carry the distinctions that matter when somebody is scanning rather
+ * than reading: *something is wrong*, *nothing has concluded*, *neither*.
+ * Within "nothing is wrong", available and waiting-on-you are separated by hue
+ * and by the word, and the sheet says that rather than claiming more.
  *
  * ## Geometry
  *
@@ -156,20 +158,34 @@ export function moveShowsCost(operation: RetailOperationKind | null): boolean {
  * and a control that changed width with the length of the sentence above it
  * would break that from the outside.
  */
-export type BubbleRegister = "statement" | "concern" | "guess" | "quiet";
+const TONE_CLASS: Record<StatusTone, string> = {
+  neutral: "bubble-neutral",
+  active: "bubble-active",
+  success: "bubble-active",
+  waiting: "bubble-waiting",
+  problem: "bubble-problem",
+};
 
-const BUBBLE: Record<BubbleRegister, { klass: string; tint: string; tail: boolean }> = {
-  statement: { klass: "bubble-statement", tint: "text-fg-meta", tail: true },
-  concern: { klass: "bubble-concern", tint: "text-coral", tail: true },
-  guess: { klass: "bubble-guess", tint: "text-amber", tail: true },
-  /* An aside is a note, not an utterance. Nothing points at a speaker. */
-  quiet: { klass: "bubble-quiet", tint: "text-fg-meta", tail: false },
+const TONE_TINT: Record<StatusTone, string> = {
+  neutral: "text-fg-meta",
+  active: "text-mint",
+  success: "text-mint",
+  waiting: "text-amber",
+  problem: "text-coral",
 };
 
 export function Bubble({
   children,
-  register = "statement",
-  /** The status word, from `statusForFocusTier`. Never written at a call site. */
+  /** What kind of thing this is. From `statusForCandidate(...).tone`. */
+  tone = "neutral",
+  /** Whether a loop is hanging. From `statusForCandidate(...).open`. */
+  open = false,
+  /**
+   * Something also true, never something to do. A bubble with no walls, and no
+   * tail — nobody is being spoken to, so nothing points at a speaker.
+   */
+  aside = false,
+  /** The status word, from `statusForCandidate`. Never written at a call site. */
   eyebrow,
   /**
    * Whether this one points at the speaker. Only the first of a run does, the
@@ -183,25 +199,34 @@ export function Bubble({
   index = 0,
 }: {
   children: ReactNode;
-  register?: BubbleRegister;
+  tone?: StatusTone;
+  open?: boolean;
+  aside?: boolean;
   eyebrow?: string;
   tail?: boolean;
   wide?: boolean;
   index?: number;
 }) {
-  const spec = BUBBLE[register];
-  const hasTail = tail && spec.tail;
+  const hasTail = tail && !aside;
 
   return (
     <div
-      className={`bubble bubble-arrive ${spec.klass} ${hasTail ? "bubble-tailed" : ""} ${
-        wide ? "w-full" : "w-fit max-w-[46ch]"
-      } ${register === "quiet" ? "px-1 py-1" : "px-4 py-3.5"} flex min-w-0 flex-col gap-2`}
+      className={`bubble bubble-arrive ${aside ? "bubble-aside" : TONE_CLASS[tone]} ${
+        open && !aside ? "bubble-open" : ""
+      } ${hasTail ? "bubble-tailed" : ""} ${wide ? "w-full" : "w-fit max-w-[46ch]"} ${
+        aside ? "px-1 py-1" : "px-4 py-3.5"
+      } flex min-w-0 flex-col gap-2`}
       style={{ "--i": index } as CSSProperties}
     >
       {hasTail && <BubbleTail />}
       {eyebrow && (
-        <p className={`text-label font-mono tracking-[0.16em] uppercase ${spec.tint}`}>{eyebrow}</p>
+        <p
+          className={`text-label font-mono tracking-[0.16em] uppercase ${
+            aside ? TONE_TINT.neutral : TONE_TINT[tone]
+          }`}
+        >
+          {eyebrow}
+        </p>
       )}
       {children}
     </div>
@@ -215,9 +240,9 @@ export function Bubble({
  * pixels, which is what hides the body's own left border across the joint —
  * and it only hides it because the register fills are opaque. The **stroke**
  * then runs the two edges that are genuinely outside: the top, collinear with
- * the bubble's top border, and the diagonal, which stops exactly at the
- * bubble's left edge so the bubble's own border continues the line downward.
- * The third edge is interior and must never be drawn.
+ * the bubble's top border, and the diagonal, which stops at the bubble's left
+ * edge so the bubble's own border continues the line downward. The third edge
+ * is interior and must never be drawn.
  *
  * Both read the register's custom properties, so a dashed bubble gets a dashed
  * tail and a 2px bubble a 2px one, without either side knowing about the other.

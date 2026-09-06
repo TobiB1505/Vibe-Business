@@ -1,14 +1,11 @@
 import type { ReactNode } from "react";
-import { statusForFocusTier } from "@/components/system/status-vocabulary";
+import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { creditsToUnits } from "@/modules/credits/units";
-import {
-  deriveNovaFocus,
-  type FocusCandidateKind,
-  type NovaFocusFacts,
-} from "@/modules/nova/focus";
+import { deriveNovaFocus, type FocusCandidateKind, type NovaFocusFacts } from "@/modules/nova/focus";
 import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
 import { buildNovaHomeView } from "@/modules/nova/home-view";
-import { Bubble, type BubbleRegister, Context, Line, Move } from "./elements";
+import { Bubble, Context, Line, Move } from "./elements";
+import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
 
 /**
@@ -20,86 +17,87 @@ import type { Study } from "./studies";
  * wireframe says why without arguing: every line of text on that screen sits
  * in a bubble that arrives, and a bubble already carries its own nature. So
  * the register moved outward, and this sheet has to show that it survived the
- * move — that four situations are still four situations when the marker is the
- * container rather than a rule beside the words.
+ * move.
+ *
+ * ## The register is the domain's, not this file's
+ *
+ * Every bubble here takes its tone, its word and its contour from
+ * `statusForCandidate`, which is also what the pill on the real Focus Card
+ * reads. A sheet that picked its own four registers would be designing a
+ * vocabulary the product does not have — which is what the first draft did,
+ * and it is why a stalled run and a crashed one looked like the same thing
+ * with a different shade.
  *
  * ## Built to fail, not to convince
  *
- * - **The greyscale row** removes hue. Three of the four register properties
- *   are meant to survive it — fill weight, contour weight, contour style — and
- *   if they do not, the design was colour with a story attached.
+ * - **The greyscale row** removes hue. Four appearances are meant to survive
+ *   it — hairline solid, hairline dashed, double solid, double dashed — and
+ *   they carry the distinctions somebody scanning needs before they read.
  * - **The thread** runs the wireframe's own sequence on the product's real
- *   projection: a statement, the aside that justifies it, the move it leads
- *   to. Nothing here is copy this file invented; `buildNovaFeed` wrote all of
- *   it, which is the only way the sheet tests the element rather than the
- *   prose.
+ *   projection. Nothing here is copy this file invented.
  * - **The geometry row** puts three words, forty words and a decision in the
  *   same column, because a container that looks right at one length and wrong
  *   at another is not finished.
  */
 
-const BASE: NovaFocusFacts = {
-  sourceDisconnected: false,
-  failedOperations: { agent: false, scan: false, audit: false },
-  stalledOperations: { agent: false, scan: false, audit: false },
-  changes: [],
-  questions: [],
-  moves: [],
-  plannedMoveId: null,
-  executableStep: null,
-  planOffered: false,
-  auditOutdated: false,
-  repositoryReadOutdated: false,
-  workspaceChoiceRequired: false,
-  working: null,
-};
-
-const FACTS: Partial<Record<FocusCandidateKind, NovaFocusFacts>> = {
-  review_change: {
-    ...BASE,
-    changes: [
-      { preparedChangeId: "c", stage: "review_required", headline: "Two files changed on a branch" },
-    ],
-  },
-  audit_failed: { ...BASE, failedOperations: { agent: false, scan: false, audit: true } },
-  audit_stalled: { ...BASE, stalledOperations: { agent: false, scan: false, audit: true } },
-  nothing_to_do: BASE,
-};
+/** The credits shown against a Move here. A fixture, like every other value. */
+const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 function moment(kind: FocusCandidateKind) {
-  const entry = buildNovaHomeView(deriveNovaFocus(FACTS[kind] ?? BASE)).primary;
-  return { message: entry.message, word: statusForFocusTier(entry.tier).word };
+  const entry = buildNovaHomeView(deriveNovaFocus(MOMENT_FACTS[kind])).primary;
+  return { message: entry.message, status: statusForCandidate(entry.kind) };
 }
 
-const REGISTERS: {
-  register: BubbleRegister;
-  kind: FocusCandidateKind;
-  what: string;
-}[] = [
+/**
+ * One row per appearance the twenty-one moments actually use.
+ *
+ * Not four registers somebody chose: the two axes are `tone` and `open`, six
+ * cells exist and these are the ones the domain fills. Each is shown with a
+ * real candidate, so the row is falsifiable — change `CANDIDATE_STATUS` and
+ * this sheet changes with it.
+ */
+const APPEARANCES: { kind: FocusCandidateKind; what: string }[] = [
   {
-    register: "statement",
-    kind: "review_change",
-    what: "Nova's ordinary voice. Filled, hairline contour, solid — nothing is being claimed about status beyond the fact itself.",
-  },
-  {
-    register: "concern",
     kind: "audit_failed",
-    what: "Observed and wrong. The only 2px contour on the sheet and the only tinted fill: this is the register asking to be looked at first.",
+    what: "Coral, solid, double contour. Vibe watched the run stop, and that is settled — whatever else is true, this part is over.",
   },
   {
-    register: "guess",
     kind: "audit_stalled",
-    what: "Inferred from a clock. Dashed, because the observation is incomplete. It is not paler than a statement — a fill difference small enough to mean thinner was too small to see, and one large enough to see stopped the bubble reading as raised.",
+    what: "Coral, dashed. The same weight, because something is equally wrong; dashed, because nothing has concluded and the run may yet be alive. This used to be drawn amber-instead-of-coral, which reads as less bad where the domain was saying less certain.",
   },
   {
-    register: "quiet",
-    kind: "nothing_to_do",
-    what: "An aside: something also true, never something to do. No walls and no tail, because nobody is being spoken to.",
+    kind: "founder_input_required",
+    what: "Amber, dashed. A live run suspended on a person — the loop is hanging, and the dash is what says so.",
+  },
+  {
+    kind: "review_change",
+    what: "Amber, solid. Also the founder's turn, and not the same thing: a finished change sitting on a branch, which will still be there in an hour whether anybody looks at it or not.",
+  },
+  {
+    kind: "next_move_available",
+    what: "Mint, solid. Nothing is wrong and nothing is hanging; there is something worth starting.",
+  },
+  {
+    kind: "outcome_pending",
+    what: "Neutral, dashed. Nothing is wrong either, but the branch moved and no outcome has been read back — open without being a problem.",
   },
 ];
 
-/** The credits shown against a Move here. A fixture, like every other value. */
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
+function Eyebrow({ children }: { children: ReactNode }) {
+  return (
+    <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
+  );
+}
+
+/** One bubble, rendered from a candidate rather than from arguments. */
+function Moment({ kind, index }: { kind: FocusCandidateKind; index: number }) {
+  const { message, status } = moment(kind);
+  return (
+    <Bubble tone={status.tone} open={status.open} eyebrow={status.word} index={index}>
+      <Line>{message}</Line>
+    </Bubble>
+  );
+}
 
 /**
  * The project the thread is about, so the feed has something to say.
@@ -113,7 +111,7 @@ const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
  * would meet the other in production.
  */
 const THREAD_FACTS: NovaFocusFacts = {
-  ...BASE,
+  ...NO_FACTS,
   changes: [
     {
       preparedChangeId: "change_bubble",
@@ -124,12 +122,6 @@ const THREAD_FACTS: NovaFocusFacts = {
   moves: [{ id: "move_bubble", rank: 1, title: "Add a pricing page" }],
   auditOutdated: true,
 };
-
-function Eyebrow({ children }: { children: ReactNode }) {
-  return (
-    <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
-  );
-}
 
 /**
  * The thread, in the wireframe's sequence.
@@ -142,7 +134,9 @@ function Eyebrow({ children }: { children: ReactNode }) {
  * it breaks the run and the message after it starts a new one.
  */
 function Thread() {
-  const entries = buildNovaFeed(deriveNovaFocus(THREAD_FACTS));
+  const focus = deriveNovaFocus(THREAD_FACTS);
+  const entries = buildNovaFeed(focus);
+  const status = statusForCandidate(focus.primary.kind);
   const choice = entries.find(
     (entry): entry is Extract<NovaEntry, { kind: "nova.choice" }> => entry.kind === "nova.choice",
   );
@@ -165,7 +159,7 @@ function Thread() {
     },
     [],
   );
-  const lastSpoke = spoken.at(-1)?.entry.emphasis !== "aside" && spoken.length > 0;
+  const lastSpoke = spoken.length > 0 && spoken.at(-1)?.entry.emphasis !== "aside";
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -174,7 +168,12 @@ function Thread() {
         return (
           <Bubble
             key={entry.id}
-            register={aside ? "quiet" : "statement"}
+            /* Only the leading sentence carries the moment's register. An
+               aside is not a second claim about status, it is something also
+               true — and four coloured contours down one thread would be. */
+            tone={status.tone}
+            open={status.open}
+            aside={aside}
             tail={tail}
             index={position}
           >
@@ -189,7 +188,7 @@ function Thread() {
           Move's own rule is that its geometry never depends on its state, and
           a container that hugged would break that from the outside.
         */
-        <Bubble register="statement" tail={!lastSpoke} wide index={spoken.length}>
+        <Bubble tone={status.tone} open={status.open} tail={!lastSpoke} wide index={spoken.length}>
           {/* Never an empty line above a control: not every candidate asks a
               question, and a blank one reads as a sentence that failed to
               load. */}
@@ -221,7 +220,7 @@ export function StudyBubble({ study }: { study: Study }) {
       <div className="flex flex-col gap-3 rounded-panel border border-dashed border-line-3 bg-well p-5">
         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <Eyebrow>Element</Eyebrow>
-          <p className="text-title font-semibold text-fg">The Bubble, four registers</p>
+          <p className="text-title font-semibold text-fg">The Bubble</p>
         </div>
         <Context>
           The wireframe&rsquo;s first piece. The Line put the register inside the sentence and it
@@ -230,51 +229,57 @@ export function StudyBubble({ study }: { study: Study }) {
           sentence.
         </Context>
         <Context>
-          A register is four properties and hue is the last of them — fill weight, contour weight,
-          contour style, then colour. Solid means Vibe observed it; dashed means it inferred it
-          from a clock, which is focus.ts&rsquo;s own distinction and had never reached the screen
-          as anything but a different shade of warning.
+          Two axes, and neither is chosen here. <strong className="text-fg">Tone</strong> says what
+          kind of thing this is. <strong className="text-fg">Open</strong> says whether a loop is
+          still hanging, and is drawn as a dashed contour. Both come from statusForCandidate, which
+          is also what the pill on the real Focus Card reads.
         </Context>
       </div>
 
-      {/* ── The four ─────────────────────────────────────────────────── */}
+      {/* ── The appearances ──────────────────────────────────────────── */}
       <section className="flex flex-col gap-3">
-        <Eyebrow>The registers</Eyebrow>
+        <Eyebrow>The appearances the twenty-one moments use</Eyebrow>
+        <Context>
+          Until now every one of them said <em>Blocked</em> — ten different situations, one word,
+          one colour. A crashed run, a run nobody can account for, a disconnected source and a
+          merge a branch rule refused all read the same. They do not any more, and the words below
+          come from the product&rsquo;s vocabulary rather than from this sheet.
+        </Context>
         <div className={`flex flex-col divide-y divide-line-1 ${panel}`}>
-          {REGISTERS.map(({ register, kind, what }, position) => {
-            const { message, word } = moment(kind);
-            return (
-              <div key={register} className="flex flex-col gap-3 p-6">
-                <Bubble register={register} eyebrow={word} index={position}>
-                  <Line>{message}</Line>
-                </Bubble>
-                <p className="study-measure font-mono text-caption text-fg-meta">
-                  {register} — {what}
-                </p>
-              </div>
-            );
-          })}
+          {APPEARANCES.map(({ kind, what }, position) => (
+            <div key={kind} className="flex flex-col gap-3 p-6">
+              <Moment kind={kind} index={position} />
+              <p className="study-measure font-mono text-caption text-fg-meta">{what}</p>
+            </div>
+          ))}
+          <div className="flex flex-col gap-3 p-6">
+            <Bubble aside index={APPEARANCES.length}>
+              <Context>
+                The audit behind what I am showing you is older than your product.
+              </Context>
+            </Bubble>
+            <p className="study-measure font-mono text-caption text-fg-meta">
+              An aside — something also true, never something to do. No walls and no tail, because
+              nobody is being spoken to. The one appearance a greyscale screenshot cannot confuse.
+            </p>
+          </div>
         </div>
       </section>
 
       {/* ── Without colour ───────────────────────────────────────────── */}
       <section className="flex flex-col gap-3">
-        <Eyebrow>The same four, with hue removed</Eyebrow>
+        <Eyebrow>The same six, with hue removed</Eyebrow>
         <Context>
-          The test that matters. Fill weight, contour weight and contour style are meant to carry
-          the distinction on their own; hue is the fourth signal, not the only one. A founder who
-          cannot see it — or who is scanning before reading — should still get four situations
-          here rather than one.
+          The test that matters. Four appearances survive: hairline solid, hairline dashed, double
+          solid, double dashed. Those carry what somebody scanning needs before they read a word —
+          is something wrong, and has anything concluded. Within &ldquo;nothing is wrong&rdquo;,
+          hue and the word separate <em>worth starting</em> from <em>your turn</em>, and this sheet
+          claims no more than that.
         </Context>
         <div className={`flex flex-col gap-4 p-6 grayscale ${panel}`}>
-          {REGISTERS.map(({ register, kind }, position) => {
-            const { message, word } = moment(kind);
-            return (
-              <Bubble key={register} register={register} eyebrow={word} index={position}>
-                <Line>{message}</Line>
-              </Bubble>
-            );
-          })}
+          {APPEARANCES.map(({ kind }, position) => (
+            <Moment key={kind} kind={kind} index={position} />
+          ))}
         </div>
       </section>
 

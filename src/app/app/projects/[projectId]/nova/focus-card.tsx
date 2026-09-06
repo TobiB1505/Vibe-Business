@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { ActionBlock } from "@/components/system/action-block";
 import type { CostBalance } from "@/components/system/cost-disclosure";
-import { statusForFocusTier } from "@/components/system/status-vocabulary";
+import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { StatusPill } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
@@ -74,7 +74,7 @@ export function FocusCard({
   children?: ReactNode;
   className?: string;
 }) {
-  const status = statusForFocusTier(entry.tier);
+  const status = statusForCandidate(entry.kind);
   const settled = entry.kind === "nothing_to_do";
   const footnote = footnoteFor(entry.prompt, controlLabel);
 

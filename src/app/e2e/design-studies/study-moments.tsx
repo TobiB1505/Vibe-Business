@@ -1,17 +1,21 @@
 import type { ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
-import { novaPresenceState, statusForFocusTier } from "@/components/system/status-vocabulary";
+import {
+  novaPresenceState,
+  statusForCandidate,
+  statusForFocusTier,
+} from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
+import { StatusPill } from "@/components/ui/status-pill";
 import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import {
   deriveNovaFocus,
   FOCUS_CANDIDATE_KINDS,
-  type FocusCandidateKind,
-  type NovaFocusFacts,
 } from "@/modules/nova/focus";
 import { buildNovaHomeView, type NovaHomeEntry } from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
+import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
 
 /**
@@ -34,7 +38,7 @@ import type { Study } from "./studies";
  * Every row runs the real `deriveNovaFocus` over a fact set built to raise
  * exactly one candidate, so what is on screen is what the product would say —
  * the sentence from `feed.ts`'s table, the tier from `CANDIDATE_TIER`, the
- * status word from `statusForFocusTier`, the price from the action catalog.
+ * status word from `statusForCandidate`, the price from the action catalog.
  * Nothing here is written for the picture.
  *
  * The isolation is also an assertion. `FOCUS_CANDIDATE_KINDS` is the list, and
@@ -50,74 +54,7 @@ import type { Study } from "./studies";
  * each moment *say*, on its own, before anything ranks it.
  */
 
-const BASE: NovaFocusFacts = {
-  sourceDisconnected: false,
-  failedOperations: { agent: false, scan: false, audit: false },
-  stalledOperations: { agent: false, scan: false, audit: false },
-  changes: [],
-  questions: [],
-  moves: [],
-  plannedMoveId: null,
-  executableStep: null,
-  planOffered: false,
-  auditOutdated: false,
-  repositoryReadOutdated: false,
-  workspaceChoiceRequired: false,
-  working: null,
-};
 
-const CHANGE = { preparedChangeId: "change_moment", headline: "Two files changed on a branch" };
-const MOVE = { id: "move_moment", rank: 1, title: "Add a pricing page" };
-
-/**
- * The smallest fact set that raises each candidate, and only it.
- *
- * A `Record` over `FocusCandidateKind` rather than a list, so the compiler is
- * the thing that notices when the domain grows a twenty-second moment.
- */
-const FACTS_FOR: Record<FocusCandidateKind, NovaFocusFacts> = {
-  source_disconnected: { ...BASE, sourceDisconnected: true },
-  agent_failed: { ...BASE, failedOperations: { agent: true, scan: false, audit: false } },
-  scan_failed: { ...BASE, failedOperations: { agent: false, scan: true, audit: false } },
-  audit_failed: { ...BASE, failedOperations: { agent: false, scan: false, audit: true } },
-  agent_stalled: { ...BASE, stalledOperations: { agent: true, scan: false, audit: false } },
-  scan_stalled: { ...BASE, stalledOperations: { agent: false, scan: true, audit: false } },
-  audit_stalled: { ...BASE, stalledOperations: { agent: false, scan: false, audit: true } },
-  validation_failed: { ...BASE, changes: [{ ...CHANGE, stage: "validation_failed" }] },
-  merge_blocked: { ...BASE, changes: [{ ...CHANGE, stage: "stalled" }] },
-  repository_read_outdated: { ...BASE, repositoryReadOutdated: true },
-  agent_question: {
-    ...BASE,
-    questions: [
-      {
-        founderInputRequestId: "fir_moment",
-        question: "Which of the two checkout flows should stay?",
-        origin: "execution_blocker",
-        stepOrder: 2,
-      },
-    ],
-  },
-  founder_input_required: {
-    ...BASE,
-    questions: [
-      {
-        founderInputRequestId: "fir_moment",
-        question: "Which of the two checkout flows should stay?",
-        origin: "planner",
-        stepOrder: 2,
-      },
-    ],
-  },
-  workspace_choice_required: { ...BASE, workspaceChoiceRequired: true },
-  review_change: { ...BASE, changes: [{ ...CHANGE, stage: "review_required" }] },
-  merge_ready: { ...BASE, changes: [{ ...CHANGE, stage: "ready_to_merge" }] },
-  execution_offered: { ...BASE, executableStep: { order: 1, title: "Add a pricing page" } },
-  outcome_pending: { ...BASE, changes: [{ ...CHANGE, stage: "merged" }] },
-  plan_offered: { ...BASE, planOffered: true, moves: [MOVE] },
-  next_move_available: { ...BASE, moves: [MOVE] },
-  audit_outdated: { ...BASE, auditOutdated: true },
-  nothing_to_do: BASE,
-};
 
 /** The four readings `operationPollPhase` produces, as the facts behind them. */
 const OPERATIONS: { label: string; note: string; operation: OperationView | null }[] = [
@@ -174,26 +111,6 @@ const OPERATIONS: { label: string; note: string; operation: OperationView | null
 
 const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
-const TONE_CLASS: Record<string, string> = {
-  active: "border-mint-line bg-mint-tint-soft text-mint",
-  waiting: "border-amber-line bg-amber-tint-soft text-amber",
-  blocked: "border-coral-line bg-coral-tint-soft text-coral",
-  neutral: "border-line-3 bg-surface-2 text-fg-secondary",
-  done: "border-line-3 bg-surface-2 text-fg-secondary",
-};
-
-function Pill({ tone, children }: { tone: string; children: ReactNode }) {
-  return (
-    <span
-      className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-label font-semibold tracking-[0.14em] uppercase ${
-        TONE_CLASS[tone] ?? TONE_CLASS.neutral
-      }`}
-    >
-      {children}
-    </span>
-  );
-}
-
 function Label({ children }: { children: ReactNode }) {
   return (
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
@@ -223,7 +140,7 @@ export function StudyMoments({ study }: { study: Study }) {
       : "rounded-panel border border-line-2 bg-surface-1";
 
   const moments = FOCUS_CANDIDATE_KINDS.map((kind) => {
-    const view = buildNovaHomeView(deriveNovaFocus(FACTS_FOR[kind]));
+    const view = buildNovaHomeView(deriveNovaFocus(MOMENT_FACTS[kind]));
     return { kind, entry: view.primary };
   });
 
@@ -253,13 +170,16 @@ export function StudyMoments({ study }: { study: Study }) {
       {byTier.map((tier) => {
         const rows = moments.filter((moment) => moment.entry.tier === tier);
         if (rows.length === 0) return null;
-        const status = statusForFocusTier(tier);
+        /* A tier heading holds only a tier, so it is the one place that still
+           asks by tier. The rows under it no longer repeat its word: ten
+           different moments used to, which is the defect this gallery found. */
+        const tierStatus = statusForFocusTier(tier);
 
         return (
           <section key={tier} className="flex flex-col gap-3" aria-labelledby={`tier-${tier}`}>
             <div className="flex flex-wrap items-center gap-3">
               <Label>
-                <span id={`tier-${tier}`}>{status.word}</span>
+                <span id={`tier-${tier}`}>{tierStatus.word}</span>
               </Label>
               <span className="text-caption text-fg-meta">
                 {rows.length} {rows.length === 1 ? "moment" : "moments"}
@@ -268,6 +188,7 @@ export function StudyMoments({ study }: { study: Study }) {
 
             <ul className={`flex flex-col divide-y divide-line-1 ${panel}`}>
               {rows.map(({ kind, entry }) => {
+                const status = statusForCandidate(kind);
                 const control = controlOf(entry);
                 const presence = novaPresenceState({ tier: entry.tier, phase: "idle" });
 
@@ -275,7 +196,7 @@ export function StudyMoments({ study }: { study: Study }) {
                   <li key={kind} className="flex flex-col gap-2.5 px-5 py-4">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <NovaPresence state={presence} seed="project_e2e" size="sm" />
-                      <Pill tone={status.tone}>{status.word}</Pill>
+                      <StatusPill tone={status.tone}>{status.word}</StatusPill>
                       <code className="font-mono text-caption text-fg-meta">{kind}</code>
                     </div>
 
@@ -318,7 +239,7 @@ export function StudyMoments({ study }: { study: Study }) {
         </p>
         <ul className={`flex flex-col divide-y divide-line-1 ${panel}`}>
           {OPERATIONS.map(({ label, note, operation }) => {
-            const view = buildNovaHomeView(deriveNovaFocus({ ...BASE, working: operation }));
+            const view = buildNovaHomeView(deriveNovaFocus({ ...NO_FACTS, working: operation }));
             const presence = novaPresenceState({
               tier: view.primary.tier,
               phase: view.working?.phase ?? "idle",
