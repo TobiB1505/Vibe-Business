@@ -230,3 +230,11 @@ export function isConsoleScenario(scenario: string): boolean {
  * will meet the other twenty in production.
  */
 export const MOMENTS_SCENARIO = "study-moments";
+
+/**
+ * The blocked tier, designed one moment at a time.
+ *
+ * The gallery's own finding: ten different situations, one appearance. This
+ * is the first tier worked through individually.
+ */
+export const BLOCKED_SCENARIO = "study-blocked";
