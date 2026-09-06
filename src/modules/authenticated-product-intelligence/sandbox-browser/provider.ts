@@ -12,6 +12,7 @@ import type {
   CreateBrowserSessionOptions,
   ProviderResult,
 } from "../provider";
+import { describeError, reportBrowserFailure } from "./diagnostics";
 import { BROWSER_GUARD_ENV } from "./guard-program";
 import { BROWSER_SANDBOX, browserSandboxNameFor, chromiumCommand, guardCommand } from "./runtime";
 import { deriveBrowserSessionTokens } from "./tokens";
@@ -194,7 +195,8 @@ export function createSandboxBrowserSessionProvider(
             [BROWSER_GUARD_ENV.readyFile]: READY_PATH,
           },
         });
-      } catch {
+      } catch (error) {
+        reportBrowserFailure("session_create", { error: describeError(error) });
         return failure("browser_session_create_failed");
       }
 
@@ -203,12 +205,16 @@ export function createSandboxBrowserSessionProvider(
         // without it, so the order here is what that wait is for.
         await handle.runBackground({ command: chromiumCommand(), cwd: BROWSER_SANDBOX.root });
         await handle.runBackground({ command: guardCommand(), cwd: BROWSER_SANDBOX.root });
-      } catch {
+      } catch (error) {
+        reportBrowserFailure("session_start_programs", { error: describeError(error) });
         await handle.stop().catch(() => undefined);
         return failure("browser_session_create_failed");
       }
 
       if (!(await waitUntilReady(handle))) {
+        // The one failure with no exception behind it: Chromium or the guard
+        // came up and never reported usable, so the only fact is the wait.
+        reportBrowserFailure("session_ready_timeout", { waitedMs: READY_TIMEOUT_MS });
         // A VM nobody can use is worse than none: it bills for its whole
         // timeout and shows a person a live view that never paints.
         await handle.stop().catch(() => undefined);
@@ -221,7 +227,8 @@ export function createSandboxBrowserSessionProvider(
         const ws = websocketOrigin(origin);
         if (!ws) throw new Error("unroutable");
         connectUrl = `${ws}/control?token=${tokens.control}`;
-      } catch {
+      } catch (error) {
+        reportBrowserFailure("session_public_origin", { error: describeError(error) });
         await handle.stop().catch(() => undefined);
         return failure("browser_provider_unavailable");
       }
