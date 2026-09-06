@@ -32,6 +32,7 @@ import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { StudyShell } from "../design-studies/study-shell";
 import { StudyNovaHome } from "../design-studies/study-nova-home";
 import { StudyComposition } from "../design-studies/study-composition";
+import { StudyVoice } from "../design-studies/study-voice";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -39,8 +40,11 @@ import {
   COMPOSITION_SETTLED_SCENARIO,
   chosenStudy,
   isCompositionScenario,
+  isVoiceScenario,
   LABELS_SCENARIO,
   MONO_SCENARIO,
+  VOICE_DENSE_SCENARIO,
+  VOICE_SETTLED_SCENARIO,
   STUDIES,
   studyByScenario,
 } from "../design-studies/studies";
@@ -260,6 +264,19 @@ export default async function E2eScenarioPage({
   /* The composition studies vary rank rather than material, so they are always
      drawn in the direction that won — otherwise a reader cannot tell which of
      the two axes moved. */
+  if (isVoiceScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyVoice
+          study={chosen}
+          settled={scenario === VOICE_SETTLED_SCENARIO}
+          dense={scenario === VOICE_DENSE_SCENARIO}
+        />
+      </StudyShell>
+    );
+  }
+
   if (isCompositionScenario(scenario)) {
     const chosen = chosenStudy();
     return (

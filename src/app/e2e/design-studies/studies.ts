@@ -159,6 +159,26 @@ export const COMPOSITION_SETTLED_SCENARIO = "study-composition-settled";
 /** Five candidates at once — the case that says whether the band's columns balance. */
 export const COMPOSITION_DENSE_SCENARIO = "study-composition-dense";
 
+/**
+ * The voice studies: the same ranking and the same material, said by Nova.
+ *
+ * A third axis after material and rank, and the one the product's own two
+ * projections already disagreed about — `home-view.ts` chose the composition
+ * over `buildNovaFeed`'s transcript, and onboarding kept the transcript. These
+ * render Home in the voice onboarding uses.
+ */
+export const VOICE_SCENARIO = "study-voice";
+export const VOICE_SETTLED_SCENARIO = "study-voice-settled";
+export const VOICE_DENSE_SCENARIO = "study-voice-dense";
+
+export function isVoiceScenario(scenario: string): boolean {
+  return (
+    scenario === VOICE_SCENARIO ||
+    scenario === VOICE_SETTLED_SCENARIO ||
+    scenario === VOICE_DENSE_SCENARIO
+  );
+}
+
 export function isCompositionScenario(scenario: string): boolean {
   return (
     scenario === COMPOSITION_SCENARIO ||
