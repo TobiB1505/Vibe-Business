@@ -160,6 +160,9 @@ export const DISCLOSURE_SCENARIO = "study-disclosure";
 /** What the action work left open: the links, and how loud a delete is. */
 export const LINKS_SCENARIO = "study-links";
 
+/** What lies behind the glass — the ground the product does not yet have. */
+export const BACKGROUND_SCENARIO = "study-background";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
