@@ -343,7 +343,6 @@ export default async function E2eScenarioPage({
             beside a 35-Credit price. The brand exists to catch exactly that,
             and casting past it is how a fixture ends up asserting a bug.
           */
-          balance={{ availableCredits: creditsToUnits(420), display: "420" }}
           consequence={priced?.confirmationNote ?? undefined}
           control={
             control.kind === "none" ? undefined : (

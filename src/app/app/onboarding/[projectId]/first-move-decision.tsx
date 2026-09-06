@@ -2,7 +2,6 @@
 
 import { useActionState } from "react";
 import { ActionBlock } from "@/components/system/action-block";
-import type { CostBalance } from "@/components/system/cost-disclosure";
 import { Button } from "@/components/ui/button";
 import { startPlanAction, type StartPlanActionState } from "@/app/app/projects/[projectId]/plan-action";
 
@@ -35,13 +34,11 @@ import { startPlanAction, type StartPlanActionState } from "@/app/app/projects/[
 export function FirstMoveDecision({
   projectId,
   opportunityId,
-  balance,
   skip,
 }: {
   projectId: string;
   opportunityId: string;
   /** Null when the surface has not read one. Never suppresses the price. */
-  balance: CostBalance | null;
   /** The form that completes onboarding and opens the workspace. */
   skip: React.ReactNode;
 }) {
@@ -54,7 +51,6 @@ export function FirstMoveDecision({
     <div className="flex flex-col gap-4" data-testid="first-move-decision">
       <ActionBlock
         operation="action_plan"
-        balance={balance}
         control={
           <form action={formAction} className="flex flex-wrap items-center gap-3">
             {/* Replanning costs money and is never defaulted on (rule 60). */}

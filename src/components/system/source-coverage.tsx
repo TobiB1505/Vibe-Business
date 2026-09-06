@@ -4,7 +4,7 @@ import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import type { SourceCoverage, SourceCoverageState } from "@/modules/provenance/source-coverage";
 import { firstCoverageGap } from "@/modules/provenance/source-coverage";
-import { CostDisclosure, type CostBalance } from "./cost-disclosure";
+import { CostDisclosure } from "./cost-disclosure";
 import { StandaloneLink, proseLinkClasses } from "@/components/ui/text-link";
 
 /**
@@ -67,11 +67,9 @@ function measuredPhrase(measured: SourceCoverage["measured"]): string | null {
 
 export function SourceCoverageList({
   sources,
-  balance,
   className,
 }: {
   sources: readonly SourceCoverage[];
-  balance?: CostBalance | null;
   className?: string;
 }) {
   return (
@@ -118,7 +116,7 @@ export function SourceCoverageList({
             {source.remedy && (
               <div className="flex flex-col gap-1">
                 <StandaloneLink href={source.remedy.href}>{source.remedy.label}</StandaloneLink>
-                <CostDisclosure operation={source.remedy.operation} balance={balance} />
+                <CostDisclosure operation={source.remedy.operation} />
               </div>
             )}
           </li>

@@ -267,7 +267,6 @@ function FocusSection({
       presence={presence}
       seed={seed}
       operation={meta.price}
-      balance={data.balance}
       consequence={control.option.confirmationNote}
       control={
         <NovaServerActionControl

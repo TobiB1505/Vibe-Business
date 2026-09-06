@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { ActionBlock } from "@/components/system/action-block";
-import type { CostBalance } from "@/components/system/cost-disclosure";
 import { statusForFocusTier } from "@/components/system/status-vocabulary";
 import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -44,7 +43,6 @@ export function FocusCard({
   seed,
   control,
   operation,
-  balance,
   consequence,
   children,
   className,
@@ -58,7 +56,6 @@ export function FocusCard({
   control?: ReactNode;
   /** The retail kind the control charges under. Null when it is free. */
   operation?: Parameters<typeof ActionBlock>[0]["operation"];
-  balance?: CostBalance | null;
   consequence?: ReactNode;
   /** Context the page supplies: the audit's top blocker, a change summary. */
   children?: ReactNode;
@@ -148,7 +145,6 @@ export function FocusCard({
           <ActionBlock
             control={control}
             operation={operation ?? null}
-            balance={balance}
             consequence={consequence}
             footnote={entry.prompt}
           />

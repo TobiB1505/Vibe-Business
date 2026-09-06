@@ -54,7 +54,6 @@ import { OnboardingOperationFailure, OnboardingStalled } from "./operation-state
 import { ProductConfirmation } from "./product-confirmation";
 import { ProductRevealFacts } from "./reveal-facts";
 import { FirstMoveDecision } from "./first-move-decision";
-import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
@@ -147,7 +146,6 @@ export default async function ProjectOnboardingPage({
     firstMovePlan,
     understandingFailure,
     auditAccess,
-    balance,
   ] = await Promise.all([
     onboarding.understandingOperation
       ? getProductScanEvents(supabase, {
@@ -179,16 +177,6 @@ export default async function ProjectOnboardingPage({
      */
     onboarding.state === "product_reveal"
       ? getAuditAccessStatus(supabase, { projectId, userId: session.userId })
-      : null,
-    /*
-     * The balance, only on the screen that offers a priced decision.
-     *
-     * A missing balance never suppresses a price — `CostDisclosure` states one
-     * either way — so a failure here costs the affordability sentence and
-     * nothing else.
-     */
-    onboarding.state === "first_move"
-      ? getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null)
       : null,
   ]);
 
@@ -624,7 +612,6 @@ export default async function ProjectOnboardingPage({
                 <FirstMoveDecision
                   projectId={projectId}
                   opportunityId={firstOpportunity.id}
-                  balance={balance}
                   skip={
                     <InlineAction
                       type="submit"
