@@ -640,3 +640,94 @@
     transform: none;
   }
 }
+
+/* ── The Move, three ways (element sheet) ─────────────────────────────────
+   Press belongs to the microinteraction tier: under 120ms, no overshoot, and
+   nothing that changes an element's position — a control that moved its
+   neighbours on press would be reflowing a page somebody is reading.
+
+   `.force-hover` applies each variant's hover state without a pointer, so a
+   still screenshot can compare three treatments on the half of themselves
+   that only appears under a cursor. */
+
+.move-line,
+.move-lit,
+.move-switch {
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) var(--ease-emphasis),
+    border-color var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+}
+
+/* A — the whole row settles, its fill lifts a step. */
+.move-line:hover,
+.force-hover .move-line {
+  background-color: var(--color-mint-tint);
+  border-color: var(--color-mint);
+}
+.move-line:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* B — the band is the control's only light. Resting it is a hairline at
+   partial width; on hover it reaches the full edge and full strength. */
+.move-lit-band {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-mint) 30%,
+    var(--color-mint) 70%,
+    transparent
+  );
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+  transform: scaleX(0.55);
+}
+.move-lit:hover .move-lit-band,
+.force-hover .move-lit-band {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.move-lit:hover,
+.force-hover .move-lit {
+  background-color: var(--color-surface-3);
+  border-color: var(--color-line-strong);
+}
+.move-lit:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* C — the verb half travels, the cost half holds. The division is the
+   mechanic, so only one side may move. */
+.move-switch-verb {
+  transition:
+    background-color var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+}
+.move-switch:hover .move-switch-verb,
+.force-hover .move-switch-verb {
+  background-color: var(--color-mint);
+  color: var(--color-mint-ink);
+}
+.move-switch:active .move-switch-verb {
+  transform: translate3d(0, 1px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-line,
+  .move-lit,
+  .move-switch,
+  .move-lit-band,
+  .move-switch-verb {
+    transition: none !important;
+    transform: none !important;
+  }
+  /* The band stays lit rather than vanishing: it is the control's edge, not
+     an animation, and removing it would take the shape away with the motion. */
+  .move-lit-band {
+    opacity: 1;
+  }
+}

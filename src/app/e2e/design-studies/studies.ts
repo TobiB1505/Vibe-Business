@@ -238,3 +238,6 @@ export const MOMENTS_SCENARIO = "study-moments";
  * is the first tier worked through individually.
  */
 export const BLOCKED_SCENARIO = "study-blocked";
+
+/** The Move element sheet: one control, three designs, four states each. */
+export const MOVE_SCENARIO = "study-move";
