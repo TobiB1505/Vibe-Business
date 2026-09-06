@@ -79,6 +79,13 @@
   --color-coral-tint-soft: rgb(255 122 92 / 0.06);
   --color-coral-line: rgb(255 122 92 / 0.32);
   --color-coral-pressed: rgb(255 122 92 / 0.24);
+  /* Gold is an object, not a surface — see the note in globals.css. Same
+     five values, so a Credit is the same coin in either palette. */
+  --color-gold-light: #ffdd8f;
+  --color-gold: #d9a13a;
+  --color-gold-deep: #8a5f1c;
+  --color-gold-rim: #6b4712;
+  --color-gold-ink: #3d270a;
 
   /* ── Foreground ramp ─────────────────────────────────────────────────
      Near-neutral, very slightly warm. Six steps carry text and every one

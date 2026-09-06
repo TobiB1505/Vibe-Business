@@ -1,5 +1,6 @@
-import type { ReactNode, SVGProps } from "react";
+import type { ReactNode } from "react";
 import { buttonClasses } from "@/components/ui/button";
+import { CreditCoin } from "@/components/ui/credit-coin";
 import type { Study } from "./studies";
 
 /**
@@ -46,60 +47,6 @@ import type { Study } from "./studies";
 
 /* ── Question 1: the mark ───────────────────────────────────────────── */
 
-type MarkProps = SVGProps<SVGSVGElement> & { size?: number };
-
-/** Vibe's frame: 24 grid, 1.5px rendered at every size. */
-function Frame({ size = 16, children, ...props }: MarkProps & { children: ReactNode }) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={(1.5 * 24) / size}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
-
-/** 1 · A ring holding a core. The shape money has had for three thousand years. */
-function RingMark(props: MarkProps) {
-  return (
-    <Frame {...props}>
-      <circle cx="12" cy="12" r="8.5" />
-      <circle cx="12" cy="12" r="3" />
-    </Frame>
-  );
-}
-
-/** 2 · Nova's aperture, reduced to three blades. */
-function ApertureMark(props: MarkProps) {
-  return (
-    <Frame {...props}>
-      <path d="M12 3.5 20.4 8v8L12 20.5 3.6 16V8Z" />
-      <path d="M12 8.2 15.9 10.4v4.4L12 17l-3.9-2.2v-4.4Z" />
-    </Frame>
-  );
-}
-
-/** 3 · A meter: four segments, the last one short. Capacity that depletes. */
-function MeterMark(props: MarkProps) {
-  return (
-    <Frame {...props}>
-      <path d="M4 6.5h16" />
-      <path d="M4 11h16" />
-      <path d="M4 15.5h10" />
-      <path d="M4 20h4" />
-    </Frame>
-  );
-}
-
 type Mark = {
   key: string;
   name: string;
@@ -110,36 +57,12 @@ type Mark = {
 
 const MARKS: readonly Mark[] = [
   {
-    key: "ring",
-    name: "1 · Ring mit Kern",
+    key: "coin",
+    name: "Die Münze",
     argument:
-      "The shape value has had for three thousand years, so it needs no learning: a reader knows this is a unit of something spendable before reading a word. Two concentric circles also survive 12px, which is where most of these are rendered.",
-    cost: "It reads as a coin, and a Credit is not money. It does not come back, it cannot be refunded, and it buys one thing. A mark that says “currency” invites exactly the arithmetic ADR 0094 kept the zero out of bounds to avoid.",
-    render: (size) => <RingMark size={size} />,
-  },
-  {
-    key: "aperture",
-    name: "2 · Die Blende, reduziert",
-    argument:
-      "What a Credit buys is Vibe doing something, not a token. Reducing Nova's aperture to two rings says which system is about to spend, and ties the price to the thing that will act rather than to a wallet.",
-    cost: "Two marks that resemble each other in different jobs is the confusion ADR 0097 exists to prevent — it is the reason the hand-drawn chevron and arrow were replaced. Nova's mark means “Vibe is acting”; this would mean “Vibe acting costs”, at a glance apart.",
-    render: (size) => <ApertureMark size={size} />,
-  },
-  {
-    key: "meter",
-    name: "3 · Der Zähler",
-    argument:
-      "Honest about what a Credit actually is: metered capacity that runs down. Four bars, the last one short — the mark itself carries the idea that there is a finite amount and it is being used up.",
-    cost: "At 12px four strokes is a smudge, and worse, it looks like it is showing a level. It is not — it is the same mark whether you hold 40 or 4,000. A mark that appears to report state and does not is the false-state line the motion system already forbids.",
-    render: (size) => <MeterMark size={size} />,
-  },
-  {
-    key: "none",
-    name: "4 · Kein Zeichen, nur Typografie",
-    argument:
-      "No mark at all: the number takes the mono face the product already owns for identifiers, and the unit sits beside it smaller and quieter. One less thing to learn, and it can never be wrong at any size, on any surface, in any state.",
-    cost: "It does not answer the complaint. The objection was that the price reads as body text and does not say money is moving — and setting the same words in a different face is a smaller version of the same silence.",
-    render: () => <span className="font-mono text-fg-secondary tabular-nums">CR</span>,
+      "A struck gold coin with Vibe's V pressed into it — a pirate's coin out of a hoard, not a token. It is an object, and an object is what a price needed: a reader knows what a coin is before reading the number beside it, which is exactly what “35 Credits” set in the interface face never said.",
+    cost: "Gold sits beside amber, and amber is spoken for — DESIGN.md reserves it for incomplete and waiting states. What keeps them apart is not the hue but the material: a status is always a flat fill, metal always has a ramp and a rim. That rule now has to hold everywhere, in both palettes, forever.",
+    render: (size) => <CreditCoin size={size} />,
   },
 ];
 
@@ -196,8 +119,8 @@ type Composition = {
   render: (state: Money) => ReactNode;
 };
 
-/** The mark used for question 2, so the comparison is of composition. */
-const M = (size = 14) => <RingMark size={size} />;
+/** The decided mark, so question 2 compares composition and nothing else. */
+const M = (size = 14) => <CreditCoin size={size} />;
 
 const CTA = "Run the audit again";
 

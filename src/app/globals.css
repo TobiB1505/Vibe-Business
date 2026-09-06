@@ -118,6 +118,23 @@
   --color-coral-tint: rgb(255 122 92 / 0.13);
   --color-coral-tint-soft: rgb(255 122 92 / 0.07);
   --color-coral-line: rgb(255 122 92 / 0.26);
+  /* ── Gold ────────────────────────────────────────────────────────────
+     The Credit, and nothing else. Gold sits near amber in hue, and amber is
+     already spoken for — DESIGN.md reserves it for incomplete and waiting
+     states, and `StatusPill` paints `waiting` with it. What keeps the two
+     apart is not the hue, it is the material: **a status is always a flat
+     fill, and metal always has a ramp and a rim.** A flat gold disc would be
+     a warning dot; a struck coin cannot be mistaken for one.
+
+     Identical in both palettes on purpose. A surface re-tints when the
+     palette changes because a surface is part of the room; a coin is an
+     object in it. */
+  --color-gold-light: #ffdd8f;
+  --color-gold: #d9a13a;
+  --color-gold-deep: #8a5f1c;
+  --color-gold-rim: #6b4712;
+  /* What the V is struck into: the shadow at the bottom of the recess. */
+  --color-gold-ink: #3d270a;
   /* The press step for a destructive control, answering
      `--color-surface-pressed` for the neutral one. A destructive pill is
      tinted at rest and deepens on hover, so the press needs a third value
