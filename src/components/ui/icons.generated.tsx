@@ -47,3 +47,22 @@ export function DismissIcon(props: IconProps) {
     </IconFrame>
   );
 }
+
+/** Lucide `chevron-down`. */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m6 9 6 6 6-6" />
+    </IconFrame>
+  );
+}
+
+/** Lucide `arrow-right`. */
+export function ArrowRightIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M5 12h14" />
+      <path d="m12 5 7 7-7 7" />
+    </IconFrame>
+  );
+}

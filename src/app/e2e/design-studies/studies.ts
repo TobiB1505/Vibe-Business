@@ -151,6 +151,9 @@ export const MARK_SCENARIO = "study-mark";
 /** The container around the mark, which is what makes it read as a control. */
 export const DISMISS_SCENARIO = "study-dismiss";
 
+/** The same principles for the controls that live inside text. */
+export const INLINE_SCENARIO = "study-inline";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }

@@ -1,5 +1,20 @@
 import { IconFrame, type IconProps } from "./icon-frame";
 
+/*
+ * Re-exported from the generated set, under the names they already had.
+ *
+ * Both were hand-drawn here and both disagreed with Lucide's proportions —
+ * Vibe's chevron spanned 10 grid units against Lucide's 12, its arrow 16
+ * against 14 — so a row containing one of these beside a generated mark read
+ * as two icon sets. Re-exporting rather than renaming means the twenty-three
+ * call sites did not have to be touched to fix that.
+ *
+ * The eight remaining generic marks here — Check, Plus, Search, Refresh, Info,
+ * Alert, ChevronRight, ArrowLeft — have the same problem and are not migrated
+ * yet. Doing them is a follow-up, not a side effect of this one.
+ */
+export { ArrowRightIcon, ChevronDownIcon } from "./icons.generated";
+
 export type DashboardIconName =
   | "nova"
   | "home"
@@ -160,14 +175,6 @@ export function SignOutIcon(props: IconProps) {
   );
 }
 
-export function ChevronDownIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m7 10 5 5 5-5" />
-    </IconFrame>
-  );
-}
-
 export function ChevronRightIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -188,14 +195,6 @@ export function CheckIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
       <path d="m5 12.5 4.2 4.2L19 7" />
-    </IconFrame>
-  );
-}
-
-export function ArrowRightIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M4 12h16m-6-6 6 6-6 6" />
     </IconFrame>
   );
 }

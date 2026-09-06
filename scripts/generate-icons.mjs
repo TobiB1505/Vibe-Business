@@ -50,6 +50,16 @@ const MANIFEST = {
   EditIcon: "pencil",
   DeleteIcon: "trash-2",
   DismissIcon: "x",
+  /*
+   * These two existed hand-drawn and are replaced rather than added beside.
+   * Measured, the sets disagree: Vibe's chevron spans 10 grid units and
+   * Lucide's 12; Vibe's arrow 16 and Lucide's 14. Side by side in one row that
+   * reads as two icon sets, which is the thing ADR 0097 exists to prevent.
+   * `dashboard-icons.tsx` re-exports these under the same names, so no call
+   * site changed.
+   */
+  ChevronDownIcon: "chevron-down",
+  ArrowRightIcon: "arrow-right",
 };
 
 const HEADER = `import type { SVGProps } from "react";
