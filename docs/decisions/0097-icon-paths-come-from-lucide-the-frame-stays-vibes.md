@@ -42,6 +42,26 @@ Names are Lucide's own, so a designer and a developer can name the same thing wi
 
 The hand-drawn `CloseIcon` added hours earlier is deleted in the same change: two dismissal marks would have been the first instance of the problem this decision exists to avoid.
 
+### The stroke is stated in screen pixels, not in viewBox units
+
+Raised as "the cross looks painted on, not like an icon", and true of all thirty-nine marks rather than that one.
+
+`stroke-width` in SVG is expressed in viewBox units. The viewBox is 24, so a literal `1.8` renders at `1.8 × size / 24` on screen — 1.8px only at 24px, a size this product never uses. It renders icons at 13 to 22, and at 15, 16 and 17 for almost everything:
+
+| size | before | uses |
+|---|---|---|
+| 13px | **0.98px** | 5 |
+| 15px | **1.13px** | 26 |
+| 16px | **1.20px** | 22 |
+| 17px | **1.28px** | 16 |
+| 24px | 1.80px | 0 |
+
+Every icon in the product was drawn with a sub-pixel stroke, which a display resolves by spreading the line across two rows of pixels at partial opacity. That is the soft, sketched quality. It was never the shape.
+
+`IconFrame` now states the stroke in screen pixels and converts: `strokeWidth = 1.5 × 24 / size`, so the rendered weight is 1.5px at every size. 1.5 rather than 1.8 because at 15–17px, where this product lives, 1.8px is heavier than the type beside it.
+
+**This is the first change in the v2 work that alters what v1 renders**, and it does so deliberately. The old behaviour is not a style v1 chose; it is a unit that was never converted, in a set drawn for a size the product does not use.
+
 ### What stays hand-drawn
 
 Everything product-specific. Nova's aperture, the wordmark, the nine navigation marks that carry Vibe's own vocabulary — no catalogue has them, and a catalogue that did would be drawing Vibe's identity. `dashboard-icons.tsx` keeps them and now imports the shared frame instead of restating it.
