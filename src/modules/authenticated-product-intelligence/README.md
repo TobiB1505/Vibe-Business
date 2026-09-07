@@ -50,6 +50,16 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## Reading a product, not a framework
+
+Two detectors were testing the customer's stack rather than their product.
+
+**What a person can do.** The action selector was `button, [role=button], a[class*=btn], a[class*=button]`, and a real scan recorded one action for a whole page: *Sign out*. The page's own call to action was a `<Link>` in a utility-CSS application, whose classes describe appearance and never role. Bootstrap says `btn`, Material says `MuiButton`, CSS modules say `Button_root__x7f2`, Tailwind says nothing at all. Three layers now, weakest last: structure (`button`, submit inputs, `role=button`), then class names matched case-insensitively, then — for the case nothing else reaches — a link the page has *drawn* as a control, measured by padding plus a fill or a border, bounded to short text so a padded card stays a link.
+
+**`plan` names two things.** A scan read `/app/projects/<id>/plan` — an Action Plan, a list of business steps — as a billing surface with high confidence, four times. A project planner, a roadmap tool, a meal planner and a travel planner all have a `/plan` and none of them sells anything there. `billing`, `subscription`, `invoices` and `credits` stay path signals on their own; `plan` must be corroborated by the page saying something about money in **its own** title or heading. Not from nav: an application shell that carries "Billing" and a credit balance on every page would otherwise confirm every path in the product as billing. And never by the word `plan` itself, which would be the same claim twice rather than a second source.
+
+The error is allowed to point one way: a missed billing surface understates, an invented one tells a founder they have billing when the page is a to-do list, and an audit then skips a gap that is really there.
+
 ## What a label is, and what emptiness is
 
 Two things a real scan got wrong about the pages it read correctly.
