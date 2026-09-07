@@ -394,7 +394,30 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     // /app/connect/github/repositories twice — once via a link (200) and once
     // as a repository route (404).
     if (landedPath !== candidate.path) {
-      if (visited.has(landedPath)) continue;
+      if (visited.has(landedPath)) {
+        /*
+         * Said, not swallowed.
+         *
+         * A real scan reported `onboarding` as **not detected** with no
+         * evidence. `/app/onboarding` exists, was a candidate, and was
+         * navigated to — and it redirected to the dashboard, because the
+         * founder is long past onboarding. The loop dropped it here without a
+         * trace, so the snapshot's only account of it was an absence.
+         *
+         * "This surface sent Vibe somewhere it had already been" is a fact
+         * about the product. "Vibe found no onboarding" is not the same
+         * sentence, and reading the first as the second is how a scan comes to
+         * report a budget as a finding (rule 44).
+         */
+        warnings.push(
+          warning(
+            "redirected_to_seen_page",
+            "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
+            candidate.path,
+          ),
+        );
+        continue;
+      }
       visited.add(landedPath);
     }
 

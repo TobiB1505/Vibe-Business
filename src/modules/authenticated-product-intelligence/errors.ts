@@ -48,4 +48,6 @@ export type AuthenticatedWarningCode =
   | "extra_tab_ignored"
   | "budget_reached"
   /** More instances of one screen existed than the shape budget inspects. */
-  | "repeated_screen_skipped";
+  | "repeated_screen_skipped"
+  /** A candidate redirected onto a page already inspected, so it holds no new evidence. */
+  | "redirected_to_seen_page";

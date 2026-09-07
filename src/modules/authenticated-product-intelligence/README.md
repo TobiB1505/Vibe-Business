@@ -50,6 +50,10 @@ So `routeShape` collapses identifier segments — a UUID, a run of digits, a lon
 
 The check runs before the navigation, so a skipped copy costs nothing, and counts only pages actually **inspected** — a page that failed to load taught nothing and does not hold a slot. When copies are skipped the snapshot says so once, with a count.
 
+Auth surfaces are named **once**, in `routes.ts`, and both the crawl and the sign-in probe read that list. They used to be two lists that disagreed — `NEVER_VISIT` knew login and signup, `login-detection.ts` knew reset and MFA because it had to — and a scan duly spent a page on `/reset-password` while signed in. Only the unambiguous surfaces are shared: `confirm` and `callback` stay local to the probe, because refusing `/orders/confirm` would drop a real surface while a delayed auto-start costs one poll.
+
+A candidate that redirects onto a page already inspected is **recorded**, not dropped. `/app/onboarding` exists, was navigated to, and redirected to the dashboard because the founder is past onboarding — and the snapshot's only account of it was `onboarding: detected false, evidence: []`. "This path sent Vibe somewhere it had already been" and "Vibe found no onboarding" are different sentences.
+
 ## Noticing the login instead of asking about it
 
 The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.

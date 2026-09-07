@@ -1,4 +1,4 @@
-import { toSameOriginPath } from "./routes";
+import { isAuthSurfacePath, toSameOriginPath } from "./routes";
 
 /**
  * Deciding whether the founder has finished signing in.
@@ -98,21 +98,20 @@ export function sanitizeSignInProbe(raw: RawSignInProbe, path: string | null): S
 }
 
 /**
- * Paths that are an authentication surface rather than the product.
+ * Paths a founder passes *through* on the way in, beyond the auth surfaces
+ * themselves.
  *
- * Deliberately broader than `NEVER_VISIT` in `routes.ts`: this list also holds
- * the pages a founder passes *through* — email verification, MFA, an OAuth
- * callback — where the browser is on the right origin and is certainly not
- * finished.
+ * The shared list in `routes.ts` holds what is unambiguously an auth page.
+ * These four are added here and **only** here, because the two questions carry
+ * opposite risks: treating `/orders/confirm` as auth here delays an unprompted
+ * start by one poll, while treating it as auth in `NEVER_VISIT` would silently
+ * drop a real product surface from the crawl. A widening that belongs in one
+ * file is not a widening that belongs in both.
  */
-const AUTH_PATHS = [
-  /(^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|anmelden|registrieren)(\/|$)/i,
-  /(^|\/)(forgot|reset|recover)(-|\/|$)/i,
-  /(^|\/)(verify|verification|confirm|mfa|2fa|otp|challenge|callback|oauth)(\/|$)/i,
-];
+const MID_FLOW_PATHS = [/(^|\/)(confirm|challenge|callback|oauth)(\/|$)/i];
 
 export function isAuthPath(path: string): boolean {
-  return AUTH_PATHS.some((pattern) => pattern.test(path));
+  return isAuthSurfacePath(path) || MID_FLOW_PATHS.some((pattern) => pattern.test(path));
 }
 
 /** Why the verdict is what it is. A closed set — never text from the page. */
