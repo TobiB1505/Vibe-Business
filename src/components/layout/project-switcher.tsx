@@ -7,6 +7,7 @@ import {
   CheckIcon,
   ChevronDownIcon,
   ProductsIcon,
+  SettingsIcon,
 } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/utils/cn";
 import { initialsFrom } from "@/modules/auth/initials";
@@ -100,7 +101,9 @@ export function ProjectSwitcher({
                 {selected ? (
                   <div className="bg-mint-tint text-fg rounded-nav flex items-center gap-3 px-2.5 py-2.5">
                     <ProjectTile name={item.name} />
-                    <span className="min-w-0 flex-1 truncate text-body font-semibold">{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-body font-semibold">
+                      {item.name}
+                    </span>
                     <CheckIcon size={17} className="text-mint shrink-0" />
                   </div>
                 ) : (
@@ -112,7 +115,9 @@ export function ProjectSwitcher({
                     )}
                   >
                     <ProjectTile name={item.name} />
-                    <span className="min-w-0 flex-1 truncate text-body font-medium">{item.name}</span>
+                    <span className="min-w-0 flex-1 truncate text-body font-medium">
+                      {item.name}
+                    </span>
                   </Link>
                 )}
               </li>
@@ -120,7 +125,28 @@ export function ProjectSwitcher({
           })}
         </ul>
 
-        <div className="border-line-1 mt-2 border-t pt-2">
+        {/*
+          The two things you do *to* the project you are in, under the control
+          that says which project that is.
+
+          `Project Settings` used to be the last row of the rail, directly
+          above the account's own Settings — two rows a founder had to read to
+          tell apart, and the one about *this* project was the one further from
+          the control that names it. Here it cannot be mistaken for the
+          account's: the panel it lives in has the project's name at the top
+          and a tick beside it.
+        */}
+        <div className="border-line-1 mt-2 flex flex-col gap-1 border-t pt-2">
+          <Link
+            href={`${current.href}/settings`}
+            className={cn(
+              "text-fg-secondary hover:bg-surface-hover hover:text-fg rounded-nav",
+              "flex items-center gap-3 px-3 py-2.5 text-body font-medium transition-interactive",
+            )}
+          >
+            <SettingsIcon size={17} />
+            Project Settings
+          </Link>
           <Link
             href="/app/settings/products"
             className={cn(

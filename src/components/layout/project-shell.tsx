@@ -4,6 +4,7 @@ import { VibeLockup } from "@/components/brand/vibe-mark";
 import {
   ArrowLeftIcon,
   ChevronRightIcon,
+  SettingsIcon,
   type DashboardIconName,
 } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
@@ -194,7 +195,8 @@ export const WORKSPACE_SECTION_HEADINGS: Record<
   },
   settings: {
     title: "Project Settings",
-    description: "What Vibe is connected to, what you have told it, and how to disconnect or delete it.",
+    description:
+      "What Vibe is connected to, what you have told it, and how to disconnect or delete it.",
   },
   activity: {
     title: "Activity",
@@ -347,8 +349,33 @@ export function ProjectSidebar({
         <div className="border-line-1 my-4 border-t" />
         <ProjectNav items={items.filter((item) => item.id !== "settings")} />
 
-        <div className="border-line-1 my-4 border-t" />
-        <ProjectNav items={items.filter((item) => item.id === "settings")} />
+        {/*
+          The one row in this rail that is not about this project.
+          `Project Settings` was here, one row above the account's own
+          Settings, which asked a founder to read two nearly identical labels
+          to tell a project apart from an account. It moved into the switcher —
+          the control that says which project you are in — and what is left is
+          the way out of the project context entirely.
+
+          Clicking it does not open a page inside this rail: `/app/settings`
+          renders the Settings shell, so the rail itself changes. That is the
+          switch, and the label under a section of its own is what makes it
+          read as one rather than as a seventh project section.
+        */}
+        <div className="border-line-1 mt-4 flex flex-col gap-2 border-t pt-4">
+          <MonoLabel className="px-1 tracking-[0.18em]">Account</MonoLabel>
+          <Link
+            href="/app/settings"
+            className={cn(
+              "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav",
+              "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
+              "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+            )}
+          >
+            <SettingsIcon size={17} className="shrink-0" />
+            Settings
+          </Link>
+        </div>
       </nav>
 
       <div className="mt-6 lg:mt-auto lg:pt-8">{footer}</div>
@@ -452,7 +479,10 @@ export function WorkspaceSection({
           data-workspace-header={variant}
         >
           {intelligence && (
-            <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
+            <span
+              aria-hidden="true"
+              className="business-brain-grid pointer-events-none absolute inset-0"
+            />
           )}
           <div className="relative z-10 flex min-w-0 flex-col gap-2">
             {eyebrow && (
@@ -470,7 +500,12 @@ export function WorkspaceSection({
               {title}
             </h1>
             {description && (
-              <p className={cn("max-w-[70ch] text-lead", intelligence ? "text-fg-secondary" : "text-fg-muted")}>
+              <p
+                className={cn(
+                  "max-w-[70ch] text-lead",
+                  intelligence ? "text-fg-secondary" : "text-fg-muted",
+                )}
+              >
                 {description}
               </p>
             )}
@@ -481,9 +516,7 @@ export function WorkspaceSection({
             </div>
           )}
           {intelligence && headerStatus ? (
-            <div className="border-line-1 relative z-10 w-full border-t pt-4">
-              {headerStatus}
-            </div>
+            <div className="border-line-1 relative z-10 w-full border-t pt-4">{headerStatus}</div>
           ) : null}
         </div>
         {children}
@@ -493,13 +526,7 @@ export function WorkspaceSection({
 }
 
 /** Fixed desktop rail + one independently scrolling project document. */
-export function ProjectShell({
-  sidebar,
-  children,
-}: {
-  sidebar: ReactNode;
-  children: ReactNode;
-}) {
+export function ProjectShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
   return (
     <div className="text-fg-body flex min-h-dvh flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
       {sidebar}

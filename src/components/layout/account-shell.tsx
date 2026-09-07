@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
-import type { DashboardIconName } from "@/components/ui/dashboard-icons";
+import { ArrowLeftIcon, type DashboardIconName } from "@/components/ui/dashboard-icons";
 import { Wallet } from "@/components/system/wallet";
 import type { CreditUnits } from "@/modules/credits/units";
 import { AccountNav } from "./account-nav";
@@ -159,7 +159,32 @@ export function AccountSidebar({
         </Link>
       </div>
 
-      <AccountNav items={[...ACCOUNT_SECTIONS]} soon={[...SOON_SECTIONS]} />
+      {/*
+        The way back, said out loud.
+        Entering Settings swaps the whole rail, so the founder's own product
+        disappears from the screen — and the only route back was the lockup,
+        which is a logo and reads as "home page", not as "leave this area".
+        This is the mirror of the project rail's `All products`, and it points
+        at `/app`, which resolves to the product they were last in rather than
+        to an index they have to pick from again.
+      */}
+      <div className="flex flex-col gap-4">
+        <Link
+          href="/app"
+          className={cn(
+            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav",
+            "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
+            "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+          )}
+        >
+          <ArrowLeftIcon size={17} className="shrink-0" />
+          Back to your product
+        </Link>
+
+        <div className="border-line-1 border-t" />
+
+        <AccountNav items={[...ACCOUNT_SECTIONS]} soon={[...SOON_SECTIONS]} />
+      </div>
 
       {/* Pinned to the bottom of the rail on desktop; inline on the strip. */}
       <div className="flex flex-col gap-3 lg:mt-auto">
