@@ -6,6 +6,7 @@ import { checkBudgetBinding } from "@/modules/execution-contract/budget";
 import type { StoredExecutionSpec } from "@/modules/execution-contract/store";
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import { getReservation } from "@/modules/credits/store";
+import { resolveRetailPolicy } from "@/modules/credits/retail";
 import { releaseOperationBilling } from "@/modules/operations/billing";
 import {
   claimAgentExecutionRunRow,
@@ -245,6 +246,20 @@ export async function startAgentExecution(
    * above, and `holdAgentExecutionCredits` re-establishes it rather than
    * trusting that.
    */
+  /*
+   * One instant for the quote and the hold, so they cannot name different cards.
+   *
+   * The version used to be the literal `"launch-v1"` here. That was true when
+   * it was written and would have quietly outlived the policy it names — the
+   * same defect that mis-stamped eleven charges one layer down, where a
+   * `?? "retail-v1"` fallback survived `launch-v1` taking effect. The card is
+   * resolved from the registry instead, at the same `now` the hold prices
+   * against, so a policy boundary crossed between these two calls cannot make
+   * the quote describe a card the reservation was not taken from.
+   */
+  const now = new Date();
+  const policy = resolveRetailPolicy(now);
+
   // Recorded before the hold, because a quote is what the customer was shown
   // and the hold is what acts on it. Writing it afterwards would record an
   // agreement reached after the money moved. It authorizes nothing and cannot
@@ -256,7 +271,7 @@ export async function startAgentExecution(
     credits: economics.budget.maxCredits,
     pricingClass,
     pricingClassReason: stored.spec.pricingClassReason,
-    policyVersion: "launch-v1",
+    policyVersion: policy?.version ?? null,
     budgetPolicyVersion: economics.budget.budgetPolicyVersion,
   });
 
@@ -266,6 +281,7 @@ export async function startAgentExecution(
     operationRunId: operation.id,
     pricingClass,
     quoteId,
+    now,
   });
 
   if (!authorized.ok) {
