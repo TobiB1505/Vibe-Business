@@ -41,6 +41,7 @@ import { classifyExecutionRisk } from "@/modules/execution-contract/risk";
 import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
 import { listStepExecutionEvidence } from "@/modules/action-plans/completion-store";
 import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
+import { listHandoffsForPlan } from "@/modules/action-plans/handoff-store";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
@@ -324,10 +325,11 @@ async function routingCompletedSteps(
 }> {
   const { projectId, actionPlanId, steps } = params;
 
-  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+  const [founderResolutions, agentEvidence, founderActionEvidence, handoffs] = await Promise.all([
     listActiveFounderResolutions(supabase, projectId),
     listStepExecutionEvidence(supabase, { projectId, actionPlanId }),
     listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId }),
+    listHandoffsForPlan(supabase, { projectId, actionPlanId }),
   ]);
 
   /* The second hop, and only when there is something to ask about. A plan with
@@ -358,6 +360,23 @@ async function routingCompletedSteps(
       mergedPreparedChangeIds,
       founderActionEvidence,
       agentEvidence.absorbed,
+      /*
+       * A step Vibe handed out counts here too, or the plan advances on one
+       * screen and the Agent stays blocked on the next step forever (ADR 0096).
+       *
+       * Merged is not the bar for it, and cannot be. That bar exists because a
+       * successor is prepared against the default branch and Vibe's own change
+       * must have reached it — but Vibe made no change here. The founder's tool
+       * did, in their repository, and Vibe never held evidence of where it
+       * landed. What it holds is their word, which is the same authority a
+       * `founder_action` attestation already carries into this set.
+       *
+       * The safety net is downstream and unchanged: every run re-reads HEAD and
+       * refuses if it moved from the analysed state (rules 55-56). If the
+       * founder never pushed, the run works against the repository as it
+       * actually is rather than as anyone assumed.
+       */
+      new Set(handoffs.keys()),
     ),
     founderResolutions,
   };

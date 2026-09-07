@@ -437,6 +437,31 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
+   * The handed-off step, ticked off — and the plan on the next one (ADR 0096).
+   *
+   * The founder's whole ask ends here: run the prompt in your own tool, come
+   * back, say what it built, carry on. Everything before this scene is setup;
+   * this is the one that says the loop closes.
+   */
+  action_plan_handoff_done: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        handoffByStepKey: { "step-add-pricing-page": "claude_code" },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
    * A step a successful run covered rather than carried out (ADR 0091).
    *
    * Step 1 is `vibe` + `analysis`, which `classifyExecutionDependency` folds

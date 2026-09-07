@@ -51,6 +51,18 @@ The gate was wrong in both places. `planStaleness` says the diagnosis moved, not
 
 **And the copy control was the wrong weight.** A full-width secondary button beside the heading, the same visual weight as "Record this finding" — competing with the action that advances the plan for something that only moves text onto a clipboard. It is now the classic control: an icon-and-label button on the block it copies.
 
+## Closing the loop, and the seam that was still open
+
+The founder's ask was the end of the flow: run the prompt, come back, tick it off, carry on. The tick already existed — the attestation *is* it — but the loop was open one layer down.
+
+**`routingCompletedSteps` did not know handoffs existed.** So the plan screen would advance the moment the finding landed, and the routing set — which decides whether the *next* step may start — would still count the handed-off step as unfinished. Step 4 blocked on step 3 forever, while the plan showed step 3 as done. One product, two answers. `getOnboardingFirstMove` had the same omission.
+
+**Merged is deliberately not the bar for a handed-off step.** It is the bar for a step *Vibe* built, because a successor is prepared against the default branch and Vibe's own change must have reached it. Vibe made no change here — the founder's tool did, in their repository — so there is no prepared change to merge and no evidence to wait for. Their word is the authority, exactly as it is for the real-world work a `founder_action` attestation already carries into the same set. The safety net is unchanged and downstream: every run re-reads HEAD and refuses if it moved.
+
+**And the sabotage did not fail the first time.** Removing the wiring left every unit test green, because the tests covered the pure function and the bug was in the *call*. That is the third time in one afternoon: the plan offered a confirmation the server refused, the founder recorded a finding the plan would not count, and the plan advanced while the Agent stayed blocked. Each time the function was right and the call was not.
+
+So `completion-call-sites.test.ts` now asserts the calls rather than the functions — crude on purpose, because what has to hold is one argument in each of three places, and the alternative is a seeded plan and a session per call site.
+
 ## Verification
 
 Sabotage at three layers. Removing the fence defusal fails *"cannot have its quote closed by the text inside it"*. Removing the warning fails *"fences the planned step and says what to do with an instruction inside it"*. Making the database gate plan-wide instead of per step fails *"does not admit any other step in the same plan"* — because handing out one change must not open the next.

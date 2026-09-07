@@ -533,16 +533,21 @@ export async function getOnboardingFirstMove(
     return { plan: null, firstActionableStep: null, progress: null, completedStepOrders: [] };
   }
 
-  const [resolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+  const [resolutions, agentEvidence, founderActionEvidence, handoffs] = await Promise.all([
     listActiveFounderResolutions(supabase, projectId),
     listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
     listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    // Onboarding shows the same plan, so it has to agree with it about which
+    // steps are done — a handed-off step closed on the plan screen and still
+    // open here would be one product disagreeing with itself (ADR 0096).
+    listHandoffsForPlan(supabase, { projectId, actionPlanId: plan.id }),
   ]);
   const completed = completedStepsFromEvidence(
     plan.steps,
     resolutions,
     agentEvidence,
     founderActionEvidence,
+    new Set(handoffs.keys()),
   );
 
   return {

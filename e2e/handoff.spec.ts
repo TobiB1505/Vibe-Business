@@ -1,4 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
+
+/** The checklist starts collapsed; the same helper `action-plan-ui.spec.ts` uses. */
+async function openFullPlannedWork(page: Page) {
+  const disclosure = page.getByText("See the full planned work", { exact: false });
+  if (await disclosure.isVisible()) await disclosure.click();
+}
 
 /**
  * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0096).
@@ -109,5 +115,32 @@ test.describe("a step Vibe will not build", () => {
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
+  });
+
+  test("moves the plan on once the founder says their tool built it", async ({ page }) => {
+    /*
+     * The end of the loop the founder asked for. Recording the finding is a
+     * durable attestation, so the handed-off step is finished and the plan's
+     * entry point is somewhere else — no prompt, no "answer this", nothing
+     * still asking to be built.
+     *
+     * The seam under this is what broke twice: the routing set decides whether
+     * the *next* step may start, and it did not know handoffs existed. This
+     * scene sees the plan's answer; `completion-call-sites.test.ts` pins the
+     * calls that produce it.
+     */
+    await page.goto("/e2e/action_plan_handoff_done");
+
+    await expect(page.getByTestId("handoff-prompt")).toHaveCount(0);
+    await expect(page.getByText("Vibe won't build this one")).toHaveCount(0);
+    await expect(page.getByTestId("attestation-finding")).toHaveCount(0);
+
+    // The step is on the checklist as done rather than gone.
+    await openFullPlannedWork(page);
+    const row = page
+      .getByTestId("plan-step")
+      .filter({ hasText: "Build a dedicated pricing page" })
+      .first();
+    await expect(row).not.toContainText("Start here");
   });
 });

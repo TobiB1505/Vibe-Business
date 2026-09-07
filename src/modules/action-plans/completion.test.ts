@@ -515,3 +515,75 @@ describe("what a successor may be routed on top of", () => {
     ]).toEqual([2]);
   });
 });
+
+/**
+ * Ticking off a handed-off step has to move the *Agent* on, not just the plan.
+ *
+ * The founder's whole ask: run the prompt in their own tool, come back, tick it
+ * off, carry on. The plan screen advanced the moment the attestation landed —
+ * and the routing set, which decides whether the next step may start, did not
+ * know handoffs existed. So step 4 would have stayed blocked on step 3 forever
+ * while the plan showed step 3 as done. One product, two answers.
+ */
+describe("what a handed-off step unblocks", () => {
+  const handed = fakePlanStep({
+    id: "3-checkout",
+    order: 3,
+    actor: "vibe",
+    changeKind: "product_change",
+  });
+  const next = fakePlanStep({
+    id: "4-link-pricing",
+    order: 4,
+    actor: "vibe",
+    changeKind: "product_change",
+    dependsOn: [3],
+  });
+  const attestation = founderActionEvidence({ stepKey: handed.id, stepOrder: handed.order });
+
+  it("counts for routing once the founder says they built it", () => {
+    const routing = completedStepsForExecutionRouting(
+      [handed, next],
+      [],
+      [],
+      new Set(),
+      [attestation],
+      [],
+      new Set([handed.id]),
+    );
+
+    expect([...routing]).toEqual([3]);
+    expect(firstActionableStep([handed, next], routing)?.order).toBe(4);
+  });
+
+  it("counts for nothing without the handoff", () => {
+    // The exclusion that keeps a founder from ticking off work the agent would
+    // build is unchanged: without a handoff this is exactly that work.
+    expect([
+      ...completedStepsForExecutionRouting([handed, next], [], [], new Set(), [attestation]),
+    ]).toEqual([]);
+  });
+
+  it("does not wait for a merge Vibe could never observe", () => {
+    /*
+     * Merged is the bar for a step *Vibe* built, because a successor is
+     * prepared against the default branch and Vibe's own change must have
+     * reached it. Vibe made no change here — the founder's tool did, in their
+     * repository — so there is no prepared change to merge and no evidence to
+     * wait for. Their word is the authority, exactly as it is for the
+     * real-world work a `founder_action` attestation already carries into this
+     * set. Every run still re-reads HEAD before it prepares anything.
+     */
+    const routing = completedStepsForExecutionRouting(
+      [handed, next],
+      [],
+      [],
+      new Set(), // nothing merged at all
+      [attestation],
+      [],
+      new Set([handed.id]),
+    );
+
+    expect([...routing]).toEqual([3]);
+  });
+});
