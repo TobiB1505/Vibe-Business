@@ -333,7 +333,7 @@ export function ProjectRail({
         items={switcherItems}
       />
 
-      <div className="border-line-1 my-3 border-t" />
+      <div className="border-line-1 my-2 border-t" />
       <RailScroll>
         <ProjectNav items={items.filter((item) => item.id !== "settings")} />
       </RailScroll>
@@ -356,7 +356,7 @@ export function ProjectRail({
         that swaps the whole rail, and an unwarmed swap is the difference
         between a fold and a wait.
       */}
-      <div className="border-line-1 mt-3 flex flex-col gap-2 border-t pt-3">
+      <div className="border-line-1 mt-2 flex flex-col gap-1.5 border-t pt-2">
         <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
         <Link
           href="/app/settings"

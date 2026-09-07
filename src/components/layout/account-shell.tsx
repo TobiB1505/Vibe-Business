@@ -148,7 +148,7 @@ export function SettingsRail({ back }: { back: SettingsRailBack }) {
         <span className="truncate">{back.label}</span>
       </Link>
 
-      <div className="border-line-1 my-4 border-t" />
+      <div className="border-line-1 my-2 border-t" />
 
       <RailScroll>
         <AccountNav items={[...ACCOUNT_SECTIONS]} soon={[...SOON_SECTIONS]} />

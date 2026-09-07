@@ -106,14 +106,22 @@ export function ProjectSwitcher({
       <summary
         aria-label={`Switch product, current product ${current.name}, ${planName} plan`}
         className={cn(
-          "rounded-nav flex cursor-pointer list-none items-center gap-2.5 px-2.5 py-2",
+          "rounded-nav flex cursor-pointer list-none items-center gap-2 px-2.5 py-2",
           "border border-transparent transition-interactive",
           "hover:border-line-2 hover:bg-surface-2 group-open:border-line-2 group-open:bg-surface-2",
           "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <ProjectTile name={current.name} />
+        {/*
+          No mark on the trigger. It is the same initials square the panel
+          draws, 24px plus its gap, on a 256px rail — and with the plan beside
+          it the product's own name was left 74px, which rendered `Vibe-Business`
+          as `Vibe-B…`. A control that truncates the one thing it exists to say
+          has spent its width on the wrong half. The lockup is directly above,
+          the panel keeps the marks where they help you tell products apart,
+          and the name gets the room.
+        */}
         <span className="text-fg min-w-0 flex-1 truncate text-body font-semibold">
           {current.name}
         </span>
@@ -124,7 +132,7 @@ export function ProjectSwitcher({
             className="bg-amber size-1.5 shrink-0 rounded-full"
           />
         )}
-        <RatingChip className="shrink-0 px-2 py-0.5">{planName}</RatingChip>
+        <RatingChip className="shrink-0 px-1.5 py-0.5">{planName}</RatingChip>
         <ChevronsUpDownIcon size={14} className="text-fg-meta shrink-0" />
       </summary>
 

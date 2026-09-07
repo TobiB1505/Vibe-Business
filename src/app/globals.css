@@ -409,6 +409,25 @@
 :root {
   --shell-top: 2.25rem;
   --shell-heading-line: calc(var(--text-display) * var(--text-display--line-height));
+
+  /*
+   * The rail's own rhythm (UI-15).
+   *
+   * Two numbers, and every region of the rail reads one of them: `--rail-inset`
+   * is the space above the lockup and below the identity, `--rail-gap` is the
+   * space between the rail's three regions. They exist because the rail's
+   * spacing had been set element by element — `pt-[--shell-top]` here, `gap-7`
+   * there, `pt-8` on the foot — which is how a navigation ends up with 44px of
+   * nothing above its logo and its first section below the fold on a laptop.
+   *
+   * `--shell-top` stays what it is: the content column's top padding, which is
+   * a different question and has a different answer. The rail no longer
+   * borrows it, and the lockup is no longer centred against the first heading
+   * line beside it — a mark that starts at the top of its own surface reads as
+   * the top of the product, which is what it is.
+   */
+  --rail-inset: 1.25rem;
+  --rail-gap: 1.25rem;
 }
 
 @media (width >= 40rem) {

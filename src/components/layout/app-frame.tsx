@@ -51,7 +51,8 @@ export function AppFrame({ rail, children }: { rail: ReactNode; children: ReactN
       <aside
         data-testid="app-rail"
         className={cn(
-          "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b px-4 py-5",
+          "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
+          "gap-[var(--rail-gap)]",
           /*
            * Sticky rather than a nested scroller. The account surface already
            * scrolled the document and the workspace scrolled a column inside
@@ -60,7 +61,7 @@ export function AppFrame({ rail, children }: { rail: ReactNode; children: ReactN
            * restoration working on every page.
            */
           "lg:sticky lg:top-0 lg:h-dvh lg:w-64 lg:overflow-hidden lg:border-r lg:border-b-0",
-          "lg:px-5 lg:pt-[var(--shell-top)] lg:pb-7",
+          "lg:px-5 lg:py-[var(--rail-inset)]",
           "empty:hidden",
         )}
       >
@@ -77,20 +78,23 @@ export function AppFrame({ rail, children }: { rail: ReactNode; children: ReactN
 }
 
 /**
- * The lockup, in the same box in both rails.
+ * The lockup, at the top of the rail.
  *
- * Centred inside a box the height of a page heading's first line, so the mark
- * and the heading beside it read as level. Top-aligning their boxes does not
- * do that: a 15px lockup sits near the top of its short line box and a 34px
- * heading sits far down its tall one. The height comes from the type scale
- * (`--shell-heading-line`) and is never nudged.
+ * It used to be centred inside a box the height of a page heading's first
+ * line, so that the mark and the heading beside it read as level. That is a
+ * real argument and it produced a worse screen: 44px of the rail's top padding
+ * plus a 37px box put the mark 50px down its own surface, floating in the
+ * middle of nothing, while the section list below it ran off the bottom of a
+ * laptop. A mark that starts at the top of its surface reads as the top of the
+ * product, and the alignment it was chasing is between two different columns
+ * that do not have to agree.
  *
  * `/app` resolves to whichever product the founder was last in, so the mark is
  * "back to your work" from both rails rather than a trip through an index.
  */
 export function RailBrand() {
   return (
-    <div className="flex shrink-0 items-center px-1 lg:min-h-[var(--shell-heading-line)]">
+    <div className="flex shrink-0 items-center px-1">
       <Link href="/app" className="rounded-nav" aria-label="Vibe Business — your product">
         <VibeLockup />
       </Link>
@@ -164,6 +168,16 @@ export function RailScroll({ children }: { children: ReactNode }) {
       data-testid="rail-scroll"
       className={cn(
         "lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain",
+        /*
+         * Scroll anchoring off, and this is a bug fix rather than a
+         * preference. The rail arrives as a skeleton and is replaced by a list
+         * of a different height; the browser then adjusts this container's
+         * `scrollTop` to keep what was visible visible, which on a navigation
+         * list means it silently scrolls *past the first section*. Nova was
+         * missing from the rail in production for exactly that reason. A
+         * navigation's natural position is its top, always.
+         */
+        "[overflow-anchor:none]",
         "lg:[mask-image:linear-gradient(to_bottom,black_calc(100%-1.75rem),transparent)]",
       )}
     >
@@ -190,15 +204,15 @@ export function RailSkeleton() {
     <>
       <RailBrand />
       <div className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
-        <SkeletonBlock className="h-10 w-full rounded-nav" />
-        <div className="border-line-1 my-3 border-t" />
+        <SkeletonBlock className="h-9 w-full rounded-nav" />
+        <div className="border-line-1 my-2 border-t" />
         <div className="flex flex-col gap-1">
           {[0, 1, 2, 3, 4].map((row) => (
             <SkeletonBlock key={row} className="h-11 w-full rounded-nav" />
           ))}
         </div>
       </div>
-      <div className="flex shrink-0 flex-col gap-3 lg:pt-8">
+      <div className="flex shrink-0 flex-col gap-3 lg:pt-[var(--rail-gap)]">
         <SkeletonBlock className="h-10 w-full rounded-full" />
         <SkeletonBlock className="h-14 w-40 rounded-nav" />
       </div>
@@ -224,7 +238,7 @@ export function RailFooter({
   subtitle?: string;
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-3 lg:pt-8">
+    <div className="flex shrink-0 flex-col gap-3 lg:pt-[var(--rail-gap)]">
       <Wallet credits={credits} href="/app/settings/billing" />
       <AccountCard identity={identity} subtitle={subtitle} />
     </div>
