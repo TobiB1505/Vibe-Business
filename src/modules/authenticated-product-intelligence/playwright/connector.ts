@@ -12,7 +12,7 @@ import {
   signInProbeScript,
   type SignInProbe,
 } from "../login-detection";
-import { decideRequest } from "../read-only-policy";
+import { couldHaveRenderedPage, decideRequest } from "../read-only-policy";
 
 /**
  * Playwright transport for authenticated analysis (Sprint 5 §16, §17, §18, §19).
@@ -123,7 +123,7 @@ export async function attachReadOnlyGuards(
   context: BrowserContext,
   origin: string,
 ): Promise<AnalysisBrowserPort["blocked"]> {
-  const blocked = { mutatingRequests: 0, downloads: 0, externalNavigations: 0 };
+  const blocked = { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 };
 
   await context.route("**/*", async (route) => {
     const request = route.request();
@@ -139,8 +139,13 @@ export async function attachReadOnlyGuards(
       return;
     }
 
-    if (decision.reason === "mutating_method") blocked.mutatingRequests += 1;
-    else blocked.externalNavigations += 1;
+    if (decision.reason === "mutating_method") {
+      // Refused either way; only the conclusion differs. A blocked beacon
+      // cannot have changed what the page displays, and a scan that says it
+      // might is telling the founder something untrue about their product.
+      if (couldHaveRenderedPage(request.resourceType())) blocked.mutatingRequests += 1;
+      else blocked.mutatingBeacons += 1;
+    } else blocked.externalNavigations += 1;
 
     await route.abort("blockedbyclient");
   });

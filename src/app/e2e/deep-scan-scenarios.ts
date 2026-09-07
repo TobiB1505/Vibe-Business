@@ -56,6 +56,11 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
    * `completeness: "partial"` used to be the whole account of a scan that had
    * recorded specific warnings, so this is the state the disclosure exists
    * for: the result leads, the caveats are behind a label that says how many.
+   *
+   * The three kinds are all present on purpose. A real scan produced six notes
+   * of which one was a failure, and the disclosure used to head all six with
+   * "things Vibe could not check" — so this fixture is the shape that has to
+   * keep reading correctly: one failure, one deliberate stop, one observation.
    */
   "deep-scan-completed-with-warnings": {
     ...BASE,
@@ -74,9 +79,22 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
         { id: "dashboard", name: "Dashboard" },
         { id: "settings", name: "Settings" },
       ],
-      warnings: [
-        "One page took too long to load and was not read.",
-        "Vibe could not tell two settings pages apart, so it read one of them.",
+      notes: [
+        {
+          kind: "failed",
+          path: "/app/reports",
+          message: "One page took too long to load and was not read.",
+        },
+        {
+          kind: "by_design",
+          path: null,
+          message: "3 screen(s) exist in more copies than Vibe inspected. Each was read up to 2 time(s).",
+        },
+        {
+          kind: "observed",
+          path: "/app/onboarding",
+          message: "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
+        },
       ],
       accessMode: "credits",
     },
@@ -121,7 +139,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
         { id: "project_workspace", name: "Project workspace" },
         { id: "integrations", name: "Integrations" },
       ],
-      warnings: [],
+      notes: [],
       accessMode: "included_first_scan",
     },
   } satisfies DeepScanViewModel,
@@ -141,7 +159,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
       pagesInspected: 6,
       completeness: "complete",
       surfaces: [{ id: "dashboard", name: "Dashboard" }],
-      warnings: [],
+      notes: [],
       accessMode: "included_first_scan",
     },
   } satisfies DeepScanViewModel,
