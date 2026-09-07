@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
 import type { ReleaseReason } from "@/modules/credits/balance";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
@@ -152,8 +153,25 @@ async function terminate(
  * immediately before this, which is why the argument is always available and
  * never has to be looked up again.
  */
+/**
+ * Writes one browser-provider cost row, with a client that may write it.
+ *
+ * The caller's client is the customer's, cookie-scoped, and
+ * `deep_scan_provider_usage` grants it nothing — deliberately, because that
+ * table is Vibe's cost ledger and not the customer's data. So every write
+ * failed with `permission denied for table deep_scan_provider_usage`, and the
+ * store logs rather than throws on purpose, so it failed **quietly**: a scan
+ * completed, the customer was charged, and the seconds Vibe paid for were never
+ * recorded. A margin nobody can compute is exactly what ADR 0076 set out to fix.
+ *
+ * Service role, then, and rule 53's condition is met by construction rather
+ * than by care: nothing here is taken from a caller's arguments. The project
+ * and session come from the row `createSessionRecord` persisted after
+ * `loadOwnedProject` verified ownership, and the figures come from the
+ * provider. Reviewed in `service-boundary.test.ts`.
+ */
 async function recordUsage(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   params: {
     provider: string;
     projectId: string;
@@ -164,7 +182,7 @@ async function recordUsage(
   },
 ): Promise<void> {
   await recordDeepScanUsage(
-    supabase,
+    createServiceClient(),
     buildDeepScanUsage({
       provider: params.provider,
       projectId: params.projectId,

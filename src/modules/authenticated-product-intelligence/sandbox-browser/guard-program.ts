@@ -47,6 +47,28 @@
  * because a reply that distinguishes "unknown verb" from "bad argument" is an
  * oracle, and this channel has nothing to tell its caller.
  *
+ * ## Why the control pipe passes the frame type along
+ *
+ * A byte pipe that forwards what it was handed is not a byte pipe if it
+ * changes how the bytes are framed. `ws` hands a message to its listener as a
+ * Buffer whatever the frame was, and `send(buffer)` writes a **binary** frame —
+ * so every CDP message Vibe forwarded arrived at Chromium as binary, where the
+ * protocol is text.
+ *
+ * Chromium closed the connection, and Playwright reported the only thing it
+ * could see:
+ *
+ * ```
+ * browserType.connectOverCDP: Target page, context or browser has been closed
+ *   <ws connected>    wss://…/control
+ *   <ws disconnected> code=1005
+ * ```
+ *
+ * Measured against `ws@8.18.0` rather than reasoned about: `send(buffer)`
+ * arrives BINARY, `send(buffer, { binary: false })` arrives TEXT. The listener
+ * is given an `isBinary` flag for exactly this, so the pipe forwards it and the
+ * framing survives the hop in both directions.
+ *
  * ## One note about the `ws` import, which belongs here rather than in the
  * program
  *
@@ -78,7 +100,7 @@
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v4";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v5";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {
@@ -221,15 +243,15 @@ control.on("connection", async (client) => {
   let open = false;
   upstream.on("open", () => {
     open = true;
-    for (const message of queued) upstream.send(message);
+    for (const message of queued) upstream.send(message[0], { binary: message[1] });
     queued.length = 0;
   });
-  client.on("message", (data) => {
-    if (open) upstream.send(data);
-    else queued.push(data);
+  client.on("message", (data, isBinary) => {
+    if (open) upstream.send(data, { binary: isBinary });
+    else queued.push([data, isBinary]);
   });
-  upstream.on("message", (data) => {
-    if (client.readyState === WebSocket.OPEN) client.send(data);
+  upstream.on("message", (data, isBinary) => {
+    if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
   });
 
   const close = () => {
