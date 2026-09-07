@@ -167,6 +167,8 @@ export function LiveBrowserCanvas({
   const keyboardRef = useRef<HTMLInputElement>(null);
   /** Where the current touch started, so a scroll can be told from a tap. */
   const touchStart = useRef<{ x: number; y: number } | null>(null);
+  /** The previous point of the current touch, for the wheel delta. */
+  const touchLast = useRef<{ x: number; y: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   /** The size of the last frame, which is the coordinate space the guard expects. */
   const frameSize = useRef({ w: 0, h: 0 });
@@ -444,31 +446,50 @@ export function LiveBrowserCanvas({
        * touch is sent as the mouse it stands for, and `preventDefault` stops
        * the synthesized pair arriving afterwards as a second click.
        */
+      /*
+       * Touch, translated into the two things a finger actually means.
+       *
+       * The first version sent a press on touchstart and `mouseMoved` with the
+       * button still down on every move — which is not scrolling, it is
+       * **dragging a selection**, and that is exactly what it did: a swipe
+       * highlighted the page instead of moving it.
+       *
+       * A finger has no button. A drag is a scroll and becomes wheel deltas; a
+       * tap is a click and becomes a press and a release, sent only once the
+       * finger lifts and the movement is known to have been small. Nothing is
+       * pressed while a scroll is in progress, so there is nothing to select.
+       */
       onTouchStart={(event) => {
         event.preventDefault();
         const point = touchAt(event.nativeEvent);
         if (point) {
-          // Where it began, so the release can tell a tap from a scroll. The
-          // keyboard is not raised here: it would come up on every drag.
           touchStart.current = point;
-          send({ t: "mouse", type: "mousePressed", ...point, button: "left", clickCount: 1, modifiers: 0 });
+          touchLast.current = point;
         }
       }}
       onTouchMove={(event) => {
         event.preventDefault();
         const point = touchAt(event.nativeEvent);
-        if (point) send({ t: "mouse", type: "mouseMoved", ...point, button: "left", modifiers: 0 });
+        const last = touchLast.current;
+        if (!point || !last) return;
+        touchLast.current = point;
+        // Inverted, because dragging the page down moves the content down,
+        // which is scrolling up — the same direction every touch surface uses.
+        send({ t: "wheel", x: point.x, y: point.y, dx: last.x - point.x, dy: last.y - point.y });
       }}
       onTouchEnd={(event) => {
         event.preventDefault();
         const point = touchAt(event.nativeEvent);
         const began = touchStart.current;
         touchStart.current = null;
-        if (!point) return;
+        touchLast.current = null;
+        if (!point || !began || !isTap(began, point)) return;
+        // A tap, and only now: a press sent on touchstart would have had to be
+        // released somewhere, and every release after a drag is a selection.
+        send({ t: "mouse", type: "mousePressed", ...point, button: "left", clickCount: 1, modifiers: 0 });
         send({ t: "mouse", type: "mouseReleased", ...point, button: "left", clickCount: 1, modifiers: 0 });
-        // Still inside the gesture, which is the only moment iOS will open a
-        // keyboard — and only for a tap, so scrolling leaves it alone.
-        if (began && isTap(began, point)) takeKeyboard();
+        // Still inside the gesture, which is the only moment iOS opens one.
+        takeKeyboard();
       }}
       onContextMenu={(event) => event.preventDefault()}
       data-connected={connected ? "true" : "false"}

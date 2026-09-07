@@ -65,6 +65,22 @@ export type AnalyzeInput = {
   now?: () => number;
   /** Provider session wall-clock, when known. Cost signal only. */
   browserSessionDurationMs?: number | null;
+  /**
+   * Where a page failure goes, other than into a sentence for the customer.
+   *
+   * A scan reported twenty pages unreachable and inspected one — including
+   * `/privacy` and `/terms`, which are static and need nothing to render. The
+   * snapshot said `A page could not be loaded.` twenty times and the reason was
+   * discarded in a bare `catch`, so "the app needs POST to render", "the
+   * navigation timed out" and "the browser was in a bad state" were the same
+   * observation.
+   *
+   * A seam rather than an import: the analyzer stays a function of its inputs,
+   * and the caller decides where a diagnosis goes. Nothing here reaches the
+   * snapshot — provider text belongs to the operator, never to a stored row
+   * (ADR 0011).
+   */
+  onDiagnostic?: (event: { step: string; path: string; detail: string }) => void;
 };
 
 export type AnalyzeResult =
@@ -137,6 +153,18 @@ function buildSurfaceSignals(pages: AuthenticatedPageSummary[]): AuthenticatedSu
   });
 }
 
+/**
+ * A failure as a short string, never an object and never a stack.
+ *
+ * Playwright's messages carry a call log and sometimes a URL. Bounded here, and
+ * scrubbed again on the way to Sentry — this is the first of three layers, not
+ * the only one.
+ */
+function describeFailure(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 300);
+  return typeof error === "string" ? error.slice(0, 300) : "non-error thrown";
+}
+
 export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<AnalyzeResult> {
   const budgets = input.budgets ?? DEFAULT_AUTHENTICATED_BUDGETS;
   const now = input.now ?? Date.now;
@@ -204,9 +232,14 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
         navigationCount += 1;
         const result = await page.goto(target, { timeoutMs: tracker.remainingNavigationTimeoutMs });
         status = result.status;
-      } catch {
+      } catch (error) {
         tracker.note("navigation_failed");
         warnings.push(warning("page_unreachable", "A page could not be loaded.", candidate.path));
+        input.onDiagnostic?.({
+          step: "navigate",
+          path: candidate.path,
+          detail: describeFailure(error),
+        });
         continue;
       }
     }
@@ -239,7 +272,12 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     let raw: RawPageExtraction;
     try {
       raw = await page.extract();
-    } catch {
+    } catch (error) {
+      input.onDiagnostic?.({
+        step: "extract",
+        path: candidate.path,
+        detail: describeFailure(error),
+      });
       warnings.push(warning("page_unreachable", "A page could not be inspected.", candidate.path));
       continue;
     }

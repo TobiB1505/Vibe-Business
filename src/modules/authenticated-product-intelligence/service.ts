@@ -530,6 +530,16 @@ export async function analyzeDeepScan(
   }
 
   let analysis;
+  /*
+   * Why pages failed, gathered and reported once.
+   *
+   * One alert per page would be twenty alerts for one condition, so the
+   * failures are collected and sent as a single event with a bounded sample.
+   * Nothing here reaches the snapshot: the customer is told "a page could not
+   * be loaded", which is true and actionable, and the operator gets the reason.
+   */
+  const pageFailures: string[] = [];
+
   try {
     analysis = await analyzeAuthenticatedProduct({
       origin: session.origin,
@@ -538,6 +548,9 @@ export async function analyzeDeepScan(
       browser: readOnly.port,
       repository: repository?.result ?? null,
       publicProduct: publicProduct?.result ?? null,
+      onDiagnostic: (event) => {
+        pageFailures.push(`${event.step} ${event.path}: ${event.detail}`);
+      },
       budgets: DEFAULT_AUTHENTICATED_BUDGETS,
       browserSessionDurationMs: Date.now() - Date.parse(session.createdAt),
     });
@@ -547,6 +560,20 @@ export async function analyzeDeepScan(
     // Close our CDP socket regardless. Terminating the provider session is a
     // separate decision, made below.
     await readOnly.disconnect().catch(() => undefined);
+
+    if (pageFailures.length > 0) {
+      const { alertOperator } = await import("@/lib/observability/alert");
+      await alertOperator(
+        "deep scan: pages could not be read",
+        {
+          failures: pageFailures.length,
+          // A sample, not the list: twenty failures of one cause are one
+          // cause, and the first few carry it.
+          sample: pageFailures.slice(0, 5).join(" | ").slice(0, 1200),
+        },
+        "warning",
+      ).catch(() => undefined);
+    }
   }
 
   if (!analysis.ok) return fail(analysis.error, run.snapshotId);

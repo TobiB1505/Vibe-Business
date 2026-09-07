@@ -210,12 +210,39 @@ describe("the temporary browser can be operated by touch", () => {
     "utf8",
   );
 
-  it("translates touch into the mouse the guard understands", () => {
-    // Safari synthesizes a mouse event from a tap but not from a drag, and
-    // never soon enough to scroll a login page.
+  it("translates touch into the two things a finger means", () => {
     for (const handler of ["onTouchStart", "onTouchMove", "onTouchEnd"]) {
       expect(source).toContain(handler);
     }
+  });
+
+  it("scrolls a drag rather than dragging a selection", () => {
+    /*
+     * The first version pressed on touchstart and sent `mouseMoved` with the
+     * button still down. That is not scrolling — it is dragging a selection,
+     * and it highlighted the page instead of moving it. A finger has no
+     * button; a drag is a wheel.
+     */
+    const move = source.slice(source.indexOf("onTouchMove"), source.indexOf("onTouchEnd"));
+
+    expect(move).toContain('t: "wheel"');
+    expect(move).not.toContain('type: "mouseMoved"');
+  });
+
+  it("presses nothing until the finger lifts on a tap", () => {
+    // A press sent on touchstart has to be released somewhere, and every
+    // release after a drag is a selection.
+    const start = source.slice(source.indexOf("onTouchStart"), source.indexOf("onTouchMove"));
+
+    expect(start).not.toContain("mousePressed");
+  });
+
+  it("sends the press and the release together, on the tap", () => {
+    const end = source.slice(source.indexOf("onTouchEnd"), source.indexOf("onContextMenu"));
+
+    expect(end).toContain("mousePressed");
+    expect(end).toContain("mouseReleased");
+    expect(end).toContain("isTap(began, point)");
   });
 
   it("stops a drag scrolling Vibe's page instead of the product", () => {
@@ -232,7 +259,9 @@ describe("the temporary browser can be operated by touch", () => {
   it("raises the keyboard only from the gesture that asked for it", () => {
     // iOS opens a keyboard only inside a user gesture, and `touchend` is one.
     // Moving this out of the handler is how it silently stops working.
-    expect(source).toContain("if (began && isTap(began, point)) takeKeyboard()");
+    const end = source.slice(source.indexOf("onTouchEnd"), source.indexOf("onContextMenu"));
+
+    expect(end).toContain("takeKeyboard()");
   });
 
   it("never leaves what was typed sitting in Vibe's DOM", () => {
