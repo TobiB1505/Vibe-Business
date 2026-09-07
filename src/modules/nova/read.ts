@@ -3,6 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getLatestCompletedActionPlan } from "../action-plans/store";
+import { resolvePlanExecutionRoutes } from "../coding-agent/website-preflight";
+import { VIBE_EXECUTABLE_MODES } from "../execution-contract/schema";
 import { getAuditCurrency } from "../business-audit/service";
 import { getLatestApprovalsForPreparedChanges } from "../approvals/store";
 import type { ChangeStage } from "../execution/change-progress";
@@ -63,16 +65,26 @@ import type {
  * option: the same precedence, over the rows that decide the stages Nova can
  * actually tell apart, and a documented list of the ones it never produces.
  *
- * ## What this still does not read
+ * ## What this reads now, and the premise that turned out to be false
  *
- * `executableStep` alone, and for the original reason: whether Vibe can build
- * a plan step is `resolvePlanExecutionRoutes`'s answer, and it performs a live
- * website preflight. The offer is computed where that call is already being
- * made, and handed in rather than fetched here.
+ * Three facts were fixed at their empty values on one belief: that answering
+ * them meant reaching the network. It was wrong about all three.
  *
- * The other two — `repositoryReadOutdated` and `workspaceChoiceRequired` —
- * were fixed false on the same assumption and it turned out to be wrong for
- * them: their resolver is pure over a stored snapshot. They are read below.
+ * `repositoryReadOutdated` and `workspaceChoiceRequired` went first —
+ * `resolveValidationProfile` is pure over a stored snapshot, and
+ * `resolveProjectValidationTarget` adds one conditional read of the founder's
+ * stored answer.
+ *
+ * `executableStep` was the last, and its comment named the reason:
+ * *`resolvePlanExecutionRoutes` performs a live website preflight*. It does
+ * not, and its own docblock says so in as many words — *reads state, never the
+ * network: no live HEAD, no site crawl*. It sets `liveHead: null` and reads
+ * five tables. The website preflight in that file belongs to `runAgentPreflight`,
+ * which the *start* path calls, not the routes resolver.
+ *
+ * So the offer is read here, and `execution_offered` can arise. Which is worth
+ * stating plainly: a candidate that could never be raised is a branch nothing
+ * exercises, and it sat that way through every screen built on top of it.
  */
 
 /**
@@ -345,6 +357,53 @@ async function readQuestionFacts(
 }
 
 /**
+ * The plan's next step, when the resolver says Vibe could carry it out.
+ *
+ * ## What decides it, and what does not
+ *
+ * `resolvePlanExecution` classifies every step of the plan, and
+ * `VIBE_EXECUTABLE_MODES` is the domain's own name for the two that describe
+ * work Vibe does itself. The first such step in plan order is the offer. Nova
+ * re-decides none of it: a step the resolver calls `manual`,
+ * `needs_user_input`, `blocked` or `unsupported` is not an offer, and the
+ * reasons for that live where the classification does.
+ *
+ * ## What the offer is not
+ *
+ * Permission. `resolvePlanExecutionRoutes` says so itself — its `admission` is
+ * about stored state alone and a screen must not present it as a right to
+ * start. Nova raises `execution_offered` as a *moment*, and the control behind
+ * it is routed to the surface that re-checks before spending (rule 55).
+ *
+ * Null on both "nothing left" and "the next step is a person's", and that
+ * conflation is deliberate: the distinction is the plan's to draw, on the plan.
+ */
+async function readExecutableStep(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    plan: Awaited<ReturnType<typeof getLatestCompletedActionPlan>>;
+  },
+): Promise<{ order: number; title: string } | null> {
+  if (!params.plan) return null;
+
+  const { resolutions } = await resolvePlanExecutionRoutes(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    plan: params.plan,
+  });
+
+  const offered = resolutions
+    .filter((resolution) => VIBE_EXECUTABLE_MODES.includes(resolution.mode))
+    .sort((a, b) => a.stepOrder - b.stepOrder)[0];
+  if (!offered) return null;
+
+  const step = params.plan.steps.find((entry) => entry.order === offered.stepOrder);
+  return step ? { order: step.order, title: step.title } : null;
+}
+
+/**
  * Which of Nova's three restartable operations is presumed lost.
  *
  * A stalled run is not work in flight, and reporting it as `working` was the
@@ -401,6 +460,7 @@ function splitStalledFromRunning(
 export async function readNovaFocusFacts(
   supabase: SupabaseClient,
   projectId: string,
+  userId: string,
 ): Promise<NovaFocusFacts> {
   const [
     changes,
@@ -438,6 +498,8 @@ export async function readNovaFocusFacts(
 
   const { stalled, running } = splitStalledFromRunning(operations);
 
+  const executableStep = await readExecutableStep(supabase, { projectId, userId, plan });
+
   return {
     sourceDisconnected,
     failedOperations,
@@ -446,8 +508,7 @@ export async function readNovaFocusFacts(
     questions,
     moves,
     plannedMoveId: plan?.opportunityId ?? null,
-    /* Needs the execution resolver, which reaches the network. §L Slice 6. */
-    executableStep: null,
+    executableStep,
     planOffered: plan === null && moves.length > 0,
     /*
      * `hasAudit` guards the honest reading of `upToDate`: a project with no
@@ -465,6 +526,16 @@ export async function readNovaFocusFacts(
 export async function readNovaFocus(
   supabase: SupabaseClient,
   projectId: string,
+  /**
+   * The signed-in owner, for the one read that scopes by them.
+   *
+   * `resolvePlanExecutionRoutes` loads the repository connection *as its
+   * owner*, and required rather than optional because an optional one would
+   * make the offer silently absent for a caller that forgot it — a candidate
+   * that never arises is indistinguishable from a project with nothing to
+   * build, which is exactly the failure this read was added to end.
+   */
+  userId: string,
 ): Promise<NovaFocus> {
-  return deriveNovaFocus(await readNovaFocusFacts(supabase, projectId));
+  return deriveNovaFocus(await readNovaFocusFacts(supabase, projectId, userId));
 }

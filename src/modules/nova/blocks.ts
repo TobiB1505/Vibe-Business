@@ -134,7 +134,15 @@ export const BLOCK_FOR_MOMENT: Record<FocusCandidateKind, BlockKind> = {
   /* A Move, read before it is paid for. */
   plan_offered: "move",
   next_move_available: "move",
-  execution_offered: "move",
+
+  /*
+   * Not a Move: a plan *step*, and there is no Move behind it to draw. The
+   * sentence names the step and the candidate carries its title, which is the
+   * whole of what Home can honestly show — what it cannot show is the build
+   * chain and the two prices that go with it, and that is why this moment is
+   * still routed to the plan.
+   */
+  execution_offered: "none",
 
   /* The audit is stale, so the reading it produced is what to show. */
   audit_outdated: "audit",

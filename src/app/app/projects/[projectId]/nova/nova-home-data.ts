@@ -48,6 +48,20 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * query for six rows. Neither fans out, and both are content a founder came
  * for rather than chrome.
  *
+ * ## The overlap that is known and not yet paid down
+ *
+ * On a project with a plan, `readNovaFocus` now resolves the execution offer,
+ * and `resolvePlanExecutionRoutes` reads the same three evidence tables
+ * `getActionPlanChecklist` reads — the founder's resolutions, the agent's step
+ * evidence, the founder-action evidence. Six queries where three would do.
+ *
+ * It is written down rather than fixed because the fix is not local: one asks
+ * *which step could Vibe build* and the other *where is the founder in the
+ * sequence*, they live in different modules, and a shared read would have to
+ * belong to one of them or to a third. None of it fans out per candidate, and
+ * both halves are on screen — but this is the first duplicated read on this
+ * route and it should not become the second.
+ *
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
  * 2. The product's identity row — three columns, one project.
@@ -288,7 +302,7 @@ export async function readNovaHomeData(
   },
 ): Promise<NovaHomeData> {
   const [focus, identity, audit, balance, checklist, events] = await Promise.all([
-    readNovaFocus(supabase, params.projectId),
+    readNovaFocus(supabase, params.projectId, params.userId),
     readIdentity(supabase, params.projectId, params.projectName),
     readAudit(supabase, params.projectId),
     getHeaderCreditBalance(supabase, { userId: params.userId }),
