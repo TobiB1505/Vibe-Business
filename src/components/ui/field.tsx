@@ -25,7 +25,7 @@ import { ChevronDownIcon } from "./icons.generated";
  * Because for a while they did not, and the divergence was not a design. Four
  * text-entry surfaces carried four fills, three borders and two focus
  * treatments, and the first two of them were in the same file — one on
- * `bg-field`, one on `bg-surface-1`, one `rounded-field`, one `rounded-xl`.
+ * `bg-field`, one on `bg-surface-1`, one `rounded-field`, one `rounded-field`.
  * Nobody chose that; each was written next to whatever was nearby.
  *
  * A shared constant is not enough on its own, because a call site can copy it

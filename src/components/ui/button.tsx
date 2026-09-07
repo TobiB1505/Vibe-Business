@@ -114,7 +114,7 @@ const TEXT_ACTION_TONES: Record<TextActionTone, string> = {
 
 const TEXT_ACTION_BASE =
   "vibe-control-text " +
-  "rounded-sm underline underline-offset-4 " +
+  "rounded-inline underline underline-offset-4 " +
   // The same shared utility as the pill, for the reason given there.
   "transition-interactive " +
   "disabled:pointer-events-none disabled:text-fg-disabled disabled:no-underline";

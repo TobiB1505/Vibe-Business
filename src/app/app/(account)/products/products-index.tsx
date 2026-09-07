@@ -165,7 +165,7 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
               setQuery("");
               setFilter("all");
             }}
-            className="text-mint hover:text-mint-hover mt-5 rounded-sm text-body font-semibold transition-interactive"
+            className="text-mint hover:text-mint-hover mt-5 rounded-inline text-body font-semibold transition-interactive"
           >
             Clear search and filters
           </button>

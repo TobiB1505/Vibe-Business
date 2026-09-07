@@ -47,7 +47,7 @@ export default async function SignupPage({
 
       <p className="text-fg-muted text-body">
         Already have an account?{" "}
-        <Link href="/login" className="text-mint hover:text-mint-hover rounded-sm">
+        <Link href="/login" className="text-mint hover:text-mint-hover rounded-inline">
           Sign in
         </Link>
       </p>

@@ -322,11 +322,36 @@
   /* ── Shape ───────────────────────────────────────────────────────────
      Radii scale with the element. Controls and navigation use a precise
      ten-pixel corner; pills are reserved for statuses and compact filters. */
+  /*
+   * The corner scale (UI-8).
+   *
+   * Five names existed and the product wrote seventeen. `rounded-xl` is 12px,
+   * which is `--radius-field`; `rounded-2xl` is 16px, which is
+   * `--radius-card`. Same corner, two names, and nothing in a class string
+   * says which was meant. Below `nav` there was no Vibe name at all, so
+   * fifty-nine places reached into Tailwind's scale and chose between 4, 6 and
+   * 8px with nothing to guide them.
+   *
+   * `inline` and `inset` name the two that were actually needed, and `stage`
+   * names the one above `card` — five places wanted "bigger than a card" and
+   * wrote 18.4px, 19.2px and 20px between them.
+   *
+   * Every value here is one the product already writes. The names are objects,
+   * like the five that were here first, because a corner is a property of a
+   * thing rather than a step in an abstract ramp.
+   */
+
+  /** A focus ring on inline text: a link, a text button, a small chip. */
+  --radius-inline: 4px;
+  /** A small bordered block nested inside a surface. */
+  --radius-inset: 6px;
   --radius-nav: 10px;
   --radius-well: 14px;
   --radius-field: 12px;
   --radius-panel: 14px;
   --radius-card: 16px;
+  /** A feature surface above a card: the business-brain stage, a reveal. */
+  --radius-stage: 20px;
 
   /* ── Elevation ───────────────────────────────────────────────────────
      The inset highlight belongs to the primary card only. */

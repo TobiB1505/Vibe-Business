@@ -68,7 +68,7 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-[14px] border border-line-2 bg-app p-4">
+    <section className="rounded-panel border border-line-2 bg-app p-4">
       <h2 className="text-ui font-semibold text-fg">{title}</h2>
       {note ? <p className="mt-0.5 text-caption text-fg-meta">{note}</p> : null}
       <div className="mt-3">{children}</div>
@@ -189,7 +189,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex rounded-[10px] border border-line-2">
+          <div className="flex rounded-nav border border-line-2">
             {CONSOLE_WINDOWS.map((option) => (
               <button
                 key={option}
@@ -215,7 +215,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
       </header>
 
       {snapshot.truncated ? (
-        <p className="mt-4 rounded-[10px] border border-amber-line bg-amber-tint-soft px-3 py-2 text-caption text-amber-deep">
+        <p className="mt-4 rounded-nav border border-amber-line bg-amber-tint-soft px-3 py-2 text-caption text-amber-deep">
           A query reached its bound, so the totals below are a floor rather than a total.
         </p>
       ) : null}

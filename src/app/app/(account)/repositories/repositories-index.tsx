@@ -278,7 +278,7 @@ export function RepositoriesIndex({
                       searchRef.current?.focus();
                     }}
                     aria-label="Clear repository search"
-                    className="text-fg-meta hover:text-fg rounded-sm px-1 text-base transition-interactive"
+                    className="text-fg-meta hover:text-fg rounded-inline px-1 text-base transition-interactive"
                   >
                     ×
                   </button>
@@ -443,7 +443,7 @@ export function RepositoriesIndex({
               <SearchIcon size={22} className="text-fg-meta" />
               <h3 className="text-fg mt-4 text-title font-semibold">No matching repositories</h3>
               <p className="text-fg-muted mt-2 max-w-md text-body">Try another repository, product or branch name, or reset the visibility filter.</p>
-              <button type="button" onClick={clearSearchAndFilters} className="text-mint hover:text-mint-hover mt-5 rounded-sm text-body font-semibold transition-interactive">Clear search and filters</button>
+              <button type="button" onClick={clearSearchAndFilters} className="text-mint hover:text-mint-hover mt-5 rounded-inline text-body font-semibold transition-interactive">Clear search and filters</button>
             </div>
           )}
         </Surface>

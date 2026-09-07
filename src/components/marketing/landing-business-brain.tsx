@@ -70,7 +70,7 @@ export function LandingBusinessBrain() {
   const mapView = useMemo(() => PREVIEW_VIEW, []);
 
   return (
-    <div className="business-brain-stage relative overflow-hidden rounded-[1.25rem] border border-line-2 p-3 sm:p-5">
+    <div className="business-brain-stage relative overflow-hidden rounded-stage border border-line-2 p-3 sm:p-5">
       <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
       <div className="relative grid min-w-0 gap-4">
         <div className="min-w-0">
@@ -87,7 +87,7 @@ export function LandingBusinessBrain() {
           className="business-brain-side-card grid gap-4 p-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
           aria-live="polite"
         >
-          <span className="text-mint flex size-10 items-center justify-center rounded-xl border border-mint-line bg-mint-tint">
+          <span className="text-mint flex size-10 items-center justify-center rounded-field border border-mint-line bg-mint-tint">
             <BusinessHealthIcon size={19} />
           </span>
           <div className="flex flex-col gap-2">

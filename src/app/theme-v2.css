@@ -206,11 +206,16 @@
 
   /* ── Shape ───────────────────────────────────────────────────────────
      Tighter than v1 across the board. A precise corner is a small one. */
+  /* The second palette runs tighter throughout, and the three new corners
+     follow it rather than v1's values. */
+  --radius-inline: 3px;
+  --radius-inset: 5px;
   --radius-nav: 8px;
   --radius-well: 10px;
   --radius-field: 9px;
   --radius-panel: 11px;
   --radius-card: 12px;
+  --radius-stage: 16px;
 
   /* ── Elevation ───────────────────────────────────────────────────── */
   --shadow-panel: 0 20px 48px -30px rgb(0 0 0 / 0.85);

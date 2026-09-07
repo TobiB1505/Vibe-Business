@@ -384,7 +384,7 @@ export function ProjectBreadcrumb({
         <li>
           <Link
             href="/app/products"
-            className="text-fg-body hover:text-fg rounded-sm font-medium transition-interactive"
+            className="text-fg-body hover:text-fg rounded-inline font-medium transition-interactive"
           >
             My Products
           </Link>
@@ -447,7 +447,7 @@ export function WorkspaceSection({
           className={cn(
             "flex flex-wrap items-end justify-between gap-5",
             intelligence &&
-              "business-brain-stage relative items-center overflow-hidden rounded-[1.25rem] border border-line-2 px-5 py-5 sm:px-6 sm:py-6",
+              "business-brain-stage relative items-center overflow-hidden rounded-stage border border-line-2 px-5 py-5 sm:px-6 sm:py-6",
           )}
           data-workspace-header={variant}
         >

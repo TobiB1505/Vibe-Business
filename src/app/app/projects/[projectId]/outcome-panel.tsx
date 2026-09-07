@@ -153,7 +153,7 @@ function OutcomeLadder({
   businessImpact?: string;
 }) {
   return (
-    <dl className="space-y-1 rounded-md border border-line-2 p-3" data-testid="outcome-ladder">
+    <dl className="space-y-1 rounded-inset border border-line-2 p-3" data-testid="outcome-ladder">
       <div className="flex items-baseline justify-between gap-3">
         <dt className="text-caption text-fg-muted">Merged</dt>
         <dd className="text-caption text-mint">Yes</dd>

@@ -46,11 +46,11 @@ export function UnderstandingStatus({
         )}
       </div>
       <dl className="grid w-full max-w-[38rem] gap-2 text-left sm:grid-cols-2">
-        <div className="border-line-2 bg-surface-2 rounded-lg border p-3">
+        <div className="border-line-2 bg-surface-2 rounded-inset border p-3">
           <dt className="text-fg-meta text-caption">Product source</dt>
           <dd className="text-fg-body mt-1 text-body">Repository connected</dd>
         </div>
-        <div className="border-line-2 bg-surface-2 rounded-lg border p-3">
+        <div className="border-line-2 bg-surface-2 rounded-inset border p-3">
           <dt className="text-fg-meta text-caption">Public product</dt>
           <dd className="text-fg-body mt-1 text-body">
             {hasLive ? "Live product read" : "No live site provided"}

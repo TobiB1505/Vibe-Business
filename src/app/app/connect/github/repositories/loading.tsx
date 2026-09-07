@@ -22,7 +22,7 @@ export default function Loading() {
           <SkeletonBlock className="h-11 w-4/5 sm:h-14" />
           <SkeletonText lines={1} className="max-w-[48ch]" />
         </div>
-        <div className="border-line-2 divide-line-2 flex flex-col divide-y overflow-hidden rounded-xl border">
+        <div className="border-line-2 divide-line-2 flex flex-col divide-y overflow-hidden rounded-field border">
           <SkeletonBlock className="h-14 w-full rounded-none" />
           <SkeletonBlock className="h-14 w-full rounded-none" />
           <SkeletonBlock className="h-14 w-full rounded-none" />

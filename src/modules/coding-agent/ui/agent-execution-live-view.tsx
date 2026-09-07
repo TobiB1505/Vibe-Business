@@ -616,7 +616,7 @@ export function ActivityFeed({ events }: { events: readonly StoredExecutionEvent
         Scrolls inside its own box rather than stretching the page. A run can
         produce hundreds of lines and the panel below it must stay reachable.
       */}
-      <div className="border-line-2 max-h-96 overflow-y-auto rounded-md border">
+      <div className="border-line-2 max-h-96 overflow-y-auto rounded-inset border">
         <ul className="divide-line-2 divide-y">
           {events.map((event) => (
             <li

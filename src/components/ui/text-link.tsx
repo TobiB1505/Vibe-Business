@@ -38,7 +38,7 @@ import { ArrowRightIcon, ExternalLinkIcon } from "./icons.generated";
  * only reason a mark is better here than nothing at all.
  */
 
-const SHARED = "rounded-sm transition-interactive";
+const SHARED = "rounded-inline transition-interactive";
 
 /**
  * A link that continues a sentence.

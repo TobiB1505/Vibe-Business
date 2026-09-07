@@ -80,7 +80,7 @@ export default async function LoginPage({
 
       <p className="text-fg-muted text-body">
         No account yet?{" "}
-        <Link href="/signup" className="text-mint hover:text-mint-hover rounded-sm">
+        <Link href="/signup" className="text-mint hover:text-mint-hover rounded-inline">
           Create one
         </Link>
       </p>

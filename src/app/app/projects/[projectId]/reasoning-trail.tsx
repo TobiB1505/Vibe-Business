@@ -115,7 +115,7 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
 
         <div className="text-fg-meta flex flex-wrap items-center gap-2 font-mono text-[0.625rem] tracking-[0.08em] uppercase">
           {conclusion.lenses.map((lens) => (
-            <span key={lens} className="border-line-2 rounded-sm border px-1.5 py-0.5">
+            <span key={lens} className="border-line-2 rounded-inline border px-1.5 py-0.5">
               {LENS_LABELS[lens]}
             </span>
           ))}

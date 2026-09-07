@@ -133,7 +133,7 @@ export function NeedsUserPanel({
               value={value}
               onChange={(event) => setValue(event.target.value)}
               autoComplete="off"
-              className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 w-full rounded-md border px-3 py-1.5 text-body focus:ring-4 focus:outline-none"
+              className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 w-full rounded-inset border px-3 py-1.5 text-body focus:ring-4 focus:outline-none"
               placeholder="Solo founders who already shipped something"
             />
           </label>

@@ -313,6 +313,14 @@ describe("a button that is working says so", () => {
   });
 });
 
+/**
+ * Prose is not a class list.
+ *
+ * A docblock explaining why `text-base` is gone contains `text-base`, and a
+ * test that counts it fails on an edit to a comment — which teaches people not
+ * to write the explanation down. `button.tsx` names it three times while
+ * recording that half of it never applied.
+ */
 function withoutComments(src: string): string {
   return src
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
@@ -503,6 +511,21 @@ describe("the body and caption steps name what they replaced", () => {
  * becoming a licence — which is the failure mode of every allowlist that
  * records only a path.
  */
+const SCALE = /\btext-(base|lg|xl|2xl|3xl|4xl)\b/g;
+
+function uses(): Map<string, number> {
+  const found = new Map<string, number>();
+  for (const file of walk(join(process.cwd(), "src"))) {
+    if (!file.endsWith(".tsx")) continue;
+    const path = file.replace(process.cwd() + "/", "");
+    // A study renders the replaced thing beside the replacement on purpose.
+    if (path.startsWith("src/app/e2e/design-studies/")) continue;
+    const count = (withoutComments(readFileSync(file, "utf8")).match(SCALE) ?? []).length;
+    if (count > 0) found.set(path, count);
+  }
+  return found;
+}
+
 describe("headings come from Vibe's scale, not Tailwind's", () => {
   /**
    * The remaining uses, and what each file is doing with them.
@@ -517,33 +540,6 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
     ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
     ["src/components/ui/credit-amount.tsx", 1], // the price, sized with its coin
   ];
-
-  const SCALE = /\btext-(base|lg|xl|2xl|3xl|4xl)\b/g;
-
-  /**
-   * Prose is not a class list.
-   *
-   * A docblock that explains why `text-base` is gone contains `text-base`, and
-   * a test that counts it fails on an edit to a comment — which is a test that
-   * teaches people not to write the explanation down. `button.tsx` names it
-   * three times while recording that half of it never applied.
-   */
-  function withoutComments(source: string): string {
-    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
-  }
-
-  function uses(): Map<string, number> {
-    const found = new Map<string, number>();
-    for (const file of walk(join(process.cwd(), "src"))) {
-      if (!file.endsWith(".tsx")) continue;
-      const path = file.replace(process.cwd() + "/", "");
-      // A study renders the replaced thing beside the replacement on purpose.
-      if (path.startsWith("src/app/e2e/design-studies/")) continue;
-      const count = (withoutComments(readFileSync(file, "utf8")).match(SCALE) ?? []).length;
-      if (count > 0) found.set(path, count);
-    }
-    return found;
-  }
 
   it("writes no Tailwind display size outside the counted exceptions", () => {
     const allowed = new Map(NOT_TYPE);
@@ -618,5 +614,83 @@ describe("no arbitrary size restates a token", () => {
     }
 
     expect(restated, "Write the name. A number that has one is not a decision.").toEqual([]);
+  });
+});
+
+/**
+ * The corner scale is closed too.
+ *
+ * ## What was measured before this
+ *
+ * Five names, and the product wrote seventeen corners. Three of them were
+ * exact duplicates under two names — `rounded-xl` is 12px, which is
+ * `--radius-field`; `rounded-2xl` is 16px, which is `--radius-card`;
+ * `rounded-[10px]` is `--radius-nav` verbatim — so nothing in a class string
+ * said which was meant.
+ *
+ * Below `nav` (10px) there was no Vibe name at all, and fifty-nine places
+ * reached into Tailwind's scale to choose between 4, 6 and 8px with nothing
+ * to guide them. Above `card` (16px) there was none either, and five places
+ * wanting "bigger than a card" wrote 18.4px, 19.2px and 20px between them —
+ * three values within two pixels, none of them chosen.
+ *
+ * `--radius-inline`, `--radius-inset` and `--radius-stage` name what was
+ * missing. The rest was a rename and moved nothing.
+ *
+ * ## Why `rounded-full` is not on trial
+ *
+ * A pill is not a step on this scale — it is a shape, and 160 uses of it are
+ * a status, an avatar or a dot rather than a corner choice somebody made.
+ */
+describe("corners come from Vibe's scale, not Tailwind's", () => {
+  const TAILWIND_RADII = /\brounded-(?:[trblxyse]{1,2}-)?(xs|sm|md|lg|xl|2xl|3xl|4xl)\b/g;
+
+  it("declares a name for every corner the product needs", () => {
+    for (const token of ["inline", "inset", "nav", "field", "well", "panel", "card", "stage"]) {
+      expect(CSS, `--radius-${token} is missing`).toContain(`--radius-${token}:`);
+      expect(V2, `--radius-${token} is missing from the second palette`).toContain(
+        `--radius-${token}:`,
+      );
+    }
+  });
+
+  it("writes no Tailwind corner anywhere", () => {
+    // No exceptions, unlike the type scale: every corner in the product is a
+    // corner on something, and every one of those things now has a name.
+    const wrong: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      const found = withoutComments(readFileSync(file, "utf8")).match(TAILWIND_RADII);
+      if (found) wrong.push(`${path}: ${[...new Set(found)].join(", ")}`);
+    }
+    expect(
+      wrong,
+      "Tailwind's radius scale means nothing in Vibe, and two of its steps are " +
+        "Vibe steps under another name. Use rounded-inline, inset, nav, field, " +
+        "well, panel, card or stage.",
+    ).toEqual([]);
+  });
+
+  it("writes no arbitrary corner that a token already names", () => {
+    const declared = new Map<string, string>();
+    for (const [, name, value] of CSS.matchAll(/--radius-([a-z-]+):\s*([0-9.]+px);/g)) {
+      declared.set(value, name);
+    }
+    const restated: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      for (const [, raw] of withoutComments(readFileSync(file, "utf8")).matchAll(
+        /rounded-\[([0-9.]+(?:px|rem))\]/g,
+      )) {
+        const px = raw.endsWith("rem") ? `${Number.parseFloat(raw) * 16}px` : raw;
+        const name = declared.get(px);
+        if (name) restated.push(`${path}: rounded-[${raw}] is rounded-${name}`);
+      }
+    }
+    expect(restated, "Write the name.").toEqual([]);
   });
 });

@@ -217,7 +217,7 @@ export default function HomePage() {
               independently and gives you the exact result to review.
             </p>
             <div className="border-line-2 bg-surface-2 rounded-panel flex items-center gap-4 border p-4">
-              <span className="text-mint flex size-11 shrink-0 items-center justify-center rounded-xl border border-mint-line bg-mint-tint">
+              <span className="text-mint flex size-11 shrink-0 items-center justify-center rounded-field border border-mint-line bg-mint-tint">
                 <LockIcon size={19} />
               </span>
               <div>
@@ -232,7 +232,7 @@ export default function HomePage() {
           <div className="border-line-2 bg-surface-2 rounded-card overflow-hidden border shadow-card">
             <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-7">
               <div className="flex items-center gap-3">
-                <span className="text-mint flex size-9 items-center justify-center rounded-xl bg-mint-tint">
+                <span className="text-mint flex size-9 items-center justify-center rounded-field bg-mint-tint">
                   <AgentIcon size={18} />
                 </span>
                 <span className="text-fg font-semibold">AI Agent</span>

@@ -53,7 +53,7 @@ export default async function ChooseGithubAccountPage() {
           </p>
         </div>
 
-        <ul className="border-line-2 divide-line-2 overflow-hidden rounded-xl border divide-y">
+        <ul className="border-line-2 divide-line-2 overflow-hidden rounded-field border divide-y">
           {installations.map((installation) => (
             <li key={installation.id}>
               <Link

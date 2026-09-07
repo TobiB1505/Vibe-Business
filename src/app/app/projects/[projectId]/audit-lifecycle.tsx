@@ -75,7 +75,7 @@ function LensConstellation({ active }: { active: boolean }) {
             return (
               <li
                 key={lens}
-                className={`border-line-2 bg-app/95 text-fg-secondary absolute -translate-x-1/2 -translate-y-1/2 rounded-lg border px-2.5 py-2 text-center text-meta leading-tight font-medium ${
+                className={`border-line-2 bg-app/95 text-fg-secondary absolute -translate-x-1/2 -translate-y-1/2 rounded-inset border px-2.5 py-2 text-center text-meta leading-tight font-medium ${
                   active ? "motion-safe:animate-pulse" : ""
                 }`}
                 style={{
@@ -97,7 +97,7 @@ function LensConstellation({ active }: { active: boolean }) {
         {BUSINESS_LENSES.map((lens, index) => (
           <li
             key={lens}
-            className={`border-line-2 bg-app/70 text-fg-secondary rounded-lg border px-3 py-2.5 text-body ${
+            className={`border-line-2 bg-app/70 text-fg-secondary rounded-inset border px-3 py-2.5 text-body ${
               active ? "motion-safe:animate-pulse" : ""
             }`}
             style={

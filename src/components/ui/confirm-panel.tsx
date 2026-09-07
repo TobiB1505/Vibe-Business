@@ -128,7 +128,7 @@ export function ConfirmPanel({
     <div
       role="dialog"
       aria-labelledby={titleId}
-      className={cn("space-y-3 rounded-md border p-4", TONE_SURFACE[tone])}
+      className={cn("space-y-3 rounded-inset border p-4", TONE_SURFACE[tone])}
       onKeyDown={(event) => {
         // Escape cancels for real — it runs the caller's cancel rather than
         // hiding the element, so nothing is left half-started behind it.

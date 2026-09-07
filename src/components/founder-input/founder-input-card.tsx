@@ -267,7 +267,7 @@ export function FounderInputCard({
 
       <form action={formAction} noValidate aria-busy={pending} className="flex flex-col gap-3">
         {request.recommendation ? (
-          <div className="border-mint-line bg-mint-tint/40 flex flex-col gap-3 rounded-xl border p-4">
+          <div className="border-mint-line bg-mint-tint/40 flex flex-col gap-3 rounded-field border p-4">
             <MonoLabel className="tracking-[0.14em]">Vibe recommends</MonoLabel>
             <div className="flex flex-col gap-1">
               <p className="text-fg font-semibold">{request.recommendation.label}</p>
@@ -301,7 +301,7 @@ export function FounderInputCard({
                   name="choice"
                   value={`option:${option.id}`}
                   disabled={pending}
-                  className="border-line-3 bg-surface-2 hover:border-mint-line focus-visible:ring-mint flex cursor-pointer flex-col gap-1 rounded-xl border p-3 text-left transition-interactive focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  className="border-line-3 bg-surface-2 hover:border-mint-line focus-visible:ring-mint flex cursor-pointer flex-col gap-1 rounded-field border p-3 text-left transition-interactive focus-visible:ring-2 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="text-fg text-body font-medium">{option.label}</span>
                   {option.explanation ? (

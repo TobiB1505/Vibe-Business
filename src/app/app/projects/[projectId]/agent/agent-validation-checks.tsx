@@ -92,7 +92,7 @@ export function AgentValidationChecks({ checks }: { checks: readonly ValidationC
           >
             <span
               className={cn(
-                "flex size-[34px] flex-none items-center justify-center rounded-[10px] border",
+                "flex size-[34px] flex-none items-center justify-center rounded-nav border",
                 ICON[check.state],
               )}
             >

@@ -49,7 +49,7 @@ export default async function ResetPasswordPage() {
 
       <p className="text-fg-muted text-body">
         Changed your mind?{" "}
-        <Link href="/app" className="text-mint hover:text-mint-hover rounded-sm">
+        <Link href="/app" className="text-mint hover:text-mint-hover rounded-inline">
           Back to Vibe
         </Link>
       </p>

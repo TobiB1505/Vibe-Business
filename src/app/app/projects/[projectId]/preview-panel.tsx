@@ -419,12 +419,12 @@ export function PreviewPanel({
                 // Referer header, handing an internal identifier to code Vibe
                 // did not write.
                 rel="noreferrer noopener"
-                className="rounded-md border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-body text-mint hover:bg-mint-tint"
+                className="rounded-inset border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-body text-mint hover:bg-mint-tint"
               >
                 Open preview
               </a>
             ) : (
-              <span className="rounded-md border border-line-2 px-3 py-1.5 text-body text-fg-muted">
+              <span className="rounded-inset border border-line-2 px-3 py-1.5 text-body text-fg-muted">
                 Resolving preview address…
               </span>
             )}
@@ -443,7 +443,7 @@ export function PreviewPanel({
                 href={productionUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="rounded-md border border-line-2 px-3 py-1.5 text-body text-fg-prose hover:text-fg"
+                className="rounded-inset border border-line-2 px-3 py-1.5 text-body text-fg-prose hover:text-fg"
               >
                 Open your live site now
               </a>

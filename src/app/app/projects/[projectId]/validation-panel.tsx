@@ -119,7 +119,7 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
           text in a <pre>: the content is untrusted output from code Vibe did
           not write, already ANSI-stripped and secret-redacted at storage. */}
       {phase.outputTail && (
-        <pre className="overflow-x-auto rounded-md border border-line-2 bg-app p-3 text-caption leading-relaxed text-fg-secondary">
+        <pre className="overflow-x-auto rounded-inset border border-line-2 bg-app p-3 text-caption leading-relaxed text-fg-secondary">
           {phase.outputTail}
           {phase.outputTruncated && "\n…output truncated"}
         </pre>

@@ -93,7 +93,7 @@ export function ProvenancePanel({
 
   return (
     <section
-      className="border-line-2 rounded-md border px-3 py-2"
+      className="border-line-2 rounded-inset border px-3 py-2"
       data-testid="provenance-panel"
       data-provenance-current={provenance.firstGap === null}
     >

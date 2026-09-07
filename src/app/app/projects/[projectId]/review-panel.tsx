@@ -114,7 +114,7 @@ function Panel({
           alt={`${label} screenshot`}
           width={REVIEW_POLICY.viewport.width}
           height={REVIEW_POLICY.viewport.height}
-          className="h-auto w-full rounded-md border border-line-2 bg-app"
+          className="h-auto w-full rounded-inset border border-line-2 bg-app"
         />
       </a>
 

@@ -42,7 +42,7 @@ export function OnboardingAuditReveal({
       </header>
 
       {view && (
-        <section className="border-line-2 bg-surface-1 overflow-hidden rounded-2xl border p-3 sm:p-5">
+        <section className="border-line-2 bg-surface-1 overflow-hidden rounded-card border p-3 sm:p-5">
           <BusinessMap
             view={view}
             selected={selected}
@@ -54,7 +54,7 @@ export function OnboardingAuditReveal({
       )}
 
       {blocker && (
-        <section className="border-mint/30 bg-mint/[0.035] flex max-w-[50rem] flex-col gap-2 rounded-xl border p-5">
+        <section className="border-mint/30 bg-mint/[0.035] flex max-w-[50rem] flex-col gap-2 rounded-field border p-5">
           <MonoLabel className="text-mint">What matters first</MonoLabel>
           <h2 className="text-fg text-moment font-semibold">{blocker.headline}</h2>
           <p className="text-fg-prose text-body leading-relaxed">{blocker.explanation}</p>

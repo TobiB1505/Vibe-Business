@@ -22,7 +22,7 @@ function ProjectTile({ name }: { name: string }) {
     <span
       aria-hidden
       className={cn(
-        "from-mint/90 to-mint-deep flex size-9 shrink-0 items-center justify-center rounded-lg",
+        "from-mint/90 to-mint-deep flex size-9 shrink-0 items-center justify-center rounded-inset",
         "bg-gradient-to-br text-caption font-bold tracking-[-0.02em] text-mint-ink shadow-[0_10px_26px_-14px_rgb(0_229_160/0.8)]",
       )}
     >

@@ -80,7 +80,7 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
             className={cn(
               "flex flex-none items-center justify-center",
               item.accent
-                ? "border-mint-line bg-mint-tint text-mint size-9 rounded-[10px] border"
+                ? "border-mint-line bg-mint-tint text-mint size-9 rounded-nav border"
                 : "text-fg-secondary mt-0.5",
             )}
           >

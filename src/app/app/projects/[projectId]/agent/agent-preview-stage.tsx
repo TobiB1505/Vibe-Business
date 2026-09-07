@@ -225,7 +225,7 @@ export function AgentPreviewStage({
                     delay: reduceMotion ? 0 : index * 0.08,
                   }}
                 >
-                  <span className="border-mint-line bg-mint-tint text-mint flex size-8 flex-none items-center justify-center rounded-[10px] border">
+                  <span className="border-mint-line bg-mint-tint text-mint flex size-8 flex-none items-center justify-center rounded-nav border">
                     <svg
                       viewBox="0 0 24 24"
                       width="16"

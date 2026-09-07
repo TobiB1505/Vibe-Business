@@ -39,11 +39,11 @@ export function RepositoryPicker({
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search repositories…"
-          className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 rounded-md border px-3 py-2 text-body focus:ring-4 focus:outline-none"
+          className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 rounded-inset border px-3 py-2 text-body focus:ring-4 focus:outline-none"
         />
       )}
 
-      <ul className="border-line-2 divide-line-2 overflow-hidden rounded-xl border divide-y">
+      <ul className="border-line-2 divide-line-2 overflow-hidden rounded-field border divide-y">
         {filtered.map((repo) => (
           <li key={repo.githubRepositoryId}>
             {/* Already-connected repositories stay visible but

@@ -34,7 +34,7 @@ export function ProductRevealFacts({ facts }: { facts: readonly UnderstandingFac
       {facts.map((fact) => (
         <div
           key={fact.label}
-          className="border-line-2 bg-surface-2 flex flex-col gap-1 rounded-xl border p-4"
+          className="border-line-2 bg-surface-2 flex flex-col gap-1 rounded-field border p-4"
         >
           <p className="text-fg-meta text-caption">{fact.label}</p>
           <p className="text-fg-body text-body">{fact.value}</p>

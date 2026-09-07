@@ -337,7 +337,7 @@ function ScanFacetCard({
   return (
     <motion.article
       data-facet={facet.id}
-      className={`absolute z-30 flex h-[4.2rem] w-[10.75rem] items-center gap-3 rounded-xl border bg-app/95 px-3 shadow-lg backdrop-blur-md max-md:relative max-md:inset-auto max-md:h-[4.5rem] max-md:w-full max-md:translate-x-0 ${FACET_POSITIONS[facet.id]} ${
+      className={`absolute z-30 flex h-[4.2rem] w-[10.75rem] items-center gap-3 rounded-field border bg-app/95 px-3 shadow-lg backdrop-blur-md max-md:relative max-md:inset-auto max-md:h-[4.5rem] max-md:w-full max-md:translate-x-0 ${FACET_POSITIONS[facet.id]} ${
         facet.ready ? "border-mint/35 shadow-mint/5" : "border-line-2"
       }`}
       initial={false}
@@ -349,7 +349,7 @@ function ScanFacetCard({
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
-        className={`grid size-8 shrink-0 place-items-center rounded-lg border ${
+        className={`grid size-8 shrink-0 place-items-center rounded-inset border ${
           facet.ready ? "border-mint/25 bg-mint/[0.07] text-mint" : "border-line-1 text-fg-muted"
         }`}
       >
@@ -357,7 +357,7 @@ function ScanFacetCard({
           {facet.id === "brand" && presentation?.logo ? (
             <motion.div
               key="brand-logo"
-              className="grid size-7 place-items-center overflow-hidden rounded-md"
+              className="grid size-7 place-items-center overflow-hidden rounded-inset"
               initial={reduceMotion ? false : { opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
@@ -409,7 +409,7 @@ function DiscoveryGraph({
   return (
     <div
       data-testid="product-scan-graph"
-      className="relative h-[31rem] overflow-hidden rounded-2xl border border-line-2 bg-app/55 max-md:h-auto max-md:min-h-0 max-md:overflow-visible max-md:p-4"
+      className="relative h-[31rem] overflow-hidden rounded-card border border-line-2 bg-app/55 max-md:h-auto max-md:min-h-0 max-md:overflow-visible max-md:p-4"
     >
       <div
         aria-hidden="true"
@@ -620,14 +620,14 @@ function DiscoveringPanel({
     .join("");
 
   return (
-    <aside className="flex h-[31rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
+    <aside className="flex h-[31rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-card-title font-semibold text-fg">What we&apos;re discovering</h3>
         <SparklesIcon size={17} className="text-mint" />
       </div>
 
       <div className="mt-4 flex min-h-[4.4rem] items-center gap-3 border-b border-line-1 pb-4">
-        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-mint/25 bg-app text-lg font-semibold text-mint">
+        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-field border border-mint/25 bg-app text-lg font-semibold text-mint">
           <AnimatePresence initial={false} mode="wait">
             {presentation?.logo ? (
               <motion.div
@@ -659,7 +659,7 @@ function DiscoveringPanel({
         </div>
       </div>
 
-      <div className="mt-3 grid flex-1 grid-rows-6 overflow-hidden rounded-xl border border-line-1">
+      <div className="mt-3 grid flex-1 grid-rows-6 overflow-hidden rounded-field border border-line-1">
         {rows.map(({ facet, icon: Icon }) => (
           <div
             key={facet.label}
@@ -706,7 +706,7 @@ function LiveActivity({
   const visibleEvents = events.slice(-8);
 
   return (
-    <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
+    <section className="flex h-[18rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center gap-2">
         <span
           className={`size-2 rounded-full ${active ? "bg-mint shadow-[0_0_10px_var(--color-mint)]" : "bg-mint/70"}`}
@@ -718,7 +718,7 @@ function LiveActivity({
           visibleEvents.map((event) => (
             <motion.li
               key={event.id}
-              className={`grid min-h-0 grid-cols-[1.25rem_1fr_auto] items-center gap-2 rounded-lg px-1.5 text-caption ${
+              className={`grid min-h-0 grid-cols-[1.25rem_1fr_auto] items-center gap-2 rounded-inset px-1.5 text-caption ${
                 event.id === pulseEventId ? "bg-mint/[0.07] text-mint" : "text-fg-muted"
               }`}
               initial={false}
@@ -767,7 +767,7 @@ function DiscoveriesGrid({
   const reduceMotion = useReducedMotion();
   const found = discoveryCount(events);
   return (
-    <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
+    <section className="flex h-[18rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-card-title font-semibold text-fg">What we&apos;ve discovered so far</h3>
         <span className="rounded-full border border-mint/25 bg-mint/[0.06] px-2.5 py-1 font-mono text-[0.66rem] text-mint">
@@ -781,7 +781,7 @@ function DiscoveriesGrid({
           return (
             <motion.article
               key={facet.id}
-              className={`flex min-h-0 items-center gap-3 rounded-xl border px-3 ${facet.ready ? "border-line-2 bg-app/65" : "border-line-1 bg-app/30"}`}
+              className={`flex min-h-0 items-center gap-3 rounded-field border px-3 ${facet.ready ? "border-line-2 bg-app/65" : "border-line-1 bg-app/30"}`}
               initial={false}
               animate={
                 pulse && !reduceMotion
@@ -797,7 +797,7 @@ function DiscoveriesGrid({
               transition={{ duration: reduceMotion ? 0 : 0.7 }}
             >
               <div
-                className={`grid size-8 shrink-0 place-items-center rounded-lg ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+                className={`grid size-8 shrink-0 place-items-center rounded-inset ${facet.ready ? "text-mint" : "text-fg-meta"}`}
               >
                 {facet.id === "brand" && presentation?.logo ? (
                   <ProductLogo
@@ -839,7 +839,7 @@ function ScanFooter({
   const failed = operation?.status === "failed";
 
   return (
-    <footer className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-line-2 bg-surface-1 px-4 py-3">
+    <footer className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-card border border-line-2 bg-surface-1 px-4 py-3">
       <div
         className={`grid size-10 shrink-0 place-items-center rounded-full ${failed ? "bg-coral-tint-soft text-coral" : "bg-mint-tint-soft text-mint"}`}
       >
@@ -1027,7 +1027,7 @@ export function ProductScanExperience({
       layout={!reduceMotion}
       transition={{ layout: { duration: 0.42, ease: [0.22, 1, 0.36, 1] } }}
       aria-labelledby="product-scan-title"
-      className="relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
+      className="relative overflow-hidden rounded-stage border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
     >
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -1136,7 +1136,7 @@ export function ProductScanExperience({
               {displayFailure ? (
                 <div
                   role="alert"
-                  className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-body text-coral"
+                  className="mb-4 rounded-field border border-coral-line bg-coral-tint-soft px-4 py-3 text-body text-coral"
                 >
                   {displayFailure}
                 </div>

@@ -49,7 +49,7 @@ export function OnboardingShell({
     <div className="bg-app text-fg-body min-h-dvh">
       <header className="border-line-1 border-b">
         <div className="mx-auto flex max-w-[76rem] items-center gap-4 px-5 py-4 sm:px-8">
-          <Link href="/app" aria-label="Vibe Business" className="rounded-sm">
+          <Link href="/app" aria-label="Vibe Business" className="rounded-inline">
             <VibeLockup />
           </Link>
           {projectName && (

@@ -54,7 +54,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className="text-fg-secondary hover:text-fg rounded-sm text-body font-medium transition-interactive"
+                className="text-fg-secondary hover:text-fg rounded-inline text-body font-medium transition-interactive"
               >
                 {label}
               </Link>
@@ -63,7 +63,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <Link
               href="/login"
-              className="text-fg-secondary hover:text-fg-body rounded-sm px-2 text-body transition-interactive"
+              className="text-fg-secondary hover:text-fg-body rounded-inline px-2 text-body transition-interactive"
             >
               Sign in
             </Link>
@@ -94,7 +94,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className="text-fg-muted hover:text-fg-body rounded-sm transition-interactive"
+                className="text-fg-muted hover:text-fg-body rounded-inline transition-interactive"
               >
                 {label}
               </Link>

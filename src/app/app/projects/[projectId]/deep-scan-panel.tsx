@@ -90,7 +90,7 @@ function waitHint(retryAvailableAt: string | null, now: number | null): string |
 function Section({ children }: { children: React.ReactNode }) {
   // `id` is the jump target for the audit section's "Run included Deep Scan".
   return (
-    <section id="deep-scan" className="space-y-3 rounded-md border border-line-2 p-4">
+    <section id="deep-scan" className="space-y-3 rounded-inset border border-line-2 p-4">
       {children}
     </section>
   );
@@ -210,7 +210,7 @@ function LiveViewDialog({
         aria-labelledby="deep-scan-dialog-title"
         aria-describedby="deep-scan-dialog-description"
         tabIndex={-1}
-        className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-line-2 bg-app p-4 focus:outline-none"
+        className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-card border border-line-2 bg-app p-4 focus:outline-none"
       >
         <div className="space-y-1">
           <h3 id="deep-scan-dialog-title" className="text-card-title font-medium text-fg">
@@ -226,7 +226,7 @@ function LiveViewDialog({
             (`BROWSER_SANDBOX.viewport`). Any other ratio would letterbox the
             frame, and a letterboxed frame puts a person's click somewhere
             other than where they aimed. */}
-        <div className="aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
+        <div className="aspect-[16/10] w-full overflow-hidden rounded-inset border border-line-2 bg-surface-2">
           {loading && (
             <p role="status" className="p-4 text-body text-fg-secondary">
               Opening a temporary browser…
@@ -256,7 +256,7 @@ function LiveViewDialog({
            * until it is done, and inventing steps to fill the silence would be
            * the same lie as a progress bar that sits at 60%.
            */
-          <div role="status" className="space-y-1 rounded-md border border-line-2 bg-surface-2 p-3">
+          <div role="status" className="space-y-1 rounded-inset border border-line-2 bg-surface-2 p-3">
             <p className="text-body text-fg-prose">
               Vibe is looking around your signed-in product.
             </p>

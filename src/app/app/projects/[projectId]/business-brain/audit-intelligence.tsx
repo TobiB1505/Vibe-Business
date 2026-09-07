@@ -123,7 +123,7 @@ function PriorityCard({
     // first selection and left the overview collapsed after closing focus.
     <div
       className={cn(
-        "relative overflow-hidden rounded-[1.15rem] border p-5",
+        "relative overflow-hidden rounded-stage border p-5",
         critical
           ? "border-coral/70 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.13),transparent_42%),linear-gradient(145deg,rgb(255_122_92/0.055),rgb(255_255_255/0.018))]"
           : "border-mint/55 bg-[radial-gradient(circle_at_100%_0%,rgb(0_229_160/0.12),transparent_42%),linear-gradient(145deg,rgb(0_229_160/0.05),rgb(255_255_255/0.018))]",
@@ -173,7 +173,7 @@ function PriorityCard({
       </div>
       <Link
         href={actionHref(priority, movesHref)}
-        className="bg-surface-4 border-line-strong text-fg hover:border-mint/45 mt-5 flex min-h-11 items-center justify-between rounded-xl border px-4 text-body font-semibold transition-interactive"
+        className="bg-surface-4 border-line-strong text-fg hover:border-mint/45 mt-5 flex min-h-11 items-center justify-between rounded-field border px-4 text-body font-semibold transition-interactive"
       >
         {actionLabel(priority.moveCount, hasMoves)}
         <ArrowIcon />
@@ -192,7 +192,7 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
         <div className="flex items-start gap-3">
           <span
             className={cn(
-              "flex size-8 shrink-0 items-center justify-center rounded-lg text-lg",
+              "flex size-8 shrink-0 items-center justify-center rounded-inset text-lg",
               change.direction === "up"
                 ? "bg-mint/10 text-mint"
                 : change.direction === "down"
@@ -287,7 +287,7 @@ function DefaultPanel({
                       action={
                         <Link
                           href={actionHref(priority, movesHref)}
-                          className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-sm text-body transition-interactive"
+                          className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-inline text-body transition-interactive"
                         >
                           {actionLabel(priority.moveCount, hasMoves)}
                           <ArrowIcon />
@@ -502,7 +502,7 @@ function SelectedPanel({
                 </div>
               </div>
 
-              <div className={cn("relative mt-1 overflow-hidden rounded-2xl border p-4", node.health === "weak" ? "border-coral/60 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.12),transparent_44%),rgb(255_122_92/0.035)]" : "border-mint/40 bg-mint/[0.035]")}>
+              <div className={cn("relative mt-1 overflow-hidden rounded-card border p-4", node.health === "weak" ? "border-coral/60 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.12),transparent_44%),rgb(255_122_92/0.035)]" : "border-mint/40 bg-mint/[0.035]")}>
                 <div className="flex items-start gap-3">
                   <DetailInsightIcon kind="move" />
                   <div className="min-w-0 flex-1">
@@ -522,7 +522,7 @@ function SelectedPanel({
                     )}
                   </div>
                 </div>
-                <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-xl px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
+                <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-field px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
                   {node.problem ? actionLabel(node.problem.moveCount, hasMoves) : "View action plan"}
                   <ArrowIcon />
                 </Link>
@@ -530,11 +530,11 @@ function SelectedPanel({
 
               {node.missingContext.length > 0 && (
                 <details className="group border-line-1 border-t pt-4">
-                  <summary className="text-fg-secondary hover:text-fg flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm text-body focus-visible:ring-2 focus-visible:ring-mint">
+                  <summary className="text-fg-secondary hover:text-fg flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-inline text-body focus-visible:ring-2 focus-visible:ring-mint">
                     <span>Learn more about this dimension</span>
                     <span aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</span>
                   </summary>
-                  <div className="border-amber/20 bg-amber/[0.035] mt-3 rounded-xl border p-4">
+                  <div className="border-amber/20 bg-amber/[0.035] mt-3 rounded-field border p-4">
                     <h3 className="text-amber text-caption font-medium">Only you can answer</h3>
                     <ul className="text-fg-muted mt-2 flex list-disc flex-col gap-1.5 pl-4 text-body">
                       {node.missingContext.map((item) => <li key={item}>{item}</li>)}
@@ -641,7 +641,7 @@ export function AuditIntelligence({
       data-view={node ? "selected" : "overview"}
     >
       <section
-        className="business-brain-stage relative min-w-0 overflow-hidden rounded-[1.25rem] border border-line-2 p-4 sm:p-6"
+        className="business-brain-stage relative min-w-0 overflow-hidden rounded-stage border border-line-2 p-4 sm:p-6"
         data-testid="audit-map-panel"
       >
           <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
@@ -649,7 +649,7 @@ export function AuditIntelligence({
             {node ? (
               <div className="flex flex-col gap-2">
                 <h2 className="sr-only">Business Map — {node.label}</h2>
-                <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-body font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+                <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-field border px-3.5 text-body font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
                   <span aria-hidden="true">←</span>
                   Back to overview
                 </button>
