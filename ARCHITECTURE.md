@@ -376,6 +376,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0093](docs/decisions/0093-the-step-records-what-it-found.md) | The step records what it found | §3.5 |
 | [0094](docs/decisions/0094-a-free-operation-says-so.md) | A free operation says so | §3.5 |
 | [0095](docs/decisions/0095-design-tooling-is-repo-native.md) | Design tooling is repo-native, and a registry cannot reach Vibe's primitives | UI and design tooling |
+| [0096](docs/decisions/0096-a-contradiction-is-not-a-measurement.md) | A contradiction is not a measurement: static and live consistency checks | Internal operator console |
 
 ### Layers with no section above
 
