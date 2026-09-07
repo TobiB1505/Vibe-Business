@@ -60,7 +60,7 @@
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v1";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v2";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {
@@ -77,6 +77,20 @@ export const BROWSER_GUARD_ENV = {
    * file says the one thing the caller needs: this session can be used now.
    */
   readyFile: "VIBE_READY_FILE",
+  /**
+   * Where the guard records why it gave up, when it does.
+   *
+   * The ready file answers "can this session be used"; nothing answered "and
+   * if not, which half failed". A 45-second timeout with no other signal is
+   * the same dead end `diagnostics.ts` was written to remove one layer up:
+   * Chromium missing a shared library and the guard's own `ws` import failing
+   * are different problems, and from outside the VM they looked identical.
+   *
+   * Written by the guard rather than logged, because `runBackground` detaches
+   * and nothing reads a detached process's output. A file, Vibe already knows
+   * how to read.
+   */
+  failureFile: "VIBE_FAILURE_FILE",
 } as const;
 
 export const BROWSER_GUARD_PROGRAM = `
@@ -91,10 +105,18 @@ const viewToken = process.env.VIBE_VIEW_TOKEN;
 const publicPort = Number(process.env.VIBE_PUBLIC_PORT);
 const devtoolsPort = Number(process.env.VIBE_DEVTOOLS_PORT);
 const readyFile = process.env.VIBE_READY_FILE;
+const failureFile = process.env.VIBE_FAILURE_FILE;
+
+function giveUp(reason) {
+  console.error("guard: " + reason);
+  try {
+    if (failureFile) writeFileSync(failureFile, reason);
+  } catch {}
+  process.exit(1);
+}
 
 if (!controlToken || !viewToken || !publicPort || !devtoolsPort || !readyFile) {
-  console.error("guard: incomplete environment");
-  process.exit(1);
+  giveUp("incomplete environment");
 }
 
 /**
@@ -349,8 +371,7 @@ async function waitForChromium(deadlineMs) {
 
 server.listen(publicPort, "0.0.0.0", async () => {
   if (!(await waitForChromium(30000))) {
-    console.error("guard: chromium did not answer");
-    process.exit(1);
+    giveUp("chromium did not answer on the devtools port within 30s");
   }
   // The content is deliberately not a token, a URL or a port. Vibe already
   // knows all three; what it cannot know from outside is whether this VM is
