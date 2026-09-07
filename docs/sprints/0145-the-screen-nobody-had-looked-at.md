@@ -192,3 +192,9 @@ Domain 8,793 · lint 0/0 · typecheck clean · build green · no migration.
 Browser suite: see the pull request; the branch was validated on the domain
 suite and by rendering fixture routes in Chromium under both motion
 preferences.
+
+*(2026-09-07, the same evening: the browser suite finished — **577 passed**,
+none failed, flaky or skipped, 4.7 minutes, against the code at
+`60ab6497`, which is this branch's head for everything but this document.
+The sentence above stands as written: it was accurate when the record was
+made and the run had genuinely not returned.)*
