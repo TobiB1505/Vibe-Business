@@ -172,7 +172,17 @@ function Heading({ title, status }: { title: string; status?: string }) {
 const FOCUSABLE =
   'a[href], button, input, select, textarea, canvas, [tabindex]:not([tabindex="-1"])';
 
-function LiveViewDialog({
+/**
+ * The sign-in dialog.
+ *
+ * Exported for the browser fixtures, and that is not a convenience. Three
+ * defects have now reached the founder inside this component — an animation
+ * bound to the wrong state, a countdown, a closing check — and every one of
+ * them passed unit tests and lint. The dialog only opens on interaction and
+ * only reaches its interesting states through Server Actions the fixtures
+ * never call, so *nothing* could see it. Rule 69's untested screen, exactly.
+ */
+export function LiveViewDialog({
   liveViewUrl,
   stage,
   error,
@@ -468,22 +478,33 @@ function LiveViewDialog({
           session they could not finish. A phone can drive this now; a larger
           screen is genuinely easier, and that is all this says.
         */}
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="text-xs text-fg-muted">
             Tap or click to interact. A larger screen makes signing in easier.
           </p>
           {loginSecondsLeft !== null && (
             /*
-             * A visible deadline, because the alternative is being cut off
-             * without warning. `role="timer"` with a polite live region: a
-             * screen reader should be able to ask for it, not have every
-             * second announced.
+             * A deadline has to be *readable*, not merely rendered.
+             *
+             * The first version was `text-meta` in `fg-meta` — the smallest and
+             * dimmest type on the screen — wrapped onto its own line under a
+             * two-line paragraph on a phone. It was on screen and the founder
+             * reported it missing, which for a two-minute deadline is the same
+             * thing. A person who cannot find the clock is a person being cut
+             * off without warning.
+             *
+             * So it is a bordered chip at body size, and it turns amber under
+             * thirty seconds. `role="timer"` with `aria-live="off"`: a screen
+             * reader should be able to ask for it, never have every second
+             * announced at it.
              */
             <p
               role="timer"
               aria-live="off"
-              className={`font-mono text-meta ${
-                loginSecondsLeft * 1000 <= LOGIN_URGENT_MS ? "text-amber" : "text-fg-meta"
+              className={`rounded-nav border px-3 py-1.5 font-mono text-sm ${
+                loginSecondsLeft * 1000 <= LOGIN_URGENT_MS
+                  ? "border-amber text-amber"
+                  : "border-line-2 text-fg-body"
               }`}
             >
               {formatCountdown(loginSecondsLeft)} to sign in
@@ -1234,12 +1255,11 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       // The server terminates the browser; the modal closes only afterwards.
       await cancelDeepScanAction(projectId, sessionId);
       setBusy(false);
-      // Not closed here. The handoff draws its check and calls `handleSealed`,
-      // which is what ends the dialog — so the last thing a founder sees is
-      // Vibe finishing, rather than a window vanishing.
-      setSealing(true);
+      setSessionId(null);
+      closeDialog();
+      router.refresh();
     });
-  }, [projectId, sessionId, closeDialog]);
+  }, [projectId, sessionId, closeDialog, router]);
 
   /**
    * The login deadline ran out.
@@ -1297,9 +1317,12 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         return;
       }
 
-      setSessionId(null);
-      closeDialog();
-      router.refresh();
+      /*
+       * Not closed here. The handoff draws its check and calls `handleSealed`,
+       * which is what ends the dialog — so the last thing a founder sees is
+       * Vibe finishing, rather than a window vanishing.
+       */
+      setSealing(true);
     });
   }, [projectId, sessionId, closeDialog, router]);
 
