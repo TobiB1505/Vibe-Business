@@ -7,6 +7,7 @@ import {
   isComposingKey,
   isTap,
   modifiersOf,
+  reconnectDelayMs,
 } from "./live-browser-canvas";
 
 /**
@@ -274,5 +275,75 @@ describe("the temporary browser can be operated by touch", () => {
     // against Vibe's origin.
     expect(source).toContain('autoComplete="off"');
     expect(source).not.toContain('type="password"');
+  });
+});
+
+/*
+ * A founder watched "Connecting to it" spin for 47 seconds and cancelled a
+ * browser Vibe had already created and was paying for. The sandbox had
+ * reported ready — the guard was listening *inside* the microVM — and the one
+ * socket this component opened was refused. There was no second attempt, no
+ * timeout, and no way for the dialog to say so, so the spinner was the whole
+ * user interface for a failure.
+ */
+describe("the view socket is retried, and gives up out loud", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/live-browser-canvas.tsx"),
+    "utf8",
+  );
+
+  it("waits briefly for the first retries and longer for the last", () => {
+    // The usual gap is short — a public URL that is a moment behind the port
+    // it points at — so the first attempts must not be spent waiting.
+    expect(reconnectDelayMs(0)).toBe(500);
+    expect(reconnectDelayMs(1)).toBe(1_000);
+    expect(reconnectDelayMs(9)).toBe(8_000);
+  });
+
+  it("stops asking rather than retrying forever", () => {
+    expect(reconnectDelayMs(10)).toBeNull();
+    expect(reconnectDelayMs(50)).toBeNull();
+  });
+
+  it("keeps trying for longer than a browser has ever taken to answer", () => {
+    let total = 0;
+    for (let failures = 0; ; failures += 1) {
+      const delay = reconnectDelayMs(failures);
+      if (delay === null) break;
+      total += delay;
+    }
+    // Comfortably past the twenty seconds a warm sandbox takes, and short
+    // enough that the person is told something before a minute is out.
+    expect(total).toBeGreaterThan(45_000);
+    expect(total).toBeLessThan(70_000);
+  });
+
+  it("reports unavailability only once the ladder is spent", () => {
+    // Calling it on the first refused socket would put a failure on screen
+    // half a second into a wait that usually resolves itself.
+    const lost = source.slice(source.indexOf("const lost = () => {"));
+    const decision = lost.slice(0, lost.indexOf("socket.onerror"));
+    expect(decision).toContain("if (delay === null) {");
+    expect(decision).toContain("onUnavailable?.();");
+    expect(decision).toContain("retry = setTimeout(connect, delay);");
+  });
+
+  it("counts one failure per socket, not one per event", () => {
+    // A refused socket fires `error` and then `close`. Both land here, and
+    // two reconnects scheduled for one failure would spend the ladder at
+    // double speed while looking correct.
+    expect(source).toContain("if (disposed || socketRef.current !== socket) return;");
+  });
+
+  it("starts the ladder over once a socket has opened", () => {
+    // Otherwise a drop mid-login inherits the tail of the previous run and
+    // waits eight seconds before its first attempt.
+    const open = source.slice(source.indexOf("socket.onopen = () => {"));
+    expect(open.slice(0, open.indexOf("};"))).toContain("failures = 0;");
+  });
+
+  it("leaves no timer behind when the dialog closes", () => {
+    const cleanup = source.slice(source.indexOf("      disposed = true;"));
+    expect(cleanup.slice(0, 400)).toContain("clearTimeout(retry);");
   });
 });
