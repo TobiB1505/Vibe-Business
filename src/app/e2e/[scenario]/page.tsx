@@ -1324,7 +1324,7 @@ export default async function E2eScenarioPage({
       <AccountShell
         sidebar={
           <AccountSidebar
-            credits="2,480"
+            credits={creditsToUnits(2480)}
             footer={
               <AccountMenu
                 identity={{
@@ -1355,7 +1355,7 @@ export default async function E2eScenarioPage({
       <AccountShell
         sidebar={
           <AccountSidebar
-            credits="2,480"
+            credits={creditsToUnits(2480)}
             footer={
               <AccountMenu
                 identity={{
@@ -1386,7 +1386,7 @@ export default async function E2eScenarioPage({
       <AccountShell
         sidebar={
           <AccountSidebar
-            credits="2,480"
+            credits={creditsToUnits(2480)}
             footer={
               <AccountMenu
                 identity={{
@@ -1411,7 +1411,7 @@ export default async function E2eScenarioPage({
       <AccountShell
         sidebar={
           <AccountSidebar
-            credits="2,480"
+            credits={creditsToUnits(2480)}
             footer={
               <AccountMenu
                 identity={{
@@ -1436,7 +1436,7 @@ export default async function E2eScenarioPage({
       <AccountShell
         sidebar={
           <AccountSidebar
-            credits="2,480"
+            credits={creditsToUnits(2480)}
             footer={
               <AccountMenu
                 identity={{

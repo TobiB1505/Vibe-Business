@@ -2,6 +2,8 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import type { DashboardIconName } from "@/components/ui/dashboard-icons";
+import { CreditAmount } from "@/components/ui/credit-amount";
+import type { CreditUnits } from "@/modules/credits/units";
 import { AccountNav } from "./account-nav";
 import { cn } from "@/lib/utils/cn";
 
@@ -103,7 +105,12 @@ export function accountSectionHref(sectionId: string): string {
 
 export function AccountSidebar({
   /**
-   * Available Credits, already formatted (e.g. `"2,480"`).
+   * Available Credits, in units.
+   *
+   * Units rather than a formatted string, because the rail draws the coin —
+   * and `CreditAmount` is what owns the coin's optical centring against the
+   * digits. Handing it a pre-formatted string would mean formatting here and
+   * mis-centring there.
    *
    * Omitted rather than zeroed when unknown: "we did not look" and "you have
    * none" are different facts, and only one of them is a balance.
@@ -111,7 +118,7 @@ export function AccountSidebar({
   credits,
   footer,
 }: {
-  credits: string | null;
+  credits: CreditUnits | null;
   /** The account menu. Passed in so the shell stays a server component. */
   footer: ReactNode;
 }) {
@@ -141,11 +148,17 @@ export function AccountSidebar({
             href="/app/billing"
             className={cn(
               "rounded-nav text-fg-muted hover:text-fg-body hover:bg-surface-2 hidden px-3 py-2.5",
-              "items-baseline gap-1.5 text-body transition-interactive lg:flex",
+              "items-center gap-2 text-body transition-interactive lg:flex",
             )}
           >
-            <span className="text-fg-body font-semibold tabular-nums">{credits}</span>
-            <span>Credits</span>
+            {/*
+              The coin, because a balance in this product is denominated in
+              something Vibe drew. Written as `CreditAmount` rather than a coin
+              beside a number: the mark has to be optically centred against the
+              digits, which is not what `items-center` does, and that
+              correction lives in one component (see `credit-amount.tsx`).
+            */}
+            <CreditAmount credits={credits} size="sm" className="text-fg-body font-semibold" />
           </Link>
         )}
         {footer}
@@ -163,7 +176,7 @@ export function AccountShell({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-app text-fg-body flex min-h-dvh flex-col lg:flex-row">
+    <div className="text-fg-body flex min-h-dvh flex-col lg:flex-row">
       {sidebar}
       <div className="flex min-w-0 flex-1 flex-col">
         {/*

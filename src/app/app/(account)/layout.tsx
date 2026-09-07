@@ -55,7 +55,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
     <AccountShell
       sidebar={
         <AccountSidebar
-          credits={creditBalance?.display ?? null}
+          credits={creditBalance?.availableCredits ?? null}
           footer={<AccountMenu identity={identity} />}
         />
       }
