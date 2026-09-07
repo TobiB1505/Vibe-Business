@@ -166,3 +166,55 @@ describe("the mark's motion preference", () => {
     expect(source("nova-arriving.tsx")).toContain("useMotionAllowed");
   });
 });
+
+/**
+ * The dissolving stages, and the two rules they state.
+ *
+ * ## What this caught
+ *
+ * Both of the component's last two rules were written in its docblock and
+ * neither was implemented.
+ *
+ * The reduced-motion rule said the faded lines are not rendered. The
+ * stylesheet's reduced-motion block set the container to `opacity: 1` and
+ * stopped its animation, which removes the fading and leaves the stale stages
+ * standing there — the opposite of the rule.
+ *
+ * The timer rule said a line goes because it stopped being true, never on a
+ * timer. The container animated to `opacity: 0` over 420ms `both`, from mount:
+ * every past stage vanished on a timer whatever the run was doing, and the
+ * emptied box kept its height for the rest of the run. In production the
+ * element was therefore invisible within half a second of appearing, under a
+ * permanent gap.
+ *
+ * Neither is expressible as a value test — one is about which elements exist
+ * across two runtimes, the other about what a stylesheet does after 420ms — so
+ * both are asserted against the source, and both were confirmed in a browser
+ * before being written down.
+ */
+describe("the dissolving stages", () => {
+  it("renders no past stage under reduced motion", () => {
+    const dissolving = rendered("nova-dissolving.tsx");
+
+    expect(dissolving).toContain("useMotionAllowed");
+    /* The gate is on the fading block, not on the current stage: the stage a
+       run is at is information, and reduced motion does not remove it. */
+    expect(dissolving).toMatch(/motion && fading\.length > 0 &&/);
+    expect(dissolving).toMatch(/nova-thinking/);
+  });
+
+  it("fades by position rather than by timer", () => {
+    const dissolving = rendered("nova-dissolving.tsx");
+
+    /* Opacity comes from where a line sits, and only the stage changing can
+       move it. Nothing in here starts on its own. */
+    expect(dissolving).toMatch(/opacity: index === 0 \? 0\.55 : 0\.28/);
+    expect(dissolving).not.toMatch(/animation|nova-dissolve|setTimeout|setInterval/);
+  });
+
+  it("leaves no timer class behind in the stylesheet", () => {
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+
+    expect(css).not.toContain("nova-dissolve");
+  });
+});

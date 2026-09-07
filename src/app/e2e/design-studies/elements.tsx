@@ -16,6 +16,7 @@
  */
 
 export { NovaBubble as Bubble } from "@/components/nova/nova-bubble";
+export { NovaDissolving as Dissolving } from "@/components/nova/nova-dissolving";
 export {
   NovaMove as Move,
   NovaMoves as Moves,
@@ -28,6 +29,5 @@ export {
   NovaHappened as Happened,
   NovaThinking as Thinking,
   NovaRenderBlock as RenderBlock,
-  NovaDissolving as Dissolving,
   type NovaAvailability,
 } from "@/components/nova/nova-thread";
