@@ -50,13 +50,23 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## Two minutes to sign in, and you can see them
+
+A sandbox bills for every second it exists, and this one exists to hold a login form. The provider ceiling is ten minutes, which is nine minutes of paying for an empty room when somebody walks away mid-flow.
+
+`LOGIN_DEADLINE_MS` is two minutes, as one constant, and the countdown is on screen from the moment the browser is — not from when the dialog opens, because a cold sandbox can take two minutes to build and charging that to the founder's sign-in time would be billing them for Vibe's own wait. It stops the instant the scan starts. When it runs out the browser is terminated on the same path as Cancel, so nothing is charged, and the panel says which of the two happened.
+
+Two minutes is tight for a password manager plus a second factor on a phone. The mitigation is that it is *visible*: somebody who can see thirty seconds left knows to hurry, where somebody who can see nothing is simply cut off.
+
 ## The handoff, and why it is allowed to be decoration
 
 The live view is useful for the first seconds of an analysis — a person can watch the crawl start — and after that it is a video of pages flicking past that nobody is driving. What followed was a spinner and a seconds counter.
 
 `scan-handoff.tsx` hands the picture over instead: the frame switches off the way a CRT does, the mark takes its place, and Vibe visibly gathers while the analysis runs. It holds the three obligations in code rather than in a comment — bound to an observed state (mounted only while an analysis Vibe started is running, so it cannot appear over a pending, paused or failed scan), removable without loss (every word a founder needs is in the status panel below it), and carrying no timing (a fixed period; nothing accelerates, fills or counts down).
 
-The tiles carry **no text**, and that is deliberate rather than timid. Everything else on screen during the animation is decoration a person reads as decoration; a tile reading `/app/billing` would be the one element they read as *information*. Vibe does not know from here which page is being read at any moment — the analysis runs inside one request and reports when it is done — so that path would be wrong, and a screen that makes things up costs more than an animation earns.
+Four scenes, because the scan runs for a minute and a half and one of them is not enough: the switch-off, a **boot** — an indeterminate sweep, never a filling bar, because a bar would reach its end in two seconds and then sit full for another ninety over a scan still running — the gathering, and a **check** when the result lands. The check is reachable only from `succeeded`, which is set when the analysis has come back; success animated before success exists is the first entry on the never-animate list. The dialog closes *after* it, so the last thing a founder sees is Vibe finishing rather than a window vanishing.
+
+The glyphs are page furniture — an `@`, a folder, a cart, a table, a code snippet. They carry **no text**, and that is deliberate rather than timid. Everything else on screen during the animation is decoration a person reads as decoration; a tile reading `/app/billing` would be the one element they read as *information*. Vibe does not know from here which page is being read at any moment — the analysis runs inside one request and reports when it is done — so that path would be wrong, and a screen that makes things up costs more than an animation earns.
 
 ## The window follows the device; the reading does not
 

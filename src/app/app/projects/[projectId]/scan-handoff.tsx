@@ -1,8 +1,22 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactElement } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { VibeMark } from "@/components/brand/vibe-mark";
+import { CodeIcon } from "@/components/ui/dashboard-icons";
+import {
+  AtGlyph,
+  BellGlyph,
+  ButtonGlyph,
+  CartGlyph,
+  FieldGlyph,
+  FolderGlyph,
+  ImageGlyph,
+  LinkGlyph,
+  ParagraphGlyph,
+  PlayGlyph,
+  TableGlyph,
+} from "./scan-glyphs";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 
 /**
@@ -50,8 +64,20 @@ import { useDocumentVisible } from "@/lib/client/use-document-visible";
 const WATCH_MS = 2_600;
 /** The switch-off itself. Short: it is a transition, not a scene. */
 const COLLAPSE_MS = 620;
+/**
+ * The boot.
+ *
+ * An **indeterminate** sweep, not a filling bar, and the difference is the
+ * whole reason this is allowed to exist. A bar that fills reads as a fraction
+ * of the work; it would reach the end in under two seconds and then sit there
+ * for another ninety, which is a completion claim over a scan still running. A
+ * segment travelling a track accumulates nothing and claims nothing.
+ */
+const BOOT_MS = 1_900;
+/** The check, when the analysis comes back. Long enough to read, short enough to leave. */
+const SEAL_MS = 1_500;
 
-export type ScanHandoffStage = "watching" | "collapsing" | "gathering";
+export type ScanHandoffStage = "watching" | "collapsing" | "booting" | "gathering" | "sealing";
 
 /**
  * Which stage a given moment belongs to.
@@ -60,12 +86,21 @@ export type ScanHandoffStage = "watching" | "collapsing" | "gathering";
  * frame — and so the reduced-motion answer is a value rather than a branch
  * scattered through the component.
  */
-export function scanHandoffStage(elapsedMs: number, reducedMotion: boolean): ScanHandoffStage {
+export function scanHandoffStage(
+  elapsedMs: number,
+  reducedMotion: boolean,
+  /** Set once the analysis has come back with a result. */
+  succeeded = false,
+): ScanHandoffStage {
+  // The outcome outranks the clock. A result that arrives during the boot
+  // must not wait for a scene the founder no longer needs.
+  if (succeeded) return "sealing";
   // Reduced motion is not a degraded experience: it is the same information
   // without the movement. The end state is the information, so it starts there.
   if (reducedMotion) return "gathering";
   if (elapsedMs < WATCH_MS) return "watching";
   if (elapsedMs < WATCH_MS + COLLAPSE_MS) return "collapsing";
+  if (elapsedMs < WATCH_MS + COLLAPSE_MS + BOOT_MS) return "booting";
   return "gathering";
 }
 
@@ -77,26 +112,36 @@ export function scanHandoffStage(elapsedMs: number, reducedMotion: boolean): Sca
  * tiles would jump mid-flight. Twelve is enough that the loop does not read as
  * a loop.
  */
-const TILE_ORIGINS = [
-  { x: -0.62, y: -0.34 },
-  { x: 0.58, y: -0.4 },
-  { x: -0.7, y: 0.18 },
-  { x: 0.66, y: 0.3 },
-  { x: -0.28, y: -0.52 },
-  { x: 0.3, y: 0.52 },
-  { x: -0.55, y: 0.46 },
-  { x: 0.5, y: -0.5 },
-  { x: -0.74, y: -0.06 },
-  { x: 0.72, y: 0.02 },
-  { x: 0.12, y: -0.58 },
-  { x: -0.1, y: 0.58 },
+const TILE_ORIGINS: { x: number; y: number; Glyph: (props: { size?: number }) => ReactElement }[] = [
+  { x: -0.62, y: -0.34, Glyph: AtGlyph },
+  { x: 0.58, y: -0.4, Glyph: FolderGlyph },
+  { x: -0.7, y: 0.18, Glyph: CodeIcon },
+  { x: 0.66, y: 0.3, Glyph: ImageGlyph },
+  { x: -0.28, y: -0.52, Glyph: FieldGlyph },
+  { x: 0.3, y: 0.52, Glyph: CartGlyph },
+  { x: -0.55, y: 0.46, Glyph: TableGlyph },
+  { x: 0.5, y: -0.5, Glyph: ButtonGlyph },
+  { x: -0.74, y: -0.06, Glyph: ParagraphGlyph },
+  { x: 0.72, y: 0.02, Glyph: BellGlyph },
+  { x: 0.12, y: -0.58, Glyph: LinkGlyph },
+  { x: -0.1, y: 0.58, Glyph: PlayGlyph },
 ];
 
 /** One tile's flight, on a fixed period with a fixed offset. */
 const TILE_FLIGHT_S = 2.2;
 const TILE_STAGGER_S = 0.34;
 
-export function ScanHandoff({ running }: { running: boolean }) {
+export function ScanHandoff({
+  running,
+  succeeded = false,
+  onSealed,
+}: {
+  running: boolean;
+  /** The analysis came back with a result. Drives the closing check. */
+  succeeded?: boolean;
+  /** Called once the check has played, so the dialog closes after it and not during. */
+  onSealed?: () => void;
+}) {
   const reducedMotion = useReducedMotion() ?? false;
   const visible = useDocumentVisible();
 
@@ -175,9 +220,25 @@ export function ScanHandoff({ running }: { running: boolean }) {
     return () => observer.disconnect();
   }, [running]);
 
+  /*
+   * The dialog closes after the check, not during it.
+   *
+   * The callback is in the dependency list rather than stashed in a ref
+   * written during render — the caller holds it in a `useCallback`, which is
+   * where stability belongs. A ref assigned at render time is the thing this
+   * repository has already been bitten by twice.
+   */
+  useEffect(() => {
+    if (!succeeded) return;
+    // Reduced motion gets no outro to wait for: there is nothing to watch, so
+    // making somebody wait for it would be a delay with no content in it.
+    const timer = setTimeout(() => onSealed?.(), reducedMotion ? 0 : SEAL_MS);
+    return () => clearTimeout(timer);
+  }, [succeeded, reducedMotion, onSealed]);
+
   if (!running) return null;
 
-  const stage = scanHandoffStage(elapsedMs, reducedMotion);
+  const stage = scanHandoffStage(elapsedMs, reducedMotion, succeeded);
 
   /*
    * The box is mounted for the whole run, empty while the founder is still
@@ -226,6 +287,83 @@ export function ScanHandoff({ running }: { running: boolean }) {
         )}
       </AnimatePresence>
 
+      {stage === "booting" && (
+        /*
+         * The boot.
+         *
+         * An **indeterminate** sweep: a bright segment crossing a track, twice,
+         * then gone. Not a filling bar — a bar that fills reads as a fraction
+         * of the work, would reach the end in under two seconds, and would then
+         * sit full for another ninety while the scan is still running. That is
+         * a completion claim, and it is the exact thing the motion rules name
+         * as never animatable. A travelling segment accumulates nothing.
+         */
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8">
+          <motion.p
+            className="text-fg-meta font-mono text-meta tracking-[0.3em] uppercase"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            Deep Scan
+          </motion.p>
+          <div className="border-line-2 relative h-[3px] w-full max-w-xs overflow-hidden rounded-full border-y-0 bg-surface-3">
+            <motion.div
+              className="bg-mint absolute inset-y-0 w-1/3 rounded-full"
+              initial={{ x: "-120%" }}
+              animate={{ x: ["-120%", "320%"] }}
+              transition={{
+                duration: BOOT_MS / 2 / 1000,
+                ease: "easeInOut",
+                repeat: 1,
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {stage === "sealing" && (
+        /*
+         * The close.
+         *
+         * Bound to the one state that earns it: `succeeded` is set only when
+         * the analysis has come back with a result. A check drawn before a
+         * result exists would be success animated before success — the first
+         * entry on the never-animate list.
+         */
+        <div className="absolute inset-0 flex items-center justify-center">
+          <motion.div
+            className="bg-mint text-mint-ink flex size-20 items-center justify-center rounded-full"
+            initial={reducedMotion ? false : { scale: 0.4, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.42, ease: [0.2, 0.9, 0.2, 1] }}
+          >
+            {/*
+              The tick is *drawn* rather than faded in: `pathLength` animates
+              the stroke itself, so it reads as Vibe finishing something rather
+              than as an image appearing.
+            */}
+            <motion.svg
+              viewBox="0 0 24 24"
+              className="size-10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <motion.path
+                d="m5 12.5 4.5 4.5L19 7.5"
+                initial={reducedMotion ? false : { pathLength: 0 }}
+                animate={{ pathLength: 1 }}
+                transition={{ duration: 0.42, delay: 0.2, ease: "easeOut" }}
+              />
+            </motion.svg>
+          </motion.div>
+        </div>
+      )}
+
       {stage === "gathering" && (
         <div className="absolute inset-0 flex items-center justify-center">
           {/*
@@ -252,10 +390,10 @@ export function ScanHandoff({ running }: { running: boolean }) {
           {!reducedMotion &&
             visible &&
             box !== null &&
-            TILE_ORIGINS.map((origin, index) => (
+            TILE_ORIGINS.map(({ Glyph, ...origin }, index) => (
               <motion.div
                 key={index}
-                className="border-line-2 bg-surface-3 rounded-nav shadow-card absolute h-8 w-12 border"
+                className="border-line-2 bg-surface-3 rounded-nav shadow-card text-fg-muted absolute flex h-11 w-11 items-center justify-center border"
                 initial={{
                   x: origin.x * box.w,
                   y: origin.y * box.h,
@@ -283,7 +421,9 @@ export function ScanHandoff({ running }: { running: boolean }) {
                   ),
                   delay: index * TILE_STAGGER_S,
                 }}
-              />
+              >
+                <Glyph size={18} />
+              </motion.div>
             ))}
         </div>
       )}

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { startupSteps, type BrowserStartupStage } from "./deep-scan-panel";
+import { formatCountdown, startupSteps, type BrowserStartupStage } from "./deep-scan-panel";
 
 /**
  * What fills the wait between clicking start and seeing a browser.
@@ -195,5 +195,61 @@ describe("the picture is never stretched to fit a box", () => {
     // A stale ratio would size the next session's box before its first frame.
     const close = source.slice(source.indexOf("const closeDialog = useCallback"));
     expect(close.slice(0, close.indexOf("}, ["))).toContain("setFrame(null)");
+  });
+});
+
+/*
+ * A sandbox bills for every second it exists, and this one exists to hold a
+ * login form. Ten minutes of it — the provider ceiling — is nine minutes of
+ * paying for an empty room when somebody walks away mid-flow.
+ */
+describe("the login deadline is visible before it bites", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  it("reads as a clock, because people read clocks", () => {
+    expect(formatCountdown(120)).toBe("2:00");
+    expect(formatCountdown(95)).toBe("1:35");
+    expect(formatCountdown(9)).toBe("0:09");
+    expect(formatCountdown(0)).toBe("0:00");
+  });
+
+  it("never shows a negative or a fractional second", () => {
+    expect(formatCountdown(-4)).toBe("0:00");
+    expect(formatCountdown(59.7)).toBe("0:59");
+  });
+
+  it("starts when the browser is on screen, not when the dialog opens", () => {
+    /*
+     * A cold sandbox can take two minutes to build. Charging that to the
+     * founder's sign-in time would be billing them for Vibe's own wait.
+     */
+    expect(source).toContain('stage === "ready" && !busy && !sealing && !unreachable');
+  });
+
+  it("stops as soon as the scan starts", () => {
+    // `!busy` covers the auto-start firing near the deadline: once Vibe is
+    // reading, the founder is no longer signing in and the clock is over.
+    const armed = source.slice(source.indexOf("const loginSecondsLeft = useLoginCountdown("));
+    expect(armed.slice(0, armed.indexOf(");"))).toContain("!busy");
+  });
+
+  it("ends the browser rather than leaving it running", () => {
+    const expired = source.slice(source.indexOf("const handleLoginExpired = useCallback"));
+    const body = expired.slice(0, expired.indexOf("}, ["));
+    expect(body).toContain("cancelDeepScanAction");
+    // And says why, rather than closing a dialog with no explanation.
+    expect(body).toContain("Nothing was charged");
+  });
+
+  it("does not hand out a fresh two minutes on every render", () => {
+    // The deadline is set once per arming. A hook that re-derived it per
+    // render is a clock that never runs down.
+    const hook = source.slice(source.indexOf("function useLoginCountdown"));
+    const body = hook.slice(0, hook.indexOf("\n}"));
+    expect(body).toContain("}, [armed, onExpired]);");
+    expect(body).toContain("deadlineRef.current = Date.now() + LOGIN_DEADLINE_MS;");
   });
 });

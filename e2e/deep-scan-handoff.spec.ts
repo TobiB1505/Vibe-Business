@@ -76,3 +76,51 @@ test.describe("the scan handoff", () => {
     expect(after!.height).toBeCloseTo(before!.height, 0);
   });
 });
+
+/*
+ * The scan runs for a minute and a half, so the sequence has scenes: a boot,
+ * then the gathering, then a check when the result lands. Each is only worth
+ * having if it actually reaches the screen.
+ */
+test.describe("the scenes", () => {
+  test("boots before it gathers", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-handoff");
+
+    const box = page.getByTestId("handoff-box");
+    // The boot names the thing being started. It is the first text in the box.
+    await expect(box.getByText("Deep Scan")).toBeVisible({ timeout: 10_000 });
+
+    // And then it hands over to the mark, which the boot scene does not have.
+    await expect(box.locator("img")).toBeVisible({ timeout: 10_000 });
+    await expect(box.getByText("Deep Scan")).toBeHidden();
+  });
+
+  test("flies page furniture in, and none of it is text", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-handoff");
+
+    const box = page.getByTestId("handoff-box");
+    await expect(box.locator("img")).toBeVisible({ timeout: 10_000 });
+
+    // Twelve glyphs, drawn as SVG. `img` is the mark, so these are the rest.
+    await expect(box.locator("svg")).toHaveCount(12);
+
+    /*
+     * And nothing in the box reads as a page Vibe visited. A glyph that
+     * carried a path would be the one element a founder reads as information,
+     * and Vibe does not know from here which page is being read.
+     */
+    await expect(box).not.toContainText("/app");
+  });
+
+  test("draws a check when a result exists, and only then", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-handoff-sealed");
+
+    const box = page.getByTestId("handoff-box");
+    const check = box.locator("svg path[d^='m5 12.5']");
+    await expect(check).toBeVisible();
+
+    // The gathering never appears: a result outranks the clock, so nobody
+    // waits through a scene they no longer need.
+    await expect(box.locator("img")).toHaveCount(0);
+  });
+});

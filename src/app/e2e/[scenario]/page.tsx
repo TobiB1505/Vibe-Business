@@ -1612,6 +1612,21 @@ export default async function E2eScenarioPage({
    * it passed while the component threw on mount and a founder watched 42
    * seconds of live browser where it should have been.
    */
+  /* The closing check, which cannot be reached without a real analysis result. */
+  if (scenario === "deep-scan-handoff-sealed") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <div
+          data-testid="handoff-box"
+          className="border-line-2 bg-surface-2 rounded-card relative aspect-[16/10] w-full overflow-hidden border"
+        >
+          <ScanHandoff running succeeded />
+        </div>
+      </main>
+    );
+  }
+
   if (scenario === "deep-scan-handoff") {
     return (
       <main className="mx-auto max-w-3xl p-8">
