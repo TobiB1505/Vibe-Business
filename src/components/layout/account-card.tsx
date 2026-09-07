@@ -63,7 +63,14 @@ export function AccountCard({
       <Link
         href="/app/settings/profile"
         className={cn(
-          "rounded-nav flex items-center gap-3 px-3 py-3",
+          /*
+            Sized to the avatar and the name, not to the rail.
+            A full-width field left half of itself empty past the subtitle,
+            which reads as a large surface that happens to have a person in
+            the corner. `max-w-full` keeps a long name inside the rail, and the
+            truncation below is what makes that safe.
+          */
+          "rounded-nav flex w-fit max-w-full items-center gap-3 px-3 py-3",
           /*
             The container is transparent at rest and arrives on the way in.
             A border that appears rather than one that widens: `transparent`
@@ -91,7 +98,7 @@ export function AccountCard({
             size={38}
           />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
+        <span className="flex min-w-0 flex-col">
           <span
             className="text-fg-body truncate text-body font-semibold"
             title={identity.displayName}

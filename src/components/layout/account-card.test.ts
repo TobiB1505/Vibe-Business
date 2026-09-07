@@ -63,6 +63,22 @@ describe("the account card", () => {
     expect(card).not.toMatch(/"[^"]*\bbg-surface-1\b[^"]*rounded/);
   });
 
+  /**
+   * The field is around the avatar and the name, not around the rail.
+   *
+   * Full width left half of the field empty past the subtitle, which reads as
+   * a large surface with a person in the corner rather than as a control
+   * wrapped around an identity. `max-w-full` is what keeps a long name inside
+   * the rail, and the truncation on the name is what makes that safe.
+   */
+  it("sizes the field to its content, and never past the rail", () => {
+    const card = code(CARD);
+    expect(card).toContain("w-fit max-w-full");
+    expect(card).toContain("truncate");
+    // A stretching child would defeat `w-fit` from the inside.
+    expect(card).not.toContain("flex-1");
+  });
+
   it("answers a finger, which never hovers", () => {
     // `IconButton` makes this argument at length: touch gets rest and pressed
     // and nothing in between, so a press has to be a visible step past hover

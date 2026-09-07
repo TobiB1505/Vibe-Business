@@ -27,7 +27,9 @@ The card kept the menu's bordered panel, which made it the one bordered thing at
 
 That looks like it contradicts `IconButton`, which argues at length that a bare mark with a fill arriving on hover is not a control on a phone: there is no hover there, so the resting state is the only state a finger ever sees. **That argument is about a control whose container is its whole affordance.** An icon alone says nothing about being pressable; an avatar and a name say who they are at rest, and every other row in this rail is exactly this shape. Touch still gets an answer — `active:` is a visible step past hover.
 
-The border is `transparent` rather than absent, so it holds its pixel and nothing on the rail moves when it becomes visible. Measured: resting fill and border both `rgba(…, 0)`, hover `rgba(255 255 255 / 0.035)` and `rgba(255 255 255 / 0.13)`, box height and position identical across the two. Mutation-tested in both the unit guard and the browser one.
+The border is `transparent` rather than absent, so it holds its pixel and nothing on the rail moves when it becomes visible. Measured: resting fill and border both `rgba(…, 0)`, hover `rgba(255 255 255 / 0.035)` and `rgba(255 255 255 / 0.13)`, box height and position identical across the two.
+
+And the field is around the *identity*, not around the rail. Full width left roughly half of it empty past the subtitle, which reads as a large surface with a person in the corner rather than as a control wrapped around a name: 215px of field for 121px of content. `w-fit` with `max-w-full` hugs the content and still stops at the rail — a long name measures exactly the rail width and truncates rather than overflowing it. Every claim here is mutation-tested in both the unit guard and the browser one.
 
 ## Two small things measured rather than assumed
 

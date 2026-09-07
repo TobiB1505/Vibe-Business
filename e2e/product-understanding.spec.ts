@@ -120,6 +120,11 @@ test.describe("the project shell owns project context", () => {
     const hovered = await identity.boundingBox();
     expect(Math.abs(hovered!.height - box!.height)).toBeLessThan(0.5);
     expect(Math.abs(hovered!.y - box!.y)).toBeLessThan(0.5);
+
+    // And the field is around the identity rather than around the rail: full
+    // width left half of it empty past the subtitle.
+    const rail = await account.boundingBox();
+    expect(box!.width, "the field spans the rail").toBeLessThan(rail!.width - 24);
   });
 });
 
