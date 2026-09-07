@@ -49,6 +49,20 @@ import { cn } from "@/lib/utils/cn";
 
 export type NovaPresenceState = "idle" | "listening" | "working" | "settled";
 
+/**
+ * How long `introduce` takes, end to end, in milliseconds.
+ *
+ * The blades seat from 0.2s, the curve is drawn from 1.3s over 750ms, and the
+ * peak lights at 1.72s over 240ms — so the mark is finished at 1.96s. Exported
+ * because a sequence built around this entrance has to know when it ends, and
+ * the alternative is a second number somewhere else that is right until one of
+ * the three above is tuned.
+ *
+ * The keyframes below are the source; this is the sum, and
+ * `nova-presence.test.ts` checks it against them.
+ */
+export const NOVA_INTRODUCTION_MS = 1960;
+
 const SIZES = {
   sm: { px: 28, stroke: 0.8 },
   md: { px: 44, stroke: 1 },

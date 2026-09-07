@@ -146,8 +146,12 @@ export function Arriving({
  * A subscription rather than a flag set from an effect: the server and the
  * hydrating client agree on "no staging", so the complete thread is what the
  * markup contains and staging is only ever added afterwards.
+ *
+ * Exported because the opening choreography needs the same answer, and two
+ * readings of one preference is how a screen ends up half-staged: the thread
+ * present from the first frame while the panel around it is still assembling.
  */
-function useMotionAllowed(): boolean {
+export function useMotionAllowed(): boolean {
   const subscribe = useCallback((onChange: () => void) => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     media.addEventListener("change", onChange);

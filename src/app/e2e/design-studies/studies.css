@@ -596,6 +596,16 @@
   animation-play-state: paused;
 }
 
+/* The dot beside "Connecting…", which is the one moment a connection state is
+   genuinely unknown rather than merely false. */
+.study-pulse {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+.study-paused .study-pulse {
+  animation-play-state: paused;
+}
+
 .study-press {
   transition:
     transform var(--dur-press) var(--ease-out),
@@ -620,6 +630,7 @@
   .study-rise,
   .study-breathe,
   .study-typing,
+  .study-pulse,
   .study-press {
     animation: none !important;
     transition: none !important;
@@ -627,7 +638,8 @@
   /* Three still dots rather than none: the bubble is what says she is
      composing, and removing it would take information the motion only
      decorated. */
-  .study-typing {
+  .study-typing,
+  .study-pulse {
     opacity: 1;
   }
   /* The settled state, immediately — never a hidden element. */

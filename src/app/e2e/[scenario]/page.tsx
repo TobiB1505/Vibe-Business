@@ -42,6 +42,7 @@ import { StudyMove } from "../design-studies/study-move";
 import { StudyBubble } from "../design-studies/study-bubble";
 import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
+import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -57,6 +58,8 @@ import {
   MOVE_SCENARIO,
   BUBBLE_SCENARIO,
   BLOCK_SCENARIO,
+  OPENING_SCENARIO,
+  OPENING_WALKTHROUGH_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
   CHAT_ANSWERED_SCENARIO,
@@ -298,6 +301,24 @@ export default async function E2eScenarioPage({
     return (
       <StudyShell study={chosen}>
         <StudyBlock study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === OPENING_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyOpening study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === OPENING_WALKTHROUGH_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyOpeningWalkthrough study={chosen} />
       </StudyShell>
     );
   }

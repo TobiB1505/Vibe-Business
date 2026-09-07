@@ -262,6 +262,16 @@ export const WIREFRAME_SCENARIO = "study-wireframe";
 
 /** The Render Block element sheet: in flight, settled, and unscorable. */
 export const BLOCK_SCENARIO = "study-block";
+
+/**
+ * The opening: the first time a founder ever meets Nova.
+ *
+ * Two scenarios, because the sequence and what follows it are different
+ * questions. The first is a choreography and can only be judged running; the
+ * second is the one thing she asks before the product starts, and is a still.
+ */
+export const OPENING_SCENARIO = "study-opening";
+export const OPENING_WALKTHROUGH_SCENARIO = "study-opening-walkthrough";
 export const WIREFRAME_OFFLINE_SCENARIO = "study-wireframe-offline";
 
 export function isWireframeScenario(scenario: string): boolean {

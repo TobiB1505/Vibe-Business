@@ -1,5 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { APERTURE, CURVE, HOLE, type NovaPresenceState } from "./nova-presence";
+import {
+  APERTURE,
+  CURVE,
+  HOLE,
+  NOVA_INTRODUCTION_MS,
+  type NovaPresenceState,
+} from "./nova-presence";
 
 /**
  * The mark's one geometric invariant: no opening closes inside the curve.
@@ -125,5 +133,30 @@ describe("Nova's mark", () => {
      */
     const openings = STATES.map((state) => APERTURE[state]);
     expect(Math.max(...openings)).toBeLessThanOrEqual(Math.min(...openings) * 2);
+  });
+
+  /**
+   * The entrance's advertised length is the entrance's actual length.
+   *
+   * `NOVA_INTRODUCTION_MS` exists so a sequence can wait for the mark to
+   * finish assembling before moving it. A number that drifted from the
+   * keyframes would move it mid-draw — which is exactly what the first build
+   * of the opening did, cutting the curve off halfway.
+   *
+   * The last thing to happen is the peak lighting, so the sum is its delay
+   * plus its duration, both read out of the component's own stylesheet rather
+   * than restated here.
+   */
+  it("says how long the introduction takes, and is right", () => {
+    const source = readFileSync(join(import.meta.dirname, "nova-presence.tsx"), "utf8");
+    const peak =
+      /\.nPeakDraw-\$\{id\} \{ animation: nPeakDraw-\$\{id\} (\d+)ms [^;]*? ([\d.]+)s both; \}/.exec(
+        source,
+      );
+
+    if (!peak) throw new Error("the peak's entrance keyframe is no longer where this can read it");
+
+    const finishes = Number(peak[2]) * 1000 + Number(peak[1]);
+    expect(NOVA_INTRODUCTION_MS).toBe(finishes);
   });
 });

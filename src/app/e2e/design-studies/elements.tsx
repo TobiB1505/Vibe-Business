@@ -503,6 +503,15 @@ export function Header({
   subject,
   /** Whether the repository behind that name is still reachable. */
   connected,
+  /**
+   * The moment before that is known, on the one screen that has one.
+   *
+   * Everywhere else this state does not exist: a page renders with the answer
+   * already read. The opening is the exception, and it needs its own word —
+   * "Disconnected" in coral for the second before the first read returns would
+   * be the product alarming a founder about nothing.
+   */
+  connecting = false,
   /** The mark, passed in so this element never decides which state it is in. */
   mark,
   /** The viewer's clock. Passed in, because only a client component has one. */
@@ -511,6 +520,7 @@ export function Header({
   availability: NovaAvailability;
   subject: string;
   connected: boolean;
+  connecting?: boolean;
   mark: ReactNode;
   now?: ReactNode;
 }) {
@@ -541,9 +551,11 @@ export function Header({
         <span className="flex shrink-0 items-center gap-1.5 text-caption text-fg-meta">
           <span
             aria-hidden
-            className={`size-1.5 shrink-0 rounded-full ${connected ? "bg-mint" : "bg-coral"}`}
+            className={`size-1.5 shrink-0 rounded-full ${
+              connecting ? "study-pulse bg-fg-muted" : connected ? "bg-mint" : "bg-coral"
+            }`}
           />
-          {connected ? "Connected" : "Disconnected"}
+          {connecting ? "Connecting…" : connected ? "Connected" : "Disconnected"}
         </span>
       </div>
       {now}
