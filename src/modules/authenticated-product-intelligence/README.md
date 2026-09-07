@@ -28,6 +28,8 @@ It contains **no interpolation** — not one `${`, not one backtick. Both tokens
 
 A real browser rendering a logged-in application is expensive in provider seconds and can contain real customer data. `budgets.ts` is therefore _tighter_ than the public crawler's, and reaching a budget degrades the result to partial rather than crawling on (rule 39).
 
+It also refuses to spend a page on something the public scan already read. A page the live product crawl fetched and rendered **anonymously** is not authenticated product — it is described already, statically, for no browser seconds and no Credits — so it is not a candidate here, whether it arrives as a repository route or as a link in the signed-in shell's own footer. Only the landing page is exempt, because it is where the browser already is. A path the public crawl watched *bounce to a login page* is the opposite case and ranks highest: that is proof the route is part of the signed-in product.
+
 Page content is untrusted data, never instruction (rule 36): what is extracted is sanitized into typed signals, and what is stored is derived intelligence with short evidence labels — never page source, body text, cookies or query strings (rule 37).
 
 ## One included scan per project

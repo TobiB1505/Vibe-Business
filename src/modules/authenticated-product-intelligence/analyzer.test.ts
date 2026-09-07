@@ -408,3 +408,60 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
     expect(new Set(paths).size).toBe(paths.length);
   });
 });
+
+/*
+ * The founder's instruction, after watching a 25-page budget go on `/`,
+ * `/privacy`, `/terms`, `/forgot-password` and `/reset-password`:
+ *
+ *   "er sollte auf keinen fall die public sites lesen die ohne Login möglich
+ *    sind das machen wir schon mit dem live product scan"
+ *
+ * Those paths arrived as links in the signed-in shell's own footer, which is
+ * why the exclusion has to live here and not only in `buildRouteCandidates`.
+ */
+describe("analyzeAuthenticatedProduct — pages the public scan already read", () => {
+  it("does not spend a page visit on a link the public crawl rendered anonymously", async () => {
+    let current = `${ORIGIN}/app`;
+    const visited: string[] = [];
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        visited.push(new URL(url).pathname);
+        current = url;
+        return { status: 200 };
+      },
+      extract: async () =>
+        extraction({ sameOriginLinks: [`${ORIGIN}/privacy`, `${ORIGIN}/app/settings`] }),
+    };
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      },
+      publicProduct: publicWith([{ path: "/privacy", redirectedTo: null }]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(visited).not.toContain("/privacy");
+    expect(visited).toContain("/app/settings");
+    expect(result.snapshot.pages.map((entry) => entry.path)).not.toContain("/privacy");
+  });
+
+  it("still inspects a path the public crawl saw bounce to a login page", async () => {
+    const { browser, visited } = fakeBrowser();
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser,
+      publicProduct: publicWith([{ path: "/app/reports", redirectedTo: "/login" }]),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(visited.map((url) => new URL(url).pathname)).toContain("/app/reports");
+  });
+});

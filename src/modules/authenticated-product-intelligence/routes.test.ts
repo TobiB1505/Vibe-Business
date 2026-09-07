@@ -320,7 +320,24 @@ describe("route priority refinement (Sprint 6 §5)", () => {
     expect(protectedFirst.indexOf(insights!)).toBeLessThan(protectedFirst.indexOf(reports!));
   });
 
-  it("demotes a repository route the public crawler already rendered", () => {
+  /*
+   * Sprint 6 §5 demoted a page the public crawl had already rendered, and kept
+   * it on the list: the signed-in view of `/` is often a different page, so a
+   * blanket removal looked like it would throw away real evidence.
+   *
+   * A measured scan reversed that. It spent pages of a 25-page budget on `/`,
+   * `/privacy`, `/terms`, `/forgot-password` and `/reset-password` — pages the
+   * live product scan reads already, statically, for no browser seconds and no
+   * Credits. The demotion did not prevent it, partly because it only ever
+   * applied to repository routes and those paths arrived as links in the
+   * signed-in shell's own footer.
+   *
+   * So a page the public crawl rendered anonymously is now skipped outright.
+   * The landing page keeps its exemption, because it is where the browser
+   * already is, and it is the one page whose signed-in form we are certain to
+   * see either way.
+   */
+  it("skips a repository route the public crawler already rendered", () => {
     const overlapping = candidates({
       repositoryRoutes: [{ path: "/pricing", kind: "page", dynamic: false }],
       publicPages: [{ path: "/pricing", redirectedTo: null }],
@@ -329,16 +346,12 @@ describe("route priority refinement (Sprint 6 §5)", () => {
       repositoryRoutes: [{ path: "/pricing", kind: "page", dynamic: false }],
     });
 
-    const demoted = overlapping.find((candidate) => candidate.path === "/pricing");
-    const undemoted = fresh.find((candidate) => candidate.path === "/pricing");
-
-    expect(demoted!.priority).toBeLessThan(undemoted!.priority);
+    expect(overlapping.map((candidate) => candidate.path)).not.toContain("/pricing");
+    expect(fresh.map((candidate) => candidate.path)).toContain("/pricing");
   });
 
-  it("keeps public-overlap routes as candidates rather than removing them", () => {
-    // The signed-in view of `/` is frequently a different page entirely, so a
-    // blanket removal would throw away real evidence (Sprint 6 §5).
-    const result = candidates({
+  it("skips public-overlap routes whichever source they arrive by", () => {
+    const seeded = candidates({
       landingPath: "/app",
       repositoryRoutes: [
         { path: "/", kind: "page", dynamic: false },
@@ -350,9 +363,31 @@ describe("route priority refinement (Sprint 6 §5)", () => {
       ],
     });
 
-    expect(result.map((candidate) => candidate.path)).toContain("/");
-    expect(result.map((candidate) => candidate.path)).toContain("/pricing");
-    expect(result.every((candidate) => candidate.priority >= 1)).toBe(true);
+    expect(seeded.map((candidate) => candidate.path)).not.toContain("/");
+    expect(seeded.map((candidate) => candidate.path)).not.toContain("/pricing");
+
+    // The footer of the signed-in shell is where `/privacy` and `/terms`
+    // actually came from, so the exclusion has to hold for harvested links too.
+    const linked = extendCandidates([], ["/privacy", "/app/settings"], {
+      origin: ORIGIN,
+      depth: 1,
+      budgets: DEFAULT_AUTHENTICATED_BUDGETS,
+      publiclyRendered: new Set(["/privacy"]),
+    });
+
+    expect(linked.map((candidate) => candidate.path)).toEqual(["/app/settings"]);
+  });
+
+  it("keeps a protected path even when the public crawl fetched something at it", () => {
+    // A page that bounced to a login surface is not a page the public scan
+    // read: `redirectedTo` is what separates the two, and only a genuinely
+    // rendered page is excluded.
+    const result = candidates({
+      landingPath: "/app",
+      publicPages: [{ path: "/reports", redirectedTo: "/login" }],
+    });
+
+    expect(result.map((candidate) => candidate.path)).toContain("/reports");
   });
 
   it("never demotes the landing page the user is already on", () => {

@@ -171,6 +171,24 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
   const tracker = new AuthenticatedBudgetTracker(budgets, now);
   const warnings: AuthenticatedWarning[] = [];
 
+  /*
+   * Paths the live product scan already read anonymously.
+   *
+   * Derived here as well as inside `buildRouteCandidates`, because links
+   * harvested mid-crawl never pass through that function — and links are how
+   * `/privacy` and `/terms` actually reached a real scan's candidate list.
+   */
+  const publiclyRendered = new Set<string>();
+  for (const page of input.publicProduct?.pages ?? []) {
+    if (page.redirectedTo !== null) continue;
+    if (page.status < 200 || page.status >= 300) continue;
+    // Normalized the same way a candidate is, or the two sets would never
+    // match: one holds `/privacy`, the other whatever the public snapshot
+    // happened to store.
+    const path = toSameOriginPath(page.path, input.origin);
+    if (path !== null) publiclyRendered.add(path);
+  }
+
   const selected = await selectAuthenticatedPage(input.browser, input.origin);
   if (selected === null) {
     // The user may still be mid-login, or logged into the wrong origin. This is
@@ -230,8 +248,7 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     if (!(candidate.source === "landing" && navigationCount === 0)) {
       try {
         navigationCount += 1;
-        const result = await page.goto(target, { timeoutMs: tracker.remainingNavigationTimeoutMs });
-        status = result.status;
+        status = (await page.goto(target, { timeoutMs: tracker.remainingNavigationTimeoutMs })).status;
       } catch (error) {
         tracker.note("navigation_failed");
         warnings.push(warning("page_unreachable", "A page could not be loaded.", candidate.path));
@@ -298,7 +315,7 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
       const discovered = extendCandidates(
         [...candidates, ...pages.map((entry) => ({ path: entry.path, source: entry.source, depth: entry.depth, priority: 0 }))],
         readSameOriginLinks(raw),
-        { origin: input.origin, depth: candidate.depth + 1, budgets },
+        { origin: input.origin, depth: candidate.depth + 1, budgets, publiclyRendered },
       );
       for (const entry of discovered) {
         if (!tracker.acceptCandidate()) break;
