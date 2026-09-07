@@ -130,10 +130,21 @@ export function AccountSidebar({
         // Desktop: a full-height rail that stays put while content scrolls.
         // Below `lg` it becomes a strip at the top, for the same reason
         // `ProjectSidebar` does — a 248px rail on a 375px screen eats the page.
-        "lg:sticky lg:top-0 lg:h-dvh lg:w-[17.5rem] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-6 lg:pt-11 lg:pb-7",
+        // One rhythm with the column beside it. `--shell-top` is the same
+        // variable `main` reads, so the rail cannot drift from the content
+        // again — which it did, twice.
+        "lg:sticky lg:top-0 lg:h-dvh lg:w-[17.5rem] lg:overflow-y-auto lg:border-r lg:border-b-0",
+        "lg:px-6 lg:pt-[var(--shell-top)] lg:pb-7",
       )}
     >
-      <div className="px-1">
+      {/*
+        Centred inside a box the height of the page heading's first line, so
+        the lockup and "Welcome back." read as level. Top-aligning their boxes
+        does not do that: a 15px lockup sits near the top of its short line box
+        and a 34px heading sits far down its tall one. The height is computed
+        from the type scale (`--shell-heading-line`), never nudged.
+      */}
+      <div className="flex items-center px-1 lg:min-h-[var(--shell-heading-line)]">
         <Link href="/app" className="rounded-nav" aria-label="Vibe Business — home">
           <VibeLockup />
         </Link>
@@ -167,7 +178,7 @@ export function AccountShell({ sidebar, children }: { sidebar: ReactNode; childr
           already takes 248px, and this screen's job is to be calm rather than
           to fit more in.
         */}
-        <main className="mx-auto w-full max-w-[78rem] px-5 py-9 sm:px-8 sm:py-11 xl:px-10">
+        <main className="mx-auto w-full max-w-[78rem] px-5 py-[var(--shell-top)] sm:px-8 xl:px-10">
           {children}
         </main>
       </div>

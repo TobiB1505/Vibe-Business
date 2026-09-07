@@ -384,6 +384,39 @@
   --stagger-row: 80ms;
 }
 
+/*
+ * The shell's top rhythm, in one place.
+ *
+ * ## Why this is a variable and not two paddings
+ *
+ * Because it was two paddings and they drifted. The account rail opened at
+ * 28px while the content column opened at 44px, so the brand lockup sat 16px
+ * above the page heading beside it; that was fixed by writing 44 in both
+ * places, and the next change to one of them will separate them again. A rail
+ * and the column beside it are one rhythm, so they read one number.
+ *
+ * ## And why a heading's line box is a token too
+ *
+ * Matching the *boxes* is not matching what a reader sees. A 15px lockup and a
+ * 34px heading whose boxes start on the same pixel do not look aligned: the
+ * heading's glyphs sit far down its own line box and the lockup's sit near the
+ * top of its much shorter one. Centring the lockup inside a box the height of
+ * the heading's first line is the correction, and it is computed from the type
+ * scale rather than nudged — so it stays right when the scale moves, and it is
+ * already right in the second palette, where `--text-display` is 34px rather
+ * than 36.
+ */
+:root {
+  --shell-top: 2.25rem;
+  --shell-heading-line: calc(var(--text-display) * var(--text-display--line-height));
+}
+
+@media (width >= 40rem) {
+  :root {
+    --shell-top: 2.75rem;
+  }
+}
+
 /* The active step's ring, breathing outward and fading. Decorative: the step's
    state is carried by its mark, its label and its status word. */
 @keyframes vibe-step-glow {
