@@ -348,7 +348,12 @@ describe("every type class names a token that exists", () => {
       .filter((name) => !name.includes("--")),
   );
 
-  /** Tailwind's own scale, which is legitimate even where Vibe has its own. */
+  /**
+   * Tailwind's own scale still *resolves*, so a class naming it is not an
+   * unresolvable name — which is all this particular test asks. Whether it is
+   * allowed at all is a different question, answered by "headings come from
+   * Vibe's scale, not Tailwind's" below.
+   */
   const TAILWIND = new Set([
     "xs",
     "sm",
@@ -455,5 +460,147 @@ describe("the body and caption steps name what they replaced", () => {
       stragglers,
       "`text-sm` and `text-xs` are Tailwind's names for steps Vibe now owns.",
     ).toEqual([]);
+  });
+});
+
+/**
+ * The heading scale is closed, and it has to stay closed.
+ *
+ * ## What was measured before this
+ *
+ * 1381 type-size decisions, of which 1134 named a Vibe token. The other 247
+ * were not call sites drifting. They were two specific holes:
+ *
+ * - **One job, three sizes.** A panel's own name — "Connected repositories",
+ *   "What you told Vibe", "Delete your account" — was written at 16px twenty
+ *   times, 18px five times and 19px eleven times.
+ * - **A job with no size.** The line that speaks to the founder — "Vibe needs
+ *   your input", "Vibe knows your product." — was written at 20px twelve
+ *   times and 24px eight. The scale had nothing between `title` (19) and
+ *   `headline` (28), so both numbers came from Tailwind's, which means
+ *   nothing here.
+ *
+ * `--text-moment` closes the second and the sweep closed the first. The rule
+ * that let it happen is the one this replaces: the earlier version of this
+ * file allowed Tailwind's whole scale as "legitimate even where Vibe has its
+ * own", and 98 sizes walked through that door.
+ *
+ * ## Why exceptions are counted rather than described
+ *
+ * Nineteen uses remain and they are not type. They are a metric (a number with
+ * `tabular-nums`), a glyph sized as an icon (a `×`, a `!`, an initial), and a
+ * large CTA whose size belongs to `buttonClasses`. Each is a separate
+ * decision, none of them is a heading, and folding them into the type scale to
+ * make a test pass would be the wrong fix.
+ *
+ * So they are named by file *with a count*. A file may keep exactly what it
+ * has; one more makes this fail. That is what stops the allowlist from
+ * becoming a licence — which is the failure mode of every allowlist that
+ * records only a path.
+ */
+describe("headings come from Vibe's scale, not Tailwind's", () => {
+  /**
+   * The remaining uses, and what each file is doing with them.
+   *
+   * metric — a number with `tabular-nums`, sized to be read as a quantity
+   * glyph  — a character sized as an icon: `×`, `!`, an avatar initial
+   * cta    — a large marketing button, whose size belongs to `buttonClasses`
+   */
+  const NOT_TYPE: [string, number][] = [
+    ["src/app/app/(account)/products/product-list-card.tsx", 3], // glyph ×3
+    ["src/app/app/(account)/products/products-index.tsx", 1], // metric
+    ["src/app/app/(account)/repositories/repositories-index.tsx", 2], // metric, glyph
+    ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 4], // metric, glyph ×3
+    ["src/app/app/projects/[projectId]/business-brain/business-map.tsx", 1], // metric
+    ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // metric
+    ["src/app/app/projects/[projectId]/understanding-panel.tsx", 2], // metric ×2
+    ["src/app/page.tsx", 3], // cta ×3
+    ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
+    ["src/components/ui/credit-amount.tsx", 1], // metric — the price itself
+  ];
+
+  const SCALE = /\btext-(base|lg|xl|2xl|3xl|4xl)\b/g;
+
+  function uses(): Map<string, number> {
+    const found = new Map<string, number>();
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      // A study renders the replaced thing beside the replacement on purpose.
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      const count = (readFileSync(file, "utf8").match(SCALE) ?? []).length;
+      if (count > 0) found.set(path, count);
+    }
+    return found;
+  }
+
+  it("writes no Tailwind display size outside the counted exceptions", () => {
+    const allowed = new Map(NOT_TYPE);
+    const wrong: string[] = [];
+    for (const [path, count] of uses()) {
+      const budget = allowed.get(path);
+      if (budget === undefined) wrong.push(`${path} (${count})`);
+      else if (count !== budget) wrong.push(`${path} has ${count}, allowed ${budget}`);
+    }
+    expect(
+      wrong,
+      "Tailwind's display scale means nothing in Vibe. A heading takes " +
+        "text-title, text-moment or text-headline; prose takes text-lead.",
+    ).toEqual([]);
+  });
+
+  it("keeps every counted exception honest", () => {
+    // An allowance for a file that no longer needs it is an allowance nobody
+    // notices has become a licence.
+    const found = uses();
+    const stale = NOT_TYPE.filter(([path]) => !found.has(path)).map(([path]) => path);
+    expect(stale, "listed as an exception and no longer uses one — drop it").toEqual([]);
+  });
+
+  it("declares the step that was missing", () => {
+    // The whole sweep rests on this token existing. Without it the twenty
+    // moment headings have nowhere on the scale to be.
+    expect(CSS).toContain("--text-moment:");
+    expect(V2).toContain("--text-moment:");
+  });
+});
+
+/**
+ * A size that has a name is written with the name.
+ *
+ * Sixty-one `text-[…]` values were exact duplicates of a declared token —
+ * `text-[0.9375rem]` thirteen times for `lead`, `text-[0.6875rem]` twelve for
+ * `meta`, `text-[3rem]` six for `hero`. Not one of them was a decision; each
+ * was a number typed where a name existed, and together they made the scale
+ * look far less adopted than it was.
+ *
+ * This forbids only the exact duplicates. A near-miss — 0.65rem, 0.7rem — is a
+ * judgement about which rung it belongs on, not a rename, and belongs in a
+ * change that argues for it.
+ */
+describe("no arbitrary size restates a token", () => {
+  it("finds no text-[…] that a declared token already names", () => {
+    const declared = new Map<string, string>();
+    for (const [, name, value] of CSS.matchAll(/--text-([a-z-]+):\s*([0-9.]+rem);/g)) {
+      if (name.includes("--")) continue;
+      declared.set(value, name);
+      // The same size written in pixels, which is how eleven of them appeared.
+      declared.set(`${Number.parseFloat(value) * 16}px`, name);
+    }
+
+    const restated: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      for (const [, value] of readFileSync(file, "utf8").matchAll(
+        /text-\[([0-9.]+(?:rem|px))\]/g,
+      )) {
+        const name = declared.get(value);
+        if (name) restated.push(`${path}: text-[${value}] is text-${name}`);
+      }
+    }
+
+    expect(restated, "Write the name. A number that has one is not a decision.").toEqual([]);
   });
 });
