@@ -14,7 +14,7 @@ import {
   imageBuildEnv,
   imageLinkCommand,
 } from "./image-build";
-import { describeError, reportBrowserFailure } from "./diagnostics";
+import { boundedOutput, describeError, reportBrowserFailure } from "./diagnostics";
 import type { BrowserRuntimeImage } from "./provider";
 import { BROWSER_SANDBOX } from "./runtime";
 
@@ -149,7 +149,7 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
             commandIndex: index,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
-            output: result.output.slice(-1500),
+            output: boundedOutput(result.output),
             os: os && os.exitCode === 0 ? os.output.slice(0, 300) : "unknown",
           });
           await discard(handle);
@@ -181,7 +181,7 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
           commandIndex: "link",
           exitCode: linked.exitCode,
           timedOut: linked.timedOut,
-          output: linked.output.slice(-1500),
+          output: boundedOutput(linked.output),
         });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };

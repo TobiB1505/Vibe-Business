@@ -116,6 +116,27 @@ export function imageBuildCommands(): readonly ImageBuildStep[] {
     // safe here for the reason the whole sandbox is: there is no customer
     // repository in this VM to hand root to. Nothing that runs a repository's
     // own commands may do this — `sudo-scope.test.ts` enforces that.
+    /*
+     * Refreshing the package index, as its own step.
+     *
+     * `install-deps` does this itself, and that is exactly the problem: when it
+     * failed, apt went on to report thirty "Unable to locate package" lines and
+     * the one line that explained them was buried at the top of another
+     * command's output. Every package unavailable — `libx11-6` included — is
+     * not thirty missing packages, it is an empty index, and an empty index is
+     * one failure with one cause.
+     *
+     * So it is lifted out. A step that fails here fails with its own exit code
+     * and its own report, and cannot be mistaken for a browser whose
+     * dependencies have gone missing from Ubuntu.
+     *
+     * `apt-get` rather than something distribution-agnostic, because the
+     * distribution is no longer a guess: `/etc/os-release` in the failing build
+     * said `Ubuntu 26.04 LTS`. If that ever changes, this step reports
+     * `apt-get: command not found` by name — which is how the previous wrong
+     * assumption was caught, and cheaper than assuming again.
+     */
+    { command: { command: "apt-get", args: ["update"] }, sudo: true },
     {
       command: {
         command: "npx",

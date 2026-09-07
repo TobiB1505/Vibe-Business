@@ -74,13 +74,29 @@ describe("the browser's system libraries are Playwright's problem, not ours", ()
     expect(depsStep()?.sudo).toBe(true);
   });
 
-  it("asks for root in exactly one step", () => {
-    // The npm install and the browser download stay unprivileged, so the
-    // browser is owned by the user that runs it rather than by root.
-    const elevated = imageBuildCommands().filter((step) => step.sudo);
+  it("refreshes the package index before installing, as its own step", () => {
+    // Buried inside `install-deps`, a failed index refresh reported itself as
+    // thirty missing packages. Every package unavailable is one failure, not
+    // thirty, and lifting it out is what gives that failure its own name.
+    const steps = imageBuildCommands();
+    const update = steps.findIndex((step) => step.command.command === "apt-get");
+    const install = steps.findIndex((step) => step.command.args.includes("install-deps"));
 
-    expect(elevated).toHaveLength(1);
-    expect(elevated[0]?.command.args).toContain("install-deps");
+    expect(update).toBeGreaterThanOrEqual(0);
+    expect(update).toBeLessThan(install);
+  });
+
+  it("keeps the download unprivileged while the package steps are not", () => {
+    // Only the package manager runs as root, so the browser is owned by the
+    // user that runs it rather than by root.
+    const elevated = imageBuildCommands().filter((step) => step.sudo);
+    const download = imageBuildCommands().find(
+      (step) => step.command.args.includes("install") && step.command.command === "npx",
+    );
+
+    expect(elevated).toHaveLength(2);
+    expect(elevated.every((step) => step.command.args.some((arg) => /update|install-deps/.test(arg)))).toBe(true);
+    expect(download?.sudo).toBeUndefined();
   });
 
   it("can reach a package archive whichever distribution this turns out to be", () => {
