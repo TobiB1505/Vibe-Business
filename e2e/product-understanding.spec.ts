@@ -488,14 +488,34 @@ test.describe("what the account can spend", () => {
   test("carries the balance in the project rail, as a link to Billing", async ({ page }) => {
     await page.goto(READY);
 
-    const chip = page.getByTestId("wallet-chip");
-    await expect(chip).toBeVisible();
-    await expect(chip).toContainText("Credits");
-    await expect(chip).toContainText("35");
-    await expect(chip).toHaveAttribute("href", "/app/billing");
+    const wallet = page.getByTestId("wallet");
+    await expect(wallet).toBeVisible();
+    await expect(wallet).toContainText("Credits");
+    await expect(wallet).toContainText("35");
+    await expect(page.getByTestId("wallet-balance")).toHaveAttribute("href", "/app/billing");
 
-    // 35 is below the threshold, so it is worth noticing rather than selling.
-    await expect(chip).toHaveAttribute("data-low", "true");
-    await expect(chip).not.toContainText(/top up|buy|upgrade/i);
+    // 35 is below the threshold, so it is worth noticing.
+    await expect(wallet).toHaveAttribute("data-low", "true");
+  });
+
+  /*
+   * The number stays a number.
+   *
+   * This component used to refuse a top-up outright, and the reason was right
+   * about the balance and wrong about where the action lives: a founder who
+   * reads a low balance has one next move. So there is exactly one way to add
+   * Credits from here, it is a 28px mark with no words, and the *reading*
+   * still says nothing about buying — no banner, no sentence, no "upgrade".
+   */
+  test("offers one way to add Credits, and does not become a sales pitch", async ({ page }) => {
+    await page.goto(READY);
+
+    const wallet = page.getByTestId("wallet");
+    const topUp = wallet.getByRole("link", { name: "Top up Credits" });
+    await expect(topUp).toHaveAttribute("href", "/app/billing#credit-packs");
+    await expect(wallet.getByRole("link")).toHaveCount(2);
+
+    // The visible text of the whole block is the label and the balance.
+    await expect(wallet).not.toContainText(/top up|buy|upgrade|out of credits/i);
   });
 });

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import type { DashboardIconName } from "@/components/ui/dashboard-icons";
-import { CreditAmount } from "@/components/ui/credit-amount";
+import { Wallet } from "@/components/system/wallet";
 import type { CreditUnits } from "@/modules/credits/units";
 import { AccountNav } from "./account-nav";
 import { cn } from "@/lib/utils/cn";
@@ -143,24 +143,7 @@ export function AccountSidebar({
 
       {/* Pinned to the bottom of the rail on desktop; inline on the strip. */}
       <div className="flex flex-col gap-3 lg:mt-auto">
-        {credits !== null && (
-          <Link
-            href="/app/billing"
-            className={cn(
-              "rounded-nav text-fg-muted hover:text-fg-body hover:bg-surface-2 hidden px-3 py-2.5",
-              "items-center gap-2 text-body transition-interactive lg:flex",
-            )}
-          >
-            {/*
-              The coin, because a balance in this product is denominated in
-              something Vibe drew. Written as `CreditAmount` rather than a coin
-              beside a number: the mark has to be optically centred against the
-              digits, which is not what `items-center` does, and that
-              correction lives in one component (see `credit-amount.tsx`).
-            */}
-            <CreditAmount credits={credits} size="sm" className="text-fg-body font-semibold" />
-          </Link>
-        )}
+        <Wallet credits={credits} href="/app/billing" className="max-lg:hidden" />
         {footer}
       </div>
     </nav>

@@ -8,7 +8,7 @@ import {
   projectSectionHref,
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
-import { WalletChip } from "@/components/system/wallet-chip";
+import { Wallet } from "@/components/system/wallet";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { createClient } from "@/lib/supabase/server";
@@ -144,7 +144,7 @@ export default async function ProjectLayout({
           items={navItems}
           footer={
             <div className="flex flex-col gap-3">
-              <WalletChip balance={balance} href="/app/billing" />
+              <Wallet credits={balance?.availableCredits ?? null} href="/app/billing" />
               <AccountMenu identity={identity} subtitle="Founder" placement="above" />
             </div>
           }

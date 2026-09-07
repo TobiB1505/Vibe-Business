@@ -40,13 +40,32 @@ const SIZES = {
   lg: { text: "text-title font-semibold", coin: 26 },
 } as const;
 
+/**
+ * A tone is a prop rather than a `className`, and it has to be.
+ *
+ * `cn` is a filtered join, not `tailwind-merge`: a caller appending
+ * `text-amber` would land it *beside* the `text-fg` in the base list and let
+ * stylesheet order decide, which is how a tint gets written, generated,
+ * shipped and never seen. The same trap the surface tones fell into once.
+ */
+export type CreditTone = "default" | "low";
+
+const TONE_CLASSES: Record<CreditTone, string> = {
+  default: "text-fg",
+  /* A balance worth noticing. Amber is this product's word for waiting or
+     short — never coral, which means something failed. */
+  low: "text-amber",
+};
+
 export function CreditAmount({
   credits,
   size = "md",
+  tone = "default",
   className,
 }: {
   credits: CreditUnits;
   size?: keyof typeof SIZES;
+  tone?: CreditTone;
   className?: string;
 }) {
   const { text, coin } = SIZES[size];
@@ -56,7 +75,12 @@ export function CreditAmount({
          correction is in `em` and depends on the loaded face's cap height, so
          only a browser can check it — and only if it can find this reliably. */
       data-credit-amount
-      className={cn("inline-flex items-center gap-2 text-fg tabular-nums", text, className)}
+      className={cn(
+        "inline-flex items-center gap-2 tabular-nums",
+        TONE_CLASSES[tone],
+        text,
+        className,
+      )}
     >
       {/*
         The optical correction, on a wrapper rather than on the svg: the coin
