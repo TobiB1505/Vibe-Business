@@ -76,31 +76,106 @@ export const IMAGE_BUILD_CWD = "/";
  * reason. There is no interpolation point here that anything outside this file
  * can reach.
  */
-export function imageBuildCommands(): readonly SandboxCommand[] {
+/**
+ * Chromium's shared libraries, as Amazon Linux 2023 names them.
+ *
+ * The fifth failure of the first Deep Scan, and the one that took the longest
+ * to reach because everything before it had to work first:
+ *
+ * ```
+ * /vibe-browser/chromium: error while loading shared libraries:
+ *     libglib-2.0.so.0: cannot open shared object file
+ * ```
+ *
+ * `playwright install chromium` downloads a browser. It does not install the
+ * system libraries that browser links against, and the sandbox's base image
+ * does not carry them. Playwright's own `--with-deps` cannot help here: its
+ * `nativeDeps` table covers Debian and Ubuntu only, and a Vercel sandbox is
+ * Amazon Linux 2023.
+ *
+ * So this is Playwright's own list, translated. Every entry is one package
+ * from `nativeDeps["ubuntu26.04-x64"].chromium` in the pinned release, mapped
+ * to the RPM that provides the same libraries — not a set assembled from
+ * memory of what a headless browser usually wants. `liberation-fonts` is the
+ * one addition, from Playwright's `tools` list: without a font, a login page
+ * renders as boxes and the person cannot sign in.
+ *
+ * The translation is the part that could still be wrong, and it fails
+ * loudly: `chromium --version` is run on any readiness timeout and names the
+ * next missing library by itself.
+ */
+const CHROMIUM_SYSTEM_LIBRARIES = [
+  "alsa-lib", // libasound2t64
+  "at-spi2-atk", // libatk-bridge2.0-0t64
+  "atk", // libatk1.0-0t64
+  "at-spi2-core", // libatspi2.0-0t64
+  "cairo", // libcairo2
+  "cups-libs", // libcups2t64
+  "dbus-libs", // libdbus-1-3
+  "libdrm", // libdrm2
+  "mesa-libgbm", // libgbm1
+  "glib2", // libglib2.0-0t64 — the one the loader named first
+  "nspr", // libnspr4
+  "nss", // libnss3
+  "pango", // libpango-1.0-0
+  "libX11", // libx11-6
+  "libxcb", // libxcb1
+  "libXcomposite", // libxcomposite1
+  "libXdamage", // libxdamage1
+  "libXext", // libxext6
+  "libXfixes", // libxfixes3
+  "libxkbcommon", // libxkbcommon0
+  "libXrandr", // libxrandr2
+  "liberation-fonts", // from Playwright's `tools`: no font, no readable page
+] as const;
+
+/**
+ * One build step.
+ *
+ * A wrapper rather than a `sudo` field on `SandboxCommand`, because that type
+ * is shared with validation and preview — where a command that can ask for
+ * root is precisely what must not exist. Root is a property of *this* build,
+ * so it is named here.
+ */
+export type ImageBuildStep = { command: SandboxCommand; sudo?: boolean };
+
+export function imageBuildCommands(): readonly ImageBuildStep[] {
   return [
-    { command: "mkdir", args: ["-p", BROWSER_SANDBOX.root, BROWSERS_DIR] },
+    { command: { command: "mkdir", args: ["-p", BROWSER_SANDBOX.root, BROWSERS_DIR] } },
+    // Root, and the only command in this repository that asks for it. It is
+    // safe here for the reason the whole sandbox is: there is no customer
+    // repository in this VM to hand root to. Nothing that runs a repository's
+    // own commands may do this — `sudo-scope.test.ts` enforces that.
+    {
+      command: { command: "dnf", args: ["install", "-y", ...CHROMIUM_SYSTEM_LIBRARIES] },
+      sudo: true,
+    },
     // The guard's one dependency. `--ignore-scripts` for the same reason
     // validation installs that way: a lifecycle hook is the classic
     // supply-chain execution point, and this is the window with the network
     // open.
     {
-      command: "npm",
-      args: [
-        "install",
-        "--prefix",
-        BROWSER_SANDBOX.root,
-        "--no-save",
-        "--ignore-scripts",
-        "ws@8.18.0",
-        `playwright-core@${BROWSER_PLAYWRIGHT_VERSION}`,
-      ],
+      command: {
+        command: "npm",
+        args: [
+          "install",
+          "--prefix",
+          BROWSER_SANDBOX.root,
+          "--no-save",
+          "--ignore-scripts",
+          "ws@8.18.0",
+          `playwright-core@${BROWSER_PLAYWRIGHT_VERSION}`,
+        ],
+      },
     },
     // Chromium. `install` is the one place a lifecycle-style download is the
     // point rather than a hazard, and it is Playwright's own, at a pinned
     // version, into a directory Vibe named.
     {
-      command: "npx",
-      args: ["--yes", `playwright@${BROWSER_PLAYWRIGHT_VERSION}`, "install", "chromium"],
+      command: {
+        command: "npx",
+        args: ["--yes", `playwright@${BROWSER_PLAYWRIGHT_VERSION}`, "install", "chromium"],
+      },
     },
   ];
 }
@@ -155,6 +230,15 @@ export const IMAGE_BUILD_HOSTS = [
    * entry. `image-build.test.ts` is what stops it being tidied away.
    */
   "storage.googleapis.com",
+  /*
+   * Amazon Linux's package repository, for the shared libraries above.
+   *
+   * One host, measured rather than assumed: the mirror list at
+   * `cdn.amazonlinux.com/al2023/core/mirrors/latest/x86_64/mirror.list`
+   * answers with URLs on `cdn.amazonlinux.com` itself, so no second name is
+   * reached and no wildcard is needed.
+   */
+  "cdn.amazonlinux.com",
 ] as const;
 
 /**

@@ -50,12 +50,54 @@ describe("the egress allowlist covers where the browser actually comes from", ()
   });
 });
 
+describe("the browser's system libraries are installed, not assumed", () => {
+  it("installs them as root, because a package manager needs it", () => {
+    const install = imageBuildCommands().find((step) => step.command.command === "dnf");
+
+    expect(install, "chromium exits 127 without its shared libraries").toBeDefined();
+    expect(install?.sudo).toBe(true);
+  });
+
+  it("names the library the loader actually asked for", () => {
+    // `libglib-2.0.so.0: cannot open shared object file` — the fifth failure of
+    // the first real Deep Scan, and `glib2` is the package that provides it.
+    const install = imageBuildCommands().find((step) => step.command.command === "dnf");
+
+    expect(install?.command.args).toContain("glib2");
+  });
+
+  it("carries a font, so a login page is readable rather than boxes", () => {
+    // From Playwright's own `tools` list. A browser with no font renders a
+    // sign-in form nobody can complete, which is a working Deep Scan that
+    // fails for a reason no error would explain.
+    const install = imageBuildCommands().find((step) => step.command.command === "dnf");
+
+    expect(install?.command.args).toContain("liberation-fonts");
+  });
+
+  it("can reach the repository those packages come from", () => {
+    // Measured: the AL2023 mirror list answers with URLs on this same host, so
+    // one name is the whole requirement and no wildcard is needed.
+    expect(IMAGE_BUILD_HOSTS).toContain("cdn.amazonlinux.com");
+  });
+
+  it("asks for root in exactly one step", () => {
+    // The npm install and the browser download must not run as root: `dnf` is
+    // the only command here that needs it, and `sudo-scope.test.ts` is why the
+    // option exists at all.
+    const elevated = imageBuildCommands().filter((step) => step.sudo);
+
+    expect(elevated).toHaveLength(1);
+    expect(elevated[0]?.command.command).toBe("dnf");
+  });
+});
+
 describe("the build makes its own root before it needs one", () => {
   it("creates the root in its first command", () => {
     const [first] = imageBuildCommands();
 
-    expect(first.command).toBe("mkdir");
-    expect(first.args).toContain(BROWSER_SANDBOX.root);
+    expect(first.command.command).toBe("mkdir");
+    expect(first.command.args).toContain(BROWSER_SANDBOX.root);
   });
 
   it("does not run that command inside the directory it creates", () => {
@@ -69,8 +111,8 @@ describe("the build makes its own root before it needs one", () => {
   it("installs the browser at the version the driver is pinned to", () => {
     // Both halves are one release: the Chromium inside the sandbox and the
     // playwright-core that drives it from Vibe's server.
-    const install = imageBuildCommands().find((command) => command.command === "npx");
+    const install = imageBuildCommands().find((step) => step.command.command === "npx");
 
-    expect(install?.args).toContain(`playwright@${BROWSER_PLAYWRIGHT_VERSION}`);
+    expect(install?.command.args).toContain(`playwright@${BROWSER_PLAYWRIGHT_VERSION}`);
   });
 });

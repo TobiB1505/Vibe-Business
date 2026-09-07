@@ -248,6 +248,17 @@ export interface SandboxHandle {
      * key, never a GitHub credential, never a service role.
      */
     env?: Record<string, string>;
+    /**
+     * Runs the command as root.
+     *
+     * Exactly one caller, and it is the one sandbox with no customer code in
+     * it: the browser image build, installing Chromium's shared libraries with
+     * the distribution's package manager (ADR 0076). Nothing that runs a
+     * repository's own commands may pass this — a validation or preview
+     * sandbox handing root to a customer's build script is the hazard ADR 0015
+     * exists to prevent, and `sudo-scope.test.ts` is what keeps that true.
+     */
+    sudo?: boolean;
   }): Promise<SandboxCommandResult>;
 
   /**
