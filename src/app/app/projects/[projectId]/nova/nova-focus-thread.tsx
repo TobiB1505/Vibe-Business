@@ -150,18 +150,26 @@ const BLOCK_LABEL: Record<BlockKind, string> = {
 /**
  * Which blocks write their own name, so the frame does not write it again.
  *
- * A composed surface often carries its own heading — the Product Scan's
- * "Product scan · live", the file list's "Files touched" — and a frame that
- * printed the label above it put the same words on screen twice. That is the
- * duplication this whole surface keeps removing, so it is decided here, once,
- * total over the kinds, rather than remembered at each call site.
+ * A composed surface sometimes carries its own heading — the Product Scan
+ * writes "Product scan · live" — and a frame that printed the label above it
+ * put the same words on screen twice. That is the duplication this whole
+ * surface keeps removing, so it is decided here, once, total over the kinds,
+ * rather than remembered at each call site.
+ *
+ * The test is whether the two say the *same* thing, not whether the block has
+ * a heading at all. The agent's list says "Files touched", which is a section
+ * inside a block called "Building" — one names what is being shown and the
+ * other names what is happening, and dropping the frame's label there left the
+ * record on screen with nothing saying it was a run in progress. It was set
+ * true here for one commit on the strength of "it has its own title", and
+ * looking at the rendered block is what caught it.
  *
  * The label still travels: it is the region's accessible name either way.
  */
 const BLOCK_NAMES_ITSELF: Record<BlockKind, boolean> = {
   audit: false,
   scan: true,
-  agent: true,
+  agent: false,
   review: false,
   move: false,
   ask: false,

@@ -23,6 +23,7 @@ import { AuditBlock } from "@/components/nova/blocks/audit";
 import { MoveBlock } from "@/components/nova/blocks/move";
 import { ProgressBlock } from "@/components/nova/blocks/progress";
 import { ScanBlock } from "@/components/nova/blocks/scan";
+import { NovaAgentLive } from "./nova-agent-live";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
@@ -419,6 +420,23 @@ function FocusSection({
  * asks it and supplies the block the data is in hand for. Before, the thread
  * asked nothing and drew the progress checklist alone — so twelve of the
  * fifteen types ran behind a blank column, the Product Scan among them.
+ *
+ * ## The two kinds it answers `undefined` for, and why that is not a gap
+ *
+ * `review` and `audit` both name blocks that exist and both draw nothing here,
+ * because in each case the honest content is already on screen or does not
+ * exist yet.
+ *
+ * A **change** operation runs while the moment leading the thread is about
+ * that same change, so `blockFor` has already drawn its gates. A second copy
+ * under it would be the same panel twice, which is the duplication this
+ * surface keeps removing.
+ *
+ * A running **audit** has produced no reading. The only one in hand is the
+ * previous audit's, and putting last month's score under a live progress line
+ * is the same false-freshness the Product Scan block refuses when it passes a
+ * null presentation. When the audit is stale, `audit_outdated` is the moment
+ * and `blockFor` draws that reading with the framing that says so.
  */
 function runningBlockFor(
   data: NovaHomeData,
@@ -470,12 +488,24 @@ function runningBlockFor(
         ),
       };
 
-    /*
-     * `agent` is the one kind the registry names and this cannot yet supply:
-     * its block reads the execution's own event log, which is keyed by the
-     * agent run rather than by the operation, and Home holds neither. A frame
-     * around an absence would be worse than none.
-     */
+    case "agent":
+      return {
+        kind,
+        node: (
+          <NovaAgentLive
+            projectId={context.projectId}
+            operationId={working.operationId}
+            initialEvents={data.agentEvents}
+            /*
+             * The operations view's own answer, never a guess from the status
+             * string. It is already false for a stalled run — a run presumed
+             * lost is not worth pressing the database about every 2.5 seconds.
+             */
+            shouldPoll={working.shouldPoll}
+          />
+        ),
+      };
+
     default:
       return undefined;
   }

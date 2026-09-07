@@ -498,11 +498,11 @@ export function StudyBlock({ study }: { study: Study }) {
       <section className="flex flex-col gap-3">
         <Eyebrow>The Agent at work, and what survives it</Eyebrow>
         <Context>
-          The block where the dissolving lines earn their argument, because both
-          kinds of record are on screen at once. The lines at the top are the run&rsquo;s stages —
-          a column that is overwritten as the run moves, with nothing writing down the ones before
-          it. The files under them are stored rows, so they are rendered by the shipped component
-          that already knows how to show them, disclosure and pulse included.
+          The block where the dissolving lines earn their argument, because both kinds of record are
+          on screen at once. The lines at the top are the run&rsquo;s stages — a column that is
+          overwritten as the run moves, with nothing writing down the ones before it. The files
+          under them are stored rows, so they are rendered by the shipped component that already
+          knows how to show them, disclosure and pulse included.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble index={0}>
@@ -511,7 +511,10 @@ export function StudyBlock({ study }: { study: Study }) {
           <RenderBlock label="Building" index={1}>
             <div className="flex flex-col gap-5">
               <Dissolving stages={AGENT_STAGES} />
-              <AgentWorking events={AGENT.fileEvents} />
+              {/* The sheet draws a run in flight, and the pulse is a prop now
+                  rather than a constant — so it has to be asked for here, and
+                  the block beside a settled run will not claim activity. */}
+              <AgentWorking events={AGENT.fileEvents} live />
             </div>
           </RenderBlock>
         </div>
@@ -588,15 +591,19 @@ export function StudyBlock({ study }: { study: Study }) {
         <Context>
           <em>Answer in the plan</em> and <em>Choose in the Agent</em>. Both are the same mechanism
           as the one above, and both were <code className="font-mono">elsewhere</code> controls for
-          a reason home-view.ts states plainly: Home did not hold the arguments the action needed.
-          A block that mounts the panel does hold them, because the panel is where they live.
+          a reason home-view.ts states plainly: Home did not hold the arguments the action needed. A
+          block that mounts the panel does hold them, because the panel is where they live.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble tone="waiting" open index={0}>
             <Line>The plan needs a decision only you can make.</Line>
           </Bubble>
           <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
-            <PlanAskBlock projectId="project_e2e" request={PLAN_REQUEST} resolveAction={labResolveAction} />
+            <PlanAskBlock
+              projectId="project_e2e"
+              request={PLAN_REQUEST}
+              resolveAction={labResolveAction}
+            />
           </RenderBlock>
         </div>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
@@ -621,10 +628,10 @@ export function StudyBlock({ study }: { study: Study }) {
           </RenderBlock>
         </div>
         <Context>
-          The workspace list brings its own notice with it — <em>choosing is free and you can
-          change it later, nothing starts running</em> — which is the sentence that stops a founder
-          reading this as the moment a priced run begins. A block that rebuilt the list would have
-          had to remember to write it.
+          The workspace list brings its own notice with it —{" "}
+          <em>choosing is free and you can change it later, nothing starts running</em> — which is
+          the sentence that stops a founder reading this as the moment a priced run begins. A block
+          that rebuilt the list would have had to remember to write it.
         </Context>
       </section>
 
@@ -656,8 +663,11 @@ export function StudyBlock({ study }: { study: Study }) {
           I said last time I would not put a merge control in a thread, and the reason this is not
           that is that a <em>button</em> is not what arrives. The gate brings its own order —
           evidence, then approval, then merge, then outcome, each reachable only through the one
-          above it. Its own comment says it: <em>a merge needs an approval, an approval needs a
-          review, a review needs a preview, a preview needs a validation.</em>
+          above it. Its own comment says it:{" "}
+          <em>
+            a merge needs an approval, an approval needs a review, a review needs a preview, a
+            preview needs a validation.
+          </em>
         </Context>
         <Context>
           That ordering is rule 67 in component form. An approval binds to one immutable identity —
@@ -686,7 +696,9 @@ export function StudyBlock({ study }: { study: Study }) {
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble open index={0}>
-            <Line>A change reached your default branch. I have not looked at what changed yet.</Line>
+            <Line>
+              A change reached your default branch. I have not looked at what changed yet.
+            </Line>
           </Bubble>
           <RenderBlock label="The change" at="2h" index={1}>
             <ReviewBlock
@@ -733,7 +745,6 @@ export function StudyBlock({ study }: { study: Study }) {
           card gives up its own surface rather than the block giving up its frame.
         </Context>
       </section>
-
 
       {/* ── The minute after the press ───────────────────────────────── */}
       <section className="flex flex-col gap-3">

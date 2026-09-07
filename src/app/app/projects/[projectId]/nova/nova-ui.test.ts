@@ -311,6 +311,30 @@ describe("Nova Home", () => {
       expect(home).toContain("BLOCK_FOR_OPERATION");
       expect(home).toContain("<ProgressBlock");
       expect(home).toContain("<ScanBlock");
+      expect(home).toContain("<NovaAgentLive");
+    });
+
+    /*
+     * The agent's file list is the one composed block whose component does not
+     * poll for itself — the Product Scan does, which is why mounting it made
+     * it live for free. Rendering `AgentWorking` straight into the thread would
+     * draw the server render's list, hold it still, and pulse at it.
+     */
+    it("does not mount the agent's record without a reading behind it", () => {
+      const home = component("nova-home.tsx");
+      expect(home).not.toContain("<AgentWorking");
+      expect(component("nova-agent-live.tsx")).toContain("useOperationPoll");
+    });
+
+    /*
+     * One owner for "the run ended". The header polls the operation and
+     * refreshes the route, because a run finishing is what makes the ranking
+     * stale — a second component refreshing on the same fact would be two
+     * answers to a question that has one.
+     */
+    it("leaves the settling refresh to the header", () => {
+      expect(component("nova-agent-live.tsx")).not.toContain("router.refresh");
+      expect(component("nova-header-live.tsx")).toContain("router.refresh");
     });
 
     /*
