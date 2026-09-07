@@ -22,7 +22,6 @@ import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
 import { NovaThreadHeader } from "@/components/nova/nova-thread";
 import { NovaClock } from "@/components/nova/nova-clock";
 import { AuditBlock } from "@/components/nova/blocks/audit";
-import { MoveBlock } from "@/components/nova/blocks/move";
 import { HealthScore, HealthScoreAbsent } from "./health-score";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { ProductIdentity } from "./product-identity";
@@ -72,7 +71,6 @@ export async function NovaHome({
     userId,
     projectName: project.name,
     repositoryFullName: project.repository?.fullName ?? null,
-    productionUrl: project.productionUrl,
   });
 
   const href = {
@@ -258,7 +256,7 @@ function FocusSection({
         entry={entry}
         voice={data.momentVoice}
         aside={data.situationAside}
-        block={momentBlock(data, entry)}
+        block={auditBlock(data, entry)}
       />
     );
   }
@@ -407,7 +405,7 @@ function FocusSection({
         entry={entry}
         voice={data.momentVoice}
         aside={data.situationAside}
-        block={momentBlock(data, entry)}
+        block={auditBlock(data, entry)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
       />
@@ -422,7 +420,7 @@ function FocusSection({
         entry={entry}
         voice={data.momentVoice}
         aside={data.situationAside}
-        block={momentBlock(data, entry)}
+        block={auditBlock(data, entry)}
       />
     );
   }
@@ -440,7 +438,7 @@ function FocusSection({
       entry={entry}
       voice={data.momentVoice}
       aside={data.situationAside}
-      block={momentBlock(data, entry)}
+      block={auditBlock(data, entry)}
       controlLabel={control.option.label}
       /*
        * `ActionBlock` rather than the bare control, because the price is not
@@ -471,35 +469,14 @@ function FocusSection({
 }
 
 /**
- * What the moment is about, drawn.
+ * The audit's reading, when the audit is what the moment is about.
  *
- * `BLOCK_FOR_MOMENT` chooses; this supplies what the reader could get. Two
- * kinds reach here — the other three (`review`, `ask`, and the choice) are
- * decided by the control, because each of them owns a form and the thread
- * hands it the block slot directly.
- *
- * A kind with no subject in hand draws nothing, which is the honest answer:
- * a frame around an absence would be worse than no frame.
+ * The only block Home can draw without a further read: `readHealth` already
+ * builds the whole `BusinessBrainView` to produce four numbers, and until now
+ * threw the rest away. Every other kind needs a subject Home does not hold —
+ * and drawing a frame around an absence would be worse than drawing nothing.
  */
-function momentBlock(data: NovaHomeData, entry: NovaHomeEntry) {
-  const kind = BLOCK_FOR_MOMENT[entry.kind];
-
-  /* The audit's own reading. `buildHealth` already assembles the whole
-     `BusinessBrainView` to produce four numbers, and used to throw the rest
-     away — so this block costs nothing at all. */
-  if (kind === "audit") return data.health ? <AuditBlock view={data.health.view} /> : undefined;
-
-  /*
-   * The Move, before it is paid for. A founder was being asked to spend twenty
-   * Credits on a control whose only description was its own label — "Plan this"
-   * — so the problem it addresses, its impact, its effort and how sure Vibe is
-   * that it exists at all were a page away from the button that charges for it.
-   */
-  if (kind === "move") {
-    return data.move ? (
-      <MoveBlock opportunity={data.move.opportunity} execution={data.move.execution} />
-    ) : undefined;
-  }
-
-  return undefined;
+function auditBlock(data: NovaHomeData, entry: NovaHomeEntry) {
+  if (BLOCK_FOR_MOMENT[entry.kind] !== "audit" || !data.health) return undefined;
+  return <AuditBlock view={data.health.view} />;
 }

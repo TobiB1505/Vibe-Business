@@ -21,11 +21,8 @@ import type { PrimaryGoal } from "@/modules/projects/founder-intent";
 import { situationAside } from "@/modules/nova/briefing/aside";
 import { readBriefing } from "@/modules/nova/briefing/read";
 import type { NovaSituation } from "@/modules/nova/briefing/situation";
-import { getOpportunityExecutionState } from "@/modules/execution/service";
-import type { OpportunityActionState } from "@/modules/execution/view";
-import type { OpportunitySetView } from "@/modules/opportunities/service";
 import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
-import type { FocusCandidate, FocusCandidateKind } from "@/modules/nova/focus";
+import type { FocusCandidateKind } from "@/modules/nova/focus";
 import { buildNovaAuditEntry } from "@/modules/nova/feed";
 import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
 import { readNovaMoveVoice } from "@/modules/nova/voice/move-slot";
@@ -61,11 +58,9 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * 2. The balance — `getHeaderCreditBalance`, which is documented as the one
  *    billing read a per-page surface may make. Never `getBillingOverview`,
  *    which repairs on read.
- * 3. Then, and only when the ranking put one of these moments first, the one
- *    subject it needs: the open question, the prepared change, the
- *    applications to choose between, the sentence Nova already wrote about the
- *    document, or the Move with its execution state. Every one of them is
- *    skipped on a load whose moment is about something else.
+ * 3. Then, and only when the ranking put one of three moments first, the one
+ *    subject that moment needs: the open question, the prepared change, or the
+ *    applications to choose between.
  *
  * The latest audit is not read at all — it arrives inside the evidence, which
  * is two queries fewer than the stamp-then-document pair this used to make,
@@ -144,16 +139,6 @@ export type NovaHomeData = {
    * the two rules and why it yields rather than repeat.
    */
   situationAside: string | null;
-  /**
-   * The Move this moment is about, read before it is paid for.
-   *
-   * Null when the moment is about something else, when the ranking named a
-   * Move the current set no longer holds, or when the moment is a plan step
-   * rather than a Move — `execution_offered` carries a step order and no Move
-   * id, so there is nothing to draw and a frame around that would be worse
-   * than none.
-   */
-  move: { opportunity: BusinessOpportunity; execution: OpportunityActionState } | null;
   /**
    * The question to answer here, when the ranking put one first.
    *
@@ -424,60 +409,6 @@ async function readMomentVoice(
   return null;
 }
 
-/**
- * The Move the moment names, and whether Vibe can act on it.
- *
- * ## Why the candidate names the Move rather than the briefing
- *
- * `readBriefing` carries the engine's rank-1, and the ranking is free to put a
- * different one first — `next_move_available` is precisely the moment where it
- * does. Drawing rank 1 under a sentence about another Move would be a card
- * about the wrong thing, which is worse than no card.
- *
- * ## Why the execution state is resolved rather than passed as null
- *
- * Because `MoveCard` reads `null` as *"Vibe has no executor for this"* and
- * says so — "Not automated yet", from a field the opportunity model wrote
- * about itself. Rule 54 is explicit that model output is never authority, and
- * a surface that had simply not asked would have been asserting it. So Home
- * asks: three reads, on a Move moment and nowhere else.
- */
-async function readMomentMove(
-  supabase: SupabaseClient,
-  params: {
-    projectId: string;
-    productionUrl: string | null;
-    candidate: FocusCandidate;
-    moment: FocusCandidateKind;
-    opportunities: OpportunitySetView | null;
-    repository: AuditEvidence["repository"];
-  },
-): Promise<NovaHomeData["move"]> {
-  if (BLOCK_FOR_MOMENT[params.moment] !== "move") return null;
-
-  /* `execution_offered` is about a plan step and names no Move. */
-  const candidate = params.candidate;
-  if (!("move" in candidate)) return null;
-
-  const set = params.opportunities?.set;
-  const repository = params.repository;
-  if (!set || !repository?.result) return null;
-
-  const opportunity = set.opportunities.find((entry) => entry.id === candidate.move.id);
-  if (!opportunity) return null;
-
-  const execution = await getOpportunityExecutionState(supabase, {
-    projectId: params.projectId,
-    opportunity,
-    opportunitySetId: set.id,
-    repositorySnapshotId: repository.id,
-    repository: repository.result,
-    hasProductionOrigin: params.productionUrl !== null,
-  });
-
-  return { opportunity, execution };
-}
-
 export async function readNovaHomeData(
   supabase: SupabaseClient,
   params: {
@@ -486,11 +417,6 @@ export async function readNovaHomeData(
     projectName: string;
     /** The connected repository, for the gates' preflight. Null when none is. */
     repositoryFullName: string | null;
-    /**
-     * The product's own origin, for resolving whether a Move is executable.
-     * Null when none is set — which is itself an answer, not a missing one.
-     */
-    productionUrl: string | null;
     /** Injected so a briefing is a function of its inputs and one clock. */
     now?: Date;
   },
@@ -501,10 +427,7 @@ export async function readNovaHomeData(
    * the same reason. It hands back the evidence and the focus it assembled, so
    * the score and the ranking cost nothing more (VB-022).
    */
-  const { evidence, focus, situation, topMove, opportunities } = await readBriefing(
-    supabase,
-    params,
-  );
+  const { evidence, focus, situation, topMove } = await readBriefing(supabase, params);
 
   const [identity, balance] = await Promise.all([
     readIdentity(supabase, params.projectId, params.projectName),
@@ -522,7 +445,7 @@ export async function readNovaHomeData(
   const control = view.primary.control;
   const health = buildHealth(evidence.latestAudit);
 
-  const [question, change, workspaceCandidates, momentVoice, move] = await Promise.all([
+  const [question, change, workspaceCandidates, momentVoice] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -551,20 +474,6 @@ export async function readNovaHomeData(
       primaryGoal: evidence.founderIntent.intent.primaryGoal,
       situation,
     }),
-    /*
-     * The Move the moment names, with the one thing the card cannot show
-     * without asking: whether Vibe can act on it. Three reads, and only on a
-     * moment that is about a Move — the alternative was a card claiming "Not
-     * automated yet" because nobody had asked.
-     */
-    readMomentMove(supabase, {
-      projectId: params.projectId,
-      productionUrl: params.productionUrl,
-      candidate: view.primary.candidate,
-      moment: view.primary.kind,
-      opportunities,
-      repository: evidence.repository,
-    }),
   ]);
 
   return {
@@ -579,7 +488,6 @@ export async function readNovaHomeData(
     change,
     workspaceCandidates,
     momentVoice,
-    move,
     situationAside: situationAside({
       situation,
       moment: view.primary.kind,

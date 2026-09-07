@@ -1,7 +1,5 @@
 import { novaScenarioView } from "./nova-scenarios";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
-import type { BusinessOpportunity } from "@/modules/opportunities/schema";
-import type { OpportunityActionState } from "@/modules/execution/view";
 
 /**
  * Nova's own writing in the thread, in the three states it has.
@@ -49,13 +47,6 @@ const SCENARIOS = {
    * is open — and it never appears beside her own sentence.
    */
   "nova-voice-aside": { voice: null, aside: ASIDE },
-
-  /**
-   * A moment about a Move, with the Move under it. The control and its price
-   * sit beside the block, never inside it — a founder is never a mis-click
-   * away from spending inside something they are reading.
-   */
-  "nova-voice-move": { voice: null, aside: null },
 } as const satisfies Record<string, { voice: string | null; aside: string | null }>;
 
 export const E2E_NOVA_VOICE_SCENARIOS = SCENARIOS;
@@ -68,56 +59,10 @@ export function isE2eNovaVoiceScenario(value: string): value is E2eNovaVoiceScen
 /**
  * The moment the thread draws, from the real view model.
  *
- * `nova-review` for the voice states: its facts raise a change waiting to be
- * looked at, a moment about work rather than about currency, which is the case
- * where both the written sentence and the aside are allowed to appear.
- *
- * `nova-moves` for the Move block, because the block a moment gets is decided
- * by the moment — a Move card under a change's own label would be a fixture
- * agreeing with itself about the wrong thing.
+ * `nova-review` is the fixture whose facts raise a change waiting to be looked
+ * at — a moment about work rather than about currency, which is the case where
+ * both the written sentence and the aside are allowed to appear.
  */
-export function novaVoiceEntry(scenario: E2eNovaVoiceScenario): NovaHomeEntry {
-  return novaScenarioView(scenario === "nova-voice-move" ? "nova-moves" : "nova-review").primary;
+export function novaVoiceEntry(): NovaHomeEntry {
+  return novaScenarioView("nova-review").primary;
 }
-
-/**
- * The Move a moment names, drawn under the sentence that names it.
- *
- * ## What has to be visible
- *
- * That the block is a *view* and the control is beside it, not inside it. A
- * founder was being asked to spend twenty Credits on a control whose only
- * description was its own label; the point of the block is that the problem,
- * the impact, the effort and Vibe's confidence that the problem exists are on
- * the same screen as the button that charges for them.
- *
- * The execution state is the one thing the card cannot know from the Move
- * alone, and `preparable` is the state that matters most here — it is the one
- * where a priced button appears.
- */
-export const E2E_NOVA_MOVE: {
-  opportunity: BusinessOpportunity;
-  execution: OpportunityActionState;
-} = {
-  opportunity: {
-    id: "opportunity_e2e",
-    sourceConclusionKey: "conversion.pricing_absent",
-    rank: 1,
-    title: "Put a price on the pricing page",
-    problem: "The pricing page names no amount, so nobody can find out what it costs.",
-    whyNow: "It sits in front of every purchase, and your goal on file is to reach paying customers.",
-    impact: "high",
-    effort: "medium",
-    confidence: "high",
-    category: "conversion",
-    primaryLens: "conversion",
-    secondaryLenses: [],
-    evidenceIds: [],
-    executionType: "code_change",
-    executionReadiness: "ready",
-    dependencies: [],
-  },
-  /* Vibe has an executor and nothing blocks it — the state a priced control
-     is offered from, and the one a founder decides in. */
-  execution: { kind: "preparable", capability: "agentic_execution_v2" },
-};

@@ -70,32 +70,3 @@ test.describe("at 390px", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
-
-/**
- * The Move a moment names, under the sentence that names it.
- *
- * The claim is not that the card is right — the Action Plan's own tests decide
- * that. It is that a founder asked to spend on a Move can read it first, and
- * that the control stays outside what they are reading.
- */
-test.describe("when the moment is about a Move", () => {
-  test("shows the Move under the sentence", async ({ page }) => {
-    await page.goto("/e2e/nova-voice-move");
-
-    await expect(page.getByText("Put a price on the pricing page")).toBeVisible();
-    await expect(page.getByText(/the pricing page names no amount/i)).toBeVisible();
-  });
-
-  /** The block says what Vibe can do; it never offers to do it. */
-  test("carries no control inside the block", async ({ page }) => {
-    await page.goto("/e2e/nova-voice-move");
-
-    await expect(page.getByRole("button")).toHaveCount(0);
-  });
-
-  test("labels the block as what it is", async ({ page }) => {
-    await page.goto("/e2e/nova-voice-move");
-
-    await expect(page.getByText(/next move/i).first()).toBeVisible();
-  });
-});
