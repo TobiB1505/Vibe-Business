@@ -50,6 +50,14 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## What a label is, and what emptiness is
+
+Two things a real scan got wrong about the pages it read correctly.
+
+`textContent` welds a container's descendants together with nothing between them, and the snapshot stored the result: `Sign outLog out of Vibe Business`, `ProfileManage your profile`, `5,155Credits` — a visible label and the sentence underneath it, persisted as one string. The extraction now walks text nodes and joins them with a space. The trade is one-sided on purpose: a word split across inline tags gains a space it did not have, which reads fine, where the alternative loses the boundary between two sentences, which does not.
+
+And `[aria-live=polite]` was in the empty-state selector, so `Showing 1–4 of 4 repositories` made a table with four rows in it an **empty state** — carried onward in `applicationSignals.emptyStatePresent`. A polite live region is where an application puts pagination, toasts and validation; it says "this text changes", never "there is nothing here". The selector now holds only markers an author writes *because* a thing is empty, and `sanitizePageExtraction` — the last gate before anything is persisted, which treats the script's output as untrusted — drops a label counting items that are present. The total is what decides it, not the phrasing: `0 of 0 results` is a genuine empty state in the same words.
+
 ## A screen is worth a page; a copy of it is not
 
 `/app/projects/<a>/settings` and `/app/projects/<b>/settings` are one screen holding different rows. The first run that read pages properly inspected **25 pages and saw 8 screens** — four projects × seven workspace tabs — and then reported `integrations` and `onboarding` as *not detected*, because it had never reached `/app/connect/github` or `/app/onboarding`. That is a scan answering a question about the product with a fact about its own budget.
