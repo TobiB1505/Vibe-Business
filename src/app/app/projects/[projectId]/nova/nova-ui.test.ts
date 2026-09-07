@@ -276,15 +276,48 @@ describe("Nova Home", () => {
     });
 
     /*
-     * The progress block is the one that belongs to the *run* rather than to
-     * the moment, and it draws only where a sequence exists — two of the
-     * fifteen operation types. `novaWorkingEntry` decides; the thread reads
-     * its answer.
+     * The run's block belongs to the *run* rather than to the moment, and the
+     * other registry picks it. This used to be the progress checklist and
+     * nothing else, so twelve of the fifteen operation types ran behind a
+     * blank column.
      */
-    it("draws the stages only where the run has them", () => {
+    it("asks the registry which block a running operation gets", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("BLOCK_FOR_OPERATION");
+      expect(home).toContain("<ProgressBlock");
+      expect(home).toContain("<ScanBlock");
+    });
+
+    /*
+     * The stage list comes from `progressSequenceFor` by way of
+     * `novaWorkingEntry`. A screen free to pass either one is a screen free to
+     * draw the planning rows while an opportunity run is going.
+     */
+    it("never names a progress sequence at a call site", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toMatch(/sequence=\{"(action_planning|opportunity_generation)"\}/);
+      }
+      expect(component("nova-home.tsx")).toContain("working.sequence");
+    });
+
+    /*
+     * The thread frames blocks and chooses none. Both registries are read
+     * where the data is, which is what keeps the thread renderable from a
+     * study with fixtures.
+     */
+    it("leaves the choice of block out of the thread", () => {
       const thread = component("nova-focus-thread.tsx");
-      expect(thread).toContain("working?.sequence");
-      expect(thread).not.toMatch(/sequence=\{"(action_planning|opportunity_generation)"\}/);
+      expect(thread).not.toContain("BLOCK_FOR_OPERATION");
+      expect(thread).not.toMatch(/<ProgressBlock|<ScanBlock|<AuditBlock|<MoveBlock/);
+    });
+
+    /*
+     * A scan that is still running has written no profile, so there is no
+     * reading to put under it. Carrying an earlier one in would show a founder
+     * last week's answer beneath a live progress line.
+     */
+    it("shows no reading under a scan that is still running", () => {
+      expect(component("nova-home.tsx")).toContain("presentation={null}");
     });
   });
 

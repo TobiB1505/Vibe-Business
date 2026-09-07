@@ -9,6 +9,9 @@ import { getMoveWithExecution } from "@/modules/execution/service";
 import type { OpportunityActionState } from "@/modules/execution/view";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
+import { BLOCK_FOR_OPERATION } from "@/modules/nova/blocks";
+import { getProductScanEvents } from "@/modules/product-scan/store";
+import type { ProductScanEvent } from "@/modules/product-scan/schema";
 import { buildActivityFeed, type ActivityEntry } from "@/modules/audit-log/view";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
@@ -37,10 +40,17 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * This is the most-visited route in the product, and the audit's own risk note
  * for this slice was the read count on it. So the shape is deliberate: five
  * concurrent reads, none of which fans out per candidate — and then at most
- * one conditional read, decided by what the ranking put first and described on
+ * two conditional reads, in one batch, answering two different questions.
+ *
+ * Four of them answer *what did the ranking put first*, and are described on
  * `question`, `change`, `workspaceCandidates` and `move` below. They are
  * mutually exclusive by construction: one primary candidate is one moment, and
  * each of the four belongs to a different set of kinds.
+ *
+ * The fifth answers *what is running*, which is a different question and can
+ * be true at the same time as any of the four — a scan can be in flight while
+ * the moment that leads is a change to review. It is `scanEvents`, and it is
+ * why the count above says two rather than one.
  *
  * One of the five arrived with the rail and was weighed rather than assumed:
  * the event log, one query for six rows. The rail's checklist is not a sixth —
@@ -156,6 +166,21 @@ export type NovaHomeData = {
    * Move that genuinely has no summary still resolves to null.
    */
   move: { opportunity: BusinessOpportunity; execution: OpportunityActionState | null } | null;
+  /**
+   * The running scan's own event stream, for the block that watches it.
+   *
+   * Empty unless a Product Scan is in flight. `ProductScanExperience` polls
+   * from there on and refreshes this route when the run lands, so this is the
+   * first frame rather than the whole story — and it is deliberately the same
+   * read the product page makes, because the thread composes that component
+   * rather than reproducing it.
+   *
+   * There is no presentation beside it. A presentation is built from a
+   * completed profile, and a run that is still going has not written one; the
+   * component's own poll supplies it the moment it exists. Passing a stale one
+   * would be showing a founder last week's reading under a live progress line.
+   */
+  scanEvents: ProductScanEvent[];
   /**
    * The plan as a sequence, for the rail. Null when no plan has completed.
    *
@@ -330,7 +355,13 @@ export async function readNovaHomeData(
    */
   const primaryMove = "move" in view.primary.candidate ? view.primary.candidate.move : null;
 
-  const [question, change, workspaceCandidates, move] = await Promise.all([
+  /*
+   * Not keyed on the control: a run in flight and the moment that leads are
+   * different questions, and a project can be in both at once.
+   */
+  const running = view.working;
+
+  const [question, change, workspaceCandidates, move, scanEvents] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -351,6 +382,18 @@ export async function readNovaHomeData(
           opportunityId: primaryMove.id,
         })
       : Promise.resolve(null),
+    /*
+     * One query, on the loads where a scan is actually running. Both operation
+     * types that draw the scan block write to the same event table keyed by
+     * the operation, so the registry's answer is the whole condition — a
+     * legacy run with no events renders the component's own empty state.
+     */
+    running && BLOCK_FOR_OPERATION[running.type] === "scan"
+      ? getProductScanEvents(supabase, {
+          projectId: params.projectId,
+          operationId: running.operationId,
+        })
+      : Promise.resolve<ProductScanEvent[]>([]),
   ]);
 
   return {
@@ -362,6 +405,7 @@ export async function readNovaHomeData(
     change,
     workspaceCandidates,
     move,
+    scanEvents,
     checklist: reading.checklist,
     /* Oldest last: a thread reads downward and the log arrives newest first. */
     activity: buildActivityFeed(events.events).reverse(),

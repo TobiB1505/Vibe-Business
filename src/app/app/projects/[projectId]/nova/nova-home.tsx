@@ -16,14 +16,17 @@ import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
 import { NovaRail } from "./nova-rail";
 import { ActionBlock } from "@/components/system/action-block";
-import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
+import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
 import { NovaClock } from "@/components/nova/nova-clock";
 import { NovaHeaderLive } from "./nova-header-live";
 import { AuditBlock } from "@/components/nova/blocks/audit";
 import { MoveBlock } from "@/components/nova/blocks/move";
+import { ProgressBlock } from "@/components/nova/blocks/progress";
+import { ScanBlock } from "@/components/nova/blocks/scan";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
+import type { ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -148,7 +151,12 @@ export async function NovaHome({
           conversation with four panels stapled under it is not a conversation.
         */}
         <NovaRise className="max-lg:order-1" delay={0.1}>
-          <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
+          <FocusSection
+            data={data}
+            projectId={project.id}
+            sectionHref={sectionHref}
+            running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
+          />
         </NovaRise>
       </div>
     </div>
@@ -182,18 +190,19 @@ function FocusSection({
   data,
   projectId,
   sectionHref,
+  running,
 }: {
   data: NovaHomeData;
   projectId: string;
   sectionHref: Record<NovaHomeSection, string>;
+  /** What is in flight, already resolved to a block. Built once, above. */
+  running?: { kind: BlockKind; node: ReactNode };
 }) {
   const entry = data.view.primary;
   const control = entry.control;
 
   if (control.kind === "none") {
-    return (
-      <NovaFocusThread entry={entry} working={data.view.working} block={blockFor(data, entry)} />
-    );
+    return <NovaFocusThread entry={entry} running={running} block={blockFor(data, entry)} />;
   }
 
   if (control.kind === "answer") {
@@ -204,13 +213,13 @@ function FocusSection({
      * worse than a card with none. The sentence above it still stands.
      */
     if (!data.question) {
-      return <NovaFocusThread entry={entry} working={data.view.working} />;
+      return <NovaFocusThread entry={entry} running={running} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
-        working={data.view.working}
+        running={running}
         block={
           <FounderInputCard
             projectId={projectId}
@@ -239,13 +248,13 @@ function FocusSection({
      * change that is not there would be worse than none.
      */
     if (!data.change) {
-      return <NovaFocusThread entry={entry} working={data.view.working} />;
+      return <NovaFocusThread entry={entry} running={running} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
-        working={data.view.working}
+        running={running}
         block={
           <ChangeGates
             projectId={projectId}
@@ -272,13 +281,13 @@ function FocusSection({
      * choice with nothing to choose from would be worse than none.
      */
     if (data.workspaceCandidates.length === 0) {
-      return <NovaFocusThread entry={entry} working={data.view.working} />;
+      return <NovaFocusThread entry={entry} running={running} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
-        working={data.view.working}
+        running={running}
         block={
           <AgentWorkspaceChoice
             candidates={data.workspaceCandidates}
@@ -305,7 +314,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
-        working={data.view.working}
+        running={running}
         controlLabel={control.label}
         control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
       />
@@ -334,7 +343,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
-        working={data.view.working}
+        running={running}
         block={blockFor(data, entry)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
@@ -345,9 +354,7 @@ function FocusSection({
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return (
-      <NovaFocusThread entry={entry} working={data.view.working} block={blockFor(data, entry)} />
-    );
+    return <NovaFocusThread entry={entry} running={running} block={blockFor(data, entry)} />;
   }
 
   const subject = control.option.subject;
@@ -361,7 +368,7 @@ function FocusSection({
   return (
     <NovaFocusThread
       entry={entry}
-      working={data.view.working}
+      running={running}
       block={blockFor(data, entry)}
       controlLabel={control.option.label}
       /*
@@ -390,6 +397,85 @@ function FocusSection({
       }
     />
   );
+}
+
+/**
+ * The block for the run in flight, when one is.
+ *
+ * ## Why this exists beside `blockFor`
+ *
+ * They answer different questions. `blockFor` draws the *moment* — the thing
+ * that needs deciding — and this draws what is *happening* while it waits. A
+ * project can be in both states at once, which is why the thread has two slots
+ * rather than one that switches.
+ *
+ * ## What it must not do
+ *
+ * Choose. `BLOCK_FOR_OPERATION` is total over every operation type, so a new
+ * one fails the build until somebody decides what a founder watches; this
+ * asks it and supplies the block the data is in hand for. Before, the thread
+ * asked nothing and drew the progress checklist alone — so twelve of the
+ * fifteen types ran behind a blank column, the Product Scan among them.
+ */
+function runningBlockFor(
+  data: NovaHomeData,
+  context: { projectId: string; canStart: boolean },
+): { kind: BlockKind; node: ReactNode } | undefined {
+  const working = data.view.working;
+  if (!working) return undefined;
+
+  const kind = BLOCK_FOR_OPERATION[working.type];
+
+  switch (kind) {
+    case "progress":
+      /*
+       * The sequence is `progressSequenceFor`'s, derived from the type by the
+       * same record that answered `kind` — the two agree by construction, and
+       * the check is here because a total record cannot prove that to the
+       * compiler.
+       */
+      return working.sequence
+        ? {
+            kind,
+            node: <ProgressBlock sequence={working.sequence} operation={working.operation} />,
+          }
+        : undefined;
+
+    case "scan":
+      return {
+        kind,
+        node: (
+          <ScanBlock
+            projectId={context.projectId}
+            operation={working.operation}
+            events={data.scanEvents}
+            /*
+             * A reading exists only once the run has written a profile, and
+             * this run has not finished. The component's own poll supplies it
+             * the moment it does.
+             */
+            presentation={null}
+            productName={data.identity.name}
+            /*
+             * Whether an earlier scan ever landed — which changes what the
+             * component says it is about to do, not whether it may. A project
+             * that has never been read says so.
+             */
+            hasProfile={data.identity.understood !== "not_read"}
+            canStart={context.canStart}
+          />
+        ),
+      };
+
+    /*
+     * `agent` is the one kind the registry names and this cannot yet supply:
+     * its block reads the execution's own event log, which is keyed by the
+     * agent run rather than by the operation, and Home holds neither. A frame
+     * around an absence would be worse than none.
+     */
+    default:
+      return undefined;
+  }
 }
 
 /**
