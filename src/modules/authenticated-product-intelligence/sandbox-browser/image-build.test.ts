@@ -74,6 +74,31 @@ describe("the browser's system libraries are Playwright's problem, not ours", ()
     expect(depsStep()?.sudo).toBe(true);
   });
 
+  it("puts apt on HTTPS before it refreshes anything", () => {
+    /*
+     * `Connection failed [IP: 91.189.91.81 80]`. DNS was fine and the hosts
+     * were allowed; the port was not. An `allow_domains` policy admits a name
+     * over TLS, and Ubuntu's default sources are plain HTTP.
+     */
+    const steps = imageBuildCommands();
+    const rewrite = steps.findIndex((step) => step.command.command === "find");
+    const update = steps.findIndex((step) => step.command.command === "apt-get");
+
+    expect(rewrite).toBeGreaterThanOrEqual(0);
+    expect(rewrite).toBeLessThan(update);
+    expect(steps[rewrite]?.command.args).toContain("s,http://,https://,g");
+  });
+
+  it("rewrites both source layouts, because the image decides which it uses", () => {
+    // Ubuntu 26.04 keeps sources in deb822 form under `sources.list.d/`; older
+    // layouts use `sources.list`. A `sed` at one fixed path is wrong on
+    // whichever layout it was not written for.
+    const rewrite = imageBuildCommands().find((step) => step.command.command === "find");
+
+    expect(rewrite?.command.args).toContain("*.sources");
+    expect(rewrite?.command.args).toContain("*.list");
+  });
+
   it("refreshes the package index before installing, as its own step", () => {
     // Buried inside `install-deps`, a failed index refresh reported itself as
     // thirty missing packages. Every package unavailable is one failure, not
@@ -89,14 +114,13 @@ describe("the browser's system libraries are Playwright's problem, not ours", ()
   it("keeps the download unprivileged while the package steps are not", () => {
     // Only the package manager runs as root, so the browser is owned by the
     // user that runs it rather than by root.
-    const elevated = imageBuildCommands().filter((step) => step.sudo);
     const download = imageBuildCommands().find(
       (step) => step.command.args.includes("install") && step.command.command === "npx",
     );
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
 
-    expect(elevated).toHaveLength(2);
-    expect(elevated.every((step) => step.command.args.some((arg) => /update|install-deps/.test(arg)))).toBe(true);
     expect(download?.sudo).toBeUndefined();
+    expect(install?.sudo).toBeUndefined();
   });
 
   it("can reach a package archive whichever distribution this turns out to be", () => {
