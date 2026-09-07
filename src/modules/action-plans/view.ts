@@ -337,9 +337,27 @@ export type AttestationPrompt = {
    * not derive choices from the step's completion criterion: that criterion is
    * model output, and turning model wording into a set of machine options is
    * the mistake this codebase refuses everywhere else. The criterion is shown
-   * beside the field, in its own element, and the founder answers it.
+   * beside the field, in its own element — see `criterion` below for the one
+   * surface that has already said it — and the founder answers it.
    */
   finding: { label: string; help: string } | null;
+  /**
+   * The step's completion criterion, shown beside the field — or null when
+   * this surface has already said it.
+   *
+   * Null is not a style choice. A handed-off step sits under the prompt Vibe
+   * just wrote, and that prompt carries the criterion verbatim as its
+   * `DONE WHEN:` line. Rendering it again a few hundred pixels lower put the
+   * same sentence on screen twice under a heading — "Answer this" — that asked
+   * the founder to do something the prompt had already asked their tool to do.
+   * The founder read it as noise, which is what it was.
+   *
+   * The label is here rather than derived in the component from whether a
+   * finding exists, because it is copy: "Answer this" over a field and
+   * "Confirm when true" over a tick are two different requests, and which one
+   * a step gets is a question about the step, not about the form.
+   */
+  criterion: { label: string } | null;
 };
 
 export function attestationPrompt(
@@ -377,6 +395,9 @@ export function attestationPrompt(
         label: "Paste the VIBE SUMMARY here",
         help: "Your tool prints it when it's finished — a line of your own works too.",
       },
+      // The prompt above carries this step's criterion as its `DONE WHEN:`
+      // line. Saying it twice is the duplicate this field sat under.
+      criterion: null,
     };
   }
 
@@ -394,6 +415,7 @@ export function attestationPrompt(
         label: "What did you find?",
         help: "In your own words. The next plan is written with this in front of it.",
       },
+      criterion: { label: "Answer this" },
     };
   }
 
@@ -403,6 +425,7 @@ export function attestationPrompt(
     footnote: "This records your confirmation against this exact plan step.",
     submitLabel: "Confirm this is complete",
     finding: null,
+    criterion: { label: "Confirm when true" },
   };
 }
 

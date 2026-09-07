@@ -46,15 +46,20 @@ export function AttestationForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
-        <MonoLabel className="text-amber tracking-[0.12em]">
-          {prompt.finding ? "Answer this" : "Confirm when true"}
-        </MonoLabel>
-        {/* The step's own criterion, in its own element. Vibe writes the prompt
-            beside it and never parses it into choices — it is model output, and
-            model wording is not a machine API. */}
-        <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
-      </div>
+      {/* The step's own criterion, in its own element. Vibe writes the prompt
+          beside it and never parses it into choices — it is model output, and
+          model wording is not a machine API.
+
+          Absent on a handed-off step, and that is the point: the prompt above
+          already carries this exact sentence as its `DONE WHEN:` line, so a
+          second copy under "Answer this" asked the founder to answer something
+          their tool had already been given. */}
+      {prompt.criterion && (
+        <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
+          <MonoLabel className="text-amber tracking-[0.12em]">{prompt.criterion.label}</MonoLabel>
+          <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
+        </div>
+      )}
 
       <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
         {prompt.finding && (

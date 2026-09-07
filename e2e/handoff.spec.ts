@@ -136,6 +136,28 @@ test.describe("a step Vibe will not build", () => {
     await expect(page.getByText("does not claim Vibe did the work")).toBeVisible();
   });
 
+  test("says the criterion once, because the prompt already carries it", async ({ page }) => {
+    await page.goto("/e2e/action_plan_handoff_prompt");
+    await expect(page.getByTestId("handoff-prompt")).toBeVisible();
+
+    /*
+     * The prompt Vibe just wrote ends with `DONE WHEN: <criterion>`, and the
+     * attestation form used to print the same sentence again under "Answer
+     * this" — one screen, one sentence, twice, the second time under a heading
+     * asking the founder to do what the prompt had already asked their tool.
+     * Counted in the rendered text rather than by locator, because the point is
+     * how many times a person reads it.
+     */
+    const criterion = "A pricing page exists at a public URL.";
+    const shown = await page.evaluate(
+      (text) => document.body.innerText.split(text).length - 1,
+      criterion,
+    );
+
+    expect(shown).toBe(1);
+    await expect(page.getByText("Answer this")).toHaveCount(0);
+  });
+
   test("does not scroll sideways at 375px", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto("/e2e/action_plan_handoff_prompt");

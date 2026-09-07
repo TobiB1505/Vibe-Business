@@ -553,4 +553,21 @@ describe("attestationPrompt", () => {
     expect(prompt.lead).toContain("isn't a change to your product");
     expect(prompt.footnote).toContain("does not claim Vibe did the work");
   });
+
+  it("drops the criterion where the prompt above already carries it", () => {
+    /*
+     * A handed-off step sits under the prompt Vibe just wrote, and that prompt
+     * quotes the criterion as its `DONE WHEN:` line. Rendering it again under
+     * "Answer this" put one sentence on screen twice and asked the founder to
+     * answer what their tool had already been given.
+     *
+     * The two surfaces without a prompt keep it, and they ask for different
+     * things: one is answered in writing, the other confirmed as true.
+     */
+    expect(attestationPrompt({ actor: "vibe" }, true).criterion).toBeNull();
+    expect(attestationPrompt({ actor: "vibe" }).criterion?.label).toBe("Answer this");
+    expect(attestationPrompt({ actor: "founder_action" }).criterion?.label).toBe(
+      "Confirm when true",
+    );
+  });
 });
