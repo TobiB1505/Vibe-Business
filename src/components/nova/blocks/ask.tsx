@@ -1,10 +1,8 @@
 "use client";
 
-import { AgentQuestionPanel } from "@/app/app/projects/[projectId]/agent/agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import type { FounderInputFormState } from "@/components/founder-input/founder-input-card";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
-import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
 
 /**
  * The ask: a question answered where it was asked.
@@ -19,96 +17,67 @@ import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
  *
  * ## Why it is composition and not a rebuild
  *
- * Because the shipped pieces already split the two halves that had to be
- * split. `AgentQuestionPanel` renders *what is asked* — from the interrupt —
- * and takes the control as children. `FounderInputCard` is *how it is
- * answered*, and takes its server action as a prop. Neither knows where it is.
+ * Because `FounderInputCard` already splits the two halves that had to be
+ * split: it renders the question, the reason, the recommendation and the
+ * options, and it takes the server action that answers as a prop. It does not
+ * know where it is. So the card travels into the thread and the action stays
+ * with whoever can perform it — which is why an ask block is a dozen lines
+ * rather than a second answering flow to keep in step with the first.
  *
- * So the panel travels into the thread and the action stays with whoever can
- * perform it. That is the whole mechanism, and it is why an ask block is a
- * dozen lines rather than a second answering flow to keep in step with the
- * first — which is exactly what the audit map had become.
+ * ## What used to be here, and why it went
  *
- * ## What the lab cannot show, and says so
+ * `AgentQuestionPanel`, in its `block` variant, wrapping the card. The panel
+ * writes "Vibe has a question" and the waiting time as a heading; the card
+ * writes "Execution paused" and the question; the render block above both
+ * writes "Needs your answer". Three statements of one fact, and — because the
+ * card brought its own amber `Surface` inside the block's amber frame — two
+ * borders around one question.
  *
- * The action. `resolveFounderInputAction` writes a durable resolution and
- * unblocks a paused run; there is nothing here to unblock and nothing to
- * write, so the study passes a no-op that reports what it is. The boundary is
- * visible rather than papered over — in production Nova's own route supplies
- * the real action, the same way the agent route supplies it today.
+ * The card won because it is the half that cannot be dropped: it holds the
+ * options and the submit. What it was missing was the waiting time, which is
+ * the only thing the panel said that nothing else did, so the card takes it as
+ * a prop now. The panel is untouched and still owns the Agent route, where it
+ * is a page-scale object rather than a heading inside somebody else's frame.
  */
 export function AskBlock({
   projectId,
-  interrupt,
   request,
-  /** The real thing in production. A no-op with a truthful message here. */
-  resolveAction,
-}: {
-  projectId: string;
-  interrupt: StoredExecutionInterrupt;
-  request: FounderInputRequest;
-  resolveAction: (
-    projectId: string,
-    requestId: string,
-    contextHash: string,
-    previous: FounderInputFormState,
-    formData: FormData,
-  ) => Promise<FounderInputFormState>;
-}) {
-  return (
-    <AgentQuestionPanel
-      interrupt={interrupt}
-      variant="block"
-      waitingSince="12m"
-      /* The card below states the question, the reason and the options. On the
-         workspace page those sit in two columns and read as a title and a form;
-         stacked in a block they were the same sentence twice. */
-      questionInChildren
-    >
-      <FounderInputCard
-        projectId={projectId}
-        request={request}
-        context="runtime_execution"
-        resolveAction={resolveAction}
-        presentation="workspace"
-      />
-    </AgentQuestionPanel>
-  );
-}
-
-/**
- * The plan's question, answered in the thread.
- *
- * The same card as the agent's, with `context="action_plan"` — and no panel
- * around it, because the plan page does not wrap it in one either. That is
- * worth noticing rather than smoothing over: the two questions are the same
- * object to the founder and two shapes in the code, and the block inherits
- * whichever shape the owning surface uses rather than imposing a third.
- */
-export function PlanAskBlock({
-  projectId,
-  request,
-  resolveAction,
-  openRequestCount = 1,
-}: {
-  projectId: string;
-  request: FounderInputRequest;
-  resolveAction: (
-    projectId: string,
-    requestId: string,
-    contextHash: string,
-    previous: FounderInputFormState,
-    formData: FormData,
-  ) => Promise<FounderInputFormState>;
+  /**
+   * Which flow asked.
+   *
+   * A runtime question has a paused run behind it and the card says so; a
+   * planner question does not. The candidate's kind is what knows, and it is
+   * the same distinction `focus.ts` uses to raise two candidates instead of
+   * one.
+   */
+  context,
+  /** How long it has been waiting, already formatted by whoever holds a clock. */
+  waitingSince,
   /** Real open requests on this plan. Used only to orient the current one. */
+  openRequestCount = 1,
+  /** The real thing in production. A no-op with a truthful message in the lab. */
+  resolveAction,
+}: {
+  projectId: string;
+  request: FounderInputRequest;
+  context: "action_plan" | "runtime_execution";
+  waitingSince?: string;
   openRequestCount?: number;
+  resolveAction: (
+    projectId: string,
+    requestId: string,
+    contextHash: string,
+    previous: FounderInputFormState,
+    formData: FormData,
+  ) => Promise<FounderInputFormState>;
 }) {
   return (
     <FounderInputCard
       projectId={projectId}
       request={request}
-      context="action_plan"
-      presentation="workspace"
+      context={context}
+      presentation="block"
+      waitingSince={waitingSince}
       openRequestCount={openRequestCount}
       resolveAction={resolveAction}
     />

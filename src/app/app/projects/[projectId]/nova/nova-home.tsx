@@ -10,6 +10,7 @@ import { ChangeGates } from "../agent/change-gates";
 import { AgentWorkspaceChoice } from "../agent/agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { formatElapsedShort } from "@/lib/utils/format-datetime";
 import { resolveFounderInputAction } from "../founder-input-action";
 
 import { NovaRise } from "./nova-rise";
@@ -233,7 +234,15 @@ function FocusSection({
              * one.
              */
             context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
-            presentation="workspace"
+            presentation="block"
+            /*
+             * How long a run has been stopped waiting, which is the one thing
+             * this surface could not say. It costs no read — the request has
+             * been in hand since the ranking put it first — and it is computed
+             * on the server, because a relative time read on the client would
+             * disagree with the markup around it.
+             */
+            waitingSince={formatElapsedShort(data.question.createdAt, new Date())}
             resolveAction={resolveFounderInputAction}
           />
         }

@@ -300,6 +300,38 @@ describe("Nova Home", () => {
       expect(home).toContain("<MoveBlock");
     });
 
+    /**
+     * One frame, one heading, on the block a founder answers in.
+     *
+     * The thread drew `NovaRenderBlock` with `tone="waiting"` and the card
+     * drew its own amber `Surface` inside it — two amber borders around one
+     * question — under a label saying "Needs your answer" above a pill saying
+     * "Needs your decision". Three statements of one fact.
+     *
+     * `presentation="block"` is the same move the Product Scan and the file
+     * list already make: the composed surface drops its own frame because the
+     * render block is the frame.
+     */
+    it("answers inside one frame rather than two", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/<FounderInputCard[\s\S]*?presentation="block"/);
+      /* The panel would be a fourth heading. It still owns the Agent route,
+         where it is a page-scale object rather than a heading inside somebody
+         else's frame. */
+      expect(home).not.toContain("AgentQuestionPanel");
+    });
+
+    /*
+     * How long a run has been stopped waiting is the one thing this surface
+     * could not say, and it costs no read — the request has been in hand since
+     * the ranking put it first. Computed on the server, because a relative
+     * time read on the client would disagree with the markup around it.
+     */
+    it("says how long the run has been waiting", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/waitingSince=\{formatElapsedShort\(data\.question\.createdAt/);
+    });
+
     /*
      * The run's block belongs to the *run* rather than to the moment, and the
      * other registry picks it. This used to be the progress checklist and

@@ -6,7 +6,7 @@ import {
 } from "@/modules/projects/business-brain-view";
 import { buildOperationView, OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "@/components/nova/blocks/agent";
-import { AskBlock, PlanAskBlock } from "@/components/nova/blocks/ask";
+import { AskBlock } from "@/components/nova/blocks/ask";
 import { WorkspaceAskBlock } from "@/components/nova/blocks/workspace";
 import { MoveBlock } from "@/components/nova/blocks/move";
 import { ProgressBlock } from "@/components/nova/blocks/progress";
@@ -22,7 +22,6 @@ import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./elements";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
-import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
 import type { WorkspaceCandidate } from "@/modules/validation/profile";
 import type { Study } from "./studies";
 
@@ -92,27 +91,6 @@ function auditView(scenario: "audit-synthesis" | "audit-unscored"): BusinessBrai
  * nobody had built a fixture for — which is some of why it kept being routed
  * away from rather than designed.
  */
-const ASK_INTERRUPT: StoredExecutionInterrupt = {
-  id: "interrupt_e2e",
-  projectId: "project_e2e",
-  userId: "user_e2e",
-  executionSpecId: "spec_e2e",
-  agentExecutionRunId: "run_e2e",
-  type: "business_decision_required",
-  question: "Which of the two checkout flows should stay?",
-  responseSchema: {
-    kind: "single_choice",
-    options: [
-      { id: "hosted", label: "The hosted checkout" },
-      { id: "embedded", label: "The embedded checkout" },
-    ],
-  },
-  status: "open",
-  answer: null,
-  createdAt: "2026-09-06T08:58:00.000Z",
-  answeredAt: null,
-};
-
 const ASK_REQUEST: FounderInputRequest = {
   id: "request_e2e",
   projectId: "project_e2e",
@@ -567,21 +545,34 @@ export function StudyBlock({ study }: { study: Study }) {
           <Bubble tone="waiting" open index={0}>
             <Line>I stopped part-way and need something from you.</Line>
           </Bubble>
-          <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
+          <RenderBlock label="Needs your answer" tone="waiting" index={1}>
             <AskBlock
               projectId="project_e2e"
-              interrupt={ASK_INTERRUPT}
               request={ASK_REQUEST}
+              context="runtime_execution"
+              waitingSince="12m"
               resolveAction={labResolveAction}
             />
           </RenderBlock>
         </div>
         <Context>
-          The block carries the amber and the panel gave up its own border to say it once instead of
-          twice. What the lab cannot show is the action: resolving writes a durable answer and
-          unblocks a paused run, and there is nothing here to unblock — so the control reports that
-          rather than pretending. In production Nova&rsquo;s route supplies the real one, the same
-          way the agent route supplies it today.
+          One frame and one heading, which took two attempts. The first drew the block&rsquo;s amber
+          border around the card&rsquo;s own amber surface, under a label saying{" "}
+          <em>Needs your answer</em>, above a panel saying <em>Vibe has a question</em>, above a
+          pill saying <em>Needs your decision</em>. Three statements of one fact and two borders —
+          in the sheet whose whole argument is that this surface says things once.
+        </Context>
+        <Context>
+          What survives is the half that could not be dropped: the card holds the options and the
+          submit. <em>Execution paused</em> stays because it is the one claim the frame does not
+          make — a <em>run</em> is stopped, which is why answering here matters — and the waiting
+          time moved onto it, because that was the only thing the panel said that nothing else did.
+        </Context>
+        <Context>
+          What the lab cannot show is the action: resolving writes a durable answer and unblocks a
+          paused run, and there is nothing here to unblock — so the control reports that rather than
+          pretending. In production Nova&rsquo;s route supplies the real one, the same way the agent
+          route supplies it today.
         </Context>
       </section>
 
@@ -598,10 +589,11 @@ export function StudyBlock({ study }: { study: Study }) {
           <Bubble tone="waiting" open index={0}>
             <Line>The plan needs a decision only you can make.</Line>
           </Bubble>
-          <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
-            <PlanAskBlock
+          <RenderBlock label="Needs your answer" tone="waiting" index={1}>
+            <AskBlock
               projectId="project_e2e"
               request={PLAN_REQUEST}
+              context="action_plan"
               resolveAction={labResolveAction}
             />
           </RenderBlock>
