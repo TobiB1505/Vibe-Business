@@ -296,8 +296,8 @@ export type ProjectNavItem = {
 export function ProjectRail({
   projectId,
   projectName,
-  repositoryFullName,
   connected,
+  planName,
   switcherItems,
   items,
   // No `currentId`: the active section is derived from the URL inside
@@ -306,8 +306,9 @@ export function ProjectRail({
 }: {
   projectId: string;
   projectName: string;
-  repositoryFullName: string | null;
   connected: boolean;
+  /** The account's plan, resolved from its live subscription. */
+  planName: string;
   switcherItems: ProjectSwitcherItem[];
   items: ProjectNavItem[];
 }) {
@@ -319,40 +320,47 @@ export function ProjectRail({
 
   return (
     <RailNav direction="back" label="Project sections">
-      <div className="flex flex-col gap-2">
-        <MonoLabel className="px-1 tracking-[0.18em]">Project</MonoLabel>
-        <ProjectSwitcher
-          current={current}
-          repositoryFullName={repositoryFullName}
-          connected={connected}
-          items={switcherItems}
-        />
-      </div>
+      {/*
+        No eyebrow above the switcher. `PROJECT` labelled a control that
+        already says what it is — the product's mark, its name and a selector
+        glyph — and it cost a row in a rail whose section list was being cut
+        off four items in.
+      */}
+      <ProjectSwitcher
+        current={current}
+        connected={connected}
+        planName={planName}
+        items={switcherItems}
+      />
 
-      <div className="border-line-1 my-4 border-t" />
+      <div className="border-line-1 my-3 border-t" />
       <RailScroll>
         <ProjectNav items={items.filter((item) => item.id !== "settings")} />
       </RailScroll>
 
       {/*
-          The one row in this rail that is not about this project.
+        The one row in this rail that is not about this product.
 
-          `Project Settings` was here, one row above the account's own
-          Settings, which asked a founder to read two nearly identical labels
-          to tell a project apart from an account. It moved into the switcher —
-          the control that says which project you are in — and what is left is
-          the way out of the project context entirely.
+        `Project Settings` was here, one row above the account's own Settings,
+        which asked a founder to read two nearly identical labels to tell a
+        product apart from an account. It moved into the switcher — the control
+        that says which product you are in — and what is left is the way out of
+        the product context entirely.
 
-          It does not open a page inside this navigation: it unfolds the rail
-          into the account's own, landing on General. The chevron says so, and
-          the label above it is `General` because that is where the fold
-          arrives — the founder is told the destination before the click, not
-          after it.
-        */}
-      <div className="border-line-1 mt-4 flex flex-col gap-2 border-t pt-4">
+        It does not open a page inside this navigation: it unfolds the rail
+        into the account's own, landing on General. The chevron says so, and
+        the label above it is `General` because that is where the fold arrives
+        — the founder is told the destination before the click, not after it.
+
+        `prefetch` is not decoration here. This is the one link in the product
+        that swaps the whole rail, and an unwarmed swap is the difference
+        between a fold and a wait.
+      */}
+      <div className="border-line-1 mt-3 flex flex-col gap-2 border-t pt-3">
         <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
         <Link
           href="/app/settings"
+          prefetch
           className={cn(
             "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav group/settings",
             "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",

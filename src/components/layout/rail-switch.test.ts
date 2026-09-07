@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { PROJECT_SECTIONS } from "./project-shell";
 
@@ -145,6 +145,73 @@ describe("each navigation can reach the other", () => {
       ["settings rail", ACCOUNT_SHELL],
     ] as const) {
       expect(code(source), `${name} renders its own lockup again`).not.toContain("VibeLockup");
+    }
+  });
+});
+
+describe("the rail is read once per area, not once per click", () => {
+  /**
+   * The shape this replaces, and why it was wrong.
+   *
+   * The rail's first form was one catch-all page for the whole `/app` subtree,
+   * on the reasoning that a route boundary is a remount boundary. That was
+   * true about mounting and wrong about everything else: a page is matched per
+   * URL, so every section click refetched the rail's reads — and with no
+   * Suspense boundary of its own, the router could not commit the navigation
+   * until they returned. A layout is matched by its own segment and preserved
+   * while that segment holds, which is what makes a section click cost
+   * nothing.
+   */
+  const AREAS = ["projects/[projectId]", "settings"] as const;
+
+  it("renders each navigation from a layout", () => {
+    for (const area of AREAS) {
+      expect(existsSync(`src/app/app/@rail/${area}/layout.tsx`), area).toBe(true);
+    }
+  });
+
+  it("renders nothing from the pages under those layouts", () => {
+    // A slot page that drew anything would be re-rendered on every URL, which
+    // is precisely the work this shape exists to stop doing.
+    const pages = [
+      "src/app/app/@rail/projects/[projectId]/page.tsx",
+      "src/app/app/@rail/projects/[projectId]/[...section]/page.tsx",
+      "src/app/app/@rail/settings/page.tsx",
+      "src/app/app/@rail/settings/[...section]/page.tsx",
+    ];
+    for (const page of pages) {
+      const source = code(readFileSync(page, "utf8"));
+      expect(source, `${page} does not render null`).toContain("return null");
+      expect(source, `${page} imports something, so it is doing work`).not.toContain("import ");
+    }
+  });
+
+  it("gives the slot a first frame, so no navigation waits on the chrome", () => {
+    // Without a boundary here the nearest ancestor is `/app`'s layout, which
+    // has none either — so every click under `/app` blocked on the rail.
+    expect(existsSync("src/app/app/@rail/loading.tsx")).toBe(true);
+  });
+});
+
+describe("the plan badge is a fact", () => {
+  it("is read from the account's subscription", () => {
+    expect(code(readFileSync("src/app/app/@rail/project-rail.tsx", "utf8"))).toContain(
+      "activePlanName",
+    );
+  });
+
+  it("is never a name the switcher chose", () => {
+    // `PLAN_KEYS` is Free, Builder, Pro. A literal here would be a badge that
+    // keeps saying the same thing after the account changes. Matched as a
+    // quoted or rendered value rather than as a substring, or `Pro` would hit
+    // `ProjectSwitcher` and the assertion would be about nothing.
+    const panel = code(SWITCHER);
+    expect(panel, "the switcher does not render the plan it was given").toContain("{planName}");
+    for (const plan of ["Free", "Builder", "Pro"]) {
+      expect(
+        new RegExp(`["'>]${plan}["'<]`).test(panel),
+        `the switcher writes the ${plan} plan into the markup`,
+      ).toBe(false);
     }
   });
 });

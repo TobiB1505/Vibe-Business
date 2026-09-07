@@ -1,6 +1,6 @@
 # 0101 - One rail, unfolded by a parallel route
 
-Status: Accepted
+Status: Accepted; its **one-catch-all clause** — that the navigation should be one slot route for the whole `/app` subtree — is corrected by [ADR 0102](0102-the-rail-is-a-layout-per-area.md) on 2026-09-07. *[Correction, 2026-09-07: "a route boundary is a remount boundary, so one route never remounts" was true about mounting and wrong about everything else. A page is matched per URL, so the rail refetched on every section click — and with no `loading.tsx` the slot had no Suspense boundary, so every navigation under `/app` blocked on it. Each area's navigation is a layout now, and the slot has a first frame. The claim below that the lockup and the identity survive the fold as the same DOM nodes went with it; the `<aside>`, its width and its position still do.]* Everything else this decided stands.
 Date: 2026-09-07
 
 Supersedes the **two-rails clause** of [ADR 0046](0046-account-dashboard-and-context-swap.md) and the **scroll-model clause** of [ADR 0051](0051-project-shell-context-ownership.md). There is one `<aside>` in the signed-in product. It is rendered by the layout every `/app` route shares, it is one width, it never scrolls, and what changes between a product and Settings is the navigation inside it.

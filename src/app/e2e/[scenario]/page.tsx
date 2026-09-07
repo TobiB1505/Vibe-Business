@@ -644,10 +644,15 @@ export default async function E2eScenarioPage({
             <ProjectRail
               projectId="project_e2e"
               projectName="Acme"
-              repositoryFullName="acme/acme"
               connected
+              planName="Free"
               switcherItems={[
-                { id: "project_e2e", name: "Acme", href: currentHref },
+                {
+                  id: "project_e2e",
+                  name: "Acme",
+                  href: currentHref,
+                  repositoryFullName: "acme/acme",
+                },
                 {
                   id: "project_e2e_planner",
                   name: "Planner Agent",

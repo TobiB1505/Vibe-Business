@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { AccountCard } from "@/components/layout/account-card";
 import { Wallet } from "@/components/system/wallet";
+import { SkeletonBlock } from "@/components/ui/skeleton";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import type { CreditUnits } from "@/modules/credits/units";
 import { cn } from "@/lib/utils/cn";
@@ -122,7 +123,7 @@ export function RailNav({
       aria-label={label}
       data-rail-direction={direction}
       style={
-        { "--vibe-rail-from": direction === "forward" ? "0.75rem" : "-0.75rem" } as CSSProperties
+        { "--vibe-rail-from": direction === "forward" ? "1.25rem" : "-1.25rem" } as CSSProperties
       }
       className="vibe-rail-unfold flex min-w-0 flex-col lg:min-h-0 lg:flex-1"
     >
@@ -168,6 +169,40 @@ export function RailScroll({ children }: { children: ReactNode }) {
     >
       {children}
     </div>
+  );
+}
+
+/**
+ * The rail's first frame (UI-14).
+ *
+ * Reached only when the *area* changes — entering Settings, or coming back —
+ * because the navigation is a layout per area and a layout is preserved while
+ * its segment holds. Moving between sections of one product never reaches
+ * this, which is the whole point of the shape.
+ *
+ * It draws the real lockup and skeletons for everything below it, at the
+ * heights those things actually occupy, so the arriving rail lands on the
+ * geometry the skeleton reserved rather than pushing it around. Nothing here
+ * animates: a rail that is about to be replaced does not need to perform.
+ */
+export function RailSkeleton() {
+  return (
+    <>
+      <RailBrand />
+      <div className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1">
+        <SkeletonBlock className="h-10 w-full rounded-nav" />
+        <div className="border-line-1 my-3 border-t" />
+        <div className="flex flex-col gap-1">
+          {[0, 1, 2, 3, 4].map((row) => (
+            <SkeletonBlock key={row} className="h-11 w-full rounded-nav" />
+          ))}
+        </div>
+      </div>
+      <div className="flex shrink-0 flex-col gap-3 lg:pt-8">
+        <SkeletonBlock className="h-10 w-full rounded-full" />
+        <SkeletonBlock className="h-14 w-40 rounded-nav" />
+      </div>
+    </>
   );
 }
 

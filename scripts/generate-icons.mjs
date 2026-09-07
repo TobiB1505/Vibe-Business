@@ -59,6 +59,9 @@ const MANIFEST = {
    * site changed.
    */
   ChevronDownIcon: "chevron-down",
+  /* The selector glyph: this control does not open downward, it *changes*
+     what the row names. A single chevron says "expand"; two say "pick". */
+  ChevronsUpDownIcon: "chevrons-up-down",
   ArrowRightIcon: "arrow-right",
   /*
    * The rest of the generic set, migrated in one pass rather than one at a

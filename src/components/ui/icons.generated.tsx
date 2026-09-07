@@ -57,6 +57,16 @@ export function ChevronDownIcon(props: IconProps) {
   );
 }
 
+/** Lucide `chevrons-up-down`. */
+export function ChevronsUpDownIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m7 15 5 5 5-5" />
+      <path d="m7 9 5-5 5 5" />
+    </IconFrame>
+  );
+}
+
 /** Lucide `arrow-right`. */
 export function ArrowRightIcon(props: IconProps) {
   return (

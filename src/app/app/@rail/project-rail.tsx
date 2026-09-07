@@ -6,6 +6,7 @@ import {
 } from "@/components/layout/project-shell";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
+import { activePlanName } from "@/modules/billing/plan-name";
 import { readAgentRailStatus } from "@/modules/coding-agent/agent-workspace";
 import {
   getProjectFrameContext,
@@ -27,12 +28,14 @@ import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
  *
  * ## What it loads
  *
- * The project's own half of the frame, and only that: the project context, two
- * `count`-only queries, the Agent's live state and at most four sibling names.
- * The identity and the balance below it belong to the rail's foot, which is
- * the same object in both areas and is loaded once by the slot. The project
- * context is shared with the layout through `getProjectFrameContext`, so this
- * costs one read between them, not two.
+ * The project context, two `count`-only queries, the Agent's live state, at
+ * most four sibling names and one subscription row for the plan badge. The
+ * project context is shared with the workspace layout through
+ * `getProjectFrameContext`, so this costs one read between them, not two.
+ *
+ * All of it once per *product*, not once per click: the rail is a layout now
+ * (`@rail/projects/[projectId]/layout.tsx`), so moving between sections
+ * re-renders a null page underneath it and nothing here runs again.
  *
  * Failures in the optional reads render less furniture rather than breaking
  * the product; a badge is not worth a dead workspace.
@@ -53,13 +56,14 @@ export async function ProjectRailSlot({ projectId }: { projectId: string }) {
 
   const supabase = await createClient();
 
-  const [counts, siblingProjects, agentStatus] = await Promise.all([
+  const [counts, siblingProjects, agentStatus, planName] = await Promise.all([
     getProjectWorkspaceCounts(supabase, project.id),
     listProjectSwitcherOptions(supabase, {
       userId: session.userId,
       currentProjectId: project.id,
     }),
     readAgentRailStatus(supabase, project.id),
+    activePlanName(supabase, session.userId),
   ]);
 
   /**
@@ -91,13 +95,16 @@ export async function ProjectRailSlot({ projectId }: { projectId: string }) {
     <ProjectRail
       projectId={project.id}
       projectName={project.name}
-      repositoryFullName={project.repository?.fullName ?? null}
       connected={project.repository !== null}
+      planName={planName}
       switcherItems={[
         {
           id: project.id,
           name: project.name,
           href: projectSectionHref(project.id, "home"),
+          // Known, because this render resolved it. The siblings' connections
+          // were not read, so they carry no line rather than a guessed one.
+          repositoryFullName: project.repository?.fullName ?? null,
         },
         ...siblingProjects.map((sibling) => ({
           ...sibling,

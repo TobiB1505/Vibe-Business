@@ -135,6 +135,9 @@ export function SettingsRail({ back }: { back: SettingsRailBack }) {
         */}
       <Link
         href={back.href}
+        /* The one link that swaps the whole rail back. An unwarmed swap is the
+           difference between a fold and a wait. */
+        prefetch
         className={cn(
           "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav",
           "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",

@@ -382,6 +382,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0099](docs/decisions/0099-glass-is-the-material.md) | Glass is the material, and the ground has to be visible for it to be one | UI and design tooling |
 | [0100](docs/decisions/0100-the-account-level-is-settings.md) | The account level is Settings, and `/app` resolves to a product | Web surface |
 | [0101](docs/decisions/0101-one-rail-that-unfolds.md) | One rail, unfolded by a parallel route | Web surface |
+| [0102](docs/decisions/0102-the-rail-is-a-layout-per-area.md) | One rail, a layout per area, and a first frame | Web surface |
 
 ### Layers with no section above
 
