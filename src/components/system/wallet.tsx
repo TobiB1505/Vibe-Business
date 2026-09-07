@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { PlusIcon } from "@/components/ui/icons.generated";
 import { CreditAmount } from "@/components/ui/credit-amount";
-import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 import type { CreditUnits } from "@/modules/credits/units";
 
@@ -83,58 +82,58 @@ export function Wallet({
 
   return (
     /*
-      A block rather than one link, because it holds two destinations and a
-      link inside a link is not a thing a browser or a screen reader can
-      resolve. The container carries the surface; each half carries its own
-      target and its own focus ring.
+      One pill with two halves, not a panel with a label.
+      A box with a `BALANCE` caption above the number made the rail's quietest
+      fact look like a section. The balance is one reading and one action, so
+      it is one control: fully round, bordered, and reacting as a whole on
+      hover the way the buttons around it do.
+
+      A `div` rather than a link, because a link inside a link is not something
+      a browser or a screen reader can resolve. The container carries the
+      shape; each half carries its own target and its own focus ring.
     */
     <div
       data-testid="wallet"
       data-low={low || undefined}
       className={cn(
-        "border-line-2 bg-surface-2 rounded-panel flex flex-col gap-1.5 border px-3 py-2.5",
+        "border-line-2 bg-surface-2 group/wallet flex items-stretch rounded-full border",
         "transition-interactive hover:border-line-strong",
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <MonoLabel className="text-fg-meta">Balance</MonoLabel>
-        {/*
-          A `Link` styled as a control rather than `IconButton`, which is a
-          `<button>`: this navigates, and a button that navigates is announced
-          wrong and cannot be opened in a new tab. The states are the same
-          three IconButton draws, at the one size that fits a rail label row.
-        */}
-        <Link
-          href={topUpHref}
-          aria-label="Top up Credits"
-          className={cn(
-            "vibe-control rounded-inset text-fg-muted grid size-7 shrink-0 place-items-center",
-            /*
-              Quiet at rest, mint on the way in. The container exists at rest
-              because a bare mark is not a control on a phone (see
-              `IconButton`), and it answers in mint because adding Credits is
-              Vibe's own action rather than a neutral one — the same colour
-              every priced control in the product uses to mean "this is the
-              thing you do here".
-            */
-            "bg-surface-3 hover:bg-mint-tint hover:text-mint active:bg-mint-tint",
-            "transition-interactive focus-visible:ring-2 focus-visible:ring-mint focus-visible:outline-none",
-          )}
-        >
-          <PlusIcon size={14} />
-        </Link>
-      </div>
-
       <Link
         href={href}
         data-testid="wallet-balance"
         className={cn(
-          "rounded-inset -mx-1 px-1 py-0.5",
-          "transition-interactive focus-visible:ring-2 focus-visible:ring-mint focus-visible:outline-none",
+          "flex min-w-0 flex-1 items-center rounded-l-full py-2 pr-3 pl-4",
+          "transition-interactive hover:bg-surface-hover",
+          "focus-visible:ring-mint focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none",
         )}
       >
-        <CreditAmount credits={credits} size="lg" tone={low ? "low" : "default"} />
+        <CreditAmount credits={credits} size="sm" tone={low ? "low" : "default"} />
+      </Link>
+
+      {/* A hairline, inset from both ends so the pill reads as one shape
+          rather than as two chips pushed together. */}
+      <span aria-hidden className="bg-line-2 my-2 w-px shrink-0" />
+
+      <Link
+        href={topUpHref}
+        aria-label="Top up Credits"
+        className={cn(
+          "vibe-control text-fg-muted grid w-10 shrink-0 place-items-center rounded-r-full",
+          /*
+            Quiet at rest, mint on the way in: adding Credits is Vibe's own
+            action rather than a neutral one — the colour every priced control
+            in the product already uses to mean "this is the thing you do
+            here". The container exists at rest because a bare mark is not a
+            control on a phone; here the container is the pill's own end.
+          */
+          "transition-interactive hover:bg-mint-tint hover:text-mint active:bg-mint-tint",
+          "focus-visible:ring-mint focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none",
+        )}
+      >
+        <PlusIcon size={15} />
       </Link>
     </div>
   );
