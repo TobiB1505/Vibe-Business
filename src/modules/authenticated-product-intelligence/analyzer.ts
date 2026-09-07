@@ -165,6 +165,47 @@ function describeFailure(error: unknown): string {
   return typeof error === "string" ? error.slice(0, 300) : "non-error thrown";
 }
 
+/**
+ * Whether a navigation failed because the *previous* one was still settling.
+ *
+ * Not a broken page. A single-page application answers `goto` as soon as the
+ * document is there and then routes on its own — an auth check, a redirect to
+ * a canonical path — and that late navigation aborts whatever `goto` started
+ * next. A real scan lost eighteen pages in a chain to it, each one interrupted
+ * by the target before it:
+ *
+ * ```
+ * page.goto: Navigation to ".../plan" is interrupted by
+ *            another navigation to ".../app"
+ * ```
+ *
+ * The page is fine. The timing is not.
+ */
+function interruptedByAnotherNavigation(error: unknown): boolean {
+  return error instanceof Error && /interrupted by another navigation/i.test(error.message);
+}
+
+/**
+ * One navigation, retried once when the previous page interrupted it.
+ *
+ * Once, and only for that one cause: by the time the error is raised the
+ * interrupting navigation has finished, so the second attempt starts from a
+ * settled page. A retry loop would turn a genuinely unreachable page into a
+ * budget spent on it, which is the failure the budgets exist to prevent.
+ */
+async function navigate(
+  page: { goto: (path: string, options: { timeoutMs: number }) => Promise<{ status: number | null }> },
+  target: string,
+  timeoutMs: number,
+): Promise<{ status: number | null }> {
+  try {
+    return await page.goto(target, { timeoutMs });
+  } catch (error) {
+    if (!interruptedByAnotherNavigation(error)) throw error;
+    return await page.goto(target, { timeoutMs });
+  }
+}
+
 export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<AnalyzeResult> {
   const budgets = input.budgets ?? DEFAULT_AUTHENTICATED_BUDGETS;
   const now = input.now ?? Date.now;
@@ -248,7 +289,7 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     if (!(candidate.source === "landing" && navigationCount === 0)) {
       try {
         navigationCount += 1;
-        status = (await page.goto(target, { timeoutMs: tracker.remainingNavigationTimeoutMs })).status;
+        status = (await navigate(page, target, tracker.remainingNavigationTimeoutMs)).status;
       } catch (error) {
         tracker.note("navigation_failed");
         warnings.push(warning("page_unreachable", "A page could not be loaded.", candidate.path));
