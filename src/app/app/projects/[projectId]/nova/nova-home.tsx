@@ -5,7 +5,6 @@ import type { NovaHomeEntry, NovaHomeSection } from "@/modules/nova/home-view";
 import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-context";
 
 import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
-import { NovaPresence } from "@/components/nova/nova-presence";
 
 import { ChangeGates } from "../agent/change-gates";
 import { AgentWorkspaceChoice } from "../agent/agent-workspace-choice";
@@ -95,27 +94,28 @@ export async function NovaHome({
     <div className="flex flex-col gap-6">
       {/*
         The status row, and the only piece of chrome on this page.
-        `NovaThreadHeader` says who is speaking and what about — Nova and her
-        availability on the left, the product and whether its repository is
-        reachable on the right. The clock is a client component because only a
-        browser has one; the rest is server-rendered.
+
+        Deliberately *not* wrapped in `NovaRise`. It is `sticky top-0`, and a
+        sticky element can only stick within its own containing block — a
+        wrapper that hugs the header is a wrapper with no room to stick in, so
+        the header scrolled away with the thread instead of staying above it.
+        An entrance is not worth a status row that leaves.
       */}
-      <NovaRise>
-        <NovaHeaderLive
-          projectId={project.id}
-          working={data.view.working}
-          /*
-           * What the line says when nothing is running. The moment's own word,
-           * from the same table the bubble below it reads, so the header cannot
-           * describe a moment differently from the sentence under it.
-           */
-          resting={statusForCandidate(data.view.primary.kind)}
-          subject={data.identity.name}
-          connected={connected}
-          mark={<NovaPresence state={presence} size="md" seed={project.id} />}
-          now={<NovaClock />}
-        />
-      </NovaRise>
+      <NovaHeaderLive
+        projectId={project.id}
+        working={data.view.working}
+        /*
+         * What the line says when nothing is running. The moment's own word,
+         * from the same table the bubble below it reads, so the header cannot
+         * describe a moment differently from the sentence under it.
+         */
+        resting={statusForCandidate(data.view.primary.kind)}
+        tier={data.view.primary.tier}
+        seed={project.id}
+        subject={data.identity.name}
+        connected={connected}
+        now={<NovaClock />}
+      />
 
       {/*
         Two halves: the work on the left, the conversation on the right.

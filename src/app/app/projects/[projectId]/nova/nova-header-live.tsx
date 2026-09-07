@@ -8,6 +8,9 @@ import { novaWorkingEntry } from "@/modules/nova/home-view";
 import type { NovaWorkingEntry } from "@/modules/nova/home-view";
 import { operationPollPhase, type OperationView } from "@/modules/operations/view";
 import { NovaThreadHeader } from "@/components/nova/nova-thread";
+import { NovaPresence } from "@/components/nova/nova-presence";
+import { novaPresenceState } from "@/components/system/status-vocabulary";
+import type { NovaFocusTier } from "@/modules/nova/focus";
 import type { StatusTone } from "@/components/ui/status-pill";
 
 /**
@@ -53,17 +56,28 @@ export function NovaHeaderLive({
   working,
   /** What the line says when nothing is running: the moment's own word. */
   resting,
+  /**
+   * The leading moment's tier, for the mark.
+   *
+   * Passed rather than a finished mark, and that is the fix it exists for: a
+   * mark built on the server reads the phase of the *server* render, so the
+   * word under it — which comes from the poll — could say a run had finished
+   * while the frame was still turning. Both halves read the same phase now.
+   */
+  tier,
+  /** The project, so one product always draws the same mark. */
+  seed,
   subject,
   connected,
-  mark,
   now,
 }: {
   projectId: string;
   working: NovaWorkingEntry | null;
   resting: { word: string; tone: StatusTone };
+  tier: NovaFocusTier;
+  seed: string;
   subject: string;
   connected: boolean;
-  mark: ReactNode;
   now?: ReactNode;
 }) {
   const router = useRouter();
@@ -115,7 +129,18 @@ export function NovaHeaderLive({
       status={live ? { word: live.stageLabel, tone: "active" } : resting}
       subject={subject}
       connected={connected}
-      mark={mark}
+      /*
+       * Derived here from the same reading the word uses. `novaPresenceState`
+       * is still the only function that decides which state the mark stands
+       * in — this passes it a live phase instead of a stale one.
+       */
+      mark={
+        <NovaPresence
+          state={novaPresenceState({ tier, phase: live?.phase ?? "idle" })}
+          size="md"
+          seed={seed}
+        />
+      }
       now={now}
     />
   );

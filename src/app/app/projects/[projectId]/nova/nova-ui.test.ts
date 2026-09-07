@@ -230,6 +230,19 @@ describe("Nova Home", () => {
     });
 
     /*
+     * The status row is chrome and stays while the thread scrolls, which is
+     * what `sticky top-0` on it is for. A sticky element can only stick within
+     * its own containing block, so a wrapper that hugs it — an entrance
+     * animation, say — is a wrapper with no room to stick in, and the header
+     * leaves with the thread. It shipped that way once.
+     */
+    it("does not wrap the sticky header in anything that hugs it", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/<NovaHeaderLive/);
+      expect(home).not.toMatch(/<NovaRise[^>]*>\s*<NovaHeaderLive/);
+    });
+
+    /*
      * And the rail goes second on a phone. A founder who opens this on a phone
      * came for what Nova says; the plan and the log above it means scrolling
      * past everything to reach the one thing that speaks.
