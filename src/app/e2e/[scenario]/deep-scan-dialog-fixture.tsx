@@ -12,7 +12,13 @@ import { LiveViewDialog } from "@/app/app/projects/[projectId]/deep-scan-panel";
  * no browser coverage at all, and a countdown and a closing check both shipped
  * without ever appearing on screen.
  */
-export function DeepScanDialogFixture({ sealing }: { sealing: boolean }) {
+export function DeepScanDialogFixture({
+  sealing = false,
+  expired = false,
+}: {
+  sealing?: boolean;
+  expired?: boolean;
+}) {
   const noop = () => {};
 
   return (
@@ -28,6 +34,7 @@ export function DeepScanDialogFixture({ sealing }: { sealing: boolean }) {
       signIn={{ signedIn: false, startsInSeconds: null, postpone: noop }}
       sealing={sealing}
       analysing={sealing}
+      expired={expired}
       progress={sealing ? { pagesInspected: 14, maxPages: 25 } : null}
       onCancel={noop}
       onAnalyze={noop}

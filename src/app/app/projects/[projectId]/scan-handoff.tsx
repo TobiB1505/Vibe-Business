@@ -74,8 +74,16 @@ const COLLAPSE_MS = 620;
  * segment travelling a track accumulates nothing and claims nothing.
  */
 const BOOT_MS = 1_900;
-/** The check, when the analysis comes back. Long enough to read, short enough to leave. */
-const SEAL_MS = 1_500;
+/**
+ * The check, when the analysis comes back.
+ *
+ * Was 1.5 seconds, and the founder's report was "Haken und weg" — the tick
+ * drew and the dialog was already gone. 0.2s of delay plus 0.42s of drawing
+ * leaves under a second of a finished check on screen, which is not enough to
+ * register as the answer to a ninety-second wait. It is the last thing a
+ * person sees of this flow, and it should feel like an ending.
+ */
+const SEAL_MS = 2_600;
 
 export type ScanHandoffStage = "watching" | "collapsing" | "booting" | "gathering" | "sealing";
 

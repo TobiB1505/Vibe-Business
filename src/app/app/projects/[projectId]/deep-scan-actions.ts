@@ -4,12 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getBrowserSessionProvider } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
-import type { DeepScanProgress } from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScan,
   cancelDeepScan,
   getDeepScanLiveView,
-  getDeepScanProgress,
   probeDeepScanSignIn,
   startDeepScan,
 } from "@/modules/authenticated-product-intelligence/service";
@@ -42,28 +40,15 @@ export type LiveViewActionState =
 
 export type SimpleDeepScanActionState = { ok: true } | { ok: false; error: DeepScanActionFailure };
 
-export type DeepScanProgressActionState = DeepScanProgress | null;
-
-/**
- * How far the running analysis has got.
+/*
+ * The progress read is deliberately **not** here.
  *
- * Polled while the scan runs, so it is the cheapest thing here: one read, no
- * writes, no revalidation. A failure answers `null` — the panel then shows the
- * animation without a count, which is the state it was in before this existed
- * and is never worse than the alternative of an error over a working scan.
+ * It was, and it could never have worked: Next.js executes Server Actions from
+ * one client one at a time, and the analysis is itself an action that runs for
+ * ninety seconds — so every poll queued behind it and arrived in a burst after
+ * it finished. It lives at `/api/deep-scan/[sessionId]/progress`, which is an
+ * ordinary request and is not queued behind anything.
  */
-export async function deepScanProgressAction(
-  sessionId: string,
-): Promise<DeepScanProgressActionState> {
-  const session = await requireSession();
-  const supabase = await createClient();
-
-  try {
-    return await getDeepScanProgress(supabase, { sessionId, userId: session.userId });
-  } catch {
-    return null;
-  }
-}
 
 export type SignInProbeActionState =
   | { ok: true; signedIn: boolean }

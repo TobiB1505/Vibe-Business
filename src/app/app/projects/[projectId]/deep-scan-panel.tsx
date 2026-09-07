@@ -21,7 +21,6 @@ import {
   analyzeDeepScanAction,
   cancelDeepScanAction,
   getDeepScanLiveViewAction,
-  deepScanProgressAction,
   probeDeepScanSignInAction,
   startDeepScanAction,
 } from "./deep-scan-actions";
@@ -201,6 +200,7 @@ export function LiveViewDialog({
   sealing,
   analysing,
   progress,
+  expired,
   onSealed,
   onLoginExpired,
 }: {
@@ -225,6 +225,8 @@ export function LiveViewDialog({
   analysing: boolean;
   /** Pages read so far, once the running scan has answered. */
   progress: DeepScanProgress | null;
+  /** Sign-in ran past the deadline and the browser has been given back. */
+  expired: boolean;
   onSealed: () => void;
   /** The founder ran out of time to sign in. */
   onLoginExpired: () => void;
@@ -249,7 +251,7 @@ export function LiveViewDialog({
    * while the browser is still opening, because that wait is Vibe's.
    */
   const loginSecondsLeft = useLoginCountdown(
-    stage === "ready" && !busy && !sealing && !unreachable && error === null,
+    stage === "ready" && !busy && !sealing && !expired && !unreachable && error === null,
     onLoginExpired,
   );
 
@@ -454,7 +456,39 @@ export function LiveViewDialog({
             onSealed={onSealed}
           />
 
-          {!error && !unreachable && stage !== "ready" && (
+          {!error && expired && (
+            /*
+             * An ending the founder did not ask for, said where they were
+             * looking. The browser is already given back — a sandbox exists to
+             * hold a login form, and one nobody is signing into is an empty
+             * room being billed for.
+             *
+             * "Nothing was charged" is first, because that is the question a
+             * person has when something they started ends by itself.
+             */
+            <div
+              role="alert"
+              className="bg-surface-2 absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
+            >
+              <div className="space-y-1">
+                <p className="text-fg-body text-sm font-medium">
+                  Sign-in took longer than two minutes
+                </p>
+                <p className="max-w-[54ch] text-xs text-fg-muted">
+                  Vibe closed the temporary browser rather than leave it running. Nothing was
+                  charged. You can start again — Vibe waits two minutes between attempts, and
+                  closing this shows when.
+                </p>
+              </div>
+              <div>
+                <TextAction type="button" onClick={onCancel} className="text-sm">
+                  Close
+                </TextAction>
+              </div>
+            </div>
+          )}
+
+          {!error && !expired && !unreachable && stage !== "ready" && (
             <div
               role="status"
               className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
@@ -562,7 +596,13 @@ export function LiveViewDialog({
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
+          <Button
+            type="button"
+            onClick={onAnalyze}
+            // There is no browser left to analyse once the deadline has passed.
+            disabled={busy || expired || !liveViewUrl}
+            busy={busy}
+          >
             {busy
               ? "Looking around…"
               : signIn.signedIn
@@ -825,7 +865,22 @@ function useScanProgress(sessionId: string | null, running: boolean): DeepScanPr
     let cancelled = false;
 
     const ask = async () => {
-      const answer = await deepScanProgressAction(sessionId);
+      /*
+       * `fetch`, not a Server Action, and that is the whole reason this works.
+       *
+       * Next.js runs Server Actions from one client one at a time, and the
+       * analysis *is* a Server Action that lasts ninety seconds. As an action
+       * this poll queued behind it — a real run produced thirty of them, and
+       * the runtime log shows all thirty arriving in a burst over eight
+       * seconds after the analysis returned. The count could never have moved
+       * while it mattered, and the queue draining afterwards is why the panel
+       * then sat blank for half a minute.
+       */
+      const answer = await fetch(`/api/deep-scan/${encodeURIComponent(sessionId)}/progress`, {
+        cache: "no-store",
+      })
+        .then((response) => (response.ok ? (response.json() as Promise<DeepScanProgress | null>) : null))
+        .catch(() => null);
       if (cancelled) return;
       // Only ever forward. The row is read while it is being written, so a
       // read that lands between two updates can answer with the earlier
@@ -1239,6 +1294,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
    * not exist yet.
    */
   const [analysing, setAnalysing] = useState(false);
+  /** Sign-in ran past the deadline, and the dialog is saying so. */
+  const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
@@ -1260,6 +1317,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setFrame(null);
     setSealing(false);
     setAnalysing(false);
+    setExpired(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -1327,24 +1385,44 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const handleLoginExpired = useCallback(() => {
     if (!sessionId) return;
     setBusy(true);
+    /*
+     * The dialog stays open and says what happened.
+     *
+     * It used to terminate the browser, close, and leave a sentence in the
+     * panel behind — so from the founder's side the window simply vanished
+     * while they were typing a password. An ending they did not ask for has to
+     * be told to them where they are looking.
+     */
+    setExpired(true);
     startTransition(async () => {
       await cancelDeepScanAction(projectId, sessionId);
       setBusy(false);
       setSessionId(null);
-      closeDialog();
-      setError(
-        "The temporary browser closed because sign-in took longer than two minutes. Nothing was charged — you can start it again.",
-      );
       router.refresh();
     });
-  }, [projectId, sessionId, closeDialog, router]);
+  }, [projectId, sessionId, router]);
 
+  /**
+   * The dialog closes onto the result, not onto a blank panel.
+   *
+   * It used to close and *then* refresh, so the founder watched twenty to
+   * thirty seconds of nothing where the scan overview should have been. Most
+   * of that was the Server Action queue draining — thirty progress polls that
+   * had been stuck behind the analysis — and that cause is gone. What remains
+   * is the refresh itself, which is a real round trip.
+   *
+   * So the check stays up until the refreshed page has arrived. `refresh()` is
+   * awaited inside a transition, and the dialog closes after it: a beat longer
+   * on an answer, instead of a gap with nothing in it.
+   */
   const handleSealed = useCallback(() => {
-    setSealing(false);
-    setAnalysing(false);
-    setSessionId(null);
-    closeDialog();
-    router.refresh();
+    startTransition(async () => {
+      await Promise.resolve(router.refresh());
+      setSealing(false);
+      setAnalysing(false);
+      setSessionId(null);
+      closeDialog();
+    });
   }, [closeDialog, router]);
 
   const handleAnalyze = useCallback(() => {
@@ -1642,6 +1720,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           onUnavailable={handleUnavailable}
           sealing={sealing}
           analysing={analysing}
+          expired={expired}
           progress={progress}
           onSealed={handleSealed}
           onLoginExpired={handleLoginExpired}

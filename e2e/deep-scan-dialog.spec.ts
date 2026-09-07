@@ -67,3 +67,30 @@ test.describe("the analysis has come back", () => {
     await expect(page.getByRole("timer")).toBeHidden();
   });
 });
+
+/*
+ * The deadline used to terminate the browser, close the dialog, and leave a
+ * sentence in the panel behind — so from the founder's side the window simply
+ * vanished while they were typing a password. An ending nobody asked for has
+ * to be told where the person is looking.
+ */
+test.describe("sign-in ran out of time", () => {
+  test("says what happened, where the founder was looking", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-dialog-expired");
+
+    // Scoped to the dialog: Next's own route announcer is also an alert.
+    const notice = page.getByRole("dialog").getByRole("alert");
+    await expect(notice).toContainText("Sign-in took longer than two minutes");
+    // The question a person has when something they started ends by itself.
+    await expect(notice).toContainText("Nothing was charged");
+    // And the cooldown, named rather than discovered by a refused click.
+    await expect(notice).toContainText("waits two minutes between attempts");
+  });
+
+  test("stops the clock and the analysis button once the browser is gone", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-dialog-expired");
+
+    await expect(page.getByRole("timer")).toBeHidden();
+    await expect(page.getByRole("button", { name: /logged in/i })).toBeDisabled();
+  });
+});
