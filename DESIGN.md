@@ -47,7 +47,7 @@ The register is product-first **inside `/app`**: marketing expression does not l
 
 Everything here is one of two things, and they do not cost the same to change.
 
-**Design rules are revisable in place.** Composition, hierarchy, register, material, motion character, typography, restraint, which technique suits which surface. If you have a better argument, rewrite the rule and say why — no ADR, no ceremony. Being cheap to change is what keeps them true; three of them had gone stale before anyone noticed, precisely because they read as invariants. See [ADR 0097](docs/decisions/0097-design-rules-are-revisable-truth-rules-are-not.md).
+**Design rules are revisable in place.** Composition, hierarchy, register, material, motion character, typography, restraint, which technique suits which surface. If you have a better argument, rewrite the rule and say why — no ADR, no ceremony. Being cheap to change is what keeps them true; three of them had gone stale before anyone noticed, precisely because they read as invariants. See [ADR 0098](docs/decisions/0098-design-rules-are-revisable-truth-rules-are-not.md).
 
 **Truth rules are not.** No fabricated metric, count, percentage or success state; no motion asserting a state Vibe has not observed; missing evidence is `null` and says so; no control whose label misdescribes what pressing it does; no affordance that appears available and is not. Those have the standing of the security invariants, and changing one needs a record.
 
@@ -57,7 +57,7 @@ The runtime source of truth is [src/app/globals.css](src/app/globals.css). This 
 
 ### Two vocabularies, one of them not switched on
 
-Since [ADR 0096](docs/decisions/0096-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
+Since [ADR 0097](docs/decisions/0097-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
 
 v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, opaque panels with bright hairlines and tight corners, glass spent on chrome and signature moments rather than on dense data, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
 

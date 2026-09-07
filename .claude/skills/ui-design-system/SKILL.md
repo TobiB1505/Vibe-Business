@@ -22,7 +22,7 @@ rule; rewrite it and say why. No ADR.
 unobserved state, `null` is not zero, no label that misdescribes its control, no
 affordance that looks available and is not. Those are invariants.
 
-[ADR 0097](../../../docs/decisions/0097-design-rules-are-revisable-truth-rules-are-not.md)
+[ADR 0098](../../../docs/decisions/0098-design-rules-are-revisable-truth-rules-are-not.md)
 records why the distinction is written down: three aesthetic rules in these skills
 had gone stale because they read as invariants and nobody argued with them.
 

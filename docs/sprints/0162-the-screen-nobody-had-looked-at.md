@@ -1,8 +1,8 @@
-# Sprint 0145 — The screen nobody had looked at
+# Sprint 0162 — The screen nobody had looked at
 
 Nova Home renders the ranking, as a conversation. Two ADRs
-([0096](../decisions/0096-the-second-design-system-arrives-scoped.md),
-[0097](../decisions/0097-design-rules-are-revisable-truth-rules-are-not.md)).
+([0096](../decisions/0097-the-second-design-system-arrives-scoped.md),
+[0097](../decisions/0098-design-rules-are-revisable-truth-rules-are-not.md)).
 
 ## What was wrong
 
