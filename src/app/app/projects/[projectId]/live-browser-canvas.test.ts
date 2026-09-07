@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { frameCoordinates, modifiersOf } from "./live-browser-canvas";
+import { charactersOf, frameCoordinates, isComposingKey, modifiersOf } from "./live-browser-canvas";
 
 /**
  * The two pure halves of driving a remote browser by hand.
@@ -77,5 +79,101 @@ describe("modifier bits", () => {
     expect(modifiersOf({ altKey: true, ctrlKey: true, metaKey: true, shiftKey: true })).toBe(15);
     // The guard clamps at 15, so nothing here can exceed it.
     expect(modifiersOf({ altKey: true, ctrlKey: true, metaKey: true, shiftKey: true })).toBeLessThanOrEqual(15);
+  });
+});
+
+/**
+ * The two decisions that make this usable from a phone.
+ *
+ * The browser worked on a desktop and could not be typed into on a phone, for
+ * a reason no rendering catches: iOS opens its keyboard only for a focused
+ * editable element, and a canvas is not one whatever its tabindex. So a person
+ * could watch their own product, scroll it, tap it — and never enter a
+ * password, which is the entire point of the session.
+ */
+describe("a keystroke the soft keyboard refuses to name", () => {
+  it("recognises both shapes a phone reports", () => {
+    // iOS says `Unidentified`; Android's composition path says keyCode 229.
+    // Forwarding either sends Chromium a keystroke with no key in it.
+    expect(isComposingKey({ key: "Unidentified", keyCode: 0 })).toBe(true);
+    expect(isComposingKey({ key: "a", keyCode: 229 })).toBe(true);
+  });
+
+  it("leaves every real key on the ordinary path", () => {
+    // A hardware keyboard, and the three keys a login form needs beyond
+    // letters. Treating any of these as composition would break the desktop.
+    for (const event of [
+      { key: "a", keyCode: 65 },
+      { key: "Backspace", keyCode: 8 },
+      { key: "Enter", keyCode: 13 },
+      { key: "Tab", keyCode: 9 },
+      { key: "Shift", keyCode: 16 },
+    ]) {
+      expect(isComposingKey(event), `${event.key} must not be treated as composition`).toBe(false);
+    }
+  });
+});
+
+describe("typed text becomes the characters a person meant", () => {
+  it("splits a word into its letters", () => {
+    expect(charactersOf("abc")).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps a two-unit character whole", () => {
+    // `split("")` would send two halves of one character, and a password
+    // containing one would be typed as something else entirely.
+    expect(charactersOf("é😀")).toEqual(["é", "😀"]);
+  });
+
+  it("sends nothing for an empty field", () => {
+    // The field is emptied after every keystroke, so it is read empty often.
+    expect(charactersOf("")).toEqual([]);
+  });
+});
+
+/**
+ * What a phone needs that no pure function can hold.
+ *
+ * This project has no React rendering harness, so these are source assertions —
+ * the same substitute `merge-ui.test.ts` uses and for the same reason. They do
+ * not prove what a person sees; they prove the four things whose absence is
+ * exactly what made the browser unusable on a phone, each of which is one
+ * deletion away from coming back.
+ */
+describe("the temporary browser can be operated by touch", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/live-browser-canvas.tsx"),
+    "utf8",
+  );
+
+  it("translates touch into the mouse the guard understands", () => {
+    // Safari synthesizes a mouse event from a tap but not from a drag, and
+    // never soon enough to scroll a login page.
+    for (const handler of ["onTouchStart", "onTouchMove", "onTouchEnd"]) {
+      expect(source).toContain(handler);
+    }
+  });
+
+  it("stops a drag scrolling Vibe's page instead of the product", () => {
+    expect(source).toContain("touch-none");
+  });
+
+  it("keeps a focusable field for the keyboard to attach to", () => {
+    // The whole reason a phone could not type: iOS raises its keyboard only
+    // for a focused editable element, and a canvas is not one.
+    expect(source).toContain("keyboardRef");
+    expect(source).toContain("focus({ preventScroll: true })");
+  });
+
+  it("never leaves what was typed sitting in Vibe's DOM", () => {
+    // The field is a conduit. Text left in it would be a password in the page.
+    expect(source).toContain('event.target.value = ""');
+  });
+
+  it("does not ask the browser to remember a credential that is not Vibe's", () => {
+    // A password field here would offer to save the customer's product login
+    // against Vibe's origin.
+    expect(source).toContain('autoComplete="off"');
+    expect(source).not.toContain('type="password"');
   });
 });

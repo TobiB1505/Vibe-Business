@@ -247,7 +247,16 @@ function LiveViewDialog({
           )}
         </div>
 
-        <p className="text-xs text-fg-muted">Deep Scan works best on a desktop browser.</p>
+        {/*
+          Was "Deep Scan works best on a desktop browser", which was true of a
+          browser a phone could not type into at all — and read as a preference
+          rather than a wall, so it invited somebody to spend Credits on a
+          session they could not finish. A phone can drive this now; a larger
+          screen is genuinely easier, and that is all this says.
+        */}
+        <p className="text-xs text-fg-muted">
+          Tap or click to interact. A larger screen makes signing in easier.
+        </p>
 
         {busy && (
           /*
