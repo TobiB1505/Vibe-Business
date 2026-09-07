@@ -8,6 +8,7 @@ import {
   readAuditEvidence,
 } from "@/modules/business-audit/service";
 import { novaSituationFrom } from "@/modules/nova/briefing/situation";
+import type { PrimaryGoal } from "@/modules/projects/founder-intent";
 import type { NovaSituation } from "@/modules/nova/briefing/situation";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 
@@ -31,6 +32,12 @@ import { getLatestOpportunities } from "@/modules/opportunities/service";
  * than throwing past a completion nothing can take back — which is the same
  * standing `speakAfterOperation` itself has.
  */
+export type SituationRead = {
+  situation: NovaSituation;
+  /** The founder's stated goal, which the evidence read already carries. */
+  primaryGoal: PrimaryGoal | null;
+};
+
 export async function readSituation(
   /**
    * A client, not an `ExecutionDeps`. This never reaches a provider — it reads
@@ -40,7 +47,7 @@ export async function readSituation(
    */
   supabase: SupabaseClient,
   projectId: string,
-): Promise<NovaSituation | null> {
+): Promise<SituationRead | null> {
   try {
     const evidence = await readAuditEvidence(supabase, projectId);
 
@@ -50,7 +57,13 @@ export async function readSituation(
       getLatestOpportunities(supabase, projectId),
     ]);
 
-    return novaSituationFrom({ evidence, readiness, currency, opportunities }, new Date());
+    return {
+      situation: novaSituationFrom({ evidence, readiness, currency, opportunities }, new Date()),
+      /* Free: `readAuditEvidence` reads the founder intent either way, and a
+         caller that wants the goal would otherwise make a second query for a
+         row this function already has in hand. */
+      primaryGoal: evidence.founderIntent.intent.primaryGoal,
+    };
   } catch (error) {
     console.error("[nova-voice] could not read the situation to speak from", {
       projectId,

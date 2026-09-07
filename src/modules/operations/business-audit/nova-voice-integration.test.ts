@@ -230,7 +230,7 @@ function renderedEntry() {
  * under test rather than a comment.
  */
 async function readVoice() {
-  const situation = await readSituation(fakeSupabase(db), PROJECT);
+  const situation = (await readSituation(fakeSupabase(db), PROJECT))?.situation ?? null;
 
   return readNovaAuditVoice(fakeSupabase(db), {
     projectId: PROJECT,

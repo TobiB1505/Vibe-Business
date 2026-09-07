@@ -87,7 +87,7 @@ export async function readBriefing(
   const evidence = await readAuditEvidence(supabase, params.projectId);
 
   const [focus, currency, readiness, opportunities, founderName] = await Promise.all([
-    readNovaFocus(supabase, params.projectId),
+    readNovaFocus(supabase, params.projectId, params.userId),
     getAuditCurrency(supabase, params.projectId, evidence),
     getAuditReadiness(supabase, params.projectId, evidence),
     getLatestOpportunities(supabase, params.projectId),

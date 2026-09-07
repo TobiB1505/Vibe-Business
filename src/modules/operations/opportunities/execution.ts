@@ -426,7 +426,7 @@ async function speakAboutTheTopMove(
   const storedIntent = await getFounderIntent(deps.supabase, operation.projectId);
   const subject = novaMoveSubject(move);
   const founderGoal = novaFounderGoal(storedIntent?.intent.primaryGoal ?? null);
-  const situation = await readSituation(deps.supabase, operation.projectId);
+  const situation = (await readSituation(deps.supabase, operation.projectId))?.situation ?? null;
 
   await speakAfterOperation({
     supabase: deps.supabase,

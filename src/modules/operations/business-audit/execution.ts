@@ -838,7 +838,7 @@ async function speakAboutTheAudit(
    * a failed operation — so this degrades to no situation rather than throwing
    * past the completion that already happened.
    */
-  const situation = await readSituation(deps.supabase, operation.projectId);
+  const situation = (await readSituation(deps.supabase, operation.projectId))?.situation ?? null;
 
   await speakAfterOperation({
     supabase: deps.supabase,

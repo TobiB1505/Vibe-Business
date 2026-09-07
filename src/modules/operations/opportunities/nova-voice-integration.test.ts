@@ -191,7 +191,7 @@ describe("the Moves actually reach Nova", () => {
       primaryGoal: null,
       /* The half a render could silently get wrong: composed by the same
          function the step used, so the two identities agree. */
-      situation: await readSituation(fakeSupabase(db), PROJECT),
+      situation: (await readSituation(fakeSupabase(db), PROJECT))?.situation ?? null,
     });
 
     expect(read).toMatchObject({ message: SPOKEN, source: "voice", resolved: true });
