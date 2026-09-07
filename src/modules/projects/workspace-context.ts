@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -68,8 +69,8 @@ export type ProjectSwitcherOption = {
  * The current project is already known to the layout and is inserted there,
  * so this query asks only for alternatives. Four keeps the disclosure useful
  * without turning a frame rendered on every project route into an account
- * dashboard read. The permanent "View all products" destination remains the
- * complete inventory and the recovery path when this optional read fails.
+ * dashboard read. Settings → Products remains the complete inventory and the
+ * recovery path when this optional read fails.
  */
 export async function listProjectSwitcherOptions(
   supabase: SupabaseClient,
@@ -154,6 +155,36 @@ export async function getProjectWorkspaceContext(
       : null,
   };
 }
+
+/**
+ * The project frame's context, resolved once per request (UI-13).
+ *
+ * ## Why this wrapper exists
+ *
+ * The rail moved into the `@rail` parallel route slot so that one `<aside>`
+ * can stay mounted across the whole signed-in product. A slot and the layout
+ * beside it are two independent renders of the same request, and both need the
+ * project's name — so without this, every project route would resolve the same
+ * row twice.
+ *
+ * `cache()` memoizes for the duration of one render, which is exactly the
+ * lifetime this needs: the slot and the layout share one read, and the next
+ * request shares nothing with this one.
+ *
+ * ## Why the arguments are positional
+ *
+ * `cache()` compares each argument with `Object.is`. An options object is a
+ * fresh reference on every call, so a `{ projectId, userId }` signature would
+ * miss the cache on every single lookup while looking exactly like it worked.
+ */
+export const getProjectFrameContext = cache(async function getProjectFrameContext(
+  projectId: string,
+  userId: string,
+): Promise<ProjectWorkspaceContext | null> {
+  if (!isUuid(projectId)) return null;
+  const supabase = await createClient();
+  return getProjectWorkspaceContext(supabase, { projectId, userId });
+});
 
 /**
  * The gate every workspace route opens with.

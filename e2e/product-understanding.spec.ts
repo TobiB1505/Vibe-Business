@@ -61,13 +61,20 @@ test.describe("the project shell owns project context", () => {
     await page.goto(READY);
 
     await expect(page.getByTestId("project-switcher")).toContainText("Acme");
-    await expect(page.getByRole("link", { name: "All products", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "My Product", exact: true })).toBeVisible();
     await expect(page.getByText("Here's how Vibe understands your product.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Check my product again" })).toBeVisible();
 
-    const main = page.locator("main");
-    await expect(main).toHaveCSS("overflow-y", "auto");
+    /*
+     * The rail stays while the document scrolls, rather than the document
+     * standing still while a column inside it scrolls. Both look the same at
+     * rest; only the first leaves anchors, `scroll-mt` and browser scroll
+     * restoration working — and it is the model Settings already used, which
+     * is what lets one rail serve both (UI-13).
+     */
+    const rail = page.getByTestId("app-rail");
+    await expect(rail).toHaveCSS("position", "sticky");
+    await expect(page.locator("main")).not.toHaveCSS("overflow-y", "auto");
     await expect(page.locator("header.sticky")).toHaveCount(0);
   });
 
@@ -79,7 +86,14 @@ test.describe("the project shell owns project context", () => {
     const switcher = page.getByTestId("project-switcher");
     await switcher.locator("summary").click();
     await expect(switcher.getByRole("link", { name: "Planner Agent" })).toBeVisible();
-    await expect(switcher.getByRole("link", { name: "View all products" })).toBeVisible();
+    await expect(switcher.getByRole("link", { name: "Project Settings" })).toBeVisible();
+    /*
+     * And nothing offering to go and look at the products, from inside the
+     * panel that is the products. It was a row here and a row in the rail, and
+     * both pointed at a list the founder had already opened.
+     */
+    await expect(switcher.getByRole("link", { name: "View all products" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "All products", exact: true })).toHaveCount(0);
 
     /*
      * The identity is a link to the page about it, not a menu.

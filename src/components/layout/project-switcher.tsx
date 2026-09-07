@@ -3,12 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import {
-  CheckIcon,
-  ChevronDownIcon,
-  ProductsIcon,
-  SettingsIcon,
-} from "@/components/ui/dashboard-icons";
+import { CheckIcon, ChevronDownIcon, SettingsIcon } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/utils/cn";
 import { initialsFrom } from "@/modules/auth/initials";
 
@@ -126,7 +121,7 @@ export function ProjectSwitcher({
         </ul>
 
         {/*
-          The two things you do *to* the project you are in, under the control
+          The one thing you do *to* the project you are in, under the control
           that says which project that is.
 
           `Project Settings` used to be the last row of the rail, directly
@@ -135,6 +130,11 @@ export function ProjectSwitcher({
           the control that names it. Here it cannot be mistaken for the
           account's: the panel it lives in has the project's name at the top
           and a tick beside it.
+
+          `View all products` stood beside it and is gone. The list of every
+          product is what this panel *is* — it is open, the products are in it,
+          and a row offering to go and see them somewhere else was offering the
+          founder the thing they were already looking at.
         */}
         <div className="border-line-1 mt-2 flex flex-col gap-1 border-t pt-2">
           <Link
@@ -146,16 +146,6 @@ export function ProjectSwitcher({
           >
             <SettingsIcon size={17} />
             Project Settings
-          </Link>
-          <Link
-            href="/app/settings/products"
-            className={cn(
-              "text-fg-secondary hover:bg-surface-hover hover:text-fg rounded-nav",
-              "flex items-center gap-3 px-3 py-2.5 text-body font-medium transition-interactive",
-            )}
-          >
-            <ProductsIcon size={17} />
-            View all products
           </Link>
         </div>
       </div>

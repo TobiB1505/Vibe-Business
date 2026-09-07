@@ -381,6 +381,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0098](docs/decisions/0098-the-palette-ships-behind-one-switch.md) | The palette ships behind one switch, not one route at a time | UI and design tooling |
 | [0099](docs/decisions/0099-glass-is-the-material.md) | Glass is the material, and the ground has to be visible for it to be one | UI and design tooling |
 | [0100](docs/decisions/0100-the-account-level-is-settings.md) | The account level is Settings, and `/app` resolves to a product | Web surface |
+| [0101](docs/decisions/0101-one-rail-that-unfolds.md) | One rail, unfolded by a parallel route | Web surface |
 
 ### Layers with no section above
 

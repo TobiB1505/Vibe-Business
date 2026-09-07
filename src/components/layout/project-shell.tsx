@@ -1,13 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { VibeLockup } from "@/components/brand/vibe-mark";
 import {
-  ArrowLeftIcon,
   ChevronRightIcon,
   SettingsIcon,
   type DashboardIconName,
 } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
+import { RailNav, RailScroll } from "./app-frame";
 import { ProjectNav } from "./project-nav";
 import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";
 import { cn } from "@/lib/utils/cn";
@@ -285,14 +284,22 @@ export type ProjectNavItem = {
   status?: string | null;
 };
 
-export function ProjectSidebar({
+/**
+ * The navigation the rail holds while a founder is inside a product.
+ *
+ * The middle of the rail and nothing else. The `<aside>` belongs to
+ * `AppFrame`, and the lockup above and the identity below belong to the slot
+ * that renders this — so those two are *the same DOM nodes* in Settings, not
+ * copies of them. Only what is between them is replaced, which is the whole of
+ * what the fold is.
+ */
+export function ProjectRail({
   projectId,
   projectName,
   repositoryFullName,
   connected,
   switcherItems,
   items,
-  footer,
   // No `currentId`: the active section is derived from the URL inside
   // `ProjectNav`, so it cannot disagree with the address bar after a refresh,
   // a Back navigation, or a link opened in a new tab.
@@ -303,7 +310,6 @@ export function ProjectSidebar({
   connected: boolean;
   switcherItems: ProjectSwitcherItem[];
   items: ProjectNavItem[];
-  footer: ReactNode;
 }) {
   const current = {
     id: projectId,
@@ -312,74 +318,57 @@ export function ProjectSidebar({
   };
 
   return (
-    <aside
-      className={cn(
-        "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
-        "lg:h-full lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-5 lg:py-6",
-      )}
-    >
-      <div className="px-1">
-        <Link href="/app" className="rounded-nav" aria-label="Vibe Business — your projects">
-          <VibeLockup />
-        </Link>
+    <RailNav direction="back" label="Project sections">
+      <div className="flex flex-col gap-2">
+        <MonoLabel className="px-1 tracking-[0.18em]">Project</MonoLabel>
+        <ProjectSwitcher
+          current={current}
+          repositoryFullName={repositoryFullName}
+          connected={connected}
+          items={switcherItems}
+        />
       </div>
 
-      <nav aria-label="Project sections" className="mt-8 flex min-w-0 flex-col">
-        <div className="flex flex-col gap-2">
-          <MonoLabel className="px-1 tracking-[0.18em]">Project</MonoLabel>
-          <ProjectSwitcher
-            current={current}
-            repositoryFullName={repositoryFullName}
-            connected={connected}
-            items={switcherItems}
-          />
-        </div>
-
-        <Link
-          href="/app/settings/products"
-          className={cn(
-            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav mt-3",
-            "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
-          )}
-        >
-          <ArrowLeftIcon size={17} className="shrink-0" />
-          All products
-        </Link>
-
-        <div className="border-line-1 my-4 border-t" />
+      <div className="border-line-1 my-4 border-t" />
+      <RailScroll>
         <ProjectNav items={items.filter((item) => item.id !== "settings")} />
+      </RailScroll>
 
-        {/*
+      {/*
           The one row in this rail that is not about this project.
+
           `Project Settings` was here, one row above the account's own
           Settings, which asked a founder to read two nearly identical labels
           to tell a project apart from an account. It moved into the switcher —
           the control that says which project you are in — and what is left is
           the way out of the project context entirely.
 
-          Clicking it does not open a page inside this rail: `/app/settings`
-          renders the Settings shell, so the rail itself changes. That is the
-          switch, and the label under a section of its own is what makes it
-          read as one rather than as a seventh project section.
+          It does not open a page inside this navigation: it unfolds the rail
+          into the account's own, landing on General. The chevron says so, and
+          the label above it is `General` because that is where the fold
+          arrives — the founder is told the destination before the click, not
+          after it.
         */}
-        <div className="border-line-1 mt-4 flex flex-col gap-2 border-t pt-4">
-          <MonoLabel className="px-1 tracking-[0.18em]">Account</MonoLabel>
-          <Link
-            href="/app/settings"
-            className={cn(
-              "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav",
-              "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
-              "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
-            )}
-          >
-            <SettingsIcon size={17} className="shrink-0" />
-            Settings
-          </Link>
-        </div>
-      </nav>
-
-      <div className="mt-6 lg:mt-auto lg:pt-8">{footer}</div>
-    </aside>
+      <div className="border-line-1 mt-4 flex flex-col gap-2 border-t pt-4">
+        <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
+        <Link
+          href="/app/settings"
+          className={cn(
+            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav group/settings",
+            "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
+            "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+          )}
+        >
+          <SettingsIcon size={17} className="shrink-0" />
+          Settings
+          <ChevronRightIcon
+            size={15}
+            aria-hidden
+            className="text-fg-meta group-hover/settings:text-fg-secondary ml-auto shrink-0 transition-interactive"
+          />
+        </Link>
+      </div>
+    </RailNav>
   );
 }
 
@@ -525,16 +514,19 @@ export function WorkspaceSection({
   );
 }
 
-/** Fixed desktop rail + one independently scrolling project document. */
-export function ProjectShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
+/**
+ * The workspace column. The rail beside it belongs to `AppFrame`.
+ *
+ * `--shell-top` is the same variable the rail pads with, so the first line of
+ * a page and the lockup beside it start at one height — on this surface and on
+ * Settings, which is the point of there being one number.
+ */
+export function ProjectShell({ children }: { children: ReactNode }) {
   return (
-    <div className="text-fg-body flex min-h-dvh flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
-      {sidebar}
-      <main className="min-w-0 flex-1 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
-        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 py-7 sm:px-8 sm:py-9 xl:px-10 xl:py-10">
-          {children}
-        </div>
-      </main>
-    </div>
+    <main className="min-w-0 flex-1">
+      <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 py-[var(--shell-top)] sm:px-8 xl:px-10">
+        {children}
+      </div>
+    </main>
   );
 }

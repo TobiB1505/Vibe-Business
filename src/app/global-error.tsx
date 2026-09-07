@@ -69,6 +69,14 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
             repository, and no work in progress. Reloading usually fixes it.
           </p>
           <p>
+            {/*
+              A document load, deliberately. The router is what failed; `Link`
+              would ask the thing that just broke to navigate. `no-html-link-
+              for-pages` started flagging this when the rail became a parallel
+              route — the rule reads `@rail/[...path]/page.tsx` as a page at
+              `/app/` — and a slot is not an address anybody can navigate to.
+            */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/app"
               style={{

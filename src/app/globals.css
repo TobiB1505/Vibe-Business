@@ -955,6 +955,34 @@
 }
 
 /*
+ * The rail unfolding into a different navigation.
+ *
+ * The `<aside>` itself never moves — it is one element for the life of the
+ * session (`app-frame.tsx`), and that is the point. What slides is the list
+ * inside it, from the side it conceptually came from: the Settings navigation
+ * arrives from the right, the product's own navigation from the left. The
+ * distance is deliberately short; this reports a change of context, it does
+ * not perform one.
+ *
+ * `--vibe-rail-from` is handed in by `RailNav` because only the incoming rail
+ * knows which direction it is travelling.
+ */
+@keyframes vibe-rail-unfold {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--vibe-rail-from, 0.75rem), 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@utility vibe-rail-unfold {
+  animation: vibe-rail-unfold var(--duration-reveal) var(--ease-vibe) both;
+}
+
+/*
  * A score ring drawing itself to its true length.
  *
  * Admissible where a count-up is not: the arc carries no label, so no frame of
@@ -980,6 +1008,7 @@
    component. Paused, not stopped: it resumes where it left off, so nothing
    jumps when somebody comes back to the tab. */
 :root[data-motion="paused"] .vibe-reveal,
+:root[data-motion="paused"] .vibe-rail-unfold,
 :root[data-motion="paused"] .vibe-ring-draw,
 :root[data-motion="paused"] .vibe-breathe {
   animation-play-state: paused;
@@ -989,7 +1018,8 @@
    never a hidden element, which is how a reduced-motion user ends up with a
    blank page instead of a still one. */
 @media (prefers-reduced-motion: reduce) {
-  .vibe-reveal {
+  .vibe-reveal,
+  .vibe-rail-unfold {
     animation: none;
     opacity: 1;
     transform: none;

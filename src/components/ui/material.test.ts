@@ -63,15 +63,16 @@ describe("the primitives emit the material hooks", () => {
     expect(SHEET).toContain("vibe-overlay");
   });
 
-  it("the rails emit the chrome hook", () => {
-    // Both of them. A product where one rail is a pane and the other is a
-    // fill has two frames, and a founder moves between them constantly.
-    for (const shell of ["account-shell", "project-shell"]) {
-      expect(
-        readFileSync(join(process.cwd(), `src/components/layout/${shell}.tsx`), "utf8"),
-        `${shell} does not wear vibe-chrome`,
-      ).toContain("vibe-chrome");
-    }
+  it("the rail emits the chrome hook", () => {
+    // There used to be two rails, and a product where one is a pane and the
+    // other is a fill has two frames — with a founder moving between them
+    // constantly. There is one now (UI-13), and it wears the material in the
+    // one place the `<aside>` is declared, so the question cannot be answered
+    // two ways again.
+    expect(
+      readFileSync(join(process.cwd(), "src/components/layout/app-frame.tsx"), "utf8"),
+      "the rail does not wear vibe-chrome",
+    ).toContain("vibe-chrome");
   });
 
   it("emits the control hook from buttonClasses, not from the component", () => {

@@ -29,9 +29,16 @@ const APP_DIR = join(process.cwd(), "src/app/app");
  */
 const WITHOUT_FIRST_FRAME: readonly { route: string; why: string }[] = [];
 
+/**
+ * Routes, not parallel route slots.
+ *
+ * A `@rail` slot renders beside the route a click actually navigated to, and
+ * that route's own `loading.tsx` is the first frame the founder sees. The slot
+ * is furniture arriving next to it, not a screen anybody is waiting for.
+ */
 function routesWithAPage(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
+    if (!entry.isDirectory() || entry.name.startsWith("@")) continue;
     const child = join(dir, entry.name);
     if (existsSync(join(child, "page.tsx"))) found.push(child);
     routesWithAPage(child, found);

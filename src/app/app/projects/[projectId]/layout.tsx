@@ -2,54 +2,26 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { ProjectBreadcrumbTrail } from "@/components/layout/project-breadcrumb-trail";
 import { RecordVisit } from "@/components/layout/record-visit";
-import {
-  PROJECT_SECTIONS,
-  ProjectShell,
-  ProjectSidebar,
-  projectSectionHref,
-  type ProjectNavItem,
-} from "@/components/layout/project-shell";
-import { Wallet } from "@/components/system/wallet";
-import { getHeaderCreditBalance } from "@/modules/billing/overview";
-import { AccountCard } from "@/components/layout/account-card";
-import { createClient } from "@/lib/supabase/server";
+import { ProjectShell } from "@/components/layout/project-shell";
 import { requireSession } from "@/modules/auth/session";
-import { buildAccountIdentity } from "@/modules/auth/identity-view";
-import { getGithubIdentity } from "@/modules/github/identity";
-import {
-  getProjectWorkspaceContext,
-  listProjectSwitcherOptions,
-} from "@/modules/projects/workspace-context";
-import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
-import { readAgentRailStatus } from "@/modules/coding-agent/agent-workspace";
+import { getProjectFrameContext } from "@/modules/projects/workspace-context";
 
 /**
- * The workspace frame, shared by every section route (Sprint UI-2 Part 2).
+ * The workspace column, shared by every section route (Sprint UI-2 Part 2).
  *
- * ## What it loads, and why that list is short
+ * ## What it loads, and why the list got shorter
  *
- * A layout runs on *every* route beneath it, so anything loaded here is paid
- * for by every project route. It therefore loads only what the frame itself
- * renders: the project's identity and stored repository connection, two
- * navigation counts, one account identity row and at most four sibling project
- * names for the switcher.
+ * One project row, for the breadcrumb. Everything else this used to load —
+ * the navigation counts, the Agent's live status, the sibling products, the
+ * account identity and the balance — belonged to the rail, and the rail is now
+ * the `@rail` slot beside this layout (UI-13). The project row itself is
+ * shared with that slot through `getProjectFrameContext`, which memoizes for
+ * the length of one render, so the move cost no extra query.
  *
  * The audit, opportunities, prepared changes, Deep Scan, impact and activity
  * are each loaded by the one route that shows them. That separation is the
  * whole point of the split — before it, opening the Business score signed
  * review-image URLs and ran the merge preflight.
- *
- * ## The counts, and what they are allowed to cost
- *
- * UI-1's badges came free because the single page had already loaded both
- * lists. UI-2 removed them rather than putting an opportunity read and a
- * prepared read into this layout, where every project route would pay.
- *
- * They are back (Sprint UI-2.5) as two `count`-only queries that transfer no
- * rows — see `workspace-counts.ts`. The switcher read is independently capped
- * at four alternatives, and the account identity is one unique row. Failures
- * in the optional counts/switcher render less furniture rather than breaking
- * the project; neither a badge nor a shortcut is worth a dead workspace.
  *
  * ## Ownership
  *
@@ -68,90 +40,13 @@ export default async function ProjectLayout({
   const session = await requireSession();
   const { projectId } = await params;
 
-  const supabase = await createClient();
-  const project = await getProjectWorkspaceContext(supabase, {
-    projectId,
-    userId: session.userId,
-  });
-
   // The same answer for "no such project" and "not yours", so a URL cannot be
   // used to discover which project ids exist.
+  const project = await getProjectFrameContext(projectId, session.userId);
   if (!project) notFound();
 
-  const [counts, github, siblingProjects, agentStatus, balance] = await Promise.all([
-    getProjectWorkspaceCounts(supabase, project.id),
-    getGithubIdentity(supabase, session.userId),
-    listProjectSwitcherOptions(supabase, {
-      userId: session.userId,
-      currentProjectId: project.id,
-    }),
-    readAgentRailStatus(supabase, project.id),
-    /*
-     * The balance, in the same window as everything else (audit R22).
-     *
-     * One query per account, and the one this product already makes on the
-     * account surfaces — every priced control here states its price and none
-     * of them could state what the founder had to spend it from. A failure
-     * renders no chip rather than breaking the project, like the counts above.
-     */
-    getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null),
-  ]);
-  const identity = buildAccountIdentity({ email: session.email, github });
-
-  /**
-   * A badge only where the number carries information. Zero is hidden rather
-   * than rendered: "0 next moves" is decoration, and it is indistinguishable
-   * at a glance from a count that failed — which is exactly the confusion
-   * `null` exists to prevent.
-   */
-  const countFor = (value: number | null): number | null => (value && value > 0 ? value : null);
-
-  const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
-    id: section.id,
-    label: section.label,
-    icon: section.icon,
-    href: projectSectionHref(project.id, section.id),
-    count: section.id === "action-plan" ? countFor(counts.nextMoves) : null,
-    /*
-     * The Agent says what it is doing rather than how many changes it has
-     * produced. The count is still true and still reachable — it is on the
-     * page itself — but it is not what a glance at the rail is asking.
-     */
-    status: section.id === "agent" ? agentStatus : null,
-    // Mint on Action Plan: those are things Vibe is offering to act on.
-    // Agent is a neutral queue count, not an invitation.
-    countTone: section.id === "action-plan" ? "accent" : "neutral",
-  }));
-
   return (
-    <ProjectShell
-      sidebar={
-        <ProjectSidebar
-          projectId={project.id}
-          projectName={project.name}
-          repositoryFullName={project.repository?.fullName ?? null}
-          connected={project.repository !== null}
-          switcherItems={[
-            {
-              id: project.id,
-              name: project.name,
-              href: projectSectionHref(project.id, "home"),
-            },
-            ...siblingProjects.map((sibling) => ({
-              ...sibling,
-              href: projectSectionHref(sibling.id, "home"),
-            })),
-          ]}
-          items={navItems}
-          footer={
-            <div className="flex flex-col gap-3">
-              <Wallet credits={balance?.availableCredits ?? null} href="/app/settings/billing" />
-              <AccountCard identity={identity} subtitle="Founder" />
-            </div>
-          }
-        />
-      }
-    >
+    <ProjectShell>
       {/* So `/app` comes back here rather than to whichever product the
           ranking happens to put first. A client leaf: only a mount is an
           opening, and a write during render would also run on prefetch. */}

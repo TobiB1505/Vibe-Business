@@ -36,18 +36,20 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 }
 
 describe("the balance is one object", () => {
-  it("is worn by both rails, because they are the same shape", () => {
+  it("is worn once, by the foot both rails share", () => {
     // The account rail drew a bare number and the word Credits; the project
     // rail drew a bordered chip. Same object, same place in the column, two
     // designs — which is how a product acquires a second design by accident.
+    //
+    // There is one rail now (UI-13) and one foot inside it, so the two cannot
+    // diverge: `RailFooter` renders the balance and the identity for both
+    // states of the fold, and neither navigation composes its own.
+    expect(/\bWallet\b/.test(readFileSync("src/components/layout/app-frame.tsx", "utf8"))).toBe(
+      true,
+    );
     for (const rail of ["account-shell", "project-shell"]) {
-      const layout = readFileSync(`src/components/layout/${rail}.tsx`, "utf8");
-      const wearer =
-        /\bWallet\b/.test(layout) ||
-        // The project rail takes its footer from the route, so the wearer is
-        // the layout that composes it rather than the shell itself.
-        /\bWallet\b/.test(readFileSync("src/app/app/projects/[projectId]/layout.tsx", "utf8"));
-      expect(wearer, `${rail} does not reach Wallet`).toBe(true);
+      const source = code(readFileSync(`src/components/layout/${rail}.tsx`, "utf8"));
+      expect(/\bWallet\b/.test(source), `${rail} composes a balance of its own again`).toBe(false);
     }
   });
 

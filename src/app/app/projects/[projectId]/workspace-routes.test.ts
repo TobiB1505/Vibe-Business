@@ -35,6 +35,19 @@ function layoutSource(): string {
 }
 
 /**
+ * The rail is a route too (UI-13).
+ *
+ * The project navigation moved out of the layout and into the `@rail`
+ * parallel route slot, so that one `<aside>` stays mounted across the whole
+ * signed-in product. It renders on every project route exactly as the layout
+ * does — so the cost contract below has to read both, or half of the frame
+ * would be outside the boundary that keeps it cheap.
+ */
+function railSource(): string {
+  return readFileSync(join(process.cwd(), "src/app/app/@rail/project-rail.tsx"), "utf8");
+}
+
+/**
  * Every `page.tsx` under the project route, at any depth, including the index.
  *
  * ## Why this recurses
@@ -283,8 +296,11 @@ describe("routes load only what they render", () => {
   });
 });
 
-describe("the shared layout stays cheap (UI-2.5 performance contract)", () => {
-  const layout = layoutSource();
+describe("the shared frame stays cheap (UI-2.5 performance contract)", () => {
+  const frame: readonly [string, string][] = [
+    ["layout", layoutSource()],
+    ["rail", railSource()],
+  ];
 
   /**
    * The layout runs on every one of the seven routes, so anything it loads is
@@ -311,18 +327,37 @@ describe("the shared layout stays cheap (UI-2.5 performance contract)", () => {
       "listAuditEventsForProject",
     ];
 
-    for (const forbidden of FORBIDDEN) {
-      expect(layout, `layout calls ${forbidden}`).not.toContain(`${forbidden}(`);
+    for (const [name, source] of frame) {
+      for (const forbidden of FORBIDDEN) {
+        expect(source, `${name} calls ${forbidden}`).not.toContain(`${forbidden}(`);
+      }
     }
   });
 
   it("uses the count-only read model for its badges", () => {
-    expect(layout).toContain("getProjectWorkspaceCounts");
+    expect(railSource()).toContain("getProjectWorkspaceCounts");
+  });
+
+  it("resolves the project once for the layout and the rail together", () => {
+    // Two renders of the same request both need the project's name. Without
+    // the request-scoped memo they would each read the row, and the split that
+    // made the rail persist would have doubled a query on every route.
+    for (const [name, source] of frame) {
+      expect(source, `${name} reads the project row for itself`).toContain(
+        "getProjectFrameContext",
+      );
+    }
   });
 
   it("never signs a review image or asks a provider for anything", () => {
-    for (const forbidden of ["createVercelSandboxProvider", "createGithubMergePort", "getPreviewStatus"]) {
-      expect(layout, `layout reaches for ${forbidden}`).not.toContain(forbidden);
+    for (const [name, source] of frame) {
+      for (const forbidden of [
+        "createVercelSandboxProvider",
+        "createGithubMergePort",
+        "getPreviewStatus",
+      ]) {
+        expect(source, `${name} reaches for ${forbidden}`).not.toContain(forbidden);
+      }
     }
   });
 });

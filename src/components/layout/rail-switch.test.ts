@@ -3,20 +3,22 @@ import { describe, expect, it } from "vitest";
 import { PROJECT_SECTIONS } from "./project-shell";
 
 /**
- * Two rails, and the way between them.
+ * One rail, and the fold between its two states.
  *
  * ## What this exists to catch
  *
- * The project rail used to end with `Project Settings` directly above the
- * account's own `Settings`. Two rows, nearly the same word, one about the
- * product and one about the person — and the one about *this* project sat
- * furthest from the control that says which project that is.
+ * There were two rails. The project's was 256px and lived in
+ * `projects/[projectId]/layout.tsx`; the account's was 280px and lived in
+ * `(account)/layout.tsx`. Moving between them unmounted a whole `<aside>` and
+ * mounted a differently-sized one, so the navigation visibly grew on the way
+ * into Settings and shrank on the way out — which a founder reads as the page
+ * reloading, because every pixel of the chrome was rebuilt.
  *
- * So `Project Settings` moved into the switcher, where the project's name and
- * a tick are already on screen, and what is left at the foot of the rail is
- * the way out of the project context entirely. Entering it swaps the rail,
- * which is the whole point and is also why the way back has to be visible:
- * a founder in Settings can no longer see their product anywhere.
+ * There is one `<aside>` now, rendered by `AppFrame` from the layout both
+ * areas share, and the two navigations are `@rail` slot contents that swap
+ * inside it. These assertions guard the three things that make that true: that
+ * the box is declared in exactly one place, that neither navigation smuggles
+ * its own back, and that each still says how to reach the other.
  */
 
 const PROJECT_SHELL = readFileSync("src/components/layout/project-shell.tsx", "utf8");
@@ -24,18 +26,48 @@ const PROJECT_SHELL = readFileSync("src/components/layout/project-shell.tsx", "u
 /**
  * The rail's own render, not the whole file.
  *
- * `PROJECT_SECTIONS` and `SECTION_HEADINGS` both still say "Project Settings"
- * and should: the section exists, has a route and has a page heading. What
- * moved is where it is *offered*, so that is what this reads.
+ * `PROJECT_SECTIONS` and `WORKSPACE_SECTION_HEADINGS` both still say "Project
+ * Settings" and should: the section exists, has a route and has a page
+ * heading. What moved is where it is *offered*, so that is what this reads.
  */
-const PROJECT_RAIL = PROJECT_SHELL.slice(PROJECT_SHELL.indexOf("export function ProjectSidebar"));
+const PROJECT_RAIL = PROJECT_SHELL.slice(PROJECT_SHELL.indexOf("export function ProjectRail"));
 const SWITCHER = readFileSync("src/components/layout/project-switcher.tsx", "utf8");
 const ACCOUNT_SHELL = readFileSync("src/components/layout/account-shell.tsx", "utf8");
+const APP_FRAME = readFileSync("src/components/layout/app-frame.tsx", "utf8");
 
 /** Comments explain the move by name; a test that counted prose would pass on one. */
 function code(source: string): string {
   return source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
 }
+
+describe("the rail is one element", () => {
+  it("is declared by the frame and by nothing else", () => {
+    expect(code(APP_FRAME)).toContain("<aside");
+    for (const [name, source] of [
+      ["project rail", PROJECT_SHELL],
+      ["settings rail", ACCOUNT_SHELL],
+    ] as const) {
+      expect(code(source), `${name} renders a rail of its own again`).not.toContain("<aside");
+    }
+  });
+
+  it("gives the two navigations no width of their own to disagree about", () => {
+    // The specific defect: `lg:w-64` here and `lg:w-[17.5rem]` there.
+    expect(code(APP_FRAME)).toContain("lg:w-64");
+    for (const [name, source] of [
+      ["project rail", PROJECT_SHELL],
+      ["settings rail", ACCOUNT_SHELL],
+    ] as const) {
+      expect(code(source), `${name} sets its own rail width`).not.toMatch(/lg:w-\[|lg:w-\d/);
+    }
+  });
+
+  it("hides the frame rather than reserving it on a route with no navigation", () => {
+    // Onboarding and the connect flow render nothing into the slot. An empty
+    // 256px rail beside a focused flow is worse than no rail at all.
+    expect(code(APP_FRAME)).toContain("empty:hidden");
+  });
+});
 
 describe("project settings belongs to the project switcher", () => {
   it("is offered from the control that names the project", () => {
@@ -60,34 +92,59 @@ describe("project settings belongs to the project switcher", () => {
   });
 });
 
-describe("each rail can reach the other", () => {
+describe("the products index is not offered from inside it", () => {
   /**
-   * A rail that swaps the whole navigation and offers no way back is a trap,
+   * Two rows said "go and look at all your products". One was in the rail and
+   * one was in the switcher — the panel that *is* the list of products, open,
+   * with the products in it. Both are gone; Settings → Products remains the
+   * complete inventory and is still a rail row there.
+   */
+  it("is gone from the switcher, which is already the list", () => {
+    expect(code(SWITCHER)).not.toContain("View all products");
+  });
+
+  it("is gone from the project rail", () => {
+    expect(code(PROJECT_RAIL)).not.toContain("All products");
+  });
+});
+
+describe("each navigation can reach the other", () => {
+  /**
+   * A rail that swaps its whole navigation and offers no way back is a trap,
    * and it is invisible in a screenshot of either state.
    */
-  it("leaves the project context from the project rail", () => {
+  it("unfolds into Settings from the project rail, under the label it lands on", () => {
     const rail = code(PROJECT_RAIL);
     expect(rail).toContain('href="/app/settings"');
-    expect(rail).toContain("Settings");
+    // `/app/settings` is General, so General is what the founder is told they
+    // are opening. The section used to be labelled `Account`, which named an
+    // area rather than the row the click actually arrives on.
+    expect(rail).toContain(">General<");
   });
 
-  it("comes back to a product from the settings rail", () => {
+  it("comes back to a named product from the settings rail", () => {
     const rail = code(ACCOUNT_SHELL);
-    // `/app` resolves to the product the founder was last in, so the way back
-    // is not an index they have to choose from again.
-    expect(rail).toContain('href="/app"');
-    expect(rail).toContain("Back to your product");
+    // Not `/app`: that is a redirect, and a redirect is the round trip that
+    // made leaving Settings feel like a page load. The slot resolves the
+    // product and this renders it.
+    expect(rail).toContain("back.href");
+    expect(rail).toContain("back.label");
+    expect(code(readFileSync("src/app/app/@rail/settings-rail.tsx", "utf8"))).toContain(
+      "Back to your product",
+    );
   });
 
-  it("does not rely on the lockup alone for either direction", () => {
+  it("does not rely on the lockup for either direction", () => {
     // The lockup is a logo. It reads as "home page", not as "leave this area",
-    // and it was the only route out of Settings before this.
+    // and it was the only route out of Settings before this. It is now shared
+    // by both states, which is what makes the fold look continuous — so
+    // neither navigation may lean on it.
+    expect(code(APP_FRAME)).toContain('href="/app"');
     for (const [name, source] of [
       ["project rail", PROJECT_RAIL],
       ["settings rail", ACCOUNT_SHELL],
     ] as const) {
-      const links = code(source).match(/href="\/app(\/settings)?"/g) ?? [];
-      expect(links.length, `${name} has only the lockup`).toBeGreaterThanOrEqual(2);
+      expect(code(source), `${name} renders its own lockup again`).not.toContain("VibeLockup");
     }
   });
 });

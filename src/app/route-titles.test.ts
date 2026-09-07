@@ -44,8 +44,19 @@ const WITHOUT_THEIR_OWN_TITLE: readonly { route: string; why: string }[] = [
   },
 ];
 
+/**
+ * Every route, and nothing that only looks like one.
+ *
+ * `@rail` is a parallel route slot: it renders the navigation beside whatever
+ * route the URL actually resolved to. It has no address, no tab and no history
+ * entry of its own, so a title on it would name nothing — and metadata
+ * exported from a slot merges into the page's, which is how a rail ends up
+ * renaming the screen it is standing next to. Slots are skipped by directory
+ * so a new one cannot arrive pre-approved by a stale exemption.
+ */
 function pageFiles(dir: string = ROUTES): string[] {
   return readdirSync(dir).flatMap((entry) => {
+    if (entry.startsWith("@")) return [];
     const full = join(dir, entry);
     if (statSync(full).isDirectory()) return pageFiles(full);
     return entry === "page.tsx" ? [full] : [];
