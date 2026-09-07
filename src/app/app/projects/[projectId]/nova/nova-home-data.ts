@@ -7,6 +7,9 @@ import type { FindingSeverity } from "@/components/system/finding-card";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
+import { getActionPlanChecklist, type ActionPlanChecklist } from "@/modules/action-plans/service";
+import { listAuditEventsForProject } from "@/modules/audit-log/queries";
+import { buildActivityFeed, type ActivityEntry } from "@/modules/audit-log/view";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { WorkspaceCandidate } from "@/modules/validation/profile";
@@ -32,12 +35,18 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * ## Why the reads are counted
  *
  * This is the most-visited route in the product, and the audit's own risk note
- * for this slice was the read count on it. So the shape is deliberate: four
+ * for this slice was the read count on it. So the shape is deliberate: six
  * concurrent reads, none of which fans out per candidate — and then at most
  * one conditional read, decided by what the ranking put first and described on
  * `question`, `change` and `workspaceCandidates` below. They are mutually
  * exclusive by construction: one primary candidate is one moment, and each of
  * the three belongs to a different set of kinds.
+ *
+ * Two of the six arrived with the rail, and both were weighed rather than
+ * assumed. `getActionPlanChecklist` exists because the Action Plan page's own
+ * read costs nine and answers questions the rail does not ask; the log is one
+ * query for six rows. Neither fans out, and both are content a founder came
+ * for rather than chrome.
  *
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
@@ -145,6 +154,25 @@ export type NovaHomeData = {
    * interpolated into a href, a class, or anything a browser would execute.
    */
   workspaceCandidates: readonly WorkspaceCandidate[];
+  /**
+   * The plan as a sequence, for the rail. Null when no plan has completed.
+   *
+   * Four reads through `getActionPlanChecklist`, not the Action Plan page's
+   * nine: the rail asks what the sequence is and where in it we are, and
+   * nothing about staleness or open questions. It derives completion with the
+   * page's own functions, so the summary and the page cannot come to disagree.
+   */
+  checklist: ActionPlanChecklist | null;
+  /**
+   * What has already happened, oldest last.
+   *
+   * The event log, which has existed since the audit trail shipped and which
+   * no founder-facing surface but Settings has ever rendered. It is the only
+   * half of this screen that is a *record*: everything else is re-derived on
+   * every load and carries no timestamp, because a sentence computed now was
+   * never sent at any particular time.
+   */
+  activity: ActivityEntry[];
 };
 
 type IdentityRow = {
@@ -296,11 +324,20 @@ export async function readNovaHomeData(
     repositoryFullName: string | null;
   },
 ): Promise<NovaHomeData> {
-  const [focus, identity, health, balance] = await Promise.all([
+  const [focus, identity, health, balance, checklist, events] = await Promise.all([
     readNovaFocus(supabase, params.projectId),
     readIdentity(supabase, params.projectId, params.projectName),
     readHealth(supabase, params.projectId),
     getHeaderCreditBalance(supabase, { userId: params.userId }),
+    getActionPlanChecklist(supabase, params.projectId),
+    listAuditEventsForProject(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+      /* Six rows. The rail is a reminder of what happened, not the audit trail
+         — Settings owns that, with paging. A column that scrolled would be a
+         second log beside the one that already exists. */
+      limit: 6,
+    }),
   ]);
 
   const view = buildNovaHomeView(focus);
@@ -329,5 +366,16 @@ export async function readNovaHomeData(
       : Promise.resolve([]),
   ]);
 
-  return { view, identity, health, balance, question, change, workspaceCandidates };
+  return {
+    view,
+    identity,
+    health,
+    balance,
+    question,
+    change,
+    workspaceCandidates,
+    checklist,
+    /* Oldest last: a thread reads downward and the log arrives newest first. */
+    activity: buildActivityFeed(events.events).reverse(),
+  };
 }

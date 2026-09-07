@@ -422,6 +422,68 @@ export type ActionPlanView = {
   openFounderInputCount: number;
 };
 
+/**
+ * The plan as a checklist, and nothing else.
+ *
+ * ## Why this exists beside `getLatestActionPlan`
+ *
+ * That one answers everything the Action Plan page asks — staleness against
+ * four other artefacts, the open question for the current step, how many
+ * questions the plan has outstanding — and costs nine reads to do it. Nova's
+ * rail asks one question: *what is the sequence, and where in it are we.*
+ *
+ * So this reads the plan and the three pieces of completion evidence, and
+ * derives the rest with the same functions the page uses — `completedStepsFromEvidence`,
+ * `satisfiedStepsFromEvidence`, `absorptionByStepOrder`, `firstActionableStep`.
+ * Four reads rather than nine, and no second opinion about what "done" means:
+ * a rail that computed completion its own way is a rail that would eventually
+ * disagree with the page it summarises.
+ *
+ * Null when no plan has completed. Not an empty checklist — a project with no
+ * plan has no sequence, and a list of nothing would read as a plan with every
+ * step finished.
+ */
+export type ActionPlanChecklist = {
+  steps: ActionPlanStep[];
+  /** What could genuinely happen next, or null when nothing can. */
+  firstActionableOrder: number | null;
+  /** Carried out. The narrow set, exactly as the page means it. */
+  completedStepOrders: number[];
+  /** Covered step order → the order of the step whose run absorbed it. */
+  absorbedByStepOrder: Record<number, number>;
+};
+
+export async function getActionPlanChecklist(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<ActionPlanChecklist | null> {
+  const plan = await getLatestCompletedActionPlan(supabase, projectId);
+  if (!plan) return null;
+
+  const [resolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+    listActiveFounderResolutions(supabase, projectId),
+    listStepExecutionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+  ]);
+
+  const completed = completedStepsFromEvidence(
+    plan.steps,
+    resolutions,
+    agentEvidence.completion,
+    founderActionEvidence,
+  );
+  const satisfied = satisfiedStepsFromEvidence(completed, agentEvidence.absorbed);
+
+  return {
+    steps: plan.steps,
+    firstActionableOrder: firstActionableStep(plan.steps, satisfied)?.order ?? null,
+    completedStepOrders: [...completed],
+    absorbedByStepOrder: Object.fromEntries(
+      absorptionByStepOrder(completed, agentEvidence.absorbed),
+    ),
+  };
+}
+
 export async function getLatestActionPlan(
   supabase: SupabaseClient,
   projectId: string,

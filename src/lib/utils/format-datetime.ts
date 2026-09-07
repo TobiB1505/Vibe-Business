@@ -127,6 +127,44 @@ export function formatLocalClock(date: Date): string {
 }
 
 /**
+ * `32m` / `2h` / `3d` — how long ago, in one unit.
+ *
+ * ## Why `now` is an argument
+ *
+ * Because a function that read the clock itself would be untestable and,
+ * worse, would be a different value on the server and on the client for the
+ * same render. `now` is passed by the caller, which forces whoever renders it
+ * to have decided where the value comes from.
+ *
+ * ## Where this may be used, and where it may not
+ *
+ * Server components only, and the reason is the same hydration hazard the rest
+ * of this file exists for: a relative label rendered on the server and
+ * recomputed during hydration disagrees with itself the moment a minute
+ * passes. In a server component the string is produced once and never
+ * recomputed, so there is nothing to disagree with.
+ *
+ * ## Why one unit and no "ago"
+ *
+ * It sits in a column of timestamps beside the rows it belongs to, where the
+ * word would be four characters of the same noise on every line. And a single
+ * unit is what a founder reads at a glance — "1h 12m" is a duration, and this
+ * is a position in the past.
+ */
+export function formatElapsedShort(iso: string, now: Date = new Date()): string {
+  const then = Date.parse(iso);
+  if (!Number.isFinite(then)) return "";
+
+  const minutes = Math.max(0, Math.round((now.getTime() - then) / 60_000));
+  if (minutes < 60) return `${minutes}m`;
+
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+
+  return `${Math.round(hours / 24)}d`;
+}
+
+/**
  * `1,240` / `12.5` — grouped integers, two decimals otherwise.
  *
  * `Number.prototype.toLocaleString()` has the same split-brain problem as the

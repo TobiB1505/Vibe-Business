@@ -260,6 +260,15 @@ export const BUBBLE_SCENARIO = "study-bubble";
  */
 export const WIREFRAME_SCENARIO = "study-wireframe";
 
+/**
+ * The rail, in the states it can be in.
+ *
+ * Mounts the product's own `NovaRail` with fixtures, because the rail is
+ * otherwise only visible to a founder whose project happens to be in the state
+ * you wanted to look at.
+ */
+export const RAIL_SCENARIO = "study-rail";
+
 /** The Render Block element sheet: in flight, settled, and unscorable. */
 export const BLOCK_SCENARIO = "study-block";
 

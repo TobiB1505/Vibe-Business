@@ -17,6 +17,7 @@ import { resolveFounderInputAction } from "../founder-input-action";
 import { AttentionStack } from "./attention-stack";
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
+import { NovaRail } from "./nova-rail";
 import { ActionBlock } from "@/components/system/action-block";
 import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
 import { NovaThreadHeader } from "@/components/nova/nova-thread";
@@ -121,7 +122,7 @@ export async function NovaHome({
   const connected = project.repository !== null;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex flex-col gap-6">
       {/*
         The status row, and the only piece of chrome on this page.
         `NovaThreadHeader` says who is speaking and what about — Nova and her
@@ -139,36 +140,59 @@ export async function NovaHome({
         />
       </NovaRise>
 
-      <NovaRise delay={0.03}>
-        <ProductIdentity
-          name={data.identity.name}
-          logoUrl={data.identity.logoUrl}
-          category={data.identity.category}
-          understood={data.identity.understood}
-          productHref={href.product}
-        />
-      </NovaRise>
-
       {/*
-        The primary settles first and the rest follows: the ranking drawn in
-        time. Every delay below is the position `deriveNovaFocus` decided.
+        Two halves: the work on the left, the conversation on the right.
+
+        On a phone the rail goes second. A founder who opens this on a phone
+        came for what Nova has to say, and putting the whole plan and the whole
+        log above it means scrolling past everything to reach the one thing
+        that speaks.
       */}
-      <NovaRise delay={0.06}>
-        <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
-      </NovaRise>
+      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-start">
+        <NovaRise className="max-lg:order-2" delay={0.03}>
+          <NovaRail
+            presence={presence}
+            seed={project.id}
+            working={data.view.working}
+            checklist={data.checklist}
+            activity={data.activity}
+          />
+        </NovaRise>
 
-      <NovaRise delay={0.18}>
-        <NovaWorkingLive
-          projectId={project.id}
-          working={data.view.working}
-          presence={presence}
-          seed={project.id}
-        />
-      </NovaRise>
+        <div className="flex flex-col gap-6 max-lg:order-1">
+          <NovaRise delay={0.06}>
+            <ProductIdentity
+              name={data.identity.name}
+              logoUrl={data.identity.logoUrl}
+              category={data.identity.category}
+              understood={data.identity.understood}
+              productHref={href.product}
+            />
+          </NovaRise>
 
-      <NovaRise delay={0.26}>
-        <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
-      </NovaRise>
+          {/*
+            The primary settles first and the rest follows: the ranking drawn
+            in time. Every delay below is the position `deriveNovaFocus`
+            decided.
+          */}
+          <NovaRise delay={0.1}>
+            <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
+          </NovaRise>
+
+          <NovaRise delay={0.18}>
+            <NovaWorkingLive
+              projectId={project.id}
+              working={data.view.working}
+              presence={presence}
+              seed={project.id}
+            />
+          </NovaRise>
+
+          <NovaRise delay={0.26}>
+            <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
+          </NovaRise>
+        </div>
+      </div>
 
       {data.health ? (
         /* `HealthScore` is itself a labelled region; wrapping it in a second

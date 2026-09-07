@@ -201,9 +201,32 @@ describe("Nova Home", () => {
       expect(stack).not.toMatch(/<Button|<form|ActionBlock|CostDisclosure/);
     });
 
-    it("is a column rather than a dashboard grid", () => {
-      expect(component("nova-home.tsx")).toContain("flex flex-col");
-      expect(component("nova-home.tsx")).not.toMatch(/grid-cols-[2-9]/);
+    /*
+     * Two columns, not a grid of tiles, and the distinction is the whole
+     * point. The rail is the work and the thread is the conversation; they are
+     * different *kinds* of thing at different widths, which is why one is
+     * fixed at 300px and the other takes what is left.
+     *
+     * A symmetric grid is the shape the audit found and this design replaced:
+     * six equal doors on arrival, with nothing saying which to open. So the
+     * check is that no equal-column grid appears, rather than that no grid
+     * does.
+     */
+    it("is a rail and a thread, never a grid of equal tiles", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("lg:grid-cols-[300px_1fr]");
+      expect(home).not.toMatch(/grid-cols-[2-9]\b/);
+      expect(home).not.toMatch(/grid-cols-(?:repeat|\[repeat)/);
+    });
+
+    /*
+     * And the rail goes second on a phone. A founder who opens this on a phone
+     * came for what Nova says; the plan and the log above it means scrolling
+     * past everything to reach the one thing that speaks.
+     */
+    it("puts the conversation first on a narrow screen", () => {
+      expect(component("nova-home.tsx")).toContain("max-lg:order-2");
+      expect(component("nova-home.tsx")).toContain("max-lg:order-1");
     });
 
     it("has no chat input anywhere", () => {
