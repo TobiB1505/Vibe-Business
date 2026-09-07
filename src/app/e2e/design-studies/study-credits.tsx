@@ -333,6 +333,34 @@ export function StudyCredits({ study }: { study: Study }) {
       {COMPOSITIONS.map((composition) => (
         <CompositionRow key={composition.key} composition={composition} />
       ))}
+
+      {/*
+        Every size, because a guard measures what a page renders.
+
+        `credit-amount.spec.ts` checks the coin's optical centring on "every
+        price on the page" and its docblock claims that covers more than one
+        size. It did not: the compositions above all draw the default, so the
+        correction was verified at 16px and nowhere else — and it was wrong at
+        13px in both palettes, in opposite directions. These three exist so the
+        claim is true.
+      */}
+      <section className="mt-12 flex flex-col gap-4 border-t border-line-3 pt-8">
+        <p className="eyebrow text-mint">Die Marke auf der Kapitalhöhe</p>
+        <h2 className="text-title font-semibold text-fg">Every size the component has</h2>
+        <p className="max-w-[66ch] text-caption text-fg-prose">
+          The coin is placed from the loaded face&rsquo;s own cap height, so the same rule holds at
+          each of these and in both palettes. Rendered here so the browser guard can measure all
+          three rather than one.
+        </p>
+        <div className="flex flex-wrap items-end gap-8 rounded-panel border border-line-2 bg-surface-1 px-5 py-6">
+          {(["sm", "md", "lg"] as const).map((size) => (
+            <div key={size} className="flex flex-col gap-2">
+              <span className="eyebrow text-fg-meta">{size}</span>
+              <CreditAmount credits={creditsToUnits(2480)} size={size} />
+            </div>
+          ))}
+        </div>
+      </section>
     </div>
   );
 }

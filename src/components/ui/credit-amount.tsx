@@ -13,10 +13,26 @@ import { CreditCoin } from "./credit-coin";
  * 16px against a 12px cap height, the coin sat a pixel low, which is enough to
  * look like a mistake and not enough to see why.
  *
- * The correction is `-0.06em`: half a typical descender depth, expressed in em
- * so it scales with the text rather than being a magic pixel that is right at
- * one size and wrong at the other five. A call site that composed this by hand
- * would get it wrong, and each one would get it wrong differently.
+ * ## Why the correction is `cap` and not `em`
+ *
+ * It was `-0.06em`, described as "half a typical descender depth". A typical
+ * descender is a guess about a *face*, and this product loads two: measured on
+ * the account rail at 13px, the same constant put the coin 0.47px **low** in
+ * the first palette and 0.53px **high** in the second, because Inter and Geist
+ * do not agree about where a capital ends. One em constant cannot serve both,
+ * and the second palette failed the half-pixel bar the guard already set.
+ *
+ * So the coin is placed from the font's own metric. The row aligns on the
+ * baseline; the wrapper's bottom edge sits on it; and the coin is pushed back
+ * down by `half its own height minus half a cap`, which lands its centre
+ * exactly at the middle of a capital. `cap` is the real cap height of the
+ * loaded face, so this is right for Inter, right for Geist, and right at every
+ * size in `SIZES` without a table.
+ *
+ * If a browser does not know `cap` the `calc()` is invalid and the transform
+ * drops, which leaves the coin where flex put it — the pre-correction position,
+ * about a pixel out. That is the same degradation the `em` version had and it
+ * is not a blank or a jump.
  *
  * ## Why the coin is sized from the cap height
  *
@@ -76,7 +92,9 @@ export function CreditAmount({
          only a browser can check it — and only if it can find this reliably. */
       data-credit-amount
       className={cn(
-        "inline-flex items-center gap-2 tabular-nums",
+        // Baseline, not centre: the correction below is measured from the
+        // text's own baseline, so the row has to align on it.
+        "inline-flex items-baseline gap-2 tabular-nums",
         TONE_CLASSES[tone],
         text,
         className,
@@ -84,11 +102,19 @@ export function CreditAmount({
     >
       {/*
         The optical correction, on a wrapper rather than on the svg: the coin
-        keeps its own box for layout, and only the paint moves. `-0.06em`
-        resolves against this span's inherited font size, so it stays right at
-        every size in SIZES and at any the caller sets.
+        keeps its own box for layout, and only the paint moves.
+
+        An inline-flex with no baseline-aligned child takes its baseline from
+        its own bottom edge, so this box hangs *above* the text baseline. The
+        translate pushes it back down until the coin's centre sits half a cap
+        above that baseline — the middle of a capital, which is where a mark
+        beside a word belongs.
       */}
-      <span aria-hidden className="inline-flex translate-y-[-0.06em]">
+      <span
+        aria-hidden
+        className="inline-flex"
+        style={{ transform: `translateY(calc(${coin / 2}px - 0.5cap))` }}
+      >
         <CreditCoin size={coin} />
       </span>
       {formatCreditsForDisplay(credits)} Credits
