@@ -8,6 +8,7 @@ import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-conte
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import type { NovaPresenceState } from "@/components/nova/nova-presence";
 
+import { ChangeGates } from "../agent/change-gates";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveFounderInputAction } from "../founder-input-action";
 
@@ -56,6 +57,7 @@ export async function NovaHome({
     projectId: project.id,
     userId,
     projectName: project.name,
+    repositoryFullName: project.repository?.fullName ?? null,
   });
 
   const href = {
@@ -253,6 +255,35 @@ function FocusSection({
           context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
           presentation="workspace"
           resolveAction={resolveFounderInputAction}
+        />
+      </FocusCard>
+    );
+  }
+
+  if (control.kind === "gate") {
+    /*
+     * The ranking saw a prepared change; this reads the card for it. If it has
+     * merged, been superseded or stopped being `prepared` in between, the
+     * sentence above still stands and there is nothing to decide — gates for a
+     * change that is not there would be worse than none.
+     */
+    if (!data.change) {
+      return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    }
+
+    return (
+      <FocusCard entry={entry} presence={presence} seed={seed}>
+        <ChangeGates
+          projectId={projectId}
+          change={data.change}
+          planHref={sectionHref["action-plan"]}
+          stage={control.stage}
+          /*
+           * The Focus Card is the header. `chrome` draws the change's status
+           * sentence, which is the sentence Nova has just said above it — the
+           * duplication this surface keeps removing.
+           */
+          chrome={false}
         />
       </FocusCard>
     );

@@ -185,6 +185,30 @@ describe("Nova Home", () => {
     });
   });
 
+  /**
+   * The gates travel whole, or not at all.
+   *
+   * A merge button on Home would be the failure rules 67-71 describe: a yes
+   * bound to one commit, pressed against whatever is current. What makes
+   * mounting the gates here safe is that `ChangeGates` brings the sequence —
+   * validation, preview, review, approval, merge, outcome, each reachable only
+   * through the one above it. Reaching past it for the merge panel, or for the
+   * merge action, is how that guarantee would be lost one import at a time.
+   */
+  describe("the change gates", () => {
+    it("mounts the shipped gates rather than a panel out of the middle", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("<ChangeGates");
+      expect(home).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);
+    });
+
+    it("never calls the merge action itself", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toMatch(/mergeApprovedChangeAction|startMerge/);
+      }
+    });
+  });
+
   describe("honest absence", () => {
     it("renders a missing score through the one function that knows n/a", () => {
       const health = component("health-score.tsx");

@@ -8,6 +8,10 @@ import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
+import {
+  getPreparedChangeWorkspaceItem,
+  type PreparedChangeWorkspaceItem,
+} from "@/modules/execution/workspace";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import { readNovaFocus } from "@/modules/nova/read";
@@ -23,9 +27,10 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  *
  * This is the most-visited route in the product, and the audit's own risk note
  * for this slice was the read count on it. So the shape is deliberate: four
- * concurrent reads, none of which fans out per candidate — and one conditional
- * fifth, described on `question` below, which happens only on the loads where
- * the ranking put a question first.
+ * concurrent reads, none of which fans out per candidate — and then at most
+ * one conditional read, decided by what the ranking put first and described on
+ * `question` and `change` below. They are mutually exclusive by construction:
+ * a primary candidate is a question or a change or neither, never both.
  *
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
@@ -96,6 +101,22 @@ export type NovaHomeData = {
    * question.
    */
   question: FounderInputRequest | null;
+  /**
+   * The change to decide here, when the ranking put one first.
+   *
+   * The other conditional read, and the expensive one. It signs review images,
+   * resolves a live preview and performs a read-only
+   * merge preflight against GitHub — which is the price of the gates being
+   * real rather than a picture of them, and it is the same read the Agent
+   * route makes for the same card. It happens only where the primary candidate
+   * is about a prepared change.
+   *
+   * Null covers a change that has moved on since the ranking read it: merged
+   * in another tab, superseded, no longer `prepared`. The card then renders
+   * Nova's sentence with no gates under it rather than gates for a change that
+   * is not there.
+   */
+  change: PreparedChangeWorkspaceItem | null;
 };
 
 type IdentityRow = {
@@ -205,7 +226,13 @@ async function readHealth(supabase: SupabaseClient, projectId: string): Promise<
 
 export async function readNovaHomeData(
   supabase: SupabaseClient,
-  params: { projectId: string; userId: string; projectName: string },
+  params: {
+    projectId: string;
+    userId: string;
+    projectName: string;
+    /** The connected repository, for the gates' preflight. Null when none is. */
+    repositoryFullName: string | null;
+  },
 ): Promise<NovaHomeData> {
   const [focus, identity, health, balance] = await Promise.all([
     readNovaFocus(supabase, params.projectId),
@@ -223,10 +250,19 @@ export async function readNovaHomeData(
    * documented read count honest rather than quietly five.
    */
   const control = view.primary.control;
-  const question =
+  const [question, change] = await Promise.all([
     control.kind === "answer"
-      ? await getFounderInputRequest(supabase, control.founderInputRequestId)
-      : null;
+      ? getFounderInputRequest(supabase, control.founderInputRequestId)
+      : Promise.resolve(null),
+    control.kind === "gate"
+      ? getPreparedChangeWorkspaceItem(supabase, {
+          projectId: params.projectId,
+          userId: params.userId,
+          repositoryFullName: params.repositoryFullName,
+          preparedChangeId: control.preparedChangeId,
+        })
+      : Promise.resolve(null),
+  ]);
 
-  return { view, identity, health, balance, question };
+  return { view, identity, health, balance, question, change };
 }

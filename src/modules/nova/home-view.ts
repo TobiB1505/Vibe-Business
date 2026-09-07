@@ -60,7 +60,7 @@ import type { FocusCandidate, FocusCandidateKind, NovaFocus, NovaFocusTier } fro
  * `elsewhere`, and sending somebody to a decision Home cannot hold is still
  * better than a button that fails.
  */
-export type NovaControlKind = "server_action" | "navigation" | "elsewhere" | "answer";
+export type NovaControlKind = "server_action" | "navigation" | "elsewhere" | "answer" | "gate";
 
 export type NovaHomeControl =
   | { kind: "server_action"; option: NovaChoiceOption }
@@ -70,6 +70,16 @@ export type NovaHomeControl =
    * only the request to answer, which the candidate already names.
    */
   | { kind: "answer"; founderInputRequestId: string }
+  /**
+   * Decided here, through the change's own gates.
+   *
+   * Like `answer`, this carries an identity rather than a label: the gate is
+   * the control, and it brings its own sequence — validation, preview, review,
+   * approval, merge, outcome — each reachable only through the one above it.
+   * `stage` narrows that sequence to the decision this moment is actually
+   * about, which is the same narrowing the Agent route does.
+   */
+  | { kind: "gate"; preparedChangeId: string; stage: "validate" | "review" }
   /** Go and decide where the decision lives. Carries its own honest label. */
   | { kind: "elsewhere"; label: string; section: NovaHomeSection }
   /** Nothing to press. `nothing_to_do` has no control, and inventing one would be work Nova made up. */
@@ -114,40 +124,55 @@ export type NovaHomeView = {
 };
 
 /**
- * Which candidates Home can drive itself, and which belong to another screen.
- *
- * Read as a list of what is *missing* rather than what is refused:
- *
- * - `merge_ready` needs a `changeApprovalId`, which the focus facts do not
- *   carry and which the merge action requires. The Agent's review stage has it.
- * - `execution_offered` needs the plan step key; `read.ts` also fixes
- *   `executableStep` at null until the execution resolver is wired, so this
- *   candidate cannot currently arise at all.
- * - `workspace_choice_required` needs the candidate roots, and `read.ts` fixes
- *   the flag at false for the same reason.
- * - The two question kinds need the bounded-options card that owns answering.
- *   Restating a question's options in a second component is how two answers to
- *   one question get built.
- */
-/**
  * The decisions Home genuinely cannot hold.
  *
- * Three, not five. A merge needs an approval id and a build needs a plan step
- * key, and no candidate carries either — sending somebody to the surface that
- * does is still the honest answer. `workspace_choice_required` stays for a
- * different reason: the candidate names no application, because the list comes
- * from the repository analysis rather than from the ranking, so Home has
- * nothing to render a choice *of*.
+ * Two.
  *
- * The two that left are the questions. Both carry the id of what is being
- * asked, which is the whole of what answering needs.
+ * `execution_offered` needs the plan step key, and `read.ts` fixes
+ * `executableStep` at null until the execution resolver is wired, so the
+ * candidate cannot presently arise at all. The entry stays because the routing
+ * must stay honest the day it can.
+ *
+ * `workspace_choice_required` names no application: the list of candidate
+ * roots comes from the repository analysis rather than from the ranking, so
+ * Home has nothing to render a choice *of*.
+ *
+ * The four that left did so for two different reasons, and both are worth
+ * keeping straight.
+ *
+ * The questions carry the id of what is being asked, which is the whole of
+ * what answering needs. The merge does not carry an approval id — and that
+ * turned out to be the wrong thing to look for. A merge control is not
+ * something to lift out of the gates; the *gates* are what travels, and they
+ * name their own approval. See `gate` above.
  */
 const ELSEWHERE: Partial<Record<FocusCandidateKind, { label: string; section: NovaHomeSection }>> =
   {
-    merge_ready: { label: "Go to the change", section: "agent" },
     execution_offered: { label: "Go to the plan", section: "action-plan" },
     workspace_choice_required: { label: "Choose in the Agent", section: "agent" },
   };
+
+/**
+ * Which gate a change moment is about.
+ *
+ * Total over the change candidates, so a sixth one fails to compile here
+ * rather than quietly falling through to a link. Only two stages appear
+ * because only two carry a decision: a failed validation is decided at
+ * `validate`, and everything from reading the diff to verifying the outcome
+ * happens under `review` — which is the same narrowing `ChangeGates` applies
+ * on the Agent route, asked for by the moment instead of by the run.
+ */
+const GATE_STAGE = {
+  validation_failed: "validate",
+  merge_blocked: "review",
+  review_change: "review",
+  merge_ready: "review",
+  outcome_pending: "review",
+} as const satisfies Partial<Record<FocusCandidateKind, "validate" | "review">>;
+
+function gateStage(kind: FocusCandidateKind): "validate" | "review" | null {
+  return kind in GATE_STAGE ? GATE_STAGE[kind as keyof typeof GATE_STAGE] : null;
+}
 
 function detailFor(candidate: FocusCandidate): string | null {
   if ("headline" in candidate) return candidate.headline;
@@ -173,6 +198,12 @@ function controlFor(candidate: FocusCandidate): NovaHomeControl {
      the card that answers it takes the request and its action as props. */
   if (candidate.kind === "agent_question" || candidate.kind === "founder_input_required") {
     return { kind: "answer", founderInputRequestId: candidate.founderInputRequestId };
+  }
+
+  /* A change is decided through its own gates, and the candidate names it. */
+  const stage = gateStage(candidate.kind);
+  if (stage !== null && "preparedChangeId" in candidate) {
+    return { kind: "gate", preparedChangeId: candidate.preparedChangeId, stage };
   }
 
   const option = novaCandidateOption(candidate);
@@ -203,6 +234,7 @@ export function novaControlLabel(control: NovaHomeControl): string | null {
     case "elsewhere":
       return control.label;
     case "answer":
+    case "gate":
     case "none":
       return null;
   }

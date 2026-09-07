@@ -140,20 +140,49 @@ describe("Nova Home view", () => {
   });
 
   describe("controls are only offered where Home holds the arguments", () => {
-    it("sends a merge to the surface that has the approval id", () => {
+    /*
+     * This used to assert `elsewhere`, on the reasoning that a merge needs an
+     * approval id no candidate carries. The id was the wrong thing to look
+     * for. A merge control lifted out of its sequence is exactly the failure
+     * rules 67-71 describe — a yes to commit A applied to commit B — but the
+     * *sequence* travelling is not: `ChangeGates` brings validation, preview,
+     * review, approval, merge and outcome in that order, each reachable only
+     * through the one above it, and names its own approval.
+     *
+     * So the control carries the change's identity and which gate to open, and
+     * still has no label of its own: there is no button here to press out of
+     * order.
+     */
+    it("decides a merge through the change's own gates", () => {
       const view = viewOf({
-        changes: [
-          { preparedChangeId: "change-1", stage: "ready_to_merge", headline: "Approved" },
-        ],
+        changes: [{ preparedChangeId: "change-1", stage: "ready_to_merge", headline: "Approved" }],
       });
 
       expect(view.primary.kind).toBe("merge_ready");
-      expect(view.primary.control.kind).toBe("elsewhere");
-      // And it must not wear the catalog's verb while doing something else.
-      if (view.primary.control.kind === "elsewhere") {
-        expect(view.primary.control.label.toLowerCase()).not.toContain("merge it");
-        expect(view.primary.control.section).toBe("agent");
+      expect(view.primary.control.kind).toBe("gate");
+      if (view.primary.control.kind === "gate") {
+        expect(view.primary.control.preparedChangeId).toBe("change-1");
+        expect(view.primary.control.stage).toBe("review");
       }
+      // No verb of its own. The gates carry every control this moment has.
+      expect(novaControlLabel(view.primary.control)).toBeNull();
+    });
+
+    /*
+     * A failed validation is the one change moment decided at a different
+     * gate, and getting it wrong would show a founder the approval and merge
+     * panels for a change that has not passed its checks.
+     */
+    it("opens the validation gate for a change that failed its checks", () => {
+      const view = viewOf({
+        changes: [
+          { preparedChangeId: "change-2", stage: "validation_failed", headline: "Checks failed" },
+        ],
+      });
+
+      expect(view.primary.kind).toBe("validation_failed");
+      if (view.primary.control.kind !== "gate") throw new Error("expected a gate");
+      expect(view.primary.control.stage).toBe("validate");
     });
 
     /*
@@ -229,13 +258,16 @@ describe("Nova Home view", () => {
       }
     });
 
+    /*
+     * Reconnecting is the GitHub App install flow. It leaves the product
+     * entirely, so a Server Action could not finish what it starts — which is
+     * why one navigation is still a navigation after four of them became
+     * gates.
+     */
     it("keeps a navigation control a link rather than a button", () => {
-      const view = viewOf({
-        changes: [
-          { preparedChangeId: "change-1", stage: "review_required", headline: "Look at this" },
-        ],
-      });
+      const view = viewOf({ sourceDisconnected: true });
 
+      expect(view.primary.kind).toBe("source_disconnected");
       expect(view.primary.control.kind).toBe("navigation");
     });
   });
