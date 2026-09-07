@@ -13,6 +13,7 @@ import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
 
 const analyzeMock = vi.fn();
 const connectMock = vi.fn();
+const probeMock = vi.fn();
 const landingMock = vi.fn(
   async (_connectUrl: string, _origin: string) =>
     ({ navigated: true }) as { navigated: boolean; reason?: string },
@@ -69,6 +70,7 @@ vi.mock("@/lib/supabase/service", () => ({
 vi.mock("./playwright/connector", () => ({
   connectReadOnly: (connectUrl: string, origin: string) => connectMock(connectUrl, origin),
   openSessionAtOrigin: (connectUrl: string, origin: string) => landingMock(connectUrl, origin),
+  probeSignInState: (connectUrl: string, origin: string) => probeMock(connectUrl, origin),
 }));
 
 const {
@@ -76,6 +78,7 @@ const {
   cancelDeepScan,
   getDeepScanAccessStatus,
   getDeepScanLiveView,
+  probeDeepScanSignIn,
   startDeepScan,
 } = await import("./service");
 
@@ -152,6 +155,8 @@ function setup(options: { productionUrl?: string | null } = {}) {
 beforeEach(() => {
   analyzeMock.mockReset();
   connectMock.mockReset();
+  probeMock.mockReset();
+  probeMock.mockResolvedValue(null);
   landingMock.mockReset();
   landingMock.mockResolvedValue({ navigated: true });
   holdMock.mockReset();
@@ -851,5 +856,120 @@ describe("startDeepScan — landing on the product", () => {
     const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
 
     expect(result.ok).toBe(true);
+  });
+});
+
+/*
+ * The founder asked Vibe to notice the finished login instead of waiting to be
+ * told about it. What makes that safe is not the detection — that is
+ * `login-detection.test.ts` — but that asking the question costs nothing and
+ * changes nothing. A probe runs every few seconds against a live browser; if
+ * it could write, terminate, charge or start, it would be the most dangerous
+ * call in this file.
+ */
+describe("probeDeepScanSignIn — a question, not an action", () => {
+  it("reports a signed-in browser without writing anything", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    probeMock.mockResolvedValue({
+      path: "/app",
+      passwordFieldPresent: false,
+      signOutAffordancePresent: true,
+      accountAffordancePresent: true,
+      hasAppShell: true,
+    });
+
+    const before = JSON.stringify(db.rows("authenticated_browser_sessions"));
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result).toEqual({ ok: true, signedIn: true, reason: "sign_out_offered" });
+    // Not a snapshot, not a usage row, not a status change, not a credit move.
+    expect(JSON.stringify(db.rows("authenticated_browser_sessions"))).toBe(before);
+    expect(db.rows("authenticated_product_intelligence_snapshots")).toHaveLength(0);
+    expect(analyzeMock).not.toHaveBeenCalled();
+    expect(settleMock).not.toHaveBeenCalled();
+    expect(releaseMock).not.toHaveBeenCalled();
+    expect(provider.terminated).toHaveLength(0);
+  });
+
+  it("reports not-signed-in while the founder is still on a login page", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    probeMock.mockResolvedValue({
+      path: "/login",
+      passwordFieldPresent: true,
+      signOutAffordancePresent: false,
+      accountAffordancePresent: false,
+      hasAppShell: true,
+    });
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result).toEqual({ ok: true, signedIn: false, reason: "password_field_present" });
+  });
+
+  it("treats a browser sitting on an identity provider as not signed in", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    // No page on the project's origin at all.
+    probeMock.mockResolvedValue(null);
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result).toEqual({ ok: true, signedIn: false, reason: "off_origin" });
+  });
+
+  it("refuses a session the caller does not own", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: INTRUDER,
+    });
+
+    expect(result).toEqual({ ok: false, error: "project_not_found" });
+    // The intruder never reaches the browser, so no capability URL is minted.
+    expect(probeMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves an expired browser to the paths that own terminating it", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    db.rows("authenticated_browser_sessions")[0]!.expires_at = new Date(Date.now() - 60_000).toISOString();
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result.ok).toBe(false);
+    // Reported, never resolved here: terminating and refunding is a decision
+    // with money attached, and it belongs to `analyzeDeepScan`/`cancelDeepScan`.
+    expect(provider.terminated).toHaveLength(0);
+    expect(releaseMock).not.toHaveBeenCalled();
   });
 });
