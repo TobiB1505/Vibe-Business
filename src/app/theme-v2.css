@@ -238,14 +238,33 @@
   --atmos-ramp-far: rgb(255 255 255 / 0.01);
 
   /* ── Glass ───────────────────────────────────────────────────────────
-     Values, not a default. `backdrop-filter` on stacked dense content is
-     what makes a product judder, so glass is for chrome, overlays and
-     signature moments; panels and tables stay opaque. S2 spends these. */
+     The material, now — not an accent. See ADR 0099: this direction was
+     asked for as glass rather than as flat tiles, and a product where one
+     surface in five is a pane and the rest are fills does not read as
+     glass, it reads as an inconsistency.
+
+     Two blurs, because a card and a panel are not the same object. The
+     card is the screen's subject and gets the deeper one; a panel is the
+     workhorse and there can be a dozen on a screen, so it gets a blur
+     shallow enough that a dozen of them composite without judder. A
+     section is the quiet grouping band behind panels and stays a fill —
+     glass behind glass is two panes and no ground. */
   --glass-blur: 14px;
+  --glass-blur-panel: 9px;
   --glass-sat: 130%;
   --glass-fill: rgb(255 255 255 / 0.04);
+  /* A panel sits *on* the ground rather than over the page, so it carries
+     less fill and a quieter edge than the card that may contain it. Without
+     the split, a panel inside a card disappeared into it. */
+  --glass-fill-panel: rgb(255 255 255 / 0.03);
   --glass-line: rgb(255 255 255 / 0.16);
+  --glass-line-panel: rgb(255 255 255 / 0.11);
   --glass-sheen: rgb(255 255 255 / 0.07);
+  --glass-sheen-panel: rgb(255 255 255 / 0.045);
+  /* Chrome — the rail and the top bar. Thinner than a panel because it is
+     the frame rather than a thing on the page, and it runs the full height:
+     a fill that reads right on a 240px card reads as a slab at 900px. */
+  --glass-fill-chrome: rgb(255 255 255 / 0.018);
 
   /* ── Motion ──────────────────────────────────────────────────────────
      v1's names, answered differently — not a second vocabulary beside them.
@@ -429,9 +448,74 @@
   pointer-events: none;
 }
 
-/* Panels and sections: opaque, and edge-carried. The line does the work the
-   fill used to do, which is the whole of "Precision & Light". */
-[data-vibe="v2"] .vibe-surface-panel,
+/*
+ * The panel is glass too.
+ *
+ * ## Why this changed
+ *
+ * The rule here used to be "glass is spent on the card and nowhere else", and
+ * it was wrong about what this design system is. Measured on the dashboard,
+ * one surface was a pane and four were fills — and the four are the product
+ * grid, which is what a founder actually looks at. The direction was chosen as
+ * glass rather than flat tiles; a card floating alone over four tiles is not a
+ * lighter version of that, it is a different design.
+ *
+ * ## What is kept from the old argument
+ *
+ * The judder concern was real and is answered by the blur, not by opacity: a
+ * panel gets 9px where the card gets 14. `backdrop-filter` costs by radius,
+ * and a shallow blur over a ramp still reads as a pane because the ramp is
+ * what makes it one (see the ground, above).
+ *
+ * ## Why a section is still a fill
+ *
+ * A section groups panels. Glass behind glass gives the inner pane another
+ * pane to sample instead of the ground, and both stop reading as glass. The
+ * hierarchy needs one opaque step, and the quiet band is the right one.
+ */
+[data-vibe="v2"] .vibe-surface-panel {
+  background: var(--glass-fill-panel);
+  border-color: var(--glass-line-panel);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-sat));
+  position: relative;
+}
+
+[data-vibe="v2"] .vibe-surface-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen-panel), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/*
+ * Chrome: the rail, the top bar, the frame around the page.
+ *
+ * `DESIGN.md` named chrome as a place glass belongs before it named anything
+ * else, and it was the last one still painted as a flat fill. A rail that is
+ * opaque while everything inside it is a pane does not read as restraint; it
+ * reads as the one element nobody got to.
+ *
+ * The card's blur rather than the panel's, and much less fill: chrome is
+ * pinned, so its blur is computed against a ground that does not move under
+ * it, and it is the full height of the viewport, where a panel's fill would
+ * stack into a slab.
+ */
+[data-vibe="v2"] .vibe-chrome {
+  background: var(--glass-fill-chrome);
+  border-color: var(--glass-line-panel);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/* The one opaque step. Edge-carried: the line does the work the fill used to
+   do, which is the whole of "Precision & Light". */
 [data-vibe="v2"] .vibe-surface-section {
   backdrop-filter: none;
 }

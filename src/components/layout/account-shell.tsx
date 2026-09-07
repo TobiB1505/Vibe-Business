@@ -126,7 +126,7 @@ export function AccountSidebar({
     <nav
       aria-label="Account"
       className={cn(
-        "border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b p-4",
+        "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b p-4",
         // Desktop: a full-height rail that stays put while content scrolls.
         // Below `lg` it becomes a strip at the top, for the same reason
         // `ProjectSidebar` does — a 248px rail on a 375px screen eats the page.

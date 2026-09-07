@@ -44,6 +44,7 @@ const HOOKS = [
   "vibe-control",
   "vibe-control-text",
   "vibe-overlay",
+  "vibe-chrome",
 ] as const;
 
 describe("the primitives emit the material hooks", () => {
@@ -60,6 +61,17 @@ describe("the primitives emit the material hooks", () => {
 
   it("Sheet emits the overlay hook", () => {
     expect(SHEET).toContain("vibe-overlay");
+  });
+
+  it("the rails emit the chrome hook", () => {
+    // Both of them. A product where one rail is a pane and the other is a
+    // fill has two frames, and a founder moves between them constantly.
+    for (const shell of ["account-shell", "project-shell"]) {
+      expect(
+        readFileSync(join(process.cwd(), `src/components/layout/${shell}.tsx`), "utf8"),
+        `${shell} does not wear vibe-chrome`,
+      ).toContain("vibe-chrome");
+    }
   });
 
   it("emits the control hook from buttonClasses, not from the component", () => {
@@ -370,6 +382,39 @@ describe("an empty state is one component", () => {
       offenders,
       `Use EmptyState from ${STATES}. Four hand-written ones is how the ` +
         "product ended up with four reserved heights and two registers.",
+    ).toEqual([]);
+  });
+});
+
+describe("the ground is reachable", () => {
+  /**
+   * A shell may not paint the page background over the whole viewport.
+   *
+   * `.vibe-atmosphere` is `position: fixed; z-index: -1`. That puts it above
+   * the canvas and below everything in flow — including a block background on
+   * a full-height shell root. Every shell carried `bg-app` there, which is the
+   * colour `body` already paints, so the product looked correct and the ramp
+   * was covered on every signed-in route. Measured on the dashboard: 11.79
+   * luminance top and bottom, which is `--color-app` exactly.
+   *
+   * `bg-app` on a *bounded* element is fine and there are many — a menu panel,
+   * a diff well, a chip. The defect is specifically the pair: a viewport-tall
+   * root that also fills.
+   */
+  it("no full-height shell root fills the viewport with bg-app", () => {
+    const dir = join(process.cwd(), "src/components/layout");
+    const offenders: string[] = [];
+    for (const entry of readdirSync(dir)) {
+      if (!entry.endsWith(".tsx") || entry.endsWith(".test.tsx")) continue;
+      const text = readFileSync(join(dir, entry), "utf8");
+      for (const [line] of text.matchAll(/[^\n]*min-h-dvh[^\n]*/g)) {
+        if (/\bbg-app\b/.test(line)) offenders.push(`${entry}: ${line.trim().slice(0, 90)}`);
+      }
+    }
+    expect(
+      offenders,
+      "body already paints --color-app. A viewport-tall element painting it " +
+        "again hides the ground, and the glass then has a flat field to refract.",
     ).toEqual([]);
   });
 });

@@ -20,7 +20,7 @@ import { buttonClasses } from "@/components/ui/button";
  */
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-app text-fg-body relative isolate min-h-dvh overflow-clip">
+    <div className="text-fg-body relative isolate min-h-dvh overflow-clip">
       <div
         aria-hidden
         className="pointer-events-none absolute -top-64 left-1/2 -z-10 h-[56rem] w-[68rem] -translate-x-1/2 rounded-full"

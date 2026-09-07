@@ -28,7 +28,7 @@ export function AuthShell({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-app text-fg-body grid min-h-dvh lg:grid-cols-2">
+    <div className="text-fg-body grid min-h-dvh lg:grid-cols-2">
       <div className="border-line-1 relative hidden flex-col justify-between overflow-clip border-r p-14 lg:flex">
         <div
           aria-hidden

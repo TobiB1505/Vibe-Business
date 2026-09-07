@@ -61,7 +61,7 @@ export function AppShell({
   bleed?: boolean;
 }) {
   return (
-    <div className="bg-app text-fg-body flex min-h-dvh flex-col">
+    <div className="text-fg-body flex min-h-dvh flex-col">
       <header className="border-line-1 bg-app/70 sticky top-0 z-30 border-b backdrop-blur-xl">
         <div className="flex items-center gap-4 px-5 py-4 sm:px-8">
           {/* The ring used to be switched off here with nothing put in its

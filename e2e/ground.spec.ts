@@ -17,6 +17,8 @@ import { expect, test, type Page } from "@playwright/test";
 const NOVA = "/e2e/nova-priced";
 /** A route that deliberately did not opt into the contained field. */
 const DENSE = "/e2e/repository_intelligence";
+/** An ordinary product screen in the account shell — no field, just ground. */
+const DASHBOARD = "/e2e/account-three-products";
 
 async function paletteV2(page: Page) {
   await page.evaluate(() => document.documentElement.setAttribute("data-vibe", "v2"));
@@ -98,10 +100,10 @@ test.describe("the ground exists and stays out of the way", () => {
    * decodes the pixel and asserts the *direction and size* of the gradient,
    * which is the only claim that fails when the ground goes away.
    */
-  async function luminance(page: Page, y: number): Promise<number> {
+  async function luminance(page: Page, y: number, x = 4): Promise<number> {
     // A 1×1 PNG: signature, chunks, one IDAT holding a filter byte and one
     // pixel. Small enough to decode here rather than to take a dependency.
-    const png = await page.screenshot({ clip: { x: 4, y, width: 1, height: 1 } });
+    const png = await page.screenshot({ clip: { x, y, width: 1, height: 1 } });
     let offset = 8;
     let data = Buffer.alloc(0);
     let channels = 3;
@@ -142,6 +144,44 @@ test.describe("the ground exists and stays out of the way", () => {
     expect(
       litTop / Math.max(litBottom, 0.01),
       `v2 must light the ground from the top: ${litTop.toFixed(2)} over ${litBottom.toFixed(2)}`,
+    ).toBeGreaterThan(1.3);
+  });
+
+  /**
+   * The ground survives the shell.
+   *
+   * This is the defect the test above could not see. `.vibe-atmosphere` is
+   * `position: fixed; z-index: -1`, so it paints above the canvas and below
+   * everything in flow — including a block background a shell draws over the
+   * whole viewport. Every shell in the product drew `bg-app` there, which is
+   * the same colour `body` already paints, so nothing looked broken and the
+   * ramp was covered on every signed-in route.
+   *
+   * Measured on the dashboard before the fix: 11.79 luminance at the top and
+   * 11.79 at the bottom, which is `--color-app` exactly. The glass shipped in
+   * S2 had, in the product, never once had anything to refract.
+   *
+   * Sampled inside the content column rather than at x=4, which is the rail —
+   * chrome is its own glass and would answer for itself.
+   */
+  test("is not painted over by the shell on an ordinary product screen", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(DASHBOARD);
+    const column = 1420;
+
+    const flatTop = await luminance(page, 8, column);
+    const flatBottom = await luminance(page, 860, column);
+    expect(
+      Math.abs(flatTop - flatBottom),
+      "v1 has no ground; a ramp here means the second palette leaked into the first",
+    ).toBeLessThan(0.5);
+
+    await paletteV2(page);
+    const litTop = await luminance(page, 8, column);
+    const litBottom = await luminance(page, 860, column);
+    expect(
+      litTop / Math.max(litBottom, 0.01),
+      `the shell is covering the ground: ${litTop.toFixed(2)} over ${litBottom.toFixed(2)}`,
     ).toBeGreaterThan(1.3);
   });
 

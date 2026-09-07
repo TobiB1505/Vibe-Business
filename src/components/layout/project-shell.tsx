@@ -312,7 +312,7 @@ export function ProjectSidebar({
   return (
     <aside
       className={cn(
-        "border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
+        "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
         "lg:h-full lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-5 lg:py-6",
       )}
     >
@@ -501,7 +501,7 @@ export function ProjectShell({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-app text-fg-body flex min-h-dvh flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
+    <div className="text-fg-body flex min-h-dvh flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
       {sidebar}
       <main className="min-w-0 flex-1 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
         <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 py-7 sm:px-8 sm:py-9 xl:px-10 xl:py-10">
