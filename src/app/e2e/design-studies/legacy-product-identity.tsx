@@ -5,6 +5,15 @@ import { RatingChip } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
 
 /**
+ * Kept as the picture of what the thread replaced.
+ *
+ * Production does not render this. The product card. The status row carries the product's name and whether its repository is reachable, which is the same two facts as a status rather than as a subtitle.
+ *
+ * It lives in the lab so the studies that compare before and after can still
+ * draw it, and so the production folder holds only what production renders.
+ */
+
+/**
  * Whose product this is (UI Sourcing Spec C4).
  *
  * ## The name, and the bug it fixes

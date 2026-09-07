@@ -101,6 +101,19 @@ export type NovaAvailability = { state: "online" } | { state: "offline"; because
  */
 export function NovaThreadHeader({
   availability,
+  /**
+   * What Nova is doing, or what is being asked of the founder.
+   *
+   * Replaces the availability line when present, and that is the point: "Online"
+   * is a fact about a service, and nobody came to this screen to read it. What
+   * belongs in the one line under her name is the *state* — the stage a run is
+   * actually at, or the word for the moment that needs a person.
+   *
+   * Never chosen at a call site. It is `OPERATION_STAGE_LABELS` for a live run
+   * and `statusForCandidate` otherwise, so this line cannot describe a moment
+   * differently from the bubble below it.
+   */
+  status,
   /** What this conversation is about. The project's own name, never Nova's. */
   subject,
   /** Whether the repository behind that name is still reachable. */
@@ -120,6 +133,7 @@ export function NovaThreadHeader({
   now,
 }: {
   availability: NovaAvailability;
+  status?: { word: string; tone: StatusTone };
   subject: string;
   connected: boolean;
   connecting?: boolean;
@@ -136,9 +150,16 @@ export function NovaThreadHeader({
         <p className="flex items-center gap-1.5 truncate text-caption text-fg-meta">
           <span
             aria-hidden
-            className={`size-1.5 shrink-0 rounded-full ${online ? "bg-mint" : "bg-fg-disabled"}`}
+            className={`size-1.5 shrink-0 rounded-full ${
+              !online ? "bg-fg-disabled" : status ? STATUS_DOT[status.tone] : "bg-mint"
+            }`}
           />
-          {online ? "Online" : `Offline — ${availability.because}`}
+          {/*
+            Availability outranks the state, and has to: a founder reading
+            "Reading what you built" while Vibe is down would be watching a
+            sentence about work that is not happening.
+          */}
+          {!online ? `Offline — ${availability.because}` : (status?.word ?? "Online")}
         </p>
       </div>
       {/*
@@ -164,6 +185,21 @@ export function NovaThreadHeader({
     </header>
   );
 }
+
+/**
+ * The state's own colour, on the one dot that carries it.
+ *
+ * Paired with the word beside it, always — `DESIGN.md` says colour is never
+ * the only signal, and this dot is aria-hidden precisely because the sentence
+ * next to it is the information.
+ */
+const STATUS_DOT: Record<StatusTone, string> = {
+  neutral: "bg-fg-muted",
+  active: "bg-mint",
+  success: "bg-mint",
+  waiting: "bg-amber",
+  problem: "bg-coral",
+};
 
 /**
  * Something that happened, with the time it happened at.

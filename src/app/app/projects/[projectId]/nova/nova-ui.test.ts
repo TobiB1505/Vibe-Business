@@ -37,10 +37,8 @@ describe("Nova Home", () => {
     for (const name of [
       "nova-home.tsx",
       "nova-focus-thread.tsx",
-      "attention-stack.tsx",
-      "working-strip.tsx",
-      "product-identity.tsx",
-      "health-score.tsx",
+      "nova-rail.tsx",
+      "nova-header-live.tsx",
     ]) {
       expect(component(name), name).not.toBe("");
     }
@@ -133,8 +131,20 @@ describe("Nova Home", () => {
       }
     });
 
-    it("resolves citations through the shared resolver", () => {
-      expect(component("nova-home-data.ts")).toContain("describeEvidenceId");
+    /*
+     * Home used to resolve citations itself, for a finding card it rendered
+     * under the business score. Both are gone: the score belongs to Business
+     * Health and the audit's own blocker is inside the audit block, which is
+     * the shipped component and resolves its own evidence.
+     *
+     * So the assertion inverts. Home holds no evidence resolver of its own,
+     * because a second one is how two surfaces come to describe one id
+     * differently.
+     */
+    it("resolves no evidence itself", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toContain("describeEvidenceId");
+      }
     });
 
     /**
@@ -261,16 +271,32 @@ describe("Nova Home", () => {
   });
 
   describe("honest absence", () => {
-    it("renders a missing score through the one function that knows n/a", () => {
-      const health = component("health-score.tsx");
-      expect(health).toContain("scoreDisplay");
-      // Never a zero standing in for "nothing was measurable".
-      expect(health).not.toMatch(/score\s*\?\?\s*0|score\s*\|\|\s*0/);
+    /*
+     * Home used to render the business score, and these two assertions were
+     * about the shapes it had to keep honest: never a zero standing in for
+     * "nothing was measurable", and a never-audited project distinct from an
+     * unscored one. Home renders no score at all now — Business Health owns
+     * the reading — so the strongest thing to check here is that it did not
+     * grow one back, in prose or in a figure.
+     *
+     * Rule 44 itself is enforced where the number lives, and is tested there.
+     */
+    it("states no score of its own", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toMatch(/scoreDisplay|<HealthScore|overall\.score/);
+      }
     });
 
-    it("keeps a never-audited project distinct from an unscored one", () => {
-      expect(component("health-score.tsx")).toContain("HealthScoreAbsent");
-      expect(component("nova-home.tsx")).toContain("HealthScoreAbsent");
+    /*
+     * The thread's version of the same refusal. `deriveNovaFocus` decides what
+     * leads, and every sentence it produces comes from the feed's table — so a
+     * template literal building one here would be Home writing copy the domain
+     * did not.
+     */
+    it("writes none of Nova's sentences itself", () => {
+      const thread = component("nova-focus-thread.tsx");
+      expect(thread).toContain("entry.message");
+      expect(thread).not.toMatch(/`[^`]*\$\{entry\.(kind|tier)\}/);
     });
 
     it("offers no control when there is nothing to do", () => {
@@ -281,18 +307,21 @@ describe("Nova Home", () => {
 
   describe("status", () => {
     it("takes every word from the shared vocabulary", () => {
-      for (const name of ["working-strip.tsx", "attention-stack.tsx", "nova-focus-thread.tsx"]) {
+      for (const name of ["nova-focus-thread.tsx", "nova-home.tsx"]) {
         expect(component(name), name).toMatch(/statusFor(OperationPhase|FocusTier|Candidate)/);
       }
     });
 
     it("never depends on colour alone", () => {
-      // Every tone in this slice is rendered by a component that also prints
-      // the word: `StatusPill` takes children, `StatusDot` is aria-hidden and
-      // is always paired with one here.
-      const strip = component("working-strip.tsx");
-      expect(strip).toContain("status.word");
-      expect(component("attention-stack.tsx")).toContain("status.word");
+      /*
+       * The one dot left on this screen is the header's, and it is
+       * `aria-hidden` with the state's word beside it — the header takes both
+       * as one `status` object, so a tone cannot arrive without the sentence
+       * that explains it.
+       */
+      const header = component("nova-header-live.tsx");
+      expect(header).toMatch(/word:|resting/);
+      expect(header).toContain("stageLabel");
     });
   });
 });

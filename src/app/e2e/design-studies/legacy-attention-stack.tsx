@@ -6,6 +6,15 @@ import { MonoLabel } from "@/components/ui/typography";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
 
 /**
+ * Kept as the picture of what the thread replaced.
+ *
+ * Production does not render this. The secondary moments. Home shows the one moment the ranking chose; a stack under it was the ranking's output re-listed as a set.
+ *
+ * It lives in the lab so the studies that compare before and after can still
+ * draw it, and so the production folder holds only what production renders.
+ */
+
+/**
  * Everything else that is true (UI Sourcing Spec C2; audit E13).
  *
  * ## Why this exists at all

@@ -1,10 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { EvidenceCitation } from "@/components/system/evidence-drawer";
 import type { CostBalance } from "@/components/system/cost-disclosure";
-import type { FindingSeverity } from "@/components/system/finding-card";
-import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getActionPlanChecklist, type ActionPlanChecklist } from "@/modules/action-plans/service";
@@ -78,37 +75,18 @@ export type NovaProductIdentity = {
   understood: "confirmed" | "unconfirmed" | "not_read";
 };
 
-export type NovaPriorityFinding = {
-  headline: string;
-  explanation: string;
-  whyItMatters: string | null;
-  severity: FindingSeverity;
-  citations: EvidenceCitation[];
-};
-
-export type NovaHealth = {
-  /**
-   * The audit's own reading, kept rather than discarded.
-   *
-   * `buildBusinessBrainView` was already being called to produce the four
-   * numbers below and then thrown away, which meant Home held the whole map
-   * and rendered a score. The thread shows it when the audit is the moment,
-   * and the read did not grow by a row.
-   */
-  view: BusinessBrainView;
-  score: number | null;
-  stateLabel: string;
-  scoredLenses: number;
-  eligibleLenses: number;
-  insufficientCoverageReason: string | null;
-  priority: NovaPriorityFinding | null;
-};
-
 export type NovaHomeData = {
   view: NovaHomeView;
   identity: NovaProductIdentity;
-  /** Null when no audit has ever completed — not a score of zero. */
-  health: NovaHealth | null;
+  /**
+   * The audit's own reading, or null when none has ever completed.
+   *
+   * Not a score of zero — nothing has been measured. It used to be six fields
+   * projected out of this view for a panel Home no longer has, and the file's
+   * own rule applied: a number nothing renders is a read nobody can see going
+   * stale. So the view travels whole and the audit block draws it.
+   */
+  audit: BusinessBrainView | null;
   /** Null when the account has no Credit account yet. */
   balance: CostBalance | null;
   /**
@@ -259,59 +237,31 @@ async function readWorkspaceCandidates(
 }
 
 /**
- * A citation, resolved to the sentence a founder reads.
+ * The audit's reading, whole.
  *
- * The id never leaves this function. `describeEvidenceId` is the same resolver
- * the Business Brain uses, so the drawer on Home and the evidence on Business
- * Health say the same thing about the same id.
+ * A stamp, then that one document, then the module's own view boundary —
+ * never the sixty-reading trend, which is Business Health's and draws a chart
+ * Home does not have, and never the per-conclusion Move counts, which are the
+ * Action Plan's. `buildBusinessBrainView` treats both as empty.
  */
-function citation(id: string): EvidenceCitation {
-  const described = describeEvidenceId(id);
-  return { detail: described.detail, source: described.source, certainty: described.certainty };
-}
-
-async function readHealth(supabase: SupabaseClient, projectId: string): Promise<NovaHealth | null> {
+async function readAudit(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<BusinessBrainView | null> {
   const stamp = await getLatestAuditStamp(supabase, projectId);
   if (!stamp) return null;
 
   const stored = await getProjectAuditById(supabase, { projectId, auditId: stamp.id });
   if (!stored?.result) return null;
 
-  /*
-   * No readings and no moves. Home draws no trend and offers no per-conclusion
-   * Move count that it could act on, so asking for either would be reading
-   * rows to throw them away. `buildBusinessBrainView` treats both as empty.
-   */
-  const view = buildBusinessBrainView({
-    audit: stored.result,
-    lastScanAt: stored.completedAt ?? stored.createdAt,
-    auditReadings: [],
-    movesByConclusion: {},
-  });
-
-  if (!view) return null;
-
-  const priority = view.primaryPriority;
-
-  return {
-    view,
-    score: view.overall.score,
-    stateLabel: view.overall.stateLabel,
-    scoredLenses: view.overall.scoredLenses,
-    eligibleLenses: view.overall.eligibleLenses,
-    // The sentence behind a missing score. Computed by the scorer since the
-    // audit shipped, and until now rendered nowhere.
-    insufficientCoverageReason: stored.result.overall.insufficientCoverageReason,
-    priority: priority
-      ? {
-          headline: priority.headline,
-          explanation: priority.explanation,
-          whyItMatters: priority.whyItMatters,
-          severity: priority.tone,
-          citations: priority.evidence.map((item) => citation(item.id)),
-        }
-      : null,
-  };
+  return (
+    buildBusinessBrainView({
+      audit: stored.result,
+      lastScanAt: stored.completedAt ?? stored.createdAt,
+      auditReadings: [],
+      movesByConclusion: {},
+    }) ?? null
+  );
 }
 
 export async function readNovaHomeData(
@@ -324,10 +274,10 @@ export async function readNovaHomeData(
     repositoryFullName: string | null;
   },
 ): Promise<NovaHomeData> {
-  const [focus, identity, health, balance, checklist, events] = await Promise.all([
+  const [focus, identity, audit, balance, checklist, events] = await Promise.all([
     readNovaFocus(supabase, params.projectId),
     readIdentity(supabase, params.projectId, params.projectName),
-    readHealth(supabase, params.projectId),
+    readAudit(supabase, params.projectId),
     getHeaderCreditBalance(supabase, { userId: params.userId }),
     getActionPlanChecklist(supabase, params.projectId),
     listAuditEventsForProject(supabase, {
@@ -369,7 +319,7 @@ export async function readNovaHomeData(
   return {
     view,
     identity,
-    health,
+    audit,
     balance,
     question,
     change,

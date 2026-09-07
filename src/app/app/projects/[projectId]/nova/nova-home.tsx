@@ -1,11 +1,10 @@
-import { FindingCard } from "@/components/system/finding-card";
 import { projectSectionHref, preparedChangeHref } from "@/components/layout/project-shell";
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaHomeEntry, NovaHomeSection } from "@/modules/nova/home-view";
 import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-context";
 
-import { novaPresenceState } from "@/components/system/status-vocabulary";
+import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
 
 import { ChangeGates } from "../agent/change-gates";
@@ -14,19 +13,15 @@ import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-acti
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveFounderInputAction } from "../founder-input-action";
 
-import { AttentionStack } from "./attention-stack";
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
 import { NovaRail } from "./nova-rail";
 import { ActionBlock } from "@/components/system/action-block";
 import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
-import { NovaThreadHeader } from "@/components/nova/nova-thread";
 import { NovaClock } from "@/components/nova/nova-clock";
+import { NovaHeaderLive } from "./nova-header-live";
 import { AuditBlock } from "@/components/nova/blocks/audit";
-import { HealthScore, HealthScoreAbsent } from "./health-score";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
-import { ProductIdentity } from "./product-identity";
-import { NovaWorkingLive } from "./nova-working-live";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -82,35 +77,10 @@ export async function NovaHome({
     "my-product": href.product,
   };
 
-  /**
-   * Where a row in the stack goes.
-   *
-   * The subject, when the candidate names one, so a founder lands on the thing
-   * rather than on the page that lists things. Falling back to the section
-   * keeps every row a real destination.
-   */
-  function entryHref(entry: NovaHomeEntry): string {
-    const candidate = entry.candidate;
-    if ("preparedChangeId" in candidate) {
-      return preparedChangeHref(
-        agentChangeHref(href.agent, candidate.preparedChangeId),
-        candidate.preparedChangeId,
-      );
-    }
-    if ("move" in candidate) return planMoveHref(href.plan, candidate.move.id);
-    if (entry.control.kind === "elsewhere") return sectionHref[entry.control.section];
-    if (entry.kind === "audit_outdated" || entry.kind === "audit_failed") return href.health;
-    if (entry.kind === "scan_failed" || entry.kind === "repository_read_outdated") {
-      return href.product;
-    }
-    return href.agent;
-  }
-
   /*
-   * Which of four things Nova is doing, from what the domain observed. The
-   * mark on the Focus Card and the mark on the working strip are the same
-   * instrument in the same state, because they are reading the same facts —
-   * and neither is a prop a caller picked.
+   * Nova's mark, derived rather than chosen. The tier the ranking produced and
+   * the phase the operations view read — a caller passing `working` by hand
+   * would be asserting activity the product has not observed.
    */
   const presence = novaPresenceState({
     tier: data.view.primary.tier,
@@ -131,8 +101,15 @@ export async function NovaHome({
         browser has one; the rest is server-rendered.
       */}
       <NovaRise>
-        <NovaThreadHeader
-          availability={{ state: "online" }}
+        <NovaHeaderLive
+          projectId={project.id}
+          working={data.view.working}
+          /*
+           * What the line says when nothing is running. The moment's own word,
+           * from the same table the bubble below it reads, so the header cannot
+           * describe a moment differently from the sentence under it.
+           */
+          resting={statusForCandidate(data.view.primary.kind)}
           subject={data.identity.name}
           connected={connected}
           mark={<NovaPresence state={presence} size="md" seed={project.id} />}
@@ -159,76 +136,20 @@ export async function NovaHome({
           />
         </NovaRise>
 
-        <div className="flex flex-col gap-6 max-lg:order-1">
-          <NovaRise delay={0.06}>
-            <ProductIdentity
-              name={data.identity.name}
-              logoUrl={data.identity.logoUrl}
-              category={data.identity.category}
-              understood={data.identity.understood}
-              productHref={href.product}
-            />
-          </NovaRise>
+        {/*
+          The thread, and nothing beside it.
 
-          {/*
-            The primary settles first and the rest follows: the ranking drawn
-            in time. Every delay below is the position `deriveNovaFocus`
-            decided.
-          */}
-          <NovaRise delay={0.1}>
-            <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
-          </NovaRise>
-
-          <NovaRise delay={0.18}>
-            <NovaWorkingLive
-              projectId={project.id}
-              working={data.view.working}
-              presence={presence}
-              seed={project.id}
-            />
-          </NovaRise>
-
-          <NovaRise delay={0.26}>
-            <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
-          </NovaRise>
-        </div>
+          Everything that used to sit in this column was a second reading of
+          something already said: a product identity card under a header
+          carrying the product's name, a working strip under Nova saying what
+          she was doing, a stack of secondary moments under the one moment the
+          ranking chose, and a business score that has its own rail item. A
+          conversation with four panels stapled under it is not a conversation.
+        */}
+        <NovaRise className="max-lg:order-1" delay={0.1}>
+          <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
+        </NovaRise>
       </div>
-
-      {data.health ? (
-        /* `HealthScore` is itself a labelled region; wrapping it in a second
-           one would put two landmarks with the same name around one panel. */
-        <NovaRise delay={0.34} className="flex flex-col gap-4">
-          <HealthScore
-            score={data.health.score}
-            stateLabel={data.health.stateLabel}
-            scoredLenses={data.health.scoredLenses}
-            eligibleLenses={data.health.eligibleLenses}
-            insufficientCoverageReason={data.health.insufficientCoverageReason}
-            healthHref={href.health}
-          />
-          {/*
-            The audit's own first blocker, with the evidence behind it. This is
-            the one place on Home where Vibe states a judgment, so it is the one
-            place the trust ladder applies: the conclusion, why it matters, and
-            a way into the citations that support it.
-          */}
-          {data.health.priority && (
-            <FindingCard
-              variant="priority"
-              rank={1}
-              title={data.health.priority.headline}
-              explanation={data.health.priority.explanation}
-              whyItMatters={data.health.priority.whyItMatters}
-              severity={data.health.priority.severity}
-              citations={data.health.priority.citations}
-            />
-          )}
-        </NovaRise>
-      ) : (
-        <NovaRise delay={0.34}>
-          <HealthScoreAbsent healthHref={href.health} />
-        </NovaRise>
-      )}
     </div>
   );
 }
@@ -469,6 +390,6 @@ function FocusSection({
  * and drawing a frame around an absence would be worse than drawing nothing.
  */
 function auditBlock(data: NovaHomeData, entry: NovaHomeEntry) {
-  if (BLOCK_FOR_MOMENT[entry.kind] !== "audit" || !data.health) return undefined;
-  return <AuditBlock view={data.health.view} />;
+  if (BLOCK_FOR_MOMENT[entry.kind] !== "audit" || !data.audit) return undefined;
+  return <AuditBlock view={data.audit} />;
 }
