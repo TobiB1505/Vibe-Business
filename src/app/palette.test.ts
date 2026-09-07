@@ -68,8 +68,8 @@ describe("the local switch is a tool, not a preference", () => {
     // A control that appears in production because somebody dropped the
     // condition is the failure this exists for, and it is invisible in every
     // local run.
-    const menu = readFileSync("src/components/layout/account-menu.tsx", "utf8");
-    expect(menu).toContain("{paletteSwitchable() && <PaletteSwitch");
+    const card = readFileSync("src/components/layout/account-card.tsx", "utf8");
+    expect(card).toContain("{paletteSwitchable() && <PaletteSwitch");
     const layout = readFileSync("src/app/layout.tsx", "utf8");
     expect(layout).toContain("{paletteSwitchable() && (");
   });

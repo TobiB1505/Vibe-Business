@@ -81,11 +81,17 @@ test.describe("the project shell owns project context", () => {
     await expect(switcher.getByRole("link", { name: "Planner Agent" })).toBeVisible();
     await expect(switcher.getByRole("link", { name: "View all products" })).toBeVisible();
 
-    const account = page.getByTestId("account-menu");
-    await account.locator("summary").click();
-    await expect(account.getByRole("link", { name: /account settings/i })).toBeVisible();
-    await expect(account.getByRole("link", { name: /billing/i })).toBeVisible();
-    await expect(account.getByRole("button", { name: /sign out/i })).toBeVisible();
+    /*
+     * The identity is a link to the page about it, not a menu.
+     *
+     * The menu held Profile, Account settings and Billing, all three of which
+     * are rows in the Settings rail — a disclosure whose contents are the
+     * navigation standing next to it. Sign out was the one thing with no other
+     * home and moved to Settings → General.
+     */
+    const account = page.getByTestId("account-card");
+    await expect(account.locator("summary")).toHaveCount(0);
+    await expect(account.getByRole("link")).toHaveAttribute("href", "/app/settings/profile");
   });
 });
 

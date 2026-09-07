@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
-import { AccountMenu } from "@/components/layout/account-menu";
+import { AccountCard } from "@/components/layout/account-card";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
@@ -56,7 +56,7 @@ export default async function AccountLayout({ children }: { children: ReactNode 
       sidebar={
         <AccountSidebar
           credits={creditBalance?.availableCredits ?? null}
-          footer={<AccountMenu identity={identity} />}
+          footer={<AccountCard identity={identity} />}
         />
       }
     >

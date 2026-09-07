@@ -11,7 +11,7 @@ import {
 } from "@/components/layout/project-shell";
 import { Wallet } from "@/components/system/wallet";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
-import { AccountMenu } from "@/components/layout/account-menu";
+import { AccountCard } from "@/components/layout/account-card";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
@@ -146,7 +146,7 @@ export default async function ProjectLayout({
           footer={
             <div className="flex flex-col gap-3">
               <Wallet credits={balance?.availableCredits ?? null} href="/app/settings/billing" />
-              <AccountMenu identity={identity} subtitle="Founder" placement="above" />
+              <AccountCard identity={identity} subtitle="Founder" />
             </div>
           }
         />

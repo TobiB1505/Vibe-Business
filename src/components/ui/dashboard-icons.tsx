@@ -33,7 +33,8 @@ export {
    * disagreed: this set's door spanned eleven grid units against Lucide's six,
    * and its arrow started inside the door. Two sign-out marks in one product
    * is the defect ADR 0097 exists to prevent, so the drawn one is gone and the
-   * name resolves here — `account-menu.tsx` did not change.
+   * name resolves here. The control moved from the account menu to
+   * Settings → General when the menu became a plain identity card.
    */
   SignOutIcon,
 } from "./icons.generated";

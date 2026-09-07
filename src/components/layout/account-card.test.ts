@@ -1,0 +1,76 @@
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+
+/**
+ * The identity is a link to the page about it.
+ *
+ * ## What this exists to catch
+ *
+ * Not a broken render. The defect was a disclosure whose contents were the
+ * navigation standing next to it: the account menu offered Profile, Account
+ * settings and Billing, and all three are rows in the Settings rail. A founder
+ * had to open it to find that out, and it cost two clicks to reach a page one
+ * click away.
+ *
+ * The half that actually needs guarding is the fourth item. Sign out was the
+ * only thing in that menu with no other home, and deleting a disclosure is
+ * exactly how a capability leaves a product without anybody noticing.
+ */
+
+const CARD = readFileSync("src/components/layout/account-card.tsx", "utf8");
+const GENERAL = readFileSync("src/app/app/(account)/settings/page.tsx", "utf8");
+
+/** Comments name the menu while explaining that it is gone. */
+function code(source: string): string {
+  return source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
+function sourceFiles(dir: string, out: string[] = []): string[] {
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) sourceFiles(path, out);
+    else if (/\.tsx?$/.test(path) && !/\.test\.tsx?$/.test(path)) out.push(path);
+  }
+  return out;
+}
+
+describe("the account card", () => {
+  it("is one link to the profile, with nothing to open", () => {
+    const card = code(CARD);
+    expect(card).toContain('href="/app/settings/profile"');
+    expect(card, "the disclosure is back").not.toContain("<details");
+    expect(card).not.toContain("<summary");
+    // And it offers no second destination, or it is a menu again.
+    expect(card.match(/href=/g) ?? []).toHaveLength(1);
+  });
+
+  it("shows the avatar and the name, and nothing else to decide about", () => {
+    const card = code(CARD);
+    expect(card).toContain("<Avatar");
+    expect(card).toContain("identity.displayName");
+    // The chevron said "this opens". Nothing opens.
+    expect(card).not.toContain("ChevronDownIcon");
+  });
+});
+
+describe("sign out survived the menu", () => {
+  it("has a home on the account's own page", () => {
+    expect(code(GENERAL)).toContain("action={signOut}");
+    expect(code(GENERAL)).toContain("Sign out");
+  });
+
+  /**
+   * The account rails are the only chrome on a signed-in screen. If the
+   * control existed nowhere a founder could reach without knowing a URL, the
+   * product would have no way out — and every test would still pass.
+   */
+  it("is reachable from a signed-in surface, not only from a shell that is gone", () => {
+    const wearers = sourceFiles("src").filter((path) => {
+      if (path.endsWith("actions.ts")) return false;
+      return /action=\{signOut\}/.test(readFileSync(path, "utf8"));
+    });
+    expect(wearers.length, "nothing renders a sign-out control").toBeGreaterThan(0);
+    expect(wearers).toContain("src/app/app/(account)/settings/page.tsx");
+  });
+});

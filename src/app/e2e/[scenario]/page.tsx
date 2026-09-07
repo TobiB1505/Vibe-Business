@@ -132,7 +132,7 @@ import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-accoun
 import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
 import { ProductsIndex } from "@/app/app/(account)/settings/products/products-index";
 import { RepositoriesIndex } from "@/app/app/(account)/settings/repositories/repositories-index";
-import { AccountMenu } from "@/components/layout/account-menu";
+import { AccountCard } from "@/components/layout/account-card";
 import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
 import {
   PROJECT_SECTIONS,
@@ -663,7 +663,7 @@ export default async function E2eScenarioPage({
                   project route, not only from Billing.
                 */}
                 <Wallet credits={creditsToUnits(35)} href="/app/settings/billing" />
-                <AccountMenu
+                <AccountCard
                   identity={{
                     displayName: "Tobi",
                     initials: "TB",
@@ -671,7 +671,6 @@ export default async function E2eScenarioPage({
                     fromGithub: true,
                   }}
                   subtitle="Founder"
-                  placement="above"
                 />
               </div>
             }
@@ -1326,7 +1325,7 @@ export default async function E2eScenarioPage({
           <AccountSidebar
             credits={creditsToUnits(2480)}
             footer={
-              <AccountMenu
+              <AccountCard
                 identity={{
                   displayName: "Tobi",
                   initials: "TB",
@@ -1357,7 +1356,7 @@ export default async function E2eScenarioPage({
           <AccountSidebar
             credits={creditsToUnits(2480)}
             footer={
-              <AccountMenu
+              <AccountCard
                 identity={{
                   displayName: "Tobi",
                   initials: "TB",
@@ -1382,7 +1381,7 @@ export default async function E2eScenarioPage({
           <AccountSidebar
             credits={creditsToUnits(2480)}
             footer={
-              <AccountMenu
+              <AccountCard
                 identity={{
                   displayName: "Tobi",
                   initials: "TB",
@@ -1407,7 +1406,7 @@ export default async function E2eScenarioPage({
           <AccountSidebar
             credits={creditsToUnits(2480)}
             footer={
-              <AccountMenu
+              <AccountCard
                 identity={{
                   displayName: "Tobi",
                   initials: "TB",

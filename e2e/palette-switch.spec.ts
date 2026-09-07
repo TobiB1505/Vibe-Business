@@ -14,13 +14,17 @@ import { expect, test } from "@playwright/test";
  * reload, and it must not flash the other palette on the way — a switch that
  * repaints the ground, the corners and the type a frame late is worse than
  * no switch, because every navigation becomes a strobe.
+ *
+ * ## Why nothing is opened first
+ *
+ * The switch used to live inside the account menu. That menu held Profile,
+ * Account settings, Billing and Sign out, and three of those are rows in the
+ * Settings rail now — a disclosure whose contents are the navigation standing
+ * next to it. It became a plain identity card, and the switch sits under it in
+ * the rail footer both shells share.
  */
 
 const SCREEN = "/e2e/account-repositories";
-
-async function openAccountMenu(page: import("@playwright/test").Page) {
-  await page.locator('[data-testid="account-menu"] summary').click();
-}
 
 test.describe("the palette can be flipped without a redeploy", () => {
   test("starts on what the deployment renders", async ({ page }) => {
@@ -28,13 +32,11 @@ test.describe("the palette can be flipped without a redeploy", () => {
     // Playwright's server sets no VIBE_PALETTE, so this is the customer's
     // palette — and the attribute is written in both states on purpose.
     await expect(page.locator("html")).toHaveAttribute("data-vibe", "v1");
-    await openAccountMenu(page);
     await expect(page.getByRole("radio", { name: "v1" })).toBeChecked();
   });
 
   test("changes the product, and says the view is a local override", async ({ page }) => {
     await page.goto(SCREEN);
-    await openAccountMenu(page);
 
     const before = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--radius-card").trim(),
@@ -55,7 +57,6 @@ test.describe("the palette can be flipped without a redeploy", () => {
 
   test("survives a reload, and the first paint is already right", async ({ page }) => {
     await page.goto(SCREEN);
-    await openAccountMenu(page);
     await page.getByRole("group", { name: "Design system" }).getByText("v2").click();
     await expect(page.locator("html")).toHaveAttribute("data-vibe", "v2");
 
@@ -68,7 +69,6 @@ test.describe("the palette can be flipped without a redeploy", () => {
 
   test("flips back, and stops being an override", async ({ page }) => {
     await page.goto(SCREEN);
-    await openAccountMenu(page);
     const group = page.getByRole("group", { name: "Design system" });
     await group.getByText("v2").click();
     await expect(page.getByText("local override")).toBeVisible();
