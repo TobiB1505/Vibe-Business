@@ -83,7 +83,7 @@ describe("the wait is opened by the click, not by the answer", () => {
 
   it("shows the dialog before the server action is awaited", () => {
     const opened = source.indexOf('setStage("starting");\n    setDialogOpen(true);');
-    const awaited = source.indexOf("await startDeepScanAction(projectId)");
+    const awaited = source.indexOf("await startDeepScanAction(projectId,");
 
     expect(opened).toBeGreaterThan(0);
     expect(opened).toBeLessThan(awaited);

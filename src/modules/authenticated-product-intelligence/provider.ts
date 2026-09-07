@@ -1,4 +1,5 @@
 import type { AuthenticatedAnalysisFailure } from "./errors";
+import type { BrowserViewportName } from "./sandbox-browser/runtime";
 
 /**
  * The browser-session boundary (Sprint 5 §5, ADR 0012).
@@ -49,6 +50,14 @@ export type CreateBrowserSessionOptions = {
    * (Sprint 5 §11).
    */
   timeoutSeconds: number;
+  /**
+   * The window shape the founder signs in through.
+   *
+   * A name from a closed set, never a size — nothing a client sends becomes a
+   * number on a command line. The analysis viewport is fixed regardless; see
+   * `BROWSER_SANDBOX.loginViewports`.
+   */
+  viewport?: BrowserViewportName;
 };
 
 export type ProviderResult<T> = { ok: true; value: T } | { ok: false; error: AuthenticatedAnalysisFailure };

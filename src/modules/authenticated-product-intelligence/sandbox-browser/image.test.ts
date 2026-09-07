@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetBrowserSandboxEnvCache } from "@/lib/env/browser-sandbox";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
@@ -5,7 +7,7 @@ import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { BROWSER_GUARD_PROGRAM, BROWSER_RUNTIME_VERSION } from "./guard-program";
 import { createBrowserRuntimeImage } from "./image";
 import { IMAGE_BUILD_CWD, IMAGE_BUILD_HOSTS, IMAGE_LINK, imageBuildCommands } from "./image-build";
-import { BROWSER_SANDBOX } from "./runtime";
+import { BROWSER_SANDBOX, chromiumCommand } from "./runtime";
 
 /**
  * Resolving and building the image a browser session starts from.
@@ -339,5 +341,58 @@ describe("a build command never runs in a directory that does not exist yet", ()
     expect(first.command.command).toBe("mkdir");
     expect(first.command.args).toContain(BROWSER_SANDBOX.root);
     expect(IMAGE_BUILD_CWD).not.toBe(BROWSER_SANDBOX.root);
+  });
+});
+
+/*
+ * The founder signs in through their own device's shape; the analysis reads
+ * the desktop product regardless. Both halves have to hold, and the second is
+ * the one that keeps two scans of one product comparable — a mobile layout
+ * hides its navigation behind a menu, so a phone-started scan would harvest
+ * fewer links and find fewer surfaces.
+ */
+describe("the login window follows the device, the analysis does not", () => {
+  it("launches Chromium at the shape it was asked for", () => {
+    const mobile = chromiumCommand("mobile").args.join(" ");
+    const desktop = chromiumCommand("desktop").args.join(" ");
+
+    expect(mobile).toContain(
+      `--window-size=${BROWSER_SANDBOX.loginViewports.mobile.width},${BROWSER_SANDBOX.loginViewports.mobile.height}`,
+    );
+    expect(desktop).toContain(
+      `--window-size=${BROWSER_SANDBOX.loginViewports.desktop.width},${BROWSER_SANDBOX.loginViewports.desktop.height}`,
+    );
+  });
+
+  it("defaults to desktop", () => {
+    expect(chromiumCommand().args.join(" ")).toBe(chromiumCommand("desktop").args.join(" "));
+  });
+
+  it("never puts a caller's number on the command line", () => {
+    // The two numbers come from this repository's own table, whatever was
+    // passed. A shape name that is not in the table gets desktop.
+    const rogue = chromiumCommand("1920x1200; rm -rf /" as never).args.join(" ");
+    expect(rogue).toBe(chromiumCommand("desktop").args.join(" "));
+  });
+
+  it("keeps every login shape at or under the screencast ceiling", () => {
+    // A window larger than the cast is scaled down, and a scaled frame puts a
+    // person's tap somewhere other than where they aimed.
+    for (const [name, size] of Object.entries(BROWSER_SANDBOX.loginViewports)) {
+      expect(size.width, name).toBeLessThanOrEqual(BROWSER_SANDBOX.viewport.width);
+      expect(size.height, name).toBeLessThanOrEqual(BROWSER_SANDBOX.viewport.height);
+    }
+  });
+
+  it("puts the page back to the analysis viewport before reading it", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/modules/authenticated-product-intelligence/playwright/connector.ts"),
+      "utf8",
+    );
+    const connect = source.slice(source.indexOf("export async function connectReadOnly"));
+
+    expect(connect).toContain("setViewportSize(BROWSER_SANDBOX.viewport)");
+    // Before the port is handed to the analyzer, not after.
+    expect(connect.indexOf("setViewportSize")).toBeLessThan(connect.indexOf("const port"));
   });
 });

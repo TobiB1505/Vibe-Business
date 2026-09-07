@@ -276,8 +276,12 @@ export class FakeBrowserProvider implements BrowserSessionProvider {
     return this.calls.filter((call) => call.method === "terminateSession").map((call) => call.arg!);
   }
 
-  async createSession(): Promise<ProviderResult<BrowserSessionHandle>> {
+  /** The options the last `createSession` was called with, for viewport tests. */
+  createdWith: { viewport?: string } | null = null;
+
+  async createSession(options?: { viewport?: string }): Promise<ProviderResult<BrowserSessionHandle>> {
     this.calls.push({ method: "createSession" });
+    this.createdWith = { viewport: options?.viewport };
     return (
       this.behaviour.createSession ?? {
         ok: true,
