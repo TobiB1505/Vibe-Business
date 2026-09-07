@@ -274,6 +274,67 @@ describe("a VM nobody can use is stopped", () => {
     reported.mockRestore();
   });
 
+  it("asks the guard itself when it recorded nothing", async () => {
+    /*
+     * Chromium answered `Google Chrome for Testing 151.0.7922.34` and the
+     * failure file was empty, which leaves the other program — and nothing
+     * could see it, because `runBackground` detaches and a module that fails
+     * to import exits before any of the guard's own code runs. That is exactly
+     * why `giveUp` recorded nothing.
+     */
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fake = fakeSandboxProvider({
+      results: {
+        "node /vibe-browser/guard.mjs": {
+          exitCode: 1,
+          output: "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'ws'",
+        },
+      },
+    });
+    let clock = 0;
+    const browser = createSandboxBrowserSessionProvider({
+      sandboxes: fake,
+      image: workingImage,
+      sleep: async () => undefined,
+      now: () => (clock += 10_000),
+    });
+
+    await browser.createSession({ timeoutSeconds: 600 });
+    await Promise.resolve();
+
+    expect(reported).toHaveBeenCalledWith(
+      "deep scan: the browser session could not start",
+      expect.objectContaining({
+        guardExitCode: 1,
+        guardOutput: expect.stringContaining("Cannot find package 'ws'"),
+      }),
+    );
+
+    reported.mockRestore();
+  });
+
+  it("does not let the probe write the files this session waited on", async () => {
+    // A second guard writing the ready file would turn a diagnosis into a
+    // session that reports itself usable after it was given up on.
+    const fake = fakeSandboxProvider({});
+    let clock = 0;
+    const browser = createSandboxBrowserSessionProvider({
+      sandboxes: fake,
+      image: workingImage,
+      sleep: async () => undefined,
+      now: () => (clock += 10_000),
+    });
+
+    await browser.createSession({ timeoutSeconds: 600 });
+
+    const probeRun = fake.events.find(
+      (event) => event.kind === "command" && event.command.includes("guard.mjs"),
+    );
+    expect(probeRun?.kind === "command" && probeRun.env?.[BROWSER_GUARD_ENV.readyFile]).toContain(
+      ".probe",
+    );
+  });
+
   it("distinguishes a guard that never decided from one that did", async () => {
     // No failure file: the guard never got far enough to write one, which is a
     // different problem from Chromium not answering and used to look the same.

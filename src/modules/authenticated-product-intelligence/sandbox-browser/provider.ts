@@ -12,7 +12,7 @@ import type {
   CreateBrowserSessionOptions,
   ProviderResult,
 } from "../provider";
-import { describeError, reportBrowserFailure } from "./diagnostics";
+import { boundedOutput, describeError, reportBrowserFailure } from "./diagnostics";
 import { BROWSER_GUARD_ENV } from "./guard-program";
 import { BROWSER_SANDBOX, browserSandboxNameFor, chromiumCommand, guardCommand } from "./runtime";
 import { deriveBrowserSessionTokens } from "./tokens";
@@ -79,6 +79,13 @@ export type SandboxBrowserProviderDeps = {
 /** How long Vibe waits for the guard to report the VM usable. */
 const READY_TIMEOUT_MS = 45_000;
 const READY_POLL_MS = 500;
+/**
+ * How long the guard is given in the foreground, on a timeout only.
+ *
+ * Short: a guard that starts correctly never returns — it listens — so this
+ * probe is expected to time out, and the answer is whatever it printed first.
+ */
+const GUARD_PROBE_MS = 8_000;
 
 const READY_PATH = `${BROWSER_SANDBOX.root}/ready`;
 const FAILURE_PATH = `${BROWSER_SANDBOX.root}/guard-failure`;
@@ -239,11 +246,51 @@ export function createSandboxBrowserSessionProvider(
           })
           .catch(() => null);
 
+        /*
+         * And the guard, in the foreground, where its output has a reader.
+         *
+         * With Chromium answering `Google Chrome for Testing 151.0.7922.34`
+         * and the failure file empty, the remaining question is about the
+         * other program — and nothing could see it, because `runBackground`
+         * detaches and a module that fails to import prints its reason and
+         * exits before any line of the guard's own code runs, which is exactly
+         * why `giveUp` recorded nothing.
+         *
+         * Both outcomes are answers. Output means the guard cannot start and
+         * says why; a clean timeout means it can, and the problem is somewhere
+         * this probe is not looking.
+         *
+         * Its files are the probe's own, so a second guard cannot write the
+         * ready file this session already gave up waiting for.
+         */
+        const guardProbe = await handle
+          .run({
+            command: guardCommand(),
+            cwd: BROWSER_SANDBOX.root,
+            timeoutMs: GUARD_PROBE_MS,
+            env: {
+              [BROWSER_GUARD_ENV.controlToken]: tokens.control,
+              [BROWSER_GUARD_ENV.viewToken]: tokens.view,
+              // A port nothing else holds: the point is to reach the guard's
+              // own code, not to lose to the instance already listening.
+              [BROWSER_GUARD_ENV.publicPort]: String(BROWSER_SANDBOX.publicPort + 1),
+              [BROWSER_GUARD_ENV.devtoolsPort]: String(BROWSER_SANDBOX.devtoolsPort),
+              [BROWSER_GUARD_ENV.readyFile]: `${READY_PATH}.probe`,
+              [BROWSER_GUARD_ENV.failureFile]: `${FAILURE_PATH}.probe`,
+            },
+          })
+          .catch(() => null);
+
         reportBrowserFailure("session_ready_timeout", {
           waitedMs: READY_TIMEOUT_MS,
           guardFailure: guardFailure ?? "none recorded",
           chromiumExitCode: probe?.exitCode ?? null,
-          chromiumOutput: probe ? probe.output.slice(-800) : "probe unavailable",
+          chromiumOutput: probe ? boundedOutput(probe.output, 400) : "probe unavailable",
+          guardExitCode: guardProbe?.exitCode ?? null,
+          guardTimedOut: guardProbe?.timedOut ?? null,
+          guardOutput: guardProbe
+            ? boundedOutput(guardProbe.output, 600) || "(no output)"
+            : "probe unavailable",
         });
         // A VM nobody can use is worse than none: it bills for its whole
         // timeout and shows a person a live view that never paints.
