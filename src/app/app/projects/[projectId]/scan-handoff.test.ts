@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import { scanHandoffStage } from "./scan-handoff";
+import { handoffRunning } from "./deep-scan-panel";
 
 /**
  * The handoff from watching a browser to waiting for a result.
@@ -120,7 +121,8 @@ describe("ambience, not a false state", () => {
     // `sealing` keeps it mounted through the closing check, which is the one
     // state that outlives `busy` — and it is still gated on an error being
     // absent, so a failed analysis gets no animation at all.
-    expect(panel).toContain("running={(busy || sealing) && !error}");
+    // The decision is a pure function, so the JSX only has to hand it state.
+    expect(panel).toContain("running={handoffRunning({ analysing, sealing, error })}");
   });
 
   it("is hidden from assistive technology, because it says nothing", () => {
@@ -273,5 +275,68 @@ describe("the glyphs are page furniture, not findings", () => {
     const tiles = SOURCE.slice(SOURCE.indexOf("TILE_ORIGINS.map"));
     expect(tiles).not.toMatch(/\/app\//);
     expect(tiles).not.toMatch(/\{surface|\{page|label/);
+  });
+});
+
+/*
+ * The animation fired the moment the founder opened the panel.
+ *
+ * It was bound to `busy`, and `busy` means *a server action is in flight* —
+ * which is equally true while Vibe is creating a browser. `handleStart` sets
+ * it and opens the dialog in the same tick, so the switch-off played over a
+ * frame that had not connected yet, and by the time the live view arrived the
+ * animation was already sitting on top of it.
+ *
+ * The decision is a pure function now, because that is the only way to test a
+ * choice rather than assert that a line of JSX exists.
+ */
+describe("what the handoff is bound to", () => {
+  const none = { analysing: false, sealing: false, error: null };
+
+  it("does not run while Vibe is only starting or ending a browser", () => {
+    // Opening the dialog, cancelling, and the login deadline expiring all
+    // make the panel busy. None of them is Vibe reading a product.
+    expect(handoffRunning(none)).toBe(false);
+  });
+
+  it("runs while the analysis is reading", () => {
+    expect(handoffRunning({ ...none, analysing: true })).toBe(true);
+  });
+
+  it("stays through the closing check, which outlives the analysis", () => {
+    expect(handoffRunning({ ...none, sealing: true })).toBe(true);
+  });
+
+  it("stops on an error, because a failed run is settled and still", () => {
+    expect(handoffRunning({ analysing: true, sealing: true, error: "It failed." })).toBe(false);
+  });
+
+  it("is set in exactly one place, and that place is the analysis", () => {
+    const panel = readFileSync(
+      join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+      "utf8",
+    );
+
+    // One `setAnalysing(true)`, and it is inside `handleAnalyze`.
+    const arms = panel.match(/setAnalysing\(true\)/g) ?? [];
+    expect(arms).toHaveLength(1);
+
+    const analyse = panel.slice(panel.indexOf("const handleAnalyze = useCallback"));
+    expect(analyse.slice(0, analyse.indexOf("}, ["))).toContain("setAnalysing(true)");
+  });
+
+  it("does not tell a founder Vibe is reading before it is", () => {
+    /*
+     * The same wrong signal drove the status panel and its clock, so during
+     * the twenty seconds before a browser existed the dialog said "Vibe is
+     * looking around your signed-in product" with a counter under it.
+     */
+    const panel = readFileSync(
+      join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+      "utf8",
+    );
+    expect(panel).toContain("useElapsedSeconds(analysing)");
+    expect(panel).toContain("{analysing && (");
+    expect(panel).not.toContain("useElapsedSeconds(busy)");
   });
 });

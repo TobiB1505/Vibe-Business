@@ -187,6 +187,7 @@ function LiveViewDialog({
   onRetryView,
   onUnavailable,
   sealing,
+  analysing,
   onSealed,
   onLoginExpired,
 }: {
@@ -207,11 +208,23 @@ function LiveViewDialog({
   onUnavailable: () => void;
   /** The analysis returned; the dialog is showing the result before it closes. */
   sealing: boolean;
+  /** Vibe has the browser and is reading it. Not the same as busy. */
+  analysing: boolean;
   onSealed: () => void;
   /** The founder ran out of time to sign in. */
   onLoginExpired: () => void;
 }) {
-  const elapsedSeconds = useElapsedSeconds(busy);
+  /*
+   * The analysis clock, and it counts the analysis.
+   *
+   * It was `busy`, which is also true while Vibe is *creating* a browser — so
+   * the panel said "Vibe is looking around your signed-in product" with a
+   * running counter under it during the twenty seconds before there was a
+   * browser to look around in. Same wrong signal as the animation, same
+   * sentence: busy means a server action is in flight, not that Vibe is
+   * reading.
+   */
+  const elapsedSeconds = useElapsedSeconds(analysing);
   // A second clock, and it runs on a different question: how long the browser
   // has been opening, not how long the analysis has been running.
   const startupSeconds = useElapsedSeconds(stage !== "ready" && !unreachable);
@@ -420,7 +433,7 @@ function LiveViewDialog({
             pending, cancelled or failed scan, because it is not mounted then.
           */}
           <ScanHandoff
-            running={(busy || sealing) && !error}
+            running={handoffRunning({ analysing, sealing, error })}
             succeeded={sealing}
             onSealed={onSealed}
           />
@@ -478,7 +491,7 @@ function LiveViewDialog({
           )}
         </div>
 
-        {busy && (
+        {analysing && (
           /*
            * What a founder is owed while this runs (UI-4 §6): what is
            * happening, roughly how long it takes, and that leaving would lose
@@ -606,6 +619,28 @@ function ResultNotes({ notes }: { notes: DeepScanNote[] }) {
       </div>
     </Disclosure>
   );
+}
+
+/**
+ * Whether the handoff animation should be on screen.
+ *
+ * Pure and exported, because binding it to the wrong signal is exactly the
+ * mistake that shipped: it was `busy`, and `busy` means *a server action is in
+ * flight* — which is true while the browser is being **created**, not only
+ * while the analysis runs. So clicking "Run Deep Scan" opened the dialog and
+ * started the switch-off in the same tick, over a frame that had not connected
+ * yet, and the founder saw the animation fire on opening the panel.
+ *
+ * `analysing` is the narrower fact and the only one that earns this: Vibe has
+ * the browser and is reading. `sealing` extends it through the closing check,
+ * and an error ends it, because a failed scan is settled and still.
+ */
+export function handoffRunning(state: {
+  analysing: boolean;
+  sealing: boolean;
+  error: string | null;
+}): boolean {
+  return (state.analysing || state.sealing) && state.error === null;
 }
 
 /**
@@ -1119,6 +1154,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
    * mean the founder's confirmation is a modal disappearing.
    */
   const [sealing, setSealing] = useState(false);
+  /**
+   * Vibe has the browser and is reading it.
+   *
+   * Deliberately *not* `busy`. Busy means a server action is in flight, and
+   * that is equally true while the browser is being created — which is how the
+   * handoff came to fire the moment the dialog opened, over a picture that did
+   * not exist yet.
+   */
+  const [analysing, setAnalysing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
@@ -1139,6 +1183,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setUnreachable(false);
     setFrame(null);
     setSealing(false);
+    setAnalysing(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -1221,6 +1266,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
 
   const handleSealed = useCallback(() => {
     setSealing(false);
+    setAnalysing(false);
     setSessionId(null);
     closeDialog();
     router.refresh();
@@ -1229,6 +1275,9 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const handleAnalyze = useCallback(() => {
     if (!sessionId) return;
     setBusy(true);
+    // The one place this is set. Everything else that makes the panel busy is
+    // Vibe starting or ending a browser, not reading one.
+    setAnalysing(true);
     setError(null);
     startTransition(async () => {
       const result = await analyzeDeepScanAction(projectId, sessionId);
@@ -1239,6 +1288,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         const code = result.error;
         const recoverable = code === "authenticated_origin_not_reached" || code === "authentication_not_confirmed";
         setError(messageFor(code));
+        setAnalysing(false);
         if (!recoverable) {
           setSessionId(null);
           closeDialog();
@@ -1511,6 +1561,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           onRetryView={handleRetryView}
           onUnavailable={handleUnavailable}
           sealing={sealing}
+          analysing={analysing}
           onSealed={handleSealed}
           onLoginExpired={handleLoginExpired}
         />
