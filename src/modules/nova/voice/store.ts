@@ -231,6 +231,30 @@ export async function resolveNovaVoiceGeneration(
  * spends; and the resolve comes after the outcome so a crash between them
  * leaves the identity permanently on the template rather than open to a second
  * attempt (ADR 0086).
+ *
+ * ## The switch is checked before the claim, and that is a fix
+ *
+ * It used to be checked inside `speakNovaMessage`, which runs *after* the
+ * claim — so an attempt made while `NOVA_VOICE_ENABLED` was off claimed the
+ * identity, resolved it as `disabled`, and burned it. Turning the switch back
+ * on could never recover it: the identity was resolved, so nothing would ever
+ * claim it again.
+ *
+ * Production shows two of those. Of four rows ever written, two are audits
+ * and Move sets from an afternoon the switch was off, and their sentences are
+ * gone for good.
+ *
+ * The rule the irrevocable claim exists for is *never a second paid attempt*,
+ * and `disabled` makes no first one — `providerInvoked` is false and no ledger
+ * row is written, which ADR 0086 already treats as "no call happened" one
+ * layer down. Burning an identity for an attempt that spent nothing buys
+ * nothing and costs a sentence. A switch thrown for an incident must be
+ * reversible; this is what makes it so.
+ *
+ * `over_input_budget` still claims, and that difference is the point rather
+ * than an oversight: it is a property of the payload against a ceiling, so the
+ * same identity overflows the same way every time. Re-attempting it would
+ * count tokens forever to reach the same answer.
  */
 export async function ensureNovaVoiceMessage(params: {
   supabase: SupabaseClient;
@@ -246,6 +270,16 @@ export async function ensureNovaVoiceMessage(params: {
     template: params.template,
   });
   if (stored.resolved) return stored;
+
+  /*
+   * Off means *not now*, never *not ever*. Claiming here would resolve the
+   * identity as `disabled` and put it beyond reach of the switch being turned
+   * back on — see the docblock. Nothing is spent and nothing is recorded, so
+   * there is nothing to protect against a second attempt.
+   */
+  if (params.enabled !== true) {
+    return { ...stored, message: params.template, source: "template" };
+  }
 
   const won = await claimNovaVoiceGeneration(params.supabase, params.claim);
   if (!won) return stored;
