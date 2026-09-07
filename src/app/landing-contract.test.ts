@@ -107,7 +107,7 @@ describe("the landing page sends people the right way", () => {
    * claim about the page a stranger sees.
    */
   it("carries a chosen paid plan through signup to the billing surface", () => {
-    expect(LANDING).toContain('/signup?next=${encodeURIComponent("/app/billing")}');
+    expect(LANDING).toContain('/signup?next=${encodeURIComponent("/app/settings/billing")}');
     // The free plan has nothing to pay for, so it keeps the plain destination.
     expect(LANDING).toContain('plan.key === "free"');
   });

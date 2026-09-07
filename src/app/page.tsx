@@ -357,7 +357,7 @@ export default function HomePage() {
                   href={
                     plan.key === "free"
                       ? "/signup"
-                      : `/signup?next=${encodeURIComponent("/app/billing")}`
+                      : `/signup?next=${encodeURIComponent("/app/settings/billing")}`
                   }
                   className={`${buttonClasses({
                     variant: featured ? "primary" : "secondary",

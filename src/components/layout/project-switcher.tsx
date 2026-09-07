@@ -122,7 +122,7 @@ export function ProjectSwitcher({
 
         <div className="border-line-1 mt-2 border-t pt-2">
           <Link
-            href="/app/products"
+            href="/app/settings/products"
             className={cn(
               "text-fg-secondary hover:bg-surface-hover hover:text-fg rounded-nav",
               "flex items-center gap-3 px-3 py-2.5 text-body font-medium transition-interactive",

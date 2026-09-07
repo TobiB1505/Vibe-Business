@@ -16,8 +16,16 @@ type ConnectErrorCode =
   | "installation_not_accessible"
   | "github_unavailable";
 
+/**
+ * Failures land on the page about GitHub access, not on `/app`.
+ *
+ * `/app` used to be the account dashboard and could render a notice; it is a
+ * redirect to a product now, so an error sent there would be swallowed on the
+ * way. Settings → Repositories is where a founder looks after a connection did
+ * not work, and it already carries the control to try again.
+ */
 function errorRedirect(origin: string, code: ConnectErrorCode): NextResponse {
-  const url = new URL("/app", origin);
+  const url = new URL("/app/settings/repositories", origin);
   url.searchParams.set("connect_error", code);
   return NextResponse.redirect(url);
 }
@@ -103,7 +111,10 @@ export async function GET(request: NextRequest) {
     const identity = await fetchGithubIdentity(userAccessToken);
 
     const userOctokit = getUserOctokit(userAccessToken);
-    const verifiedInstallation = await verifyInstallationAccessibleToUser(userOctokit, installationId);
+    const verifiedInstallation = await verifyInstallationAccessibleToUser(
+      userOctokit,
+      installationId,
+    );
 
     if (!verifiedInstallation) {
       // The core ADR 0009 rejection: the installation_id from the callback
@@ -124,7 +135,11 @@ export async function GET(request: NextRequest) {
     });
 
     await upsertGithubConnection(supabase, session.userId, identity);
-    const installationRow = await upsertGithubInstallation(supabase, session.userId, verifiedInstallation);
+    const installationRow = await upsertGithubInstallation(
+      supabase,
+      session.userId,
+      verifiedInstallation,
+    );
 
     await recordAuditEvent(supabase, {
       userId: session.userId,

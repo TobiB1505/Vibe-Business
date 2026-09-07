@@ -79,7 +79,7 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-4">
             {credits != null && (
               <Link
-                href="/app/billing"
+                href="/app/settings/billing"
                 className="text-fg-body hover:text-fg rounded-nav text-ui tabular-nums transition-interactive"
               >
                 <span className="font-semibold">{credits}</span>{" "}

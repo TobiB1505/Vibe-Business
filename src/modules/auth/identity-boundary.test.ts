@@ -15,7 +15,7 @@ describe("the client-safe initials boundary", () => {
   });
 
   it("keeps the interactive product list off the account identity module", () => {
-    const card = source("src/app/app/(account)/products/product-list-card.tsx");
+    const card = source("src/app/app/(account)/settings/products/product-list-card.tsx");
 
     expect(card).toContain('from "@/modules/auth/initials"');
     expect(card).not.toContain('from "@/modules/auth/identity-view"');

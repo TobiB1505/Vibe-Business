@@ -129,7 +129,7 @@ describe("run #7's shape: a task that applies to every public page (PART D)", ()
 
   it("does not pull the signed-in area in merely because it exists (PART O)", () => {
     expect(paths).not.toContain("src/app/app/(account)/page.tsx");
-    expect(paths).not.toContain("src/app/app/(account)/billing/page.tsx");
+    expect(paths).not.toContain("src/app/app/(account)/settings/billing/page.tsx");
   });
 
   it("states the surface as a fact, so the file list is not a sample of nothing", () => {
@@ -187,7 +187,10 @@ describe("steps of one plan no longer compile to the same brief", () => {
   });
 
   it("falls back to the old prose hints when a step cites nothing recognisable", () => {
-    const unrecognised = briefFor({ ...CANONICAL, step: { changeKind: "product_change", evidenceIds: [] } });
+    const unrecognised = briefFor({
+      ...CANONICAL,
+      step: { changeKind: "product_change", evidenceIds: [] },
+    });
 
     expect(unrecognised.surface.requirement.scopes).toEqual([]);
     expect(unrecognised.fileCandidates.length).toBeGreaterThan(0);
@@ -321,7 +324,14 @@ describe("the run #7 lifecycle, replayed against the fixed policy (PART O)", () 
       act("Edit", path);
     }
 
-    return { act, changed, refusals, get state() { return state; } };
+    return {
+      act,
+      changed,
+      refusals,
+      get state() {
+        return state;
+      },
+    };
   }
 
   it("charges eight legitimate edits no convergence at all", () => {

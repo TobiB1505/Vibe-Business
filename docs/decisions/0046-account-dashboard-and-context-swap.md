@@ -1,6 +1,6 @@
 # 0046 - The account level is a dashboard of its own, and the sidebar swaps context
 
-Status: Accepted
+Status: Accepted; its **account-dashboard clause** — that the account level is a screen of its own — is superseded by [ADR 0100](0100-the-account-level-is-settings.md) on 2026-09-07. `/app` resolves to a product and renders nothing. What this ADR decided about the *context swap* — that the sidebar changes what it is about rather than the application changing — stands, and is what makes a Settings area with its own rail readable rather than a second product.
 
 Date: 2026-08-23
 

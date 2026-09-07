@@ -48,7 +48,9 @@ export type DashboardIconName =
   | "agent"
   | "settings"
   | "experiments"
-  | "team";
+  | "team"
+  | "billing"
+  | "profile";
 
 /**
  * Nova, as a navigation icon.
@@ -333,6 +335,11 @@ export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardI
     settings: SettingsIcon,
     experiments: ExperimentsIcon,
     team: TeamIcon,
+    /* Both already existed as exports and had no navigable name, so the
+       Settings rail was reaching for a gauge to mean billing and two people to
+       mean one person. */
+    billing: CreditCardIcon,
+    profile: UserIcon,
   }[name];
 
   return <Icon {...props} />;

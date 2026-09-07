@@ -358,9 +358,11 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
     retiredBy: "Sprint 0056 — as src/app/login/page.tsx.",
   },
   {
-    path: "src/app/app/(account)/page.tsx",
+    path: "src/app/app/page.tsx",
     claim: "Read-only access to start",
-    retiredBy: "Sprint 0056 — as src/app/login/page.tsx.",
+    retiredBy:
+      "Sprint 0056 — as src/app/login/page.tsx. The file moved out of the (account) group in " +
+      "Sprint 0147, when /app stopped being a screen and became the redirect that picks a product.",
   },
   {
     path: "docs/setup/github-app.md",

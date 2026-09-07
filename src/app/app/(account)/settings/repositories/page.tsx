@@ -33,7 +33,7 @@ export const metadata = { title: "Repositories" };
  * would fast-forward, and nothing on this page merges anything.
  */
 export default async function RepositoriesPage() {
-  const session = await requireSession("/app/repositories");
+  const session = await requireSession("/app/settings/repositories");
   const supabase = await createClient();
 
   const [repositories, github] = await Promise.all([

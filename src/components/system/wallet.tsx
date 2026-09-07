@@ -54,7 +54,7 @@ import type { CreditUnits } from "@/modules/credits/units";
 const LOW_CREDITS = 50_000;
 
 /** Where Billing puts the packs. Named once so both defaults agree. */
-export const TOP_UP_HREF = "/app/billing#credit-packs";
+export const TOP_UP_HREF = "/app/settings/billing#credit-packs";
 
 export function Wallet({
   credits,

@@ -127,24 +127,6 @@ const THREE_PRODUCTS: DashboardProject[] = [
   }),
 ];
 
-export const E2E_ACCOUNT_SCENARIOS = {
-  /** The budget case. */
-  "account-three-products": (): DashboardProject[] => THREE_PRODUCTS,
-
-  /** One product, never analysed: the hero must offer a sentence, not a zero. */
-  "account-unscored": (): DashboardProject[] => [
-    project({ id: "project_e2e_new", name: "Just Connected" }),
-  ],
-
-  /** No products at all. */
-  "account-empty": (): DashboardProject[] => [],
-} as const;
-
-export type E2eAccountScenario = keyof typeof E2E_ACCOUNT_SCENARIOS;
-
-export function isE2eAccountScenario(value: string): value is E2eAccountScenario {
-  return value in E2E_ACCOUNT_SCENARIOS;
-}
 
 const PRODUCT_CONTEXT = [
   {

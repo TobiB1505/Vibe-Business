@@ -29,7 +29,7 @@ export default async function BillingPage({
 }: {
   searchParams: Promise<{ checkout?: string }>;
 }) {
-  const session = await requireSession("/app/billing");
+  const session = await requireSession("/app/settings/billing");
   const supabase = await createClient();
 
   const [overview, params, accountActivity] = await Promise.all([

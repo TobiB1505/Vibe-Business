@@ -50,26 +50,43 @@ export type AccountSection = {
   id: string;
   label: string;
   icon: DashboardIconName;
-  /** The URL segment under `/app`. Empty for Home, which is `/app` itself. */
+  /** The URL segment under `/app/settings`. Empty for the index itself. */
   segment: string;
 };
 
 /**
- * The rail, in navigation order.
+ * The Settings rail, in navigation order.
+ *
+ * ## Why this is Settings and not an account dashboard
+ *
+ * Because `/app` stopped being a screen. A founder lands in a product, and
+ * everything that used to be account-level chrome — the product list, the
+ * connected repositories, billing, the profile — is what you go *to Settings*
+ * for. Four top-level rows for four settings pages made the account look like
+ * a second application; it is one area with a rail, the way the rest of this
+ * category does it.
+ *
+ * ## Why General is a row and also the parent
+ *
+ * `/app/settings` is the section a person lands on when they click Settings
+ * from anywhere, so it has to be a page rather than a redirect. Listing it in
+ * the rail is what makes it reachable again once they have moved off it.
  *
  * A row appears here only once its route exists. Nothing is listed "coming
  * soon" as a link — an item that 404s is worse than an item that is absent,
  * and `SOON_SECTIONS` below is how a planned area says so honestly.
  */
 export const ACCOUNT_SECTIONS = [
-  { id: "home", label: "Home", icon: "home", segment: "" },
-  { id: "products", label: "My Products", icon: "products", segment: "products" },
+  { id: "general", label: "General", icon: "settings", segment: "" },
+  { id: "products", label: "Products", icon: "products", segment: "products" },
   {
     id: "repositories",
     label: "Repositories",
     icon: "repositories",
     segment: "repositories",
   },
+  { id: "billing", label: "Billing", icon: "billing", segment: "billing" },
+  { id: "profile", label: "Profile", icon: "profile", segment: "profile" },
 ] as const satisfies readonly AccountSection[];
 
 /**
@@ -78,29 +95,18 @@ export const ACCOUNT_SECTIONS = [
  * A real product intention with nothing behind it yet is more honest as a
  * disabled label than as either a hidden feature or a page that apologises for
  * itself — as long as it is still true that there is nothing behind it.
+ *
+ * `Team` is the case that stays: ownership is single-user in every table
+ * (`projects.user_id`, RLS on `auth.uid()`, one GitHub identity per user), and
+ * `billing/catalog.ts` says in its own words "No Enterprise, no Team, no
+ * annual, no seats". There is no sharing primitive to expose, so the label is
+ * the whole of what is true.
  */
-export const SOON_SECTIONS = [
-  /*
-   * No `Experiments` here any more (audit §303, Slice 6).
-   *
-   * It was honest when this list was written and stopped being so when the
-   * project rail gained a live `Experiments` destination: the account rail
-   * then said "coming soon" about a room the founder could already walk into
-   * one level down. Two rails disagreeing about whether a feature exists is
-   * worse than either answer, and the true one is that it does.
-   *
-   * `Team` stays, and is a different case entirely: ownership is single-user
-   * in every table (`projects.user_id`, RLS on `auth.uid()`, one GitHub
-   * identity per user), and `billing/catalog.ts` says in its own words "No
-   * Enterprise, no Team, no annual, no seats". There is no sharing primitive
-   * to expose, so the label is the whole of what is true.
-   */
-  { id: "team", label: "Team", icon: "team" },
-] as const;
+export const SOON_SECTIONS = [{ id: "team", label: "Team", icon: "team" }] as const;
 
 export function accountSectionHref(sectionId: string): string {
   const section = ACCOUNT_SECTIONS.find((candidate) => candidate.id === sectionId);
-  return section && section.segment ? `/app/${section.segment}` : "/app";
+  return section && section.segment ? `/app/settings/${section.segment}` : "/app/settings";
 }
 
 export function AccountSidebar({
@@ -124,7 +130,7 @@ export function AccountSidebar({
 }) {
   return (
     <nav
-      aria-label="Account"
+      aria-label="Settings"
       className={cn(
         "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b p-4",
         // Desktop: a full-height rail that stays put while content scrolls.
@@ -145,7 +151,10 @@ export function AccountSidebar({
         from the type scale (`--shell-heading-line`), never nudged.
       */}
       <div className="flex items-center px-1 lg:min-h-[var(--shell-heading-line)]">
-        <Link href="/app" className="rounded-nav" aria-label="Vibe Business — home">
+        {/* The way back into the product. `/app` resolves to whichever one
+            the founder was last in, so this is "leave Settings" rather than a
+            trip through an index. */}
+        <Link href="/app" className="rounded-nav" aria-label="Vibe Business — back to your product">
           <VibeLockup />
         </Link>
       </div>
@@ -160,7 +169,7 @@ export function AccountSidebar({
           on screens that offer priced actions. A price without a balance is
           half a disclosure, and that argument does not stop at 1024px.
         */}
-        <Wallet credits={credits} href="/app/billing" />
+        <Wallet credits={credits} href="/app/settings/billing" />
         {footer}
       </div>
     </nav>

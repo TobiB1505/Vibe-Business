@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { ProjectBreadcrumbTrail } from "@/components/layout/project-breadcrumb-trail";
+import { RecordVisit } from "@/components/layout/record-visit";
 import {
   PROJECT_SECTIONS,
   ProjectShell,
@@ -144,13 +145,17 @@ export default async function ProjectLayout({
           items={navItems}
           footer={
             <div className="flex flex-col gap-3">
-              <Wallet credits={balance?.availableCredits ?? null} href="/app/billing" />
+              <Wallet credits={balance?.availableCredits ?? null} href="/app/settings/billing" />
               <AccountMenu identity={identity} subtitle="Founder" placement="above" />
             </div>
           }
         />
       }
     >
+      {/* So `/app` comes back here rather than to whichever product the
+          ranking happens to put first. A client leaf: only a mount is an
+          opening, and a write during render would also run on prefetch. */}
+      <RecordVisit projectId={project.id} />
       <ProjectBreadcrumbTrail projectId={project.id} projectName={project.name} />
       {children}
     </ProjectShell>

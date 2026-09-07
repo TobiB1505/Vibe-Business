@@ -334,7 +334,7 @@ export function ProjectSidebar({
         </div>
 
         <Link
-          href="/app/products"
+          href="/app/settings/products"
           className={cn(
             "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav mt-3",
             "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
@@ -383,7 +383,7 @@ export function ProjectBreadcrumb({
       <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-body">
         <li>
           <Link
-            href="/app/products"
+            href="/app/settings/products"
             className="text-fg-body hover:text-fg rounded-inline font-medium transition-interactive"
           >
             My Products

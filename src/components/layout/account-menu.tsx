@@ -15,7 +15,7 @@ import { activePalette, paletteSwitchable } from "@/app/palette";
 
 const ACTIONS = [
   {
-    href: "/app/profile",
+    href: "/app/settings/profile",
     label: "Profile",
     description: "Manage your profile",
     Icon: UserIcon,
@@ -27,7 +27,7 @@ const ACTIONS = [
     Icon: SettingsIcon,
   },
   {
-    href: "/app/billing",
+    href: "/app/settings/billing",
     label: "Billing",
     description: "Credits and plan",
     Icon: CreditCardIcon,

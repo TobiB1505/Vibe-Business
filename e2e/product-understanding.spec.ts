@@ -303,7 +303,9 @@ test.describe("state is never carried by colour alone", () => {
     // is on the row's own text rather than on an exact-match string.
     const sources = page.getByRole("listitem").filter({ hasText: "Your code" });
     await expect(sources.first()).toBeVisible();
-    await expect(page.getByRole("listitem").filter({ hasText: "Your public product" }).first()).toBeVisible();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Your public product" }).first(),
+    ).toBeVisible();
     await expect(page.getByText("Your signed-in product has not been checked yet")).toBeVisible();
   });
 });
@@ -492,7 +494,10 @@ test.describe("what the account can spend", () => {
     await expect(wallet).toBeVisible();
     await expect(wallet).toContainText("Credits");
     await expect(wallet).toContainText("35");
-    await expect(page.getByTestId("wallet-balance")).toHaveAttribute("href", "/app/billing");
+    await expect(page.getByTestId("wallet-balance")).toHaveAttribute(
+      "href",
+      "/app/settings/billing",
+    );
 
     // 35 is below the threshold, so it is worth noticing.
     await expect(wallet).toHaveAttribute("data-low", "true");
@@ -512,7 +517,7 @@ test.describe("what the account can spend", () => {
 
     const wallet = page.getByTestId("wallet");
     const topUp = wallet.getByRole("link", { name: "Top up Credits" });
-    await expect(topUp).toHaveAttribute("href", "/app/billing#credit-packs");
+    await expect(topUp).toHaveAttribute("href", "/app/settings/billing#credit-packs");
     await expect(wallet.getByRole("link")).toHaveCount(2);
 
     // The visible text of the whole block is the label and the balance.

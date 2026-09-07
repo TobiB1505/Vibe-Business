@@ -108,8 +108,8 @@ describe("adding Credits", () => {
     // A prop with one default rather than a literal at each call site: the
     // dedicated top-up screen is still to come, and re-pointing it must be one
     // edit rather than a search.
-    expect(WALLET).toContain('export const TOP_UP_HREF = "/app/billing#credit-packs"');
-    expect(code(WALLET).match(/\/app\/billing/g) ?? []).toHaveLength(1);
+    expect(WALLET).toContain('export const TOP_UP_HREF = "/app/settings/billing#credit-packs"');
+    expect(code(WALLET).match(/\/app\/settings\/billing/g) ?? []).toHaveLength(1);
   });
 
   it("is a link, because it navigates", () => {

@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dashboard-icons";
 import { buttonClasses } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
@@ -106,6 +107,26 @@ function AccessRevokedNotice() {
   );
 }
 
+/**
+ * What a failed GitHub connection says, moved here from the account dashboard.
+ *
+ * The callback used to send failures to `/app`, which was a screen. `/app` is
+ * a redirect now, so the message needed somewhere it could actually be read —
+ * and this is the page about GitHub access, which is where a founder looks
+ * after a connection did not work and where the control to try again already
+ * is.
+ */
+const CONNECT_ERROR_MESSAGES: Record<string, string> = {
+  oauth_denied: "GitHub authorization was cancelled or denied.",
+  state_invalid:
+    "That connection attempt expired or was invalid. Please try connecting GitHub again.",
+  missing_params:
+    "GitHub didn't return the information needed to complete the connection. Please try again.",
+  installation_not_accessible:
+    "That GitHub installation isn't accessible to your GitHub account. Please try again.",
+  github_unavailable: "GitHub is temporarily unavailable. Please try again in a moment.",
+};
+
 export function RepositoriesIndex({
   repositories,
   githubLogin,
@@ -178,8 +199,16 @@ export function RepositoriesIndex({
     searchRef.current?.focus();
   }
 
+  const connectError = searchParams.get("connect_error");
+
   return (
     <div className="flex flex-col gap-7" data-testid="repositories-index">
+      {connectError && (
+        <Notice tone="problem" label="Connection failed">
+          {CONNECT_ERROR_MESSAGES[connectError] ?? "GitHub connection failed. Please try again."}
+        </Notice>
+      )}
+
       <SectionHeader
         level={1}
         title="Repositories"

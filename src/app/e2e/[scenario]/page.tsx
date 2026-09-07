@@ -95,7 +95,7 @@ import {
   isE2eInternalConsoleScenario,
 } from "../internal-console-scenarios";
 import { AppErrorPreview } from "../app-error-preview";
-import BillingLoading from "@/app/app/(account)/billing/loading";
+import BillingLoading from "@/app/app/(account)/settings/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
 import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
 import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
@@ -120,21 +120,18 @@ import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-read
 import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-run-task-header";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
-  E2E_ACCOUNT_SCENARIOS,
   E2E_PROFILE_SCENARIOS,
   isE2eProfileScenario,
   E2E_PRODUCTS_SCENARIOS,
   E2E_REPOSITORIES_SCENARIOS,
-  isE2eAccountScenario,
   isE2eProductsScenario,
   isE2eRepositoriesScenario,
 } from "../account-scenarios";
-import { AccountHome } from "@/app/app/account-home";
-import { ProfileView } from "@/app/app/(account)/profile/profile-view";
+import { ProfileView } from "@/app/app/(account)/settings/profile/profile-view";
 import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-account";
 import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
-import { ProductsIndex } from "@/app/app/(account)/products/products-index";
-import { RepositoriesIndex } from "@/app/app/(account)/repositories/repositories-index";
+import { ProductsIndex } from "@/app/app/(account)/settings/products/products-index";
+import { RepositoriesIndex } from "@/app/app/(account)/settings/repositories/repositories-index";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
 import {
@@ -170,7 +167,7 @@ import { ActionPlanWorkspace } from "@/app/app/projects/[projectId]/plan/action-
 import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refresh-bar";
 import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
-import { BillingView } from "@/app/app/(account)/billing/billing-view";
+import { BillingView } from "@/app/app/(account)/settings/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
 import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
@@ -665,7 +662,7 @@ export default async function E2eScenarioPage({
                   the browser proves a founder can see what they have from a
                   project route, not only from Billing.
                 */}
-                <Wallet credits={creditsToUnits(35)} href="/app/billing" />
+                <Wallet credits={creditsToUnits(35)} href="/app/settings/billing" />
                 <AccountMenu
                   identity={{
                     displayName: "Tobi",
@@ -1316,33 +1313,8 @@ export default async function E2eScenarioPage({
    * The density budget in `e2e/account-dashboard.spec.ts` counts this screen,
    * so a composition assembled here instead would measure nothing real.
    */
-  if (isE2eAccountScenario(scenario)) {
-    return (
-      <AccountShell
-        sidebar={
-          <AccountSidebar
-            credits={creditsToUnits(2480)}
-            footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                }}
-              />
-            }
-          />
-        }
-      >
-        <div className="sr-only">{label}</div>
-        <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
-      </AccountShell>
-    );
-  }
-
   /*
-   * Profile, through the component `/app/profile` renders. It takes the
+   * Profile, through the component `/app/settings/profile` renders. It takes the
    * session's email and the connection row as props precisely so this can
    * supply both — the harness has neither.
    */

@@ -35,7 +35,7 @@ export const metadata: Metadata = {
  *
  * ## What it deliberately does not own
  *
- * Credits and billing (`/app/billing`) and the GitHub App installation both stay
+ * Credits and billing (`/app/settings/billing`) and the GitHub App installation both stay
  * where they are and are linked from here. Neither is scoped to one project —
  * an account has one balance and one installation across every project — so
  * putting either behind a project's Settings would imply a per-project setting
@@ -173,7 +173,7 @@ export default async function ProjectSettingsPage({
               <span className="text-fg-secondary text-body">
                 Credits, your plan and what things cost
               </span>
-              <StandaloneLink href="/app/billing">Credits and billing</StandaloneLink>
+              <StandaloneLink href="/app/settings/billing">Credits and billing</StandaloneLink>
             </li>
             <li className="flex flex-wrap items-baseline justify-between gap-3">
               <span className="text-fg-secondary text-body">

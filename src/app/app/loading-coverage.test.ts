@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -55,8 +55,18 @@ describe("app routes", () => {
     ).toEqual([]);
   });
 
-  it("keeps the app index's own first frame", () => {
-    expect(existsSync(join(APP_DIR, "(account)", "loading.tsx"))).toBe(true);
+  /**
+   * `/app` has no first frame, because it has no frame at all.
+   *
+   * It stopped being a screen: it resolves a session and two constant-cost
+   * reads and then redirects to a product. A `loading.tsx` there would paint a
+   * skeleton of a page that never renders, which is a flash of a layout the
+   * founder is not going to.
+   */
+  it("gives the app entry point no first frame, because it renders nothing", () => {
+    expect(existsSync(join(APP_DIR, "page.tsx"))).toBe(true);
+    expect(existsSync(join(APP_DIR, "loading.tsx"))).toBe(false);
+    expect(readFileSync(join(APP_DIR, "page.tsx"), "utf8")).toContain("redirect(");
   });
 
   it("names a reason for every route that has none", () => {

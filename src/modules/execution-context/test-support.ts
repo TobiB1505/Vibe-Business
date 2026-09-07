@@ -30,15 +30,17 @@ export type FixtureSurface = {
  * therefore layered on here, explicitly, so a reader of a compiler test can see
  * exactly which repository fact produced which line of the brief.
  */
-export function fakeBriefSnapshot(overrides: {
-  commitSha?: string;
-  routes?: readonly RouteSummary[];
-  routeMode?: RepositoryIntelligenceSnapshot["routes"]["mode"];
-  routesTruncated?: boolean;
-  surfaces?: readonly FixtureSurface[];
-  topLevelDirectories?: readonly string[];
-  frameworkEvidence?: readonly string[];
-} = {}): RepositoryIntelligenceSnapshot {
+export function fakeBriefSnapshot(
+  overrides: {
+    commitSha?: string;
+    routes?: readonly RouteSummary[];
+    routeMode?: RepositoryIntelligenceSnapshot["routes"]["mode"];
+    routesTruncated?: boolean;
+    surfaces?: readonly FixtureSurface[];
+    topLevelDirectories?: readonly string[];
+    frameworkEvidence?: readonly string[];
+  } = {},
+): RepositoryIntelligenceSnapshot {
   const base = fakeSnapshot();
 
   const surfaces = (overrides.surfaces ?? []).map((surface) => ({
@@ -70,7 +72,9 @@ export function fakeBriefSnapshot(overrides: {
     businessSurfaces: surfaces.length > 0 ? surfaces : base.businessSurfaces,
     projectStructure: {
       ...base.projectStructure,
-      topLevelDirectories: [...(overrides.topLevelDirectories ?? base.projectStructure.topLevelDirectories)],
+      topLevelDirectories: [
+        ...(overrides.topLevelDirectories ?? base.projectStructure.topLevelDirectories),
+      ],
     },
   };
 }
@@ -109,7 +113,10 @@ export function fakePublicSiteSnapshot(
       fakeRoute({ path: "/privacy" }),
       fakeRoute({ path: "/terms" }),
       fakeRoute({ path: "/app", sourcePath: "src/app/app/(account)/page.tsx" }),
-      fakeRoute({ path: "/app/billing", sourcePath: "src/app/app/(account)/billing/page.tsx" }),
+      fakeRoute({
+        path: "/app/settings/billing",
+        sourcePath: "src/app/app/(account)/settings/billing/page.tsx",
+      }),
       fakeRoute({
         path: "/app/projects/[projectId]",
         dynamic: true,

@@ -1,8 +1,12 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
-import { RETIRED_WORKSPACE_ADDRESSES, retiredAddressRedirects } from "./retired-addresses";
+import {
+  MOVED_ACCOUNT_SECTIONS,
+  RETIRED_WORKSPACE_ADDRESSES,
+  retiredAddressRedirects,
+} from "./retired-addresses";
 
 /**
  * A redirect is only worth having if it lands somewhere (PERF-023).
@@ -16,16 +20,54 @@ describe("retired workspace addresses", () => {
   it("answers each one with the section that replaced it", () => {
     const rules = retiredAddressRedirects();
 
-    expect(rules.map((rule) => rule.source)).toEqual([
+    const workspace = rules.filter((rule) => rule.source.startsWith("/app/projects/"));
+    expect(workspace.map((rule) => rule.source)).toEqual([
       "/app/projects/:projectId/score",
       "/app/projects/:projectId/prepared",
       "/app/projects/:projectId/understanding",
     ]);
-    expect(rules.map((rule) => rule.destination)).toEqual([
+    expect(workspace.map((rule) => rule.destination)).toEqual([
       "/app/projects/:projectId",
       "/app/projects/:projectId/agent",
       "/app/projects/:projectId/product",
     ]);
+  });
+
+  /**
+   * The account sections moved under Settings, and the old addresses are the
+   * ones a founder has: the old rail linked them, and `requireSession` sends
+   * people to them after a login.
+   */
+  it("answers each moved account section, index and anything under it", () => {
+    const rules = retiredAddressRedirects();
+
+    for (const segment of MOVED_ACCOUNT_SECTIONS) {
+      expect(rules).toContainEqual({
+        source: `/app/${segment}`,
+        destination: `/app/settings/${segment}`,
+        permanent: false,
+      });
+      expect(rules).toContainEqual({
+        source: `/app/${segment}/:path*`,
+        destination: `/app/settings/${segment}/:path*`,
+        permanent: false,
+      });
+    }
+  });
+
+  it("points every moved section at a route that exists", () => {
+    for (const segment of MOVED_ACCOUNT_SECTIONS) {
+      expect(
+        existsSync(join(process.cwd(), `src/app/app/(account)/settings/${segment}/page.tsx`)),
+        `/app/settings/${segment} has no page`,
+      ).toBe(true);
+      // And the old address must not still be a route, or it would shadow the
+      // redirect and the move would be invisible.
+      expect(
+        existsSync(join(process.cwd(), `src/app/app/(account)/${segment}/page.tsx`)),
+        `/app/${segment} is still a route`,
+      ).toBe(false);
+    }
   });
 
   /**

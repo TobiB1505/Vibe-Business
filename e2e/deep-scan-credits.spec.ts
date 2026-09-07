@@ -55,7 +55,7 @@ test.describe("an additional Deep Scan the balance cannot cover", () => {
     // checkout behind it.
     await expect(page.getByRole("link", { name: "Top up Credits" })).toHaveAttribute(
       "href",
-      "/app/billing",
+      "/app/settings/billing",
     );
   });
 

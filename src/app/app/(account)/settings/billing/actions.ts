@@ -202,5 +202,5 @@ export async function claimWelcomeCreditsAction(
     return { error: MESSAGES.failed };
   }
 
-  redirect("/app/billing");
+  redirect("/app/settings/billing");
 }

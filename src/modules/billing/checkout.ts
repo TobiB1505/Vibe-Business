@@ -109,7 +109,7 @@ async function resolveStripeCustomerId(
  */
 export function billingReturnBase(): string {
   const env = getStripeEnv();
-  return env.STRIPE_BILLING_RETURN_URL ?? `${getAppUrl()}/app/billing`;
+  return env.STRIPE_BILLING_RETURN_URL ?? `${getAppUrl()}/app/settings/billing`;
 }
 
 function returnUrls(): { success: string; cancel: string } {

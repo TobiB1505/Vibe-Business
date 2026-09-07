@@ -13,7 +13,7 @@
 |---|---|---|---|
 | Product scope and approval | `PRODUCT.md` | Product contract | 2026-08-24 |
 | Architecture and provider boundaries | `ARCHITECTURE.md` | Architecture contract | 2026-08-24 |
-| Account/project context swap | `docs/decisions/0046-account-dashboard-and-context-swap.md` | ADR | 2026-08-24 |
+| Account/project context swap | `docs/decisions/0046-account-dashboard-and-context-swap.md`, `docs/decisions/0100-the-account-level-is-settings.md` | ADR | 2026-09-07 |
 | Project Home and Business Health | `docs/decisions/0047-business-health-is-project-home.md` | ADR | 2026-08-24 |
 | Business Brain interaction and view model | `docs/decisions/0048-signature-business-brain.md` | ADR | 2026-08-24 |
 | GitHub permissions and repository connection | `docs/decisions/0003-github-app-integration.md`, `docs/decisions/0009-github-installation-ownership-verification.md` | ADR | 2026-08-24 |
@@ -82,7 +82,7 @@
 | Validate again | `Validate again` on an existing prepared change | stable busy action; active duplicate blocked; an exact prior pass is deliberately not reused | same Agent Validate stage with the new durable run | persistent inline failure; retry remains available | submitted action remains contextual | ADR 0015, rule 60 |
 | Open the Agent for a Move | `See this move in Agent` beside the start control, or the Agent rail item while a Move is selected | route navigation only, never a run | Agent focused on that Move, naming what Vibe can do about it | an unresolvable Move degrades to the unfocused Agent, naming none | destination page heading | ADR 0058 |
 | Return to a Move from the Agent | the focused card's back link, or a prepared change's Move title | route navigation only, never a run | that Move selected on the Action Plan, scrolled to its detail | the link is absent where the Move cannot be named | Move detail region | ADR 0058 |
-| Review the Move a card names | `Review moves` on the account dashboard's open decision | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
+| Review the Move a card names | The Focus Card's control on Nova | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
 
 ## Navigation and responsive behavior
 
@@ -142,5 +142,5 @@
 
 - Static: lint, typecheck, unit tests, strict premium audit.
 - Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion; Action Plan selected, founder-input, generating and reduced-motion states at 1440/1280/tablet/375.
-- Canonical sibling: `/app/products` and the account shell.
+- Canonical sibling: `/app/settings/products` and the Settings shell.
 - Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/one-loop.spec.ts`, `e2e/product-scan.spec.ts`, `e2e/billing.spec.ts`.

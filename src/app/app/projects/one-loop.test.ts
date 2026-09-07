@@ -67,14 +67,14 @@ const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx")
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
 const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
 /*
- * Where the dashboard names a Move and offers the way into it.
+ * Where a surface names a Move and offers the way into it.
  *
- * It was its own panel beside the Business signal one, then both became
- * `SignalCard`, and the dashboard is now a ranked desk whose first entry opens
- * into the decision — so this is `DeskHead`. The regression below is unchanged
- * and still lives in that code; only the file it lives in has moved, twice.
+ * It was a panel on the account dashboard, then that dashboard's card, then
+ * the desk's open decision — and there is no account dashboard at all now.
+ * Nova is the surface that names a Move today, so the regression is asserted
+ * where it can actually happen.
  */
-const NEXT_MOVE_CARD = read("src/app/app/desk-head.tsx");
+const NOVA_HOME = read("src/app/app/projects/[projectId]/nova/nova-home.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {
@@ -628,6 +628,6 @@ describe("the plan hands off to the agent, and the agent points back", () => {
    */
   it("opens the Move a card names, not the plan's current first", () => {
     expect(HOME_STATUS).toContain("planMoveHref(planHref, nextMove.id)");
-    expect(NEXT_MOVE_CARD).toContain("planMoveHref(entry.item.action.href, move.id)");
+    expect(NOVA_HOME).toContain("planMoveHref(href.plan, candidate.move.id)");
   });
 });

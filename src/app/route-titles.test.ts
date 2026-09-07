@@ -18,11 +18,13 @@ import { describe, expect, it } from "vitest";
  * the browser's own chrome. Twenty-two routes accumulated it without anybody
  * noticing, over the whole life of the product.
  *
- * ## The two deliberate exemptions
+ * ## The three deliberate exemptions
  *
  * The landing page takes the root layout's `default`, which is the product
  * name and is the right title for the product's front page. The fixture route
- * exists only under `VIBE_E2E_FIXTURES` and ships in no deployed build.
+ * exists only under `VIBE_E2E_FIXTURES` and ships in no deployed build. And
+ * `/app` renders nothing at all — it resolves which product to open and
+ * redirects, so a title on it would name a tab that never exists.
  */
 
 const ROUTES = join(process.cwd(), "src/app");
@@ -31,6 +33,10 @@ const WITHOUT_THEIR_OWN_TITLE: readonly { route: string; why: string }[] = [
   {
     route: "page.tsx",
     why: "The landing page. The root layout's `default` is the product name, which is what this page should be called.",
+  },
+  {
+    route: "app/page.tsx",
+    why: "The app entry point renders nothing: it resolves which product to open and redirects, so a title would name a tab that never exists.",
   },
   {
     route: "e2e/[scenario]/page.tsx",
@@ -70,7 +76,9 @@ describe("every route names itself", () => {
   it("keeps no exemption for a route that no longer exists", () => {
     // A stale exemption silently pre-approves whatever is written at that path.
     const live = new Set(pageFiles().map((f) => relative(ROUTES, f).replaceAll("\\", "/")));
-    expect(WITHOUT_THEIR_OWN_TITLE.filter((e) => !live.has(e.route)).map((e) => e.route)).toEqual([]);
+    expect(WITHOUT_THEIR_OWN_TITLE.filter((e) => !live.has(e.route)).map((e) => e.route)).toEqual(
+      [],
+    );
   });
 
   it("appends the product name once, through the layout's template", () => {

@@ -380,6 +380,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0097](docs/decisions/0097-icon-paths-come-from-lucide-the-frame-stays-vibes.md) | Icon paths come from Lucide; the frame stays Vibe's | UI and design tooling |
 | [0098](docs/decisions/0098-the-palette-ships-behind-one-switch.md) | The palette ships behind one switch, not one route at a time | UI and design tooling |
 | [0099](docs/decisions/0099-glass-is-the-material.md) | Glass is the material, and the ground has to be visible for it to be one | UI and design tooling |
+| [0100](docs/decisions/0100-the-account-level-is-settings.md) | The account level is Settings, and `/app` resolves to a product | Web surface |
 
 ### Layers with no section above
 

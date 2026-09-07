@@ -15,7 +15,7 @@ export const metadata = { title: "Profile" };
  * would be testing a page that exists only in the fixture file.
  */
 export default async function ProfilePage() {
-  const session = await requireSession("/app/profile");
+  const session = await requireSession("/app/settings/profile");
   const supabase = await createClient();
 
   const github = await getGithubIdentity(supabase, session.userId);

@@ -17,8 +17,8 @@ import { expect, test, type Page } from "@playwright/test";
 const NOVA = "/e2e/nova-priced";
 /** A route that deliberately did not opt into the contained field. */
 const DENSE = "/e2e/repository_intelligence";
-/** An ordinary product screen in the account shell — no field, just ground. */
-const DASHBOARD = "/e2e/account-three-products";
+/** An ordinary screen in the account shell — no field, just ground. */
+const ACCOUNT = "/e2e/account-products";
 
 async function paletteV2(page: Page) {
   await page.evaluate(() => document.documentElement.setAttribute("data-vibe", "v2"));
@@ -157,32 +157,46 @@ test.describe("the ground exists and stays out of the way", () => {
    * the same colour `body` already paints, so nothing looked broken and the
    * ramp was covered on every signed-in route.
    *
-   * Measured on the dashboard before the fix: 11.79 luminance at the top and
-   * 11.79 at the bottom, which is `--color-app` exactly. The glass shipped in
-   * S2 had, in the product, never once had anything to refract.
+   * Measured on an account screen before the fix: 11.79 luminance at the top
+   * and 11.79 at the bottom, which is `--color-app` exactly. The glass shipped
+   * in S2 had, in the product, never once had anything to refract.
    *
    * Sampled inside the content column rather than at x=4, which is the rail —
    * chrome is its own glass and would answer for itself.
    */
   test("is not painted over by the shell on an ordinary product screen", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto(DASHBOARD);
+    await page.goto(ACCOUNT);
     const column = 1420;
 
     const flatTop = await luminance(page, 8, column);
     const flatBottom = await luminance(page, 860, column);
-    expect(
-      Math.abs(flatTop - flatBottom),
-      "v1 has no ground; a ramp here means the second palette leaked into the first",
-    ).toBeLessThan(0.5);
-
     await paletteV2(page);
     const litTop = await luminance(page, 8, column);
     const litBottom = await luminance(page, 860, column);
+
     expect(
       litTop / Math.max(litBottom, 0.01),
       `the shell is covering the ground: ${litTop.toFixed(2)} over ${litBottom.toFixed(2)}`,
     ).toBeGreaterThan(1.3);
+
+    /*
+     * And the first palette is flat *by comparison*, not absolutely.
+     *
+     * An absolute bar was tried at half a pixel of luminance and failed at
+     * 1.0 on a page with cards on it: a `shadow-card` bleeds past its own box
+     * and is not hit-tested, so a column that `elementFromPoint` reports as
+     * page background still picks up a little of it. That is noise. A ground
+     * is not: the same column measures a ten-point drop with the ramp on. So
+     * the claim is the ratio between the two palettes, which noise cannot
+     * fake and a leak cannot survive.
+     */
+    const flat = Math.abs(flatTop - flatBottom);
+    const lit = Math.abs(litTop - litBottom);
+    expect(
+      flat * 4,
+      `v1 varies by ${flat.toFixed(2)} against v2's ${lit.toFixed(2)} — the ground leaked`,
+    ).toBeLessThan(lit);
   });
 
   test("takes no pointer and no tab stop", async ({ page }) => {

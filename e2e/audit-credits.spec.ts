@@ -104,7 +104,7 @@ test.describe("a spent entitlement the customer cannot pay past", () => {
 
     await expect(page.getByRole("link", { name: /top up/i })).toHaveAttribute(
       "href",
-      "/app/billing",
+      "/app/settings/billing",
     );
   });
 });

@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils/cn";
  *
  * ## Matching
  *
- * Home is the index route, so it is active only on an exact match; a
- * `startsWith` would light it on every account page. Everything else matches at
- * a real path boundary, so `/products` never matches `/products-archive`.
+ * General is the index route, so it is active only on an exact match; a
+ * `startsWith` would light it on every Settings page. Everything else matches
+ * at a real path boundary, so `/products` never matches `/products-archive`.
  *
  * ## The "Soon" rows
  *
@@ -40,7 +40,7 @@ export function AccountNav({
 
   function isActive(href: string): boolean {
     if (pathname === href) return true;
-    if (href === "/app") return false;
+    if (href === "/app/settings") return false;
     return pathname.startsWith(`${href}/`);
   }
 

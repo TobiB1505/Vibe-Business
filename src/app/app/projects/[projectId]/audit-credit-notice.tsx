@@ -129,7 +129,7 @@ export function AuditCreditNotice({ gate }: { gate: AuditCreditGate }) {
             </div>
           </div>
           <Link
-            href="/app/billing"
+            href="/app/settings/billing"
             className="border-amber/30 bg-amber/[0.08] text-amber hover:border-amber/55 hover:bg-amber/[0.12] inline-flex min-h-10 shrink-0 items-center justify-center rounded-field border px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-amber"
           >
             Top up Credits
