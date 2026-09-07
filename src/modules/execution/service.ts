@@ -20,6 +20,8 @@ import { resolveAppRoot } from "./app-root";
 import { resolveExecutionCapability } from "./capabilities";
 import { branchNameFor, computeExecutionIdentity } from "./identity";
 import { capabilityVersionFor, type ExecutionCapability } from "./schema";
+import { buildOpportunityActionState, type OpportunityActionState } from "./view";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { findReusablePreparedChange, getPreparedChange, type StoredPreparedChange } from "./store";
 
 /**
@@ -334,6 +336,71 @@ export type OpportunityExecutionSummary = {
   preparedChangeId: string | null;
   branchName: string | null;
 };
+
+/**
+ * One Move, with the execution answer its card needs.
+ *
+ * ## Why this exists beside the plan page's own assembly
+ *
+ * The Action Plan resolves every Move's execution state because it draws every
+ * Move. Nova's thread draws *one* — the Move the ranking put first — and the
+ * page's loop over `getOpportunityExecutionSummaries` plus two operation reads
+ * per opportunity is the wrong shape for that.
+ *
+ * ## Why it does not simply pass `null`
+ *
+ * Because `null` is an answer, not an absence. `MoveCard` reads it as "no
+ * executor summary exists" and says *Not automated yet — Vibe can still guide
+ * the work step by step*, which is a sentence about Vibe's capability. Handing
+ * it null without having looked would make that sentence a guess, and the only
+ * thing underneath it would be `executionReadiness` — a model opinion, which
+ * rule 54 says is never authority.
+ *
+ * So the answer is read, with the same builder the page uses, and a Move with
+ * genuinely no summary still resolves to `null` — the honest one.
+ */
+export async function getMoveWithExecution(
+  supabase: SupabaseClient,
+  params: { projectId: string; opportunityId: string },
+): Promise<{ opportunity: BusinessOpportunity; execution: OpportunityActionState | null } | null> {
+  const [opportunities, summaries] = await Promise.all([
+    getLatestOpportunities(supabase, params.projectId),
+    getOpportunityExecutionSummaries(supabase, params.projectId),
+  ]);
+
+  const opportunity = opportunities?.set.opportunities.find(
+    (entry) => entry.id === params.opportunityId,
+  );
+  if (!opportunity) return null;
+
+  const summary = summaries.find((entry) => entry.opportunityId === params.opportunityId);
+  if (!summary) return { opportunity, execution: null };
+
+  const [activeOperation, failedOperation] = await Promise.all([
+    getActivePreparationFor(supabase, {
+      projectId: params.projectId,
+      opportunityId: params.opportunityId,
+    }),
+    // Without this a failed preparation silently re-offers the start control
+    // instead of saying what went wrong.
+    getLatestFailedPreparationFor(supabase, {
+      projectId: params.projectId,
+      opportunityId: params.opportunityId,
+    }),
+  ]);
+
+  return {
+    opportunity,
+    execution: buildOpportunityActionState({
+      opportunity,
+      capability: summary.capability,
+      preparedChangeId: summary.preparedChangeId,
+      activeOperation,
+      failedOperation,
+      blockedReason: null,
+    }),
+  };
+}
 
 export async function getOpportunityExecutionSummaries(
   supabase: SupabaseClient,

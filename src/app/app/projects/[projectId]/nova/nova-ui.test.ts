@@ -260,6 +260,35 @@ describe("Nova Home", () => {
   });
 
   /**
+   * A block is chosen by the registry, never at the call site.
+   *
+   * `BLOCK_FOR_MOMENT` is total over every moment the domain can raise, so a
+   * new one fails the build until somebody decides what a founder sees. A
+   * screen that picked its own block would be a second answer to that
+   * question, and the two would disagree the first time either moved.
+   */
+  describe("the blocks", () => {
+    it("asks the registry which block a moment gets", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("BLOCK_FOR_MOMENT");
+      expect(home).toContain("<AuditBlock");
+      expect(home).toContain("<MoveBlock");
+    });
+
+    /*
+     * The progress block is the one that belongs to the *run* rather than to
+     * the moment, and it draws only where a sequence exists — two of the
+     * fifteen operation types. `novaWorkingEntry` decides; the thread reads
+     * its answer.
+     */
+    it("draws the stages only where the run has them", () => {
+      const thread = component("nova-focus-thread.tsx");
+      expect(thread).toContain("working?.sequence");
+      expect(thread).not.toMatch(/sequence=\{"(action_planning|opportunity_generation)"\}/);
+    });
+  });
+
+  /**
    * The gates travel whole, or not at all.
    *
    * A merge button on Home would be the failure rules 67-71 describe: a yes

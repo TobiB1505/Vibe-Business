@@ -145,7 +145,7 @@ function facts(working: OperationView | null): NovaFocusFacts {
     auditOutdated: true,
     repositoryReadOutdated: false,
     workspaceChoiceRequired: false,
-    working,
+    working: working && { type: "business_audit" as const, view: working },
   };
 }
 

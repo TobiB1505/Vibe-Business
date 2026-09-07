@@ -118,22 +118,57 @@ describe("Nova Home view", () => {
 
   describe("waiting is never working", () => {
     it("reports a paused operation as waiting on the founder", () => {
-      const view = viewOf({ working: operation({ status: "needs_user" }) });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation({ status: "needs_user" }) },
+      });
       expect(view.working?.phase).toBe("waiting_user");
     });
 
     it("reports a running operation as working", () => {
-      const view = viewOf({ working: operation({ status: "running" }) });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation({ status: "running" }) },
+      });
       expect(view.working?.phase).toBe("working");
     });
 
     it("reports a stalled run as stalled rather than as either", () => {
-      const view = viewOf({ working: operation({ stalled: true }) });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation({ stalled: true }) },
+      });
       expect(view.working?.phase).toBe("stalled");
     });
 
+    /*
+     * The type travels with the reading because a stage list is keyed by it.
+     * Without it a surface drawing the named stages would have to guess which
+     * sequence it was looking at, and two of the fifteen operation types have
+     * one — so the wrong guess is a checklist that ticks the wrong rows.
+     */
+    it("carries the kind of run, and the stages that kind has", () => {
+      const planning = viewOf({
+        working: { type: "action_planning", view: operation() },
+      });
+
+      expect(planning.working?.type).toBe("action_planning");
+      expect(planning.working?.sequence).toBe("action_planning");
+    });
+
+    /*
+     * And says so honestly when a run has none. A merge reports a stage and no
+     * sequence; an empty checklist under it would be a picture of four steps
+     * nobody defined.
+     */
+    it("reports no stages for a run that has none", () => {
+      const merging = viewOf({ working: { type: "change_merge", view: operation() } });
+
+      expect(merging.working?.stageLabel).toBeTruthy();
+      expect(merging.working?.sequence).toBeNull();
+    });
+
     it("names a stage rather than a percentage", () => {
-      const view = viewOf({ working: operation() });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation() },
+      });
       expect(view.working?.stageLabel).toBeTruthy();
       expect(view.working?.stageLabel).not.toMatch(/\d+\s*%/);
     });

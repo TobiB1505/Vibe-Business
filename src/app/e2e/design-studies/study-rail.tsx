@@ -1,6 +1,7 @@
 import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
 import type { ActionPlanChecklist } from "@/modules/action-plans/service";
 import { buildActivityFeed } from "@/modules/audit-log/view";
+import { buildOperationView } from "@/modules/operations/view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { Study } from "./studies";
@@ -88,6 +89,18 @@ const RECORDS: AuditEventRecord[] = [
 
 const ACTIVITY = buildActivityFeed(RECORDS).reverse();
 
+/** A scan in flight. Built through the view so the study draws a real reading. */
+const SCANNING = buildOperationView({
+  operationId: "op-1",
+  status: "running",
+  stage: "preparing",
+  failureCode: null,
+  resultId: null,
+  startedAt: new Date(Date.now() - 20_000).toISOString(),
+  completedAt: null,
+  createdAt: new Date(Date.now() - 20_000).toISOString(),
+});
+
 export function StudyRail({ study }: { study: Study }) {
   const panel =
     study.skin === "glass"
@@ -116,6 +129,9 @@ export function StudyRail({ study }: { study: Study }) {
             seed="project_e2e"
             working={{
               operationId: "op-1",
+              type: "product_scan",
+              sequence: null,
+              operation: SCANNING,
               stageLabel: "Reading what you built",
               phase: "working",
               shouldPoll: true,

@@ -507,9 +507,12 @@ describe("the next Move", () => {
 
 describe("what is running", () => {
   it("carries the operation through without turning it into a candidate", () => {
-    const focus = deriveNovaFocus({ ...quiet(), working: RUNNING });
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      working: { type: "business_audit", view: RUNNING },
+    });
 
-    expect(focus.working).toBe(RUNNING);
+    expect(focus.working?.view).toBe(RUNNING);
     expect(focus.primary.kind).toBe("nothing_to_do");
   });
 
@@ -521,10 +524,10 @@ describe("what is running", () => {
     const focus = deriveNovaFocus({
       ...quiet(),
       changes: [changeAt("validating")],
-      working: RUNNING,
+      working: { type: "business_audit", view: RUNNING },
     });
 
-    expect(focus.working).toBe(RUNNING);
+    expect(focus.working?.view).toBe(RUNNING);
     expect(focus.primary.kind).toBe("nothing_to_do");
   });
 
@@ -532,11 +535,11 @@ describe("what is running", () => {
     const focus = deriveNovaFocus({
       ...quiet(),
       changes: [changeAt("awaiting_approval", "change-a"), changeAt("validating", "change-b")],
-      working: RUNNING,
+      working: { type: "business_audit", view: RUNNING },
     });
 
     expect(focus.primary.kind).toBe("review_change");
-    expect(focus.working).toBe(RUNNING);
+    expect(focus.working?.view).toBe(RUNNING);
   });
 });
 

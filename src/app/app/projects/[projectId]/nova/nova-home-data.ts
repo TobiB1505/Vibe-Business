@@ -5,6 +5,9 @@ import type { CostBalance } from "@/components/system/cost-disclosure";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getActionPlanChecklist, type ActionPlanChecklist } from "@/modules/action-plans/service";
+import { getMoveWithExecution } from "@/modules/execution/service";
+import type { OpportunityActionState } from "@/modules/execution/view";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed, type ActivityEntry } from "@/modules/audit-log/view";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
@@ -35,9 +38,9 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * for this slice was the read count on it. So the shape is deliberate: six
  * concurrent reads, none of which fans out per candidate — and then at most
  * one conditional read, decided by what the ranking put first and described on
- * `question`, `change` and `workspaceCandidates` below. They are mutually
- * exclusive by construction: one primary candidate is one moment, and each of
- * the three belongs to a different set of kinds.
+ * `question`, `change`, `workspaceCandidates` and `move` below. They are
+ * mutually exclusive by construction: one primary candidate is one moment, and
+ * each of the four belongs to a different set of kinds.
  *
  * Two of the six arrived with the rail, and both were weighed rather than
  * assumed. `getActionPlanChecklist` exists because the Action Plan page's own
@@ -132,6 +135,16 @@ export type NovaHomeData = {
    * interpolated into a href, a class, or anything a browser would execute.
    */
   workspaceCandidates: readonly WorkspaceCandidate[];
+  /**
+   * The Move to read, when the ranking put one first.
+   *
+   * The third of the conditional reads, and the one with an argument behind
+   * its execution half: `MoveCard` reads a null execution as "no executor
+   * summary exists" and says so, which would be a guess if nobody had looked.
+   * `getMoveWithExecution` looks, with the builder the Action Plan uses, and a
+   * Move that genuinely has no summary still resolves to null.
+   */
+  move: { opportunity: BusinessOpportunity; execution: OpportunityActionState | null } | null;
   /**
    * The plan as a sequence, for the rail. Null when no plan has completed.
    *
@@ -299,7 +312,13 @@ export async function readNovaHomeData(
    * documented read count honest rather than quietly five.
    */
   const control = view.primary.control;
-  const [question, change, workspaceCandidates] = await Promise.all([
+  /*
+   * The candidate carries the Move's id, rank and title — enough to rank it,
+   * not enough to read it. The card wants the whole opportunity.
+   */
+  const primaryMove = "move" in view.primary.candidate ? view.primary.candidate.move : null;
+
+  const [question, change, workspaceCandidates, move] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -314,6 +333,12 @@ export async function readNovaHomeData(
     control.kind === "choose"
       ? readWorkspaceCandidates(supabase, params.projectId)
       : Promise.resolve([]),
+    primaryMove
+      ? getMoveWithExecution(supabase, {
+          projectId: params.projectId,
+          opportunityId: primaryMove.id,
+        })
+      : Promise.resolve(null),
   ]);
 
   return {
@@ -324,6 +349,7 @@ export async function readNovaHomeData(
     question,
     change,
     workspaceCandidates,
+    move,
     checklist,
     /* Oldest last: a thread reads downward and the log arrives newest first. */
     activity: buildActivityFeed(events.events).reverse(),

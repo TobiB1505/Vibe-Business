@@ -660,7 +660,7 @@ describe("a run that stopped answering", () => {
 
     const focus = await readNovaFocus(client(), PROJECT);
 
-    expect(focus.working?.stalled).toBe(true);
+    expect(focus.working?.view.stalled).toBe(true);
     expect(focus.primary.kind).toBe("nothing_to_do");
   });
 
@@ -671,7 +671,7 @@ describe("a run that stopped answering", () => {
 
     const focus = await readNovaFocus(client(), PROJECT);
 
-    expect(focus.working?.stalled).toBe(false);
+    expect(focus.working?.view.stalled).toBe(false);
     expect(focus.primary.kind).toBe("nothing_to_do");
   });
 

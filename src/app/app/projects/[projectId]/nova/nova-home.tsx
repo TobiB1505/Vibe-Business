@@ -20,6 +20,7 @@ import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
 import { NovaClock } from "@/components/nova/nova-clock";
 import { NovaHeaderLive } from "./nova-header-live";
 import { AuditBlock } from "@/components/nova/blocks/audit";
+import { MoveBlock } from "@/components/nova/blocks/move";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
@@ -190,7 +191,9 @@ function FocusSection({
   const control = entry.control;
 
   if (control.kind === "none") {
-    return <NovaFocusThread entry={entry} block={auditBlock(data, entry)} />;
+    return (
+      <NovaFocusThread entry={entry} working={data.view.working} block={blockFor(data, entry)} />
+    );
   }
 
   if (control.kind === "answer") {
@@ -201,12 +204,13 @@ function FocusSection({
      * worse than a card with none. The sentence above it still stands.
      */
     if (!data.question) {
-      return <NovaFocusThread entry={entry} />;
+      return <NovaFocusThread entry={entry} working={data.view.working} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        working={data.view.working}
         block={
           <FounderInputCard
             projectId={projectId}
@@ -235,12 +239,13 @@ function FocusSection({
      * change that is not there would be worse than none.
      */
     if (!data.change) {
-      return <NovaFocusThread entry={entry} />;
+      return <NovaFocusThread entry={entry} working={data.view.working} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        working={data.view.working}
         block={
           <ChangeGates
             projectId={projectId}
@@ -267,12 +272,13 @@ function FocusSection({
      * choice with nothing to choose from would be worse than none.
      */
     if (data.workspaceCandidates.length === 0) {
-      return <NovaFocusThread entry={entry} />;
+      return <NovaFocusThread entry={entry} working={data.view.working} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        working={data.view.working}
         block={
           <AgentWorkspaceChoice
             candidates={data.workspaceCandidates}
@@ -299,6 +305,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        working={data.view.working}
         controlLabel={control.label}
         control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
       />
@@ -327,7 +334,8 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
-        block={auditBlock(data, entry)}
+        working={data.view.working}
+        block={blockFor(data, entry)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
       />
@@ -337,7 +345,9 @@ function FocusSection({
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return <NovaFocusThread entry={entry} block={auditBlock(data, entry)} />;
+    return (
+      <NovaFocusThread entry={entry} working={data.view.working} block={blockFor(data, entry)} />
+    );
   }
 
   const subject = control.option.subject;
@@ -351,7 +361,8 @@ function FocusSection({
   return (
     <NovaFocusThread
       entry={entry}
-      block={auditBlock(data, entry)}
+      working={data.view.working}
+      block={blockFor(data, entry)}
       controlLabel={control.option.label}
       /*
        * `ActionBlock` rather than the bare control, because the price is not
@@ -382,14 +393,25 @@ function FocusSection({
 }
 
 /**
- * The audit's reading, when the audit is what the moment is about.
+ * The block for a moment, when the read behind it landed.
  *
- * The only block Home can draw without a further read: `readHealth` already
- * builds the whole `BusinessBrainView` to produce four numbers, and until now
- * threw the rest away. Every other kind needs a subject Home does not hold —
- * and drawing a frame around an absence would be worse than drawing nothing.
+ * `BLOCK_FOR_MOMENT` decides which kind; this supplies the one the data is in
+ * hand for. A kind whose subject was not read draws nothing — a frame around
+ * an absence is worse than no frame, and the sentence above it still stands.
+ *
+ * The two branches with their own control paths — a question's card, a
+ * change's gates, the workspace choice — are built where their arguments are,
+ * beside the control that answers them. These two are pure views.
  */
-function auditBlock(data: NovaHomeData, entry: NovaHomeEntry) {
-  if (BLOCK_FOR_MOMENT[entry.kind] !== "audit" || !data.audit) return undefined;
-  return <AuditBlock view={data.audit} />;
+function blockFor(data: NovaHomeData, entry: NovaHomeEntry) {
+  switch (BLOCK_FOR_MOMENT[entry.kind]) {
+    case "audit":
+      return data.audit ? <AuditBlock view={data.audit} /> : undefined;
+    case "move":
+      return data.move ? (
+        <MoveBlock opportunity={data.move.opportunity} execution={data.move.execution} />
+      ) : undefined;
+    default:
+      return undefined;
+  }
 }

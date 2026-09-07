@@ -367,9 +367,11 @@ const RESTARTABLE_STALLS = {
 
 function splitStalledFromRunning(
   operations: readonly { operationType: OperationType; run: StoredOperationRun | null }[],
-): { stalled: NovaOperationFlags; running: StoredOperationRun[] } {
+): { stalled: NovaOperationFlags; running: { type: OperationType; run: StoredOperationRun }[] } {
   const stalled: NovaOperationFlags = { agent: false, scan: false, audit: false };
-  const running: StoredOperationRun[] = [];
+  /* The type travels with the run: a stage list is keyed by it, and a surface
+     that had only the row would have to guess which sequence it was drawing. */
+  const running: { type: OperationType; run: StoredOperationRun }[] = [];
 
   for (const { operationType, run } of operations) {
     if (run === null) continue;
@@ -384,7 +386,7 @@ function splitStalledFromRunning(
       continue;
     }
 
-    running.push(run);
+    running.push({ type: operationType, run });
   }
 
   /*
@@ -392,7 +394,7 @@ function splitStalledFromRunning(
    * flight at once; Nova reports one, and the newest is the one the founder
    * just started.
    */
-  running.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  running.sort((a, b) => b.run.createdAt.localeCompare(a.run.createdAt));
   return { stalled, running };
 }
 
@@ -456,7 +458,7 @@ export async function readNovaFocusFacts(
     auditOutdated: auditCurrency.hasAudit && !auditCurrency.upToDate,
     repositoryReadOutdated: validationTarget.repositoryReadOutdated,
     workspaceChoiceRequired: validationTarget.workspaceChoiceRequired,
-    working: running.length > 0 ? view(running[0]) : null,
+    working: running.length > 0 ? { type: running[0].type, view: view(running[0].run) } : null,
   };
 }
 

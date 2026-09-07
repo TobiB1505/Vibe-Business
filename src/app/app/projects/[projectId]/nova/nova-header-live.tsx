@@ -100,7 +100,13 @@ export function NovaHeaderLive({
     continueAfter: (next) => operationPollPhase(next) === "working",
   });
 
-  const polled = novaWorkingEntry(latest ?? null);
+  /*
+   * The type comes from the server's reading, not from the poll: the poll
+   * returns the operation row, and a row does not say which kind of run it is.
+   * `working` is the same operation — the poll is keyed by its id — so reusing
+   * its type is a fact rather than an assumption.
+   */
+  const polled = latest && working ? novaWorkingEntry({ type: working.type, view: latest }) : null;
   const settled = polled !== null && polled.phase !== "working";
 
   useEffect(() => {

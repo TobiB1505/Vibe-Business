@@ -180,7 +180,7 @@ const FACTS: NovaFocusFacts = {
   ],
   moves: [{ id: "move_wireframe", rank: 1, title: "Add a pricing page" }],
   auditOutdated: true,
-  working: RUNNING,
+  working: { type: "business_audit", view: RUNNING },
 };
 
 /**

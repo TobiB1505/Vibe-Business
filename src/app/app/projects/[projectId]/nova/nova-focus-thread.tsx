@@ -2,7 +2,8 @@ import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaAside, NovaLine, NovaRenderBlock } from "@/components/nova/nova-thread";
 import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { BLOCK_FOR_MOMENT, type BlockKind } from "@/modules/nova/blocks";
-import type { NovaHomeEntry } from "@/modules/nova/home-view";
+import type { NovaHomeEntry, NovaWorkingEntry } from "@/modules/nova/home-view";
+import { ProgressBlock } from "@/components/nova/blocks/progress";
 import type { ReactNode } from "react";
 import { footnoteFor } from "./footnote";
 
@@ -39,6 +40,16 @@ import { footnoteFor } from "./footnote";
  */
 export function NovaFocusThread({
   entry,
+  /**
+   * The run in flight, when one is and it has named stages.
+   *
+   * Below the moment rather than instead of it, because the two are different
+   * questions: the moment is what needs deciding, and this is what is
+   * happening while it waits. Only two of the fifteen operation types have a
+   * stage list — `progressSequenceFor` decides, and a run without one draws
+   * nothing rather than an empty checklist.
+   */
+  working,
   /** The block for this moment, when the surface could read its subject. */
   block,
   /** What the founder can do. Outside the bubble, as every control is. */
@@ -50,6 +61,7 @@ export function NovaFocusThread({
   controlLabel,
 }: {
   entry: NovaHomeEntry;
+  working?: NovaWorkingEntry | null;
   block?: ReactNode;
   control?: ReactNode;
   controlLabel?: string;
@@ -90,6 +102,12 @@ export function NovaFocusThread({
       {block && kind !== "none" && (
         <NovaRenderBlock label={BLOCK_LABEL[kind]} tone={status.tone} index={3}>
           {block}
+        </NovaRenderBlock>
+      )}
+
+      {working?.sequence && (
+        <NovaRenderBlock label={BLOCK_LABEL.progress} tone="active" index={4}>
+          <ProgressBlock sequence={working.sequence} operation={working.operation} />
         </NovaRenderBlock>
       )}
 

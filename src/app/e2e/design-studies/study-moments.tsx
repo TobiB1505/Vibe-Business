@@ -319,7 +319,12 @@ export function StudyMoments({ study }: { study: Study }) {
         </p>
         <ul className={`flex flex-col divide-y divide-line-1 ${panel}`}>
           {OPERATIONS.map(({ label, note, operation }) => {
-            const view = buildNovaHomeView(deriveNovaFocus({ ...NO_FACTS, working: operation }));
+            const view = buildNovaHomeView(
+              deriveNovaFocus({
+                ...NO_FACTS,
+                working: operation && { type: "business_audit", view: operation },
+              }),
+            );
             const presence = novaPresenceState({
               tier: view.primary.tier,
               phase: view.working?.phase ?? "idle",

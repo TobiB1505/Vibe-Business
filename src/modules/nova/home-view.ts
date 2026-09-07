@@ -3,7 +3,16 @@ import { operationPollPhase, OPERATION_STAGE_LABELS } from "../operations/view";
 import { novaCandidateMessage, novaCandidateOption, novaCandidatePrompt } from "./feed";
 import type { NovaChoiceOption } from "./feed";
 import { novaCandidateTier } from "./focus";
-import type { FocusCandidate, FocusCandidateKind, NovaFocus, NovaFocusTier } from "./focus";
+import type {
+  FocusCandidate,
+  FocusCandidateKind,
+  NovaFocus,
+  NovaFocusTier,
+  NovaWorkingFact,
+} from "./focus";
+import type { OperationType } from "../operations/schema";
+import type { ProgressSequenceId } from "../operations/view";
+import { progressSequenceFor } from "./blocks";
 
 /**
  * Nova Home, as data (UI Sourcing Spec C1).
@@ -125,6 +134,12 @@ export type NovaHomeEntry = {
 
 export type NovaWorkingEntry = {
   operationId: string;
+  /** What kind of run this is. Decides the stage list, never chosen by a screen. */
+  type: OperationType;
+  /** The named stages this run has, or null when this kind has none. */
+  sequence: ProgressSequenceId | null;
+  /** The reading itself, for a block that draws the stages. */
+  operation: OperationView;
   /** The named stage, never a percentage. */
   stageLabel: string;
   /** `working`, `waiting_user`, `stalled` — the operations view's own reading. */
@@ -284,14 +299,25 @@ function entryFor(candidate: FocusCandidate): NovaHomeEntry {
  * then mapped it to a stage label itself would be a second projection of the
  * same facts, and the two would drift the first time a stage was renamed.
  */
-export function novaWorkingEntry(operation: OperationView | null): NovaWorkingEntry | null {
-  if (operation === null) return null;
+export function novaWorkingEntry(working: NovaWorkingFact | null): NovaWorkingEntry | null {
+  if (working === null) return null;
+
+  const { type, view } = working;
 
   return {
-    operationId: operation.operationId,
-    stageLabel: OPERATION_STAGE_LABELS[operation.stage],
-    phase: operationPollPhase(operation),
-    shouldPoll: operation.shouldPoll,
+    operationId: view.operationId,
+    type,
+    /*
+     * The named stages, when this kind of run has them. Two of the fifteen
+     * types do; the rest report a stage and no sequence, which is a true
+     * answer rather than a missing one — and `progressSequenceFor` is the only
+     * place that decides, so a caller cannot pick the wrong list.
+     */
+    sequence: progressSequenceFor(type),
+    operation: view,
+    stageLabel: OPERATION_STAGE_LABELS[view.stage],
+    phase: operationPollPhase(view),
+    shouldPoll: view.shouldPoll,
   };
 }
 
