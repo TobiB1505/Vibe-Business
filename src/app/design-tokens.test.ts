@@ -487,11 +487,14 @@ describe("the body and caption steps name what they replaced", () => {
  *
  * ## Why exceptions are counted rather than described
  *
- * Nineteen uses remain and they are not type. They are a metric (a number with
- * `tabular-nums`), a glyph sized as an icon (a `×`, a `!`, an initial), and a
- * large CTA whose size belongs to `buttonClasses`. Each is a separate
- * decision, none of them is a heading, and folding them into the type scale to
- * make a test pass would be the wrong fix.
+ * Twelve uses remain and they are not type. They are a glyph sized as an icon
+ * (a `×`, a `!`, an avatar initial), a large CTA whose size belongs to
+ * `buttonClasses`, a mono rank, and one price sized together with its coin.
+ * None of them is a heading, and folding them into the type scale to make a
+ * test pass would be the wrong fix.
+ *
+ * The metrics that used to be on this list are gone: they were figures, and
+ * `--text-figure-*` names them now.
  *
  * So they are named by file *with a count*. A file may keep exactly what it
  * has; one more makes this fail. That is what stops the allowlist from
@@ -502,21 +505,17 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
   /**
    * The remaining uses, and what each file is doing with them.
    *
-   * metric — a number with `tabular-nums`, sized to be read as a quantity
-   * glyph  — a character sized as an icon: `×`, `!`, an avatar initial
-   * cta    — a large marketing button, whose size belongs to `buttonClasses`
+   * glyph — a character sized as an icon: `×`, `!`, an avatar initial
+   * cta   — a large marketing button, whose size belongs to `buttonClasses`
    */
   const NOT_TYPE: [string, number][] = [
-    ["src/app/app/(account)/products/product-list-card.tsx", 3], // glyph ×3
-    ["src/app/app/(account)/products/products-index.tsx", 1], // metric
-    ["src/app/app/(account)/repositories/repositories-index.tsx", 2], // metric, glyph
-    ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 4], // metric, glyph ×3
-    ["src/app/app/projects/[projectId]/business-brain/business-map.tsx", 1], // metric
-    ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // metric
-    ["src/app/app/projects/[projectId]/understanding-panel.tsx", 2], // metric ×2
+    ["src/app/app/(account)/products/product-list-card.tsx", 2], // glyph — an avatar initial
+    ["src/app/app/(account)/repositories/repositories-index.tsx", 1], // glyph — a × that clears
+    ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 3], // glyph ×3
+    ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // a mono rank, "01"
     ["src/app/page.tsx", 3], // cta ×3
     ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
-    ["src/components/ui/credit-amount.tsx", 1], // metric — the price itself
+    ["src/components/ui/credit-amount.tsx", 1], // the price, sized with its coin
   ];
 
   const SCALE = /\btext-(base|lg|xl|2xl|3xl|4xl)\b/g;
@@ -583,6 +582,11 @@ describe("no arbitrary size restates a token", () => {
     const declared = new Map<string, string>();
     for (const [, name, value] of CSS.matchAll(/--text-([a-z-]+):\s*([0-9.]+rem);/g)) {
       if (name.includes("--")) continue;
+      // A figure step is not merely a size: it carries `line-height: 1` and
+      // tracking chosen for numerals. Prose that happens to be 20px is not
+      // "text-figure-sm written as a number", and telling somebody to rename
+      // it would put a numeral's leading on a sentence.
+      if (name.startsWith("figure")) continue;
       declared.set(value, name);
       // The same size written in pixels, which is how eleven of them appeared.
       declared.set(`${Number.parseFloat(value) * 16}px`, name);

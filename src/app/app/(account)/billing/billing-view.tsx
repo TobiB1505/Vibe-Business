@@ -45,6 +45,7 @@ import {
   StartPlanForm,
 } from "./purchase-forms";
 import { StandaloneLink } from "@/components/ui/text-link";
+import { figureClasses } from "@/components/ui/figure";
 
 /** Checkout return states. A redirect never grants Credits; the webhook does. */
 export const CHECKOUT_NOTICES: Record<
@@ -243,7 +244,7 @@ export function BillingView({
           <MonoLabel className="text-mint">Available Credits</MonoLabel>
 
           <p
-            className="text-fg mt-5 text-[3.15rem] leading-none font-bold tracking-[-0.04em] tabular-nums"
+            className={figureClasses("lg", "text-fg mt-5")}
             data-testid="credit-balance"
           >
             {overview.displayAvailable}

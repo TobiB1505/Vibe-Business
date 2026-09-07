@@ -32,6 +32,7 @@ import {
 } from "./repository-list-state";
 import { proseLinkClasses } from "@/components/ui/text-link";
 import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
+import { Figure } from "@/components/ui/figure";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -44,8 +45,7 @@ function GithubMark({ className }: { className?: string }) {
 function Metric({ value, label }: { value: number; label: string }) {
   return (
     <div className="border-line-2 min-w-24 border-l pl-5 first:border-l-0 first:pl-0">
-      <strong className="text-fg block text-xl font-bold tabular-nums">{value}</strong>
-      <span className="text-fg-meta mt-0.5 block text-caption">{label}</span>
+      <Figure value={value} tier="sm" label={label} />
     </div>
   );
 }

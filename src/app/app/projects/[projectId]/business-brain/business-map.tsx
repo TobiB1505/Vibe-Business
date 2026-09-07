@@ -7,6 +7,7 @@ import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
 import { CoverageLine } from "@/components/system/confidence";
 import type { ScoreTone } from "@/components/ui/score-display";
+import { figureClasses } from "@/components/ui/figure";
 
 /**
  * The overall reading's own tone, by state.
@@ -212,7 +213,7 @@ function NodeButton({
       >
         <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
         <span className="text-fg mt-1.5 max-w-[6.5rem] text-[0.72rem] leading-[1.1] font-semibold tracking-[-0.018em]">{node.label}</span>
-        <span className="text-fg mt-1 text-[1.35rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">{node.score ?? "—"}</span>
+        <span className={figureClasses("sm", "text-fg mt-1")}>{node.score ?? "—"}</span>
         <span className={cn("mt-1.5 flex items-center gap-1.5 text-[0.65rem] font-medium", statusTone(node))}>
           <span aria-hidden="true" className="business-brain-status-dot size-1.5 rounded-full" />
           {node.healthLabel}
@@ -257,7 +258,7 @@ function MobileBrain({ view, selected, onSelect }: {
               >
                 <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
                 <span className="text-fg mt-2 max-w-28 text-caption font-semibold leading-tight">{node.label}</span>
-                <span className="text-fg mt-1 text-xl font-semibold tabular-nums">{node.score ?? "—"}</span>
+                <span className={figureClasses("sm", "text-fg mt-1")}>{node.score ?? "—"}</span>
                 <span className={cn("mt-1 text-[0.65rem]", statusTone(node))}>{node.healthLabel}</span>
               </button>
             </li>
@@ -362,7 +363,7 @@ export function BusinessMap({
           className="business-brain-core pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-[13.4rem] flex-col items-center justify-center rounded-full text-center"
           style={{ transform: "translate(-50%, -50%)" }}
         >
-          <span className="text-fg text-[3.9rem] leading-none font-semibold tracking-[-0.065em] tabular-nums">{view.overall.score ?? "—"}</span>
+          <span className={figureClasses("lg", "text-fg")}>{view.overall.score ?? "—"}</span>
           <span className="text-fg mt-2.5 text-title font-semibold">Business Health</span>
           <span className={cn("mt-2.5 rounded-full px-3 py-1 text-[0.7rem] font-medium", SCORE_STATE_CHIP[view.overall.state])}>{view.overall.stateLabel}</span>
         </div>

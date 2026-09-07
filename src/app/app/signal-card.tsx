@@ -7,6 +7,7 @@ import { Sparkline, sparklineBreakCaption } from "@/components/ui/sparkline";
 import { statusToneText } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import { figureClasses } from "@/components/ui/figure";
 import { formatDate, formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
@@ -97,10 +98,7 @@ function ScoreRing({ score }: { score: number }) {
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
-          className={cn(
-            "text-[3.25rem] leading-none font-bold tracking-[-0.06em] tabular-nums",
-            statusToneText(statusForScoreTone(tone)),
-          )}
+          className={figureClasses("lg", statusToneText(statusForScoreTone(tone)))}
         >
           {score}
         </span>

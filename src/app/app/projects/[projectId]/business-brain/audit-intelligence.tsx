@@ -20,6 +20,7 @@ import type {
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 import { ArrowRightIcon } from "@/components/ui/icons.generated";
 import { InlineAction } from "@/components/ui/inline-action";
+import { figureClasses } from "@/components/ui/figure";
 
 /*
  * No `evidence` tab.
@@ -552,7 +553,7 @@ function SelectedPanel({
                     <span className="text-fg-meta text-[0.68rem] font-medium tracking-[0.1em] uppercase">Current lens score</span>
                     <h3 id={`${tabId}-score-heading`} className="text-fg mt-1 text-title font-semibold">{node.label}</h3>
                   </div>
-                  <p className={cn("shrink-0 text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", scoreTone)}>
+                  <p className={figureClasses("md", cn("shrink-0", scoreTone))}>
                     {node.score ?? "—"}<span className="text-fg-meta ml-1 text-caption font-normal tracking-normal">/100</span>
                   </p>
                 </div>

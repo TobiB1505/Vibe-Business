@@ -4,6 +4,7 @@ import { scoreDisplay } from "@/components/ui/score-display";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 import { StandaloneLink } from "@/components/ui/text-link";
+import { figureClasses } from "@/components/ui/figure";
 
 /**
  * The business reading, small (UI Sourcing Spec C6).
@@ -66,12 +67,7 @@ export function HealthScore({
       </div>
 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span
-          className={cn(
-            "text-fg text-display leading-none font-bold tabular-nums",
-            display.unscored && "text-fg-muted",
-          )}
-        >
+        <span className={figureClasses("md", display.unscored ? "text-fg-muted" : "text-fg")}>
           {display.text}
         </span>
         <span className="text-fg-prose text-body">{stateLabel}</span>

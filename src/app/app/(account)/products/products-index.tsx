@@ -12,6 +12,7 @@ import {
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
 import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
+import { Figure } from "@/components/ui/figure";
 import { cn } from "@/lib/utils/cn";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { ProductListCard } from "./product-list-card";
@@ -43,10 +44,7 @@ function SummaryMetric({
       >
         {icon}
       </span>
-      <span className="flex min-w-0 flex-col">
-        <strong className="text-fg text-lg font-bold tabular-nums">{value}</strong>
-        <span className="text-fg-meta text-caption">{label}</span>
-      </span>
+      <Figure value={value} tier="sm" label={label} />
     </Surface>
   );
 }

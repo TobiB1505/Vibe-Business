@@ -17,6 +17,7 @@ import {
 } from "@/modules/projects/founder-intent";
 import type { ConfidenceTone, UnderstandingView } from "@/modules/product-understanding/view";
 import { StandaloneLink } from "@/components/ui/text-link";
+import { Figure } from "@/components/ui/figure";
 
 /**
  * Evidence ids to citations, resolved through the one table that knows how to
@@ -190,8 +191,8 @@ export function UnderstandingPanel({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="border-line-1 bg-surface-2 rounded-xl border p-3"><span className="text-fg text-xl font-semibold tabular-nums">{view.capabilities.length}</span><p className="text-fg-meta mt-1 text-caption">supported capabilities</p></div>
-              <div className="border-line-1 bg-surface-2 rounded-xl border p-3"><span className="text-fg text-xl font-semibold tabular-nums">{sourceCount}/{sourceTotal}</span><p className="text-fg-meta mt-1 text-caption">sources available</p></div>
+              <div className="border-line-1 bg-surface-2 rounded-xl border p-3"><Figure value={view.capabilities.length} tier="sm" label="supported capabilities" /></div>
+              <div className="border-line-1 bg-surface-2 rounded-xl border p-3"><Figure value={`${sourceCount}/${sourceTotal}`} tier="sm" label="sources available" /></div>
             </div>
           </div>
         </div>

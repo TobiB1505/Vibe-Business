@@ -11,6 +11,7 @@ import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
 import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { Sparkline } from "@/components/ui/sparkline";
 import { StatusPill, statusToneText } from "@/components/ui/status-pill";
+import { figureClasses } from "@/components/ui/figure";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { initialsFrom } from "@/modules/auth/initials";
@@ -128,7 +129,9 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                     </StatusPill>
                   </div>
                   {projectLabelDiffers ? (
-                    <p className="text-fg-meta mt-1 truncate text-caption">Project: {product.name}</p>
+                    <p className="text-fg-meta mt-1 truncate text-caption">
+                      Project: {product.name}
+                    </p>
                   ) : null}
                   <p className="text-fg-muted mt-2 line-clamp-2 max-w-[56ch] text-body leading-6">
                     {product.shortDescription ?? "No product summary is available yet."}
@@ -179,8 +182,13 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
               <div>
                 <p className="text-fg-meta text-meta">Business signal</p>
                 {product.scoreState === "scored" && product.score !== null ? (
-                  <p className="mt-1 flex items-baseline gap-1 font-semibold tabular-nums">
-                    <span className={cn("text-lg", statusToneText(statusForScoreTone(display.tone)))}>
+                  <p className="mt-1 flex items-baseline gap-1">
+                    <span
+                      className={figureClasses(
+                        "sm",
+                        statusToneText(statusForScoreTone(display.tone)),
+                      )}
+                    >
                       {product.score}
                     </span>
                     <span className="text-fg-meta text-caption">/100</span>
