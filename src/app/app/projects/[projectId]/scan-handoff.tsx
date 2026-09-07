@@ -139,30 +139,64 @@ export function ScanHandoff({ running }: { running: boolean }) {
     return () => clearInterval(timer);
   }, [running]);
 
+  /*
+   * Measured once the element exists, and re-measured only when it changes.
+   *
+   * This shipped with **no dependency array** and a fresh object on every
+   * observation. `ResizeObserver` fires on `observe`, that set state, the
+   * state re-rendered, the effect ran again because it had no deps, and it
+   * observed again — a render loop that React ends by throwing, which the
+   * section's error boundary caught as "this section didn't load". The
+   * animation never appeared; a founder watched 42 seconds of live browser
+   * where the handoff should have been, and leaving the tab made it worse
+   * because the visibility change is another render.
+   *
+   * Two fixes, and both are needed. The dependency array stops the effect
+   * re-running per render, and the equality check stops an observation that
+   * reports the same size from being a state change at all — a resize
+   * observer on a box whose size is a fraction of a live video frame will
+   * report the same numbers repeatedly.
+   */
   useEffect(() => {
     const element = boxRef.current;
     if (!element) return;
 
-    // Observed rather than read once: the dialog's box is sized from the live
-    // frame, so it can change shape under this component.
-    const observer = new ResizeObserver(([entry]) => {
-      if (!entry) return;
-      setBox({ w: entry.contentRect.width, h: entry.contentRect.height });
+    const observer = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect) return;
+      setBox((current) =>
+        current && current.w === rect.width && current.h === rect.height
+          ? current
+          : { w: rect.width, h: rect.height },
+      );
     });
     observer.observe(element);
 
     return () => observer.disconnect();
-  });
+  }, [running]);
 
   if (!running) return null;
 
   const stage = scanHandoffStage(elapsedMs, reducedMotion);
-  // The picture stays on screen and untouched while the founder is still
-  // watching it; this component only takes over at the switch-off.
-  if (stage === "watching") return null;
 
+  /*
+   * The box is mounted for the whole run, empty while the founder is still
+   * watching the real browser.
+   *
+   * It used to return `null` during `watching`, so the element the observer
+   * needed did not exist until the switch-off had already begun — the tiles
+   * then had no geometry for their first frames. An empty, transparent,
+   * pointer-transparent box costs nothing and means the measurement is ready
+   * before it is wanted.
+   */
   return (
-    <div ref={boxRef} className="absolute inset-0 overflow-hidden bg-app" aria-hidden>
+    <div
+      ref={boxRef}
+      className={`pointer-events-none absolute inset-0 overflow-hidden ${
+        stage === "watching" ? "" : "bg-app"
+      }`}
+      aria-hidden
+    >
       <AnimatePresence>
         {stage === "collapsing" && !reducedMotion && (
           /*
