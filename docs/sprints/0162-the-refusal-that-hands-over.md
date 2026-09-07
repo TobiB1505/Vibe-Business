@@ -43,6 +43,14 @@ The gate was wrong in both places. `planStaleness` says the diagnosis moved, not
 
 **Both were mine, and both were missed by tests that looked right.** The browser suite asserted the tool buttons were *visible* and never clicked one; the Agent notice had a scene for the refusal and none for the refusal-with-a-way-out.
 
+## Three more the founder found by using it
+
+**The step rendered twice.** The confirmation passed into the handoff card was the whole `FounderActionCard` — its own bordered panel, its own status pill, its own copy of the title and description. So one step drew two cards under each other, one saying *"Vibe won't build this one"* and the other *"Vibe can't run this one"*, and the second one's sentence — *"this isn't a change to your product"* — was **false**: it is a change; Vibe declined it. The card now owns the framing and `AttestationForm` owns the question and the answer, and a third prompt reading exists for a handed-off step.
+
+**Recording the finding was impossible.** `isFounderAttestable` was widened and the database function was widened, and `founder-action-attestation.ts` was not — it still called the predicate with no handoff set, so a `product_change` came back false and the founder who had just been handed a prompt and done the work could not record it. The screen offered it and the server refused it, for the second time in an hour, with the same error copy and a different cause.
+
+**And the copy control was the wrong weight.** A full-width secondary button beside the heading, the same visual weight as "Record this finding" — competing with the action that advances the plan for something that only moves text onto a clipboard. It is now the classic control: an icon-and-label button on the block it copies.
+
 ## Verification
 
 Sabotage at three layers. Removing the fence defusal fails *"cannot have its quote closed by the text inside it"*. Removing the warning fails *"fences the planned step and says what to do with an instruction inside it"*. Making the database gate plan-wide instead of per step fails *"does not admit any other step in the same plan"* — because handing out one change must not open the next.

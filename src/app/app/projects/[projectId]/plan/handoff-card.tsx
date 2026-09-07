@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CheckIcon } from "@/components/ui/dashboard-icons";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
@@ -123,31 +124,61 @@ function HandoffPrompt({ prompt, toolLabel }: { prompt: string; toolLabel: strin
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <MonoLabel className="text-amber tracking-[0.12em]">Paste this into {toolLabel}</MonoLabel>
-        <Button
+      <MonoLabel className="text-amber tracking-[0.12em]">Paste this into {toolLabel}</MonoLabel>
+
+      {/*
+        The copy control sits on the block it copies, which is where every
+        editor, gist and docs site puts it. It was a full-width secondary button
+        beside the heading — the same weight as "Record this finding", competing
+        with the action that actually advances the plan for something that only
+        moves text onto a clipboard.
+      */}
+      <div className="relative">
+        <button
           type="button"
-          variant="secondary"
           onClick={() => {
-            /* Best effort, and the prompt is selectable either way: a clipboard
-               write can be refused by the browser, and a copy button that lies
-               is worse than one that quietly does nothing. */
+            /* Best effort, and the prompt stays selectable either way: a
+               clipboard write can be refused by the browser, and a copy button
+               that lies is worse than one that quietly does nothing. */
             void navigator.clipboard
               ?.writeText(prompt)
               .then(() => setCopied(true))
               .catch(() => setCopied(false));
           }}
+          aria-label={copied ? "Prompt copied" : "Copy prompt"}
           data-testid="handoff-copy"
+          className="border-line-2 bg-surface-2 text-fg-muted hover:text-fg hover:border-line-3 absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-nav border px-2 py-1 text-xs transition-interactive"
         >
-          {copied ? "Copied" : "Copy prompt"}
-        </Button>
+          {copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <pre
+          data-testid="handoff-prompt"
+          className="border-line-2 bg-surface-2 text-fg-body rounded-well max-h-72 overflow-auto border py-2 pr-20 pl-3 text-xs leading-relaxed whitespace-pre-wrap"
+        >
+          {prompt}
+        </pre>
       </div>
-      <pre
-        data-testid="handoff-prompt"
-        className="border-line-2 bg-surface-2 text-fg-body rounded-well max-h-72 overflow-auto border px-3 py-2 text-xs leading-relaxed whitespace-pre-wrap"
-      >
-        {prompt}
-      </pre>
     </div>
+  );
+}
+
+/** Two offset sheets — the shape every interface uses for "copy". */
+function CopyIcon({ size = 14 }: { size?: number }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15V6a2 2 0 0 1 2-2h9" />
+    </svg>
   );
 }

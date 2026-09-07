@@ -59,4 +59,19 @@ describe("actions the plan screen offers on a stale plan", () => {
      */
     expect(read("founder-input-action.ts")).toContain("staleness.length");
   });
+
+  it("asks the attestation gate about handoffs, not just about the step", () => {
+    /*
+     * The defect a founder hit within minutes of the last fix. The predicate
+     * was widened and the database function was widened, and this call was
+     * not — so `isFounderAttestable` fell back to its empty default, a
+     * `product_change` came back false, and the founder who had just been
+     * handed a prompt and done the work could not record it. The screen offered
+     * it; the server refused it. Again.
+     */
+    const source = read("founder-action-attestation.ts");
+
+    expect(source).toContain("handoffByStepKey");
+    expect(source).not.toMatch(/isFounderAttestable\(\s*current\.firstActionableStep\s*\)/);
+  });
 });

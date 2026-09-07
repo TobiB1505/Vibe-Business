@@ -48,13 +48,10 @@ import {
 } from "@/modules/action-plans/view";
 import { OperationProgress } from "@/components/system/operation-progress";
 import { resolveFounderInputAction } from "../founder-input-action";
-import {
-  attestFounderActionStepAction,
-  type FounderActionAttestationState,
-} from "../founder-action-attestation";
 import { getOperationStatusAction } from "../run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "../plan-action";
 import { PrepareChangePanel } from "../prepare-change-panel";
+import { AttestationForm } from "./attestation-form";
 import { HandoffCard } from "./handoff-card";
 
 /**
@@ -413,10 +410,11 @@ function PlanBody({
               repository={repositoryFullName}
               tool={planView.handoffByStepKey[firstActionableStep.id] ?? null}
               confirmation={
-                <FounderActionCard
+                <AttestationForm
                   projectId={projectId}
                   actionPlanId={plan.id}
                   step={firstActionableStep}
+                  handedOff
                 />
               }
             />
@@ -578,11 +576,6 @@ function FounderActionCard({
   step: ActionPlanStep;
 }) {
   const prompt = attestationPrompt(step);
-  const action = attestFounderActionStepAction.bind(null, projectId, actionPlanId, step.id);
-  const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
-    action,
-    null,
-  );
 
   return (
     <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
@@ -596,57 +589,12 @@ function FounderActionCard({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
         <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
-        {prompt.lead && (
-          <p className="text-fg-muted text-sm leading-relaxed">{prompt.lead}</p>
-        )}
+        {prompt.lead && <p className="text-fg-muted text-sm leading-relaxed">{prompt.lead}</p>}
       </div>
 
-      <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
-        <MonoLabel className="text-amber tracking-[0.12em]">
-          {prompt.finding ? "Answer this" : "Confirm when true"}
-        </MonoLabel>
-        {/* The step's own criterion, in its own element. Vibe writes the
-            prompt beside it and never parses it into choices — it is model
-            output, and model wording is not a machine API. */}
-        <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
-      </div>
-
-      <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
-        {prompt.finding && (
-          <div className="flex w-full flex-col gap-1.5">
-            <label
-              htmlFor={`finding-${step.id}`}
-              className="text-fg-secondary text-sm font-medium"
-            >
-              {prompt.finding.label}
-            </label>
-            <textarea
-              id={`finding-${step.id}`}
-              name="finding"
-              required
-              rows={4}
-              maxLength={1200}
-              className="border-line-2 bg-surface-2 text-fg-body rounded-well w-full resize-y border px-3 py-2 text-sm leading-relaxed"
-              data-testid="attestation-finding"
-            />
-            <p className="text-fg-muted text-xs">{prompt.finding.help}</p>
-          </div>
-        )}
-        <Button type="submit" disabled={pending || state?.ok === true} busy={pending}>
-          {pending
-            ? "Saving…"
-            : state?.ok
-              ? "Recorded"
-              : prompt.submitLabel}
-        </Button>
-        <p className="text-fg-muted text-xs">{prompt.footnote}</p>
-      </form>
-
-      {state && !state.ok && (
-        <p role="alert" className="text-coral text-sm">
-          {state.message}
-        </p>
-      )}
+      {/* The question and the answer, owned by one component so the handoff
+          card can compose it without drawing a second card (ADR 0096). */}
+      <AttestationForm projectId={projectId} actionPlanId={actionPlanId} step={step} />
     </Surface>
   );
 }

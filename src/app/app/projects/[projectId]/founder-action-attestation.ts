@@ -59,7 +59,16 @@ export async function attestFounderActionStepAction(
     /* One predicate, shared with the completion projection and the database
        function behind this call, so the three cannot drift into disagreeing
        about which steps a founder is allowed to close (ADR 0090). */
-    !isFounderAttestable(current.firstActionableStep)
+    /*
+     * The handoffs, not just the step. Widening the predicate and the database
+     * without widening this call left a handed-off step admitted by both and
+     * refused here — the founder got the prompt, did the work, and could not
+     * record it (ADR 0096).
+     */
+    !isFounderAttestable(
+      current.firstActionableStep,
+      new Set(Object.keys(current.handoffByStepKey)),
+    )
   ) {
     return { ok: false, message: ERROR_COPY.step_not_attestable };
   }

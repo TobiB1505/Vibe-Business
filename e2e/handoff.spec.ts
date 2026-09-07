@@ -50,7 +50,33 @@ test.describe("a step Vibe will not build", () => {
     await expect(prompt).toContainText("Build a dedicated pricing page");
     await expect(prompt).toContainText("DONE WHEN");
     await expect(page.getByText("Paste this into Claude Code")).toBeVisible();
-    await expect(page.getByTestId("handoff-copy")).toBeVisible();
+
+    // The classic control: on the block it copies, not a second full-width
+    // button competing with the action that advances the plan.
+    const copy = page.getByTestId("handoff-copy");
+    await expect(copy).toBeVisible();
+    await expect(copy).toHaveAccessibleName("Copy prompt");
+    expect(await copy.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
+  });
+
+  test("shows the step once, not twice", async ({ page }) => {
+    /*
+     * The confirmation used to be the whole `FounderActionCard`, nested inside
+     * this one — so the same step drew two bordered panels, each with its own
+     * status pill and its own copy of the title and description, saying two
+     * different things about itself (ADR 0096).
+     */
+    await page.goto("/e2e/action_plan_handoff_prompt");
+
+    await expect(
+      page.getByRole("heading", { name: "Build a dedicated pricing page" }),
+    ).toHaveCount(1);
+    await expect(page.getByText("Vibe won't build this one")).toHaveCount(1);
+    await expect(page.getByText("Vibe can't run this one")).toHaveCount(0);
+
+    // And the sentence that would be false here: this step *is* a change to
+    // the product. Vibe declined it; that is a different claim.
+    await expect(page.getByText("isn't a change to your product")).toHaveCount(0);
   });
 
   test("warns the receiving agent about instructions inside the quoted plan", async ({ page }) => {
@@ -69,7 +95,8 @@ test.describe("a step Vibe will not build", () => {
     await page.goto("/e2e/action_plan_handoff_prompt");
 
     await expect(page.getByTestId("attestation-finding")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Record this finding" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Record what your tool built" })).toBeVisible();
+    await expect(page.getByText("What did your tool build?")).toBeVisible();
     await expect(page.getByText("does not claim Vibe did the work")).toBeVisible();
   });
 

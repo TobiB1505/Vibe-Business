@@ -342,7 +342,33 @@ export type AttestationPrompt = {
   finding: { label: string; help: string } | null;
 };
 
-export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): AttestationPrompt {
+export function attestationPrompt(
+  step: Pick<ActionPlanStep, "actor">,
+  /**
+   * Whether Vibe handed this step to the founder's own tool (ADR 0096).
+   *
+   * A third reading, and it needs one: the `vibe` copy below says the step
+   * "isn't a change to your product", which is exactly what a handed-off step
+   * *is*. Vibe declined it — that is a different sentence, and saying the wrong
+   * one over a prompt Vibe just wrote would read as a contradiction.
+   */
+  handedOff = false,
+): AttestationPrompt {
+  if (handedOff) {
+    return {
+      pill: "Vibe won't build this one",
+      lead: null,
+      footnote:
+        "Recorded against this exact plan step and given to the next planning run. It does not " +
+        "claim Vibe did the work.",
+      submitLabel: "Record what your tool built",
+      finding: {
+        label: "What did your tool build?",
+        help: "In your own words. The next plan is written with this in front of it.",
+      },
+    };
+  }
+
   if (step.actor === "vibe") {
     return {
       pill: "Vibe can't run this one",
