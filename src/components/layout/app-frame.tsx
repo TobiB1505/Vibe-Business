@@ -61,7 +61,7 @@ export function AppFrame({ rail, children }: { rail: ReactNode; children: ReactN
            * restoration working on every page.
            */
           "lg:sticky lg:top-0 lg:h-dvh lg:w-64 lg:overflow-hidden lg:border-r lg:border-b-0",
-          "lg:px-5 lg:py-[var(--rail-inset)]",
+          "lg:px-5 lg:py-[var(--frame-inset)]",
           "empty:hidden",
         )}
       >
@@ -231,16 +231,14 @@ export function RailSkeleton() {
 export function RailFooter({
   credits,
   identity,
-  subtitle,
 }: {
   credits: CreditUnits | null;
   identity: AccountIdentity;
-  subtitle?: string;
 }) {
   return (
     <div className="flex shrink-0 flex-col gap-3 lg:pt-[var(--rail-gap)]">
       <Wallet credits={credits} href="/app/settings/billing" />
-      <AccountCard identity={identity} subtitle={subtitle} />
+      <AccountCard identity={identity} />
     </div>
   );
 }

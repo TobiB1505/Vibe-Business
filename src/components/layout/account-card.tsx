@@ -25,23 +25,23 @@ import { activePalette, paletteSwitchable } from "@/app/palette";
  * thing in the menu with no other home, so it got one rather than being
  * dropped with the disclosure that carried it.
  *
- * ## Why the field arrives on hover instead of sitting there
+ * ## Why it is a pill, having been a row that appeared on hover
  *
- * This looks like it contradicts `IconButton`, which argues at length that a
- * bare mark with a fill that arrives on hover is not a control on a phone —
- * there is no hover there, so the resting state is the only state a finger
- * ever sees. That argument is about a control whose *container is its whole
- * affordance*: an icon alone says nothing about being pressable.
+ * It has been three shapes. A bordered card, which was the odd one out in a
+ * rail of borderless rows. Then a row with no container until you hovered it,
+ * on the argument that an avatar and a name are self-describing at rest and
+ * the rest of the rail is exactly that shape.
  *
- * This one is not that. An avatar and a name are self-describing at rest, and
- * every other row in this rail — Nova, Business Health, Products, Billing — is
- * exactly this shape: no container until you hover it. A bordered card at the
- * foot of a rail of borderless rows was the odd one out, and it read as a
- * panel of content rather than as the last row of the navigation.
+ * That argument was about the *navigation*, and this is not in it. The foot of
+ * the rail holds two account-level controls — what you can spend, and who you
+ * are — and they sit below the divider that ends the navigation. Read as a
+ * pair rather than as a last row, the balance being a pill and the identity
+ * being nothing until touched is two treatments for one kind of thing. So it
+ * is a pill, the same pill, and the pair reads as the pair it is.
  *
- * So it inverts, and it inverts *into the rail's own row treatment* rather
- * than into something new. Touch still gets an answer: `active:` is a step
- * past hover, which is what a finger sees when hover never happens.
+ * It still hugs its content rather than the rail: a full-width field left half
+ * of itself empty, which reads as a large surface that happens to have a
+ * person in the corner.
  *
  * ## Why the palette switch stays here
  *
@@ -50,35 +50,23 @@ import { activePalette, paletteSwitchable } from "@/app/palette";
  * rail footer is the only chrome both shells share. It renders outside
  * production only; `paletteSwitchable()` says why.
  */
-export function AccountCard({
-  identity,
-  subtitle,
-}: {
-  identity: AccountIdentity;
-  /** Project rails name the user's role; account rails describe the identity source. */
-  subtitle?: string;
-}) {
+export function AccountCard({ identity }: { identity: AccountIdentity }) {
   return (
     <div data-testid="account-card" className="flex flex-col gap-2">
       <Link
         href="/app/settings/profile"
         className={cn(
           /*
-            Sized to the avatar and the name, not to the rail.
-            A full-width field left half of itself empty past the subtitle,
-            which reads as a large surface that happens to have a person in
-            the corner. `max-w-full` keeps a long name inside the rail, and the
-            truncation below is what makes that safe.
+            The wallet's shape, at the wallet's height. `w-fit` so it hugs the
+            identity; `max-w-full` so a long name stops at the rail's edge
+            instead of overflowing it, which the truncation below makes safe.
           */
-          "rounded-nav flex w-fit max-w-full items-center gap-3 px-3 py-3",
-          /*
-            The container is transparent at rest and arrives on the way in.
-            A border that appears rather than one that widens: `transparent`
-            holds the pixel, so nothing on the rail shifts when it becomes
-            visible.
-          */
-          "border border-transparent",
-          "transition-interactive hover:border-line-2 hover:bg-surface-2",
+          // `h-10` is the wallet's height, said the same way, so the two
+          // controls at the foot of the rail are one pair rather than two
+          // sizes that happen to be near each other.
+          "border-line-2 bg-surface-2 flex h-10 w-fit max-w-full items-center gap-2.5 rounded-full border",
+          "pr-4 pl-1.5",
+          "transition-interactive hover:border-line-strong hover:bg-surface-hover",
           // The step past hover, which is the only feedback a finger gets.
           "active:bg-surface-3",
           "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
@@ -90,24 +78,25 @@ export function AccountCard({
           it would make the link announce the same name twice before reaching
           the word that says where it goes.
         */}
-        <span aria-hidden>
+        <span aria-hidden className="shrink-0">
           <Avatar
             src={identity.avatarUrl}
             initials={identity.initials}
             label={identity.displayName}
-            size={38}
+            size={28}
           />
         </span>
-        <span className="flex min-w-0 flex-col">
-          <span
-            className="text-fg-body truncate text-body font-semibold"
-            title={identity.displayName}
-          >
-            {identity.displayName}
-          </span>
-          <span className="text-fg-meta text-caption">
-            {subtitle ?? (identity.fromGithub ? "GitHub account" : "Signed in")}
-          </span>
+        {/*
+          The name, and nothing under it. The second line said "Founder" on a
+          product rail and "GitHub account" on the account one — a constant and
+          a fact that Settings → Profile states properly. Neither survives being
+          the reason this control is two lines tall beside a one-line balance.
+        */}
+        <span
+          className="text-fg-body min-w-0 truncate text-body font-semibold"
+          title={identity.displayName}
+        >
+          {identity.displayName}
         </span>
       </Link>
 

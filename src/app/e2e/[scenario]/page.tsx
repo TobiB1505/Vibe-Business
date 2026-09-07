@@ -640,7 +640,7 @@ export default async function E2eScenarioPage({
     return (
       <AppFrame
         rail={
-          <FixtureRail subtitle="Founder" credits={35}>
+          <FixtureRail credits={35}>
             <ProjectRail
               projectId="project_e2e"
               projectName="Acme"
@@ -1678,15 +1678,7 @@ function FixtureSettingsRail() {
  * of them the same DOM nodes across the fold. The harness composes the same
  * three so a fixture measures the rail the product actually has.
  */
-function FixtureRail({
-  credits,
-  subtitle,
-  children,
-}: {
-  credits: number;
-  subtitle?: string;
-  children: ReactNode;
-}) {
+function FixtureRail({ credits, children }: { credits: number; children: ReactNode }) {
   return (
     <>
       <RailBrand />
@@ -1699,7 +1691,6 @@ function FixtureRail({
       <RailFooter
         credits={creditsToUnits(credits)}
         identity={{ displayName: "Tobi", initials: "TB", avatarUrl: null, fromGithub: true }}
-        subtitle={subtitle}
       />
     </>
   );

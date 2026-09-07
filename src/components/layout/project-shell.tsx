@@ -525,14 +525,15 @@ export function WorkspaceSection({
 /**
  * The workspace column. The rail beside it belongs to `AppFrame`.
  *
- * `--shell-top` is the same variable the rail pads with, so the first line of
- * a page and the lockup beside it start at one height — on this surface and on
- * Settings, which is the point of there being one number.
+ * `--frame-inset` is the same number the rail pads with, so the breadcrumb and
+ * the lockup beside it start at one height — on this surface and on Settings,
+ * which is the point of there being one number. The bottom is generous rather
+ * than symmetric: a page ending 20px above the fold reads as cut off.
  */
 export function ProjectShell({ children }: { children: ReactNode }) {
   return (
     <main className="min-w-0 flex-1">
-      <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 py-[var(--shell-top)] sm:px-8 xl:px-10">
+      <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 pt-[var(--frame-inset)] pb-16 sm:px-8 xl:px-10">
         {children}
       </div>
     </main>

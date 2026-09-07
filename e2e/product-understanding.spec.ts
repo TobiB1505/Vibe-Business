@@ -108,37 +108,48 @@ test.describe("the project shell owns project context", () => {
     await expect(account.getByRole("link")).toHaveAttribute("href", "/app/settings/profile");
 
     /*
-     * And it is a rail row until you point at it.
+     * And it is a pill, at rest, the same one the balance above it wears.
      *
-     * Source can say the classes are there; only a browser says the resting
-     * state actually paints nothing and the hover state paints something —
-     * and that the row does not move between the two, which is the reason the
-     * border is transparent rather than absent.
+     * It has been a bordered card, then a row with nothing until you hovered
+     * it, and now this — so the resting paint is worth a browser rather than a
+     * class list. The two controls at the foot of the rail are a pair, and a
+     * pair is only a pair if it reads as one at rest.
      */
     const identity = account.getByRole("link");
-    const paint = () =>
-      identity.evaluate((node) => {
+    const paint = (locator: typeof identity) =>
+      locator.evaluate((node) => {
         const style = getComputedStyle(node);
-        return { fill: style.backgroundColor, edge: style.borderTopColor };
+        return {
+          fill: style.backgroundColor,
+          edge: style.borderTopColor,
+          radius: style.borderTopLeftRadius,
+          height: Math.round(node.getBoundingClientRect().height),
+        };
       });
+
+    const rest = await paint(identity);
+    expect(rest.fill, "the identity has no resting fill").not.toMatch(/rgba\(.*, 0\)$/);
+    expect(rest.edge, "the identity has no resting border").not.toMatch(/rgba\(.*, 0\)$/);
+    // Fully round rather than merely rounded: half its own height or more.
+    expect(Number.parseFloat(rest.radius)).toBeGreaterThanOrEqual(rest.height / 2);
+
+    const balance = await paint(page.getByTestId("wallet-balance"));
+    expect(rest.height, "the pair is two sizes").toBe(balance.height);
+    expect(rest.fill).toBe(balance.fill);
+    expect(rest.edge).toBe(balance.edge);
+
     const box = await identity.boundingBox();
-
-    const rest = await paint();
-    expect(rest.fill, "the card has a resting fill").toMatch(/rgba\(.*, 0\)$/);
-    expect(rest.edge, "the card has a resting border").toMatch(/rgba\(.*, 0\)$/);
-
     await identity.hover();
-    await expect.poll(async () => (await paint()).fill).not.toMatch(/rgba\(.*, 0\)$/);
-    expect((await paint()).edge, "no field arrives on hover").not.toMatch(/rgba\(.*, 0\)$/);
+    await expect.poll(async () => (await paint(identity)).fill).not.toBe(rest.fill);
 
     const hovered = await identity.boundingBox();
     expect(Math.abs(hovered!.height - box!.height)).toBeLessThan(0.5);
     expect(Math.abs(hovered!.y - box!.y)).toBeLessThan(0.5);
 
-    // And the field is around the identity rather than around the rail: full
-    // width left half of it empty past the subtitle.
+    // And the pill is around the identity rather than around the rail: full
+    // width would leave half of it empty.
     const rail = await account.boundingBox();
-    expect(box!.width, "the field spans the rail").toBeLessThan(rail!.width - 24);
+    expect(box!.width, "the pill spans the rail").toBeLessThan(rail!.width - 24);
   });
 });
 
@@ -575,5 +586,39 @@ test.describe("what the account can spend", () => {
 
     // The visible text of the whole block is the label and the balance.
     await expect(wallet).not.toContainText(/top up|buy|upgrade|out of credits/i);
+  });
+
+  /*
+   * Reading a balance and buying more of it are two acts with two
+   * destinations. They used to be one pill with an inset hairline through it,
+   * which is a shape that makes the seam the thing you notice — you can see it
+   * is two elements pretending to be one.
+   */
+  test("draws the balance and the top-up as two round controls, not one seam", async ({ page }) => {
+    await page.goto(READY);
+
+    const balance = (await page.getByTestId("wallet-balance").boundingBox())!;
+    const topUp = (await page
+      .getByTestId("wallet")
+      .getByRole("link", { name: "Top up Credits" })
+      .boundingBox())!;
+
+    // A real gap between them, not a shared edge.
+    expect(topUp.x - (balance.x + balance.width)).toBeGreaterThan(4);
+
+    // Both fully round, and the same height.
+    for (const control of [
+      page.getByTestId("wallet-balance"),
+      page.getByRole("link", { name: "Top up Credits" }),
+    ]) {
+      const shape = await control.evaluate((node) => ({
+        radius: Number.parseFloat(getComputedStyle(node).borderTopLeftRadius),
+        height: node.getBoundingClientRect().height,
+      }));
+      expect(shape.radius).toBeGreaterThanOrEqual(shape.height / 2);
+    }
+    expect(Math.round(topUp.height)).toBe(Math.round(balance.height));
+    // Square: a round control with an oblong body is a pill with one item in it.
+    expect(Math.round(topUp.width)).toBe(Math.round(topUp.height));
   });
 });

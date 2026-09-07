@@ -40,7 +40,7 @@ export default async function ProjectRailLayout({
     <>
       <RailBrand />
       <ProjectRailSlot projectId={projectId} />
-      <RailAccountFooter subtitle="Founder" />
+      <RailAccountFooter />
       {children}
     </>
   );

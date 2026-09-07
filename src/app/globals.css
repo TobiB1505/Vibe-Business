@@ -407,33 +407,27 @@
  * than 36.
  */
 :root {
-  --shell-top: 2.25rem;
-  --shell-heading-line: calc(var(--text-display) * var(--text-display--line-height));
-
   /*
-   * The rail's own rhythm (UI-15).
+   * The frame's rhythm (UI-15, UI-16).
    *
-   * Two numbers, and every region of the rail reads one of them: `--rail-inset`
-   * is the space above the lockup and below the identity, `--rail-gap` is the
-   * space between the rail's three regions. They exist because the rail's
-   * spacing had been set element by element — `pt-[--shell-top]` here, `gap-7`
-   * there, `pt-8` on the foot — which is how a navigation ends up with 44px of
-   * nothing above its logo and its first section below the fold on a laptop.
+   * Two numbers, and every column of the signed-in app reads one of them.
+   * `--frame-inset` is where each column starts: the rail's lockup and the
+   * content column's first line, at the same height, so the top of the screen
+   * is one line rather than two. `--rail-gap` is the space between the rail's
+   * three regions.
    *
-   * `--shell-top` stays what it is: the content column's top padding, which is
-   * a different question and has a different answer. The rail no longer
-   * borrows it, and the lockup is no longer centred against the first heading
-   * line beside it — a mark that starts at the top of its own surface reads as
-   * the top of the product, which is what it is.
+   * They exist because this spacing had been set element by element —
+   * `pt-[--shell-top]` here, a heading-line box there, `gap-7`, `pt-8`, `my-3`
+   * — which is how a navigation ends up with 44px of nothing above its logo
+   * and its first section below the fold on a laptop.
+   *
+   * The lockup is no longer centred against the heading beside it; the column
+   * beside it comes up to meet it instead. A mark at the top of its surface
+   * reads as the top of the product, and the alignment now costs nothing
+   * because both sides read the same number.
    */
-  --rail-inset: 1.25rem;
+  --frame-inset: 1.25rem;
   --rail-gap: 1.25rem;
-}
-
-@media (width >= 40rem) {
-  :root {
-    --shell-top: 2.75rem;
-  }
 }
 
 /* The active step's ring, breathing outward and fading. Decorative: the step's

@@ -35,8 +35,18 @@ import type { CreditUnits } from "@/modules/credits/units";
  * What it got wrong is where the top-up lives. A founder who reads a low
  * balance in the rail has exactly one next move, and making them find Billing,
  * scroll to the packs and start again is not restraint — it is the balance
- * refusing to answer the question it just raised. The `+` is one 28px control
- * with no words, at the edge of a block whose subject is still the number.
+ * refusing to answer the question it just raised. The `+` is one control with
+ * no words, beside a block whose subject is still the number.
+ *
+ * ## Two controls, not one pill with a seam
+ *
+ * The `+` used to be the right-hand end of the balance's own pill, divided
+ * from it by an inset hairline. That is a common shape and it was the wrong
+ * one here: reading a balance and buying more of it are two different acts
+ * with two different destinations, and drawing them as one object with a line
+ * through it makes the line the thing you notice — you can see it is two
+ * elements pretending to be one. They are two round controls with a gap now,
+ * which is what they are.
  *
  * `topUpHref` points at Billing's own top-up section today. It is a prop
  * rather than a constant so it can be re-pointed at the dedicated top-up
@@ -82,58 +92,50 @@ export function Wallet({
 
   return (
     /*
-      One pill with two halves, not a panel with a label.
-      A box with a `BALANCE` caption above the number made the rail's quietest
-      fact look like a section. The balance is one reading and one action, so
-      it is one control: fully round, bordered, and reacting as a whole on
-      hover the way the buttons around it do.
+      Two controls in a row, each fully round.
 
-      A `div` rather than a link, because a link inside a link is not something
-      a browser or a screen reader can resolve. The container carries the
-      shape; each half carries its own target and its own focus ring.
+      A `div` rather than a link around both, because a link inside a link is
+      not something a browser or a screen reader can resolve — and because
+      these genuinely go to two places. The balance takes the width; the `+` is
+      a fixed square beside it, so the pair reads as "a reading, and one thing
+      to do about it" rather than as a segmented control.
     */
     <div
       data-testid="wallet"
       data-low={low || undefined}
-      className={cn(
-        "border-line-2 bg-surface-2 group/wallet flex items-stretch rounded-full border",
-        "transition-interactive hover:border-line-strong",
-        className,
-      )}
+      className={cn("flex items-center gap-2", className)}
     >
       <Link
         href={href}
         data-testid="wallet-balance"
         className={cn(
-          "flex min-w-0 flex-1 items-center rounded-l-full py-2 pr-3 pl-4",
-          "transition-interactive hover:bg-surface-hover",
-          "focus-visible:ring-mint focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none",
+          "border-line-2 bg-surface-2 flex h-10 min-w-0 flex-1 items-center rounded-full border px-4",
+          "transition-interactive hover:border-line-strong hover:bg-surface-hover",
+          "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
         )}
       >
         <CreditAmount credits={credits} size="sm" tone={low ? "low" : "default"} />
       </Link>
 
-      {/* A hairline, inset from both ends so the pill reads as one shape
-          rather than as two chips pushed together. */}
-      <span aria-hidden className="bg-line-2 my-2 w-px shrink-0" />
-
       <Link
         href={topUpHref}
         aria-label="Top up Credits"
         className={cn(
-          "vibe-control text-fg-muted grid w-10 shrink-0 place-items-center rounded-r-full",
+          "border-line-2 bg-surface-2 text-fg-muted grid size-10 shrink-0 place-items-center",
+          "rounded-full border",
           /*
             Quiet at rest, mint on the way in: adding Credits is Vibe's own
             action rather than a neutral one — the colour every priced control
             in the product already uses to mean "this is the thing you do
             here". The container exists at rest because a bare mark is not a
-            control on a phone; here the container is the pill's own end.
+            control on a phone.
           */
-          "transition-interactive hover:bg-mint-tint hover:text-mint active:bg-mint-tint",
-          "focus-visible:ring-mint focus-visible:z-10 focus-visible:ring-2 focus-visible:outline-none",
+          "transition-interactive hover:border-mint-line hover:bg-mint-tint hover:text-mint",
+          "active:bg-mint-tint",
+          "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
         )}
       >
-        <PlusIcon size={15} />
+        <PlusIcon size={16} />
       </Link>
     </div>
   );

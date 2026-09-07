@@ -162,12 +162,13 @@ export function SettingsRail({ back }: { back: SettingsRailBack }) {
  *
  * Wider than `AppShell`'s 70rem and with more air above it: the rail already
  * takes 256px, and this screen's job is to be calm rather than to fit more in.
- * `--shell-top` is the same padding the workspace column and the rail use, so
- * nothing shifts vertically when the fold happens.
+ * `--frame-inset` is the same number the workspace column and the rail use, so
+ * nothing shifts vertically when the fold happens and the heading starts level
+ * with the lockup beside it.
  */
 export function AccountShell({ children }: { children: ReactNode }) {
   return (
-    <main className="mx-auto w-full max-w-[78rem] min-w-0 flex-1 px-5 py-[var(--shell-top)] sm:px-8 xl:px-10">
+    <main className="mx-auto w-full max-w-[78rem] min-w-0 flex-1 px-5 pt-[var(--frame-inset)] pb-16 sm:px-8 xl:px-10">
       {children}
     </main>
   );

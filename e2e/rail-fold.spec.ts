@@ -251,6 +251,29 @@ test.describe("the rail spends its height on navigation", () => {
   });
 });
 
+test.describe("the frame starts at one height", () => {
+  test("puts the first line of the page level with the lockup", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(PRODUCT);
+
+    /*
+     * The lockup used to be pushed *down* to meet the heading, inside a box
+     * the height of a display line. The column comes up to meet the lockup
+     * instead: both read `--frame-inset`, so the top of the screen is one line
+     * rather than two, and neither side is nudged.
+     */
+    const lockup = (await page
+      .getByTestId("app-rail")
+      .getByRole("link", { name: /Vibe Business/ })
+      .boundingBox())!;
+    const trail = (await page.getByRole("navigation", { name: "Breadcrumb" }).boundingBox())!;
+
+    const lockupCentre = lockup.y + lockup.height / 2;
+    const trailCentre = trail.y + trail.height / 2;
+    expect(Math.abs(lockupCentre - trailCentre), "the two tops disagree").toBeLessThan(8);
+  });
+});
+
 test.describe("Settings says how to get back", () => {
   test("names a product rather than offering a redirect", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

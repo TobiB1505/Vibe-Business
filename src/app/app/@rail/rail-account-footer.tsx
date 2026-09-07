@@ -19,7 +19,7 @@ import { getGithubIdentity } from "@/modules/github/identity";
  * control still states its price, and losing the running total is worth less
  * than losing the navigation.
  */
-export async function RailAccountFooter({ subtitle }: { subtitle?: string }) {
+export async function RailAccountFooter() {
   const session = await requireSession();
   const supabase = await createClient();
 
@@ -32,7 +32,6 @@ export async function RailAccountFooter({ subtitle }: { subtitle?: string }) {
     <RailFooter
       credits={balance?.availableCredits ?? null}
       identity={buildAccountIdentity({ email: session.email, github })}
-      subtitle={subtitle}
     />
   );
 }

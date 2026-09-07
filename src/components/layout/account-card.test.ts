@@ -46,30 +46,35 @@ describe("the account card", () => {
   });
 
   /**
-   * The field arrives on hover; at rest it is a rail row.
+   * It wears the wallet's shape, because the two are a pair.
    *
-   * Every other row in this rail is borderless until you hover it, and a
-   * bordered card at the foot of them read as a panel of content rather than
-   * as the last row of the navigation. The transparent border is what keeps
-   * that honest: it holds the pixel, so nothing shifts when it becomes
-   * visible.
+   * The foot of the rail holds two account-level controls below the divider
+   * that ends the navigation: what you can spend, and who you are. Drawing one
+   * as a pill and the other as nothing-until-hovered is two treatments for one
+   * kind of thing — which is the argument that took it out of the navigation's
+   * row treatment, where it had been on the reasoning that it *was* a row.
+   *
+   * The height is asserted because that is what makes them read as a pair
+   * rather than as two round things of nearly the same size.
    */
-  it("has no field at rest and grows one without moving anything", () => {
+  it("is the same pill as the wallet beside it", () => {
     const card = code(CARD);
-    expect(card).toContain("border border-transparent");
-    expect(card).toContain("hover:border-line-2");
-    expect(card).toContain("hover:bg-surface-2");
-    // No resting fill, or the inversion never happened.
-    expect(card).not.toMatch(/"[^"]*\bbg-surface-1\b[^"]*rounded/);
+    const wallet = code(readFileSync("src/components/system/wallet.tsx", "utf8"));
+
+    for (const shape of ["rounded-full", "border-line-2", "bg-surface-2", "h-10"]) {
+      expect(card, `the identity does not wear ${shape}`).toContain(shape);
+      expect(wallet, `the wallet does not wear ${shape}`).toContain(shape);
+    }
+    expect(card).toContain("hover:border-line-strong");
   });
 
   /**
    * The field is around the avatar and the name, not around the rail.
    *
-   * Full width left half of the field empty past the subtitle, which reads as
-   * a large surface with a person in the corner rather than as a control
-   * wrapped around an identity. `max-w-full` is what keeps a long name inside
-   * the rail, and the truncation on the name is what makes that safe.
+   * Full width left half of the pill empty, which reads as a large surface
+   * with a person in the corner rather than as a control wrapped around an
+   * identity. `max-w-full` is what keeps a long name inside the rail, and the
+   * truncation on the name is what makes that safe.
    */
   it("sizes the field to its content, and never past the rail", () => {
     const card = code(CARD);
@@ -92,6 +97,14 @@ describe("the account card", () => {
     expect(card).toContain("identity.displayName");
     // The chevron said "this opens". Nothing opens.
     expect(card).not.toContain("ChevronDownIcon");
+    /*
+     * And no second line. It said "Founder" on a product rail and "GitHub
+     * account" on the account one — a constant and a fact Settings → Profile
+     * states properly — and it was the reason this control was two lines tall
+     * beside a one-line balance.
+     */
+    expect(card, "the subtitle is back").not.toContain("subtitle");
+    expect(card).not.toContain("fromGithub");
   });
 });
 
