@@ -5,6 +5,7 @@ import {
   buildRouteCandidates,
   extendCandidates,
   isSafeAnalysisTarget,
+  routeShape,
   sortCandidates,
   toSameOriginPath,
   type RouteCandidateSource,
@@ -42,6 +43,15 @@ export type AnalysisPagePort = {
   url(): string;
   /** Same-origin GET navigation. Returns the HTTP status when known. */
   goto(url: string, options: { timeoutMs: number }): Promise<{ status: number | null }>;
+  /**
+   * Waits until the page stops navigating itself.
+   *
+   * Required rather than optional, and never allowed to throw. An optional
+   * method is one a fake can omit and a production path can quietly skip —
+   * this module has already paid for that once, with a connector mock that
+   * never provided `openSessionAtOrigin` and a `catch {}` that hid it.
+   */
+  settle(options: { quietMs: number; timeoutMs: number }): Promise<void>;
   /** Runs the extraction script in the page. */
   extract(): Promise<RawPageExtraction>;
 };
@@ -65,6 +75,22 @@ export type AnalyzeInput = {
   now?: () => number;
   /** Provider session wall-clock, when known. Cost signal only. */
   browserSessionDurationMs?: number | null;
+  /**
+   * Where a page failure goes, other than into a sentence for the customer.
+   *
+   * A scan reported twenty pages unreachable and inspected one — including
+   * `/privacy` and `/terms`, which are static and need nothing to render. The
+   * snapshot said `A page could not be loaded.` twenty times and the reason was
+   * discarded in a bare `catch`, so "the app needs POST to render", "the
+   * navigation timed out" and "the browser was in a bad state" were the same
+   * observation.
+   *
+   * A seam rather than an import: the analyzer stays a function of its inputs,
+   * and the caller decides where a diagnosis goes. Nothing here reaches the
+   * snapshot — provider text belongs to the operator, never to a stored row
+   * (ADR 0011).
+   */
+  onDiagnostic?: (event: { step: string; path: string; detail: string }) => void;
 };
 
 export type AnalyzeResult =
@@ -137,11 +163,93 @@ function buildSurfaceSignals(pages: AuthenticatedPageSummary[]): AuthenticatedSu
   });
 }
 
+/**
+ * A failure as a short string, never an object and never a stack.
+ *
+ * Playwright's messages carry a call log and sometimes a URL. Bounded here, and
+ * scrubbed again on the way to Sentry — this is the first of three layers, not
+ * the only one.
+ */
+function describeFailure(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`.slice(0, 300);
+  return typeof error === "string" ? error.slice(0, 300) : "non-error thrown";
+}
+
+/**
+ * Whether a navigation failed because the *previous* one was still settling.
+ *
+ * Not a broken page. A single-page application answers `goto` as soon as the
+ * document is there and then routes on its own — an auth check, a redirect to
+ * a canonical path — and that late navigation aborts whatever `goto` started
+ * next. A real scan lost eighteen pages in a chain to it, each one interrupted
+ * by the target before it:
+ *
+ * ```
+ * page.goto: Navigation to ".../plan" is interrupted by
+ *            another navigation to ".../app"
+ * ```
+ *
+ * The page is fine. The timing is not.
+ */
+function interruptedByAnotherNavigation(error: unknown): boolean {
+  return error instanceof Error && /interrupted by another navigation/i.test(error.message);
+}
+
+/**
+ * One navigation, retried once when the previous page interrupted it.
+ *
+ * Once, and only for that one cause: by the time the error is raised the
+ * interrupting navigation has finished, so the second attempt starts from a
+ * settled page. A retry loop would turn a genuinely unreachable page into a
+ * budget spent on it, which is the failure the budgets exist to prevent.
+ */
+async function navigate(
+  page: AnalysisPagePort,
+  target: string,
+  options: { timeoutMs: number; quietMs: number; settleTimeoutMs: number },
+): Promise<{ status: number | null }> {
+  try {
+    return await page.goto(target, { timeoutMs: options.timeoutMs });
+  } catch (error) {
+    if (!interruptedByAnotherNavigation(error)) throw error;
+    /*
+     * Wait for the interrupting navigation before asking again.
+     *
+     * The first version of this retried immediately, and the message it
+     * produced changed from "interrupted by another navigation to /app" to
+     * "interrupted by another navigation to /plan" — the same URL, because the
+     * second attempt was now being aborted by the tail of the first. Retrying
+     * without settling is not a retry; it is the same collision one step
+     * later.
+     */
+    await page.settle({ quietMs: options.quietMs, timeoutMs: options.settleTimeoutMs });
+    return await page.goto(target, { timeoutMs: options.timeoutMs });
+  }
+}
+
 export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<AnalyzeResult> {
   const budgets = input.budgets ?? DEFAULT_AUTHENTICATED_BUDGETS;
   const now = input.now ?? Date.now;
   const tracker = new AuthenticatedBudgetTracker(budgets, now);
   const warnings: AuthenticatedWarning[] = [];
+
+  /*
+   * Paths the live product scan already read anonymously.
+   *
+   * Derived here as well as inside `buildRouteCandidates`, because links
+   * harvested mid-crawl never pass through that function — and links are how
+   * `/privacy` and `/terms` actually reached a real scan's candidate list.
+   */
+  const publiclyRendered = new Set<string>();
+  for (const page of input.publicProduct?.pages ?? []) {
+    if (page.redirectedTo !== null) continue;
+    if (page.status < 200 || page.status >= 300) continue;
+    // Normalized the same way a candidate is, or the two sets would never
+    // match: one holds `/privacy`, the other whatever the public snapshot
+    // happened to store.
+    const path = toSameOriginPath(page.path, input.origin);
+    if (path !== null) publiclyRendered.add(path);
+  }
 
   const selected = await selectAuthenticatedPage(input.browser, input.origin);
   if (selected === null) {
@@ -167,6 +275,14 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
 
   const pages: AuthenticatedPageSummary[] = [];
   const visited = new Set<string>();
+  /*
+   * How many pages each route template has already spent, and which templates
+   * had more instances than the budget inspects. The second is a warning, not
+   * a failure: skipping a repeat is the budget working, and the founder is
+   * told the product has more of a screen than Vibe looked at.
+   */
+  const shapeVisits = new Map<string, number>();
+  const repeatedScreens = new Set<string>();
   const candidateSources: Record<RouteCandidateSource, number> = {
     landing: 0,
     repository_route: 0,
@@ -186,6 +302,27 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
 
     const candidate = candidates.shift()!;
     if (visited.has(candidate.path)) continue;
+
+    /*
+     * A screen is worth a page; the same screen with different rows is not.
+     *
+     * `/app/projects/<a>/settings` and `/app/projects/<b>/settings` are one
+     * template. The first run that read pages properly spent all 25 on four
+     * copies of a project workspace's seven tabs, and then reported
+     * `integrations` and `onboarding` as absent — it had never reached
+     * `/app/connect/github` or `/app/onboarding`, because seventeen of its
+     * pages went on repetitions.
+     *
+     * Checked before the navigation, so a skipped repeat costs nothing at all,
+     * and counted on *inspected* pages rather than on candidates: a page that
+     * failed to load taught us nothing and must not hold a slot.
+     */
+    const shape = routeShape(candidate.path);
+    if ((shapeVisits.get(shape) ?? 0) >= budgets.maxPagesPerRouteShape) {
+      repeatedScreens.add(shape);
+      continue;
+    }
+
     visited.add(candidate.path);
 
     const target = `${new URL(input.origin).origin}${candidate.path}`;
@@ -202,14 +339,39 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     if (!(candidate.source === "landing" && navigationCount === 0)) {
       try {
         navigationCount += 1;
-        const result = await page.goto(target, { timeoutMs: tracker.remainingNavigationTimeoutMs });
-        status = result.status;
-      } catch {
+        status = (
+          await navigate(page, target, {
+            timeoutMs: tracker.remainingNavigationTimeoutMs,
+            quietMs: budgets.settleQuietMs,
+            settleTimeoutMs: budgets.settleTimeoutMs,
+          })
+        ).status;
+      } catch (error) {
         tracker.note("navigation_failed");
         warnings.push(warning("page_unreachable", "A page could not be loaded.", candidate.path));
+        input.onDiagnostic?.({
+          step: "navigate",
+          path: candidate.path,
+          detail: describeFailure(error),
+        });
         continue;
       }
     }
+
+    /*
+     * Let the page finish arriving before anything is read from it.
+     *
+     * This is the line the whole scan was missing. Without it the loop read a
+     * page mid-boot and then navigated away mid-boot, so a run inspected one
+     * page of sixteen and every other failure named the page before it —
+     * "Execution context was destroyed" for the read, "interrupted by another
+     * navigation" for the next hop. Both are the same missing wait.
+     *
+     * It also decides *where* we think we are: an application that redirects
+     * itself after `goto` returns has not finished choosing its URL yet, so
+     * reading `page.url()` before this settles records the wrong path.
+     */
+    await page.settle({ quietMs: budgets.settleQuietMs, timeoutMs: budgets.settleTimeoutMs });
 
     // After navigating, confirm we are still where we think we are: a redirect
     // to an identity provider or a marketing site must not be analysed.
@@ -232,14 +394,42 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     // /app/connect/github/repositories twice — once via a link (200) and once
     // as a repository route (404).
     if (landedPath !== candidate.path) {
-      if (visited.has(landedPath)) continue;
+      if (visited.has(landedPath)) {
+        /*
+         * Said, not swallowed.
+         *
+         * A real scan reported `onboarding` as **not detected** with no
+         * evidence. `/app/onboarding` exists, was a candidate, and was
+         * navigated to — and it redirected to the dashboard, because the
+         * founder is long past onboarding. The loop dropped it here without a
+         * trace, so the snapshot's only account of it was an absence.
+         *
+         * "This surface sent Vibe somewhere it had already been" is a fact
+         * about the product. "Vibe found no onboarding" is not the same
+         * sentence, and reading the first as the second is how a scan comes to
+         * report a budget as a finding (rule 44).
+         */
+        warnings.push(
+          warning(
+            "redirected_to_seen_page",
+            "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
+            candidate.path,
+          ),
+        );
+        continue;
+      }
       visited.add(landedPath);
     }
 
     let raw: RawPageExtraction;
     try {
       raw = await page.extract();
-    } catch {
+    } catch (error) {
+      input.onDiagnostic?.({
+        step: "extract",
+        path: candidate.path,
+        detail: describeFailure(error),
+      });
       warnings.push(warning("page_unreachable", "A page could not be inspected.", candidate.path));
       continue;
     }
@@ -253,6 +443,9 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     });
 
     pages.push(summary);
+    // Counted on the landed path, because that is the page that was read.
+    const landedShape = routeShape(landedPath);
+    shapeVisits.set(landedShape, (shapeVisits.get(landedShape) ?? 0) + 1);
     tracker.recordPage();
     maxDepthReached = Math.max(maxDepthReached, candidate.depth);
 
@@ -260,7 +453,7 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
       const discovered = extendCandidates(
         [...candidates, ...pages.map((entry) => ({ path: entry.path, source: entry.source, depth: entry.depth, priority: 0 }))],
         readSameOriginLinks(raw),
-        { origin: input.origin, depth: candidate.depth + 1, budgets },
+        { origin: input.origin, depth: candidate.depth + 1, budgets, publiclyRendered },
       );
       for (const entry of discovered) {
         if (!tracker.acceptCandidate()) break;
@@ -273,6 +466,21 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
 
   if (pages.length === 0) {
     return { ok: false, error: "analysis_failed" };
+  }
+
+  if (repeatedScreens.size > 0) {
+    /*
+     * Said once, with a count, and never as a failure. The founder should know
+     * their product has more instances of a screen than Vibe looked at — that
+     * is a fact about the product — without a warning per skipped page turning
+     * a working budget into a list of complaints.
+     */
+    warnings.push(
+      warning(
+        "repeated_screen_skipped",
+        `${repeatedScreens.size} screen(s) exist in more copies than Vibe inspected. Each was read up to ${budgets.maxPagesPerRouteShape} time(s).`,
+      ),
+    );
   }
 
   const blocked = input.browser.blocked;

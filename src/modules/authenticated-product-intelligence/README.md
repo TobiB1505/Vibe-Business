@@ -28,7 +28,43 @@ It contains **no interpolation** — not one `${`, not one backtick. Both tokens
 
 A real browser rendering a logged-in application is expensive in provider seconds and can contain real customer data. `budgets.ts` is therefore _tighter_ than the public crawler's, and reaching a budget degrades the result to partial rather than crawling on (rule 39).
 
+It also refuses to spend a page on something the public scan already read. A page the live product crawl fetched and rendered **anonymously** is not authenticated product — it is described already, statically, for no browser seconds and no Credits — so it is not a candidate here, whether it arrives as a repository route or as a link in the signed-in shell's own footer. Only the landing page is exempt, because it is where the browser already is. A path the public crawl watched *bounce to a login page* is the opposite case and ranks highest: that is proof the route is part of the signed-in product.
+
 Page content is untrusted data, never instruction (rule 36): what is extracted is sanitized into typed signals, and what is stored is derived intelligence with short evidence labels — never page source, body text, cookies or query strings (rule 37).
+
+## Reading a page instead of passing through it
+
+`goto` resolves when the document exists, which for a single-page application is the beginning of its work rather than the end: it then checks the session, redirects to a canonical path, or replaces the URL once its data arrives. The loop used to read and then navigate inside that window, so a page was killed by the page before it — `Execution context was destroyed` for the read, `interrupted by another navigation` for the next hop. One measured run inspected **one** page of sixteen.
+
+So every page is now let go still before anything is read from it: `AnalysisPagePort.settle` waits for the URL to hold still for half a second, then best-effort for the network to go quiet, capped at five. URL stability is the signal that always terminates; `networkidle` is the one that catches a shell fetching its data without changing the URL, and it is best effort because a logged-in application often polls and would never reach it. Reaching the cap is not a failure — the page is read as it stands.
+
+Settling also decides *where* Vibe thinks it is. An application that redirects itself after `goto` returns has not finished choosing its URL, so the landed path is read after the wait, not before it.
+
+Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
+
+## A screen is worth a page; a copy of it is not
+
+`/app/projects/<a>/settings` and `/app/projects/<b>/settings` are one screen holding different rows. The first run that read pages properly inspected **25 pages and saw 8 screens** — four projects × seven workspace tabs — and then reported `integrations` and `onboarding` as *not detected*, because it had never reached `/app/connect/github` or `/app/onboarding`. That is a scan answering a question about the product with a fact about its own budget.
+
+So `routeShape` collapses identifier segments — a UUID, a run of digits, a long hex string, a long opaque token mixing digits and letters — and `maxPagesPerRouteShape` inspects each template twice. Twice rather than once, because a second instance is often a different *state* of the same screen; that is how `empty_state` was detected in the run that prompted this. The shape is deliberately conservative: collapsing a real route would hide a surface, where an uncollapsed duplicate merely costs a page.
+
+The check runs before the navigation, so a skipped copy costs nothing, and counts only pages actually **inspected** — a page that failed to load taught nothing and does not hold a slot. When copies are skipped the snapshot says so once, with a count.
+
+Auth surfaces are named **once**, in `routes.ts`, and both the crawl and the sign-in probe read that list. They used to be two lists that disagreed — `NEVER_VISIT` knew login and signup, `login-detection.ts` knew reset and MFA because it had to — and a scan duly spent a page on `/reset-password` while signed in. Only the unambiguous surfaces are shared: `confirm` and `callback` stay local to the probe, because refusing `/orders/confirm` would drop a real surface while a delayed auto-start costs one poll.
+
+A candidate that redirects onto a page already inspected is **recorded**, not dropped. `/app/onboarding` exists, was navigated to, and redirected to the dashboard because the founder is past onboarding — and the snapshot's only account of it was `onboarding: detected false, evidence: []`. "This path sent Vibe somewhere it had already been" and "Vibe found no onboarding" are different sentences.
+
+## Noticing the login instead of asking about it
+
+The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.
+
+Three properties make that safe to poll:
+
+- **Structure, never a value.** The password check is `querySelector("input[type=password]") !== null`. It resolves to a boolean at the source, and `RawSignInProbe` has no field a credential could travel in. A test asserts the script never touches `.value`.
+- **Every ambiguity resolves to _not signed in_.** Starting early spends the scan on a login page; starting late costs one button press, and the button is still there. A password field on screen holds the scan back even next to a sign-out link.
+- **The probe writes nothing.** No session status, no snapshot, no usage row, no credit hold, and it never terminates a browser. It answers a question; `analyzeDeepScan` re-checks every precondition for itself.
+
+Two consecutive positive readings start the scan, after a grace window the founder can close — a single-page application paints its shell before its session check resolves, and one reading inside that window is a plausible false positive.
 
 ## One included scan per project
 
@@ -46,6 +82,7 @@ Page content is untrusted data, never instruction (rule 36): what is extracted i
 | `analyzer.ts`                      | One authenticated analysis: which pages, in which order, and what was learned.           |
 | `routes.ts`                        | Building and ranking route candidates, and refusing the ones that must never be visited. |
 | `extract.ts`                       | The in-page extraction script, and sanitizing what it returns.                           |
+| `login-detection.ts`               | Whether the founder has finished signing in, and whether to start unasked.               |
 | `surface-detection.ts`             | Turning extracted signals into detected application surfaces.                            |
 | `read-only-policy.ts`              | The pure decision layer: which requests and events are allowed.                          |
 | `budgets.ts`                       | Pages, bytes, time and concurrency. Tighter than the public crawl.                       |

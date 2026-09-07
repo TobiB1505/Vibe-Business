@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
 import type { ReleaseReason } from "@/modules/credits/balance";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
@@ -21,6 +22,7 @@ import {
   type DeepScanDenialReason,
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
+import { detectSignedIn, type SignInReason } from "./login-detection";
 import type { BrowserSessionProvider, BrowserSessionUsage } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
@@ -152,8 +154,25 @@ async function terminate(
  * immediately before this, which is why the argument is always available and
  * never has to be looked up again.
  */
+/**
+ * Writes one browser-provider cost row, with a client that may write it.
+ *
+ * The caller's client is the customer's, cookie-scoped, and
+ * `deep_scan_provider_usage` grants it nothing — deliberately, because that
+ * table is Vibe's cost ledger and not the customer's data. So every write
+ * failed with `permission denied for table deep_scan_provider_usage`, and the
+ * store logs rather than throws on purpose, so it failed **quietly**: a scan
+ * completed, the customer was charged, and the seconds Vibe paid for were never
+ * recorded. A margin nobody can compute is exactly what ADR 0076 set out to fix.
+ *
+ * Service role, then, and rule 53's condition is met by construction rather
+ * than by care: nothing here is taken from a caller's arguments. The project
+ * and session come from the row `createSessionRecord` persisted after
+ * `loadOwnedProject` verified ownership, and the figures come from the
+ * provider. Reviewed in `service-boundary.test.ts`.
+ */
 async function recordUsage(
-  supabase: SupabaseClient,
+  _supabase: SupabaseClient,
   params: {
     provider: string;
     projectId: string;
@@ -164,7 +183,7 @@ async function recordUsage(
   },
 ): Promise<void> {
   await recordDeepScanUsage(
-    supabase,
+    createServiceClient(),
     buildDeepScanUsage({
       provider: params.provider,
       projectId: params.projectId,
@@ -183,6 +202,21 @@ async function recordUsage(
  * Step 1: authorize, open a temporary browser, and hand the user a Live View
  * to sign in through.
  */
+/**
+ * Says a landing failed, without importing the browser stack to do it.
+ *
+ * `alertOperator` logs locally and reports to Sentry, scrubbed, and never
+ * throws — the same route `sandbox-browser/diagnostics.ts` takes one layer
+ * down. The reason is a short operator string; the customer is told
+ * `page_unreachable`, which is a sentence they can act on.
+ */
+async function reportLandingFailure(reason: string): Promise<void> {
+  const { alertOperator } = await import("@/lib/observability/alert");
+  await alertOperator("deep scan: the browser did not land on the product", { reason }).catch(
+    () => undefined,
+  );
+}
+
 export async function startDeepScan(
   supabase: SupabaseClient,
   provider: BrowserSessionProvider,
@@ -265,19 +299,57 @@ export async function startDeepScan(
 
   const session = record.session;
 
-  // Land the browser on the user's own site before they ever see it. Best
-  // effort by design: if their site is slow or down, they still get a working
-  // browser and can navigate by hand — a failed navigation must not cost them
-  // a session that was already created and paid for.
-  //
-  // Loaded here, not at module scope, for the same reason as in
-  // `analyzeDeepScan`: this pulls in the browser stack, and rendering the
-  // project page must never do that.
+  /*
+   * Land the browser on the user's own site before they ever see it.
+   *
+   * This used to be best effort, swallowed twice — the connector discarded the
+   * reason and this line discarded the result — on the argument that "they
+   * still get a working browser and can navigate by hand". **That argument
+   * died with the DevTools frontend.** What the person sees now is a JPEG on a
+   * canvas speaking four message shapes: mouse, key, wheel, frame. There is no
+   * address bar, and by ADR 0076 there is deliberately never going to be one.
+   *
+   * So a browser that lands nowhere is not a degraded session a person can
+   * rescue. It is `about:blank` forever — which is exactly what the first
+   * session in Vibe's own browser showed: a white field, and nothing anywhere
+   * to say whether the site had not been reached or had been reached and
+   * painted nothing.
+   *
+   * It fails now, and it says why. Every failure path releases the hold, so
+   * refusing costs the customer nothing and saves them a browser they cannot
+   * use.
+   *
+   * Loaded here, not at module scope, for the same reason as in
+   * `analyzeDeepScan`: this pulls in the browser stack, and rendering the
+   * project page must never do that.
+   */
+  let landing: { navigated: boolean; reason?: string };
   try {
     const { openSessionAtOrigin } = await import("./playwright/connector");
-    await openSessionAtOrigin(handle.connectUrl, origin);
-  } catch {
-    // The user can still navigate manually; nothing here is worth failing on.
+    landing = await openSessionAtOrigin(handle.connectUrl, origin);
+  } catch (error) {
+    landing = {
+      navigated: false,
+      reason: error instanceof Error ? `${error.name}: ${error.message}`.slice(0, 300) : "unknown",
+    };
+  }
+
+  if (!landing.navigated) {
+    await reportLandingFailure(landing.reason ?? "no reason recorded");
+    await updateSessionStatus(supabase, session.id, "failed", "page_unreachable");
+    const usage = await terminate(supabase, provider, handle.providerSessionId, session.id);
+    await recordUsage(supabase, {
+      usage,
+      provider: provider.name,
+      projectId: params.projectId,
+      session,
+      status: "failed",
+    });
+    // The browser existed and billed for the seconds it ran, and the customer
+    // got nothing from it. `abandoned_with_usage` is the honest pair: Vibe paid
+    // the provider, the customer pays nothing.
+    await releaseHold("abandoned_with_usage");
+    return { ok: false, error: "page_unreachable" };
   }
 
   const liveView = await provider.getLiveView(handle.providerSessionId);
@@ -344,6 +416,65 @@ export async function getDeepScanLiveView(
   if (!liveView.ok) return { ok: false, error: liveView.error };
 
   return { ok: true, liveViewUrl: liveView.value.url };
+}
+
+/**
+ * Whether the founder has finished signing in, asked of the live browser.
+ *
+ * The flow used to ask *them* — a button reading "I'm logged in — Analyze" —
+ * and the founder's instruction was that Vibe should notice by itself. So this
+ * exists to be polled while the dialog is open, and it is built to be cheap
+ * and to be harmless when it is wrong:
+ *
+ *  - It **never writes**. No session status, no snapshot, no usage row, no
+ *    credit hold. A probe that failed and a probe that said "not yet" leave
+ *    the same trace, which is none.
+ *  - It **never terminates** the browser. An expired session is reported and
+ *    left to the paths that own that decision.
+ *  - It **cannot start anything**. It answers a question; the client decides
+ *    what to do with the answer, and `analyzeDeepScan` re-checks every
+ *    precondition for itself.
+ *
+ * The capability URL is fetched per call and never stored (§10), same as
+ * everywhere else in this file.
+ */
+export type ProbeDeepScanSignInResult =
+  | { ok: true; signedIn: boolean; reason: SignInReason }
+  | { ok: false; error: AnalyzeDeepScanFailure };
+
+export async function probeDeepScanSignIn(
+  supabase: SupabaseClient,
+  provider: BrowserSessionProvider,
+  params: { sessionId: string; userId: string },
+): Promise<ProbeDeepScanSignInResult> {
+  const session = await getSessionWithProviderId(supabase, params.sessionId);
+  if (!session) return { ok: false, error: "session_not_found" };
+
+  const project = await loadOwnedProject(supabase, session.projectId, params.userId);
+  if (!project) return { ok: false, error: "project_not_found" };
+
+  if (!isLive(session)) return { ok: false, error: "session_not_live" };
+
+  const connection = await provider.getConnection(session.providerSessionId);
+  if (!connection.ok) return { ok: false, error: connection.error };
+
+  let probe;
+  try {
+    // Dynamic for the same reason `analyzeDeepScan` is: a top-level import of
+    // `playwright-core` made *rendering the project page* pull in the browser
+    // stack and 500 in production.
+    const { probeSignInState } = await import("./playwright/connector");
+    probe = await probeSignInState(connection.value.connectUrl, session.origin);
+  } catch {
+    return { ok: false, error: "browser_connection_failed" };
+  }
+
+  // No page on the origin yet: the founder is on an identity provider, or the
+  // browser has not landed. Not an error, and not signed in.
+  if (probe === null) return { ok: true, signedIn: false, reason: "off_origin" };
+
+  const verdict = detectSignedIn(probe);
+  return { ok: true, signedIn: verdict.signedIn, reason: verdict.reason };
 }
 
 /**
@@ -459,6 +590,16 @@ export async function analyzeDeepScan(
   }
 
   let analysis;
+  /*
+   * Why pages failed, gathered and reported once.
+   *
+   * One alert per page would be twenty alerts for one condition, so the
+   * failures are collected and sent as a single event with a bounded sample.
+   * Nothing here reaches the snapshot: the customer is told "a page could not
+   * be loaded", which is true and actionable, and the operator gets the reason.
+   */
+  const pageFailures: string[] = [];
+
   try {
     analysis = await analyzeAuthenticatedProduct({
       origin: session.origin,
@@ -467,6 +608,9 @@ export async function analyzeDeepScan(
       browser: readOnly.port,
       repository: repository?.result ?? null,
       publicProduct: publicProduct?.result ?? null,
+      onDiagnostic: (event) => {
+        pageFailures.push(`${event.step} ${event.path}: ${event.detail}`);
+      },
       budgets: DEFAULT_AUTHENTICATED_BUDGETS,
       browserSessionDurationMs: Date.now() - Date.parse(session.createdAt),
     });
@@ -476,6 +620,20 @@ export async function analyzeDeepScan(
     // Close our CDP socket regardless. Terminating the provider session is a
     // separate decision, made below.
     await readOnly.disconnect().catch(() => undefined);
+
+    if (pageFailures.length > 0) {
+      const { alertOperator } = await import("@/lib/observability/alert");
+      await alertOperator(
+        "deep scan: pages could not be read",
+        {
+          failures: pageFailures.length,
+          // A sample, not the list: twenty failures of one cause are one
+          // cause, and the first few carry it.
+          sample: pageFailures.slice(0, 5).join(" | ").slice(0, 1200),
+        },
+        "warning",
+      ).catch(() => undefined);
+    }
   }
 
   if (!analysis.ok) return fail(analysis.error, run.snapshotId);

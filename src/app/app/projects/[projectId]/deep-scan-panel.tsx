@@ -6,13 +6,23 @@ import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
 import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
-import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
+import { ProgressSteps } from "@/components/system/operation-progress";
+import type { OperationProgressStep } from "@/modules/operations/view";
+import type {
+  DeepScanNextScan,
+  DeepScanViewModel,
+} from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScanAction,
   cancelDeepScanAction,
   getDeepScanLiveViewAction,
+  probeDeepScanSignInAction,
   startDeepScanAction,
 } from "./deep-scan-actions";
+import {
+  CONSECUTIVE_SIGNED_IN_PROBES,
+  shouldStartUnprompted,
+} from "@/modules/authenticated-product-intelligence/login-detection";
 import { Disclosure } from "@/components/ui/disclosure";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
@@ -85,6 +95,47 @@ function waitHint(retryAvailableAt: string | null, now: number | null): string |
   return minutes <= 1 ? "You can try again in about a minute." : `You can try again in about ${minutes} minutes.`;
 }
 
+/**
+ * How far the temporary browser has got, as things that happened.
+ *
+ * Opening the dialog on the click rather than on the answer is most of what a
+ * person asked for — a browser takes twenty seconds when Vibe's image is warm
+ * and a couple of minutes when it has to be built, and staring at an unchanged
+ * button for either is the same as nothing happening.
+ *
+ * What fills that wait is deliberately **not** a bar. `OperationProgress` in
+ * this repository states the rule it is built on — *a tick is a fact, not an
+ * animation that advances on a timer* — and the elapsed-seconds helper below
+ * states the other half: the start runs inside one request, so no fraction of
+ * it is knowable from here.
+ *
+ * Three things *are* knowable, because this component watches each of them
+ * happen: the server action answered, the view socket opened, and the first
+ * frame arrived. Those are the rows.
+ */
+export type BrowserStartupStage = "starting" | "connecting" | "painting" | "ready";
+
+export function startupSteps(stage: BrowserStartupStage): OperationProgressStep[] {
+  const reached = (at: BrowserStartupStage[]) => at.includes(stage);
+  const state = (done: boolean, current: boolean): OperationProgressStep["state"] =>
+    done ? "done" : current ? "current" : "pending";
+
+  return [
+    {
+      label: "Starting a temporary browser",
+      state: state(!reached(["starting"]), reached(["starting"])),
+    },
+    {
+      label: "Connecting to it",
+      state: state(reached(["painting", "ready"]), reached(["connecting"])),
+    },
+    {
+      label: "Showing your product",
+      state: state(reached(["ready"]), reached(["painting"])),
+    },
+  ];
+}
+
 function Section({ children }: { children: React.ReactNode }) {
   // `id` is the jump target for the audit section's "Run included Deep Scan".
   return (
@@ -119,20 +170,36 @@ const FOCUSABLE =
 
 function LiveViewDialog({
   liveViewUrl,
-  loading,
+  stage,
   error,
   busy,
+  unreachable,
+  signIn,
   onCancel,
   onAnalyze,
+  onConnected,
+  onPainted,
+  onRetryView,
+  onUnavailable,
 }: {
   liveViewUrl: string | null;
-  loading: boolean;
+  stage: BrowserStartupStage;
   error: string | null;
   busy: boolean;
+  /** Every attempt at the view socket failed. */
+  unreachable: boolean;
+  signIn: SignInWatch;
   onCancel: () => void;
   onAnalyze: () => void;
+  onConnected: () => void;
+  onPainted: () => void;
+  onRetryView: () => void;
+  onUnavailable: () => void;
 }) {
   const elapsedSeconds = useElapsedSeconds(busy);
+  // A second clock, and it runs on a different question: how long the browser
+  // has been opening, not how long the analysis has been running.
+  const startupSeconds = useElapsedSeconds(stage !== "ready" && !unreachable);
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -224,27 +291,96 @@ function LiveViewDialog({
             (`BROWSER_SANDBOX.viewport`). Any other ratio would letterbox the
             frame, and a letterboxed frame puts a person's click somewhere
             other than where they aimed. */}
-        <div className="aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
-          {loading && (
-            <p role="status" className="p-4 text-sm text-fg-secondary">
-              Opening a temporary browser…
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="p-4 text-sm text-amber">
-              {error}
-            </p>
-          )}
+        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
           {liveViewUrl && !error && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
             // page; this is a JPEG on a canvas, which executes nothing
             // (ADR 0076). The URL comes only from the authorized server action.
-            <LiveBrowserCanvas viewUrl={liveViewUrl} />
+            //
+            // Mounted as soon as there is a URL, and *underneath* the waiting
+            // panel rather than after it: the socket cannot open until this
+            // exists, so a panel that waits for the canvas before mounting it
+            // would be waiting for itself.
+            <LiveBrowserCanvas
+              viewUrl={liveViewUrl}
+              onConnected={onConnected}
+              onPainted={onPainted}
+              onUnavailable={onUnavailable}
+            />
+          )}
+          {error && (
+            <p role="alert" className="absolute inset-0 bg-surface-2 p-4 text-sm text-amber">
+              {error}
+            </p>
+          )}
+          {!error && unreachable && (
+            /*
+             * The state this dialog used to have no name for.
+             *
+             * The socket failed, every retry failed, and what a founder saw
+             * was "Connecting to it" spinning until they cancelled — a browser
+             * Vibe had created and was paying for, behind a message that said
+             * it was still coming. A wait that cannot end is not a wait.
+             *
+             * The browser is still alive: the session outlives one socket, so
+             * the honest offer is another attempt at the picture, not a new
+             * browser the founder would pay for twice.
+             */
+            <div
+              role="status"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-fg-body">
+                  Vibe cannot reach the temporary browser
+                </p>
+                <p className="text-xs text-fg-muted">
+                  The browser is running, but its picture is not getting through. This is
+                  usually the connection between this device and it. Trying again costs
+                  nothing — the browser is already open.
+                </p>
+              </div>
+              <div>
+                <Button type="button" onClick={onRetryView}>
+                  Try again
+                </Button>
+              </div>
+            </div>
+          )}
+          {!error && !unreachable && stage !== "ready" && (
+            <div
+              role="status"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-fg-body">Opening a temporary browser</p>
+                {/*
+                  The honest expectation, and the reason for the slow case.
+                  Vibe builds its browser image about once a week; a person who
+                  is told that waits differently than one who is not.
+                */}
+                <p className="text-xs text-fg-muted">
+                  Usually about twenty seconds. Occasionally a couple of minutes, when Vibe
+                  has to build its browser first — that happens roughly once a week.
+                </p>
+              </div>
+              <ProgressSteps steps={startupSteps(stage)} className="max-w-md" />
+              <p className="font-mono text-meta text-fg-meta">{startupSeconds}s elapsed</p>
+            </div>
           )}
         </div>
 
-        <p className="text-xs text-fg-muted">Deep Scan works best on a desktop browser.</p>
+        {/*
+          Was "Deep Scan works best on a desktop browser", which was true of a
+          browser a phone could not type into at all — and read as a preference
+          rather than a wall, so it invited somebody to spend Credits on a
+          session they could not finish. A phone can drive this now; a larger
+          screen is genuinely easier, and that is all this says.
+        */}
+        <p className="text-xs text-fg-muted">
+          Tap or click to interact. A larger screen makes signing in easier.
+        </p>
 
         {busy && (
           /*
@@ -268,9 +404,34 @@ function LiveViewDialog({
           </div>
         )}
 
+        {!busy && signIn.startsInSeconds !== null && (
+          /*
+           * The one moment this dialog speaks first. `role="status"` rather
+           * than `alert`: it is not a problem, and interrupting a founder who
+           * has just finished typing a password is the wrong way to say so.
+           *
+           * The countdown is shown because it is running either way — a scan
+           * that begins with no warning is indistinguishable from a misclick,
+           * and the founder who is not actually finished needs somewhere to
+           * say so.
+           */
+          <div role="status" className="space-y-2 rounded-md border border-line-2 bg-surface-2 p-3">
+            <p className="text-sm text-fg-prose">
+              You look signed in. Vibe starts looking around in {signIn.startsInSeconds}s.
+            </p>
+            <TextAction type="button" onClick={signIn.postpone} className="text-sm">
+              Not yet — I&apos;ll start it myself
+            </TextAction>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
-            {busy ? "Looking around…" : "I'm logged in — Analyze"}
+            {busy
+              ? "Looking around…"
+              : signIn.signedIn
+                ? "Analyze now"
+                : "I'm logged in — Analyze"}
           </Button>
           <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
             Cancel
@@ -312,6 +473,238 @@ function useElapsedSeconds(running: boolean): number {
   if (!running || !span) return 0;
 
   return Math.max(0, Math.floor((span.now - span.startedAt) / 1000));
+}
+
+/** How often the browser is asked whether the founder has finished signing in. */
+const SIGN_IN_POLL_MS = 4_000;
+/**
+ * How long the founder has to stop an unprompted start.
+ *
+ * Long enough to read the sentence and press the button, short enough that it
+ * is not a second thing to wait through. The scan is what they asked for; this
+ * window exists for the reading that is wrong, not for the one that is right.
+ */
+const AUTO_START_GRACE_MS = 6_000;
+
+export type SignInWatch = {
+  /** The latest reading. `false` until the browser says otherwise. */
+  signedIn: boolean;
+  /** Seconds left before the scan starts by itself, or `null` if it will not. */
+  startsInSeconds: number | null;
+  /** Stops the unprompted start, for the rest of this session. */
+  postpone: () => void;
+};
+
+/**
+ * Watches the live browser for a finished login (founder request, 2026-09-07:
+ * "er sollte erkennen wann der user eingeloggt ist und losscannen").
+ *
+ * Three properties this hook has to have, and each is a line below:
+ *
+ *  - It asks only while asking is useful — the dialog open, a frame painted,
+ *    nothing else running. A poll against a browser that is still booting
+ *    learns nothing and costs a round trip.
+ *  - It stops asking the moment it has its answer. `shouldStartUnprompted`
+ *    wants consecutive readings, so the run is kept here and cleared whenever
+ *    a reading interrupts it.
+ *  - It never starts anything silently. A positive run opens a grace window
+ *    the founder can close, and closing it is permanent for this session —
+ *    someone who says "not yet" once should not be asked again every four
+ *    seconds.
+ */
+function useSignInWatch(options: {
+  sessionId: string | null;
+  active: boolean;
+  onStart: () => void;
+}): SignInWatch {
+  const { sessionId, active, onStart } = options;
+
+  const [signedIn, setSignedIn] = useState(false);
+  const [startsAt, setStartsAt] = useState<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [postponed, setPostponed] = useState(false);
+
+  /*
+   * The run of readings, tagged with the session it belongs to.
+   *
+   * Tagged rather than cleared: a new browser session must not inherit the
+   * previous one's positives, and carrying the id means that is true by
+   * construction instead of by remembering to reset something.
+   */
+  const readings = useRef<{ sessionId: string | null; values: boolean[] }>({
+    sessionId: null,
+    values: [],
+  });
+
+  // Adjusting state when a prop changes, the way React documents it: during
+  // render, not from an effect that would render once with the wrong session's
+  // answer before correcting itself.
+  const [watchedSession, setWatchedSession] = useState(sessionId);
+  if (sessionId !== watchedSession) {
+    setWatchedSession(sessionId);
+    setSignedIn(false);
+    setStartsAt(null);
+    setRemainingMs(null);
+    setPostponed(false);
+  }
+
+  const watching = active && sessionId !== null && !postponed && startsAt === null;
+
+  useEffect(() => {
+    if (!watching || sessionId === null) return;
+
+    let cancelled = false;
+
+    const ask = async () => {
+      const result = await probeDeepScanSignInAction(sessionId);
+      if (cancelled) return;
+
+      // A failed probe is a negative reading, not an error the founder has to
+      // deal with: a browser that is briefly unreachable is the ordinary shape
+      // of a login in progress, and the button is still there.
+      const reading = result.ok && result.signedIn;
+      setSignedIn(reading);
+
+      const previous = readings.current.sessionId === sessionId ? readings.current.values : [];
+      const values = [...previous, reading].slice(-CONSECUTIVE_SIGNED_IN_PROBES);
+      readings.current = { sessionId, values };
+
+      if (shouldStartUnprompted(values)) {
+        setStartsAt(Date.now() + AUTO_START_GRACE_MS);
+        setRemainingMs(AUTO_START_GRACE_MS);
+      }
+    };
+
+    void ask();
+    const timer = setInterval(() => void ask(), SIGN_IN_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [watching, sessionId]);
+
+  useEffect(() => {
+    if (startsAt === null) return;
+
+    const timer = setInterval(() => {
+      const left = startsAt - Date.now();
+      if (left > 0) {
+        setRemainingMs(left);
+        return;
+      }
+      clearInterval(timer);
+      setRemainingMs(null);
+      setStartsAt(null);
+      onStart();
+    }, 250);
+
+    return () => clearInterval(timer);
+  }, [startsAt, onStart]);
+
+  const postpone = useCallback(() => {
+    readings.current = { sessionId: null, values: [] };
+    setStartsAt(null);
+    setRemainingMs(null);
+    setPostponed(true);
+  }, []);
+
+  return {
+    signedIn,
+    startsInSeconds: remainingMs === null ? null : Math.max(0, Math.ceil(remainingMs / 1000)),
+    postpone,
+  };
+}
+
+/**
+ * The offer to run a scan, rendered from the one derived answer.
+ *
+ * Every terms decision — free, priced, short, not for sale, blocked — was made
+ * in `buildDeepScanViewModel`. This maps each to a control or to a sentence,
+ * and it never renders a heading with neither: a state with no action and no
+ * reason is indistinguishable from a broken page, which is exactly how the
+ * missing re-run was reported.
+ */
+function NextScan({
+  next,
+  rerun,
+  onStart,
+  disabled,
+  now,
+}: {
+  next: DeepScanNextScan;
+  /** True when a finished result is already on screen, which changes the verb. */
+  rerun?: boolean;
+  onStart: () => void;
+  disabled: boolean;
+  now: number | null;
+}) {
+  switch (next.kind) {
+    case "included":
+      return (
+        <Button type="button" onClick={onStart} disabled={disabled} busy={disabled}>
+          {disabled ? "Starting…" : rerun ? "Run included Deep Scan" : "Run free Deep Scan"}
+        </Button>
+      );
+
+    case "priced":
+      return (
+        <div className="space-y-2">
+          {/*
+            Said before the click, not after it. A Deep Scan that fails, is
+            cancelled, or expires costs nothing — the hold is released — and a
+            customer deciding whether to spend deserves to know that while they
+            are deciding.
+          */}
+          <p className="text-xs text-fg-muted">
+            You&apos;re only charged if Vibe comes back with a result.
+          </p>
+          <Button type="button" onClick={onStart} disabled={disabled} busy={disabled}>
+            {disabled
+              ? "Starting…"
+              : `${rerun ? "Scan again" : "Run Deep Scan"} · ${formatCreditsForDisplay(next.price)} Credits`}
+          </Button>
+        </div>
+      );
+
+    case "insufficient_credits":
+      return (
+        <div className="space-y-2">
+          <p className="text-sm text-fg-secondary">
+            Another Deep Scan costs {formatCreditsForDisplay(next.price)} Credits, and your
+            balance doesn&apos;t cover it yet.
+          </p>
+          <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+            Top up Credits
+          </Link>
+        </div>
+      );
+
+    case "not_for_sale":
+      // No policy prices another scan. The honest terminal answer, and not a
+      // route into a checkout that cannot help.
+      return (
+        <p className="text-xs text-fg-muted">
+          Additional Deep Scans aren&apos;t available right now.
+        </p>
+      );
+
+    case "blocked":
+      return (
+        <p className="text-xs text-fg-muted">
+          {waitHint(next.retryAvailableAt, now) ?? messageFor(next.reason)}
+        </p>
+      );
+
+    case "unavailable":
+      return (
+        <p className="text-xs text-fg-muted">
+          {next.reason === "provider_not_configured"
+            ? "Deep Scan is not switched on here yet. That is a gap on Vibe's side — it says nothing about your product."
+            : "Add your production website URL above to run another Deep Scan."}
+        </p>
+      );
+  }
 }
 
 function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["lastResult"]> }) {
@@ -398,15 +791,17 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const [dialogOpen, setDialogOpen] = useState(false);
   // Held in memory only, for the lifetime of the open dialog (§6).
   const [liveViewUrl, setLiveViewUrl] = useState<string | null>(null);
-  const [liveViewLoading, setLiveViewLoading] = useState(false);
+  /** How far the temporary browser has got. See `startupSteps`. */
+  const [stage, setStage] = useState<BrowserStartupStage>("starting");
   const [error, setError] = useState<string | null>(null);
+  /** Every attempt at the view socket failed. Not a stage — a failure. */
+  const [unreachable, setUnreachable] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
-    setLiveViewLoading(true);
     setError(null);
+    setUnreachable(false);
     const result = await getDeepScanLiveViewAction(id);
-    setLiveViewLoading(false);
 
     if (!result.ok) {
       setLiveViewUrl(null);
@@ -418,14 +813,19 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
 
   const closeDialog = useCallback(() => {
     setDialogOpen(false);
+    setUnreachable(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
+    setStage("starting");
   }, []);
 
   /** Re-enters an in-progress login: the capability is fetched afresh (§6). */
   const handleReopen = () => {
     if (!sessionId) return;
     setError(null);
+    // The browser already exists, so the first row is a fact before the dialog
+    // is even on screen.
+    setStage("connecting");
     setDialogOpen(true);
     void loadLiveView(sessionId);
   };
@@ -433,15 +833,23 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const handleStart = () => {
     setError(null);
     setBusy(true);
+    // Opened on the click, not on the answer. Starting a browser takes twenty
+    // seconds warm and a couple of minutes cold, and an unchanged button for
+    // either is indistinguishable from nothing having happened.
+    setStage("starting");
+    setDialogOpen(true);
     startTransition(async () => {
       const result = await startDeepScanAction(projectId);
       setBusy(false);
       if (!result.ok) {
+        // The dialog closes rather than holding a failure: the panel below is
+        // where a refusal belongs, next to the control that caused it.
+        closeDialog();
         setError(messageFor(result.error));
         return;
       }
       setSessionId(result.sessionId);
-      setDialogOpen(true);
+      setStage("connecting");
       void loadLiveView(result.sessionId);
     });
   };
@@ -462,7 +870,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     });
   }, [projectId, sessionId, closeDialog, router]);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = useCallback(() => {
     if (!sessionId) return;
     setBusy(true);
     setError(null);
@@ -487,7 +895,44 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       closeDialog();
       router.refresh();
     });
-  };
+  }, [projectId, sessionId, closeDialog, router]);
+
+  /*
+   * Vibe watches for the finished login instead of waiting to be told about
+   * it. Only while a frame is actually on screen: before that the browser is
+   * still opening, and a probe would be a round trip that cannot learn
+   * anything.
+   */
+  const signIn = useSignInWatch({
+    sessionId,
+    active: dialogOpen && stage === "ready" && !busy && !pending,
+    onStart: handleAnalyze,
+  });
+
+  /*
+   * Two facts, reported by the only component that can see them. Neither
+   * advances on a timer: the socket opened, and a frame arrived.
+   */
+  const handleConnected = useCallback(() => {
+    setStage((current) => (current === "ready" ? current : "painting"));
+  }, []);
+
+  const handleUnavailable = useCallback(() => setUnreachable(true), []);
+
+  /*
+   * Another attempt at the picture, not another browser.
+   *
+   * The session is still live and still paid for, so this re-fetches the view
+   * capability and remounts the canvas. Re-fetching is what makes it a real
+   * retry rather than a re-render: the URL carries a token, and a token that
+   * has expired is one of the reasons the socket may have refused.
+   */
+  const handleRetryView = useCallback(() => {
+    if (!sessionId) return;
+    setStage("connecting");
+    void loadLiveView(sessionId);
+  }, [sessionId, loadLiveView]);
+  const handlePainted = useCallback(() => setStage("ready"), []);
 
   const disabled = busy || pending;
 
@@ -498,9 +943,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           <>
             <Heading title="Look inside your signed-in product" status="Ready" />
             <ResultSummary result={model.lastResult} />
-            <p className="text-xs text-fg-muted">
-              Additional Deep Scans will use Vibe Credits.
-            </p>
+            {/*
+              A finished result is not the end of the section. A product changes
+              after it is scanned, and this branch used to render a summary and
+              nothing else — no button, no price, no reason — because `state`
+              ranks `completed` above every purchasable state. One successful
+              scan turned the panel into a read-only card permanently. The offer
+              is a separate question and is answered by `model.nextScan`.
+            */}
+            <NextScan next={model.nextScan} rerun onStart={handleStart} disabled={disabled} now={browserNow} />
           </>
         ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
           <>
@@ -683,11 +1134,17 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       {dialogOpen && (
         <LiveViewDialog
           liveViewUrl={liveViewUrl}
-          loading={liveViewLoading}
+          stage={stage}
           error={error}
           busy={disabled}
+          unreachable={unreachable}
+          signIn={signIn}
           onCancel={handleCancel}
           onAnalyze={handleAnalyze}
+          onConnected={handleConnected}
+          onPainted={handlePainted}
+          onRetryView={handleRetryView}
+          onUnavailable={handleUnavailable}
         />
       )}
     </>
