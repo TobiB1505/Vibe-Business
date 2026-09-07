@@ -81,6 +81,7 @@ const READY_TIMEOUT_MS = 45_000;
 const READY_POLL_MS = 500;
 
 const READY_PATH = `${BROWSER_SANDBOX.root}/ready`;
+const FAILURE_PATH = `${BROWSER_SANDBOX.root}/guard-failure`;
 
 function failure<T>(error: AuthenticatedAnalysisFailure): ProviderResult<T> {
   return { ok: false, error };
@@ -193,6 +194,7 @@ export function createSandboxBrowserSessionProvider(
             [BROWSER_GUARD_ENV.publicPort]: String(BROWSER_SANDBOX.publicPort),
             [BROWSER_GUARD_ENV.devtoolsPort]: String(BROWSER_SANDBOX.devtoolsPort),
             [BROWSER_GUARD_ENV.readyFile]: READY_PATH,
+            [BROWSER_GUARD_ENV.failureFile]: FAILURE_PATH,
           },
         });
       } catch (error) {
@@ -212,9 +214,37 @@ export function createSandboxBrowserSessionProvider(
       }
 
       if (!(await waitUntilReady(handle))) {
-        // The one failure with no exception behind it: Chromium or the guard
-        // came up and never reported usable, so the only fact is the wait.
-        reportBrowserFailure("session_ready_timeout", { waitedMs: READY_TIMEOUT_MS });
+        /*
+         * The one failure with no exception behind it, so the two facts worth
+         * having are gathered rather than inferred.
+         *
+         * `guardFailure` is what the guard itself decided — absent means it
+         * never got far enough to decide, which is a different problem from
+         * "Chromium did not answer". `chromiumVersion` asks the binary whether
+         * it can start at all: a browser missing a shared library says so on
+         * its first line, and no amount of waiting would have revealed that.
+         *
+         * Both are bounded and best effort. A diagnosis that fails must not
+         * replace the failure it is diagnosing.
+         */
+        const guardFailure = await handle
+          .readFile({ path: FAILURE_PATH, maxBytes: 500 })
+          .catch(() => null);
+
+        const probe = await handle
+          .run({
+            command: { command: chromiumCommand().command, args: ["--version"] },
+            cwd: BROWSER_SANDBOX.root,
+            timeoutMs: 15_000,
+          })
+          .catch(() => null);
+
+        reportBrowserFailure("session_ready_timeout", {
+          waitedMs: READY_TIMEOUT_MS,
+          guardFailure: guardFailure ?? "none recorded",
+          chromiumExitCode: probe?.exitCode ?? null,
+          chromiumOutput: probe ? probe.output.slice(-800) : "probe unavailable",
+        });
         // A VM nobody can use is worse than none: it bills for its whole
         // timeout and shows a person a live view that never paints.
         await handle.stop().catch(() => undefined);
