@@ -374,10 +374,8 @@ export function attestationPrompt(
         "claim Vibe did the work.",
       submitLabel: "Done — next step",
       finding: {
-        label: "Paste what your tool printed",
-        help:
-          "The prompt asks it to end with a short VIBE SUMMARY block. Paste that here — or " +
-          "write a line yourself if it didn't.",
+        label: "Paste the VIBE SUMMARY here",
+        help: "Your tool prints it when it's finished — a line of your own works too.",
       },
     };
   }

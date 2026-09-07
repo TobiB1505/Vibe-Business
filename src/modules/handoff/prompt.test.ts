@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fakePlanStep } from "@/modules/execution-contract/test-support";
+import { attestationPrompt } from "@/modules/action-plans/view";
 import { compileHandoffPrompt } from "./prompt";
 import { HANDOFF_TOOLS } from "./schema";
 
@@ -31,6 +32,21 @@ describe("the handoff prompt", () => {
     expect(prompt).toContain("VIBE SUMMARY");
     expect(prompt).toContain("Left undone");
     expect(prompt.trimEnd().endsWith("one line I can follow myself")).toBe(true);
+  });
+
+  it("names the same block the field asks for", () => {
+    /*
+     * The field says "paste the VIBE SUMMARY here" and the prompt is what makes
+     * that name mean anything. Two files, one artifact — renaming the block on
+     * one side and not the other leaves the founder hunting for a heading their
+     * tool never printed, and nothing else in the suite would notice.
+     */
+    const prompt = compileHandoffPrompt({ step: STEP, tool: "claude_code", repository: "o/r" });
+    const field = attestationPrompt({ actor: "founder_action" }, true).finding;
+
+    expect(field).not.toBeNull();
+    expect(prompt).toContain("VIBE SUMMARY");
+    expect(field?.label).toContain("VIBE SUMMARY");
   });
 
   it("carries what the founder already established", () => {

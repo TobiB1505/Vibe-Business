@@ -125,8 +125,14 @@ test.describe("a step Vibe will not build", () => {
      * the machine already wrote down.
      */
     await expect(page.getByRole("button", { name: "Done — next step" })).toBeVisible();
-    await expect(page.getByText("Paste what your tool printed")).toBeVisible();
-    await expect(page.getByText("VIBE SUMMARY", { exact: false }).first()).toBeVisible();
+    /*
+     * The field names the artifact the prompt asked for, so the founder is
+     * looking for one thing rather than composing one. Asserted against the
+     * prompt block separately, because the same two words now appear in both
+     * places and a loose match would pass on either alone.
+     */
+    await expect(page.getByText("Paste the VIBE SUMMARY here")).toBeVisible();
+    await expect(page.getByTestId("handoff-prompt")).toContainText("VIBE SUMMARY");
     await expect(page.getByText("does not claim Vibe did the work")).toBeVisible();
   });
 
