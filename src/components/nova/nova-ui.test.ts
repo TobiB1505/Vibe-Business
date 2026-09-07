@@ -120,3 +120,49 @@ describe("the confirmation", () => {
     expect(rendered("nova-choice.tsx")).toContain("option.requiresConfirmation");
   });
 });
+
+/**
+ * One reading of the motion preference, and it has to be the server's.
+ *
+ * ## What this caught
+ *
+ * `NovaPresence` read the preference through Motion's `useReducedMotion`,
+ * which answers from a media query the browser has already evaluated before
+ * React hydrates. A reader with `prefers-reduced-motion: reduce` therefore got
+ * a client first render that disagreed with the server's — the server emitted
+ * the mark's keyframe `<style>` and the client did not — and React responded
+ * by discarding the subtree and rebuilding it. On every page that mounts the
+ * mark: the landing page, Nova's rail, her status row.
+ *
+ * Typecheck, lint and the whole suite were green through all of it. What found
+ * it was opening a page in a browser with the preference set.
+ *
+ * ## Why the assertion is about the import
+ *
+ * Because the mechanism is the fix. `useMotionAllowed` is a
+ * `useSyncExternalStore` whose server snapshot is "no motion", so the two
+ * agree by construction rather than by timing — and there is no way to write
+ * that as a value test, because the defect only exists across the boundary
+ * between two renders in two runtimes.
+ */
+describe("the mark's motion preference", () => {
+  it("comes from the store with a server snapshot, not from the media query", () => {
+    const presence = source("nova-presence.tsx");
+
+    expect(presence).toContain("useMotionAllowed");
+    /* The import, not the word: the docblock above this test names the hook it
+       replaced, and a bare substring sweep would match its own explanation. */
+    expect(presence).not.toMatch(/import \{[^}]*useReducedMotion[^}]*\} from "motion\/react"/);
+  });
+
+  /*
+   * The one copy. Two readings of one preference is how a screen ends up
+   * half-staged — the thread present from the first frame while the mark
+   * beside it is still assembling — which is the argument `nova-motion.ts`
+   * makes for itself.
+   */
+  it("is the same store the staged arrival uses", () => {
+    expect(source("nova-motion.ts")).toContain("useSyncExternalStore");
+    expect(source("nova-arriving.tsx")).toContain("useMotionAllowed");
+  });
+});
