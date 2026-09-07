@@ -26,14 +26,15 @@ describe("the sequence", () => {
     expect(scanHandoffStage(2_000, false)).toBe("watching");
   });
 
-  it("switches off, then gathers", () => {
+  it("switches off, boots, then gathers", () => {
     expect(scanHandoffStage(2_700, false)).toBe("collapsing");
-    expect(scanHandoffStage(4_000, false)).toBe("gathering");
+    expect(scanHandoffStage(3_500, false)).toBe("booting");
+    expect(scanHandoffStage(6_000, false)).toBe("gathering");
     expect(scanHandoffStage(90_000, false)).toBe("gathering");
   });
 
   it("is monotonic — it never returns to an earlier stage", () => {
-    const order = ["watching", "collapsing", "gathering"];
+    const order = ["watching", "collapsing", "booting", "gathering"];
     let lowest = 0;
     for (let ms = 0; ms <= 20_000; ms += 100) {
       const index = order.indexOf(scanHandoffStage(ms, false));
@@ -116,7 +117,10 @@ describe("ambience, not a false state", () => {
       join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
       "utf8",
     );
-    expect(panel).toContain("<ScanHandoff running={busy && !error} />");
+    // `sealing` keeps it mounted through the closing check, which is the one
+    // state that outlives `busy` — and it is still gated on an error being
+    // absent, so a failed analysis gets no animation at all.
+    expect(panel).toContain("running={(busy || sealing) && !error}");
   });
 
   it("is hidden from assistive technology, because it says nothing", () => {
@@ -190,5 +194,84 @@ describe("no effect in this file can re-run itself", () => {
     // geometry for their first frames.
     expect(SOURCE).not.toContain('if (stage === "watching") return null;');
     expect(SOURCE).toContain("pointer-events-none absolute inset-0 overflow-hidden");
+  });
+});
+
+/*
+ * The scan runs for a minute and a half. The first version of this had one
+ * scene, so the founder watched the same twelve shapes orbit for most of it.
+ */
+describe("the boot, and why it is a sweep and not a bar", () => {
+  it("plays before the gathering and then never again", () => {
+    expect(scanHandoffStage(3_500, false)).toBe("booting");
+    // Never returns to it — a boot that replayed would read as a restart.
+    for (let ms = 6_000; ms <= 120_000; ms += 1_000) {
+      expect(scanHandoffStage(ms, false), `${ms}ms`).not.toBe("booting");
+    }
+  });
+
+  it("travels rather than fills", () => {
+    /*
+     * A bar that fills reads as a fraction of the work. It would reach the end
+     * in under two seconds and sit full for another ninety while the scan is
+     * still running — a completion claim, and the first entry on the
+     * never-animate list. A segment crossing a track accumulates nothing.
+     */
+    const boot = SOURCE.slice(SOURCE.indexOf('stage === "booting"'));
+    const scene = boot.slice(0, boot.indexOf('stage === "sealing"'));
+    expect(scene).toContain('animate={{ x: ["-120%", "320%"] }}');
+    expect(scene).not.toMatch(/width:|scaleX: \[0/);
+  });
+});
+
+describe("the check is bound to a result, and nothing else", () => {
+  it("outranks the clock, so a result never waits for a scene", () => {
+    for (const ms of [0, 1_000, 3_500, 90_000]) {
+      expect(scanHandoffStage(ms, false, true), `${ms}ms`).toBe("sealing");
+    }
+  });
+
+  it("is unreachable while the scan is still running", () => {
+    // Success animated before success exists is the first thing the motion
+    // rules forbid. `succeeded` is the only way into this stage.
+    for (let ms = 0; ms <= 120_000; ms += 500) {
+      expect(scanHandoffStage(ms, false, false), `${ms}ms`).not.toBe("sealing");
+      expect(scanHandoffStage(ms, true, false), `${ms}ms reduced`).not.toBe("sealing");
+    }
+  });
+
+  it("draws the tick rather than fading it in", () => {
+    const seal = SOURCE.slice(SOURCE.indexOf('stage === "sealing"'));
+    expect(seal).toContain("pathLength: 0");
+    expect(seal).toContain("pathLength: 1");
+  });
+
+  it("closes the dialog after the check, not during it", () => {
+    expect(SOURCE).toContain("setTimeout(() => onSealed?.(), reducedMotion ? 0 : SEAL_MS)");
+  });
+
+  it("makes nobody wait for an outro they cannot see", () => {
+    // Reduced motion gets no animation, so a delay before closing would be a
+    // pause with no content in it.
+    expect(SOURCE).toContain("reducedMotion ? 0 : SEAL_MS");
+  });
+});
+
+describe("the glyphs are page furniture, not findings", () => {
+  it("draws things a web page is made of", () => {
+    for (const glyph of ["AtGlyph", "FolderGlyph", "CartGlyph", "TableGlyph", "CodeIcon"]) {
+      expect(SOURCE, glyph).toContain(glyph);
+    }
+  });
+
+  it("still carries no text and no path", () => {
+    /*
+     * An `@` says "web pages contain things like this", which is true of every
+     * web page. It does not say Vibe found a contact form in *this* product.
+     * The moment one carries a label or a path, it stops being decoration.
+     */
+    const tiles = SOURCE.slice(SOURCE.indexOf("TILE_ORIGINS.map"));
+    expect(tiles).not.toMatch(/\/app\//);
+    expect(tiles).not.toMatch(/\{surface|\{page|label/);
   });
 });

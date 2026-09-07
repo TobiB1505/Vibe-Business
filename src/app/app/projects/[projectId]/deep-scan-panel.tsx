@@ -186,6 +186,9 @@ function LiveViewDialog({
   onPainted,
   onRetryView,
   onUnavailable,
+  sealing,
+  onSealed,
+  onLoginExpired,
 }: {
   liveViewUrl: string | null;
   stage: BrowserStartupStage;
@@ -202,11 +205,25 @@ function LiveViewDialog({
   onPainted: (frame: { w: number; h: number }) => void;
   onRetryView: () => void;
   onUnavailable: () => void;
+  /** The analysis returned; the dialog is showing the result before it closes. */
+  sealing: boolean;
+  onSealed: () => void;
+  /** The founder ran out of time to sign in. */
+  onLoginExpired: () => void;
 }) {
   const elapsedSeconds = useElapsedSeconds(busy);
   // A second clock, and it runs on a different question: how long the browser
   // has been opening, not how long the analysis has been running.
   const startupSeconds = useElapsedSeconds(stage !== "ready" && !unreachable);
+  /*
+   * Armed only while the founder could actually be signing in: the picture is
+   * up, nothing is running, and the analysis has not started. It is not armed
+   * while the browser is still opening, because that wait is Vibe's.
+   */
+  const loginSecondsLeft = useLoginCountdown(
+    stage === "ready" && !busy && !sealing && !unreachable && error === null,
+    onLoginExpired,
+  );
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -402,7 +419,11 @@ function LiveViewDialog({
             started and has not yet heard back from. It cannot render over a
             pending, cancelled or failed scan, because it is not mounted then.
           */}
-          <ScanHandoff running={busy && !error} />
+          <ScanHandoff
+            running={(busy || sealing) && !error}
+            succeeded={sealing}
+            onSealed={onSealed}
+          />
 
           {!error && !unreachable && stage !== "ready" && (
             <div
@@ -434,9 +455,28 @@ function LiveViewDialog({
           session they could not finish. A phone can drive this now; a larger
           screen is genuinely easier, and that is all this says.
         */}
-        <p className="text-xs text-fg-muted">
-          Tap or click to interact. A larger screen makes signing in easier.
-        </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-xs text-fg-muted">
+            Tap or click to interact. A larger screen makes signing in easier.
+          </p>
+          {loginSecondsLeft !== null && (
+            /*
+             * A visible deadline, because the alternative is being cut off
+             * without warning. `role="timer"` with a polite live region: a
+             * screen reader should be able to ask for it, not have every
+             * second announced.
+             */
+            <p
+              role="timer"
+              aria-live="off"
+              className={`font-mono text-meta ${
+                loginSecondsLeft * 1000 <= LOGIN_URGENT_MS ? "text-amber" : "text-fg-meta"
+              }`}
+            >
+              {formatCountdown(loginSecondsLeft)} to sign in
+            </p>
+          )}
+        </div>
 
         {busy && (
           /*
@@ -566,6 +606,83 @@ function ResultNotes({ notes }: { notes: DeepScanNote[] }) {
       </div>
     </Disclosure>
   );
+}
+
+/**
+ * How long a founder has to sign in before Vibe gives the browser back.
+ *
+ * A sandbox bills for every second it exists, and this one exists to hold a
+ * login form. Ten minutes of it — the provider-side ceiling — is nine minutes
+ * of paying for an empty room when somebody walks away mid-flow.
+ *
+ * Two minutes is the founder's number and it is one constant, deliberately, so
+ * it is a decision rather than an excavation. It is on the tight side for a
+ * password manager plus a second factor on a phone, and the honest mitigation
+ * is that it is *visible*: a person who can see thirty seconds left knows to
+ * hurry, where a person who cannot see anything is simply cut off.
+ *
+ * The clock starts when the browser is on screen, not when the dialog opens —
+ * a cold sandbox can take two minutes to build, and charging that to the
+ * founder's login time would be billing them for Vibe's own wait.
+ */
+const LOGIN_DEADLINE_MS = 120_000;
+/** Where the countdown stops being information and starts being a warning. */
+const LOGIN_URGENT_MS = 30_000;
+
+/**
+ * Seconds left on the login deadline, or `null` when it is not running.
+ *
+ * The clock is armed once and never re-armed: a hook that restarted whenever
+ * its argument changed would hand a founder a fresh two minutes every time the
+ * dialog re-rendered, which is most seconds.
+ */
+function useLoginCountdown(armed: boolean, onExpired: () => void): number | null {
+  /*
+   * The deadline lives in a ref and the remaining time in state, and the split
+   * is what keeps both lint rules satisfied at once: `Date.now()` is impure so
+   * it cannot be read during render, and setting state synchronously in an
+   * effect body cascades renders. A ref written in an effect is neither.
+   *
+   * The countdown is *derived* from `armed` on the way out rather than cleared
+   * on disarm, so a stale number cannot outlive the state it described.
+   */
+  const deadlineRef = useRef<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState(LOGIN_DEADLINE_MS);
+
+  useEffect(() => {
+    if (!armed) {
+      deadlineRef.current = null;
+      return;
+    }
+    // Set once per arming. A hook that re-derived this per render would hand a
+    // founder a fresh two minutes every second.
+    deadlineRef.current = Date.now() + LOGIN_DEADLINE_MS;
+
+    const tick = () => {
+      const deadline = deadlineRef.current;
+      if (deadline === null) return;
+
+      const left = deadline - Date.now();
+      if (left > 0) {
+        setRemainingMs(left);
+        return;
+      }
+      clearInterval(timer);
+      setRemainingMs(0);
+      onExpired();
+    };
+
+    const timer = setInterval(tick, 500);
+    return () => clearInterval(timer);
+  }, [armed, onExpired]);
+
+  return armed ? Math.max(0, Math.ceil(remainingMs / 1000)) : null;
+}
+
+/** `2:00`, never `120s`. A deadline is a clock, and people read clocks. */
+export function formatCountdown(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
 }
 
 /**
@@ -993,6 +1110,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const [unreachable, setUnreachable] = useState(false);
   /** The shape of the picture, so the box can be the shape of the picture. */
   const [frame, setFrame] = useState<{ w: number; h: number } | null>(null);
+  /**
+   * The analysis came back with a result, and the dialog is playing the check.
+   *
+   * A separate state from `busy`, because the two mean different things: busy
+   * is "Vibe is still reading", sealed is "Vibe has finished and is saying so".
+   * The dialog stays open through the second one — closing on the answer would
+   * mean the founder's confirmation is a modal disappearing.
+   */
+  const [sealing, setSealing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
@@ -1012,6 +1138,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setDialogOpen(false);
     setUnreachable(false);
     setFrame(null);
+    setSealing(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -1062,11 +1189,42 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       // The server terminates the browser; the modal closes only afterwards.
       await cancelDeepScanAction(projectId, sessionId);
       setBusy(false);
+      // Not closed here. The handoff draws its check and calls `handleSealed`,
+      // which is what ends the dialog — so the last thing a founder sees is
+      // Vibe finishing, rather than a window vanishing.
+      setSealing(true);
+    });
+  }, [projectId, sessionId, closeDialog]);
+
+  /**
+   * The login deadline ran out.
+   *
+   * The same path as pressing Cancel — the server terminates the browser — so
+   * a founder is never charged for a scan that never read anything, and the
+   * message says what happened rather than leaving a dialog that closed by
+   * itself unexplained.
+   */
+  const handleLoginExpired = useCallback(() => {
+    if (!sessionId) return;
+    setBusy(true);
+    startTransition(async () => {
+      await cancelDeepScanAction(projectId, sessionId);
+      setBusy(false);
       setSessionId(null);
       closeDialog();
+      setError(
+        "The temporary browser closed because sign-in took longer than two minutes. Nothing was charged — you can start it again.",
+      );
       router.refresh();
     });
   }, [projectId, sessionId, closeDialog, router]);
+
+  const handleSealed = useCallback(() => {
+    setSealing(false);
+    setSessionId(null);
+    closeDialog();
+    router.refresh();
+  }, [closeDialog, router]);
 
   const handleAnalyze = useCallback(() => {
     if (!sessionId) return;
@@ -1352,6 +1510,9 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           onPainted={handlePainted}
           onRetryView={handleRetryView}
           onUnavailable={handleUnavailable}
+          sealing={sealing}
+          onSealed={handleSealed}
+          onLoginExpired={handleLoginExpired}
         />
       )}
     </>
