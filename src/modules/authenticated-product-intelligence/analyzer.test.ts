@@ -408,3 +408,151 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
     expect(new Set(paths).size).toBe(paths.length);
   });
 });
+
+/*
+ * A real scan reported eighteen unreachable pages and inspected one. Every
+ * message was the same shape:
+ *
+ *   page.goto: Navigation to ".../plan" is interrupted by
+ *              another navigation to ".../app"
+ *
+ * The app routes on its own after `goto` resolves — an auth check, a canonical
+ * redirect — and that late navigation aborts the *next* one. Each page was
+ * killed by the page before it, so a single interruption emptied the rest of
+ * the crawl.
+ */
+describe("analyzeAuthenticatedProduct — a single-page app interrupting its own navigation", () => {
+  function interruptingBrowser(interruptOnce: Set<string>) {
+    let current = `${ORIGIN}/app`;
+    const attempts: string[] = [];
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        const path = new URL(url).pathname;
+        attempts.push(path);
+        if (interruptOnce.has(path)) {
+          interruptOnce.delete(path);
+          throw new Error(
+            `page.goto: Navigation to "${url}" is interrupted by another navigation to "${ORIGIN}/app"`,
+          );
+        }
+        current = url;
+        return { status: 200 };
+      },
+      extract: async () => extraction(),
+    };
+
+    const browser: AnalysisBrowserPort = {
+      pages: async () => [page],
+      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+    };
+
+    return { browser, attempts };
+  }
+
+  it("retries the interrupted navigation once and reads the page", async () => {
+    const { browser, attempts } = interruptingBrowser(new Set(["/app/plan"]));
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser,
+      repository: repositoryWith(["/app/plan"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(attempts.filter((path) => path === "/app/plan")).toHaveLength(2);
+    expect(result.snapshot.pages.map((page) => page.path)).toContain("/app/plan");
+  });
+
+  it("does not retry a genuine navigation failure", async () => {
+    let attempts = 0;
+    let current = `${ORIGIN}/app`;
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        const path = new URL(url).pathname;
+        if (path === "/app/plan") {
+          attempts += 1;
+          throw new Error("page.goto: Timeout 15000ms exceeded");
+        }
+        current = url;
+        return { status: 200 };
+      },
+      extract: async () => extraction(),
+    };
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      },
+      repository: repositoryWith(["/app/plan"]),
+    });
+
+    expect(result.ok).toBe(true);
+    // A retry loop would turn an unreachable page into a budget spent on it.
+    expect(attempts).toBe(1);
+  });
+});
+
+/*
+ * The founder's instruction, after watching a 25-page budget go on `/`,
+ * `/privacy`, `/terms`, `/forgot-password` and `/reset-password`:
+ *
+ *   "er sollte auf keinen fall die public sites lesen die ohne Login möglich
+ *    sind das machen wir schon mit dem live product scan"
+ *
+ * Those paths arrived as links in the signed-in shell's own footer, which is
+ * why the exclusion has to live here and not only in `buildRouteCandidates`.
+ */
+describe("analyzeAuthenticatedProduct — pages the public scan already read", () => {
+  it("does not spend a page visit on a link the public crawl rendered anonymously", async () => {
+    let current = `${ORIGIN}/app`;
+    const visited: string[] = [];
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        visited.push(new URL(url).pathname);
+        current = url;
+        return { status: 200 };
+      },
+      extract: async () =>
+        extraction({ sameOriginLinks: [`${ORIGIN}/privacy`, `${ORIGIN}/app/settings`] }),
+    };
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      },
+      publicProduct: publicWith([{ path: "/privacy", redirectedTo: null }]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(visited).not.toContain("/privacy");
+    expect(visited).toContain("/app/settings");
+    expect(result.snapshot.pages.map((entry) => entry.path)).not.toContain("/privacy");
+  });
+
+  it("still inspects a path the public crawl saw bounce to a login page", async () => {
+    const { browser, visited } = fakeBrowser();
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser,
+      publicProduct: publicWith([{ path: "/app/reports", redirectedTo: "/login" }]),
+    });
+
+    expect(result.ok).toBe(true);
+    expect(visited.map((url) => new URL(url).pathname)).toContain("/app/reports");
+  });
+});

@@ -22,6 +22,7 @@ import {
   type DeepScanDenialReason,
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
+import { detectSignedIn, type SignInReason } from "./login-detection";
 import type { BrowserSessionProvider, BrowserSessionUsage } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
@@ -415,6 +416,65 @@ export async function getDeepScanLiveView(
   if (!liveView.ok) return { ok: false, error: liveView.error };
 
   return { ok: true, liveViewUrl: liveView.value.url };
+}
+
+/**
+ * Whether the founder has finished signing in, asked of the live browser.
+ *
+ * The flow used to ask *them* — a button reading "I'm logged in — Analyze" —
+ * and the founder's instruction was that Vibe should notice by itself. So this
+ * exists to be polled while the dialog is open, and it is built to be cheap
+ * and to be harmless when it is wrong:
+ *
+ *  - It **never writes**. No session status, no snapshot, no usage row, no
+ *    credit hold. A probe that failed and a probe that said "not yet" leave
+ *    the same trace, which is none.
+ *  - It **never terminates** the browser. An expired session is reported and
+ *    left to the paths that own that decision.
+ *  - It **cannot start anything**. It answers a question; the client decides
+ *    what to do with the answer, and `analyzeDeepScan` re-checks every
+ *    precondition for itself.
+ *
+ * The capability URL is fetched per call and never stored (§10), same as
+ * everywhere else in this file.
+ */
+export type ProbeDeepScanSignInResult =
+  | { ok: true; signedIn: boolean; reason: SignInReason }
+  | { ok: false; error: AnalyzeDeepScanFailure };
+
+export async function probeDeepScanSignIn(
+  supabase: SupabaseClient,
+  provider: BrowserSessionProvider,
+  params: { sessionId: string; userId: string },
+): Promise<ProbeDeepScanSignInResult> {
+  const session = await getSessionWithProviderId(supabase, params.sessionId);
+  if (!session) return { ok: false, error: "session_not_found" };
+
+  const project = await loadOwnedProject(supabase, session.projectId, params.userId);
+  if (!project) return { ok: false, error: "project_not_found" };
+
+  if (!isLive(session)) return { ok: false, error: "session_not_live" };
+
+  const connection = await provider.getConnection(session.providerSessionId);
+  if (!connection.ok) return { ok: false, error: connection.error };
+
+  let probe;
+  try {
+    // Dynamic for the same reason `analyzeDeepScan` is: a top-level import of
+    // `playwright-core` made *rendering the project page* pull in the browser
+    // stack and 500 in production.
+    const { probeSignInState } = await import("./playwright/connector");
+    probe = await probeSignInState(connection.value.connectUrl, session.origin);
+  } catch {
+    return { ok: false, error: "browser_connection_failed" };
+  }
+
+  // No page on the origin yet: the founder is on an identity provider, or the
+  // browser has not landed. Not an error, and not signed in.
+  if (probe === null) return { ok: true, signedIn: false, reason: "off_origin" };
+
+  const verdict = detectSignedIn(probe);
+  return { ok: true, signedIn: verdict.signedIn, reason: verdict.reason };
 }
 
 /**

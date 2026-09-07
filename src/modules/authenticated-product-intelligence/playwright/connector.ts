@@ -6,6 +6,12 @@ import "server-only";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import type { AnalysisBrowserPort, AnalysisPagePort } from "../analyzer";
 import { pageExtractionScript, type RawPageExtraction } from "../extract";
+import {
+  probePathFor,
+  sanitizeSignInProbe,
+  signInProbeScript,
+  type SignInProbe,
+} from "../login-detection";
 import { decideRequest } from "../read-only-policy";
 
 /**
@@ -254,4 +260,50 @@ export async function connectReadOnly(
       await browser.close().catch(() => undefined);
     },
   };
+}
+
+/**
+ * Reads whether the founder has finished signing in, and nothing else.
+ *
+ * **No read-only guards, and that is the point.** `attachReadOnlyGuards`
+ * aborts every mutating request, and signing in *is* a POST — attaching them
+ * here would break the very login this probe is watching for. The guards exist
+ * to keep the *analysis* read-only, and the analysis connects separately.
+ *
+ * What keeps this safe instead is that it does nothing: it navigates nowhere,
+ * clicks nothing, and its one `evaluate` returns four booleans. The window in
+ * which the founder's own POST must succeed stays exactly as wide as it was.
+ *
+ * Returns `null` when no page is on the project's origin, and throws nothing a
+ * caller has to interpret — a page that is mid-navigation, a context that just
+ * went away, and a browser that never answered are all the same "not yet".
+ */
+export async function probeSignInState(
+  connectUrl: string,
+  origin: string,
+  options: { timeoutMs?: number } = {},
+): Promise<SignInProbe | null> {
+  const { chromium } = await import("playwright-core");
+
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.connectOverCDP(connectUrl, { timeout: options.timeoutMs ?? 15_000 });
+    const context = browser.contexts()[0];
+    if (!context) return null;
+
+    for (const page of context.pages()) {
+      const path = probePathFor(page.url(), origin);
+      if (path === null) continue;
+      const raw = await page.evaluate(signInProbeScript);
+      return sanitizeSignInProbe(raw, path);
+    }
+
+    return null;
+  } catch {
+    // Never surface the transport error: it carries the capability URL (§28),
+    // and a caller can do nothing with it that "not yet" does not already say.
+    return null;
+  } finally {
+    await browser?.close().catch(() => undefined);
+  }
 }

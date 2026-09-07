@@ -16,8 +16,13 @@ import {
   analyzeDeepScanAction,
   cancelDeepScanAction,
   getDeepScanLiveViewAction,
+  probeDeepScanSignInAction,
   startDeepScanAction,
 } from "./deep-scan-actions";
+import {
+  CONSECUTIVE_SIGNED_IN_PROBES,
+  shouldStartUnprompted,
+} from "@/modules/authenticated-product-intelligence/login-detection";
 import { Disclosure } from "@/components/ui/disclosure";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
@@ -168,6 +173,7 @@ function LiveViewDialog({
   stage,
   error,
   busy,
+  signIn,
   onCancel,
   onAnalyze,
   onConnected,
@@ -177,6 +183,7 @@ function LiveViewDialog({
   stage: BrowserStartupStage;
   error: string | null;
   busy: boolean;
+  signIn: SignInWatch;
   onCancel: () => void;
   onAnalyze: () => void;
   onConnected: () => void;
@@ -355,9 +362,34 @@ function LiveViewDialog({
           </div>
         )}
 
+        {!busy && signIn.startsInSeconds !== null && (
+          /*
+           * The one moment this dialog speaks first. `role="status"` rather
+           * than `alert`: it is not a problem, and interrupting a founder who
+           * has just finished typing a password is the wrong way to say so.
+           *
+           * The countdown is shown because it is running either way — a scan
+           * that begins with no warning is indistinguishable from a misclick,
+           * and the founder who is not actually finished needs somewhere to
+           * say so.
+           */
+          <div role="status" className="space-y-2 rounded-md border border-line-2 bg-surface-2 p-3">
+            <p className="text-sm text-fg-prose">
+              You look signed in. Vibe starts looking around in {signIn.startsInSeconds}s.
+            </p>
+            <TextAction type="button" onClick={signIn.postpone} className="text-sm">
+              Not yet — I&apos;ll start it myself
+            </TextAction>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
-            {busy ? "Looking around…" : "I'm logged in — Analyze"}
+            {busy
+              ? "Looking around…"
+              : signIn.signedIn
+                ? "Analyze now"
+                : "I'm logged in — Analyze"}
           </Button>
           <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
             Cancel
@@ -399,6 +431,147 @@ function useElapsedSeconds(running: boolean): number {
   if (!running || !span) return 0;
 
   return Math.max(0, Math.floor((span.now - span.startedAt) / 1000));
+}
+
+/** How often the browser is asked whether the founder has finished signing in. */
+const SIGN_IN_POLL_MS = 4_000;
+/**
+ * How long the founder has to stop an unprompted start.
+ *
+ * Long enough to read the sentence and press the button, short enough that it
+ * is not a second thing to wait through. The scan is what they asked for; this
+ * window exists for the reading that is wrong, not for the one that is right.
+ */
+const AUTO_START_GRACE_MS = 6_000;
+
+export type SignInWatch = {
+  /** The latest reading. `false` until the browser says otherwise. */
+  signedIn: boolean;
+  /** Seconds left before the scan starts by itself, or `null` if it will not. */
+  startsInSeconds: number | null;
+  /** Stops the unprompted start, for the rest of this session. */
+  postpone: () => void;
+};
+
+/**
+ * Watches the live browser for a finished login (founder request, 2026-09-07:
+ * "er sollte erkennen wann der user eingeloggt ist und losscannen").
+ *
+ * Three properties this hook has to have, and each is a line below:
+ *
+ *  - It asks only while asking is useful — the dialog open, a frame painted,
+ *    nothing else running. A poll against a browser that is still booting
+ *    learns nothing and costs a round trip.
+ *  - It stops asking the moment it has its answer. `shouldStartUnprompted`
+ *    wants consecutive readings, so the run is kept here and cleared whenever
+ *    a reading interrupts it.
+ *  - It never starts anything silently. A positive run opens a grace window
+ *    the founder can close, and closing it is permanent for this session —
+ *    someone who says "not yet" once should not be asked again every four
+ *    seconds.
+ */
+function useSignInWatch(options: {
+  sessionId: string | null;
+  active: boolean;
+  onStart: () => void;
+}): SignInWatch {
+  const { sessionId, active, onStart } = options;
+
+  const [signedIn, setSignedIn] = useState(false);
+  const [startsAt, setStartsAt] = useState<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState<number | null>(null);
+  const [postponed, setPostponed] = useState(false);
+
+  /*
+   * The run of readings, tagged with the session it belongs to.
+   *
+   * Tagged rather than cleared: a new browser session must not inherit the
+   * previous one's positives, and carrying the id means that is true by
+   * construction instead of by remembering to reset something.
+   */
+  const readings = useRef<{ sessionId: string | null; values: boolean[] }>({
+    sessionId: null,
+    values: [],
+  });
+
+  // Adjusting state when a prop changes, the way React documents it: during
+  // render, not from an effect that would render once with the wrong session's
+  // answer before correcting itself.
+  const [watchedSession, setWatchedSession] = useState(sessionId);
+  if (sessionId !== watchedSession) {
+    setWatchedSession(sessionId);
+    setSignedIn(false);
+    setStartsAt(null);
+    setRemainingMs(null);
+    setPostponed(false);
+  }
+
+  const watching = active && sessionId !== null && !postponed && startsAt === null;
+
+  useEffect(() => {
+    if (!watching || sessionId === null) return;
+
+    let cancelled = false;
+
+    const ask = async () => {
+      const result = await probeDeepScanSignInAction(sessionId);
+      if (cancelled) return;
+
+      // A failed probe is a negative reading, not an error the founder has to
+      // deal with: a browser that is briefly unreachable is the ordinary shape
+      // of a login in progress, and the button is still there.
+      const reading = result.ok && result.signedIn;
+      setSignedIn(reading);
+
+      const previous = readings.current.sessionId === sessionId ? readings.current.values : [];
+      const values = [...previous, reading].slice(-CONSECUTIVE_SIGNED_IN_PROBES);
+      readings.current = { sessionId, values };
+
+      if (shouldStartUnprompted(values)) {
+        setStartsAt(Date.now() + AUTO_START_GRACE_MS);
+        setRemainingMs(AUTO_START_GRACE_MS);
+      }
+    };
+
+    void ask();
+    const timer = setInterval(() => void ask(), SIGN_IN_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [watching, sessionId]);
+
+  useEffect(() => {
+    if (startsAt === null) return;
+
+    const timer = setInterval(() => {
+      const left = startsAt - Date.now();
+      if (left > 0) {
+        setRemainingMs(left);
+        return;
+      }
+      clearInterval(timer);
+      setRemainingMs(null);
+      setStartsAt(null);
+      onStart();
+    }, 250);
+
+    return () => clearInterval(timer);
+  }, [startsAt, onStart]);
+
+  const postpone = useCallback(() => {
+    readings.current = { sessionId: null, values: [] };
+    setStartsAt(null);
+    setRemainingMs(null);
+    setPostponed(true);
+  }, []);
+
+  return {
+    signedIn,
+    startsInSeconds: remainingMs === null ? null : Math.max(0, Math.ceil(remainingMs / 1000)),
+    postpone,
+  };
 }
 
 /**
@@ -651,7 +824,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     });
   }, [projectId, sessionId, closeDialog, router]);
 
-  const handleAnalyze = () => {
+  const handleAnalyze = useCallback(() => {
     if (!sessionId) return;
     setBusy(true);
     setError(null);
@@ -676,7 +849,19 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       closeDialog();
       router.refresh();
     });
-  };
+  }, [projectId, sessionId, closeDialog, router]);
+
+  /*
+   * Vibe watches for the finished login instead of waiting to be told about
+   * it. Only while a frame is actually on screen: before that the browser is
+   * still opening, and a probe would be a round trip that cannot learn
+   * anything.
+   */
+  const signIn = useSignInWatch({
+    sessionId,
+    active: dialogOpen && stage === "ready" && !busy && !pending,
+    onStart: handleAnalyze,
+  });
 
   /*
    * Two facts, reported by the only component that can see them. Neither
@@ -890,6 +1075,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           stage={stage}
           error={error}
           busy={disabled}
+          signIn={signIn}
           onCancel={handleCancel}
           onAnalyze={handleAnalyze}
           onConnected={handleConnected}

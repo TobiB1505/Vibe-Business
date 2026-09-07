@@ -28,7 +28,21 @@ It contains **no interpolation** — not one `${`, not one backtick. Both tokens
 
 A real browser rendering a logged-in application is expensive in provider seconds and can contain real customer data. `budgets.ts` is therefore _tighter_ than the public crawler's, and reaching a budget degrades the result to partial rather than crawling on (rule 39).
 
+It also refuses to spend a page on something the public scan already read. A page the live product crawl fetched and rendered **anonymously** is not authenticated product — it is described already, statically, for no browser seconds and no Credits — so it is not a candidate here, whether it arrives as a repository route or as a link in the signed-in shell's own footer. Only the landing page is exempt, because it is where the browser already is. A path the public crawl watched *bounce to a login page* is the opposite case and ranks highest: that is proof the route is part of the signed-in product.
+
 Page content is untrusted data, never instruction (rule 36): what is extracted is sanitized into typed signals, and what is stored is derived intelligence with short evidence labels — never page source, body text, cookies or query strings (rule 37).
+
+## Noticing the login instead of asking about it
+
+The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.
+
+Three properties make that safe to poll:
+
+- **Structure, never a value.** The password check is `querySelector("input[type=password]") !== null`. It resolves to a boolean at the source, and `RawSignInProbe` has no field a credential could travel in. A test asserts the script never touches `.value`.
+- **Every ambiguity resolves to _not signed in_.** Starting early spends the scan on a login page; starting late costs one button press, and the button is still there. A password field on screen holds the scan back even next to a sign-out link.
+- **The probe writes nothing.** No session status, no snapshot, no usage row, no credit hold, and it never terminates a browser. It answers a question; `analyzeDeepScan` re-checks every precondition for itself.
+
+Two consecutive positive readings start the scan, after a grace window the founder can close — a single-page application paints its shell before its session check resolves, and one reading inside that window is a plausible false positive.
 
 ## One included scan per project
 
@@ -46,6 +60,7 @@ Page content is untrusted data, never instruction (rule 36): what is extracted i
 | `analyzer.ts`                      | One authenticated analysis: which pages, in which order, and what was learned.           |
 | `routes.ts`                        | Building and ranking route candidates, and refusing the ones that must never be visited. |
 | `extract.ts`                       | The in-page extraction script, and sanitizing what it returns.                           |
+| `login-detection.ts`               | Whether the founder has finished signing in, and whether to start unasked.               |
 | `surface-detection.ts`             | Turning extracted signals into detected application surfaces.                            |
 | `read-only-policy.ts`              | The pure decision layer: which requests and events are allowed.                          |
 | `budgets.ts`                       | Pages, bytes, time and concurrency. Tighter than the public crawl.                       |
