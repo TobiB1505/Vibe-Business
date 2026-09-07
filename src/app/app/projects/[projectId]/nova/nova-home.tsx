@@ -6,10 +6,7 @@ import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-conte
 
 import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 
-import { ChangeGates } from "../agent/change-gates";
-import { AgentWorkspaceChoice } from "../agent/agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
-import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { formatElapsedShort } from "@/lib/utils/format-datetime";
 import { resolveFounderInputAction } from "../founder-input-action";
 
@@ -20,10 +17,25 @@ import { ActionBlock } from "@/components/system/action-block";
 import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
 import { NovaClock } from "@/components/nova/nova-clock";
 import { NovaHeaderLive } from "./nova-header-live";
-import { AuditBlock } from "@/components/nova/blocks/audit";
-import { MoveBlock } from "@/components/nova/blocks/move";
-import { ProgressBlock } from "@/components/nova/blocks/progress";
-import { ScanBlock } from "@/components/nova/blocks/scan";
+/*
+ * Through the barrel, by the kind the registry names.
+ *
+ * These used to be mounted a level lower — `ChangeGates` with `chrome={false}`
+ * written out here, `FounderInputCard` with its presentation and context
+ * written out here — while `blocks/` held wrappers that made the same
+ * decisions and nothing imported them. Two answers to "what does a founder see
+ * for this kind", one of them in a directory whose purpose is to hold the
+ * other. The lab drew the wrappers; production drew its own copy.
+ */
+import {
+  AskBlock,
+  AuditBlock,
+  MoveBlock,
+  ProgressBlock,
+  ReviewBlock,
+  ScanBlock,
+  WorkspaceAskBlock,
+} from "@/components/nova/blocks";
 import { NovaAgentLive } from "./nova-agent-live";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
@@ -223,7 +235,7 @@ function FocusSection({
         entry={entry}
         running={running}
         block={
-          <FounderInputCard
+          <AskBlock
             projectId={projectId}
             request={data.question}
             /*
@@ -234,7 +246,6 @@ function FocusSection({
              * one.
              */
             context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
-            presentation="block"
             /*
              * How long a run has been stopped waiting, which is the one thing
              * this surface could not say. It costs no read — the request has
@@ -266,17 +277,11 @@ function FocusSection({
         entry={entry}
         running={running}
         block={
-          <ChangeGates
+          <ReviewBlock
             projectId={projectId}
             change={data.change}
             planHref={sectionHref["action-plan"]}
             stage={control.stage}
-            /*
-             * The thread says it above the block. `chrome` draws the change's
-             * status sentence, which is the sentence Nova has just said — the
-             * duplication this surface keeps removing.
-             */
-            chrome={false}
           />
         }
       />
@@ -299,7 +304,7 @@ function FocusSection({
         entry={entry}
         running={running}
         block={
-          <AgentWorkspaceChoice
+          <WorkspaceAskBlock
             candidates={data.workspaceCandidates}
             /*
              * The panel asks; the control answers. Splitting them is what lets

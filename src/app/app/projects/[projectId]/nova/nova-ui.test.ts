@@ -32,6 +32,17 @@ const FILES = readdirSync(NOVA_DIR)
 
 const component = (name: string) => FILES.find((file) => file.name === name)?.body ?? "";
 
+/**
+ * The render blocks, which live beside the components rather than beside the
+ * screen.
+ *
+ * Home imports them through the barrel now, so the decisions they encode —
+ * which frame a composed surface gives up, which chrome a gate drops — are
+ * asserted where they are made rather than where they used to be pasted.
+ */
+const block = (name: string) =>
+  stripComments(readFileSync(join(process.cwd(), "src/components/nova/blocks", name), "utf8"));
+
 describe("Nova Home", () => {
   it("has the components this slice is made of", () => {
     for (const name of [
@@ -313,12 +324,33 @@ describe("Nova Home", () => {
      * render block is the frame.
      */
     it("answers inside one frame rather than two", () => {
-      const home = component("nova-home.tsx");
-      expect(home).toMatch(/<FounderInputCard[\s\S]*?presentation="block"/);
+      expect(block("ask.tsx")).toMatch(/<FounderInputCard[\s\S]*?presentation="block"/);
       /* The panel would be a fourth heading. It still owns the Agent route,
          where it is a page-scale object rather than a heading inside somebody
          else's frame. */
-      expect(home).not.toContain("AgentQuestionPanel");
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toContain("AgentQuestionPanel");
+      }
+      expect(block("ask.tsx")).not.toContain("AgentQuestionPanel");
+    });
+
+    /**
+     * One answer to "what does a founder see for this kind".
+     *
+     * `blocks/` held wrappers that made these decisions and nothing imported
+     * them, while Home wrote its own copy of each a level lower. The lab drew
+     * the wrappers; production drew the copy; nothing compared them. Home goes
+     * through the barrel now, so there is one of each.
+     */
+    it("mounts the blocks rather than a second copy of their decisions", () => {
+      const home = component("nova-home.tsx");
+
+      expect(home).toContain('from "@/components/nova/blocks"');
+      for (const composed of ["<ReviewBlock", "<AskBlock", "<WorkspaceAskBlock"]) {
+        expect(home, composed).toContain(composed);
+      }
+      /* The pieces those wrappers compose, reached for directly. */
+      expect(home).not.toMatch(/<ChangeGates|<FounderInputCard|<AgentWorkspaceChoice\b/);
     });
 
     /*
@@ -429,9 +461,17 @@ describe("Nova Home", () => {
    */
   describe("the change gates", () => {
     it("mounts the shipped gates rather than a panel out of the middle", () => {
-      const home = component("nova-home.tsx");
-      expect(home).toContain("<ChangeGates");
-      expect(home).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);
+      const review = block("review.tsx");
+
+      expect(review).toContain("<ChangeGates");
+      /* The thread says the change's status sentence above the block, so the
+         gate drops its own. That decision lives in the block now rather than
+         being written out at the call site. */
+      expect(review).toContain("chrome={false}");
+
+      for (const body of [review, component("nova-home.tsx")]) {
+        expect(body).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);
+      }
     });
 
     it("never calls the merge action itself", () => {
