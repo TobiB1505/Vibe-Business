@@ -228,6 +228,7 @@ describe("what a component reads", () => {
     const read = await readNovaAuditVoice(fakeSupabase(db, recorder), {
       projectId: PROJECT,
       entry: entry(),
+      situation: null,
     });
 
     expect(read.message).toBe(buildNovaAuditTemplate(entry()));
@@ -247,6 +248,7 @@ describe("what a component reads", () => {
     const read = await readNovaAuditVoice(fakeSupabase(db, recorder), {
       projectId: PROJECT,
       entry: entry(),
+      situation: null,
     });
 
     expect(read.message).toBe("Pricing is the thing holding this back, and it is a small fix.");
@@ -255,7 +257,7 @@ describe("what a component reads", () => {
 
   /** A read model that writes is a render with a side effect. */
   it("writes nothing", async () => {
-    await readNovaAuditVoice(fakeSupabase(db, recorder), { projectId: PROJECT, entry: entry() });
+    await readNovaAuditVoice(fakeSupabase(db, recorder), { projectId: PROJECT, entry: entry(), situation: null });
 
     expect(recorder.writes).toEqual([]);
   });
@@ -275,6 +277,7 @@ describe("what a component reads", () => {
     const read = await readNovaAuditVoice(fakeSupabase(db, recorder), {
       projectId: PROJECT,
       entry: entry(),
+      situation: null,
     });
 
     expect(read.message).toBe(buildNovaAuditTemplate(entry()));
@@ -298,6 +301,7 @@ describe("what a component reads", () => {
     const read = await readNovaAuditVoice(fakeSupabase(db, recorder), {
       projectId: PROJECT,
       entry: moved,
+      situation: null,
     });
 
     expect(read.message).toBe(buildNovaAuditTemplate(moved));

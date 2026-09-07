@@ -17,11 +17,10 @@ import {
   fakeLiveSnapshot,
   fakeRepositorySnapshot,
 } from "@/modules/business-audit/test-support";
-import { readBriefingView } from "@/modules/nova/briefing/read";
-import {
-  buildNovaBriefingTemplate,
-  readNovaBriefingVoice,
-} from "@/modules/nova/voice/briefing-slot";
+import { buildNovaAuditEntry } from "@/modules/nova/feed";
+import { buildNovaAuditTemplate, readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
+import { readSituation } from "@/modules/operations/nova-situation";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
 import {
@@ -200,23 +199,43 @@ function novaUsageRows() {
   );
 }
 
-/**
- * The briefing a component builds, from the state the pipeline just wrote.
- *
- * Assembled by `readBriefingView` — the same function the durable step used —
- * because that agreement is the property under test. The identity is a hash of
- * the payload, so a render that assembled one field differently would resolve
- * to nothing at all, permanently, and look exactly like never having spoken.
- */
-async function renderedBriefing() {
-  const { view } = await readBriefingView(fakeSupabase(db), { projectId: PROJECT, userId: USER });
-  return view;
+/** The entry a component builds, from the audit the pipeline just wrote. */
+function renderedEntry() {
+  const stored = db.rows("business_readiness_audits")[0] as unknown as {
+    result: Parameters<typeof buildBusinessBrainView>[0]["audit"];
+  };
+  const audit = stored.result;
+  const synthesis = audit.synthesis;
+  if (synthesis === null) throw new Error("the pipeline must have written a synthesis");
+
+  const view = buildBusinessBrainView({
+    audit,
+    lastScanAt: null,
+    auditReadings: [],
+    movesByConclusion: {},
+  });
+  if (view === null) throw new Error("the audit must build a view");
+
+  return buildNovaAuditEntry(view, synthesis);
 }
 
+/**
+ * What the render resolves — including the situation, which is the half a
+ * component could silently get wrong.
+ *
+ * The situation is hashed into the identity, so a page that composed it
+ * differently from the step that generated would resolve to nothing at all,
+ * permanently, and look exactly like never having spoken. Reading it through
+ * the same function the step used is what makes that agreement a property
+ * under test rather than a comment.
+ */
 async function readVoice() {
-  return readNovaBriefingVoice(fakeSupabase(db), {
+  const situation = await readSituation(fakeSupabase(db), PROJECT);
+
+  return readNovaAuditVoice(fakeSupabase(db), {
     projectId: PROJECT,
-    view: await renderedBriefing(),
+    entry: renderedEntry(),
+    situation,
   });
 }
 
@@ -260,7 +279,7 @@ describe("the switch decides whether anything is spent", () => {
     const read = await readVoice();
 
     expect(read.source).toBe("template");
-    expect(read.message).toBe(buildNovaBriefingTemplate(await renderedBriefing()));
+    expect(read.message).toBe(buildNovaAuditTemplate(renderedEntry()));
   });
 });
 
@@ -378,7 +397,7 @@ describe("the audit does not depend on Nova", () => {
 
     const read = await readVoice();
 
-    expect(read.message).toBe(buildNovaBriefingTemplate(await renderedBriefing()));
+    expect(read.message).toBe(buildNovaAuditTemplate(renderedEntry()));
     expect(read.source).toBe("template");
   });
 });

@@ -7,9 +7,7 @@ import type { FindingSeverity } from "@/components/system/finding-card";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import type { AuditEvidence } from "@/modules/business-audit/service";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
-import { readBriefingView } from "@/modules/nova/briefing/read";
-import type { BriefingView } from "@/modules/nova/briefing/view";
-import { readNovaBriefingVoice } from "@/modules/nova/voice/briefing-slot";
+import { readBriefing } from "@/modules/nova/briefing/read";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { productDisplayName } from "@/modules/projects/display-name";
@@ -26,19 +24,16 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * awaited briefing read, then a single concurrent wave, none of which fans out
  * per candidate.
  *
- * 0. `readBriefingView` — the six evidence documents, the ranking, the Move
- *    set, the currency judgements and the founder's name, assembled once. It
- *    hands the evidence and the focus back, so the score and the ranking below
- *    cost nothing more (VB-022). Awaited first for the reason Business Health
+ * 0. `readBriefing` — the six evidence documents, the ranking, the Move set,
+ *    the currency judgements and the founder's name, assembled once. It hands
+ *    the evidence and the focus back, so the score and the ranking below cost
+ *    nothing more (VB-022). Awaited first for the reason Business Health
  *    awaits its evidence first: one round trip's latency buys back eight.
  * 1. The product's identity row — three columns, one project.
  * 2. The balance — `getHeaderCreditBalance`, which is documented as the one
  *    billing read a per-page surface may make. Never `getBillingOverview`,
  *    which repairs on read.
- * 3. `readNovaBriefingVoice` — one row by identity. It takes no provider and
- *    cannot obtain one (ADR 0086, condition 5): a render resolves a stored
- *    sentence or falls through to Vibe's own.
- *
+
  * The latest audit is not read at all — it arrives inside the evidence, which
  * is two queries fewer than the stamp-then-document pair this used to make,
  * and it is now the same audit the briefing's chain judges. Not the
@@ -48,10 +43,7 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * ## What it must not do
  *
  * Re-rank anything. `deriveNovaFocus` decides what leads and what follows;
- * this assembles the facts around that decision and adds no candidate. The
- * briefing is held to the same rule: `buildProvenanceChain` judges the
- * evidence and the opportunity engine ranked the Move, so what is assembled
- * here is the join and never a second opinion.
+ * this assembles the facts around that decision and adds no candidate.
  */
 
 export type NovaProductIdentity = {
@@ -81,15 +73,6 @@ export type NovaHealth = {
 
 export type NovaHomeData = {
   view: NovaHomeView;
-  /** Where the founder stands, joined from the evidence this read already holds. */
-  briefing: BriefingView;
-  /**
-   * What the panel says about the evidence: a stored sentence when a durable
-   * step wrote one for this exact situation, and `briefing.situation`
-   * otherwise. **Never a provider call** — this read cannot reach one
-   * (ADR 0086, condition 5).
-   */
-  briefingVoice: string;
   identity: NovaProductIdentity;
   /** Null when no audit has ever completed — not a score of zero. */
   health: NovaHealth | null;
@@ -220,18 +203,15 @@ export async function readNovaHomeData(
    * the same reason. It hands back the evidence and the focus it assembled, so
    * the score and the ranking cost nothing more (VB-022).
    */
-  const { view: briefing, evidence, focus } = await readBriefingView(supabase, params);
+  const { evidence, focus } = await readBriefing(supabase, params);
 
-  const [identity, balance, briefingVoice] = await Promise.all([
+  const [identity, balance] = await Promise.all([
     readIdentity(supabase, params.projectId, params.projectName),
     getHeaderCreditBalance(supabase, { userId: params.userId }),
-    readNovaBriefingVoice(supabase, { projectId: params.projectId, view: briefing }),
   ]);
 
   return {
     view: buildNovaHomeView(focus),
-    briefing,
-    briefingVoice: briefingVoice.message,
     identity,
     health: buildHealth(evidence.latestAudit),
     balance,

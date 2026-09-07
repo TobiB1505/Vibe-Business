@@ -39,7 +39,9 @@ import type { NovaVoiceFallbackReason, NovaVoiceOutcome } from "./service";
  * It composes claim → speak → resolve, and the one production caller is
  * `speakAfterOperation` — the tail of a durable operation's final step, which
  * is where all five of ADR 0086's conditions are already true rather than
- * newly arranged. The slot it speaks is `briefing`, and the usage event is
+ * newly arranged. The slots it speaks are `audit_result` and
+ * `move_recommendation` — each carrying the situation block that makes it more
+ * than a rephrasing — and the usage event is
  * `recordAIUsage` under the operation run's id, on the line that already
  * records that operation's own inference.
  */

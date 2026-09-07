@@ -55,9 +55,12 @@ import type { NovaVoiceOutcome } from "@/modules/nova/voice/service";
  *
  * ## Which slot speaks, and why it is one per operation
  *
- * The `briefing` slot, from `nova-briefing.ts`, at the tail of the three
- * operations that move the evidence chain: a Product Scan, a business audit
- * and a Move generation.
+ * `audit_result` at the tail of a business audit, `move_recommendation` at the
+ * tail of a Move generation. Both carry the **situation** — Vibe's own reading
+ * of the evidence chain, from `nova-situation.ts` — which is what makes either
+ * worth paying for: without it a model is rephrasing a sentence a model already
+ * wrote, and with it the message can say why the document in front of the
+ * founder rests on what it rests on.
  *
  * One slot per operation is a constraint rather than a preference.
  * `ai_usage_events_job_idx` is unique on `job_id`, and this records usage under
@@ -65,12 +68,9 @@ import type { NovaVoiceOutcome } from "@/modules/nova/voice/service";
  * paid attempt the ledger silently drops, and an unrecorded provider cost is
  * the one failure this tier is not allowed to have (rule 47).
  *
- * `audit_result` and `move_recommendation` had those lines and no longer do.
- * They ask a model to rephrase prose a model already wrote, which buys a
- * synonym and a second chance to be wrong; the briefing is Vibe's own
- * structured reading of the whole chain, and no other sentence in the product
- * says it. Both slots stay built, tested and readable — their reads resolve to
- * Vibe's own words — because they are parked rather than deleted.
+ * A Product Scan speaks on no line at all. `product_reveal` exists in the slot
+ * vocabulary and has no reader, so generating there would buy a sentence no
+ * screen can show.
  */
 
 /**

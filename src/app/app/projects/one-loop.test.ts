@@ -263,7 +263,9 @@ describe("the stepper owns selection without owning business state", () => {
    * that is where the mistake lives: an `await` inside the map over Moves.
    */
   it("asks the database once for what every Move shares", () => {
-    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId)");
+    /* Now with the evidence handed in, which stops the currency check inside
+       it re-reading four snapshots the page already holds. */
+    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId, evidence)");
     expect(MOVES_PAGE).not.toContain("await getActionPlanReadiness(");
     expect(MOVES_PAGE).not.toContain("getOpportunityReadiness(supabase");
   });

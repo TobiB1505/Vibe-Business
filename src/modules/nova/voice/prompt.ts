@@ -79,16 +79,6 @@ const SLOT_BRIEFS: Record<NovaVoiceSlot, string> = {
     "You have finished preparing a change. Say what you did and what is still outstanding — never that it works.",
   outcome_result:
     "Vibe has looked at what became observable since a change went out. Report only the facts given — never state that anything was merged, deployed or built unless a fact says so.",
-  /*
-   * The one slot about *time*, and the only one whose facts include an age.
-   * Two failures are specific to it and neither is covered by the shared
-   * rules: claiming to have looked at the product since it was last read
-   * (Nova reads stored documents and watches nothing), and turning an age into
-   * a risk nobody measured — old evidence is not wrong evidence, and a scan
-   * from last month of a site nobody touched is perfectly good.
-   */
-  briefing:
-    "You are telling the founder where they stand on what Vibe holds. Report only what the facts say, and never claim to have looked at their product since it was last read. If a fact names an age, an age is all it is — never call old evidence wrong, risky or urgent.",
 };
 
 export function buildNovaVoiceSystemPrompt(slot: NovaVoiceSlot): string {
@@ -127,6 +117,32 @@ export function renderNovaVoiceUserContent(payload: NovaVoicePayload): string {
 
   if (payload.confidence !== null) lines.push(`CONFIDENCE: ${payload.confidence}`);
   lines.push(`NEXT STEP (Vibe's words, do not rename or price it): ${payload.nextStep}`);
+
+  /*
+   * Outside the fence, deliberately: every line is composed by Vibe from its
+   * own tables (`briefing/situation.ts`), so it is not customer content and
+   * putting it inside would tell the model to distrust its own operator.
+   *
+   * It is last because it is background. The rules travel with it rather than
+   * living in the system prompt, because they are about *this block* and a
+   * model reading them beside the facts they govern follows them better than
+   * one that met them six hundred tokens earlier.
+   */
+  if (payload.situation != null) {
+    lines.push(
+      "",
+      "SITUATION (Vibe's own reading of this founder's evidence, as background):",
+      ...payload.situation.lines.map((line) => `- ${line}`),
+      ...(payload.situation.remedy === null
+        ? []
+        : [`- What would repair it: ${payload.situation.remedy}`]),
+      "",
+      "Use the situation only to explain why something matters or what would help next.",
+      "It is background, never the subject of this message, and at most one sentence of it.",
+      "Never present it as something you have just checked, and never turn it into a",
+      "recommendation of your own — say only what is written above.",
+    );
+  }
 
   return lines.join("\n");
 }

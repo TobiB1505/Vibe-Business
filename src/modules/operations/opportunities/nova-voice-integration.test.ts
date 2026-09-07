@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
 import type { AIProvider, StructuredRequest, StructuredResult } from "@/modules/ai/provider";
-import { readBriefingView } from "@/modules/nova/briefing/read";
-import { readNovaBriefingVoice } from "@/modules/nova/voice/briefing-slot";
+import { readNovaMoveVoice } from "@/modules/nova/voice/move-slot";
+import { readSituation } from "@/modules/operations/nova-situation";
 
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import type { ExecutionDeps } from "../business-audit/execution";
@@ -23,11 +23,10 @@ import { completeOpportunityOperationStep } from "./execution";
  * real completion step against a real store read, and the seam it covers is
  * exactly the one a fixture cannot: whether the data actually arrives.
  *
- * The slot on this line is the briefing now — one operation may spend on one
- * voice message, because `ai_usage_events_job_idx` is unique on `job_id` — and
- * the seam is unchanged and, if anything, longer: the briefing is assembled
- * from six evidence documents, the ranking, the Move set and the founder's
- * name, and every one of those is a place the data can fail to arrive.
+ * The seam is longer now than when that bug was found. The message carries the
+ * *situation* as well as the Move — six evidence documents and two currency
+ * judgements — and every one of those is a place the data can fail to arrive,
+ * or arrive differently on the render side than on the generating side.
  */
 
 const USER = "44444444-4444-4444-8444-444444444444";
@@ -146,13 +145,13 @@ afterEach(() => {
 });
 
 describe("the Moves actually reach Nova", () => {
-  /** The regression, on the slot that speaks here now. */
-  it("generates a briefing once the set is committed", async () => {
+  /** The regression. It failed against the un-joined read. */
+  it("generates a message about the top-ranked Move", async () => {
     await completeOpportunityOperationStep(deps(), OPERATION, SET);
 
     expect(generated).toBe(1);
     expect(voiceRows()).toHaveLength(1);
-    expect(voiceRows()[0]).toMatchObject({ slot: "briefing", message: SPOKEN });
+    expect(voiceRows()[0]).toMatchObject({ slot: "move_recommendation", message: SPOKEN });
   });
 
   it("records the spend against the existing ledger", async () => {
@@ -173,18 +172,27 @@ describe("the Moves actually reach Nova", () => {
    * the one flake this suite is not allowed to have.
    */
   it("is readable afterwards through the render path", async () => {
-    /* Only `Date` is faked, so nothing about the async paths below changes. */
+    /* Only `Date` is faked, so nothing about the async paths below changes —
+       and the situation carries an age, so a run straddling midnight would
+       otherwise be the one flake this suite is not allowed to have. */
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-09-04T02:05:00.000Z"));
 
     await completeOpportunityOperationStep(deps(), OPERATION, SET);
 
-    const { view } = await readBriefingView(fakeSupabase(db), {
-      projectId: PROJECT,
-      userId: USER,
-    });
+    const { getOpportunitySetWithMoves } = await import("@/modules/opportunities/store");
+    const stored = await getOpportunitySetWithMoves(fakeSupabase(db), SET);
+    const move = stored?.opportunities.find((candidate) => candidate.rank === 1);
+    if (!move) throw new Error("the seeded set must have a rank-1 Move");
 
-    const read = await readNovaBriefingVoice(fakeSupabase(db), { projectId: PROJECT, view });
+    const read = await readNovaMoveVoice(fakeSupabase(db), {
+      projectId: PROJECT,
+      move,
+      primaryGoal: null,
+      /* The half a render could silently get wrong: composed by the same
+         function the step used, so the two identities agree. */
+      situation: await readSituation(fakeSupabase(db), PROJECT),
+    });
 
     expect(read).toMatchObject({ message: SPOKEN, source: "voice", resolved: true });
   });
@@ -199,12 +207,7 @@ describe("the Moves actually reach Nova", () => {
 });
 
 describe("the operation does not depend on Nova", () => {
-  /**
-   * An empty set is a real briefing rather than a reason to stay silent — "the
-   * evidence is current and nothing is on your list" is exactly the state a
-   * founder benefits from hearing. What must not change is the operation.
-   */
-  it("completes, and still has something to say, when the set has no Moves", async () => {
+  it("completes when the set has no Moves at all", async () => {
     db = new FakeDatabase();
     generated = 0;
     seedSetWithMoves(0);
@@ -213,7 +216,8 @@ describe("the operation does not depend on Nova", () => {
 
     const operation = db.rows("operation_runs")[0] as unknown as { status: string };
     expect(operation.status).toBe("completed");
-    expect(voiceRows()).toHaveLength(1);
+    expect(voiceRows()).toEqual([]);
+    expect(generated).toBe(0);
   });
 
   it("completes when the voice model throws", async () => {

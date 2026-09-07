@@ -15,24 +15,21 @@ import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 
 import { readNovaFocus } from "../read";
 import type { NovaFocus } from "../focus";
-import { buildNovaBriefing } from "./briefing";
-import { buildBriefingView, type BriefingView } from "./view";
+import { buildNovaBriefing, type NovaBriefing } from "./briefing";
 
 /**
- * The briefing, read from the database — once, by both sides.
+ * The briefing, read from the database — once, by everything that needs it.
  *
- * ## Why this is shared rather than done twice
+ * ## Why this is shared rather than done per caller
  *
- * Two places build a briefing, and they must agree exactly: Nova Home renders
- * one, and the durable step that may generate a sentence about it computes its
- * reuse identity from one. The identity is a hash of the payload, so a field
- * assembled slightly differently on the two sides is not a bug that shows up
- * as a wrong answer — it is a permanent cache miss that shows up as nothing at
- * all, and every founder quietly getting the template forever.
+ * Because the briefing reaches a model as part of a voice payload, and the
+ * payload is hashed into the reuse identity a render then recomputes. A field
+ * assembled slightly differently on two sides is not a bug that shows up as a
+ * wrong answer — it is a permanent miss that shows up as nothing at all, and
+ * every founder quietly getting the template forever.
  *
- * So there is one assembly, here, and both callers use it. The only thing that
- * legitimately differs between them is the clock, which is why `now` is an
- * argument.
+ * So there is one assembly, here. The only thing that legitimately differs
+ * between callers is the clock, which is why `now` is an argument.
  *
  * ## The reads
  *
@@ -44,26 +41,26 @@ import { buildBriefingView, type BriefingView } from "./view";
  * would be the thing this function exists to prevent.
  */
 export type BriefingRead = {
-  view: BriefingView;
+  briefing: NovaBriefing;
   /** Handed back so a caller that also needs the audit does not re-read it. */
   evidence: AuditEvidence;
   /** Handed back for the same reason: the ranking is decided once. */
   focus: NovaFocus;
 };
 
-export async function readBriefingView(
+export async function readBriefing(
   supabase: SupabaseClient,
   params: {
     projectId: string;
     userId: string;
     /**
-     * The project's own label, for the panel's header.
+     * The project's own label.
      *
-     * Display only: it never reaches the voice payload and therefore never
-     * reaches the reuse identity, which is why the durable step that generates
-     * a sentence omits it rather than making a query to fill a field the
-     * payload discards. `briefing-slot.test.ts` asserts the payload is
-     * identical whatever this is, so that stays checked rather than claimed.
+     * Optional because nothing that consumes a briefing needs it any more: the
+     * situation block is built from the evidence chain, and the panel that once
+     * put a name in a header is gone. Kept on `NovaBriefing` because that type
+     * is the whole of what Nova knows, and a caller that wants to address a
+     * founder by product should not have to read the row again.
      */
     projectName?: string;
     /** Injected so a briefing is a function of its inputs and one clock. */
@@ -100,5 +97,5 @@ export async function readBriefingView(
     now: params.now ?? new Date(),
   });
 
-  return { view: buildBriefingView(briefing), evidence, focus };
+  return { briefing, evidence, focus };
 }

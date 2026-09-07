@@ -9,7 +9,6 @@ import { novaPresenceState } from "@/components/system/status-vocabulary";
 import type { NovaPresenceState } from "@/components/nova/nova-presence";
 
 import { AttentionStack } from "./attention-stack";
-import { BriefingPanel } from "./briefing-panel";
 import { NovaRise } from "./nova-rise";
 import { FocusCard } from "./focus-card";
 import { HealthScore, HealthScoreAbsent } from "./health-score";
@@ -37,14 +36,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * ## The hierarchy
  *
  * Product context, then the one thing that matters, then what is running, then
- * what else is true, then where the founder stands, then the business reading.
- * Deliberately a column and not a grid: a dashboard of equal tiles is the shape
- * that made a founder choose between six doors, and the point of the ranking is
- * that they do not have to.
+ * what else is true, then the business reading. Deliberately a column and not
+ * a grid: a dashboard of equal tiles is the shape that made a founder choose
+ * between six doors, and the point of the ranking is that they do not have to.
  *
- * The briefing sits fifth on purpose. It is the join — every link of the
- * evidence chain with its age, and the one repair Vibe's own rules put ahead of
- * the rest — and a join belongs under the things it joins.
+ * There is no briefing panel here, and its absence is a decision. One was
+ * built, screenshotted and removed: the evidence chain with its dates is what
+ * Nova reads *before she speaks*, not a table a founder should have to read
+ * themselves. It travels with her sentences now — `briefing/situation.ts`.
  */
 export async function NovaHome({
   supabase,
@@ -126,8 +125,7 @@ export async function NovaHome({
         The primary settles first and the rest follows: the ranking drawn in
         time. Every delay below is the position `deriveNovaFocus` decided, and
         the whole cascade lands inside the 0.4s reveal budget `nova-ui.test.ts`
-        holds — a sixth section shortens the steps rather than making the last
-        one wait longer.
+        holds.
       */}
       <NovaRise delay={0.06}>
         <FocusSection
@@ -145,17 +143,6 @@ export async function NovaHome({
 
       <NovaRise delay={0.21}>
         <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
-      </NovaRise>
-
-      {/*
-        Where the founder stands, after the ranking rather than above it.
-        The Focus Card owns what to do next; this joins the evidence behind it
-        — every link, how old it is, and the one thing Vibe's own rules say to
-        repair before the rest is worth doing. Putting it first would put a
-        summary above the thing it summarises.
-      */}
-      <NovaRise delay={0.28}>
-        <BriefingPanel view={data.briefing} voice={data.briefingVoice} projectId={project.id} />
       </NovaRise>
 
       {data.health ? (

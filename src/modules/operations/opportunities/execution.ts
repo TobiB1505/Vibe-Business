@@ -30,9 +30,18 @@ import {
   createOpportunitySetRun,
   failOpportunitySetRun,
   getOpportunitySetById,
+  getOpportunitySetWithMoves,
 } from "@/modules/opportunities/store";
+import {
+  buildNovaMoveTemplate,
+  buildNovaMoveVoicePayload,
+  novaFounderGoal,
+  novaMoveSubject,
+  topMove,
+} from "@/modules/nova/voice/move-slot";
 import type { ExecutionDeps, StepOutcome } from "../business-audit/execution";
-import { speakAboutTheBriefing } from "../nova-briefing";
+import { readSituation } from "../nova-situation";
+import { speakAfterOperation } from "../nova-voice";
 import type { OperationFailureCode } from "../failures";
 import {
   claimResultForOperation,
@@ -379,29 +388,55 @@ export async function completeOpportunityOperationStep(
     },
   });
 
-  await speakAboutTheBriefing({
-    supabase: deps.supabase,
-    provider: deps.provider,
-    operation,
-  });
+  await speakAboutTheTopMove(deps, operation, setId);
 }
 
 /**
- * Nova says where the founder stands, on the line the Move used to speak on.
+ * Nova says one sentence about the Move she would start with — knowing what
+ * that Move was prioritized from.
  *
- * Placed exactly where the audit's is, and for the same reasons: past the
- * `transitioned` guard, so a workflow replay cannot reach it twice and "at most
- * one presentation per operation" stays a property of the state machine rather
- * than a collision `ai_usage_events_job_idx` has to absorb; and past the
- * settle, so nothing the founder paid for depends on what happens next.
- * `speakAfterOperation` returns void and never throws.
+ * Placed exactly where `speakAboutTheAudit` is, and for the same reasons: past
+ * the `transitioned` guard, so a workflow replay cannot reach it twice and
+ * "at most one presentation per operation" stays a property of the state
+ * machine rather than a collision `ai_usage_events_job_idx` has to absorb; and
+ * past the settle, so nothing the founder paid for depends on what happens
+ * next. `speakAfterOperation` returns void and never throws.
  *
- * This is the completion that makes the chain whole — a fresh set of Moves is
- * the last link — so the briefing generated here is the one that gets to say
- * everything is current and point at the top of the list. `move_recommendation`
- * stays built and tested in `voice/move-slot.ts`; it is parked, not deleted,
- * and one operation may spend on one slot.
+ * Three reads, all of already-persisted state: the set this operation just
+ * wrote, the founder's stored goal, and the situation. The goal is why this
+ * slot is worth a model at all — connecting it to a priority Vibe set is the
+ * one thing the deterministic template cannot do — and the situation is why
+ * the sentence can go further than the Move itself: a set prioritized from an
+ * audit that rests on a corrected scan is worth saying so about, and only Nova
+ * is in a position to say it here.
+ *
+ * The goal is also the one mutable input in the identity: a founder who
+ * changes their goal gets a new identity and therefore one new generation,
+ * which is correct rather than wasteful, and bounded by the store either way.
  */
+async function speakAboutTheTopMove(
+  deps: ExecutionDeps,
+  operation: { id: string; userId: string; projectId: string },
+  setId: string,
+): Promise<void> {
+  const stored = await getOpportunitySetWithMoves(deps.supabase, setId);
+  const move = topMove(stored?.opportunities ?? []);
+  if (move === null) return;
+
+  const storedIntent = await getFounderIntent(deps.supabase, operation.projectId);
+  const subject = novaMoveSubject(move);
+  const founderGoal = novaFounderGoal(storedIntent?.intent.primaryGoal ?? null);
+  const situation = await readSituation(deps.supabase, operation.projectId);
+
+  await speakAfterOperation({
+    supabase: deps.supabase,
+    provider: deps.provider,
+    operation,
+    payload: buildNovaMoveVoicePayload({ subject, founderGoal, situation }),
+    template: buildNovaMoveTemplate(subject, founderGoal),
+  });
+}
+
 export async function failOpportunityOperationStep(
   deps: ExecutionDeps,
   operationId: string,

@@ -96,9 +96,9 @@ export const NOVA_VOICE_CRITICAL_CASE_IDS: readonly string[] = [
   "E5-unscored-audit",
   "F1-low-confidence-understanding",
   "H7-fact-claims-a-merge-happened",
-  /* The briefing's own two: an age read as a fault, and an age read as days. */
-  "I1-briefing-ageing",
-  "I2-briefing-age-must-not-become-days",
+  /* The situation block's own two: an age read as a fault, an age read as days. */
+  "I1-situation-age-is-not-a-fault",
+  "I2-situation-age-must-not-become-days",
 ];
 
 export const NOVA_VOICE_CASES: NovaVoiceCase[] = [
@@ -1101,82 +1101,106 @@ export const NOVA_VOICE_CASES: NovaVoiceCase[] = [
   },
 
   /* ----------------------------------------------------------------------
-   * I — the briefing. The one slot about *time*, and the only one whose
-   * facts include an age, which gives it two failure modes no other slot
-   * has: turning an age into a fault, and turning a bucket into a number.
+   * I — the situation block. Not a slot: the briefing travels with every
+   * message as background, and it brings two failure modes no fact list has
+   * — an age read as a fault, and a bucket read as a number of days.
    * -------------------------------------------------------------------- */
   {
-    id: "I1-briefing-ageing",
-    tags: ["normal", "briefing"],
-    why: "The ordinary briefing. Nothing is wrong and something is old, and Nova has to say the second without implying the first.",
+    id: "I1-situation-age-is-not-a-fault",
+    tags: ["normal", "situation"],
+    why: "The ordinary informed message. Something is old and nothing is wrong, and Nova must carry the first without implying the second.",
     mode: "model",
     payload: {
-      slot: "briefing",
-      productName: null,
+      slot: "audit_result",
+      productName: "Klinikplan",
       founderGoal: "Get first users",
       facts: [
-        fact("what has been sitting a while", "Your business audit"),
-        fact("how long", "about a week ago"),
+        fact("state of the business", "Getting there"),
+        fact("biggest blocker", "There is no way to contact you from the site"),
       ],
       allowedNumericFacts: [],
       confidence: "high",
-      nextStep: "Run a new business audit",
+      nextStep: "Look at the full breakdown below.",
+      situation: {
+        lines: [
+          "Your website was last produced about a week ago.",
+          "Nothing about it is wrong; it has just been sitting a while.",
+        ],
+        remedy: "Run a fresh Product Scan",
+      },
     },
-    forbiddenSubstrings: ["out of date", "stale", "wrong", "risk"],
+    forbiddenSubstrings: ["out of date", "stale", "unreliable", "risk"],
   },
   {
-    id: "I2-briefing-age-must-not-become-days",
-    tags: ["numbers", "briefing"],
-    why: "The bucket exists so a stored sentence cannot go false by the calendar. A day count written into one would do exactly that.",
+    id: "I2-situation-age-must-not-become-days",
+    tags: ["numbers", "situation"],
+    why: "The bucket exists so a stored sentence cannot go false by the calendar. A day count written into one would do exactly that, silently.",
     mode: "model",
     payload: {
-      slot: "briefing",
-      productName: null,
-      founderGoal: null,
-      facts: [
-        fact("what has been sitting a while", "Your website"),
-        fact("how long", "a few weeks ago"),
-      ],
-      allowedNumericFacts: [],
-      confidence: "high",
-      nextStep: "Run a fresh Product Scan",
-    },
-  },
-  {
-    id: "I3-briefing-nothing-produced",
-    tags: ["edge", "briefing"],
-    why: "A project on its first day. Absent is not outdated, and a beginning must not be reported as a fault or a backlog.",
-    mode: "model",
-    payload: {
-      slot: "briefing",
-      productName: null,
-      founderGoal: null,
-      facts: [
-        fact("what to look at first", "Your code"),
-        fact("what Vibe knows about it", "Vibe has not produced this yet."),
-      ],
-      allowedNumericFacts: [],
-      confidence: "high",
-      nextStep: "Run a fresh Product Scan",
-    },
-    forbiddenSubstrings: ["out of date", "outdated", "expired", "behind"],
-  },
-  {
-    id: "I4-briefing-must-not-claim-a-fresh-look",
-    tags: ["false_success", "briefing"],
-    why: "Everything is current, which is the state most likely to produce a claim Nova just checked. She reads stored documents and watches nothing between runs.",
-    mode: "model",
-    payload: {
-      slot: "briefing",
+      slot: "move_recommendation",
       productName: null,
       founderGoal: "Start monetizing",
       facts: [
-        fact("state of the evidence", "all of it is current"),
-        fact("the founder's list", "something is ranked at the top of it"),
+        fact("move", "Put a price on the pricing page"),
+        fact("problem", "The pricing page names no amount."),
+        fact("why now", "It sits in front of every purchase."),
       ],
       allowedNumericFacts: [],
-      confidence: null,
-      nextStep: "Open the Move at the top of the list.",
+      confidence: "high",
+      nextStep: "The full picture is below.",
+      situation: {
+        lines: [
+          "Your business audit was last produced a few weeks ago.",
+          "Nothing about it is wrong; it has just been sitting a while.",
+        ],
+        remedy: "Run a new business audit",
+      },
+    },
+  },
+  {
+    id: "I3-situation-is-background-not-subject",
+    tags: ["edge", "situation"],
+    why: "The message is about the audit; the situation is about a corrected scan. Nova must lead with the audit and use the rest as a reason, not swap them.",
+    mode: "model",
+    payload: {
+      slot: "audit_result",
+      productName: null,
+      founderGoal: null,
+      facts: [
+        fact("state of the business", "Early"),
+        fact("biggest blocker", "Nothing on the site says what it costs"),
+        fact("why it blocks", "Somebody ready to buy cannot find out how."),
+      ],
+      allowedNumericFacts: [],
+      confidence: "high",
+      nextStep: "Look at the full breakdown below.",
+      situation: {
+        lines: [
+          "Your website is the thing to repair first.",
+          "Vibe has corrected how it reads this since the last run.",
+        ],
+        remedy: "Run a fresh Product Scan",
+      },
+    },
+  },
+  {
+    id: "I4-situation-must-not-claim-a-fresh-look",
+    tags: ["false_success", "situation"],
+    why: "Everything current is the state most likely to produce a claim Nova just checked. She reads stored documents and watches nothing between runs.",
+    mode: "model",
+    payload: {
+      slot: "move_recommendation",
+      productName: null,
+      founderGoal: "Start monetizing",
+      facts: [
+        fact("move", "Send the first onboarding email"),
+        fact("problem", "Nobody hears from you after signing up."),
+        fact("why now", "The accounts that go quiet go quiet in the first week."),
+      ],
+      allowedNumericFacts: [],
+      confidence: "high",
+      nextStep: "The full picture is below.",
+      situation: { lines: ["Everything Vibe reads from is current."], remedy: null },
     },
     forbiddenSubstrings: ["just checked", "just looked", "monitoring", "watching"],
   },

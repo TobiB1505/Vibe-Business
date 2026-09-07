@@ -19,7 +19,14 @@ import {
 } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 
-import { speakAboutTheBriefing } from "../nova-briefing";
+import { buildNovaAuditEntry } from "@/modules/nova/feed";
+import {
+  buildNovaAuditTemplate,
+  buildNovaAuditVoicePayload,
+} from "@/modules/nova/voice/audit-slot";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
+import { readSituation } from "../nova-situation";
+import { speakAfterOperation } from "../nova-voice";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
 import {
@@ -761,15 +768,12 @@ export async function completeOperationStep(
     },
   });
 
-  await speakAboutTheBriefing({
-    supabase: deps.supabase,
-    provider: deps.provider,
-    operation,
-  });
+  await speakAboutTheAudit(deps, operation, auditId);
 }
 
 /**
- * Nova says where the founder stands, on the line the audit used to speak on.
+ * Nova says one sentence about an audit that is already finished — knowing
+ * what the audit rests on.
  *
  * ## Why this line and no other
  *
@@ -787,20 +791,64 @@ export async function completeOperationStep(
  * is settled, the completion event is written. Nothing below this line can
  * change any of it, which is the whole reason the tier is allowed to exist.
  *
- * ## Why the briefing and not the audit
+ * ## Why the situation travels with it
  *
- * That uniqueness is also why it is *one* slot rather than two. `job_id` is
- * unique per operation run, so a second voice call on this line would write a
- * paid attempt the ledger silently drops — and a provider cost that is not
- * recorded is the one failure this tier is not allowed to have (rule 47).
+ * Because "I finished your audit; here is the first blocker" is a sentence the
+ * template already writes, and paying a model for a synonym is what made this
+ * slot look not worth having. What a model can do that a template cannot is
+ * connect the audit to the state of the evidence it was built on — *"…though
+ * I read your website with a version I have since corrected, so a fresh scan
+ * first would be worth it"*. That connection is the briefing, and it reaches
+ * the model as background rather than as a subject (`briefing/situation.ts`).
  *
- * Given one, the briefing is the one worth spending on. `audit_result` asks a
- * model to rephrase a sentence a model already wrote, which buys a synonym and
- * a second chance to be wrong; the briefing is Vibe's own structured reading of
- * the whole evidence chain, and no other sentence in the product says it. The
- * audit slot stays built and tested in `voice/audit-slot.ts`, and its read
- * resolves to Vibe's own words — it is parked, not deleted.
+ * The chain is composed by `novaSituationFrom`, the same function the Business
+ * Health page uses to recompute this message's identity when it renders. Two
+ * compositions would be a permanent miss that looks exactly like silence.
+ *
+ * ## Why the view is built from so little
+ *
+ * `buildBusinessBrainView` takes history, moves and a scan timestamp, and none
+ * of them reach the five fields `buildNovaAuditEntry` reads — moves decorate a
+ * problem's `move`/`moveCount`, readings decorate `recentChanges`. Passing
+ * empty ones is not a shortcut around a read; it is declining to perform four
+ * reads whose results are discarded on the next line. `audit-slot.test.ts`
+ * pins that by asserting the entry is identical with them supplied.
  */
+async function speakAboutTheAudit(
+  deps: ExecutionDeps,
+  operation: { id: string; userId: string; projectId: string },
+  auditId: string,
+): Promise<void> {
+  const stored = await getAuditById(deps.supabase, auditId);
+  const audit = stored?.result ?? null;
+  if (audit === null || !audit.synthesis) return;
+
+  const view = buildBusinessBrainView({
+    audit,
+    lastScanAt: null,
+    auditReadings: [],
+    movesByConclusion: {},
+  });
+  if (view === null) return;
+
+  const entry = buildNovaAuditEntry(view, audit.synthesis);
+
+  /*
+   * A briefing that cannot be assembled is a sentence with less context, never
+   * a failed operation — so this degrades to no situation rather than throwing
+   * past the completion that already happened.
+   */
+  const situation = await readSituation(deps.supabase, operation.projectId);
+
+  await speakAfterOperation({
+    supabase: deps.supabase,
+    provider: deps.provider,
+    operation,
+    payload: buildNovaAuditVoicePayload(entry, situation),
+    template: buildNovaAuditTemplate(entry),
+  });
+}
+
 /** Terminal failure path, idempotent for the same reason. */
 export async function failOperationStep(
   deps: ExecutionDeps,
