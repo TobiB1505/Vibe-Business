@@ -114,3 +114,43 @@ describe("the wait is opened by the click, not by the answer", () => {
     expect(source).toContain("closeDialog();\n        setError(messageFor(result.error));");
   });
 });
+
+/*
+ * The failure the startup rows could not express.
+ *
+ * The three rows are things that happened, and none of them can say "this one
+ * is not going to happen". So a refused view socket left "Connecting to it"
+ * spinning until the founder cancelled a browser Vibe had already created and
+ * was paying for. The dialog needed a state that is not a stage.
+ */
+describe("a browser that cannot be reached says so", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  it("replaces the waiting rows rather than sitting beside them", () => {
+    // Two panels in the same box would show a spinner next to the sentence
+    // saying the spinner is wrong.
+    expect(source).toContain('{!error && unreachable && (');
+    expect(source).toContain('{!error && !unreachable && stage !== "ready" && (');
+  });
+
+  it("stops the startup clock once waiting is over", () => {
+    expect(source).toContain('useElapsedSeconds(stage !== "ready" && !unreachable)');
+  });
+
+  it("offers another picture, never another browser", () => {
+    // The session is live and already paid for. A retry that started a second
+    // browser would charge the founder for Vibe's own connection problem.
+    const retry = source.slice(source.indexOf("const handleRetryView = useCallback"));
+    const body = retry.slice(0, retry.indexOf("}, ["));
+    expect(body).toContain("loadLiveView(sessionId)");
+    expect(body).not.toContain("startDeepScanAction");
+  });
+
+  it("clears the failure whenever a fresh view is fetched", () => {
+    const load = source.slice(source.indexOf("const loadLiveView = useCallback"));
+    expect(load.slice(0, load.indexOf("const result"))).toContain("setUnreachable(false)");
+  });
+});

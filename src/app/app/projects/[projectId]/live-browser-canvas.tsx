@@ -44,7 +44,13 @@ export type LiveBrowserCanvasProps = {
    * It comes only from the authorized server action.
    */
   viewUrl: string;
-  /** Announced to the person when the socket has not come up. */
+  /**
+   * The socket could not be brought up, after every retry.
+   *
+   * Not called on a single failed attempt: the first one routinely fails
+   * (see `reconnectDelayMs`). When this fires, waiting longer is not the
+   * answer and the person needs to be told.
+   */
   onUnavailable?: () => void;
   /**
    * The two things this component is the only one that can know.
@@ -156,6 +162,31 @@ export function isTap(
   return Math.abs(end.x - start.x) <= threshold && Math.abs(end.y - start.y) <= threshold;
 }
 
+/**
+ * How long to wait before the next attempt at the view socket.
+ *
+ * A single attempt was the bug. The sandbox reports ready when the guard is
+ * listening *inside* the microVM, and its public URL becomes routable a moment
+ * later — so a client that connects at exactly the wrong instant gets one
+ * refused socket and, with no retry, a spinner that reads "Connecting to it"
+ * until the person gives up. That is what a founder saw: a live browser
+ * created, billed for, and never shown.
+ *
+ * The ladder is short at the start because the usual gap is short, and long at
+ * the end because a browser that has not answered in half a minute is not
+ * about to. `null` means stop asking — roughly 50 seconds of trying, which is
+ * longer than the sandbox has ever taken to become routable and short enough
+ * that a person is not left guessing.
+ *
+ * The count resets whenever a socket opens, so a session that drops mid-login
+ * gets the full ladder again rather than the tail of the previous one.
+ */
+const RECONNECT_DELAYS_MS = [500, 1_000, 2_000, 4_000, 4_000, 8_000, 8_000, 8_000, 8_000, 8_000];
+
+export function reconnectDelayMs(failures: number): number | null {
+  return RECONNECT_DELAYS_MS[failures] ?? null;
+}
+
 export function LiveBrowserCanvas({
   viewUrl,
   onUnavailable,
@@ -179,91 +210,127 @@ export function LiveBrowserCanvas({
   const [painted, setPainted] = useState(false);
 
   useEffect(() => {
-    const socket = new WebSocket(viewUrl);
-    socketRef.current = socket;
+    /*
+     * One live socket, and a ladder of attempts behind it.
+     *
+     * `disposed` and the identity check in `lost` are what keep the two apart:
+     * a refused socket fires `error` and then `close`, and a component that
+     * unmounts mid-ladder must not leave a timer that reconnects into nothing.
+     */
+    let disposed = false;
+    let failures = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
 
-    socket.onopen = () => {
-      setConnected(true);
-      onConnected?.();
-    };
+    const connect = () => {
+      const socket = new WebSocket(viewUrl);
+      socketRef.current = socket;
 
-    socket.onmessage = (event) => {
-      let message: Frame;
-      try {
-        message = JSON.parse(String(event.data)) as Frame;
-      } catch {
-        return;
-      }
-      if (message.t !== "frame") return;
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      /*
-       * Only the newest frame is worth decoding.
-       *
-       * Every arriving frame used to get its own `Image` and its own decode.
-       * When frames arrive faster than a device can decode them — which is a
-       * phone during a page load — that queues work whose only visible effect
-       * is the last one: each earlier frame is decoded, painted, and
-       * immediately replaced. The device pays for all of them and the person
-       * watches the picture run behind.
-       *
-       * So a decode in flight does not queue another. The newest frame is
-       * held, and taken as soon as the current one is done. A live browser has
-       * no use for a stale frame — there is nothing here to miss, only
-       * something to be late for.
-       */
-      pending.current = message;
-      if (decoding.current) return;
-
-      const drawNext = () => {
-        const next = pending.current;
-        pending.current = null;
-        if (!next) {
-          decoding.current = false;
-          return;
-        }
-        decoding.current = true;
-
-        const image = new Image();
-        image.onload = () => {
-          // The backing store matches the image, so nothing is resampled
-          // twice: CSS scales the element, the browser scales the pixels once.
-          if (canvas.width !== image.naturalWidth || canvas.height !== image.naturalHeight) {
-            canvas.width = image.naturalWidth;
-            canvas.height = image.naturalHeight;
-          }
-          // The coordinate space stays the browser's, not the picture's: a
-          // click is reported in the page's own pixels whatever size the frame
-          // arrived at.
-          frameSize.current = { w: next.w, h: next.h };
-          canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
-          setPainted(true);
-          onPainted?.();
-          drawNext();
-        };
-        // A frame that cannot be decoded must not stop the ones behind it.
-        image.onerror = () => drawNext();
-        image.src = `data:image/jpeg;base64,${next.data}`;
+      socket.onopen = () => {
+        // A ladder that is not reset would spend a mid-login drop's retries at
+        // eight-second intervals, which is a long time to watch a frozen page.
+        failures = 0;
+        setConnected(true);
+        onConnected?.();
       };
 
-      drawNext();
+      socket.onmessage = (event) => {
+        let message: Frame;
+        try {
+          message = JSON.parse(String(event.data)) as Frame;
+        } catch {
+          return;
+        }
+        if (message.t !== "frame") return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        /*
+         * Only the newest frame is worth decoding.
+         *
+         * Every arriving frame used to get its own `Image` and its own decode.
+         * When frames arrive faster than a device can decode them — which is a
+         * phone during a page load — that queues work whose only visible effect
+         * is the last one: each earlier frame is decoded, painted, and
+         * immediately replaced. The device pays for all of them and the person
+         * watches the picture run behind.
+         *
+         * So a decode in flight does not queue another. The newest frame is
+         * held, and taken as soon as the current one is done. A live browser has
+         * no use for a stale frame — there is nothing here to miss, only
+         * something to be late for.
+         */
+        pending.current = message;
+        if (decoding.current) return;
+
+        const drawNext = () => {
+          const next = pending.current;
+          pending.current = null;
+          if (!next) {
+            decoding.current = false;
+            return;
+          }
+          decoding.current = true;
+
+          const image = new Image();
+          image.onload = () => {
+            // The backing store matches the image, so nothing is resampled
+            // twice: CSS scales the element, the browser scales the pixels once.
+            if (canvas.width !== image.naturalWidth || canvas.height !== image.naturalHeight) {
+              canvas.width = image.naturalWidth;
+              canvas.height = image.naturalHeight;
+            }
+            // The coordinate space stays the browser's, not the picture's: a
+            // click is reported in the page's own pixels whatever size the frame
+            // arrived at.
+            frameSize.current = { w: next.w, h: next.h };
+            canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+            setPainted(true);
+            onPainted?.();
+            drawNext();
+          };
+          // A frame that cannot be decoded must not stop the ones behind it.
+          image.onerror = () => drawNext();
+          image.src = `data:image/jpeg;base64,${next.data}`;
+        };
+
+        drawNext();
+      };
+
+      /*
+       * One handler for both events, and it must survive being called twice:
+       * scheduling two reconnects for one failure would spend the ladder at
+       * double speed without anyone noticing.
+       */
+      const lost = () => {
+        if (disposed || socketRef.current !== socket) return;
+        socketRef.current = null;
+        setConnected(false);
+
+        const delay = reconnectDelayMs(failures);
+        failures += 1;
+
+        if (delay === null) {
+          onUnavailable?.();
+          return;
+        }
+        retry = setTimeout(connect, delay);
+      };
+      socket.onerror = lost;
+      socket.onclose = lost;
     };
 
-    const lost = () => {
-      setConnected(false);
-      onUnavailable?.();
-    };
-    socket.onerror = lost;
-    socket.onclose = lost;
+    connect();
 
     return () => {
+      disposed = true;
+      clearTimeout(retry);
+      const socket = socketRef.current;
       socketRef.current = null;
       // Closing here matters: the component unmounts when the dialog is
       // dismissed, and a socket left open would keep streaming frames of a
       // signed-in product into a page nobody is looking at.
-      socket.close();
+      socket?.close();
     };
   }, [viewUrl, onUnavailable, onConnected, onPainted]);
 

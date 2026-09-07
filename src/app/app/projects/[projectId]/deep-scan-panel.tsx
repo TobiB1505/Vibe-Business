@@ -173,26 +173,33 @@ function LiveViewDialog({
   stage,
   error,
   busy,
+  unreachable,
   signIn,
   onCancel,
   onAnalyze,
   onConnected,
   onPainted,
+  onRetryView,
+  onUnavailable,
 }: {
   liveViewUrl: string | null;
   stage: BrowserStartupStage;
   error: string | null;
   busy: boolean;
+  /** Every attempt at the view socket failed. */
+  unreachable: boolean;
   signIn: SignInWatch;
   onCancel: () => void;
   onAnalyze: () => void;
   onConnected: () => void;
   onPainted: () => void;
+  onRetryView: () => void;
+  onUnavailable: () => void;
 }) {
   const elapsedSeconds = useElapsedSeconds(busy);
   // A second clock, and it runs on a different question: how long the browser
   // has been opening, not how long the analysis has been running.
-  const startupSeconds = useElapsedSeconds(stage !== "ready");
+  const startupSeconds = useElapsedSeconds(stage !== "ready" && !unreachable);
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -299,6 +306,7 @@ function LiveViewDialog({
               viewUrl={liveViewUrl}
               onConnected={onConnected}
               onPainted={onPainted}
+              onUnavailable={onUnavailable}
             />
           )}
           {error && (
@@ -306,7 +314,41 @@ function LiveViewDialog({
               {error}
             </p>
           )}
-          {!error && stage !== "ready" && (
+          {!error && unreachable && (
+            /*
+             * The state this dialog used to have no name for.
+             *
+             * The socket failed, every retry failed, and what a founder saw
+             * was "Connecting to it" spinning until they cancelled — a browser
+             * Vibe had created and was paying for, behind a message that said
+             * it was still coming. A wait that cannot end is not a wait.
+             *
+             * The browser is still alive: the session outlives one socket, so
+             * the honest offer is another attempt at the picture, not a new
+             * browser the founder would pay for twice.
+             */
+            <div
+              role="status"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-fg-body">
+                  Vibe cannot reach the temporary browser
+                </p>
+                <p className="text-xs text-fg-muted">
+                  The browser is running, but its picture is not getting through. This is
+                  usually the connection between this device and it. Trying again costs
+                  nothing — the browser is already open.
+                </p>
+              </div>
+              <div>
+                <Button type="button" onClick={onRetryView}>
+                  Try again
+                </Button>
+              </div>
+            </div>
+          )}
+          {!error && !unreachable && stage !== "ready" && (
             <div
               role="status"
               className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
@@ -752,10 +794,13 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   /** How far the temporary browser has got. See `startupSteps`. */
   const [stage, setStage] = useState<BrowserStartupStage>("starting");
   const [error, setError] = useState<string | null>(null);
+  /** Every attempt at the view socket failed. Not a stage — a failure. */
+  const [unreachable, setUnreachable] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
     setError(null);
+    setUnreachable(false);
     const result = await getDeepScanLiveViewAction(id);
 
     if (!result.ok) {
@@ -768,6 +813,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
 
   const closeDialog = useCallback(() => {
     setDialogOpen(false);
+    setUnreachable(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -870,6 +916,22 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const handleConnected = useCallback(() => {
     setStage((current) => (current === "ready" ? current : "painting"));
   }, []);
+
+  const handleUnavailable = useCallback(() => setUnreachable(true), []);
+
+  /*
+   * Another attempt at the picture, not another browser.
+   *
+   * The session is still live and still paid for, so this re-fetches the view
+   * capability and remounts the canvas. Re-fetching is what makes it a real
+   * retry rather than a re-render: the URL carries a token, and a token that
+   * has expired is one of the reasons the socket may have refused.
+   */
+  const handleRetryView = useCallback(() => {
+    if (!sessionId) return;
+    setStage("connecting");
+    void loadLiveView(sessionId);
+  }, [sessionId, loadLiveView]);
   const handlePainted = useCallback(() => setStage("ready"), []);
 
   const disabled = busy || pending;
@@ -1075,11 +1137,14 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           stage={stage}
           error={error}
           busy={disabled}
+          unreachable={unreachable}
           signIn={signIn}
           onCancel={handleCancel}
           onAnalyze={handleAnalyze}
           onConnected={handleConnected}
           onPainted={handlePainted}
+          onRetryView={handleRetryView}
+          onUnavailable={handleUnavailable}
         />
       )}
     </>
