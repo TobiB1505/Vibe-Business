@@ -281,6 +281,22 @@ export const BLOCK_SCENARIO = "study-block";
  */
 export const OPENING_SCENARIO = "study-opening";
 export const OPENING_WALKTHROUGH_SCENARIO = "study-opening-walkthrough";
+
+/**
+ * The opening the product actually renders, not the study of it.
+ *
+ * Same argument as `RAIL_SCENARIO`: `NovaOpeningScreen` is otherwise visible
+ * only to a founder opening a project for the very first time, which is a
+ * state that exists once per project and cannot be returned to. `?opening`
+ * replays it for a signed-in owner; this shows it to anyone reviewing the
+ * design, with the same `replay` flag, so nothing is recorded.
+ *
+ * It earns its place by having caught something. The study and the shipped
+ * screen were supposed to be one choreography and were not — a hand-written
+ * header, ungrouped bubbles, no staged arrival — and nothing said so, because
+ * the two were never on screen in the same place.
+ */
+export const SHIPPED_OPENING_SCENARIO = "study-opening-shipped";
 export const WIREFRAME_OFFLINE_SCENARIO = "study-wireframe-offline";
 
 export function isWireframeScenario(scenario: string): boolean {

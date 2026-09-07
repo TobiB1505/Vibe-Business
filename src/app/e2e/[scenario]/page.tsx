@@ -44,6 +44,7 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -62,6 +63,7 @@ import {
   RAIL_SCENARIO,
   OPENING_SCENARIO,
   OPENING_WALKTHROUGH_SCENARIO,
+  SHIPPED_OPENING_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
   CHAT_ANSWERED_SCENARIO,
@@ -325,6 +327,28 @@ export default async function E2eScenarioPage({
     );
   }
 
+  if (scenario === SHIPPED_OPENING_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <div className="mx-auto w-full max-w-2xl px-6 py-10 max-sm:px-4">
+          {/*
+            The product's own component, in replay — so the button records
+            nothing and the fixture needs no session. `projectId` is never used
+            on that path, and `connected` is the state worth reviewing: the
+            header's `connecting` word resolving to a repository that is there.
+          */}
+          <NovaOpeningScreen
+            projectId="fixture-project"
+            productName="Vibe Business"
+            connected
+            replay
+          />
+        </div>
+      </StudyShell>
+    );
+  }
+
   if (scenario === OPENING_WALKTHROUGH_SCENARIO) {
     const chosen = chosenStudy();
     return (
@@ -472,9 +496,7 @@ export default async function E2eScenarioPage({
           consequence={priced?.confirmationNote ?? undefined}
           /* The same label the button carries, so the fixture exercises the
              footnote's refusal to repeat it rather than rendering past it. */
-          controlLabel={
-            novaControlLabel(control) ?? undefined
-          }
+          controlLabel={novaControlLabel(control) ?? undefined}
           control={
             /* Null covers both "nothing to press" and "answered in the card",
                and this fixture renders neither — it is the Focus Card's shape,

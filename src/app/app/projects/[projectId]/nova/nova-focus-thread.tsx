@@ -29,6 +29,32 @@ import { footnoteFor } from "./footnote";
  * The bubble cannot describe a moment differently from the word beside it,
  * because both come from the same table.
  *
+ * ## Why this does not stage its arrival, and the opening does
+ *
+ * `NovaArriving` exists, it is what the opening screen uses, and it is
+ * deliberately not used here.
+ *
+ * The opening's messages are genuinely arriving: it happens once per project,
+ * there is nothing on screen a founder could already have read, and the
+ * composing beat is the difference between somebody speaking and a list
+ * rendering. Home is the opposite. Nothing here is appended — the whole thread
+ * is re-derived from rows on every load, so it is the same thread it was last
+ * time, and staging it would make a founder wait two seconds to read what they
+ * had already read. That is the cost the component's own docblock names, in
+ * the case where there is nothing to buy with it.
+ *
+ * What Home has instead is the CSS entrance: `bubble-arrive`, delayed by
+ * `--i * 70ms`, which is why every object below takes an `index` in reading
+ * order. The thread still arrives in sequence — it just does it in a quarter
+ * of a second and without claiming Nova is typing.
+ *
+ * The case that would earn staging is a message that lands *while a founder is
+ * looking*, when the header's poll refreshes the route after a run settles.
+ * That needs the thread to know which part is new, and Home holds no read
+ * marker by decision — the "while you were away" line was removed on the
+ * argument that nothing here happens without the founder. So it is written
+ * down as the open question rather than approximated.
+ *
  * ## Why the block is asked for rather than chosen here
  *
  * `BLOCK_FOR_MOMENT` is total over every moment the domain can raise, so a new
