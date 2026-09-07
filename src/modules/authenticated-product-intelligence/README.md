@@ -50,6 +50,14 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## The handoff, and why it is allowed to be decoration
+
+The live view is useful for the first seconds of an analysis — a person can watch the crawl start — and after that it is a video of pages flicking past that nobody is driving. What followed was a spinner and a seconds counter.
+
+`scan-handoff.tsx` hands the picture over instead: the frame switches off the way a CRT does, the mark takes its place, and Vibe visibly gathers while the analysis runs. It holds the three obligations in code rather than in a comment — bound to an observed state (mounted only while an analysis Vibe started is running, so it cannot appear over a pending, paused or failed scan), removable without loss (every word a founder needs is in the status panel below it), and carrying no timing (a fixed period; nothing accelerates, fills or counts down).
+
+The tiles carry **no text**, and that is deliberate rather than timid. Everything else on screen during the animation is decoration a person reads as decoration; a tile reading `/app/billing` would be the one element they read as *information*. Vibe does not know from here which page is being read at any moment — the analysis runs inside one request and reports when it is done — so that path would be wrong, and a screen that makes things up costs more than an animation earns.
+
 ## The window follows the device; the reading does not
 
 A phone driving a 1920-pixel desktop page is the fiddliest part of this flow — the founder taps at a layout their own phone users never see, at a scale where a password field is a few pixels tall. So the **login window** follows the device: `BROWSER_SANDBOX.loginViewports` holds two shapes, and the client sends a *name* from that closed set. Nothing a client sends becomes a number on Chromium's command line, and the service normalises an unrecognised hint to desktop rather than failing a scan over it.
