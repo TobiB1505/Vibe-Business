@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { MINIMUM_PASSWORD_LENGTH, passwordTooShortMessage } from "@/modules/auth/password";
 import { recordAuthAttempt, throttleMessage } from "@/modules/auth/throttle";
 import {
   authFailureMessage,
@@ -25,7 +26,6 @@ import { DEFAULT_POST_AUTH_PATH, sanitizeNextPath } from "@/modules/auth/redirec
  * makes it a second, independent refusal rather than the only one, which is
  * the right relationship between an application rule and a provider setting.
  */
-const MINIMUM_PASSWORD_LENGTH = 8;
 
 function parseCredentials(formData: FormData): { email: string; password: string } | null {
   const email = formData.get("email");
@@ -115,8 +115,12 @@ export async function signInWithPassword(
 }
 
 export type SignUpResult =
-  | { ok: true; needsConfirmation: boolean }
-  | { ok: false; error: string };
+  /**
+   * `email` is the address the confirmation was sent to — echoed back so the
+   * screen can name it. "Check your email" is not checkable against a typo
+   * the person cannot see any more.
+   */
+  { ok: true; needsConfirmation: boolean; email: string } | { ok: false; error: string };
 
 /**
  * Account creation.
@@ -141,10 +145,7 @@ export async function signUp(
   // is a dashboard setting, so relying on it alone would make this product's
   // password rule something no reader of this repository could determine.
   if (credentials.password.length < MINIMUM_PASSWORD_LENGTH) {
-    return {
-      ok: false,
-      error: `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`,
-    };
+    return { ok: false, error: passwordTooShortMessage() };
   }
 
   const origin = await requestOrigin();
@@ -165,7 +166,7 @@ export async function signUp(
     redirect(destination);
   }
 
-  return { ok: true, needsConfirmation: true };
+  return { ok: true, needsConfirmation: true, email: credentials.email };
 }
 
 export type OAuthStartResult = { ok: false; error: string };
@@ -209,8 +210,12 @@ export async function signInWithGoogle(
 }
 
 export type PasswordResetRequestResult =
-  | { ok: true }
-  | { ok: false; error: string };
+  /**
+   * `email` is what the person typed, echoed back. It says nothing about
+   * whether an account exists — that is the whole point of the wording on the
+   * success notice — and it is the only way a typo is visible afterwards.
+   */
+  { ok: true; email: string } | { ok: false; error: string };
 
 /**
  * Sends a password reset link.
@@ -254,11 +259,10 @@ export async function requestPasswordReset(
     }
   }
 
-  return { ok: true };
+  return { ok: true, email };
 }
 
-export type PasswordUpdateResult =
-  | { ok: false; error: string };
+export type PasswordUpdateResult = { ok: false; error: string };
 
 /**
  * Sets a new password for the user in the current recovery session.
@@ -276,12 +280,17 @@ export async function updatePassword(
   const confirmation = formData.get("password_confirmation");
 
   if (typeof password !== "string" || password.length < MINIMUM_PASSWORD_LENGTH) {
-    return {
-      ok: false,
-      error: `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`,
-    };
+    return { ok: false, error: passwordTooShortMessage() };
   }
-  if (typeof confirmation === "string" && confirmation !== password) {
+  /*
+   * A missing confirmation is not a matching one.
+   *
+   * This read `typeof confirmation === "string" && confirmation !== password`,
+   * so a submission that carried no confirmation field at all skipped the
+   * check and set the password. The browser marks the field `required`, which
+   * is a convenience for a person and not a property of the request.
+   */
+  if (confirmation !== password) {
     return { ok: false, error: "Both passwords need to match." };
   }
 

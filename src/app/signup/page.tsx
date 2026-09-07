@@ -38,9 +38,7 @@ export default async function SignupPage({
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Create account</h1>
-        <p className="text-fg-muted text-body">
-          With Google, or an email address and password.
-        </p>
+        <p className="text-fg-muted text-body">With Google, or an email address and password.</p>
       </div>
 
       <SignupForm next={next} />

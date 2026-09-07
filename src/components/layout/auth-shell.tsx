@@ -34,8 +34,7 @@ export function AuthShell({
           aria-hidden
           className="pointer-events-none absolute -top-44 -left-32 size-[46rem] rounded-full"
           style={{
-            background:
-              "radial-gradient(closest-side, rgb(0 229 160 / 0.15), rgb(0 229 160 / 0))",
+            background: "radial-gradient(closest-side, rgb(0 229 160 / 0.15), rgb(0 229 160 / 0))",
           }}
         />
         <div className="relative">
@@ -44,19 +43,21 @@ export function AuthShell({
 
         <div className="relative flex flex-col gap-6">
           {/*
-            * A paragraph, not the page's heading (UX audit F-2).
-            *
-            * This panel is `hidden lg:flex`, so on a phone it does not exist —
-            * and a heading that disappears below a breakpoint cannot be what
-            * the page is about. Below `lg` the route already has exactly one
-            * `h1`, the form's ("Sign in", "Create account"); on desktop this
-            * added a second one that came *first* in the document, so heading
-            * navigation offered the decorative answer before the real one.
-            *
-            * Styling is unchanged: it still renders as the hero line.
-            */}
+           * A paragraph, not the page's heading (UX audit F-2).
+           *
+           * This panel is `hidden lg:flex`, so on a phone it does not exist —
+           * and a heading that disappears below a breakpoint cannot be what
+           * the page is about. Below `lg` the route already has exactly one
+           * `h1`, the form's ("Sign in", "Create account"); on desktop this
+           * added a second one that came *first* in the document, so heading
+           * navigation offered the decorative answer before the real one.
+           *
+           * Styling is unchanged: it still renders as the hero line.
+           */}
           <p className="text-fg text-hero font-bold text-balance">{headline}</p>
-          {intro && <p className="text-fg-secondary max-w-[38ch] text-lead leading-relaxed">{intro}</p>}
+          {intro && (
+            <p className="text-fg-secondary max-w-[38ch] text-lead leading-relaxed">{intro}</p>
+          )}
           {assurances && assurances.length > 0 && (
             <ul className="text-fg-prose flex flex-col gap-3 text-body">
               {assurances.map((assurance) => (
@@ -79,14 +80,22 @@ export function AuthShell({
         </p>
       </div>
 
-      <div className="flex items-center justify-center px-5 py-12 sm:px-10">
+      {/*
+        A `main` landmark, which these four screens did not have.
+
+        Measured: `document.querySelector("main")` was null on `/login`,
+        `/signup`, `/forgot-password` and `/reset-password`. The panel beside
+        this one is decoration that disappears below `lg`; this column is the
+        page, so it is what a reader skipping to the content should land on.
+      */}
+      <main className="flex items-center justify-center px-5 py-12 sm:px-10">
         <div className="flex w-full max-w-[25rem] flex-col gap-6">
           <div className="lg:hidden">
             <VibeLockup />
           </div>
           {children}
         </div>
-      </div>
+      </main>
     </div>
   );
 }

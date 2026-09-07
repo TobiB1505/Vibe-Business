@@ -115,3 +115,34 @@ describe("every text-entry surface comes from one place", () => {
     expect(chevron.slice(0, chevron.indexOf("/>"))).toContain("pointer-events-none");
   });
 });
+
+describe("a refusal is announced", () => {
+  /**
+   * `aria-describedby` is read when focus *arrives* at a field. It says
+   * nothing when text appears under a field the person has already left —
+   * which is exactly when a rejected submission renders one, on every form in
+   * the product. `role="alert"` is the difference between a message and a
+   * message somebody hears.
+   */
+  /**
+   * Code only.
+   *
+   * The first version of this assertion read the whole branch including its
+   * docblock — which explains the fix and contains the string `role="alert"`
+   * in prose. It passed with the attribute deleted. Comments go first, always.
+   */
+  const code = (source: string) =>
+    source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
+
+  it("gives the error an assertive live region", () => {
+    const source = code(readFileSync("src/components/ui/field.tsx", "utf8"));
+    const error = source.slice(source.indexOf("{error && ("));
+    expect(error.slice(0, error.indexOf("</p>"))).toContain('role="alert"');
+  });
+
+  it("leaves the hint alone, which is not news", () => {
+    const source = code(readFileSync("src/components/ui/field.tsx", "utf8"));
+    const hint = source.slice(source.indexOf("{hint && ("), source.indexOf("{error && ("));
+    expect(hint).not.toContain("role=");
+  });
+});

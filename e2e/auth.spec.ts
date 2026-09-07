@@ -59,8 +59,9 @@ async function waitForHydration(page: Page, testId: string): Promise<void> {
     const key = Object.keys(form).find((candidate) => candidate.startsWith("__reactProps$"));
     if (!key) return false;
 
-    return typeof (form as unknown as Record<string, { action?: unknown }>)[key].action ===
-      "function";
+    return (
+      typeof (form as unknown as Record<string, { action?: unknown }>)[key].action === "function"
+    );
   }, testId);
 }
 
@@ -144,9 +145,9 @@ test.describe("submitting the email form", () => {
     await page.getByLabel("Password").fill("hunter22");
     await page.getByTestId("email-signin").click();
 
-    await expect(
-      page.getByText("We couldn't reach the server. Please try again."),
-    ).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByText("We couldn't reach the server. Please try again.")).toBeVisible({
+      timeout: 12_000,
+    });
 
     // Never the provider's own wording.
     await expect(page.getByText(/AuthRetryableFetchError|ENOTFOUND|fetch failed/)).toHaveCount(0);
@@ -159,9 +160,9 @@ test.describe("submitting the email form", () => {
     await page.getByLabel("Password").fill("hunter22");
     await page.getByTestId("email-signin").click();
 
-    await expect(
-      page.getByText("We couldn't reach the server. Please try again."),
-    ).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByText("We couldn't reach the server. Please try again.")).toBeVisible({
+      timeout: 12_000,
+    });
 
     await expect(page.getByTestId("email-signin")).toBeEnabled();
     await expect(page.getByTestId("google-signin")).toBeEnabled();
@@ -226,9 +227,7 @@ test.describe("starting Google sign-in", () => {
       page.getByTestId("google-signin").click(),
     ]);
 
-    const returnTo = new URL(
-      new URL(request.url()).searchParams.get("redirect_to") as string,
-    );
+    const returnTo = new URL(new URL(request.url()).searchParams.get("redirect_to") as string);
     expect(returnTo.searchParams.get("next")).toBe("/app/action-plan/123");
   });
 
@@ -290,9 +289,7 @@ test.describe("the guard on /app", () => {
     await page.goto("/app/action-plan/123");
 
     await expect(page).toHaveURL("/login?next=%2Fapp%2Faction-plan%2F123");
-    await expect(page.locator('input[name="next"]').first()).toHaveValue(
-      "/app/action-plan/123",
-    );
+    await expect(page.locator('input[name="next"]').first()).toHaveValue("/app/action-plan/123");
   });
 
   test("never shows a frame of the protected page first", async ({ page }) => {
@@ -320,9 +317,7 @@ test.describe("password recovery", () => {
     await expect(page.getByTestId("send-reset-link")).toBeEnabled();
   });
 
-  test("disables the button while sending, so it cannot be double-submitted", async ({
-    page,
-  }) => {
+  test("disables the button while sending, so it cannot be double-submitted", async ({ page }) => {
     await page.goto("/forgot-password");
 
     /*
@@ -395,5 +390,67 @@ test.describe("public pages stay public", () => {
   test("signup does not require a session", async ({ page }) => {
     await page.goto("/signup");
     await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+  });
+});
+
+test.describe("the four screens are pages", () => {
+  const SCREENS = ["/login", "/signup", "/forgot-password"] as const;
+
+  /**
+   * Measured before the fix: `document.querySelector("main")` was null on all
+   * four auth routes. `AuthShell` rendered two `div`s, so a reader skipping to
+   * the content had nowhere to skip to — on the four screens a stranger meets
+   * first.
+   */
+  for (const screen of SCREENS) {
+    test(`${screen} has one main landmark`, async ({ page }) => {
+      await page.goto(screen);
+      await expect(page.getByRole("main")).toHaveCount(1);
+      // The decorative half disappears below `lg`; the form is the page.
+      await expect(page.getByRole("main")).toContainText(/Sign in|Create account|Reset your/);
+    });
+  }
+
+  /**
+   * The browser's own check and the server's refusal are one number.
+   *
+   * The hint said eight, the input said six, and the server refused under
+   * eight — so a seven-character password passed the field that then reported
+   * it as the problem. This reads the attribute the browser actually enforces.
+   */
+  test("asks for the password length the server will accept", async ({ page }) => {
+    await page.goto("/signup");
+
+    const password = page.getByLabel("Password", { exact: true });
+    await expect(password).toHaveAttribute("minlength", "8");
+    await expect(page.getByText("At least 8 characters")).toBeVisible();
+  });
+
+  /**
+   * The disagreement is gone end to end.
+   *
+   * A seven-character password used to pass the browser, reach the server, and
+   * come back rejected by the field the browser had just approved. Now the
+   * browser refuses it — which is why there is no server error left to
+   * assert here, and why `field.test.ts` is where the announcement is guarded.
+   */
+  test("refuses a short password in the browser, before anything is sent", async ({ page }) => {
+    await page.goto("/signup");
+    await page.getByLabel("Email address").fill("someone@example.com");
+    await page.getByLabel("Password", { exact: true }).fill("hunter7");
+    await waitForHydration(page, "email-signup");
+    await page.getByTestId("email-signup").click();
+
+    const state = await page
+      .getByLabel("Password", { exact: true })
+      .evaluate((node: HTMLInputElement) => ({
+        valid: node.validity.valid,
+        tooShort: node.validity.tooShort,
+      }));
+
+    expect(state.tooShort, "seven characters reached the server again").toBe(true);
+    expect(state.valid).toBe(false);
+    // And the page did not navigate or report anything of its own.
+    await expect(page).toHaveURL(/\/signup$/);
   });
 });

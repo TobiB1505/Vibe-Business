@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updatePassword, type PasswordUpdateResult } from "@/modules/auth/actions";
 import { Button } from "@/components/ui/button";
+import { MINIMUM_PASSWORD_LENGTH, PASSWORD_HINT } from "@/modules/auth/password";
 import { Field, Input } from "@/components/ui/field";
 import { VibeCard } from "@/components/ui/surface";
 
@@ -25,13 +26,13 @@ export function ResetPasswordForm() {
   return (
     <VibeCard padding="md">
       <form action={formAction} className="flex flex-col gap-4">
-        <Field id="password" label="New password" hint="At least 8 characters">
+        <Field id="password" label="New password" hint={PASSWORD_HINT}>
           <Input
             id="password"
             name="password"
             type="password"
             required
-            minLength={6}
+            minLength={MINIMUM_PASSWORD_LENGTH}
             autoComplete="new-password"
             placeholder="••••••••"
             disabled={pending}
@@ -46,7 +47,7 @@ export function ResetPasswordForm() {
             name="password_confirmation"
             type="password"
             required
-            minLength={6}
+            minLength={MINIMUM_PASSWORD_LENGTH}
             autoComplete="new-password"
             placeholder="••••••••"
             disabled={pending}

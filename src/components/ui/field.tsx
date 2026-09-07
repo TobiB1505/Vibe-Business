@@ -139,7 +139,20 @@ export function Field({
         </p>
       )}
       {error && (
-        <p id={`${id}-error`} className="text-coral text-caption">
+        /*
+          Announced, not merely displayed.
+
+          `aria-describedby` binds this to the input, which is what a screen
+          reader reads when focus *arrives* there. It says nothing when the
+          text appears under a field the person has already left — which is
+          exactly when a rejected submission renders one. `role="alert"` is
+          the difference between a message and a message somebody hears.
+
+          Assertive rather than `Notice`'s `role="status"`, and the two are
+          right for different things: a notice renders as part of a page, this
+          renders because something the person just did was refused.
+        */
+        <p role="alert" id={`${id}-error`} className="text-coral text-caption">
           {error}
         </p>
       )}

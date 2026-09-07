@@ -37,9 +37,7 @@ export default async function ForgotPasswordPage({
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Reset your password</h1>
-        <p className="text-fg-muted text-body">
-          Enter the email address you signed up with.
-        </p>
+        <p className="text-fg-muted text-body">Enter the email address you signed up with.</p>
       </div>
 
       <ForgotPasswordForm initialError={error} />

@@ -1,10 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
-import {
-  requestPasswordReset,
-  type PasswordResetRequestResult,
-} from "@/modules/auth/actions";
+import { requestPasswordReset, type PasswordResetRequestResult } from "@/modules/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
@@ -19,15 +16,28 @@ import { VibeCard } from "@/components/ui/surface";
  * anti-enumeration measure, and it has to survive future copy edits.
  */
 export function ForgotPasswordForm({ initialError }: { initialError?: string | null }) {
-  const [state, formAction, pending] = useActionState<
-    PasswordResetRequestResult | null,
-    FormData
-  >(requestPasswordReset, null);
+  const [state, formAction, pending] = useActionState<PasswordResetRequestResult | null, FormData>(
+    requestPasswordReset,
+    null,
+  );
 
   if (state?.ok) {
     return (
       <Notice tone="info" label="Check your email">
-        If an account exists for this email, we&apos;ve sent you a password reset link.
+        <p>
+          If an account exists for{" "}
+          <strong className="text-fg-body font-semibold">{state.email}</strong>, we&apos;ve sent you
+          a password reset link.
+        </p>
+        {/*
+          Naming the address leaks nothing — it is the one the person just
+          typed, and the sentence above still refuses to say whether it has an
+          account. What it does is make a typo visible, which is otherwise
+          indistinguishable from an email that has not arrived yet.
+        */}
+        <p className="text-fg-muted mt-2">
+          Nothing arrived? It can take a minute, and it sometimes lands in spam.
+        </p>
       </Notice>
     );
   }

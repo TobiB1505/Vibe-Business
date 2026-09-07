@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import {
   signInWithGoogle,
@@ -8,8 +9,10 @@ import {
   type SignUpResult,
 } from "@/modules/auth/actions";
 import { Button } from "@/components/ui/button";
+import { MINIMUM_PASSWORD_LENGTH, PASSWORD_HINT } from "@/modules/auth/password";
 import { Field, Input } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
+import { proseLinkClasses } from "@/components/ui/text-link";
 import { VibeCard } from "@/components/ui/surface";
 
 /**
@@ -42,11 +45,25 @@ export function SignupForm({ next }: { next: string }) {
     return (
       <Notice tone="info" label="Check your email">
         <p>
-          Your account is created. Open the link in the email we just sent to confirm your address,
-          then sign in.
+          Your account is created. Open the link we just sent to{" "}
+          {/*
+            The address, named.
+
+            "Check your email" is not checkable: the field it was typed into is
+            gone by the time this renders, so somebody who mistyped their own
+            address has no way to see that they did — they wait for an email
+            that was never going to arrive.
+          */}
+          <strong className="text-fg-body font-semibold">{state.email}</strong> to confirm your
+          address, then sign in.
         </p>
         <p className="text-fg-muted mt-2">
-          Nothing arrived? It can take a minute, and it sometimes lands in spam.
+          Nothing arrived? It can take a minute, and it sometimes lands in spam. If that address is
+          wrong,{" "}
+          <Link href="/signup" className={proseLinkClasses()}>
+            start again
+          </Link>
+          .
         </p>
       </Notice>
     );
@@ -96,13 +113,13 @@ export function SignupForm({ next }: { next: string }) {
             />
           </Field>
 
-          <Field id="password" label="Password" hint="At least 8 characters" error={error}>
+          <Field id="password" label="Password" hint={PASSWORD_HINT} error={error}>
             <Input
               id="password"
               name="password"
               type="password"
               required
-              minLength={6}
+              minLength={MINIMUM_PASSWORD_LENGTH}
               autoComplete="new-password"
               placeholder="••••••••"
               disabled={busy}

@@ -38,9 +38,7 @@ describe("getSession", () => {
   });
 
   it("returns the session when a user is signed in", async () => {
-    getClaimsMock.mockResolvedValue(
-      verifiedClaims({ sub: "user-1", email: "user@example.com" }),
-    );
+    getClaimsMock.mockResolvedValue(verifiedClaims({ sub: "user-1", email: "user@example.com" }));
     expect(await getSession()).toEqual({ userId: "user-1", email: "user@example.com" });
   });
 
@@ -78,9 +76,7 @@ describe("requireSession", () => {
   });
 
   it("returns the session when signed in — the authenticated /app behavior", async () => {
-    getClaimsMock.mockResolvedValue(
-      verifiedClaims({ sub: "user-1", email: "user@example.com" }),
-    );
+    getClaimsMock.mockResolvedValue(verifiedClaims({ sub: "user-1", email: "user@example.com" }));
     expect(await requireSession()).toEqual({ userId: "user-1", email: "user@example.com" });
   });
 
@@ -97,8 +93,7 @@ describe("requireSession", () => {
 
     await expect(requireSession("/app/action-plan/123")).rejects.toSatisfy(
       (error: unknown) =>
-        error instanceof RedirectSignal &&
-        error.url === "/login?next=%2Fapp%2Faction-plan%2F123",
+        error instanceof RedirectSignal && error.url === "/login?next=%2Fapp%2Faction-plan%2F123",
     );
   });
 
@@ -153,7 +148,10 @@ describe("what getSession absorbs, and what it must not (PERF-024)", () => {
     createClientMock.mockRejectedValue(new Error("DYNAMIC_SERVER_USAGE"));
 
     await expect(getSession()).rejects.toThrow("DYNAMIC_SERVER_USAGE");
-    expect(error, "a rethrown error must not also be logged as a misconfiguration").not.toHaveBeenCalled();
+    expect(
+      error,
+      "a rethrown error must not also be logged as a misconfiguration",
+    ).not.toHaveBeenCalled();
     error.mockRestore();
   });
 });

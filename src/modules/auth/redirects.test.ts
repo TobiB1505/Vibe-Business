@@ -112,9 +112,7 @@ describe("sanitizeNextPath", () => {
 
   describe("falls back for absent or empty input", () => {
     it.each([[null], [undefined], [""], ["   "]])("falls back for %j", (input) => {
-      expect(sanitizeNextPath(input as string | null | undefined)).toBe(
-        DEFAULT_POST_AUTH_PATH,
-      );
+      expect(sanitizeNextPath(input as string | null | undefined)).toBe(DEFAULT_POST_AUTH_PATH);
     });
 
     it("falls back for a non-string value crossing an untyped boundary", () => {
@@ -183,7 +181,11 @@ describe("loginPathWithNext", () => {
 
 describe("internalRedirect", () => {
   it("emits a relative Location, never an absolute URL", () => {
-    for (const path of ["/app", "/login?error=oauth_failed", "/forgot-password?error=expired_link"]) {
+    for (const path of [
+      "/app",
+      "/login?error=oauth_failed",
+      "/forgot-password?error=expired_link",
+    ]) {
       const response = internalRedirect(path);
       expect(response.status).toBe(307);
       expect(response.headers.get("location")).toBe(path);
@@ -196,9 +198,7 @@ describe("internalRedirect", () => {
    * redirect to somebody else's site.
    */
   it("cannot express another origin at all", () => {
-    const location = internalRedirect(sanitizeNextPath("https://evil.com")).headers.get(
-      "location",
-    );
+    const location = internalRedirect(sanitizeNextPath("https://evil.com")).headers.get("location");
     expect(location).toBe("/app");
     expect(location?.startsWith("/")).toBe(true);
     expect(location?.startsWith("//")).toBe(false);

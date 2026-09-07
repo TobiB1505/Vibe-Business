@@ -93,9 +93,7 @@ describe("user-facing copy", () => {
     expect(authFailureMessage("email_not_confirmed")).toBe(
       "Please confirm your email before signing in.",
     );
-    expect(authFailureMessage("network")).toBe(
-      "We couldn't reach the server. Please try again.",
-    );
+    expect(authFailureMessage("network")).toBe("We couldn't reach the server. Please try again.");
     expect(authFailureMessage("oauth_cancelled")).toBe("Google sign-in was cancelled.");
     expect(authFailureMessage("unknown")).toBe("We couldn't sign you in. Please try again.");
   });
