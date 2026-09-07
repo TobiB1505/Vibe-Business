@@ -62,6 +62,53 @@ class PlaywrightPagePort implements AnalysisPagePort {
     return { status: response?.status() ?? null };
   }
 
+  /**
+   * Waits until the page stops navigating itself.
+   *
+   * `goto` resolves on `domcontentloaded`, which for a single-page application
+   * is the beginning of its work rather than the end: it then checks the
+   * session, redirects to a canonical path, or replaces the URL once its data
+   * arrives. Reading during that throws "Execution context was destroyed";
+   * navigating during it aborts the next page with "interrupted by another
+   * navigation". One scan inspected one page of sixteen for exactly this.
+   *
+   * Two signals, and both are needed. URL stability is the one that always
+   * terminates — a client-side redirect changes `location`, and polling for it
+   * cannot hang. `networkidle` is the one that catches a shell which fetches
+   * its data without changing the URL, and it is best effort precisely because
+   * a logged-in application often polls and would never reach it.
+   *
+   * It never throws and never reports failure. Reaching the ceiling means the
+   * page is read as it stands, which is the right answer: a page that will not
+   * hold still is still worth describing.
+   */
+  async settle(options: { quietMs: number; timeoutMs: number }): Promise<void> {
+    const deadline = Date.now() + options.timeoutMs;
+    const poll = Math.max(25, Math.min(100, Math.floor(options.quietMs / 4)));
+
+    let lastUrl = this.page.url();
+    let stillSince = Date.now();
+
+    while (Date.now() < deadline) {
+      if (Date.now() - stillSince >= options.quietMs) break;
+      await this.page.waitForTimeout(poll).catch(() => undefined);
+      const url = this.page.url();
+      if (url !== lastUrl) {
+        lastUrl = url;
+        stillSince = Date.now();
+      }
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+    // Best effort, and the `catch` is the design: an application that polls
+    // never goes quiet, and waiting for something that cannot happen is how
+    // the old `networkidle` note in `goto` describes burning the budget.
+    await this.page
+      .waitForLoadState("networkidle", { timeout: remaining })
+      .catch(() => undefined);
+  }
+
   async extract(): Promise<RawPageExtraction> {
     return this.page.evaluate(pageExtractionScript);
   }
