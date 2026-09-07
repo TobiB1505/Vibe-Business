@@ -60,7 +60,7 @@
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v2";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v3";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {

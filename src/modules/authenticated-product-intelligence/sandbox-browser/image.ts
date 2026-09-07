@@ -114,9 +114,10 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
     }
 
     try {
-      for (const [index, command] of imageBuildCommands().entries()) {
+      for (const [index, step] of imageBuildCommands().entries()) {
         const result = await handle.run({
-          command,
+          command: step.command,
+          ...(step.sudo ? { sudo: true } : {}),
           // Not the root: command 0 is the `mkdir` that creates it. See
           // `IMAGE_BUILD_CWD`.
           cwd: IMAGE_BUILD_CWD,

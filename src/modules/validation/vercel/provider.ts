@@ -217,6 +217,7 @@ class VercelSandboxHandle implements SandboxHandle {
     cwd: string;
     timeoutMs: number;
     env?: Record<string, string>;
+    sudo?: boolean;
   }) {
     // Per-command deadline. The sandbox's own timeout is a backstop for the
     // whole run; this stops one hanging command consuming the entire budget.
@@ -234,6 +235,9 @@ class VercelSandboxHandle implements SandboxHandle {
         // Omitted rather than passed as `{}` when there is nothing to add, so
         // the ordinary validation path is byte-for-byte the call it always was.
         ...(input.env ? { env: input.env } : {}),
+        // Omitted rather than passed as `false`, for the same reason as `env`:
+        // the ordinary validation path stays the call it always was.
+        ...(input.sudo ? { sudo: true } : {}),
         signal: controller.signal,
       });
 

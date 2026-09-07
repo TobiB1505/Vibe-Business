@@ -133,8 +133,8 @@ describe("the build window and the session window are separate", () => {
   it("installs dependencies without running their lifecycle scripts", async () => {
     // The window with the network open is the window a postinstall hook would
     // use — the same rule validation installs under, for the same reason.
-    const install = imageBuildCommands().find((command) => command.command === "npm");
-    expect(install?.args).toContain("--ignore-scripts");
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
+    expect(install?.command.args).toContain("--ignore-scripts");
   });
 });
 
@@ -172,11 +172,11 @@ describe("what lands in the image", () => {
 describe("a failed build costs one sandbox and no retry loop", () => {
   /** The fake keys results on the whole rendered command, so build it from the real one. */
   const failingInstall = () => {
-    const install = imageBuildCommands().find((command) => command.command === "npm");
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
     if (!install) throw new Error("the build no longer installs anything");
     return {
       results: {
-        [[install.command, ...install.args].join(" ")]: { exitCode: 1, output: "boom" },
+        [[install.command.command, ...install.command.args].join(" ")]: { exitCode: 1, output: "boom" },
       },
     };
   };
@@ -303,8 +303,8 @@ describe("a build command never runs in a directory that does not exist yet", ()
     // a failure here rather than a 400 from the provider.
     const [first] = imageBuildCommands();
 
-    expect(first.command).toBe("mkdir");
-    expect(first.args).toContain(BROWSER_SANDBOX.root);
+    expect(first.command.command).toBe("mkdir");
+    expect(first.command.args).toContain(BROWSER_SANDBOX.root);
     expect(IMAGE_BUILD_CWD).not.toBe(BROWSER_SANDBOX.root);
   });
 });
