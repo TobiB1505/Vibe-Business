@@ -71,7 +71,7 @@ describe("the three obligations", () => {
      * picture. A component that introduced its own height here would move
      * text a person is reading at the exact moment the picture disappears.
      */
-    expect(SOURCE).toContain('className="absolute inset-0 overflow-hidden bg-app"');
+    expect(SOURCE).toContain("pointer-events-none absolute inset-0 overflow-hidden");
   });
 
   it("animates only properties that composite", () => {
@@ -123,5 +123,72 @@ describe("ambience, not a false state", () => {
     // Everything a founder needs is in the status panel below it. If this
     // were announced, it would be announcing decoration.
     expect(SOURCE).toContain("aria-hidden");
+  });
+});
+
+/*
+ * This shipped with a `useEffect` that had **no dependency array** and set a
+ * fresh object on every observation. `ResizeObserver` fires on `observe`, that
+ * set state, the state re-rendered, the effect ran again because it had no
+ * deps, and it observed again — a render loop React ends by throwing, which
+ * the section's error boundary caught as "this section didn't load".
+ *
+ * A founder watched 42 seconds of live browser where the handoff should have
+ * been, and leaving the tab made it worse, because a visibility change is
+ * another render into the same loop.
+ *
+ * Neither `react-hooks/set-state-in-effect` nor `exhaustive-deps` sees this:
+ * an effect with no array is legal, and the `setState` is inside a callback.
+ * So the assertion is here, against every effect in the file rather than the
+ * one that was wrong.
+ */
+describe("no effect in this file can re-run itself", () => {
+  /** Every `useEffect(...)` call in the file, balanced to its closing paren. */
+  function effectBodies(source: string): string[] {
+    const bodies: string[] = [];
+    for (const match of source.matchAll(/useEffect\(/g)) {
+      let depth = 0;
+      let index = source.indexOf("(", match.index);
+      const start = index;
+      while (index < source.length) {
+        if (source[index] === "(") depth += 1;
+        else if (source[index] === ")") {
+          depth -= 1;
+          if (depth === 0) break;
+        }
+        index += 1;
+      }
+      bodies.push(source.slice(start, index + 1));
+    }
+    return bodies;
+  }
+
+  it("finds the effects at all, so an empty pass cannot look like a green one", () => {
+    expect(effectBodies(SOURCE).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("gives every effect a dependency array", () => {
+    for (const body of effectBodies(SOURCE)) {
+      expect(body.slice(-400), body.slice(-120)).toMatch(/\}\s*,\s*\[/);
+    }
+  });
+
+  it("does not turn an unchanged measurement into a state change", () => {
+    /*
+     * The second half of the fix, and it is needed on its own: a resize
+     * observer on a box whose size is a fraction of a live video frame reports
+     * the same numbers repeatedly, and a fresh object each time is a re-render
+     * each time even with the deps correct.
+     */
+    const measure = SOURCE.slice(SOURCE.indexOf("new ResizeObserver"));
+    expect(measure).toContain("current.w === rect.width && current.h === rect.height");
+  });
+
+  it("has the box mounted before the switch-off needs its size", () => {
+    // It returned `null` during `watching`, so the element the observer needs
+    // did not exist until the collapse had already begun, and the tiles had no
+    // geometry for their first frames.
+    expect(SOURCE).not.toContain('if (stage === "watching") return null;');
+    expect(SOURCE).toContain("pointer-events-none absolute inset-0 overflow-hidden");
   });
 });
