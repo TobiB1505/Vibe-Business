@@ -77,57 +77,27 @@ export const IMAGE_BUILD_CWD = "/";
  * can reach.
  */
 /**
- * Chromium's shared libraries, as Amazon Linux 2023 names them.
+ * Why the system libraries are Playwright's problem and not ours.
  *
- * The fifth failure of the first Deep Scan, and the one that took the longest
- * to reach because everything before it had to work first:
+ * `playwright install chromium` downloads a browser and not the libraries it
+ * links against, so the first attempt died at `libglib-2.0.so.0`. The obvious
+ * fix — install them ourselves — was tried and was wrong twice over.
  *
- * ```
- * /vibe-browser/chromium: error while loading shared libraries:
- *     libglib-2.0.so.0: cannot open shared object file
- * ```
+ * It assumed the distribution. Vercel's *build* image is Amazon Linux 2023,
+ * which is documented and which is a different machine from the sandbox: the
+ * build answered `sudo: dnf: command not found`. And it assumed a package list,
+ * hand-mapped from Playwright's Debian names to their RPM equivalents, which
+ * is a translation nobody can check without running it.
  *
- * `playwright install chromium` downloads a browser. It does not install the
- * system libraries that browser links against, and the sandbox's base image
- * does not carry them. Playwright's own `--with-deps` cannot help here: its
- * `nativeDeps` table covers Debian and Ubuntu only, and a Vercel sandbox is
- * Amazon Linux 2023.
+ * `install-deps` removes both assumptions. Playwright detects the distribution
+ * itself and installs the packages *it* says that distribution needs — the same
+ * table `--with-deps` uses, maintained by the people who build the browser.
+ * Where it cannot, it says so in a sentence the instrument reports.
  *
- * So this is Playwright's own list, translated. Every entry is one package
- * from `nativeDeps["ubuntu26.04-x64"].chromium` in the pinned release, mapped
- * to the RPM that provides the same libraries — not a set assembled from
- * memory of what a headless browser usually wants. `liberation-fonts` is the
- * one addition, from Playwright's `tools` list: without a font, a login page
- * renders as boxes and the person cannot sign in.
- *
- * The translation is the part that could still be wrong, and it fails
- * loudly: `chromium --version` is run on any readiness timeout and names the
- * next missing library by itself.
+ * It is the one step that runs as root, because a package manager needs it.
+ * The download stays unprivileged so the browser is owned by the user that
+ * runs it rather than by root.
  */
-const CHROMIUM_SYSTEM_LIBRARIES = [
-  "alsa-lib", // libasound2t64
-  "at-spi2-atk", // libatk-bridge2.0-0t64
-  "atk", // libatk1.0-0t64
-  "at-spi2-core", // libatspi2.0-0t64
-  "cairo", // libcairo2
-  "cups-libs", // libcups2t64
-  "dbus-libs", // libdbus-1-3
-  "libdrm", // libdrm2
-  "mesa-libgbm", // libgbm1
-  "glib2", // libglib2.0-0t64 — the one the loader named first
-  "nspr", // libnspr4
-  "nss", // libnss3
-  "pango", // libpango-1.0-0
-  "libX11", // libx11-6
-  "libxcb", // libxcb1
-  "libXcomposite", // libxcomposite1
-  "libXdamage", // libxdamage1
-  "libXext", // libxext6
-  "libXfixes", // libxfixes3
-  "libxkbcommon", // libxkbcommon0
-  "libXrandr", // libxrandr2
-  "liberation-fonts", // from Playwright's `tools`: no font, no readable page
-] as const;
 
 /**
  * One build step.
@@ -147,7 +117,10 @@ export function imageBuildCommands(): readonly ImageBuildStep[] {
     // repository in this VM to hand root to. Nothing that runs a repository's
     // own commands may do this — `sudo-scope.test.ts` enforces that.
     {
-      command: { command: "dnf", args: ["install", "-y", ...CHROMIUM_SYSTEM_LIBRARIES] },
+      command: {
+        command: "npx",
+        args: ["--yes", `playwright@${BROWSER_PLAYWRIGHT_VERSION}`, "install-deps", "chromium"],
+      },
       sudo: true,
     },
     // The guard's one dependency. `--ignore-scripts` for the same reason
@@ -231,14 +204,29 @@ export const IMAGE_BUILD_HOSTS = [
    */
   "storage.googleapis.com",
   /*
-   * Amazon Linux's package repository, for the shared libraries above.
+   * The distribution's own package repositories, for `install-deps`.
    *
-   * One host, measured rather than assumed: the mirror list at
-   * `cdn.amazonlinux.com/al2023/core/mirrors/latest/x86_64/mirror.list`
-   * answers with URLs on `cdn.amazonlinux.com` itself, so no second name is
-   * reached and no wildcard is needed.
+   * Wider than the rest of this list and deliberately so, because the one
+   * thing the failures have established is that **the sandbox's distribution
+   * is not what the documentation for Vercel's build image says**: that is
+   * Amazon Linux 2023, and the sandbox answered `dnf: command not found`.
+   * Vercel publishes `universal`, `node:24` and `ubuntu` images and does not
+   * say what `universal` is built on.
+   *
+   * So all three families are named rather than one guessed at. Every entry is
+   * a Linux distribution's package archive, reached in a VM that holds no
+   * customer repository, no credential and no source — the same argument the
+   * rest of this window rests on. A name that turns out to be unnecessary
+   * costs nothing; a missing one fails visibly, as `EAI_AGAIN` naming the
+   * host it wanted.
    */
   "cdn.amazonlinux.com",
+  "deb.debian.org",
+  "security.debian.org",
+  "archive.ubuntu.com",
+  "security.ubuntu.com",
+  "ports.ubuntu.com",
+  "*.archive.ubuntu.com",
 ] as const;
 
 /**

@@ -50,45 +50,46 @@ describe("the egress allowlist covers where the browser actually comes from", ()
   });
 });
 
-describe("the browser's system libraries are installed, not assumed", () => {
-  it("installs them as root, because a package manager needs it", () => {
-    const install = imageBuildCommands().find((step) => step.command.command === "dnf");
+describe("the browser's system libraries are Playwright's problem, not ours", () => {
+  /** The step that installs the libraries Chromium links against. */
+  const depsStep = () =>
+    imageBuildCommands().find((step) => step.command.args.includes("install-deps"));
 
-    expect(install, "chromium exits 127 without its shared libraries").toBeDefined();
-    expect(install?.sudo).toBe(true);
+  it("asks Playwright rather than naming packages", () => {
+    // Two assumptions died here: that the sandbox is Amazon Linux (it answered
+    // `dnf: command not found`) and that a hand-mapped package list is
+    // checkable without running it. `install-deps` detects the distribution
+    // and installs what the people who build the browser say it needs.
+    const deps = depsStep();
+
+    expect(deps, "chromium exits 127 without its shared libraries").toBeDefined();
+    expect(deps?.command.command).toBe("npx");
   });
 
-  it("names the library the loader actually asked for", () => {
-    // `libglib-2.0.so.0: cannot open shared object file` — the fifth failure of
-    // the first real Deep Scan, and `glib2` is the package that provides it.
-    const install = imageBuildCommands().find((step) => step.command.command === "dnf");
-
-    expect(install?.command.args).toContain("glib2");
+  it("pins the same release the driver and the browser come from", () => {
+    expect(depsStep()?.command.args).toContain(`playwright@${BROWSER_PLAYWRIGHT_VERSION}`);
   });
 
-  it("carries a font, so a login page is readable rather than boxes", () => {
-    // From Playwright's own `tools` list. A browser with no font renders a
-    // sign-in form nobody can complete, which is a working Deep Scan that
-    // fails for a reason no error would explain.
-    const install = imageBuildCommands().find((step) => step.command.command === "dnf");
-
-    expect(install?.command.args).toContain("liberation-fonts");
-  });
-
-  it("can reach the repository those packages come from", () => {
-    // Measured: the AL2023 mirror list answers with URLs on this same host, so
-    // one name is the whole requirement and no wildcard is needed.
-    expect(IMAGE_BUILD_HOSTS).toContain("cdn.amazonlinux.com");
+  it("runs as root, because a package manager needs it", () => {
+    expect(depsStep()?.sudo).toBe(true);
   });
 
   it("asks for root in exactly one step", () => {
-    // The npm install and the browser download must not run as root: `dnf` is
-    // the only command here that needs it, and `sudo-scope.test.ts` is why the
-    // option exists at all.
+    // The npm install and the browser download stay unprivileged, so the
+    // browser is owned by the user that runs it rather than by root.
     const elevated = imageBuildCommands().filter((step) => step.sudo);
 
     expect(elevated).toHaveLength(1);
-    expect(elevated[0]?.command.command).toBe("dnf");
+    expect(elevated[0]?.command.args).toContain("install-deps");
+  });
+
+  it("can reach a package archive whichever distribution this turns out to be", () => {
+    // Vercel documents its *build* image as Amazon Linux and publishes
+    // `universal`, `node:24` and `ubuntu` sandbox images without saying what
+    // `universal` is. All three families are named rather than one guessed at.
+    for (const host of ["cdn.amazonlinux.com", "deb.debian.org", "archive.ubuntu.com"]) {
+      expect(IMAGE_BUILD_HOSTS).toContain(host);
+    }
   });
 });
 
