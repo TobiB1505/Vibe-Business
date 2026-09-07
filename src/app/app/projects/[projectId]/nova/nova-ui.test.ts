@@ -320,6 +320,21 @@ describe("Nova Home", () => {
      * it live for free. Rendering `AgentWorking` straight into the thread would
      * draw the server render's list, hold it still, and pulse at it.
      */
+    /*
+     * The stage history is this tab's observation, never a read. `stage` is a
+     * column the executor overwrites, so a surface that claimed to replay the
+     * sequence would be inventing one — which is the whole argument the
+     * dissolving lines rest on.
+     */
+    it("shows only the stages it watched happen", () => {
+      const live = component("nova-agent-live.tsx");
+      expect(live).toContain("<NovaDissolving");
+      expect(live).toContain("initialStage");
+      /* Newest first, appended only on a change: a poll answering the same
+         stage repeatedly must not stack copies of one line. */
+      expect(live).toMatch(/seen\[0\] === result\.activity\.stage/);
+    });
+
     it("does not mount the agent's record without a reading behind it", () => {
       const home = component("nova-home.tsx");
       expect(home).not.toContain("<AgentWorking");

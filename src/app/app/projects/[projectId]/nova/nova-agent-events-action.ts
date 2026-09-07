@@ -7,6 +7,7 @@ import { listExecutionEvents } from "@/modules/coding-agent/observability/store"
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { getOperationRun } from "@/modules/operations/store";
 import { isTerminal } from "@/modules/operations/schema";
+import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 
 /**
  * The agent's own record, for the block in Nova's thread.
@@ -45,6 +46,18 @@ import { isTerminal } from "@/modules/operations/schema";
 export type NovaAgentEvents = {
   events: StoredExecutionEvent[];
   /**
+   * What the run says it is doing, in the executor's own words.
+   *
+   * `OPERATION_STAGE_LABELS[stage]`, from the operation row this already had
+   * to read — so it costs nothing, and it is the *only* place a caller can get
+   * it: `stage` is a column that is overwritten, and nothing writes down the
+   * values it held before. A watcher that wants the sequence has to have been
+   * watching, which is what `NovaDissolving` is honest about.
+   *
+   * Never a model's account of its own work (rule 43).
+   */
+  stage: string;
+  /**
    * Whether the run has stopped writing.
    *
    * From the operation the block is already watching, so it costs nothing
@@ -73,8 +86,10 @@ export async function getNovaAgentEventsAction(
    * the harness has not started. The block draws its own empty state and the
    * timer keeps asking.
    */
+  const stage = OPERATION_STAGE_LABELS[operation.stage];
+
   if (!run || run.userId !== session.userId) {
-    return { ok: true, activity: { events: [], done: isTerminal(operation.status) } };
+    return { ok: true, activity: { events: [], stage, done: isTerminal(operation.status) } };
   }
 
   const events = await listExecutionEvents(supabase, {
@@ -83,5 +98,5 @@ export async function getNovaAgentEventsAction(
     after: after > 0 ? after : undefined,
   });
 
-  return { ok: true, activity: { events, done: isTerminal(operation.status) } };
+  return { ok: true, activity: { events, stage, done: isTerminal(operation.status) } };
 }

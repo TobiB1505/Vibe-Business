@@ -496,6 +496,10 @@ function runningBlockFor(
             projectId={context.projectId}
             operationId={working.operationId}
             initialEvents={data.agentEvents}
+            /* The one stage the server can honestly supply. `novaWorkingEntry`
+               already resolved it through `OPERATION_STAGE_LABELS`, which is
+               the same table the poll reads. */
+            initialStage={working.stageLabel}
             /*
              * The operations view's own answer, never a guess from the status
              * string. It is already false for a stalled run — a run presumed
