@@ -6,6 +6,7 @@ What each directory holds, and which question it answers.
 |---|---|
 | [decisions/](decisions/README.md) | **Why the architecture is the way it is.** One ADR per decision, numbered and immutable. The source of truth for any decision it records; [ARCHITECTURE.md](../ARCHITECTURE.md) indexes them but never replaces them. |
 | [sprints/](sprints/README.md) | **What was built, and what it cost.** One record per sprint, written after the work, including what the sprint failed to prove. Never edited to match the present. |
+| [V1.md](V1.md) | **What "finished" means, and what is deliberately not it.** A short, closed list: the things that are not true yet about *a stranger can sign up, pay, and get value without the founder standing next to them*. Everything else in the ROADMAP is named as after-V1. **Draft** — not binding on a session until the founder has struck and added. |
 | [ROADMAP.md](ROADMAP.md) | **What is known to be missing.** Gaps that cite evidence, in the order they are worth closing. Not a plan and not a promise. |
 | [business/](business/README.md) | **What the product costs to run and what it might be worth.** Measured unit economics, credit economics, pricing analysis. |
 | [audits/](audits/) | **Dated reviews of the product as it existed on one commit.** UX, intelligence architecture, economics architecture. |

@@ -120,15 +120,10 @@ describe.skipIf(!configured)("Defect B — a failed start releases its hold", ()
 
     scaffolding.current = await createAgentScaffolding(supabase, user.userId, "start-failure");
 
-    // `resolveAgentEconomics` reads this allowlist from `process.env` directly
-    // (by design — an operator decision, never database state a customer path
-    // could reach), so the fixture project has to be named here for
-    // `startAgentExecution` to get past "agentic_execution_not_authorized" and
-    // reach the branch this file exists to prove.
-    const existing = process.env.VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS;
-    process.env.VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS = existing
-      ? `${existing},${scaffolding.current.projectId}`
-      : scaffolding.current.projectId;
+    // Nothing to authorize the fixture project with any more: `launch-v1-budget`
+    // resolves for every project (ADR 0092), so `startAgentExecution` reaches
+    // the branch this file exists to prove without an environment variable
+    // naming it.
   });
 
   it(`releases the hold every time the executor refuses to start, ${ITERATIONS} times`, async () => {

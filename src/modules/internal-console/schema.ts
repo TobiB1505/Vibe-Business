@@ -1,3 +1,5 @@
+import type { ConsistencyReport } from "./checks/schema";
+
 /**
  * What the operator console shows, as a closed vocabulary.
  *
@@ -129,6 +131,15 @@ export type ConsoleSnapshot = {
   spend: readonly SpendRow[];
   funnel: readonly FunnelRow[];
   agents: AgentSummary;
+  /**
+   * Contradictions in the live data, kept apart from every measurement above.
+   *
+   * Everything else in this snapshot is a count of something that happened. A
+   * count is never wrong, only uninteresting. These are places where two parts
+   * of the system disagree and one of them has to be false — see
+   * `checks/schema.ts` for why that needed its own vocabulary.
+   */
+  consistency: ConsistencyReport;
   /** True when a query hit its bound, so a total is a floor rather than a total. */
   truncated: boolean;
 };

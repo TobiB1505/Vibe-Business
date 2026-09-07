@@ -150,6 +150,33 @@ export const E2E_INTERNAL_CONSOLE_SCENARIOS = {
         { failureCode: "agent_produced_no_change", count: 1 },
       ],
     },
+    /*
+     * One unexplained contradiction and one that is understood, because the
+     * panel's whole design is the difference between them: a screen that showed
+     * sixteen historical rows beside one piece of news would be red every day,
+     * and a panel that is red every day is a panel nobody reads.
+     */
+    consistency: {
+      findings: [
+        {
+          check: "queued_too_long",
+          subject: "account_erasure",
+          count: 1,
+          detail: "queued and never started",
+          acknowledged: false,
+        },
+      ],
+      acknowledged: [
+        {
+          check: "unknown_rate_card",
+          subject: "core4-dogfood-budget-v1",
+          count: 13,
+          detail: "not in any price policy",
+          acknowledged: true,
+        },
+      ],
+      truncated: false,
+    },
     truncated: false,
   },
 } as const satisfies Record<string, ConsoleSnapshot>;

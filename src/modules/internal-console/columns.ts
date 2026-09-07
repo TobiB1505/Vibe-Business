@@ -128,6 +128,15 @@ export const AGENT_RUN_COLUMNS = [
 /** `project_onboarding` — where projects stop, as states rather than names. */
 export const ONBOARDING_COLUMNS = ["project_id", "state", "created_at", "completed_at"] as const;
 
+/**
+ * `billing_credit_ledger` — the stamp a charge carries, and nothing else.
+ *
+ * Not the amount, not the account, not the reservation. The consistency check
+ * asks one question — does this charge name a rate card that exists? — and a
+ * column that does not help answer it is a column this surface should not have.
+ */
+export const LEDGER_STAMP_COLUMNS = ["kind", "rate_card_version", "created_at"] as const;
+
 /** Every column this module may name, for the test that enforces the list. */
 export const ALL_CONSOLE_COLUMNS: readonly string[] = [
   ...OPERATION_RUN_COLUMNS,
@@ -136,6 +145,7 @@ export const ALL_CONSOLE_COLUMNS: readonly string[] = [
   ...DEEP_SCAN_USAGE_COLUMNS,
   ...AGENT_RUN_COLUMNS,
   ...ONBOARDING_COLUMNS,
+  ...LEDGER_STAMP_COLUMNS,
 ];
 
 /**

@@ -232,7 +232,17 @@ export async function quoteAgentExecutionCredits(params: {
   credits: CreditUnits;
   pricingClass: ExecutionPricingClass;
   pricingClassReason: ExecutionPricingClassReason;
-  policyVersion: string;
+  /**
+   * The rate card in force at the instant the caller resolved it, or null.
+   *
+   * Nullable because "no policy is in force" is a real answer and the column
+   * takes it. It used to be a required `string` and the one caller passed the
+   * literal `"launch-v1"`, which was true when written and would have outlived
+   * the policy it named — the same shape as the `?? "retail-v1"` fallback that
+   * mis-stamped eleven charges. A missing card is now recorded as missing
+   * rather than as a card that happened to be current once.
+   */
+  policyVersion: string | null;
   budgetPolicyVersion: string;
 }): Promise<string | null> {
   const supabase = createServiceClient();
