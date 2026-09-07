@@ -50,6 +50,12 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## Finished is not the same as unlimited
+
+`completeness: "partial"` rendered as **"Only partly"**, in amber, over a scan that had done everything it was ever going to do. The single reason was `mutation_blocked` — Vibe refuses every non-GET request because the session is the founder's own, and it always will. A permanent, deliberate safety property presented as a shortfall teaches a founder that Vibe half-works.
+
+`describeCompletion` reads the reasons instead of collapsing them. Three answers, because there are three situations: nothing limited it; only Vibe's own policy or budgets did; or something went wrong. Policy and budget stay separate — "Vibe will never do this" and "Vibe stopped after 25 pages" are both deliberate, and only one is an argument about safety. Anything that is neither is treated as a failure, written as the remainder so a reason added later is a failure until someone decides otherwise.
+
 ## What a scan says about itself
 
 A finished scan produced six notes and the panel headed all six with *"6 things Vibe could not check"*. **One** was a failure. Two were facts Vibe had established by looking, one was the page budget working exactly as designed, and two were safety refusals. A founder reading that heading learns Vibe failed six times.

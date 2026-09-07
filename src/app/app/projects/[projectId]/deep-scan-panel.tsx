@@ -9,6 +9,7 @@ import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { ProgressSteps } from "@/components/system/operation-progress";
 import type { OperationProgressStep } from "@/modules/operations/view";
 import type {
+  DeepScanCompletion,
   DeepScanNextScan,
   DeepScanNote,
   DeepScanNoteKind,
@@ -309,7 +310,16 @@ function LiveViewDialog({
         */}
         <div
           style={{ aspectRatio: frame ? `${frame.w} / ${frame.h}` : "16 / 10" }}
-          className="relative w-full overflow-hidden rounded-md border border-line-2 bg-surface-2"
+          /*
+           * `rounded-card`, the largest radius the design system defines, and
+           * the one the surfaces this frame sits between already use. At
+           * `rounded-md` the picture read as a raw embed dropped into the
+           * dialog rather than as part of it.
+           *
+           * `overflow-hidden` is what makes the radius real: the canvas is a
+           * replaced element and would paint square corners straight over it.
+           */
+          className="relative w-full overflow-hidden rounded-card border border-line-2 bg-surface-2"
         >
           {liveViewUrl && !error && (
             // Pixels, not a document. What used to sit here was an iframe
@@ -460,6 +470,20 @@ function LiveViewDialog({
     </div>
   );
 }
+
+/**
+ * What "finished" says, and why there are three answers rather than two.
+ *
+ * `Fully` and `Only partly` were the two, and a scan that had done everything
+ * it was ever going to do got the amber one. The middle answer is the true one
+ * for a read-only analysis: it ran to the end, within limits Vibe holds on
+ * purpose.
+ */
+const COMPLETION_LABELS: Record<DeepScanCompletion["kind"], string> = {
+  complete: "Fully",
+  within_limits: "Yes, within Vibe's limits",
+  incomplete: "Only partly",
+};
 
 /** The heading each group of notes appears under, in the founder's terms. */
 const NOTE_GROUPS: { kind: DeepScanNoteKind; heading: string }[] = [
@@ -798,11 +822,39 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
         </div>
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-fg-muted">Check finished</dt>
-          <dd className={result.completeness === "complete" ? "text-mint" : "text-amber"}>
-            {result.completeness === "complete" ? "Fully" : "Only partly"}
+          <dd className={result.completion.kind === "incomplete" ? "text-amber" : "text-mint"}>
+            {COMPLETION_LABELS[result.completion.kind]}
           </dd>
         </div>
       </dl>
+
+      {/*
+        The sentence that used to be missing entirely.
+
+        "Only partly", in amber, was the whole account of a scan whose single
+        limit was that Vibe refuses every non-GET request — which it does
+        because the session is the founder's own, and which it always will.
+        A permanent, deliberate safety property presented as a shortfall
+        teaches a person that Vibe half-works.
+
+        So the limits say what they are, and say plainly that the refusal is
+        not a setting anyone is going to change.
+      */}
+      {(result.completion.policyLimited || result.completion.budgetLimited) && (
+        <p className="max-w-[62ch] text-xs text-fg-muted leading-relaxed">
+          {result.completion.policyLimited && (
+            <>
+              Vibe only ever reads. It refuses anything that could change your data, and
+              anything that leaves your product — so a few requests are always turned down,
+              by design and not by configuration.
+            </>
+          )}
+          {result.completion.policyLimited && result.completion.budgetLimited && " "}
+          {result.completion.budgetLimited && (
+            <>It also stops at a set number of pages, so one scan stays quick and cheap.</>
+          )}
+        </p>
+      )}
 
       {result.surfaces.length > 0 && (
         <div className="space-y-1">
