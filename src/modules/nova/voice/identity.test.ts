@@ -136,7 +136,7 @@ describe("every output-relevant input moves the identity", () => {
     const current = identity({
       payload: {
         ...PAYLOAD,
-        situation: { lines: ["Everything Vibe reads from is current."], remedy: null },
+        situation: { lines: ["Everything Vibe reads from is current."], remedy: null, subject: null },
       },
     });
     const stale = identity({
@@ -145,6 +145,7 @@ describe("every output-relevant input moves the identity", () => {
         situation: {
           lines: ["Your website is the thing to repair first."],
           remedy: "Run a fresh Product Scan",
+          subject: "live_scan",
         },
       },
     });

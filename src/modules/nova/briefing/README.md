@@ -41,5 +41,16 @@ Composed by `novaSituationFrom` — one function, used by every caller, because 
 | `operations/nova-situation.ts` | The durable steps that generate — the audit's tail and the Move set's |
 | `health/content.tsx` | Recomputes the identity to read the audit's stored sentence back |
 | `plan/page.tsx` | The same, for the Move's |
+| `nova/nova-home-data.ts` | Home reads whichever of the two the moment is about, and composes the aside |
 
 `briefing.ts` itself — the founder's name, the ranking, the top Move, the whole chain with its ages — is still assembled by `read.ts` and still tested. It is the object the block is cut from, and the place anything richer would be built from.
+
+## How it reaches the thread
+
+Nova Home is where Nova speaks, and it was the one surface with none of her writing on it — her sentence there is a lookup from the feed's 21-entry table. It now reads what she already wrote, and adds Vibe's own line where she wrote nothing.
+
+**`momentVoice`** — `BLOCK_FOR_MOMENT` already says which document a moment is about, so it is asked again for the sentence. A moment about the audit resolves `audit_result`; one about a Move resolves `move_recommendation`. It is a **read** — one row by identity, no provider, no new spend, and the sentence was paid for at the operation tail that produced the document. It becomes a second bubble in the same run, never a replacement: `entry.message` says what is open *now*, hers says what she found when she made the thing.
+
+**`situationAside`** — the same facts in Vibe's own words, when Nova wrote nothing. Two rules, in `aside.ts`: it yields to a moment that already claims the same thing about the same link (`audit_outdated`, `repository_read_outdated`), and it never appears beside her own sentence, because she was given the same background and decided for herself whether to use it.
+
+Only her own words are shown. A slot's template belongs to the surface that owns the document; on Home it would be a second sentence saying what the moment already said.

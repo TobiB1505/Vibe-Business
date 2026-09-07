@@ -16,7 +16,16 @@ import {
   type PreparedChangeWorkspaceItem,
 } from "@/modules/execution/workspace";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
+import type { PrimaryGoal } from "@/modules/projects/founder-intent";
+import { situationAside } from "@/modules/nova/briefing/aside";
 import { readBriefing } from "@/modules/nova/briefing/read";
+import type { NovaSituation } from "@/modules/nova/briefing/situation";
+import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
+import type { FocusCandidateKind } from "@/modules/nova/focus";
+import { buildNovaAuditEntry } from "@/modules/nova/feed";
+import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
+import { readNovaMoveVoice } from "@/modules/nova/voice/move-slot";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import {
   buildBusinessBrainView,
@@ -113,6 +122,23 @@ export type NovaHomeData = {
   health: NovaHealth | null;
   /** Null when the account has no Credit account yet. */
   balance: CostBalance | null;
+  /**
+   * What Nova wrote about the document this moment is about, when she has.
+   *
+   * A **read**, never a generation: the sentence was written at the tail of the
+   * operation that produced the document, and this resolves it by identity
+   * (ADR 0086, condition 5 — a render cannot reach a provider). Null is the
+   * ordinary state, and the thread then says exactly what it said before.
+   */
+  momentVoice: string | null;
+  /**
+   * Vibe's own line about the evidence under this moment, when it says
+   * something the moment does not — and only when Nova wrote nothing.
+   *
+   * Deterministic, free, and current on every draw. `briefing/aside.ts` has
+   * the two rules and why it yields rather than repeat.
+   */
+  situationAside: string | null;
   /**
    * The question to answer here, when the ranking put one first.
    *
@@ -304,6 +330,85 @@ function buildHealth(latestAudit: AuditEvidence["latestAudit"]): NovaHealth | nu
   };
 }
 
+/**
+ * The sentence Nova already wrote about the document this moment is about.
+ *
+ * ## Why this is a lookup and not a call
+ *
+ * Nova has been writing about two documents since the voice tier was wired —
+ * the audit, at the tail of the audit that produced it, and the top Move, at
+ * the tail of the Move generation. Those sentences are in `nova_voice_messages`
+ * and Business Health and the Plan read them back. Home never did, which meant
+ * the one surface where Nova is *speaking* was the one surface with none of her
+ * writing on it.
+ *
+ * So this reads what is there. It cannot generate: neither slot reader takes a
+ * provider, and a render that wanted one would have to be rewritten rather than
+ * edited (ADR 0086, condition 5).
+ *
+ * ## Why the moment decides which sentence
+ *
+ * `BLOCK_FOR_MOMENT` already says which document a moment is about — it is what
+ * chooses the block below the sentence — so asking it again for the sentence is
+ * the same question answered from the same table. A moment about a question or
+ * a change gets nothing: a question is not Nova's to rephrase, and the change
+ * slot is not generated yet.
+ *
+ * ## Why the situation has to be passed in
+ *
+ * It is part of the identity the durable step wrote under, composed by
+ * `readBriefing` from the same chain. Recomputing it differently here would
+ * resolve to nothing at all, permanently, and look exactly like Nova never
+ * having spoken.
+ */
+async function readMomentVoice(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    moment: FocusCandidateKind;
+    latestAudit: AuditEvidence["latestAudit"];
+    health: NovaHealth | null;
+    topMove: BusinessOpportunity | null;
+    primaryGoal: PrimaryGoal | null;
+    situation: NovaSituation;
+  },
+): Promise<string | null> {
+  const block = BLOCK_FOR_MOMENT[params.moment];
+
+  if (block === "audit") {
+    const synthesis = params.latestAudit?.result?.synthesis ?? null;
+    if (!params.health || synthesis === null) return null;
+
+    const read = await readNovaAuditVoice(supabase, {
+      projectId: params.projectId,
+      /* The same entry Business Health builds, from the same view — which is
+         what makes the two surfaces resolve one message rather than two. */
+      entry: buildNovaAuditEntry(params.health.view, synthesis),
+      situation: params.situation,
+    });
+
+    /* Only her own words. The template belongs to the surface that owns the
+       document; here it would be a second sentence saying what the moment
+       already said. */
+    return read.source === "voice" ? read.message : null;
+  }
+
+  if (block === "move") {
+    if (!params.topMove) return null;
+
+    const read = await readNovaMoveVoice(supabase, {
+      projectId: params.projectId,
+      move: params.topMove,
+      primaryGoal: params.primaryGoal,
+      situation: params.situation,
+    });
+
+    return read.source === "voice" ? read.message : null;
+  }
+
+  return null;
+}
+
 export async function readNovaHomeData(
   supabase: SupabaseClient,
   params: {
@@ -322,7 +427,7 @@ export async function readNovaHomeData(
    * the same reason. It hands back the evidence and the focus it assembled, so
    * the score and the ranking cost nothing more (VB-022).
    */
-  const { evidence, focus } = await readBriefing(supabase, params);
+  const { evidence, focus, situation, topMove } = await readBriefing(supabase, params);
 
   const [identity, balance] = await Promise.all([
     readIdentity(supabase, params.projectId, params.projectName),
@@ -338,7 +443,9 @@ export async function readNovaHomeData(
    * documented read count honest rather than quietly one more.
    */
   const control = view.primary.control;
-  const [question, change, workspaceCandidates] = await Promise.all([
+  const health = buildHealth(evidence.latestAudit);
+
+  const [question, change, workspaceCandidates, momentVoice] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -353,6 +460,20 @@ export async function readNovaHomeData(
     control.kind === "choose"
       ? readWorkspaceCandidates(supabase, params.projectId)
       : Promise.resolve([]),
+    /*
+     * The sentence Nova already wrote about whatever this moment is about, if
+     * she wrote one. One row by identity, and only for the two moments that
+     * have a document behind them — see `readMomentVoice`.
+     */
+    readMomentVoice(supabase, {
+      projectId: params.projectId,
+      moment: view.primary.kind,
+      latestAudit: evidence.latestAudit,
+      health,
+      topMove,
+      primaryGoal: evidence.founderIntent.intent.primaryGoal,
+      situation,
+    }),
   ]);
 
   return {
@@ -361,10 +482,16 @@ export async function readNovaHomeData(
     /* From the evidence already read, not from a stamp-then-document pair of
        its own — which is two reads fewer and makes the score and the briefing
        the same audit by construction. */
-    health: buildHealth(evidence.latestAudit),
+    health,
     balance,
     question,
     change,
     workspaceCandidates,
+    momentVoice,
+    situationAside: situationAside({
+      situation,
+      moment: view.primary.kind,
+      spoken: momentVoice !== null,
+    }),
   };
 }

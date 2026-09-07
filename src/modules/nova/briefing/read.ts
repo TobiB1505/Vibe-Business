@@ -15,7 +15,10 @@ import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 
 import { readNovaFocus } from "../read";
 import type { NovaFocus } from "../focus";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
+
 import { buildNovaBriefing, type NovaBriefing } from "./briefing";
+import { buildNovaSituation, type NovaSituation } from "./situation";
 
 /**
  * The briefing, read from the database — once, by everything that needs it.
@@ -42,6 +45,20 @@ import { buildNovaBriefing, type NovaBriefing } from "./briefing";
  */
 export type BriefingRead = {
   briefing: NovaBriefing;
+  /**
+   * The block that travels with a voice payload, composed here so that a
+   * surface reading a stored message back computes the same identity the
+   * durable step wrote it under.
+   */
+  situation: NovaSituation;
+  /**
+   * The engine's rank-1 Move, whole.
+   *
+   * The briefing reduces it to a title and a reason; a surface that wants to
+   * *draw* it — or to look up what Nova said about it — needs the object, and
+   * it was read a line above either way.
+   */
+  topMove: BusinessOpportunity | null;
   /** Handed back so a caller that also needs the audit does not re-read it. */
   evidence: AuditEvidence;
   /** Handed back for the same reason: the ranking is decided once. */
@@ -85,17 +102,28 @@ export async function readBriefing(
   const topMove =
     opportunities?.set.opportunities.find((opportunity) => opportunity.rank === 1) ?? null;
 
+  /* One chain and one clock, so the briefing and the situation cannot come to
+     describe different moments of the same project. */
+  const chain = buildProvenanceChain(
+    provenanceInputsFrom({ evidence, readiness, currency, opportunities }),
+  );
+  const now = params.now ?? new Date();
+
   const briefing = buildNovaBriefing({
     founderName,
     projectName: params.projectName ?? "",
     primaryGoal: evidence.founderIntent.intent.primaryGoal,
-    chain: buildProvenanceChain(
-      provenanceInputsFrom({ evidence, readiness, currency, opportunities }),
-    ),
+    chain,
     focus,
     topMove: topMove ? { title: topMove.title, whyNow: topMove.whyNow } : null,
-    now: params.now ?? new Date(),
+    now,
   });
 
-  return { briefing, evidence, focus };
+  return {
+    briefing,
+    situation: buildNovaSituation(chain, now),
+    topMove,
+    evidence,
+    focus,
+  };
 }

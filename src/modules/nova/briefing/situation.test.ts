@@ -48,6 +48,7 @@ describe("what Nova is told about the evidence", () => {
         "Vibe has corrected how it reads this since the last run.",
       ],
       remedy: "Run a fresh Product Scan",
+      subject: "live_scan",
     });
   });
 
@@ -74,6 +75,7 @@ describe("what Nova is told about the evidence", () => {
     expect(buildNovaSituation(chain(), NOW)).toEqual({
       lines: ["Everything Vibe reads from is current."],
       remedy: null,
+      subject: null,
     });
   });
 
@@ -156,5 +158,34 @@ describe("what the block may never contain", () => {
 
   it("is never empty", () => {
     for (const situation of every) expect(situation.lines.length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * The claim that lets `subject` stay out of the reuse identity.
+ *
+ * It is excluded because it changes nothing a model sees or says, and hashing
+ * it would invalidate every stored message for a field no model reads. That is
+ * only safe while it is *derivable* from what is hashed — the lines, which
+ * name the link. So: no two subjects ever share a line set.
+ */
+describe("the subject is derivable from the lines", () => {
+  it("gives every link its own wording", () => {
+    const byLines = new Map<string, string | null>();
+
+    for (const [name, spoiled] of [
+      ["repository_scan", { repositoryScan: null }],
+      ["live_scan", { liveScan: null }],
+      ["product_profile", { productProfile: null }],
+      ["business_audit", { businessAudit: null }],
+      ["opportunity_set", { opportunitySet: null }],
+      ["none", {}],
+    ] as const) {
+      const situation = buildNovaSituation(chain(spoiled), NOW);
+      const key = situation.lines.join(" ");
+
+      expect(byLines.has(key), `${name} shares wording with ${byLines.get(key)}`).toBe(false);
+      byLines.set(key, name);
+    }
   });
 });

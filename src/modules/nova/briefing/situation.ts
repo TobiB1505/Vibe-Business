@@ -5,7 +5,11 @@ import {
 } from "@/modules/provenance/view";
 import { LINK_REMEDY } from "@/modules/provenance/chain";
 
-import { buildProvenanceChain, type ProvenanceChain } from "@/modules/provenance/chain";
+import {
+  buildProvenanceChain,
+  type ProvenanceChain,
+  type ProvenanceLinkKind,
+} from "@/modules/provenance/chain";
 import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 
 import { freshnessOf, worthMentioning, FRESHNESS_LABELS } from "./freshness";
@@ -60,6 +64,17 @@ export type NovaSituation = {
    * is rendered from state beside the prose and never passes through the model.
    */
   remedy: string | null;
+  /**
+   * Which link the lines are about, for a caller deciding whether to *show*
+   * them. Null when nothing is due.
+   *
+   * Deliberately **not** in `canonicalPayload`. It changes nothing a model
+   * sees or says, so hashing it would invalidate every stored message for a
+   * field the model never reads — and it is derivable from the lines anyway,
+   * which name the link and are hashed. `situation.test.ts` pins that: two
+   * situations with different subjects never have the same lines.
+   */
+  subject: ProvenanceLinkKind | null;
 };
 
 /**
@@ -89,6 +104,7 @@ export function buildNovaSituation(chain: ProvenanceChain, now: Date): NovaSitua
         ...(gap.reason === null ? [] : [PROVENANCE_REASONS[gap.reason]]),
       ],
       remedy: gap.remedy === null ? null : PROVENANCE_REMEDY_LABELS[gap.remedy],
+      subject: gap.kind,
     };
   }
 
@@ -111,6 +127,7 @@ export function buildNovaSituation(chain: ProvenanceChain, now: Date): NovaSitua
         "Nothing about it is wrong; it has just been sitting a while.",
       ],
       remedy: PROVENANCE_REMEDY_LABELS[LINK_REMEDY[old.kind]],
+      subject: old.kind,
     };
   }
 
@@ -119,7 +136,7 @@ export function buildNovaSituation(chain: ProvenanceChain, now: Date): NovaSitua
    * need to hedge — and because a message written while the evidence was sound
    * and one written while it was not must not be the same stored message.
    */
-  return { lines: ["Everything Vibe reads from is current."], remedy: null };
+  return { lines: ["Everything Vibe reads from is current."], remedy: null, subject: null };
 }
 
 /**

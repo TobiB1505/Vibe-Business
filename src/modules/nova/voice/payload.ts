@@ -214,6 +214,12 @@ export function canonicalPayload(payload: NovaVoicePayload): string {
      * are in different situations and must not share a sentence, and a message
      * written while a scan was stale must not survive the re-scan that fixed it.
      */
+    /*
+     * `subject` is left out on purpose. It decides whether a *surface* shows
+     * the block, not what the model is told or says, so hashing it would
+     * invalidate every stored message for a field no model ever reads — and it
+     * is derivable from the lines, which name the link and are hashed here.
+     */
     payload.situation == null
       ? null
       : [[...payload.situation.lines], payload.situation.remedy],

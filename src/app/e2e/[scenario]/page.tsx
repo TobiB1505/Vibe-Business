@@ -106,6 +106,12 @@ import { AppErrorPreview } from "../app-error-preview";
 import BillingLoading from "@/app/app/(account)/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
 import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
+import {
+  E2E_NOVA_VOICE_SCENARIOS,
+  isE2eNovaVoiceScenario,
+  novaVoiceEntry,
+} from "../nova-voice-scenarios";
+import { NovaFocusThread } from "@/app/app/projects/[projectId]/nova/nova-focus-thread";
 import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
@@ -1356,6 +1362,16 @@ export default async function E2eScenarioPage({
       <main className="mx-auto max-w-3xl p-8">
         {label}
         <ProvenancePanel provenance={e2eProvenance(scenario)} projectId="project_e2e" />
+      </main>
+    );
+  }
+
+  if (isE2eNovaVoiceScenario(scenario)) {
+    const { voice, aside } = E2E_NOVA_VOICE_SCENARIOS[scenario];
+    return (
+      <main className="mx-auto max-w-2xl p-8">
+        {label}
+        <NovaFocusThread entry={novaVoiceEntry()} voice={voice} aside={aside} />
       </main>
     );
   }

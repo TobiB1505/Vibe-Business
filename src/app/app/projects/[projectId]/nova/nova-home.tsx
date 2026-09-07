@@ -251,7 +251,14 @@ function FocusSection({
   const control = entry.control;
 
   if (control.kind === "none") {
-    return <NovaFocusThread entry={entry} block={auditBlock(data, entry)} />;
+    return (
+      <NovaFocusThread
+        entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
+        block={auditBlock(data, entry)}
+      />
+    );
   }
 
   if (control.kind === "answer") {
@@ -262,12 +269,14 @@ function FocusSection({
      * worse than a card with none. The sentence above it still stands.
      */
     if (!data.question) {
-      return <NovaFocusThread entry={entry} />;
+      return <NovaFocusThread entry={entry} voice={data.momentVoice} aside={data.situationAside} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
         block={
           <FounderInputCard
             projectId={projectId}
@@ -296,12 +305,14 @@ function FocusSection({
      * change that is not there would be worse than none.
      */
     if (!data.change) {
-      return <NovaFocusThread entry={entry} />;
+      return <NovaFocusThread entry={entry} voice={data.momentVoice} aside={data.situationAside} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
         block={
           <ChangeGates
             projectId={projectId}
@@ -328,12 +339,14 @@ function FocusSection({
      * choice with nothing to choose from would be worse than none.
      */
     if (data.workspaceCandidates.length === 0) {
-      return <NovaFocusThread entry={entry} />;
+      return <NovaFocusThread entry={entry} voice={data.momentVoice} aside={data.situationAside} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
         block={
           <AgentWorkspaceChoice
             candidates={data.workspaceCandidates}
@@ -360,6 +373,8 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
         controlLabel={control.label}
         control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
       />
@@ -388,6 +403,8 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
         block={auditBlock(data, entry)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
@@ -398,7 +415,14 @@ function FocusSection({
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return <NovaFocusThread entry={entry} block={auditBlock(data, entry)} />;
+    return (
+      <NovaFocusThread
+        entry={entry}
+        voice={data.momentVoice}
+        aside={data.situationAside}
+        block={auditBlock(data, entry)}
+      />
+    );
   }
 
   const subject = control.option.subject;
@@ -412,6 +436,8 @@ function FocusSection({
   return (
     <NovaFocusThread
       entry={entry}
+      voice={data.momentVoice}
+      aside={data.situationAside}
       block={auditBlock(data, entry)}
       controlLabel={control.option.label}
       /*
