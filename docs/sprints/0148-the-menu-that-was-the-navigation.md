@@ -21,6 +21,14 @@ That is the assertion worth having, and it is written as a property rather than 
 
 **The palette switch stayed in the rail footer.** It has to be reachable from every screen — that is its whole purpose, since each screen in the redesign has to be checked in both palettes — and the footer is the only chrome both shells share. It is now one fewer click on every one of those checks, because there is nothing to open first.
 
+## And then it inverted
+
+The card kept the menu's bordered panel, which made it the one bordered thing at the foot of a rail of borderless rows — it read as a block of content rather than as the last row of the navigation. So the field arrives on hover instead of sitting there.
+
+That looks like it contradicts `IconButton`, which argues at length that a bare mark with a fill arriving on hover is not a control on a phone: there is no hover there, so the resting state is the only state a finger ever sees. **That argument is about a control whose container is its whole affordance.** An icon alone says nothing about being pressable; an avatar and a name say who they are at rest, and every other row in this rail is exactly this shape. Touch still gets an answer — `active:` is a visible step past hover.
+
+The border is `transparent` rather than absent, so it holds its pixel and nothing on the rail moves when it becomes visible. Measured: resting fill and border both `rgba(…, 0)`, hover `rgba(255 255 255 / 0.035)` and `rgba(255 255 255 / 0.13)`, box height and position identical across the two. Mutation-tested in both the unit guard and the browser one.
+
 ## Two small things measured rather than assumed
 
 The link's accessible name is **"Tobi Founder"**, read from the rendered ARIA tree. The avatar carries `aria-hidden` inside the card: `Avatar`'s own label exists for the places it stands alone, and here it would have announced the same name twice before reaching the word that says where the link goes.

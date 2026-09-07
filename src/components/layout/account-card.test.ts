@@ -45,6 +45,31 @@ describe("the account card", () => {
     expect(card.match(/href=/g) ?? []).toHaveLength(1);
   });
 
+  /**
+   * The field arrives on hover; at rest it is a rail row.
+   *
+   * Every other row in this rail is borderless until you hover it, and a
+   * bordered card at the foot of them read as a panel of content rather than
+   * as the last row of the navigation. The transparent border is what keeps
+   * that honest: it holds the pixel, so nothing shifts when it becomes
+   * visible.
+   */
+  it("has no field at rest and grows one without moving anything", () => {
+    const card = code(CARD);
+    expect(card).toContain("border border-transparent");
+    expect(card).toContain("hover:border-line-2");
+    expect(card).toContain("hover:bg-surface-2");
+    // No resting fill, or the inversion never happened.
+    expect(card).not.toMatch(/"[^"]*\bbg-surface-1\b[^"]*rounded/);
+  });
+
+  it("answers a finger, which never hovers", () => {
+    // `IconButton` makes this argument at length: touch gets rest and pressed
+    // and nothing in between, so a press has to be a visible step past hover
+    // rather than the same fill.
+    expect(code(CARD)).toContain("active:bg-surface-3");
+  });
+
   it("shows the avatar and the name, and nothing else to decide about", () => {
     const card = code(CARD);
     expect(card).toContain("<Avatar");

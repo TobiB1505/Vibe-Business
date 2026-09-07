@@ -71,7 +71,7 @@ test.describe("the project shell owns project context", () => {
     await expect(page.locator("header.sticky")).toHaveCount(0);
   });
 
-  test("switches products and keeps account actions in the footer disclosure", async ({ page }) => {
+  test("switches products, and the identity is a row that becomes a field", async ({ page }) => {
     await forbidExternalCalls(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(READY);
@@ -92,6 +92,34 @@ test.describe("the project shell owns project context", () => {
     const account = page.getByTestId("account-card");
     await expect(account.locator("summary")).toHaveCount(0);
     await expect(account.getByRole("link")).toHaveAttribute("href", "/app/settings/profile");
+
+    /*
+     * And it is a rail row until you point at it.
+     *
+     * Source can say the classes are there; only a browser says the resting
+     * state actually paints nothing and the hover state paints something —
+     * and that the row does not move between the two, which is the reason the
+     * border is transparent rather than absent.
+     */
+    const identity = account.getByRole("link");
+    const paint = () =>
+      identity.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return { fill: style.backgroundColor, edge: style.borderTopColor };
+      });
+    const box = await identity.boundingBox();
+
+    const rest = await paint();
+    expect(rest.fill, "the card has a resting fill").toMatch(/rgba\(.*, 0\)$/);
+    expect(rest.edge, "the card has a resting border").toMatch(/rgba\(.*, 0\)$/);
+
+    await identity.hover();
+    await expect.poll(async () => (await paint()).fill).not.toMatch(/rgba\(.*, 0\)$/);
+    expect((await paint()).edge, "no field arrives on hover").not.toMatch(/rgba\(.*, 0\)$/);
+
+    const hovered = await identity.boundingBox();
+    expect(Math.abs(hovered!.height - box!.height)).toBeLessThan(0.5);
+    expect(Math.abs(hovered!.y - box!.y)).toBeLessThan(0.5);
   });
 });
 

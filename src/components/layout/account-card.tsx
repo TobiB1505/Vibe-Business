@@ -25,6 +25,24 @@ import { activePalette, paletteSwitchable } from "@/app/palette";
  * thing in the menu with no other home, so it got one rather than being
  * dropped with the disclosure that carried it.
  *
+ * ## Why the field arrives on hover instead of sitting there
+ *
+ * This looks like it contradicts `IconButton`, which argues at length that a
+ * bare mark with a fill that arrives on hover is not a control on a phone —
+ * there is no hover there, so the resting state is the only state a finger
+ * ever sees. That argument is about a control whose *container is its whole
+ * affordance*: an icon alone says nothing about being pressable.
+ *
+ * This one is not that. An avatar and a name are self-describing at rest, and
+ * every other row in this rail — Nova, Business Health, Products, Billing — is
+ * exactly this shape: no container until you hover it. A bordered card at the
+ * foot of a rail of borderless rows was the odd one out, and it read as a
+ * panel of content rather than as the last row of the navigation.
+ *
+ * So it inverts, and it inverts *into the rail's own row treatment* rather
+ * than into something new. Touch still gets an answer: `active:` is a step
+ * past hover, which is what a finger sees when hover never happens.
+ *
  * ## Why the palette switch stays here
  *
  * Because it has to be reachable from *every* screen — that is the whole point
@@ -45,8 +63,17 @@ export function AccountCard({
       <Link
         href="/app/settings/profile"
         className={cn(
-          "border-line-1 bg-surface-1 rounded-panel flex items-center gap-3 border px-3 py-3",
-          "transition-interactive hover:border-line-3 hover:bg-surface-2",
+          "rounded-nav flex items-center gap-3 px-3 py-3",
+          /*
+            The container is transparent at rest and arrives on the way in.
+            A border that appears rather than one that widens: `transparent`
+            holds the pixel, so nothing on the rail shifts when it becomes
+            visible.
+          */
+          "border border-transparent",
+          "transition-interactive hover:border-line-2 hover:bg-surface-2",
+          // The step past hover, which is the only feedback a finger gets.
+          "active:bg-surface-3",
           "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
         )}
       >
