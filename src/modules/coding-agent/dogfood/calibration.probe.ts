@@ -29,7 +29,6 @@ import { benchmarkStepKey } from "./fixtures";
  * ```
  * # Before starting run N — writes the frozen prediction to stdout.
  * NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
- * VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS=<uuid> \
  * VIBE_DOGFOOD_PROJECT_ID=<uuid> \
  * VIBE_CALIBRATION_RUN=1 \
  * pnpm agent:calibrate
