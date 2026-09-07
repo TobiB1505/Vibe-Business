@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { novaActionSubjectKind, type DispatchableNovaActionId } from "./nova-dispatch";
 
@@ -33,7 +34,30 @@ import { rerunChangeValidationAction } from "../validate-change-action";
  * against live state — this only supplies arguments and normalises five
  * different result shapes into one the card can render. Removing a check here
  * would remove nothing, because there is none here to remove.
+ *
+ * ## Why it revalidates Home, and why nothing else did
+ *
+ * Everything Home shows is derived: press "Plan this move" and an
+ * `action_planning` row exists, `readNovaFocus` puts it in `working`, and the
+ * card becomes the running one. That is the whole state machine and it needs
+ * no message queue — but it only happens on a *read*.
+ *
+ * Nothing was causing one. The actions underneath revalidate the surface they
+ * belong to — `startPlanAction` revalidates the plan — and Home is not that
+ * surface. `NovaWorkingLive` polls, and polls only while something is already
+ * running, so a click that starts the first operation had nothing watching for
+ * it. From a founder's side the press did nothing: the card said the same
+ * sentence, and the work it started was invisible until the next navigation.
+ *
+ * So the wrapper revalidates the route it belongs to. One line, at the one
+ * place all five dispatched actions pass through.
  */
+
+/** Home's own route. The five actions below revalidate it; each also
+ *  revalidates whichever surface it belongs to, and neither replaces the other. */
+function homePath(projectId: string): string {
+  return `/app/projects/${projectId}`;
+}
 
 export type NovaHomeActionState =
   | { ok: true }
@@ -50,6 +74,25 @@ export async function runNovaHomeAction(
   /** The prepared change or Move the candidate was about. Null for a project. */
   subjectId: string | null,
   _prevState: NovaHomeActionState,
+  formData: FormData,
+): Promise<NovaHomeActionState> {
+  const state = await dispatch(projectId, actionId, subjectId, formData);
+
+  /*
+   * Only on success. A refused start changed nothing, and revalidating would
+   * re-read every row behind Home to draw the same card with an error on it.
+   * A reused result *is* a success — the work exists, and the founder should
+   * see it whether this press or an earlier one started it.
+   */
+  if (state?.ok) revalidatePath(homePath(projectId));
+
+  return state;
+}
+
+async function dispatch(
+  projectId: string,
+  actionId: DispatchableNovaActionId,
+  subjectId: string | null,
   formData: FormData,
 ): Promise<NovaHomeActionState> {
   const needs = novaActionSubjectKind(actionId);

@@ -60,7 +60,17 @@ export type ProductScanExperienceProps = {
   hasProfile?: boolean;
   canStart?: boolean;
   blockedReason?: string | null;
-  variant?: "onboarding" | "workspace";
+  /**
+   * Where this is being rendered.
+   *
+   * `block` is Nova's thread. It draws the same scan from the same data — the
+   * point of the render block is that changing this component changes what the
+   * thread shows, so a compressed *copy* of the scan would defeat the whole
+   * idea — but it drops two things the thread already owns: the panel frame,
+   * which the block supplies, and the controls, which sit beside the block as
+   * every other control in a thread does.
+   */
+  variant?: "onboarding" | "workspace" | "block";
 };
 
 const CONNECTORS: Record<FacetId, string> = {
@@ -1015,8 +1025,10 @@ export function ProductScanExperience({
   );
   const displayFailure = startFailure ? OPERATION_FAILURE_MESSAGES[startFailure] : failure;
 
+  /* `block` collapses when the scan is finished, exactly as `workspace` does:
+     a thread shows the result, and the live view is for while it is live. */
   const detailsExpanded =
-    variant !== "workspace" ||
+    variant === "onboarding" ||
     active ||
     !scanFinished ||
     expandedOperationId === operation?.operationId;
@@ -1027,7 +1039,11 @@ export function ProductScanExperience({
       layout={!reduceMotion}
       transition={{ layout: { duration: 0.42, ease: [0.22, 1, 0.36, 1] } }}
       aria-labelledby="product-scan-title"
-      className="relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
+      className={
+        variant === "block"
+          ? "relative overflow-hidden"
+          : "relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
+      }
     >
       <p className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
@@ -1059,17 +1075,21 @@ export function ProductScanExperience({
                   {savedDiscoveryCount} individual discoveries saved for {productName}.
                 </p>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                aria-expanded="false"
-                aria-controls="product-scan-details"
-                onClick={() => setExpandedOperationId(operation?.operationId ?? null)}
-                className="shrink-0 max-sm:ml-[3.75rem]"
-              >
-                Open scan &amp; rescan
-                <ChevronDownIcon size={15} />
-              </Button>
+              {/* The thread carries its own controls beside the block, so this
+                  one would be a second button for the same act. */}
+              {variant !== "block" && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  aria-expanded="false"
+                  aria-controls="product-scan-details"
+                  onClick={() => setExpandedOperationId(operation?.operationId ?? null)}
+                  className="shrink-0 max-sm:ml-[3.75rem]"
+                >
+                  Open scan &amp; rescan
+                  <ChevronDownIcon size={15} />
+                </Button>
+              )}
             </motion.div>
           ) : (
             <motion.div

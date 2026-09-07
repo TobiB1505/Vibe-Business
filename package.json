@@ -36,7 +36,8 @@
     "format": "prettier --write",
     "format:check": "prettier --check",
     "screenshots:uis1": "node scripts/uis1-screenshots.mjs",
-    "screenshots:uis2": "node scripts/uis2-screenshots.mjs"
+    "screenshots:uis2": "node scripts/uis2-screenshots.mjs",
+    "screenshots:studies": "node scripts/design-study-screenshots.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",

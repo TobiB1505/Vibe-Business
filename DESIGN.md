@@ -43,7 +43,29 @@ Restraint here is a compositional tool, not a ceiling. Ordinary surfaces stay qu
 
 The register is product-first **inside `/app`**: marketing expression does not lead over a founder's own data. Outside it — the landing page above all — the register is marketing's, and that surface is held to a different bar rather than a lower one; see [Signature Surface: the Landing Page](#signature-surface-the-landing-page). The standing prohibitions are against the _generic_, not against ambition, and they are applied as a test rather than as a list of banned techniques — see [Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused). One item is absolute at any level of polish, on either side of that line: fabricated activity, which exists to make a screen look busy, is a lie rather than a style.
 
+## Two kinds of rule in this document
+
+Everything here is one of two things, and they do not cost the same to change.
+
+**Design rules are revisable in place.** Composition, hierarchy, register, material, motion character, typography, restraint, which technique suits which surface. If you have a better argument, rewrite the rule and say why — no ADR, no ceremony. Being cheap to change is what keeps them true; three of them had gone stale before anyone noticed, precisely because they read as invariants. See [ADR 0097](docs/decisions/0097-design-rules-are-revisable-truth-rules-are-not.md).
+
+**Truth rules are not.** No fabricated metric, count, percentage or success state; no motion asserting a state Vibe has not observed; missing evidence is `null` and says so; no control whose label misdescribes what pressing it does; no affordance that appears available and is not. Those have the standing of the security invariants, and changing one needs a record.
+
+Where this document says _never_, check which class it is in. The aesthetic ones are arguments, and an argument can be won.
+
 The runtime source of truth is [src/app/globals.css](src/app/globals.css). This file records the durable intent and maps to those established tokens; it does not generate them.
+
+### Two vocabularies, one of them not switched on
+
+Since [ADR 0096](docs/decisions/0096-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
+
+v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, opaque panels with bright hairlines and tight corners, glass spent on chrome and signature moments rather than on dense data, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
+
+v2 also moves the eyebrow into the interface family, which is what this document asked for and what 289 uses of `MonoLabel` were contradicting, and sets identifiers in DM Mono rather than JetBrains Mono — with the JetBrains subsets kept behind it in the stack for the scripts DM Mono does not ship.
+
+The three motion obligations this document asks for — reduced motion, hidden-tab pause, reserved geometry — are no longer asked of each component. `Reveal` in `src/components/ui/motion.tsx` cannot skip them: the first is a media query on the class, the second one attribute on `<html>`, and the third is the keyframes, which have no layout property to animate.
+
+Both palettes are measured by `design-tokens.test.ts` against `--color-surface-4`, and both must hold 4.5:1 on every load-bearing ramp step. When v2 is everywhere, its values move into `@theme`, the scope is deleted, and this section goes with it.
 
 ## Colors
 
@@ -75,9 +97,9 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-On ordinary product surfaces — settings, billing, tables, index pages, forms — *continuous* motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is what buys the signature surfaces their contrast.
+On ordinary product surfaces — settings, billing, tables, index pages, forms — _continuous_ motion communicates interaction state. Use the shared transition utility, respect reduced motion, and never animate static dashboard furniture continuously. That restraint is what buys the signature surfaces their contrast.
 
-**Quiet is not plain, and this rule has been read as though it were.** It governs choreography — orbits, auras, staged entrances, ambient movement — and it says nothing about craft. A dashboard, a profile or a billing page may have considered composition, real hierarchy, depth, texture, an entrance, hover states with weight, and a layout somebody clearly designed. The test that applies to them is the same five questions every other surface answers ([Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused)); what they may not do is borrow a *signature* surface's language and spend the contrast the product has been saving. A screen that is merely inoffensive has failed this document, not satisfied it.
+**Quiet is not plain, and this rule has been read as though it were.** It governs choreography — orbits, auras, staged entrances, ambient movement — and it says nothing about craft. A dashboard, a profile or a billing page may have considered composition, real hierarchy, depth, texture, an entrance, hover states with weight, and a layout somebody clearly designed. The test that applies to them is the same five questions every other surface answers ([Expressive technique is judged, not pre-refused](#expressive-technique-is-judged-not-pre-refused)); what they may not do is borrow a _signature_ surface's language and spend the contrast the product has been saving. A screen that is merely inoffensive has failed this document, not satisfied it.
 
 Motion beyond that is governed by [Craft and Motion](#craft-and-motion) below, which supersedes this document's earlier position that the three named signature surfaces were the only places cinematic motion could exist.
 
@@ -225,7 +247,7 @@ A signature surface is one where the product's understanding is the thing being 
 
 _Nova is the project Home at HEAD._ The first slice ships the surface itself: `deriveNovaFocus`'s ranking mounted as `src/app/app/projects/[projectId]/nova/`, one Focus Card carrying one priced control, a working strip, a bounded attention stack and the business reading as context. [ADR 0085](docs/decisions/0085-nova-is-the-project-home.md) records the reversal of [ADR 0047](docs/decisions/0047-business-health-is-project-home.md); Business Health keeps every address it had.
 
-What has *not* shipped is the choreography this section describes. Nova Home is currently calm by construction — one card reveal, one working dot, and no motion language of its own — because the surface had to be legible before it was expressive. The paragraph above therefore remains a standing design decision about what Nova is to become, and the three surfaces described below remain the product's current signature set.
+What has _not_ shipped is the choreography this section describes. Nova Home is currently calm by construction — one card reveal, one working dot, and no motion language of its own — because the surface had to be legible before it was expressive. The paragraph above therefore remains a standing design decision about what Nova is to become, and the three surfaces described below remain the product's current signature set.
 
 ## Signature Surface: the Landing Page
 
@@ -235,7 +257,7 @@ The landing page is a signature surface, and it is the one whose argument is not
 
 **So the register is marketing's.** Expression may lead here in a way it deliberately does not inside `/app`: a hero that moves, depth that is felt rather than measured, a composition built for a scroll rather than for a return visit, and copy written to be read once with attention rather than a hundred times at a glance. The audience arrives from Linear, Vercel, Framer and Lovable and reads craft as capability before they read a word.
 
-**Nova belongs here, and this is where she is introduced.** She is the product's Home and its named presence; a first page that never mentions her leaves the visitor to meet the product's protagonist after signing up. The landing page may show her mark, her states, and what she does — an *introduction*, with the same avatar and the same four presences the product uses, so the Nova a visitor meets and the Nova they sign in to are one thing.
+**Nova belongs here, and this is where she is introduced.** She is the product's Home and its named presence; a first page that never mentions her leaves the visitor to meet the product's protagonist after signing up. The landing page may show her mark, her states, and what she does — an _introduction_, with the same avatar and the same four presences the product uses, so the Nova a visitor meets and the Nova they sign in to are one thing.
 
 **What does not relax.** Everything on this page is a claim about a real product, so the truthfulness rules apply exactly as they do inside the app — see [Motion may be ambitious; it may never be false](#motion-may-be-ambitious-it-may-never-be-false). No invented metric, no fabricated dashboard, no customer logo that is not a customer, no screenshot of a state the product cannot reach, and no counter that counts nothing. A demonstration must be a demonstration: where the page shows the product working, it shows the real components on stated example data, and says so. Reduced motion, hidden-tab pausing and reserved geometry are obligations here too — a marketing page is where a visitor is most likely to arrive on a slow phone.
 

@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+/*
+ * The v2 design system (S1 — ADR 0096). Scoped to `[data-vibe="v2"]`, which
+ * nothing carries yet, so this import changes no pixel in production today.
+ * It lives in its own file so `design-tokens.test.ts` can measure the two
+ * palettes separately — a second block of the same token names here would
+ * leave the test silently measuring v1 while v2 shipped unchecked.
+ */
+@import "./theme-v2.css";
+
 /**
  * Vibe Business design tokens (UI-0).
  *
@@ -117,8 +126,8 @@
      branch names and code. Dashboard scores and status labels use the UI face;
      a number is not automatically developer tooling. */
   --font-sans:
-    Inter, "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
-    "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, Arial, sans-serif;
+    Inter, "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable",
+    "Segoe UI", ui-sans-serif, system-ui, Arial, sans-serif;
   --font-mono:
     var(--font-jetbrains-mono), var(--font-jetbrains-mono-latin-ext),
     var(--font-jetbrains-mono-cyrillic), var(--font-jetbrains-mono-cyrillic-ext),
@@ -163,6 +172,29 @@
   --text-meta: 0.6875rem;
   --text-ui: 0.8125rem;
 
+  /* ── Glass ───────────────────────────────────────────────────────────
+     v1's card blurred at 24px through a Tailwind blur utility and saturated
+     not at all. Those are exactly these values, so moving the blur off the
+     utility and onto the surface hook changes nothing here — and makes
+     `--glass-blur` mean something, which it did not while a utility was
+     hard-coding the number beside it. */
+  --glass-blur: 24px;
+  --glass-sat: 100%;
+
+  /* ── The eyebrow ─────────────────────────────────────────────────────
+     The small caps rule above a block, as four tokens rather than four
+     literals in `MonoLabel`. The values here are exactly what that
+     component hard-coded, so v1 renders unchanged; the point is that v2
+     can answer them differently without touching the 51 files that use it.
+
+     `DESIGN.md` puts ordinary labels in the interface family and reserves
+     mono for repository names, branches and SHAs. v1 does the opposite in
+     289 places — see `theme-v2.css` for the correction, and ADR 0096. */
+  --font-label: var(--font-mono);
+  --eyebrow-size: 0.65625rem;
+  --eyebrow-tracking: 0.16em;
+  --eyebrow-weight: 400;
+
   /* ── Shape ───────────────────────────────────────────────────────────
      Radii scale with the element. Controls and navigation use a precise
      ten-pixel corner; pills are reserved for statuses and compact filters. */
@@ -175,8 +207,7 @@
   /* ── Elevation ───────────────────────────────────────────────────────
      The inset highlight belongs to the primary card only. */
   --shadow-panel: 0 24px 60px -30px rgb(0 0 0 / 0.8);
-  --shadow-card:
-    0 1px 0 rgb(255 255 255 / 0.08) inset, 0 30px 70px -30px rgb(0 0 0 / 0.8);
+  --shadow-card: 0 1px 0 rgb(255 255 255 / 0.08) inset, 0 30px 70px -30px rgb(0 0 0 / 0.8);
   --shadow-mint: 0 14px 34px -12px rgb(0 229 160 / 0.6);
   --shadow-dot-mint: 0 0 8px 1px rgb(0 229 160 / 0.6);
   --shadow-dot-amber: 0 0 8px 1px rgb(232 181 74 / 0.5);
@@ -191,6 +222,11 @@
      flow loops are decorative only, and every one of them is behind a
      reduced-motion check in the component that owns it. */
   --ease-vibe: cubic-bezier(0.2, 0.7, 0.2, 1);
+  /* A press wants a different curve from a fade: it should arrive and settle,
+     not decelerate forever. Declared here at v1's own curve so the motion
+     primitives work identically with the scope off — a primitive that needs
+     v2 to be switched on before it moves is a primitive nobody can trust. */
+  --ease-emphasis: cubic-bezier(0.2, 0.7, 0.2, 1);
   --duration-hover: 150ms;
   --duration-reveal: 400ms;
   --duration-pulse: 1.4s;
@@ -456,15 +492,13 @@
 .action-plan-move {
   background:
     radial-gradient(circle at 88% 12%, rgb(0 229 160 / 0.065), transparent 30%),
-    linear-gradient(145deg, rgb(255 255 255 / 0.024), transparent 56%),
-    var(--color-surface-3);
+    linear-gradient(145deg, rgb(255 255 255 / 0.024), transparent 56%), var(--color-surface-3);
 }
 
 .action-plan-move-selected {
   background:
     radial-gradient(circle at 82% 18%, rgb(0 229 160 / 0.08), transparent 34%),
-    linear-gradient(145deg, rgb(0 229 160 / 0.055), rgb(255 255 255 / 0.018) 58%),
-    var(--color-app);
+    linear-gradient(145deg, rgb(0 229 160 / 0.055), rgb(255 255 255 / 0.018) 58%), var(--color-app);
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.06) inset,
     0 28px 64px -46px rgb(0 229 160 / 0.42);
@@ -487,8 +521,7 @@
   background:
     radial-gradient(circle at 50% 38%, rgb(0 229 160 / 0.09), transparent 30%),
     radial-gradient(circle at 50% 48%, rgb(0 229 160 / 0.035), transparent 56%),
-    linear-gradient(150deg, rgb(255 255 255 / 0.025), transparent 58%),
-    var(--color-surface-2);
+    linear-gradient(150deg, rgb(255 255 255 / 0.025), transparent 58%), var(--color-surface-2);
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.055) inset,
     0 38px 90px -56px rgb(0 0 0 / 0.95);
@@ -524,7 +557,10 @@
     radial-gradient(circle at 18% 24%, rgb(0 229 160 / 0.05), transparent 1px),
     radial-gradient(circle at 76% 18%, rgb(232 181 74 / 0.04), transparent 1px),
     radial-gradient(circle at 62% 74%, rgb(0 229 160 / 0.035), transparent 1px);
-  background-size: 73px 83px, 109px 97px, 127px 119px;
+  background-size:
+    73px 83px,
+    109px 97px,
+    127px 119px;
   mask-image: radial-gradient(circle at 48% 48%, black 38%, transparent 88%);
 }
 
@@ -559,7 +595,11 @@
   border-radius: inherit;
   background:
     radial-gradient(circle at 34% 22%, rgb(255 255 255 / 0.1), transparent 22%),
-    repeating-radial-gradient(circle at 38% 32%, transparent 0 7px, rgb(255 255 255 / 0.012) 8px 9px);
+    repeating-radial-gradient(
+      circle at 38% 32%,
+      transparent 0 7px,
+      rgb(255 255 255 / 0.012) 8px 9px
+    );
   content: "";
   opacity: 0.75;
   pointer-events: none;
@@ -610,7 +650,11 @@
     radial-gradient(circle at 34% 20%, rgb(132 255 223 / 0.22), transparent 24%),
     radial-gradient(circle at 50% 35%, rgb(0 229 160 / 0.17), transparent 55%),
     radial-gradient(circle at 73% 78%, rgb(232 181 74 / 0.12), transparent 36%),
-    repeating-radial-gradient(circle at 42% 40%, transparent 0 12px, rgb(0 229 160 / 0.018) 13px 14px),
+    repeating-radial-gradient(
+      circle at 42% 40%,
+      transparent 0 12px,
+      rgb(0 229 160 / 0.018) 13px 14px
+    ),
     linear-gradient(160deg, rgb(10 30 25 / 0.99), rgb(3 8 8 / 0.99));
   border: 1px solid rgb(0 229 160 / 0.42);
   box-shadow:
@@ -671,8 +715,456 @@
  * a glow or a lift on hover, and splitting those into a second transition
  * would put two durations on one gesture.
  */
+/*
+ * The card's blur, from the palette rather than from a utility.
+ *
+ * This is the one `vibe-*` rule that lives outside the v2 scope, and it is
+ * here so the two palettes cannot disagree with their own tokens. Both declare
+ * `--glass-blur` and `--glass-sat`; v1 declares the values the blur utility
+ * used to produce, so this renders v1 exactly as before.
+ *
+ * Fill, border and sheen stay scoped — those are where the directions actually
+ * differ, and v1 keeps drawing them from `bg-surface-4` and `border-line-4`.
+ *
+ * Unprefixed only. Writing the `-webkit-` twin beside it made Lightning CSS
+ * keep the prefixed declaration and drop the standard one, so the card
+ * computed `backdrop-filter: none` in both palettes — found by measuring the
+ * rendered page, not by reading this file. The build adds prefixes from the
+ * configured targets; hand-writing them fights it.
+ */
+.vibe-surface-card {
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Motion primitives (S2)
+
+   The three obligations from `DESIGN.md` live here, in the mechanism,
+   rather than in each component that animates. A component opts in by
+   using the class; it cannot opt out of reduced motion, it cannot forget
+   the hidden-tab pause, and it cannot animate a layout property, because
+   the keyframes it gets do not have one.
+
+   CSS rather than the `motion` library, which is already a dependency and
+   stays for orchestrated and layout-driven animation. An entrance needs no
+   state, and expressing it in React would put a `"use client"` boundary
+   over every subtree that wants one — the opposite of pushing the client
+   boundary to the leaf.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* Obligation 3, reserved geometry: opacity and transform only. Nothing here
+   touches height, margin, padding or any property that reflows a sibling, so
+   an entrance can never move text somebody is already reading. */
+@keyframes vibe-reveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, var(--vibe-rise, 10px), 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@utility vibe-reveal {
+  animation: vibe-reveal var(--duration-reveal) var(--ease-vibe) both;
+  animation-delay: calc(var(--vibe-index, 0) * var(--stagger-row));
+}
+
+/* Obligation 2, the hidden tab. `MotionProvider` stamps the root, so one
+   listener covers every animation in the product rather than one per
+   component. Paused, not stopped: it resumes where it left off, so nothing
+   jumps when somebody comes back to the tab. */
+:root[data-motion="paused"] .vibe-reveal,
+:root[data-motion="paused"] .vibe-breathe {
+  animation-play-state: paused;
+}
+
+/* Obligation 1, reduced motion. The settled state arrives immediately —
+   never a hidden element, which is how a reduced-motion user ends up with a
+   blank page instead of a still one. */
+@media (prefers-reduced-motion: reduce) {
+  .vibe-reveal {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/**
+ * The eyebrow, composed from tokens so a palette can redefine it.
+ *
+ * Deliberately does not set `line-height`: `MonoLabel` never did, and adding
+ * one here would move every block it sits above by a fraction nobody asked
+ * for. Four properties, exactly the four it hard-coded.
+ */
+@utility eyebrow {
+  font-family: var(--font-label);
+  font-size: var(--eyebrow-size);
+  font-weight: var(--eyebrow-weight);
+  letter-spacing: var(--eyebrow-tracking);
+  text-transform: uppercase;
+}
+
 @utility transition-interactive {
   transition-property: color, background-color, border-color, box-shadow, transform;
   transition-timing-function: var(--ease-vibe);
   transition-duration: 150ms;
+}
+
+/* ── Nova's thread ────────────────────────────────────────────────────────
+
+   The furniture around what Nova says: the glass status row, the render
+   block's entrance, the shimmer on a stage label, and the Move's lit edge.
+   Rendered by `src/components/nova/` and by the design lab, which draws the
+   same components rather than copies of them.
+
+   These read the product's motion tokens — `--duration-reveal`, `--ease-vibe`
+   — rather than the per-skin ones the direction studies defined. The direction
+   has been chosen; the skins were how it was chosen, and a component that
+   still read them would change appearance depending on which study drew it.
+
+   Obligations 1 and 2 are at the bottom of this block, hooked to the same
+   `data-motion="paused"` root attribute `MotionProvider` already stamps.
+*/
+
+/* Glass. Deliberately not a default: chrome, overlays and signature moments
+   only. `backdrop-filter` over stacked dense content is what makes a product
+   judder, and the thread spends it on the one row that is chrome. */
+.nova-glass {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+/* The single specular edge that reads as "this is a pane, not a fill". */
+.nova-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* A reading measure for prose that is not inside a bubble. */
+.nova-measure {
+  max-width: 68ch;
+}
+
+/* A render block arriving. Opacity and transform only, so nothing below it
+   moves while it is being read. */
+@keyframes nova-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.nova-rise {
+  animation: nova-rise var(--duration-reveal) var(--ease-vibe) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* The dot beside "Connecting…", which is the one moment a connection state is
+   genuinely unknown rather than merely false. */
+.nova-pulse {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+/*
+   What she is doing, in the shape ChatGPT taught everybody: a line of text
+   with light travelling across it.
+
+   Admissible under all three of `DESIGN.md`'s properties for decorative
+   motion. It renders only while an operation the product recorded is running.
+   The sentence is fully legible with it off — it is `OPERATION_STAGE_LABELS`,
+   the stage the executor actually wrote, never a model's account of its own
+   thinking (rule 43). And the sweep carries no timing: a fixed period,
+   unrelated to how long the run has taken or has left.
+*/
+@keyframes nova-thinking {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.nova-thinking {
+  background: linear-gradient(
+      90deg,
+      var(--color-fg-meta) 0%,
+      var(--color-fg-meta) 30%,
+      var(--color-fg) 45%,
+      var(--color-fg-meta) 60%,
+      var(--color-fg-meta) 100%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: nova-thinking 3.2s linear infinite;
+}
+
+/* Lines that were snapshots of a moment that has passed, leaving. */
+.nova-dissolve {
+  animation: nova-dissolve 420ms var(--ease-vibe) both;
+}
+
+@keyframes nova-dissolve {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+}
+
+:root[data-motion="paused"] .nova-thinking,
+:root[data-motion="paused"] .nova-pulse {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-rise,
+  .nova-dissolve {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+  .nova-pulse {
+    animation: none !important;
+    opacity: 1;
+  }
+  /* The gradient has to go with the animation, not just the animation: text
+     painted through a clipped background with `color: transparent` is
+     invisible the moment nothing moves. */
+  .nova-thinking {
+    animation: none !important;
+    background: none;
+    color: var(--color-fg-body);
+  }
+}
+
+/* The three dots, in the shape a phone taught everybody. A beat before an
+   arrival, never a standing report that somebody is at a keyboard. */
+.nova-typing {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+:root[data-motion="paused"] .nova-typing {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Three still dots rather than none: the bubble is what says she is
+     composing, and removing it would take information the motion only
+     decorated. */
+  .nova-typing {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
+/* ── The Move ─────────────────────────────────────────────────────────────
+
+   Variant B from the Move sheet, chosen at review: a dark surface with one
+   band of light along its top edge. The band is the control's only light —
+   at rest a hairline at partial width, on hover the full edge at full
+   strength — so the whole control does not have to change colour to say it
+   is pressable.
+*/
+.move-lit {
+  cursor: pointer;
+  transition:
+    background-color var(--duration-hover) var(--ease-emphasis),
+    border-color var(--duration-hover) var(--ease-emphasis),
+    transform var(--duration-hover) var(--ease-emphasis);
+}
+
+.move-lit-band {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-mint) 30%,
+    var(--color-mint) 70%,
+    transparent
+  );
+  opacity: 0.45;
+  transition:
+    opacity var(--duration-hover) var(--ease-emphasis),
+    transform var(--duration-hover) var(--ease-emphasis);
+  transform: scaleX(0.55);
+}
+
+.move-lit:hover .move-lit-band,
+.force-hover .move-lit-band {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.move-lit:hover,
+.force-hover .move-lit {
+  background-color: var(--color-surface-3);
+  border-color: var(--color-line-strong);
+}
+
+.move-lit:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-lit,
+  .move-lit-band {
+    transition: none !important;
+  }
+}
+
+/* ── Nova's speech ────────────────────────────────────────────────────────
+
+   The bubble, its register and its tail. Rendered by
+   `src/components/nova/nova-bubble.tsx` and by the design lab, which draws the
+   same component rather than a copy of it.
+*/
+
+/*
+   Rounder than the rest of the system, and deliberately out of step with it.
+   Every other surface here uses `--radius-card` (12px) because a panel holding
+   dense data wants a tight corner. A speech bubble is not that object — it is
+   the one shape on the screen a founder has already learned somewhere else,
+   and the thing they learned is soft. A 12px bubble reads as a card with a
+   spike on it.
+*/
+.bubble {
+  position: relative;
+  background: var(--bubble-fill);
+  border: var(--bubble-width) var(--bubble-stroke) var(--bubble-line);
+  border-radius: 17px;
+  --bubble-stroke: solid;
+  --bubble-dash: none;
+}
+
+/* The tail squares off the corner it grows from. Without this the tail meets a
+   17px curve and reads as a chip stuck to the side of a pill. */
+.bubble-tailed {
+  border-top-left-radius: 4px;
+}
+
+/*
+   Offset by the contour's own width, because an absolutely positioned child is
+   placed against the *padding* box — `top: 0` puts the tail a border-width
+   below the outline it is supposed to continue, which is a one-pixel step at
+   exactly the joint a reader looks at.
+*/
+.bubble-tail {
+  position: absolute;
+  top: calc(var(--bubble-width) * -1);
+  left: calc(-9px - var(--bubble-width));
+  overflow: visible;
+  pointer-events: none;
+}
+
+/*
+   Every fill here is opaque, and that is not a stylistic preference — it is
+   what makes the tail possible. A translucent fill painted over the bubble's
+   own left border does not hide it, it composites with it, and the joint shows
+   as a hairline running through the middle of the tail. Opaque panels are also
+   this direction's own sentence: glass is spent on chrome, never on the
+   surfaces text sits on.
+*/
+
+/* A plain fact. Nothing is being claimed beyond the sentence itself. */
+.bubble-neutral {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-line-3);
+  --bubble-width: 1px;
+}
+
+/* Something is available to start. */
+.bubble-active {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-mint-line);
+  --bubble-width: 1px;
+}
+
+/* Your turn. */
+.bubble-waiting {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-amber-line);
+  --bubble-width: 1px;
+}
+
+/*
+   Something is wrong. The only tinted fill and the only double contour — the
+   one register that has to be found before the others are read.
+*/
+.bubble-problem {
+  --bubble-fill: color-mix(in srgb, var(--color-app), var(--color-coral) 13%);
+  --bubble-line: var(--color-coral-line);
+  --bubble-width: 2px;
+}
+
+/*
+   Nothing has concluded. Dashed, and the dash is tighter than the browser's
+   default: the tail's outline is barely twenty pixels long, and at the default
+   length it drew one mark and a gap — a tail that disappears on one register
+   is a register that cannot speak.
+*/
+.bubble-open {
+  --bubble-stroke: dashed;
+  --bubble-dash: 3 2.5;
+}
+
+/*
+   Arrival, rebuilt.
+
+   The first version unfolded from the top-left over 480ms and read as wrong
+   for a reason worth naming: a message does not grow out of its own tail, it
+   arrives from below and pushes the thread up. So the origin is the bottom
+   edge, the travel is upward, and the whole thing is over in 280ms — a chat
+   bubble that takes half a second to appear is a chat bubble somebody is
+   waiting for.
+
+   Opacity and transform only, so nothing below a bubble moves while it is
+   being read.
+*/
+@keyframes bubble-arrive {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.bubble-arrive {
+  transform-origin: bottom left;
+  animation: bubble-arrive 280ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-arrive {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
 }

@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { MetaPixel } from "@/components/analytics/meta-pixel";
+import { MotionProvider } from "@/components/ui/motion-provider";
 import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
 import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
@@ -48,6 +49,13 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`h-full antialiased ${fontVariables}`}>
       <body className="bg-app text-fg-body h-full font-sans">
         {children}
+        {/*
+          One listener for every animation in the product: it stamps
+          `data-motion` on `<html>` while the tab is hidden, and `globals.css`
+          pauses off that attribute. Renders nothing and adds no client
+          boundary to the tree — this leaf is the only client component here.
+        */}
+        <MotionProvider />
         <Analytics />
         <SpeedInsights />
         {/*

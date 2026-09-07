@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRightIcon } from "@/components/ui/dashboard-icons";
 import { StatusPill } from "@/components/ui/status-pill";
-import { statusForFocusTier } from "@/components/system/status-vocabulary";
+import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { MonoLabel } from "@/components/ui/typography";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
 
@@ -47,7 +47,7 @@ export function AttentionStack({
 
       <ul className="border-line-2 divide-line-1 divide-y overflow-hidden rounded-panel border">
         {entries.map((entry) => {
-          const status = statusForFocusTier(entry.tier);
+          const status = statusForCandidate(entry.kind);
           return (
             <li key={entry.id}>
               <Link

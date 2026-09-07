@@ -4,6 +4,7 @@ import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
+import { novaControlLabel } from "@/modules/nova/home-view";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
@@ -22,13 +23,54 @@ import {
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
 import { creditsToUnits } from "@/modules/credits/units";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
-import { FocusCard } from "@/app/app/projects/[projectId]/nova/focus-card";
+import { FocusCard } from "../design-studies/legacy-focus-card";
 import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
 import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
 import { ProductIdentity } from "@/app/app/projects/[projectId]/nova/product-identity";
 import { HealthScore } from "@/app/app/projects/[projectId]/nova/health-score";
 import { FindingCard } from "@/components/system/finding-card";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
+import { StudyShell } from "../design-studies/study-shell";
+import { StudyNovaHome } from "../design-studies/study-nova-home";
+import { StudyComposition } from "../design-studies/study-composition";
+import { StudyVoice } from "../design-studies/study-voice";
+import { StudyChat } from "../design-studies/study-chat";
+import { StudyConsole } from "../design-studies/study-console";
+import { StudyMoments } from "../design-studies/study-moments";
+import { StudyBlocked } from "../design-studies/study-blocked";
+import { StudyMove } from "../design-studies/study-move";
+import { StudyBubble } from "../design-studies/study-bubble";
+import { StudyWireframe } from "../design-studies/study-wireframe";
+import { StudyBlock } from "../design-studies/study-block";
+import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { StudyLabels } from "../design-studies/study-labels";
+import { StudyMono } from "../design-studies/study-mono";
+import {
+  COMPOSITION_DENSE_SCENARIO,
+  COMPOSITION_SETTLED_SCENARIO,
+  chosenStudy,
+  isCompositionScenario,
+  isVoiceScenario,
+  isChatScenario,
+  isConsoleScenario,
+  MOMENTS_SCENARIO,
+  BLOCKED_SCENARIO,
+  MOVE_SCENARIO,
+  BUBBLE_SCENARIO,
+  BLOCK_SCENARIO,
+  OPENING_SCENARIO,
+  OPENING_WALKTHROUGH_SCENARIO,
+  WIREFRAME_OFFLINE_SCENARIO,
+  isWireframeScenario,
+  CHAT_ANSWERED_SCENARIO,
+  CONSOLE_IDLE_SCENARIO,
+  LABELS_SCENARIO,
+  MONO_SCENARIO,
+  VOICE_DENSE_SCENARIO,
+  VOICE_SETTLED_SCENARIO,
+  STUDIES,
+  studyByScenario,
+} from "../design-studies/studies";
 import {
   isE2eNovaScenario,
   novaScenarioHealth,
@@ -219,6 +261,157 @@ export default async function E2eScenarioPage({
     </p>
   );
 
+  /*
+    A direction study renders its own shell — atmosphere, scope attribute and
+    fonts — so it is checked before every other branch and deliberately does
+    not draw the scenario label above the screen. The label belongs to a test
+    trace; a study is a picture somebody looks at, and a stray line of debug
+    text at the top of it is the first thing a reviewer would ask about.
+  */
+  /* The two follow-up comparisons both render in the chosen direction. */
+  if (scenario === LABELS_SCENARIO || scenario === MONO_SCENARIO) {
+    const chosen = STUDIES.find((entry) => entry.chosen);
+    if (chosen) {
+      return (
+        <StudyShell study={chosen}>
+          {scenario === LABELS_SCENARIO ? (
+            <StudyLabels study={chosen} />
+          ) : (
+            <StudyMono study={chosen} />
+          )}
+        </StudyShell>
+      );
+    }
+  }
+
+  /* The composition studies vary rank rather than material, so they are always
+     drawn in the direction that won — otherwise a reader cannot tell which of
+     the two axes moved. */
+  if (isWireframeScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyWireframe study={chosen} offline={scenario === WIREFRAME_OFFLINE_SCENARIO} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === BLOCK_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyBlock study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === OPENING_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyOpening study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === OPENING_WALKTHROUGH_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyOpeningWalkthrough study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === BUBBLE_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyBubble study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === MOVE_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyMove study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === BLOCKED_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyBlocked study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === MOMENTS_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyMoments study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (isConsoleScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyConsole study={chosen} idle={scenario === CONSOLE_IDLE_SCENARIO} />
+      </StudyShell>
+    );
+  }
+
+  if (isChatScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyChat study={chosen} answered={scenario === CHAT_ANSWERED_SCENARIO} />
+      </StudyShell>
+    );
+  }
+
+  if (isVoiceScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyVoice
+          study={chosen}
+          settled={scenario === VOICE_SETTLED_SCENARIO}
+          dense={scenario === VOICE_DENSE_SCENARIO}
+        />
+      </StudyShell>
+    );
+  }
+
+  if (isCompositionScenario(scenario)) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyComposition
+          study={chosen}
+          settled={scenario === COMPOSITION_SETTLED_SCENARIO}
+          dense={scenario === COMPOSITION_DENSE_SCENARIO}
+        />
+      </StudyShell>
+    );
+  }
+
+  const study = studyByScenario(scenario);
+  if (study) {
+    return (
+      <StudyShell study={study}>
+        <StudyNovaHome study={study} />
+      </StudyShell>
+    );
+  }
+
   if (isE2eNovaScenario(scenario)) {
     const view = novaScenarioView(scenario);
     const health = novaScenarioHealth(scenario);
@@ -266,11 +459,17 @@ export default async function E2eScenarioPage({
           */
           balance={{ availableCredits: creditsToUnits(420), display: "420" }}
           consequence={priced?.confirmationNote ?? undefined}
+          /* The same label the button carries, so the fixture exercises the
+             footnote's refusal to repeat it rather than rendering past it. */
+          controlLabel={
+            novaControlLabel(control) ?? undefined
+          }
           control={
-            control.kind === "none" ? undefined : (
-              <Button variant="primary">
-                {control.kind === "elsewhere" ? control.label : control.option.label}
-              </Button>
+            /* Null covers both "nothing to press" and "answered in the card",
+               and this fixture renders neither — it is the Focus Card's shape,
+               not the answering flow. */
+            novaControlLabel(control) === null ? undefined : (
+              <Button variant="primary">{novaControlLabel(control)}</Button>
             )
           }
         />

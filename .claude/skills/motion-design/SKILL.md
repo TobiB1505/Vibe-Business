@@ -62,10 +62,22 @@ cut it — see below.
 | **Signature** | Landing page, Business Brain, Product Scan, Agent, Nova | Entrance choreography, settling ≈1.5s; after that at most two moving elements, only while genuinely working |
 | **Functional** | Panels, tabs, drawers, disclosure, toasts | 120–240ms, `--ease-vibe`, transform + opacity |
 | **Microinteraction** | Hover, focus, press | Under 120ms. `transition-interactive` |
-| **Quiet** | Tables, forms, settings, index pages | State changes are immediate. This is most of the product |
+| **Quiet** | Tables, forms, settings, index pages | No choreography. The Functional and Microinteraction budgets still apply. This is most of the product |
 
 Ordinary surfaces stay quiet so signature surfaces have contrast to spend.
 Never copy Business Brain's choreography onto an ordinary card.
+
+**Quiet governs choreography, not craft.** This row read *"state changes are
+immediate"* until it was found to be stricter than the document it implements.
+`DESIGN.md` says the rule "governs choreography — orbits, auras, staged
+entrances, ambient movement — and it says nothing about craft", and names *an
+entrance* and *hover states with weight* among the things an ordinary dashboard,
+profile or billing page may have. What a quiet surface may not do is borrow a
+signature surface's language and spend contrast the product has been saving.
+
+So a settings screen that snaps between states with no transition is not
+satisfying this tier. It is the "merely inoffensive" screen `DESIGN.md` says has
+failed the document rather than passed it.
 
 ## Ambience vs. false state — the line
 

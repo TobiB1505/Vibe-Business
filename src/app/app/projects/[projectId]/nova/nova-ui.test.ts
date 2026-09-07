@@ -36,7 +36,7 @@ describe("Nova Home", () => {
   it("has the components this slice is made of", () => {
     for (const name of [
       "nova-home.tsx",
-      "focus-card.tsx",
+      "nova-focus-thread.tsx",
       "attention-stack.tsx",
       "working-strip.tsx",
       "product-identity.tsx",
@@ -55,9 +55,16 @@ describe("Nova Home", () => {
     });
 
     it("renders a price through the one component that resolves it", () => {
-      // The Focus Card takes a retail kind and hands it to `ActionBlock`,
-      // which renders `CostDisclosure`. No screen formats Credits by hand.
-      expect(component("focus-card.tsx")).toContain("ActionBlock");
+      /*
+       * `ActionBlock` renders `CostDisclosure`, which resolves the retail kind
+       * to a figure. No screen formats Credits by hand.
+       *
+       * It moved from the Focus Card to Home when the card became a thread:
+       * the thread has no equivalent, so the control slot carries it — and the
+       * price stays above the button rather than inside the consequence
+       * disclosure, which is the rule the component exists to hold.
+       */
+      expect(component("nova-home.tsx")).toContain("<ActionBlock");
       for (const { name, body } of FILES) {
         expect(body, name).not.toContain("Credits`");
         expect(body, name).not.toMatch(/formatCredits/);
@@ -162,10 +169,31 @@ describe("Nova Home", () => {
   });
 
   describe("hierarchy", () => {
-    it("raises exactly one surface", () => {
-      // `VibeCard` is surface level 3 — "one primary object per view".
+    /*
+     * This used to assert that exactly one file raised a `VibeCard`, which was
+     * the Focus Card. Home is a thread now: what leads is a bubble, and what
+     * Vibe made is a render block. Neither is a raised card, and the rule the
+     * old assertion protected — one primary object per view — is now held by
+     * there being one primary *moment*, which `deriveNovaFocus` decides.
+     *
+     * So the check inverts. A `VibeCard` reappearing on Home would be the old
+     * shape growing back beside the new one.
+     */
+    it("raises no card, because the thread has no tiles", () => {
       const raised = FILES.filter((file) => /<VibeCard/.test(file.body));
-      expect(raised.map((file) => file.name)).toEqual(["focus-card.tsx"]);
+      expect(raised.map((file) => file.name)).toEqual([]);
+    });
+
+    /*
+     * The three objects, and the rule between them: nothing executable goes
+     * inside a bubble. A bubble shows that Nova is *saying* something; a
+     * control is something the founder does, and one object cannot be both.
+     */
+    it("keeps every control outside the bubble", () => {
+      const thread = component("nova-focus-thread.tsx");
+      expect(thread).toContain("<NovaBubble");
+      // The control is a prop rendered in its own slot, never a child.
+      expect(thread).not.toMatch(/<NovaBubble[^>]*>\s*\{control\}/);
     });
 
     it("gives the attention stack no controls of its own", () => {
@@ -185,6 +213,30 @@ describe("Nova Home", () => {
     });
   });
 
+  /**
+   * The gates travel whole, or not at all.
+   *
+   * A merge button on Home would be the failure rules 67-71 describe: a yes
+   * bound to one commit, pressed against whatever is current. What makes
+   * mounting the gates here safe is that `ChangeGates` brings the sequence —
+   * validation, preview, review, approval, merge, outcome, each reachable only
+   * through the one above it. Reaching past it for the merge panel, or for the
+   * merge action, is how that guarantee would be lost one import at a time.
+   */
+  describe("the change gates", () => {
+    it("mounts the shipped gates rather than a panel out of the middle", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("<ChangeGates");
+      expect(home).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);
+    });
+
+    it("never calls the merge action itself", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toMatch(/mergeApprovedChangeAction|startMerge/);
+      }
+    });
+  });
+
   describe("honest absence", () => {
     it("renders a missing score through the one function that knows n/a", () => {
       const health = component("health-score.tsx");
@@ -199,15 +251,15 @@ describe("Nova Home", () => {
     });
 
     it("offers no control when there is nothing to do", () => {
-      // `control` is optional on the card and omitted for the settled case.
+      // `control` is optional on the thread and omitted for the settled case.
       expect(component("nova-home.tsx")).toContain('control.kind === "none"');
     });
   });
 
   describe("status", () => {
     it("takes every word from the shared vocabulary", () => {
-      for (const name of ["working-strip.tsx", "attention-stack.tsx", "focus-card.tsx"]) {
-        expect(component(name), name).toMatch(/statusFor(OperationPhase|FocusTier)/);
+      for (const name of ["working-strip.tsx", "attention-stack.tsx", "nova-focus-thread.tsx"]) {
+        expect(component(name), name).toMatch(/statusFor(OperationPhase|FocusTier|Candidate)/);
       }
     });
 

@@ -6,15 +6,26 @@ import type { NovaHomeEntry, NovaHomeSection } from "@/modules/nova/home-view";
 import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-context";
 
 import { novaPresenceState } from "@/components/system/status-vocabulary";
-import type { NovaPresenceState } from "@/components/nova/nova-presence";
+import { NovaPresence } from "@/components/nova/nova-presence";
+
+import { ChangeGates } from "../agent/change-gates";
+import { AgentWorkspaceChoice } from "../agent/agent-workspace-choice";
+import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
+import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { resolveFounderInputAction } from "../founder-input-action";
 
 import { AttentionStack } from "./attention-stack";
 import { NovaRise } from "./nova-rise";
-import { FocusCard } from "./focus-card";
+import { NovaFocusThread } from "./nova-focus-thread";
+import { ActionBlock } from "@/components/system/action-block";
+import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
+import { NovaThreadHeader } from "@/components/nova/nova-thread";
+import { NovaClock } from "@/components/nova/nova-clock";
+import { AuditBlock } from "@/components/nova/blocks/audit";
 import { HealthScore, HealthScoreAbsent } from "./health-score";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { ProductIdentity } from "./product-identity";
-import { WorkingStrip } from "./working-strip";
+import { NovaWorkingLive } from "./nova-working-live";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -40,10 +51,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * a grid: a dashboard of equal tiles is the shape that made a founder choose
  * between six doors, and the point of the ranking is that they do not have to.
  *
- * There is no briefing panel here, and its absence is a decision. One was
- * built, screenshotted and removed: the evidence chain with its dates is what
- * Nova reads *before she speaks*, not a table a founder should have to read
- * themselves. It travels with her sentences now — `briefing/situation.ts`.
+ * There is no briefing panel here, and its absence is a decision rather than a
+ * gap. One was built — the whole evidence chain with its dates, and a read
+ * beneath it — screenshotted, and removed: that chain is what Nova reads
+ * *before she speaks*, not a table a founder should have to read themselves.
+ * It travels with her sentences now, as `briefing/situation.ts`.
  */
 export async function NovaHome({
   supabase,
@@ -58,6 +70,7 @@ export async function NovaHome({
     projectId: project.id,
     userId,
     projectName: project.name,
+    repositoryFullName: project.repository?.fullName ?? null,
   });
 
   const href = {
@@ -109,9 +122,30 @@ export async function NovaHome({
     phase: data.view.working?.phase ?? "idle",
   });
 
+  /* A repository, or none. The header says which, and says it as a fact about
+     this project rather than about Vibe. */
+  const connected = project.repository !== null;
+
   return (
     <div className="flex flex-col gap-8">
+      {/*
+        The status row, and the only piece of chrome on this page.
+        `NovaThreadHeader` says who is speaking and what about — Nova and her
+        availability on the left, the product and whether its repository is
+        reachable on the right. The clock is a client component because only a
+        browser has one; the rest is server-rendered.
+      */}
       <NovaRise>
+        <NovaThreadHeader
+          availability={{ state: "online" }}
+          subject={data.identity.name}
+          connected={connected}
+          mark={<NovaPresence state={presence} size="md" seed={project.id} />}
+          now={<NovaClock />}
+        />
+      </NovaRise>
+
+      <NovaRise delay={0.03}>
         <ProductIdentity
           name={data.identity.name}
           logoUrl={data.identity.logoUrl}
@@ -123,32 +157,29 @@ export async function NovaHome({
 
       {/*
         The primary settles first and the rest follows: the ranking drawn in
-        time. Every delay below is the position `deriveNovaFocus` decided, and
-        the whole cascade lands inside the 0.4s reveal budget `nova-ui.test.ts`
-        holds.
+        time. Every delay below is the position `deriveNovaFocus` decided.
       */}
       <NovaRise delay={0.06}>
-        <FocusSection
-          data={data}
+        <FocusSection data={data} projectId={project.id} sectionHref={sectionHref} />
+      </NovaRise>
+
+      <NovaRise delay={0.18}>
+        <NovaWorkingLive
           projectId={project.id}
-          sectionHref={sectionHref}
+          working={data.view.working}
           presence={presence}
           seed={project.id}
         />
       </NovaRise>
 
-      <NovaRise delay={0.14}>
-        <WorkingStrip working={data.view.working} presence={presence} seed={project.id} />
-      </NovaRise>
-
-      <NovaRise delay={0.21}>
+      <NovaRise delay={0.26}>
         <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
       </NovaRise>
 
       {data.health ? (
         /* `HealthScore` is itself a labelled region; wrapping it in a second
            one would put two landmarks with the same name around one panel. */
-        <NovaRise delay={0.35} className="flex flex-col gap-4">
+        <NovaRise delay={0.34} className="flex flex-col gap-4">
           <HealthScore
             score={data.health.score}
             stateLabel={data.health.stateLabel}
@@ -176,7 +207,7 @@ export async function NovaHome({
           )}
         </NovaRise>
       ) : (
-        <NovaRise delay={0.35}>
+        <NovaRise delay={0.34}>
           <HealthScoreAbsent healthHref={href.health} />
         </NovaRise>
       )}
@@ -188,35 +219,150 @@ export async function NovaHome({
  * The Focus Card and its one control.
  *
  * Split out because choosing the control is the only branching on this page,
- * and it is worth reading on its own: a bound action, a plain link, or — when
- * the decision needs arguments Home does not hold — a link to the surface that
- * does, wearing its own honest label rather than the catalog's verb.
+ * and it is worth reading on its own: a bound action, a plain link, the card
+ * that answers a question, or — when the decision needs arguments Home does
+ * not hold — a link to the surface that does, wearing its own honest label
+ * rather than the catalog's verb.
+ *
+ * ## The one that used to be a link and is not any more
+ *
+ * "Answer in the Agent" and "Answer in the plan" sent a founder out of Home to
+ * answer a question Home had just asked — and, for a runtime question, while
+ * the run that asked it sat paused. `FounderInputCard` takes the request and
+ * its resolution action as props, so it renders here, with the same options,
+ * the same recommendation and the same submit the owning surface shows.
+ *
+ * It is *inside* the Focus Card rather than beside it, unlike every other
+ * control on this page, and that is the difference between a control and an
+ * answer: a button is one press on a card that explains it, while a question
+ * is a thing to read and choose from. Splitting the question from its options
+ * would put the two halves of one decision in two boxes.
  */
 function FocusSection({
   data,
   projectId,
   sectionHref,
-  presence,
-  seed,
 }: {
   data: NovaHomeData;
   projectId: string;
   sectionHref: Record<NovaHomeSection, string>;
-  presence: NovaPresenceState;
-  seed: string;
 }) {
   const entry = data.view.primary;
   const control = entry.control;
 
   if (control.kind === "none") {
-    return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    return <NovaFocusThread entry={entry} block={auditBlock(data, entry)} />;
+  }
+
+  if (control.kind === "answer") {
+    /*
+     * The ranking saw an open request; this reads it again to render it. If it
+     * has been answered in between — in the Agent, in the plan, in another tab
+     * — there is nothing to ask, and a form for a settled question would be
+     * worse than a card with none. The sentence above it still stands.
+     */
+    if (!data.question) {
+      return <NovaFocusThread entry={entry} />;
+    }
+
+    return (
+      <NovaFocusThread
+        entry={entry}
+        block={
+          <FounderInputCard
+            projectId={projectId}
+            request={data.question}
+            /*
+             * Which flow this question came from. A runtime question has a
+             * paused run behind it and the card says so; a planner question
+             * does not. The candidate's kind is what knows, and it is the same
+             * distinction `focus.ts` used to raise two candidates instead of
+             * one.
+             */
+            context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
+            presentation="workspace"
+            resolveAction={resolveFounderInputAction}
+          />
+        }
+      />
+    );
+  }
+
+  if (control.kind === "gate") {
+    /*
+     * The ranking saw a prepared change; this reads the card for it. If it has
+     * merged, been superseded or stopped being `prepared` in between, the
+     * sentence above still stands and there is nothing to decide — gates for a
+     * change that is not there would be worse than none.
+     */
+    if (!data.change) {
+      return <NovaFocusThread entry={entry} />;
+    }
+
+    return (
+      <NovaFocusThread
+        entry={entry}
+        block={
+          <ChangeGates
+            projectId={projectId}
+            change={data.change}
+            planHref={sectionHref["action-plan"]}
+            stage={control.stage}
+            /*
+             * The thread says it above the block. `chrome` draws the change's
+             * status sentence, which is the sentence Nova has just said — the
+             * duplication this surface keeps removing.
+             */
+            chrome={false}
+          />
+        }
+      />
+    );
+  }
+
+  if (control.kind === "choose") {
+    /*
+     * The ranking saw a repository with more than one application; this reads
+     * the list to render it. Empty means the question has been settled since —
+     * answered in the Agent, or the analysis re-read and resolved — and a
+     * choice with nothing to choose from would be worse than none.
+     */
+    if (data.workspaceCandidates.length === 0) {
+      return <NovaFocusThread entry={entry} />;
+    }
+
+    return (
+      <NovaFocusThread
+        entry={entry}
+        block={
+          <AgentWorkspaceChoice
+            candidates={data.workspaceCandidates}
+            /*
+             * The panel asks; the control answers. Splitting them is what lets
+             * the same question be posed on two surfaces without either of
+             * them restating the options — and it is why choosing here and
+             * choosing in the Agent cannot come to mean different things.
+             */
+            action={(candidate) => (
+              <AgentWorkspaceChoiceAction
+                projectId={projectId}
+                candidate={candidate}
+                chosen={false}
+              />
+            )}
+          />
+        }
+      />
+    );
   }
 
   if (control.kind === "elsewhere") {
     return (
-      <FocusCard entry={entry} presence={presence} seed={seed}>
-        <NovaLinkControl href={sectionHref[control.section]} label={control.label} />
-      </FocusCard>
+      <NovaFocusThread
+        entry={entry}
+        controlLabel={control.label}
+        control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
+      />
     );
   }
 
@@ -240,16 +386,19 @@ function FocusSection({
             "/app/connect/github";
 
     return (
-      <FocusCard entry={entry} presence={presence} seed={seed}>
-        <NovaLinkControl href={target} label={control.option.label} />
-      </FocusCard>
+      <NovaFocusThread
+        entry={entry}
+        block={auditBlock(data, entry)}
+        controlLabel={control.option.label}
+        control={<NovaLinkControl href={target} label={control.option.label} />}
+      />
     );
   }
 
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    return <NovaFocusThread entry={entry} block={auditBlock(data, entry)} />;
   }
 
   const subject = control.option.subject;
@@ -261,24 +410,47 @@ function FocusSection({
         : null;
 
   return (
-    <FocusCard
+    <NovaFocusThread
       entry={entry}
-      presence={presence}
-      seed={seed}
-      operation={meta.price}
-      balance={data.balance}
-      consequence={control.option.confirmationNote}
+      block={auditBlock(data, entry)}
+      controlLabel={control.option.label}
+      /*
+       * `ActionBlock` rather than the bare control, because the price is not
+       * optional: it goes above the button and never inside the consequence
+       * disclosure. The card used to supply this and the thread has no
+       * equivalent, so the control slot carries it.
+       */
       control={
-        <NovaServerActionControl
-          projectId={projectId}
-          actionId={control.option.actionId}
-          subjectId={subjectId}
-          label={control.option.label}
-          consequential={control.option.consequential}
-          requiresConfirmation={control.option.requiresConfirmation}
-          confirmationNote={control.option.confirmationNote}
+        <ActionBlock
+          operation={meta.price}
+          balance={data.balance}
+          consequence={control.option.confirmationNote}
+          control={
+            <NovaServerActionControl
+              projectId={projectId}
+              actionId={control.option.actionId}
+              subjectId={subjectId}
+              label={control.option.label}
+              consequential={control.option.consequential}
+              requiresConfirmation={control.option.requiresConfirmation}
+              confirmationNote={control.option.confirmationNote}
+            />
+          }
         />
       }
     />
   );
+}
+
+/**
+ * The audit's reading, when the audit is what the moment is about.
+ *
+ * The only block Home can draw without a further read: `readHealth` already
+ * builds the whole `BusinessBrainView` to produce four numbers, and until now
+ * threw the rest away. Every other kind needs a subject Home does not hold —
+ * and drawing a frame around an absence would be worse than drawing nothing.
+ */
+function auditBlock(data: NovaHomeData, entry: NovaHomeEntry) {
+  if (BLOCK_FOR_MOMENT[entry.kind] !== "audit" || !data.health) return undefined;
+  return <AuditBlock view={data.health.view} />;
 }
