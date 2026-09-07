@@ -108,6 +108,43 @@ export function candidatePriority(path: string, source: RouteCandidateSource): n
   return Math.max(priority, MIN_PRIORITY);
 }
 
+/**
+ * The template a path belongs to, with its identifiers replaced.
+ *
+ * `/app/projects/88d1c463-…/settings` and `/app/projects/9b702a96-…/settings`
+ * are the same screen holding different rows. A scan that treats them as two
+ * discoveries spends its budget learning the same thing twice — the first run
+ * that read pages properly inspected **25 pages and saw 8 screens**, four
+ * copies each of a project workspace's seven tabs, and reported `integrations`
+ * and `onboarding` as absent because it never reached `/app/connect/github` or
+ * `/app/onboarding` at all.
+ *
+ * Deliberately conservative. A segment is only an identifier when it could not
+ * plausibly be a word someone chose: a UUID, a run of digits, a long hex
+ * string, or a long opaque token with both digits and letters. `/app/billing`
+ * and `/app/settings` must survive this untouched, because collapsing a real
+ * route into a shape would hide a surface rather than a duplicate.
+ */
+const IDENTIFIER_SEGMENT = [
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\d+$/,
+  /^[0-9a-f]{12,}$/i,
+  // A nanoid, a Stripe id, a base62 key: long, and mixing digits with letters
+  // in a way a hand-written slug does not.
+  /^(?=.*\d)(?=.*[a-z])[A-Za-z0-9_-]{12,}$/,
+];
+
+export function routeShape(path: string): string {
+  return path
+    .split("/")
+    .map((segment) =>
+      segment !== "" && IDENTIFIER_SEGMENT.some((pattern) => pattern.test(segment))
+        ? ":id"
+        : segment,
+    )
+    .join("/");
+}
+
 export function isNeverVisit(path: string): boolean {
   return NEVER_VISIT.some((pattern) => pattern.test(path));
 }

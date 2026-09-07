@@ -48,6 +48,16 @@
 export type AuthenticatedCrawlBudgets = {
   /** Authenticated pages actually inspected. */
   maxPages: number;
+  /**
+   * Pages inspected per route template (`/app/projects/:id/settings`).
+   *
+   * The budget exists to describe a product's *shape*, and a screen holding
+   * different rows is the same screen. The first run that read pages properly
+   * spent 25 pages on 8 screens — four copies each of a project workspace's
+   * seven tabs — and reported `integrations` and `onboarding` as absent
+   * because it never reached them.
+   */
+  maxPagesPerRouteShape: number;
   /** Route candidates considered before origin filtering and prioritisation. */
   maxCandidates: number;
   /** Link depth from the landing page (landing page is depth 0). */
@@ -80,6 +90,15 @@ export type AuthenticatedCrawlBudgets = {
 export const DEFAULT_AUTHENTICATED_BUDGETS: AuthenticatedCrawlBudgets = {
   /** Ten surfaces to find, about two pages each, plus the landing page. */
   maxPages: 25,
+  /*
+   * Two, not one.
+   *
+   * A second instance is worth a page because it is often a *different state*
+   * of the same screen — the run that prompted this detected `empty_state`
+   * from exactly that, one Action Plan with content and one without. A third
+   * is the same lesson a third time.
+   */
+  maxPagesPerRouteShape: 2,
   /** Above what a real product offered, so prioritisation chooses from all of it. */
   maxCandidates: 150,
   maxDepth: 2,

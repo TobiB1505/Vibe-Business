@@ -42,6 +42,14 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## A screen is worth a page; a copy of it is not
+
+`/app/projects/<a>/settings` and `/app/projects/<b>/settings` are one screen holding different rows. The first run that read pages properly inspected **25 pages and saw 8 screens** — four projects × seven workspace tabs — and then reported `integrations` and `onboarding` as *not detected*, because it had never reached `/app/connect/github` or `/app/onboarding`. That is a scan answering a question about the product with a fact about its own budget.
+
+So `routeShape` collapses identifier segments — a UUID, a run of digits, a long hex string, a long opaque token mixing digits and letters — and `maxPagesPerRouteShape` inspects each template twice. Twice rather than once, because a second instance is often a different *state* of the same screen; that is how `empty_state` was detected in the run that prompted this. The shape is deliberately conservative: collapsing a real route would hide a surface, where an uncollapsed duplicate merely costs a page.
+
+The check runs before the navigation, so a skipped copy costs nothing, and counts only pages actually **inspected** — a page that failed to load taught nothing and does not hold a slot. When copies are skipped the snapshot says so once, with a count.
+
 ## Noticing the login instead of asking about it
 
 The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.
