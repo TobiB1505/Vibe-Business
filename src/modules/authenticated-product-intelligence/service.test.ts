@@ -55,6 +55,17 @@ vi.mock("./analyzer", () => ({
  * any test in this file while appearing to be. That is the same silence the
  * production white screen came from, one layer up.
  */
+/*
+ * The cost ledger is written with a service-role client, because
+ * `deep_scan_provider_usage` grants the customer's role nothing — it is Vibe's
+ * cost ledger and not their data. The tests point that client at the same fake
+ * database the rest of the run uses, so a usage row is still observable here
+ * and the boundary is still the one production takes.
+ */
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => serviceClient(),
+}));
+
 vi.mock("./playwright/connector", () => ({
   connectReadOnly: (connectUrl: string, origin: string) => connectMock(connectUrl, origin),
   openSessionAtOrigin: (connectUrl: string, origin: string) => landingMock(connectUrl, origin),
@@ -118,8 +129,21 @@ function fakeSnapshot(pagesInspected = 4): AuthenticatedProductIntelligenceSnaps
   } as AuthenticatedProductIntelligenceSnapshot;
 }
 
+/**
+ * The database the mocked service-role client writes to.
+ *
+ * Set by `setup()`, because the client is obtained inside the code under test
+ * rather than handed to it — which is the point of the boundary.
+ */
+let serviceDb: InstanceType<typeof FakeDatabase> | null = null;
+function serviceClient() {
+  if (!serviceDb) throw new Error("no service-role database: call setup() first");
+  return fakeSupabase(serviceDb);
+}
+
 function setup(options: { productionUrl?: string | null } = {}) {
   const db = new FakeDatabase();
+  serviceDb = db;
   const supabase = fakeSupabase(db);
   const projectId = seedProject(db, { userId: OWNER, productionUrl: options.productionUrl });
   return { db, supabase, projectId };

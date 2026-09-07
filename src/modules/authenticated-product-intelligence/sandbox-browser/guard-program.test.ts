@@ -182,3 +182,36 @@ describe("the guard imports ws the way the package actually exports it", () => {
     expect(BROWSER_GUARD_PROGRAM).toContain("WebSocket.OPEN");
   });
 });
+
+/**
+ * The pipe that changed the bytes it was piping.
+ *
+ * `ws` hands every message to its listener as a Buffer whatever the frame was,
+ * and `send(buffer)` writes a **binary** frame. So each CDP message reached
+ * Chromium as binary, where the protocol is text, and Chromium closed the
+ * connection — which Playwright could only report as
+ * `Target page, context or browser has been closed`, `code=1005`.
+ *
+ * Measured against `ws@8.18.0`: `send(buffer)` arrives BINARY,
+ * `send(buffer, { binary: false })` arrives TEXT. The listener is handed an
+ * `isBinary` flag for exactly this.
+ */
+describe("the control channel forwards frames without changing what they are", () => {
+  it("passes the frame type in both directions", () => {
+    const sends = [...BROWSER_GUARD_PROGRAM.matchAll(/\.send\((data|message\[0\]), \{ binary: [^}]+\}\)/g)];
+
+    // Client to upstream, upstream to client, and the queue replay.
+    expect(sends.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("never forwards a message without saying how to frame it", () => {
+    // A bare `send(data)` on the pipe is the defect, in the exact shape it had.
+    expect(BROWSER_GUARD_PROGRAM).not.toMatch(/\.send\(data\)/);
+    expect(BROWSER_GUARD_PROGRAM).not.toMatch(/\.send\(message\)/);
+  });
+
+  it("reads the flag the pipe needs off both listeners", () => {
+    expect(BROWSER_GUARD_PROGRAM).toContain('client.on("message", (data, isBinary)');
+    expect(BROWSER_GUARD_PROGRAM).toContain('upstream.on("message", (data, isBinary)');
+  });
+});
