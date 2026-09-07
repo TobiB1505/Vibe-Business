@@ -52,6 +52,18 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * the moment that leads is a change to review. It is `scanEvents`, and it is
  * why the count above says two rather than one.
  *
+ * ## What "a read" means here, and what it hid
+ *
+ * A call, not a query. That distinction is not free: `getMoveWithExecution`
+ * counted as one conditional read and issued up to thirteen queries, because
+ * it asked for every Move's execution state in order to answer about one. The
+ * word "one" in this file was true and told nobody anything.
+ *
+ * It is constant now — `move-read-cost.test.ts` counts it, and counts that it
+ * does not grow with the size of the opportunity set. The lesson is the one
+ * this docblock keeps having to relearn: a count of calls is a claim about
+ * this file, and the cost is behind them.
+ *
  * One of the five arrived with the rail and was weighed rather than assumed:
  * the event log, one query for six rows. The rail's checklist is not a sixth —
  * it comes back from `readNovaHomeReading` with the ranking, for the reason
