@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { CostBalance } from "@/components/system/cost-disclosure";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
-import { getActionPlanChecklist, type ActionPlanChecklist } from "@/modules/action-plans/service";
+import type { ActionPlanChecklist } from "@/modules/action-plans/service";
 import { getMoveWithExecution } from "@/modules/execution/service";
 import type { OpportunityActionState } from "@/modules/execution/view";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
@@ -20,7 +20,7 @@ import {
 } from "@/modules/execution/workspace";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
-import { readNovaFocus } from "@/modules/nova/read";
+import { readNovaHomeReading } from "@/modules/nova/read";
 import {
   buildBusinessBrainView,
   type BusinessBrainView,
@@ -35,32 +35,29 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * ## Why the reads are counted
  *
  * This is the most-visited route in the product, and the audit's own risk note
- * for this slice was the read count on it. So the shape is deliberate: six
+ * for this slice was the read count on it. So the shape is deliberate: five
  * concurrent reads, none of which fans out per candidate — and then at most
  * one conditional read, decided by what the ranking put first and described on
  * `question`, `change`, `workspaceCandidates` and `move` below. They are
  * mutually exclusive by construction: one primary candidate is one moment, and
  * each of the four belongs to a different set of kinds.
  *
- * Two of the six arrived with the rail, and both were weighed rather than
- * assumed. `getActionPlanChecklist` exists because the Action Plan page's own
- * read costs nine and answers questions the rail does not ask; the log is one
- * query for six rows. Neither fans out, and both are content a founder came
- * for rather than chrome.
+ * One of the five arrived with the rail and was weighed rather than assumed:
+ * the event log, one query for six rows. The rail's checklist is not a sixth —
+ * it comes back from `readNovaHomeReading` with the ranking, for the reason
+ * below.
  *
- * ## The overlap that is known and not yet paid down
+ * ## The overlap that was here, and is not any more
  *
- * On a project with a plan, `readNovaFocus` now resolves the execution offer,
- * and `resolvePlanExecutionRoutes` reads the same three evidence tables
- * `getActionPlanChecklist` reads — the founder's resolutions, the agent's step
- * evidence, the founder-action evidence. Six queries where three would do.
+ * On a project with a plan this route briefly read the plan twice and its
+ * three evidence tables twice: once to answer *which step could Vibe build*
+ * and once to answer *where is the founder in the sequence*.
  *
- * It is written down rather than fixed because the fix is not local: one asks
- * *which step could Vibe build* and the other *where is the founder in the
- * sequence*, they live in different modules, and a shared read would have to
- * belong to one of them or to a third. None of it fans out per candidate, and
- * both halves are on screen — but this is the first duplicated read on this
- * route and it should not become the second.
+ * The answers still differ — an absorbed step counts as satisfied for routing
+ * only once the change that absorbed it is merged, which the rail does not
+ * require to draw a ticked box — so the derivations stayed apart and the reads
+ * came together. `readNovaHomeReading` makes them once and returns both, which
+ * is why the checklist arrives from there rather than from a call of its own.
  *
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
@@ -162,10 +159,12 @@ export type NovaHomeData = {
   /**
    * The plan as a sequence, for the rail. Null when no plan has completed.
    *
-   * Four reads through `getActionPlanChecklist`, not the Action Plan page's
-   * nine: the rail asks what the sequence is and where in it we are, and
-   * nothing about staleness or open questions. It derives completion with the
-   * page's own functions, so the summary and the page cannot come to disagree.
+   * No reads of its own: `readNovaHomeReading` already fetched the plan and
+   * its evidence to answer which step Vibe could build, and this is the second
+   * answer from the same rows. It derives completion with the Action Plan
+   * page's own functions, so the summary and the page cannot come to
+   * disagree — and it asks nothing about staleness or open questions, which
+   * are the five reads that make the page's own call cost nine.
    */
   checklist: ActionPlanChecklist | null;
   /**
@@ -301,12 +300,11 @@ export async function readNovaHomeData(
     repositoryFullName: string | null;
   },
 ): Promise<NovaHomeData> {
-  const [focus, identity, audit, balance, checklist, events] = await Promise.all([
-    readNovaFocus(supabase, params.projectId, params.userId),
+  const [reading, identity, audit, balance, events] = await Promise.all([
+    readNovaHomeReading(supabase, params.projectId, params.userId),
     readIdentity(supabase, params.projectId, params.projectName),
     readAudit(supabase, params.projectId),
     getHeaderCreditBalance(supabase, { userId: params.userId }),
-    getActionPlanChecklist(supabase, params.projectId),
     listAuditEventsForProject(supabase, {
       projectId: params.projectId,
       userId: params.userId,
@@ -317,7 +315,7 @@ export async function readNovaHomeData(
     }),
   ]);
 
-  const view = buildNovaHomeView(focus);
+  const view = buildNovaHomeView(reading.focus);
 
   /*
    * After the four, not beside them: the id to read comes out of the ranking,
@@ -364,7 +362,7 @@ export async function readNovaHomeData(
     change,
     workspaceCandidates,
     move,
-    checklist,
+    checklist: reading.checklist,
     /* Oldest last: a thread reads downward and the log arrives newest first. */
     activity: buildActivityFeed(events.events).reverse(),
   };

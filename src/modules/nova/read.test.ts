@@ -413,6 +413,18 @@ describe("what this module may never reach for", () => {
   });
 
   /*
+   * One trip for two answers. The rail's checklist and the execution offer
+   * read the same plan and the same three evidence tables, and derive
+   * differently on purpose — so the reads are shared and the derivations are
+   * not. A second `readPlanEvidence` in this module would be the duplication
+   * coming back.
+   */
+  it("reads the plan's evidence once, for both answers", () => {
+    expect(source.match(/readPlanEvidence\(/g)?.length ?? 0).toBe(1);
+    expect(source).toContain("checklistFromEvidence");
+  });
+
+  /*
    * The positive half of the correction above. Three facts were fixed at their
    * empty values on a premise about the network, and the last of them cost a
    * candidate that could never arise. A future reader who re-fixes it will

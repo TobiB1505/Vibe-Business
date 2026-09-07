@@ -4,6 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { getLatestCompletedActionPlan } from "../action-plans/store";
 import { resolvePlanExecutionRoutes } from "../coding-agent/website-preflight";
+import {
+  checklistFromEvidence,
+  readPlanEvidence,
+  type ActionPlanChecklist,
+  type PlanEvidence,
+} from "../action-plans/service";
 import { VIBE_EXECUTABLE_MODES } from "../execution-contract/schema";
 import { getAuditCurrency } from "../business-audit/service";
 import { getLatestApprovalsForPreparedChanges } from "../approvals/store";
@@ -384,14 +390,17 @@ async function readExecutableStep(
     projectId: string;
     userId: string;
     plan: Awaited<ReturnType<typeof getLatestCompletedActionPlan>>;
+    /** Read once for this load; the resolver derives its own answer from it. */
+    evidence: PlanEvidence | null;
   },
 ): Promise<{ order: number; title: string } | null> {
-  if (!params.plan) return null;
+  if (!params.plan || !params.evidence) return null;
 
   const { resolutions } = await resolvePlanExecutionRoutes(supabase, {
     projectId: params.projectId,
     userId: params.userId,
     plan: params.plan,
+    evidence: params.evidence,
   });
 
   const offered = resolutions
@@ -457,11 +466,11 @@ function splitStalledFromRunning(
   return { stalled, running };
 }
 
-export async function readNovaFocusFacts(
+async function readHomeInputs(
   supabase: SupabaseClient,
   projectId: string,
   userId: string,
-): Promise<NovaFocusFacts> {
+): Promise<{ facts: NovaFocusFacts; checklist: ActionPlanChecklist | null }> {
   const [
     changes,
     opportunities,
@@ -498,29 +507,88 @@ export async function readNovaFocusFacts(
 
   const { stalled, running } = splitStalledFromRunning(operations);
 
-  const executableStep = await readExecutableStep(supabase, { projectId, userId, plan });
+  /*
+   * One read of the plan's evidence for this load, and two answers from it.
+   *
+   * `readExecutableStep` asks which step Vibe could build; `checklistFromEvidence`
+   * asks where the founder is in the sequence, and the two derivations differ
+   * on purpose — an absorbed step counts as satisfied for routing only once
+   * the change that absorbed it is merged, which the rail does not require to
+   * draw a ticked box. Different answers, one set of rows.
+   */
+  const evidence = plan
+    ? await readPlanEvidence(supabase, { projectId, actionPlanId: plan.id })
+    : null;
+
+  const executableStep = await readExecutableStep(supabase, {
+    projectId,
+    userId,
+    plan,
+    evidence,
+  });
 
   return {
-    sourceDisconnected,
-    failedOperations,
-    stalledOperations: stalled,
-    changes,
-    questions,
-    moves,
-    plannedMoveId: plan?.opportunityId ?? null,
-    executableStep,
-    planOffered: plan === null && moves.length > 0,
-    /*
-     * `hasAudit` guards the honest reading of `upToDate`: a project with no
-     * audit at all is not one whose audit is out of date, and telling a founder
-     * to refresh something that was never run is the kind of false statement
-     * rule 44 exists to keep out of a missing measurement.
-     */
-    auditOutdated: auditCurrency.hasAudit && !auditCurrency.upToDate,
-    repositoryReadOutdated: validationTarget.repositoryReadOutdated,
-    workspaceChoiceRequired: validationTarget.workspaceChoiceRequired,
-    working: running.length > 0 ? { type: running[0].type, view: view(running[0].run) } : null,
+    checklist: plan && evidence ? checklistFromEvidence(plan.steps, evidence) : null,
+    facts: {
+      sourceDisconnected,
+      failedOperations,
+      stalledOperations: stalled,
+      changes,
+      questions,
+      moves,
+      plannedMoveId: plan?.opportunityId ?? null,
+      executableStep,
+      planOffered: plan === null && moves.length > 0,
+      /*
+       * `hasAudit` guards the honest reading of `upToDate`: a project with no
+       * audit at all is not one whose audit is out of date, and telling a founder
+       * to refresh something that was never run is the kind of false statement
+       * rule 44 exists to keep out of a missing measurement.
+       */
+      auditOutdated: auditCurrency.hasAudit && !auditCurrency.upToDate,
+      repositoryReadOutdated: validationTarget.repositoryReadOutdated,
+      workspaceChoiceRequired: validationTarget.workspaceChoiceRequired,
+      working: running.length > 0 ? { type: running[0].type, view: view(running[0].run) } : null,
+    },
   };
+}
+
+/**
+ * The ranking's inputs alone, for callers that want nothing else.
+ *
+ * The tests are the main one: `readHomeInputs` also derives the rail's
+ * checklist, which is not a fact the ranking uses and would only be noise in
+ * an assertion about what Nova decided.
+ */
+export async function readNovaFocusFacts(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+): Promise<NovaFocusFacts> {
+  return (await readHomeInputs(supabase, projectId, userId)).facts;
+}
+
+/**
+ * The ranking, and the plan reading that came free with it.
+ *
+ * ## Why the checklist comes out of here
+ *
+ * Because the reads it needs were already being made. Nova's rail draws the
+ * plan as a sequence, and until now it read the plan and its three evidence
+ * tables for itself — the same four reads this module makes to answer whether
+ * Vibe could build the next step. Two answers, one set of rows now.
+ *
+ * The two questions stay separate, and the derivations with them. What is
+ * shared is the trip to the database, which is the only part neither answer
+ * has an opinion about.
+ */
+export async function readNovaHomeReading(
+  supabase: SupabaseClient,
+  projectId: string,
+  userId: string,
+): Promise<{ focus: NovaFocus; checklist: ActionPlanChecklist | null }> {
+  const { facts, checklist } = await readHomeInputs(supabase, projectId, userId);
+  return { focus: deriveNovaFocus(facts), checklist };
 }
 
 export async function readNovaFocus(

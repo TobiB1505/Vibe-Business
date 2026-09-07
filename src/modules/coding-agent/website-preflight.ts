@@ -39,8 +39,7 @@ import { resolveChainPricingClass } from "@/modules/execution-contract/pricing-c
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { classifyExecutionRisk } from "@/modules/execution-contract/risk";
 import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
-import { listStepExecutionEvidence } from "@/modules/action-plans/completion-store";
-import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
+import { readPlanEvidence, type PlanEvidence } from "@/modules/action-plans/service";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
@@ -314,6 +313,7 @@ async function routingCompletedSteps(
     projectId: string;
     actionPlanId: string;
     steps: readonly ActionPlanStep[];
+    evidence?: PlanEvidence;
   },
 ): Promise<{
   completedSteps: ReadonlySet<number>;
@@ -324,11 +324,18 @@ async function routingCompletedSteps(
 }> {
   const { projectId, actionPlanId, steps } = params;
 
-  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
-    listActiveFounderResolutions(supabase, projectId),
-    listStepExecutionEvidence(supabase, { projectId, actionPlanId }),
-    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId }),
-  ]);
+  /*
+   * Read here, or handed in by a caller that already read it. Nova Home is the
+   * caller: it draws the rail's checklist from the same three tables, with a
+   * deliberately different derivation, and reading them twice for two answers
+   * neither of which follows from the other is a cost with nothing behind it.
+   *
+   * The parameter is `PlanEvidence`, which only `readPlanEvidence` produces —
+   * so a caller cannot hand this resolver invented rows, only rows the
+   * function it replaces would itself have fetched.
+   */
+  const { founderResolutions, agentEvidence, founderActionEvidence } =
+    params.evidence ?? (await readPlanEvidence(supabase, { projectId, actionPlanId }));
 
   /* The second hop, and only when there is something to ask about. A plan with
      no completed agent step asks the merge table nothing at all. */
@@ -384,6 +391,8 @@ export async function resolvePlanExecutionRoutes(
     projectId: string;
     userId: string;
     plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
+    /** Already read by the caller, when it needed the same rows for its own answer. */
+    evidence?: PlanEvidence;
     env?: Record<string, string | undefined>;
   },
 ): Promise<{
@@ -403,6 +412,7 @@ export async function resolvePlanExecutionRoutes(
       projectId,
       actionPlanId: plan.id,
       steps: plan.steps,
+      evidence: params.evidence,
     }),
   ]);
   const completedSteps = routing.completedSteps;

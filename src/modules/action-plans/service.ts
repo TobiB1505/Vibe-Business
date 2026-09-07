@@ -453,33 +453,65 @@ export type ActionPlanChecklist = {
   absorbedByStepOrder: Record<number, number>;
 };
 
-export async function getActionPlanChecklist(
-  supabase: SupabaseClient,
-  projectId: string,
-): Promise<ActionPlanChecklist | null> {
-  const plan = await getLatestCompletedActionPlan(supabase, projectId);
-  if (!plan) return null;
+/**
+ * What a plan's steps have to show for themselves, read once.
+ *
+ * ## Why this is a shape rather than an answer
+ *
+ * Two callers ask different questions of the same three tables. The rail asks
+ * *where is the founder in the sequence*; the execution resolver asks *which
+ * step could Vibe build next*, and its answer is deliberately stricter — a
+ * step absorbed by a change counts as satisfied for routing only once that
+ * change is on the default branch, which the rail does not require to draw a
+ * ticked box.
+ *
+ * So the derivations stay separate and the *reads* are shared. Before this,
+ * one load of Nova Home read these three tables twice and the plan itself
+ * twice, for two answers neither of which could be computed from the other.
+ */
+export type PlanEvidence = {
+  founderResolutions: Awaited<ReturnType<typeof listActiveFounderResolutions>>;
+  agentEvidence: Awaited<ReturnType<typeof listStepExecutionEvidence>>;
+  founderActionEvidence: Awaited<ReturnType<typeof listFounderActionCompletionEvidence>>;
+};
 
-  const [resolutions, agentEvidence, founderActionEvidence] = await Promise.all([
-    listActiveFounderResolutions(supabase, projectId),
-    listStepExecutionEvidence(supabase, { projectId, actionPlanId: plan.id }),
-    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+export async function readPlanEvidence(
+  supabase: SupabaseClient,
+  params: { projectId: string; actionPlanId: string },
+): Promise<PlanEvidence> {
+  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+    listActiveFounderResolutions(supabase, params.projectId),
+    listStepExecutionEvidence(supabase, params),
+    listFounderActionCompletionEvidence(supabase, params),
   ]);
 
+  return { founderResolutions, agentEvidence, founderActionEvidence };
+}
+
+/**
+ * The rail's checklist, from evidence somebody already read.
+ *
+ * Pure, so the projection can be tested without a database and so a caller
+ * that has the evidence in hand pays nothing to ask this second question.
+ */
+export function checklistFromEvidence(
+  steps: ActionPlanStep[],
+  evidence: PlanEvidence,
+): ActionPlanChecklist {
   const completed = completedStepsFromEvidence(
-    plan.steps,
-    resolutions,
-    agentEvidence.completion,
-    founderActionEvidence,
+    steps,
+    evidence.founderResolutions,
+    evidence.agentEvidence.completion,
+    evidence.founderActionEvidence,
   );
-  const satisfied = satisfiedStepsFromEvidence(completed, agentEvidence.absorbed);
+  const satisfied = satisfiedStepsFromEvidence(completed, evidence.agentEvidence.absorbed);
 
   return {
-    steps: plan.steps,
-    firstActionableOrder: firstActionableStep(plan.steps, satisfied)?.order ?? null,
+    steps,
+    firstActionableOrder: firstActionableStep(steps, satisfied)?.order ?? null,
     completedStepOrders: [...completed],
     absorbedByStepOrder: Object.fromEntries(
-      absorptionByStepOrder(completed, agentEvidence.absorbed),
+      absorptionByStepOrder(completed, evidence.agentEvidence.absorbed),
     ),
   };
 }
