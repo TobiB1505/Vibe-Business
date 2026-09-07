@@ -419,6 +419,14 @@ export type ActionPlanView = {
    * builder that has no branch. Serialized as an object across the boundary.
    */
   handoffByStepKey: Record<string, HandoffTool>;
+  /**
+   * What the founder established on the steps they closed (ADR 0093).
+   *
+   * Free — it comes off the attestation evidence this view already reads. It is
+   * here so a handoff can carry it into the founder's own tool, rather than
+   * sending them to rediscover something they had already worked out.
+   */
+  findingByStepKey: Record<string, string>;
   /** The request for the current actionable founder-owned step, if one is open. */
   founderInputRequest: FounderInputRequest | null;
   /**
@@ -490,6 +498,11 @@ export async function getLatestActionPlan(
     completedStepOrders: [...completed],
     absorbedByStepOrder: Object.fromEntries(absorption),
     handoffByStepKey: Object.fromEntries(handoffs),
+    findingByStepKey: Object.fromEntries(
+      founderActionEvidence
+        .filter((item): item is typeof item & { finding: string } => item.finding !== null)
+        .map((item) => [item.stepKey, item.finding]),
+    ),
     openFounderInputCount: requests.filter((request) => request.status === "open").length,
     founderInputRequest:
       actionable === null

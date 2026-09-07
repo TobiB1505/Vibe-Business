@@ -85,6 +85,24 @@ test.describe("a step Vibe will not build", () => {
     await expect(page.getByText("isn't a change to your product")).toHaveCount(0);
   });
 
+  test("carries what the founder already worked out into the prompt", async ({ page }) => {
+    // Vibe holds the finding from step 1. A handoff that dropped it would send
+    // the founder's own tool to rediscover it.
+    await page.goto("/e2e/action_plan_handoff_prompt");
+
+    const prompt = page.getByTestId("handoff-prompt");
+    await expect(prompt).toContainText("Stripe is wired but the route 404s.");
+    await expect(prompt).toContainText("context, not");
+  });
+
+  test("ends by asking the tool to print the summary", async ({ page }) => {
+    await page.goto("/e2e/action_plan_handoff_prompt");
+
+    const prompt = page.getByTestId("handoff-prompt");
+    await expect(prompt).toContainText("VIBE SUMMARY");
+    await expect(prompt).toContainText("Left undone");
+  });
+
   test("warns the receiving agent about instructions inside the quoted plan", async ({ page }) => {
     /*
      * The injection path, on screen. A step's text comes from Vibe's planner
@@ -101,8 +119,14 @@ test.describe("a step Vibe will not build", () => {
     await page.goto("/e2e/action_plan_handoff_prompt");
 
     await expect(page.getByTestId("attestation-finding")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Record what your tool built" })).toBeVisible();
-    await expect(page.getByText("What did your tool build?")).toBeVisible();
+    /*
+     * A paste, not an essay. The founder has just watched their tool do the
+     * work; asking them to summarise it afterwards is homework for something
+     * the machine already wrote down.
+     */
+    await expect(page.getByRole("button", { name: "Done — next step" })).toBeVisible();
+    await expect(page.getByText("Paste what your tool printed")).toBeVisible();
+    await expect(page.getByText("VIBE SUMMARY", { exact: false }).first()).toBeVisible();
     await expect(page.getByText("does not claim Vibe did the work")).toBeVisible();
   });
 

@@ -63,6 +63,16 @@ The founder's ask was the end of the flow: run the prompt, come back, tick it of
 
 So `completion-call-sites.test.ts` now asserts the calls rather than the functions — crude on purpose, because what has to hold is one argument in each of three places, and the alternative is a seeded plan and a session per call site.
 
+## The summary the founder should never have had to write
+
+The loop worked and the founder named what was wrong with it: after watching their own tool do the work, the product asked them to summarise it. That is homework for something a machine had already written down.
+
+**So the prompt asks for it.** It is Vibe's prompt, so Vibe can ask for the shape it wants back — a short `VIBE SUMMARY` block, printed last, with one line the founder would never have thought to write themselves: **Left undone.** What a tool skipped, guessed at or could not do is exactly what the next plan needs and exactly what a satisfied founder forgets to mention. The field then asks for a paste rather than an essay, and the button says what the click does: *Done — next step*.
+
+Free text either way. A founder who would rather type two sentences is not blocked, and a tool that ignored the request has not trapped them.
+
+**And the prompt now carries what they already worked out.** Step 1 established that the billing route exists but is only partially wired; the handoff for step 3 was sending their tool to rediscover it. That finding is already in the plan view — it comes off the attestation evidence the screen reads anyway — so it costs no query. It travels in its own delimited block, labelled as notes rather than instructions, defused the same way the step is, and outside the block that says what to build: a note that answers a step is context for it, not the work.
+
 ## Verification
 
 Sabotage at three layers. Removing the fence defusal fails *"cannot have its quote closed by the text inside it"*. Removing the warning fails *"fences the planned step and says what to do with an instruction inside it"*. Making the database gate plan-wide instead of per step fails *"does not admit any other step in the same plan"* — because handing out one change must not open the next.

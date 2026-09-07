@@ -409,6 +409,15 @@ function PlanBody({
               step={firstActionableStep}
               repository={repositoryFullName}
               tool={planView.handoffByStepKey[firstActionableStep.id] ?? null}
+              /* What the founder already worked out, in plan order and without
+                 the step being handed over — a note that answers this step is
+                 the step, not context for it (ADR 0096). */
+              priorFindings={steps
+                .filter((entry) => entry.id !== firstActionableStep.id)
+                .flatMap((entry) => {
+                  const finding = planView.findingByStepKey[entry.id];
+                  return finding ? [{ stepTitle: entry.title, finding }] : [];
+                })}
               confirmation={
                 <AttestationForm
                   projectId={projectId}

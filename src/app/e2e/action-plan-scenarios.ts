@@ -247,6 +247,7 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     completedStepOrders: overrides.completedStepOrders ?? [],
     absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
     handoffByStepKey: overrides.handoffByStepKey ?? {},
+    findingByStepKey: overrides.findingByStepKey ?? {},
     founderInputRequest,
     // Derived from the request the fixture just built, so a scenario can never
     // claim open questions it does not carry.
@@ -430,6 +431,8 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         progress: planProgress(STEPS, completed),
         completedStepOrders: [...completed],
         handoffByStepKey: { "step-add-pricing-page": "claude_code" },
+        // What the founder worked out on step 1, which the prompt carries in.
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
         founderInputRequest: null,
       }),
       activeOperation: null,

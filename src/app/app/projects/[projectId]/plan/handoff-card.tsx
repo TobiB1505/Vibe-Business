@@ -7,7 +7,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
-import { compileHandoffPrompt } from "@/modules/handoff/prompt";
+import { compileHandoffPrompt, type PriorFinding } from "@/modules/handoff/prompt";
 import { HANDOFF_TOOL_CHOICES, HANDOFF_TOOL_LABELS } from "@/modules/handoff/view";
 import type { HandoffTool } from "@/modules/handoff/schema";
 import { recordHandoffAction, type HandoffActionState } from "../handoff-action";
@@ -46,6 +46,7 @@ export function HandoffCard({
   step,
   repository,
   tool,
+  priorFindings,
   confirmation,
 }: {
   projectId: string;
@@ -55,6 +56,8 @@ export function HandoffCard({
   repository: string | null;
   /** The tool already chosen, or null when no handoff has been recorded yet. */
   tool: HandoffTool | null;
+  /** What the founder established on earlier steps of this plan (ADR 0096). */
+  priorFindings: readonly PriorFinding[];
   /** The attestation card, rendered under the prompt once a handoff exists. */
   confirmation: React.ReactNode;
 }) {
@@ -109,7 +112,7 @@ export function HandoffCard({
         </form>
       ) : (
         <HandoffPrompt
-          prompt={compileHandoffPrompt({ step, tool, repository })}
+          prompt={compileHandoffPrompt({ step, tool, repository, priorFindings })}
           toolLabel={HANDOFF_TOOL_LABELS[tool]}
         />
       )}

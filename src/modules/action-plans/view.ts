@@ -355,16 +355,29 @@ export function attestationPrompt(
   handedOff = false,
 ): AttestationPrompt {
   if (handedOff) {
+    /*
+     * A paste, not an essay (ADR 0096).
+     *
+     * The founder has just watched their own tool do the work, and asking them
+     * to summarise it afterwards is homework for something a machine already
+     * wrote down. So the prompt Vibe hands out ends by asking the tool to print
+     * a short block last, and this field asks for that block back.
+     *
+     * Free text either way — a founder who would rather type two sentences is
+     * not blocked, and a tool that ignored the request has not trapped them.
+     */
     return {
       pill: "Vibe won't build this one",
       lead: null,
       footnote:
         "Recorded against this exact plan step and given to the next planning run. It does not " +
         "claim Vibe did the work.",
-      submitLabel: "Record what your tool built",
+      submitLabel: "Done — next step",
       finding: {
-        label: "What did your tool build?",
-        help: "In your own words. The next plan is written with this in front of it.",
+        label: "Paste what your tool printed",
+        help:
+          "The prompt asks it to end with a short VIBE SUMMARY block. Paste that here — or " +
+          "write a line yourself if it didn't.",
       },
     };
   }
