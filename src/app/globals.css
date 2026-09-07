@@ -954,11 +954,33 @@
   animation-delay: calc(var(--vibe-index, 0) * var(--stagger-row));
 }
 
+/*
+ * A score ring drawing itself to its true length.
+ *
+ * Admissible where a count-up is not: the arc carries no label, so no frame of
+ * it can be read as a score the audit did not produce. The number inside is
+ * present and correct at frame one — see `score-ring.tsx`.
+ *
+ * `--vibe-ring-length` is the circle's circumference, handed in by the
+ * component because only it knows the radius. The rule owns the timing so
+ * every ring in the product draws at one speed.
+ */
+@keyframes vibe-ring-draw {
+  from {
+    stroke-dashoffset: var(--vibe-ring-length);
+  }
+}
+
+@utility vibe-ring-draw {
+  animation: vibe-ring-draw var(--duration-reveal) var(--ease-vibe) both;
+}
+
 /* Obligation 2, the hidden tab. `MotionProvider` stamps the root, so one
    listener covers every animation in the product rather than one per
    component. Paused, not stopped: it resumes where it left off, so nothing
    jumps when somebody comes back to the tab. */
 :root[data-motion="paused"] .vibe-reveal,
+:root[data-motion="paused"] .vibe-ring-draw,
 :root[data-motion="paused"] .vibe-breathe {
   animation-play-state: paused;
 }
@@ -971,6 +993,12 @@
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  /* The settled arc, immediately. `animation: none` leaves the inline
+     `stroke-dashoffset` in place, which is already the true value. */
+  .vibe-ring-draw {
+    animation: none;
   }
 }
 

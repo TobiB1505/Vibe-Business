@@ -1,43 +1,43 @@
 import { expect, test } from "@playwright/test";
 
 /**
- * The account dashboard's density budget (CORE-6).
+ * The account dashboard, as a ranked desk.
  *
- * ## Why a browser test rather than a review note
+ * ## What the screen is
+ *
+ * One column, most urgent first. The first entry opens into the decision
+ * itself; everything else is a row. It replaced a signal card, a grid of
+ * product cards and a connect band — a screen organised by *object* rather than
+ * by what a founder has to do. See `src/app/app/desk.ts`.
+ *
+ * ## Why a density budget still exists
  *
  * Because "the account level must feel calmer than the project level" is a
  * claim about pixels, and a target nothing enforces erodes on the next commit.
  * Every section anyone adds here will be defensible on its own — a usage strip,
  * a recent-activity list, a repository count, a plan nudge — and the sum is the
- * admin panel this screen was rebuilt to stop being.
+ * admin panel this screen keeps being rebuilt to stop being.
  *
- * ## What the numbers are
- *
- * CORE-6 removed the attention list and the activity feed from `/app`, and the
- * ceiling was 36: room for a couple of small additions and not for a fourth
- * section.
- *
- * **The attention model came back, and the ceiling moved with it.** The
- * argument is in `attention-stack.tsx` and the short form is that a product
- * raises more than one item — `attention.ts` says in its own comment that
- * hiding the second behind the first means the user never sees it — and a card
- * has one action. Measured on the three-product fixture, a blocked validation
- * was reachable from nowhere on this screen.
- *
- * What the budget exists to stop is a screen that grows unrelated strips, and
- * the *object* count is unchanged at four: the signal and the next move are
- * one card, the stack takes the column beside it, and connect moved into that
- * column. Measured today: 31, of which the stack is 7. Its worst case is four
- * rows rather than two, which is 37, so the ceiling is 40 — the same three or
- * four elements of headroom the old number left.
- *
- * It is measured against `AccountHome`, the same component `/app` renders — a
- * composition this file assembled itself would measure a screen that exists
- * nowhere.
+ * The number moved *down*, not up. The old grid measured 31 at three products
+ * against a 36 ceiling; the desk measures 12, because a row carries a title and
+ * a sentence where a card carried three labelled facts and its own action. The
+ * ceiling is 24: room for the fourth and fifth row a real account has, and not
+ * room for a second section.
  */
 
 const THREE = "/e2e/account-three-products";
 const UNSCORED = "/e2e/account-unscored";
+const EMPTY = "/e2e/account-empty";
+
+/**
+ * The desk's own list.
+ *
+ * Scoped, because the account rail is a `<ul>` of navigation items and a
+ * page-wide `listitem` query counts those too — which is how a row assertion
+ * quietly starts measuring the sidebar.
+ */
+const desk = (page: import("@playwright/test").Page) =>
+  page.getByRole("list", { name: "Everything else on your desk" }).getByRole("listitem");
 
 /**
  * One element per discrete thing a person has to read or decide about: a mono
@@ -46,8 +46,8 @@ const UNSCORED = "/e2e/account-unscored";
  */
 const ELEMENTS = "[data-mono-label], h1, h2, h3, p, a, button";
 
-/** Measured at three products with a full attention stack, plus headroom. */
-const BUDGET = 40;
+/** Measured at three products with four entries, plus headroom. */
+const BUDGET = 24;
 
 test.describe("the account dashboard stays calmer than the project workspace", () => {
   test("keeps the whole screen inside its element budget at three products", async ({ page }) => {
@@ -64,137 +64,87 @@ test.describe("the account dashboard stays calmer than the project workspace", (
   });
 
   /**
-   * The reference gives every card three useful `label: value` rows. Those rows
-   * are now present, but the card still gets exactly one action — three ways out
-   * of one card would turn a summary into a miniature workspace.
+   * The head is the only card, and there is one of it.
+   *
+   * `Surface` level 3 is "one primary object per view". A second card would put
+   * two things at the top of the hierarchy, which is the "equally weighted
+   * doors on arrival" the audit named as the failure to fix.
    */
-  test("gives a product card three facts and one action", async ({ page }) => {
+  test("has exactly one primary object", async ({ page }) => {
     await page.goto(THREE);
 
-    const cards = page.getByTestId("product-card");
-    await expect(cards).toHaveCount(3);
-
-    for (const card of await cards.all()) {
-      await expect(card.locator("dt")).toHaveCount(3);
-      expect(await card.locator("a, button").count()).toBeLessThanOrEqual(1);
-    }
+    const home = page.getByTestId("account-home");
+    await expect(home.locator(".vibe-surface-card")).toHaveCount(1);
   });
 
-  test("keeps the reference hierarchy without inventing a time filter", async ({ page }) => {
+  test("renders no activity feed and no invented account figure", async ({ page }) => {
     await page.goto(THREE);
 
-    await expect(page.getByRole("heading", { name: "Business signal" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Next move" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Your products" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Connect a new product" })).toBeVisible();
+    await expect(page.getByTestId("dashboard-activity")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: /recent activity/i })).toHaveCount(0);
+    // An average across products of different maturity is a number Vibe cannot
+    // stand behind, and rule 44 forbids a null becoming part of one.
+    await expect(page.getByText(/overall score/i)).toHaveCount(0);
+    await expect(page.getByText(/average/i)).toHaveCount(0);
     await expect(page.getByRole("button", { name: /last 7 days/i })).toHaveCount(0);
   });
 
+  /**
+   * The control is the `<summary>`, and it is addressed as one.
+   *
+   * `getByRole("button")` does not find it: ARIA in HTML gives `summary` no
+   * corresponding role, so Playwright's tree shows the `<details>` as a
+   * `group` with text inside and no interactive descendant. That is a property
+   * of the role mapping rather than of the markup — a native disclosure is
+   * operable by keyboard and announced as one by real assistive technology —
+   * so this drives the element and proves the keyboard path explicitly rather
+   * than asserting a role the spec does not define.
+   */
   test("reveals account actions from the profile control", async ({ page }) => {
     await page.goto(THREE);
 
     const menu = page.getByTestId("account-menu");
+    const control = menu.locator("summary");
     await expect(menu.getByRole("link", { name: /profile/i })).toBeHidden();
 
-    await menu.locator("summary").click();
+    await control.focus();
+    await page.keyboard.press("Enter");
 
     await expect(menu.getByRole("link", { name: /profile/i })).toBeVisible();
     await expect(menu.getByRole("link", { name: /settings/i })).toBeVisible();
     await expect(menu.getByRole("link", { name: /billing/i })).toBeVisible();
     await expect(menu.getByRole("button", { name: /sign out/i })).toBeVisible();
   });
+});
 
-  /**
-   * The activity feed stays gone. It was eight rows of metadata with no action
-   * at all, and nothing about it has changed.
-   *
-   * The attention list is the half that came back, and it came back as a
-   * ranked stack beside the hero rather than as a strip above the grid —
-   * because what it uniquely carries is the *tier* and the second item a
-   * product raises, neither of which fits on a card with one action.
-   */
-  test("renders no activity feed, and no second copy of the ranking", async ({ page }) => {
-    await page.goto(THREE);
-
-    await expect(page.getByTestId("dashboard-activity")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: /recent activity/i })).toHaveCount(0);
-
-    // One stack, not one per section.
-    await expect(page.getByRole("heading", { name: "Also waiting" })).toHaveCount(1);
-  });
-
+test.describe("the head is the most urgent decision", () => {
   /**
    * The row the old screen could not show anywhere.
    *
-   * Payflow raises two items — a failed validation and waiting moves. The hero
-   * answers the moves; the card below says "Review change", which is the
-   * *waiting* change, not the failed one. So before this stack existed, the
-   * word "failed" appeared nowhere on the dashboard for a product whose
-   * validation had failed.
+   * Payflow raises two items — a failed validation and waiting moves. The old
+   * hero offered the moves and the card below said "Review change", which is
+   * the *waiting* change; the word "failed" appeared nowhere. Ranking blocked
+   * above ready puts it at the top of the screen instead.
    */
-  test("shows a second item from a product the hero already covers", async ({ page }) => {
+  test("opens the blocked decision, not the highest score", async ({ page }) => {
     await page.goto(THREE);
 
-    const stack = page.getByRole("region", { name: "Also waiting" });
-    await expect(stack).toContainText("Payflow");
-    await expect(stack).toContainText(/failed validation/i);
-    await expect(stack).toContainText("Blocked");
-
-    // And it does not repeat what the hero's own control already offers.
-    await expect(stack).not.toContainText(/View action plan/i);
-  });
-});
-
-test.describe("the hero is about one named product", () => {
-  test("names the product that needs attention, not the account", async ({ page }) => {
-    await page.goto(THREE);
-
-    // The "Needs You Now" project is the only fixture with a failed validation,
-    // so it is first by attention tier — and the hero must be that one rather
-    // than the newest or the highest-scoring. It is named by its *product*
-    // name, Payflow, which is what every surface on this screen calls it.
-    //
-    // The region's accessible name was exactly "Payflow", from an `sr-only`
-    // heading that carried the product name and nothing else. It now carries
-    // what the region is as well — "Business signal Payflow" — because a
-    // screen-reader user landing on a region named only for a product has to
-    // read on to find out it is a score. The assertion this test exists to
-    // make is unchanged: the hero is about one named product, and that
-    // product is the one attention ranked first.
-    const hero = page.getByRole("region", { name: /Payflow/ });
-    await expect(hero).toHaveAccessibleName(/Business signal/);
-    await expect(hero.getByRole("link", { name: "Payflow" })).toBeVisible();
-    // Scoped to the hero: the same product's card below shows 46 too, and a
-    // page-wide match would pass on the card alone while the hero was blank.
-    await expect(hero.getByText("46")).toBeVisible();
-
-    // No invented account-level figure anywhere on the screen.
-    await expect(page.getByText(/overall score/i)).toHaveCount(0);
-    await expect(page.getByText(/average/i)).toHaveCount(0);
+    const head = page.getByRole("region", { name: /prepared change failed validation/i });
+    await expect(head).toBeVisible();
+    await expect(head).toContainText("Blocked");
+    await expect(head).toContainText("Payflow");
+    await expect(head.getByRole("link", { name: /Review change/ })).toBeVisible();
   });
 
-  test("calls one product by one name, hero and card alike", async ({ page }) => {
-    // The seam this closes: the hero read the project label while the card
-    // below it read the product name, so a founder saw one product introduced
-    // twice under two names on a single screen.
+  test("carries the product's reading as context, not as the subject", async ({ page }) => {
     await page.goto(THREE);
 
-    await expect(page.getByText("Needs You Now")).toHaveCount(0);
-
-    const card = page.getByTestId("product-card").filter({ hasText: "Payflow" });
-    await expect(card.getByRole("heading", { name: "Payflow" })).toBeVisible();
-    // The repository is this card's anchor back to the project, and stays.
-    await expect(card).toContainText("founder/product");
-  });
-
-  test("shows the product's logo where it has one", async ({ page }) => {
-    await page.goto(THREE);
-
-    const withLogo = page.getByTestId("product-card").filter({ hasText: "Quietly Fine" });
-    await expect(withLogo.getByTestId("product-logo")).toBeVisible();
-
-    const withoutLogo = page.getByTestId("product-card").filter({ hasText: "Payflow" });
-    await expect(withoutLogo.getByTestId("product-logo")).toHaveCount(0);
+    const head = page.getByRole("region", { name: /prepared change failed validation/i });
+    // The decision is the heading; the score is beside it.
+    await expect(head.getByRole("heading")).toContainText("1 prepared change failed validation");
+    await expect(head.locator("[data-score-ring]")).toBeVisible();
+    await expect(head).toContainText("46");
+    await expect(head).toContainText("+3 since previous audit");
   });
 
   test("explains a broken line instead of drawing a trend through it", async ({ page }) => {
@@ -207,10 +157,112 @@ test.describe("the hero is about one named product", () => {
   test("shows a sentence rather than a zero for a product with no audit", async ({ page }) => {
     await page.goto(UNSCORED);
 
-    await expect(page.getByText("Vibe hasn't analysed this product yet.")).toBeVisible();
+    await expect(page.getByText("No score yet.")).toBeVisible();
     // Rule 44 in the place it would actually break: the ring must not render.
+    await expect(page.locator("[data-score-ring]")).toHaveCount(0);
     await expect(page.getByText("/ 100")).toHaveCount(0);
     await expect(page.getByText("0", { exact: true })).toHaveCount(0);
+  });
+});
+
+test.describe("the rest of the desk is rows", () => {
+  test("ranks every entry, and never repeats the head's own decision", async ({ page }) => {
+    await page.goto(THREE);
+
+    const rows = desk(page);
+    // Two remaining items, one settled product, and the connect route.
+    await expect(rows).toHaveCount(4);
+
+    // Ready sorts below blocked, and the settled product sorts below both.
+    const text = await rows.allInnerTexts();
+    expect(text[0]).toContain("Ready");
+    expect(text[2]).toContain("Settled");
+    expect(text[3]).toContain("Connect another product");
+
+    // The head's decision appears once, in the head.
+    await expect(page.getByText(/prepared change failed validation/)).toHaveCount(1);
+  });
+
+  test("keeps a product with nothing waiting on the desk", async ({ page }) => {
+    await page.goto(THREE);
+
+    const settled = desk(page).filter({ hasText: "Quietly Fine" });
+    await expect(settled).toContainText("Nothing waiting");
+    await expect(settled).toContainText("71");
+  });
+
+  test("gives one row one destination", async ({ page }) => {
+    await page.goto(THREE);
+
+    for (const row of await desk(page).all()) {
+      expect(await row.locator("a").count()).toBe(1);
+    }
+  });
+
+  test("says what Vibe does when there is nothing at all", async ({ page }) => {
+    await page.goto(EMPTY);
+
+    await expect(page.getByText("Turn what you built into a business.")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Connect GitHub/ })).toBeVisible();
+    await expect(desk(page)).toHaveCount(0);
+  });
+});
+
+test.describe("the desk arrives without moving under a reader", () => {
+  /**
+   * Obligation 3: reserved geometry.
+   *
+   * The entrance is `vibe-reveal`, whose keyframes interpolate opacity and
+   * transform and have no layout property in them. This measures that claim
+   * where it would break — the box a row occupies must be identical mid-flight
+   * and settled, or the list reflows under somebody reading it.
+   */
+  test("reserves every row's geometry through the entrance", async ({ page }) => {
+    await page.goto(THREE);
+
+    /*
+     * Layout values, not `boundingBox()`.
+     *
+     * The first version of this used the rendered box and failed by 2.07px —
+     * correctly, and against the wrong claim. `vibe-reveal` *translates* the
+     * arriving element, so its painted box is meant to move; what must not
+     * move is everything around it. `offsetTop` and `offsetHeight` are
+     * pre-transform, so they measure exactly that: the space the row occupies
+     * in the flow, which is what a reader below it is standing on.
+     */
+    const layout = () =>
+      desk(page)
+        .first()
+        .evaluate((node) => ({
+          top: (node as HTMLElement).offsetTop,
+          height: (node as HTMLElement).offsetHeight,
+        }));
+
+    const during = await layout();
+    await page.waitForTimeout(1500);
+    const settled = await layout();
+
+    expect(during).toEqual(settled);
+
+    // And the page below it is where it was: the list did not grow into place.
+    const height = await page.evaluate(() => document.body.scrollHeight);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => document.body.scrollHeight)).toBe(height);
+  });
+
+  test("arrives settled and complete under reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(THREE);
+
+    // Not a degraded experience: the same information, without the movement.
+    const rows = desk(page);
+    await expect(rows).toHaveCount(4);
+    for (const row of await rows.all()) {
+      await expect(row).toBeVisible();
+      expect(await row.evaluate((node) => Number(getComputedStyle(node).opacity))).toBe(1);
+    }
+    // The score ring's arc is at its true length rather than animating to it.
+    await expect(page.locator("[data-score-ring]")).toBeVisible();
   });
 });
 

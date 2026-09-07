@@ -3,46 +3,45 @@ import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
-import { ArrowRightIcon, PlusIcon } from "@/components/ui/dashboard-icons";
-import {
-  buildAttentionItems,
-  orderProjectsByAttention,
-  type AttentionKind,
-} from "@/modules/projects/attention";
+import { PlusIcon } from "@/components/ui/dashboard-icons";
+import { Reveal } from "@/components/ui/motion";
 import { productDisplayName } from "@/modules/projects/display-name";
 import type { DashboardProject } from "@/modules/projects/dashboard";
-import { AttentionStack } from "./attention-stack";
-import { ProductCard } from "./product-card";
-import { SignalCard } from "./signal-card";
+import { buildDesk } from "./desk";
+import { DeskHead } from "./desk-head";
+import { DeskRow } from "./desk-row";
 
 /**
- * Everything the account dashboard puts on screen (CORE-6).
+ * The account dashboard: one ranked list, most urgent first.
+ *
+ * ## What this replaced, and why
+ *
+ * A signal card, a grid of product cards and a connect band — a screen
+ * organised by *object*. A founder arriving asks one question, *what do I do?*,
+ * and the product already answers it: `buildAttentionItems` ranks every waiting
+ * decision by tier, and the old screen used that ranking only to pick a hero
+ * and to sort a grid. Everything else it knew — that a validation had **failed**
+ * rather than merely waited, that one product raised two decisions — reached
+ * the founder nowhere.
+ *
+ * So the screen is the ranking. `desk.ts` builds it; the first entry opens into
+ * the decision itself and the rest are rows. See that file for the argument in
+ * full, and `desk-row.tsx` for why rows rather than cards.
+ *
+ * ## What survives from the old screen, deliberately
+ *
+ * One primary object — the head is the only `card`, everything under it is a
+ * `panel`. The ranking. The refusal to invent an account-wide average, a usage
+ * strip or an activity feed. And the honest empty state, which is the product's
+ * first real sentence to a new user and says what Vibe does rather than that a
+ * list is empty.
  *
  * ## Why the composition is a component and not the page
  *
- * Because the density budget is a claim about pixels, and the browser harness
- * renders components rather than pages — it has no database. A test that
- * re-assembled these three pieces itself would be measuring a screen that
- * exists only in the test file, and would keep passing after someone added a
- * fourth section to the real one. Rendering the same component the page
- * renders is what makes `e2e/account-dashboard.spec.ts` a budget rather than a
- * decoration.
- *
- * The page keeps what a page owns: the session, the reads, the redirects.
- *
- * ## The three objects, in the order they answer the question
- *
- * Where things stand for the product that needs attention *and* the one move
- * that follows from it, every product as an index, then the route to add
- * another. There is no attention list and no activity feed — both left in
- * CORE-6, and the ordering the attention list uniquely contributed is what
- * arranges the grid.
- *
- * It was four. The signal and the move were separate full-width panels with a
- * control each, which on an unanalysed product asked the same thing twice and
- * offered a button into an action plan that held nothing. `SignalCard` argues
- * the merge; what matters here is that the screen now has exactly one primary
- * object and the grid is a quiet index under it.
+ * The browser harness renders components rather than pages — it has no
+ * database — so a test that re-assembled these pieces itself would be measuring
+ * a screen that exists only in the test file. The page keeps what a page owns:
+ * the session, the reads, the redirects.
  */
 
 const CONNECT_ERROR_MESSAGES: Record<string, string> = {
@@ -63,64 +62,53 @@ const CONNECT_ERROR_MESSAGES: Record<string, string> = {
  */
 function EmptyDashboard() {
   return (
-    <Surface level="card" padding="lg" className="flex flex-col gap-5">
-      <div className="flex flex-col gap-3">
-        <MonoLabel>Get started</MonoLabel>
-        <h2 className="text-fg text-headline max-w-[24ch] font-bold text-balance">
-          Turn what you built into a business.
-        </h2>
-        <p className="text-fg-prose max-w-[60ch] text-body leading-relaxed">
-          Connect a repository you have already built. Vibe reads the product, scores the business
-          around it, and shows you what to do next. Anything it prepares later lands on its own
-          branch — the branch you ship from moves only when you approve a change.
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-4">
-        <Link href="/app/connect/github" className={buttonClasses()}>
-          Connect GitHub
-        </Link>
-        <span className="text-fg-meta text-caption">Opens GitHub · takes about a minute</span>
-      </div>
-    </Surface>
+    <Reveal>
+      <Surface level="card" padding="lg" className="flex flex-col gap-5">
+        <div className="flex flex-col gap-3">
+          <MonoLabel>Get started</MonoLabel>
+          <h2 className="text-fg text-headline max-w-[24ch] font-bold text-balance">
+            Turn what you built into a business.
+          </h2>
+          <p className="text-fg-prose max-w-[60ch] text-body leading-relaxed">
+            Connect a repository you have already built. Vibe reads the product, scores the business
+            around it, and shows you what to do next. Anything it prepares later lands on its own
+            branch — the branch you ship from moves only when you approve a change.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href="/app/connect/github" className={buttonClasses()}>
+            Connect GitHub
+          </Link>
+          <span className="text-fg-meta text-caption">Opens GitHub · takes about a minute</span>
+        </div>
+      </Surface>
+    </Reveal>
   );
 }
 
 /**
- * The way to add another product.
+ * The way to add another product: a route, not an offer.
  *
- * A route, not an offer. It carried a 64px mint tile and a two-line pitch,
- * which gave a utility link the visual weight of the work above it — on a
- * screen whose whole claim is that one thing matters most. One row, one
- * sentence, one way in.
- *
- * It sits in the right-hand column rather than under the grid, because that
- * column is otherwise a tall empty space beside a tall card, and "add another"
- * is the one thing on this screen that belongs *next to* the list rather than
- * after it.
+ * Last on the desk because it is the only entry that is not about a product the
+ * founder already has, and it is the quietest surface on the screen because a
+ * utility link must not carry the weight of the decisions above it.
  */
-function ConnectRoute() {
+function ConnectRow({ index }: { index: number }) {
   return (
-    <Surface
-      level="section"
-      padding="md"
-      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"
-    >
-      <div className="flex min-w-0 items-center gap-3">
-        <span
-          aria-hidden
-          className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
-        >
-          <PlusIcon size={18} />
-        </span>
-        <h3 className="text-fg text-ui font-semibold">Connect a new product</h3>
-      </div>
+    <Reveal as="li" index={index}>
       <Link
         href="/app/connect/github"
-        className={buttonClasses({ variant: "secondary", size: "sm" })}
+        className="group border-line-1 rounded-panel text-fg-secondary hover:border-line-3 hover:text-fg flex items-center gap-4 border border-dashed px-4 py-3.5 transition-interactive focus-visible:ring-2 focus-visible:ring-mint focus-visible:outline-none sm:px-5"
       >
-        Connect product
+        <span
+          aria-hidden
+          className="bg-mint-tint text-mint flex size-8 shrink-0 items-center justify-center rounded-nav"
+        >
+          <PlusIcon size={16} />
+        </span>
+        <span className="text-ui font-semibold">Connect another product</span>
       </Link>
-    </Surface>
+    </Reveal>
   );
 }
 
@@ -134,62 +122,29 @@ export function AccountHome({
   /** A project whose setup was never finished. Offered, never redirected to. */
   unfinishedSetupProjectId?: string | null;
 }) {
-  const attention = buildAttentionItems(projects);
   const projectNames = new Map(
     projects.map((project) => [project.id, productDisplayName(project)]),
   );
 
-  /*
-   * Most-urgent first. The same ordering carries both halves of this screen:
-   * the grid below, and the one product the hero panel is about — so the
-   * headline and the cards under it can never disagree about which product
-   * matters most.
-   */
-  const ordered = orderProjectsByAttention(projects);
-  const hero = ordered[0] ?? null;
+  const desk = buildDesk(projects);
+  const [head, ...rest] = desk;
+
+  const waiting = desk.filter((entry) => entry.kind === "item").length;
 
   /*
-   * Everything still waiting, minus the one thing the hero already answers.
-   *
-   * Not "the hero's first item" — that was wrong in the obvious case. The hero
-   * card's control is about the *move*, so on a product that also has a
-   * prepared change waiting, dropping by position removed the change and left
-   * the move, and the screen then offered the move twice while never
-   * mentioning the change.
-   *
-   * So it is dropped by what the control actually does. Everything else the
-   * hero product raises stays: `attention.ts` is explicit that a product
-   * needing attention twice must be seen twice, and a card has one action.
-   */
-  const heroAnswers: AttentionKind | null = !hero
-    ? null
-    : hero.repositoryFullName === null
-      ? "no_repository"
-      : hero.scoreState === "not_audited"
-        ? "never_audited"
-        : hero.topMove
-          ? "moves_waiting"
-          : null;
-
-  const alsoWaiting = attention.filter(
-    (item) => !(hero !== null && item.projectId === hero.id && item.kind === heroAnswers),
-  );
-
-  /**
    * The headline states a fact or says there is nothing. No greeting by name
    * and no time of day: the session carries an email, not a name, and the
    * server's clock is not the user's. Inventing either would be exactly the
    * fake personalisation this product avoids.
    */
   const headline = projects.length === 0 ? "Welcome to Vibe Business." : "Welcome back.";
-
   const summary =
-    attention.length === 0
-      ? "Your business command center is up to date."
-      : `${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} your attention across your products.`;
+    waiting === 0
+      ? "Nothing is waiting on you. Every product is up to date."
+      : `${waiting} ${waiting === 1 ? "decision is" : "decisions are"} waiting, most urgent first.`;
 
   return (
-    <div className="flex flex-col gap-7" data-testid="account-home">
+    <div className="flex flex-col gap-6" data-testid="account-home">
       {connectError && (
         <Notice tone="problem" label="Connection failed">
           {CONNECT_ERROR_MESSAGES[connectError] ?? "GitHub connection failed. Please try again."}
@@ -213,70 +168,31 @@ export function AccountHome({
         </Notice>
       )}
 
-      <header className="flex flex-col gap-2 pb-2">
+      <header className="flex flex-col gap-2 pb-1">
         <h1 className="text-fg text-headline sm:text-display font-bold tracking-[-0.04em] text-balance">
           {headline}
         </h1>
         {projects.length > 0 && <p className="text-fg-muted text-lead">{summary}</p>}
       </header>
 
-      {hero && (
-        /*
-          The screen's two halves, side by side above `xl`.
-          `minmax(0,1.6fr)` and `minmax(19rem,1fr)`: the hero holds a score
-          ring, a chart and a paragraph of prose and needs the room; the stack
-          holds four short rows and stops being readable much past 26rem. The
-          `minmax(0,…)` on the first track is what keeps the chart from forcing
-          the grid wider than the page — a `1.6fr` track's automatic minimum is
-          its content, and an SVG's is not zero.
-
-          Below `xl` they stack, hero first, which is also the DOM order: the
-          one thing to do, then everything else that is waiting.
-        */
-        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(19rem,1fr)]">
-          <SignalCard project={hero} />
-          {/*
-            Sticky, because the hero is genuinely tall — a ring, a chart and a
-            move — and a column that ends two thirds of the way up leaves a
-            void beside it. Pinned at the same 44px the content column opens
-            at, so it lines up with the heading rather than floating.
-          */}
-          <div className="flex flex-col gap-5 xl:sticky xl:top-11">
-            <AttentionStack items={alsoWaiting} />
-            {projects.length > 0 && <ConnectRoute />}
-          </div>
-        </div>
-      )}
-
-      {projects.length === 0 ? (
+      {head === undefined ? (
         <EmptyDashboard />
       ) : (
-        <section aria-labelledby="products-heading" className="flex flex-col gap-5">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <h2 id="products-heading" className="text-fg text-title font-bold">
-              Your products
-            </h2>
-            <Link
-              href="/app/products"
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-            >
-              View all products
-              <ArrowRightIcon size={16} />
-            </Link>
-          </div>
+        <>
+          <DeskHead entry={head} />
+
           {/*
-            Ordered by what needs attention, not by when it was created — that
-            ordering is the one thing the removed attention list contributed
-            that a card cannot, so the grid inherits it.
+            An ordered list, because the order is the content. The stagger
+            continues from the head — which is index 0 — so the screen arrives
+            as one sequence rather than as a card and then a list.
           */}
-          <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {ordered.map((project) => (
-              <li key={project.id}>
-                <ProductCard project={project} />
-              </li>
+          <ol className="flex flex-col gap-2.5" aria-label="Everything else on your desk">
+            {rest.map((entry, position) => (
+              <DeskRow key={entry.id} entry={entry} index={position + 1} />
             ))}
-          </ul>
-        </section>
+            <ConnectRow index={rest.length + 1} />
+          </ol>
+        </>
       )}
     </div>
   );

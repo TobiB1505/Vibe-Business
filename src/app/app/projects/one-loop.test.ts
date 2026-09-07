@@ -67,13 +67,14 @@ const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx")
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
 const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
 /*
- * The dashboard's Next move zone. It was its own panel beside the Business
- * signal one; both are now `SignalCard`, because two full-width cards with a
- * control each asked an unanalysed product's owner the same question twice.
- * The regression below is unchanged and still lives in that code — only the
- * file it lives in moved.
+ * Where the dashboard names a Move and offers the way into it.
+ *
+ * It was its own panel beside the Business signal one, then both became
+ * `SignalCard`, and the dashboard is now a ranked desk whose first entry opens
+ * into the decision — so this is `DeskHead`. The regression below is unchanged
+ * and still lives in that code; only the file it lives in has moved, twice.
  */
-const NEXT_MOVE_CARD = read("src/app/app/signal-card.tsx");
+const NEXT_MOVE_CARD = read("src/app/app/desk-head.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {
@@ -627,6 +628,6 @@ describe("the plan hands off to the agent, and the agent points back", () => {
    */
   it("opens the Move a card names, not the plan's current first", () => {
     expect(HOME_STATUS).toContain("planMoveHref(planHref, nextMove.id)");
-    expect(NEXT_MOVE_CARD).toContain("planMoveHref(planHref, move.id)");
+    expect(NEXT_MOVE_CARD).toContain("planMoveHref(entry.item.action.href, move.id)");
   });
 });

@@ -82,7 +82,7 @@
 | Validate again | `Validate again` on an existing prepared change | stable busy action; active duplicate blocked; an exact prior pass is deliberately not reused | same Agent Validate stage with the new durable run | persistent inline failure; retry remains available | submitted action remains contextual | ADR 0015, rule 60 |
 | Open the Agent for a Move | `See this move in Agent` beside the start control, or the Agent rail item while a Move is selected | route navigation only, never a run | Agent focused on that Move, naming what Vibe can do about it | an unresolvable Move degrades to the unfocused Agent, naming none | destination page heading | ADR 0058 |
 | Return to a Move from the Agent | the focused card's back link, or a prepared change's Move title | route navigation only, never a run | that Move selected on the Action Plan, scrolled to its detail | the link is absent where the Move cannot be named | Move detail region | ADR 0058 |
-| Review the Move a card names | `View action plan` on the account dashboard's signal card | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
+| Review the Move a card names | `Review moves` on the account dashboard's open decision | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
 
 ## Navigation and responsive behavior
 
