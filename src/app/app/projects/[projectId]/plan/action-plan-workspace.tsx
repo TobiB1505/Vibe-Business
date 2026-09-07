@@ -152,6 +152,23 @@ export function ActionPlanWorkspace({
   );
   const activeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
   const activeOpportunity = opportunities[activeIndex] ?? null;
+  /*
+   * Where a finished plan hands over to (ADR 0096 follow-on).
+   *
+   * The Move ranked after this one, as a link rather than a control that
+   * spends: the offer to plan it already exists on that Move, with its price
+   * and its balance check, and a second paid entry point is a second place to
+   * get those wrong. The href is the same search param this workspace already
+   * restores on popstate, so the handover is an ordinary navigation.
+   */
+  const nextOpportunity = opportunities[activeIndex + 1] ?? null;
+  const nextMove =
+    nextOpportunity === null
+      ? null
+      : {
+          title: nextOpportunity.title,
+          href: `?${PLAN_OPPORTUNITY_PARAM}=${encodeURIComponent(nextOpportunity.id)}`,
+        };
   const movesBlockNotice = buildOpportunityBlockNotice(movesBlockedReason);
 
   function selectMove(index: number, history: "push" | "none" = "push") {
@@ -331,6 +348,7 @@ export function ActionPlanWorkspace({
                     responsibilityByStepKey={responsibilityByStepKey}
                     handoffStepKey={handoffStepKey}
                     repositoryFullName={repositoryFullName}
+                    nextMove={nextMove}
                     planView={
                       planView?.plan.opportunityId === activeOpportunity.id ? planView : null
                     }

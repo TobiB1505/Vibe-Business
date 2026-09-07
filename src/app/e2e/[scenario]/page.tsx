@@ -1600,6 +1600,7 @@ export default async function E2eScenarioPage({
           defaultMoveTitle={fixture.defaultMoveTitle}
           handoffStepKey={fixture.handoffStepKey ?? null}
           repositoryFullName="TobiB1505/Vibe-Business"
+          nextMove={fixture.nextMove ?? null}
           responsibilityByStepKey={fixture.responsibilityByStepKey ?? {}}
           readiness={fixture.readiness}
           planView={fixture.planView}

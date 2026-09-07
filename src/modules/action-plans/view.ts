@@ -84,6 +84,62 @@ export const PLAN_STALENESS_LABELS: Record<PlanStalenessReason, string> = {
   planner_contract_superseded: "Vibe's planning approach has improved since this plan was made.",
 };
 
+/**
+ * What closing a step produced, for the two surfaces that have to say it.
+ *
+ * A plan does not only move; it *learns*. A founder closing a `vibe` step with
+ * no executor writes down what they found, and a founder answering a decision
+ * step leaves a durable statement. Both are recorded against the immutable step
+ * and both are read by the next planning run — and until now neither was ever
+ * shown back to the founder who wrote it.
+ *
+ * One derivation rather than two, because the handoff prompt and the finished
+ * plan want the same list at different filters: the prompt wants every closed
+ * step including the ones that produced nothing quotable, and the summary wants
+ * only what a person would read. Two copies of "which steps are settled and
+ * what did each leave behind" is exactly the shape that drifts.
+ *
+ * Order is plan order, never recency: these are steps, and the step numbers are
+ * how the founder refers to them on the screen beside this.
+ */
+export type SettledStepOutcome = {
+  order: number;
+  stepKey: string;
+  title: string;
+  /** What closing it produced, or null when it was confirmed and nothing more. */
+  outcome: string | null;
+  /** Which authority produced it — never guessed from the text. */
+  source: "finding" | "decision" | null;
+};
+
+export function settledStepOutcomes(
+  steps: readonly Pick<ActionPlanStep, "id" | "order" | "title">[],
+  completedStepOrders: readonly number[],
+  findingByStepKey: Readonly<Record<string, string>>,
+  decisionByStepKey: Readonly<Record<string, string>>,
+): SettledStepOutcome[] {
+  const completed = new Set(completedStepOrders);
+
+  return [...steps]
+    .sort((a, b) => a.order - b.order)
+    .filter((step) => completed.has(step.order))
+    .map((step) => {
+      const finding = findingByStepKey[step.id];
+      if (finding !== undefined) {
+        return { order: step.order, stepKey: step.id, title: step.title, outcome: finding, source: "finding" as const };
+      }
+
+      const decision = decisionByStepKey[step.id];
+      if (decision !== undefined) {
+        return { order: step.order, stepKey: step.id, title: step.title, outcome: decision, source: "decision" as const };
+      }
+
+      /* Closed by confirmation, or by a run. There is nothing to quote, and
+         inventing something would be Vibe writing the founder's note for them. */
+      return { order: step.order, stepKey: step.id, title: step.title, outcome: null, source: null };
+    });
+}
+
 /** A short, plain-language summary of where the plan stands (§40). */
 export const PLAN_PROGRESS_LABELS: Record<PlanProgress, string> = {
   ready: "Vibe can move this forward.",

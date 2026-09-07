@@ -233,3 +233,51 @@ test.describe("a step Vibe will not build", () => {
     await expect(row).not.toContainText("Start here");
   });
 });
+
+/**
+ * The end of a plan (ADR 0096 follow-on).
+ *
+ * Until now the last step closing rendered one sentence — "Every step is done."
+ * — and nothing else. No account of what the plan produced and no way onward,
+ * at the exact moment the founder finished what the audit, the Move and five
+ * steps had built up to.
+ */
+test.describe("a plan with every step done", () => {
+  test("shows back what the plan established", async ({ page }) => {
+    await page.goto("/e2e/action_plan_finished");
+
+    await expect(page.getByTestId("plan-complete")).toBeVisible();
+    const outcomes = page.getByTestId("plan-complete-outcomes");
+    // A written finding and a founder decision — the two authorities that leave
+    // something behind, and neither was ever shown back to the person who
+    // wrote it.
+    await expect(outcomes).toContainText("Stripe is wired but the route 404s.");
+    await expect(outcomes).toContainText("Prioritize small product teams.");
+    await expect(page.getByText("The next plan is written with these in front of it.")).toBeVisible();
+  });
+
+  test("names the next Move and its price, and starts nothing", async ({ page }) => {
+    await page.goto("/e2e/action_plan_finished");
+
+    const next = page.getByTestId("plan-complete-next-move");
+    await expect(next).toHaveText("Turn the pricing page into a signup path");
+    // A link, not a control that spends: the offer to plan that Move already
+    // exists on the Move itself, with its own price and balance check.
+    await expect(next).toHaveAttribute("href", "?move=move_two");
+    // The price of the run they would start over there, said here, before they
+    // go — from `resolveRetailPrice`, never a number typed into a component.
+    await expect(page.getByTestId("plan-complete")).toContainText("Credits");
+    await expect(page.getByTestId("plan-complete").getByRole("button")).toHaveCount(0);
+  });
+
+  test("does not scroll sideways at 375px", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/e2e/action_plan_finished");
+    await expect(page.getByTestId("plan-complete")).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});

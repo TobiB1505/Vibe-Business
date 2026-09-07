@@ -8,6 +8,7 @@ import {
 } from "./schema";
 import {
   RESPONSIBILITY_HEADLINES,
+  settledStepOutcomes,
   RESPONSIBILITY_SUBLABELS,
   buildActionPlanBlockNotice,
   founderQuestionCta,
@@ -538,6 +539,57 @@ describe("stepResponsibility", () => {
  * a confirmation must never read as a claim that Vibe did the work: it says
  * the step's own completion criterion is true, which is all it has ever said.
  */
+/**
+ * What the plan learned, which two surfaces have to say and neither could.
+ *
+ * A plan does not only move: a `vibe` step with no executor closes with a
+ * written finding, and a decision step leaves a durable statement. Both are
+ * read by the next planning run and neither was ever shown back to the founder
+ * who wrote it.
+ */
+describe("settledStepOutcomes", () => {
+  const STEPS = [
+    { id: "a", order: 1, title: "Establish what billing does" },
+    { id: "b", order: 2, title: "Confirm the plan structure" },
+    { id: "c", order: 3, title: "Publish the sitemap" },
+    { id: "d", order: 4, title: "Not done yet" },
+  ];
+
+  it("carries findings and decisions, and says which is which", () => {
+    const outcomes = settledStepOutcomes(
+      STEPS,
+      [1, 2, 3],
+      { a: "Stripe wired, route 404s." },
+      { b: "Charge the three tiers." },
+    );
+
+    expect(outcomes.map((entry) => [entry.order, entry.source])).toEqual([
+      [1, "finding"],
+      [2, "decision"],
+      // Closed by a run or a bare confirmation: there is nothing to quote, and
+      // inventing something would be Vibe writing the founder's note for them.
+      [3, null],
+    ]);
+    expect(outcomes[0]?.outcome).toBe("Stripe wired, route 404s.");
+    expect(outcomes[1]?.outcome).toBe("Charge the three tiers.");
+    expect(outcomes[2]?.outcome).toBeNull();
+  });
+
+  it("leaves out steps that are not closed", () => {
+    const outcomes = settledStepOutcomes(STEPS, [1], {}, {});
+
+    expect(outcomes).toHaveLength(1);
+    expect(outcomes[0]?.order).toBe(1);
+  });
+
+  it("keeps plan order, never recency", () => {
+    // The founder refers to these by step number on the screen beside them.
+    const outcomes = settledStepOutcomes([...STEPS].reverse(), [1, 2, 3], {}, {});
+
+    expect(outcomes.map((entry) => entry.order)).toEqual([1, 2, 3]);
+  });
+});
+
 describe("attestationPrompt", () => {
   it("keeps real-world work reading as the founder's own", () => {
     const prompt = attestationPrompt({ actor: "founder_action" });

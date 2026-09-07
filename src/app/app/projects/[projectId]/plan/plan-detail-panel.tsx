@@ -41,6 +41,7 @@ import {
   planExpectedChange,
   planFounderDemands,
   planMetaSummary,
+  settledStepOutcomes,
   stepDependencyTitles,
   stepDisplayState,
   stepSequenceStatus,
@@ -53,6 +54,7 @@ import { startPlanAction, type StartPlanActionState } from "../plan-action";
 import { PrepareChangePanel } from "../prepare-change-panel";
 import { AttestationForm } from "./attestation-form";
 import { HandoffCard } from "./handoff-card";
+import { PlanCompleteCard } from "./plan-complete-card";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
@@ -268,6 +270,7 @@ function PlanBody({
   responsibilityByStepKey,
   handoffStepKey,
   repositoryFullName,
+  nextMove,
   onFounderResolved,
 }: {
   projectId: string;
@@ -286,6 +289,8 @@ function PlanBody({
   handoffStepKey: string | null;
   /** `owner/name`, or null when Vibe holds no repository for this project. */
   repositoryFullName: string | null;
+  /** The Move to hand over to once this plan is finished. */
+  nextMove: { title: string; href: string } | null;
   onFounderResolved: () => void;
 }) {
   const reduceMotion = useReducedMotion();
@@ -414,20 +419,12 @@ function PlanBody({
                  step, not context for it (ADR 0096). Findings and decisions
                  both count: the prompt used to say "the confirmed plan
                  structure" while carrying neither. */
-              settled={steps
-                .filter(
-                  (entry) =>
-                    entry.id !== firstActionableStep.id &&
-                    planView.completedStepOrders.includes(entry.order),
-                )
-                .map((entry) => ({
-                  order: entry.order,
-                  title: entry.title,
-                  outcome:
-                    planView.findingByStepKey[entry.id] ??
-                    planView.decisionByStepKey[entry.id] ??
-                    null,
-                }))}
+              settled={settledStepOutcomes(
+                steps,
+                planView.completedStepOrders,
+                planView.findingByStepKey,
+                planView.decisionByStepKey,
+              ).filter((entry) => entry.stepKey !== firstActionableStep.id)}
               /* Everything after this step, so the receiving tool is told where
                  this task stops rather than left to guess an edge. */
               later={steps
@@ -452,11 +449,21 @@ function PlanBody({
               actionPlanId={plan.id}
               step={firstActionableStep}
             />
+          ) : firstActionableStep === null && progress === "finished" ? (
+            /* The end of the plan, which used to be one sentence and no way
+               onward. What the steps established is shown back to the founder
+               who wrote it, and the next Move is named — never started here. */
+            <PlanCompleteCard
+              outcomes={settledStepOutcomes(
+                steps,
+                planView.completedStepOrders,
+                planView.findingByStepKey,
+                planView.decisionByStepKey,
+              ).filter((entry) => entry.outcome !== null)}
+              nextMove={nextMove}
+            />
           ) : firstActionableStep === null ? (
-            <Notice
-              tone={progress === "finished" ? "info" : "waiting"}
-              label="Where this plan stands"
-            >
+            <Notice tone="waiting" label="Where this plan stands">
               {PLAN_PROGRESS_LABELS[progress]}
             </Notice>
           ) : null}
@@ -650,6 +657,7 @@ export function PlanDetailPanel({
   },
   auditHref,
   understandingHref,
+  nextMove,
 }: {
   projectId: string;
   opportunityId: string | null;
@@ -681,6 +689,14 @@ export function PlanDetailPanel({
   blockedDestinations?: BlockedActionDestinations;
   auditHref: string;
   understandingHref: string;
+  /**
+   * The Move after this one, for the finished-plan card to hand over to.
+   *
+   * A link, not a start: planning is paid and already has a disclosed offer on
+   * the Move it belongs to. Null when this is the last Move Vibe ranked, or
+   * when the surface rendering this panel has no list to take a next one from.
+   */
+  nextMove?: { title: string; href: string } | null;
 }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -831,6 +847,7 @@ export function PlanDetailPanel({
               responsibilityByStepKey={responsibilityByStepKey}
               handoffStepKey={handoffStepKey}
               repositoryFullName={repositoryFullName}
+              nextMove={nextMove ?? null}
               onFounderResolved={() => router.refresh()}
             />
           ) : blockNotice !== null ? (

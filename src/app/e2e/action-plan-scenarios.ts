@@ -282,6 +282,8 @@ export type ActionPlanFixture = {
   readiness: ActionPlanReadiness;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
+  /** The Move a finished plan hands over to, as the workspace derives it. */
+  nextMove?: { title: string; href: string } | null;
   /**
    * What each step's responsibility line says, as the route resolves it.
    *
@@ -434,6 +436,34 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         handoffByStepKey: { "step-add-pricing-page": "claude_code" },
         // What the founder worked out on step 1, which the prompt carries in.
         findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * The end of a plan, which used to be one sentence and no way onward.
+   *
+   * Every step closed, so `firstActionableStep` is null and the progress is
+   * `finished`. Two of the steps left something behind — a written finding and
+   * a founder decision — which is the material the next planning run reads and
+   * which the founder had never been shown back.
+   */
+  action_plan_finished: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      nextMove: { title: "Turn the pricing page into a signup path", href: "?move=move_two" },
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        decisionByStepKey: { "step-decide-segment": "Prioritize small product teams." },
         founderInputRequest: null,
       }),
       activeOperation: null,
