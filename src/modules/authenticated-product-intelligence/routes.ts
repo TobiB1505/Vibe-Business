@@ -38,15 +38,43 @@ export type RouteCandidate = {
 };
 
 /**
+ * Authentication surfaces, named once and shared.
+ *
+ * A real scan inspected `/reset-password` while signed in — a page nobody
+ * signed in ever sees, holding no product, costing one of twenty-five pages.
+ * The reason it got through is that this module held **two** lists of what an
+ * auth page is and they disagreed: `NEVER_VISIT` knew about login and signup,
+ * and `login-detection.ts` knew about reset, verification and MFA because it
+ * had to. A path was an auth page in one file and product in the other.
+ *
+ * So the unambiguous ones live here and both callers read them. Only the
+ * unambiguous ones: `confirm` and `callback` are *not* in this list even
+ * though the sign-in probe treats them as auth, because the two questions
+ * carry opposite risks. Delaying an unprompted scan start by one poll costs
+ * nothing; refusing to visit `/orders/confirm` would silently drop a real
+ * product surface. `login-detection.ts` documents its own additions.
+ */
+export const AUTH_SURFACE_PATHS = [
+  /(^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|anmelden|registrieren)(\/|$)/i,
+  /(^|\/)(forgot|reset|recover)(-|\/|$)/i,
+  /(^|\/)(verify|verification|mfa|2fa|otp)(\/|$)/i,
+];
+
+export function isAuthSurfacePath(path: string): boolean {
+  return AUTH_SURFACE_PATHS.some((pattern) => pattern.test(path));
+}
+
+/**
  * Paths that are never worth an authenticated navigation.
  *
  * `logout` is the important one: visiting it would end the very session we are
- * analysing (Sprint 5 §17). The rest are auth surfaces we have already
- * analysed anonymously, or destructive-by-name endpoints.
+ * analysing (Sprint 5 §17). The rest are auth surfaces — which a signed-in
+ * person never sees, so they hold no authenticated product — or
+ * destructive-by-name endpoints.
  */
 const NEVER_VISIT = [
-  /(^|\/)(logout|signout|sign-out|log-out)(\/|$)/i,
-  /(^|\/)(login|signin|sign-in|log-in|signup|sign-up|register)(\/|$)/i,
+  /(^|\/)(logout|signout|sign-out|log-out|abmelden|ausloggen)(\/|$)/i,
+  ...AUTH_SURFACE_PATHS,
   /(^|\/)(delete|destroy|remove|cancel|unsubscribe|checkout|pay|purchase)(\/|$)/i,
 ];
 
@@ -78,44 +106,71 @@ function priorityFor(path: string): number {
  * Evidence-strength adjustments on top of the path hints (Sprint 6 §5).
  *
  * A Deep Scan gets a handful of page visits, so the ordering decides what the
- * audit actually learns. Two facts we already hold are better signals than the
- * path alone:
+ * audit actually learns, and one fact we already hold is a better signal than
+ * the path alone: a path the public crawl watched bounce to a login page is
+ * *proven* to be protected. That is the strongest evidence a route is part of
+ * the signed-in product, so it outranks a same-named route merely declared in
+ * the file tree.
  *
- *  - A path the public crawl watched bounce to a login page is *proven* to be
- *    protected. That is the strongest evidence a route is part of the signed-in
- *    product, so it outranks a same-named route merely declared in the file
- *    tree.
- *  - A path the public crawl already fetched successfully has, by definition,
- *    already been described by Public Product Intelligence.
- *
- * The second is a **demotion, never a removal**. A marketing page and `/` often
- * render differently once signed in — a logged-in `/` that shows a dashboard is
- * exactly the kind of thing worth seeing — so these stay on the list, just
- * behind routes that can only be reached with a session. Priorities are floored
- * at 1 so no adjustment can push a candidate to the bottom by accident.
+ * Sprint 6 §5 also carried a *penalty* for a path the public crawl had already
+ * fetched successfully — a demotion rather than a removal, on the argument that
+ * a signed-in `/` may be a different page entirely. That penalty is gone: such
+ * a path is no longer ranked lower, it is not a candidate at all (see
+ * `buildRouteCandidates`). Priorities are floored at 1 so no adjustment can
+ * push a candidate to the bottom by accident.
  */
 const PROTECTED_ROUTE_BONUS = 15;
 const AUTHENTICATED_LINK_BONUS = 5;
-const PUBLIC_OVERLAP_PENALTY = 8;
 const MIN_PRIORITY = 1;
 
-export function candidatePriority(
-  path: string,
-  source: RouteCandidateSource,
-  publiclyRendered: ReadonlySet<string> = new Set(),
-): number {
+export function candidatePriority(path: string, source: RouteCandidateSource): number {
   let priority = priorityFor(path);
 
   if (source === "public_protected_redirect") {
     priority += PROTECTED_ROUTE_BONUS;
   } else if (source === "authenticated_link") {
     priority += AUTHENTICATED_LINK_BONUS;
-  } else if (source === "repository_route" && publiclyRendered.has(path)) {
-    priority -= PUBLIC_OVERLAP_PENALTY;
   }
   // The landing page is never adjusted: it is where the browser already is.
 
   return Math.max(priority, MIN_PRIORITY);
+}
+
+/**
+ * The template a path belongs to, with its identifiers replaced.
+ *
+ * `/app/projects/88d1c463-…/settings` and `/app/projects/9b702a96-…/settings`
+ * are the same screen holding different rows. A scan that treats them as two
+ * discoveries spends its budget learning the same thing twice — the first run
+ * that read pages properly inspected **25 pages and saw 8 screens**, four
+ * copies each of a project workspace's seven tabs, and reported `integrations`
+ * and `onboarding` as absent because it never reached `/app/connect/github` or
+ * `/app/onboarding` at all.
+ *
+ * Deliberately conservative. A segment is only an identifier when it could not
+ * plausibly be a word someone chose: a UUID, a run of digits, a long hex
+ * string, or a long opaque token with both digits and letters. `/app/billing`
+ * and `/app/settings` must survive this untouched, because collapsing a real
+ * route into a shape would hide a surface rather than a duplicate.
+ */
+const IDENTIFIER_SEGMENT = [
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i,
+  /^\d+$/,
+  /^[0-9a-f]{12,}$/i,
+  // A nanoid, a Stripe id, a base62 key: long, and mixing digits with letters
+  // in a way a hand-written slug does not.
+  /^(?=.*\d)(?=.*[a-z])[A-Za-z0-9_-]{12,}$/,
+];
+
+export function routeShape(path: string): string {
+  return path
+    .split("/")
+    .map((segment) =>
+      segment !== "" && IDENTIFIER_SEGMENT.some((pattern) => pattern.test(segment))
+        ? ":id"
+        : segment,
+    )
+    .join("/");
 }
 
 export function isNeverVisit(path: string): boolean {
@@ -183,8 +238,22 @@ export function buildRouteCandidates(input: RouteSeedInput): RouteCandidate[] {
   const { origin, landingPath, repository, publicProduct, budgets } = input;
   const byPath = new Map<string, RouteCandidate>();
 
-  // Paths the public crawl already fetched and rendered anonymously. Used only
-  // to demote overlapping repository routes — see `candidatePriority`.
+  /*
+   * Paths the public crawl already fetched and rendered **anonymously**.
+   *
+   * These are skipped outright now, where they used to be merely demoted — and
+   * demoted only when they arrived as a repository route, which is why a real
+   * scan spent candidates on `/`, `/privacy`, `/terms`, `/forgot-password` and
+   * `/reset-password`: they arrived as links from the signed-in shell, and the
+   * penalty never applied to those.
+   *
+   * A page that renders the same to nobody is not authenticated product. The
+   * live product scan reads it already, statically, for no browser seconds and
+   * no Credits — reading it again here spends a page of a budget sized against
+   * the ten surfaces that only exist behind a login.
+   *
+   * The landing page is exempt, because it is where the browser already is.
+   */
   const publiclyRendered = new Set<string>();
   for (const page of publicProduct?.pages ?? []) {
     if (page.redirectedTo !== null) continue;
@@ -197,9 +266,10 @@ export function buildRouteCandidates(input: RouteSeedInput): RouteCandidate[] {
     if (byPath.size >= budgets.maxCandidates) return;
     const path = toSameOriginPath(raw, origin);
     if (path === null || isNeverVisit(path)) return;
+    if (source !== "landing" && publiclyRendered.has(path)) return;
     const existing = byPath.get(path);
     if (existing && existing.depth <= depth) return;
-    byPath.set(path, { path, source, depth, priority: candidatePriority(path, source, publiclyRendered) });
+    byPath.set(path, { path, source, depth, priority: candidatePriority(path, source) });
   };
 
   // 1. Where the user already is. Always first, always depth 0.
@@ -241,7 +311,20 @@ export function sortCandidates(candidates: RouteCandidate[]): RouteCandidate[] {
 export function extendCandidates(
   existing: RouteCandidate[],
   links: string[],
-  options: { origin: string; depth: number; budgets: AuthenticatedCrawlBudgets },
+  options: {
+    origin: string;
+    depth: number;
+    budgets: AuthenticatedCrawlBudgets;
+    /**
+     * Paths the public scan already read anonymously, skipped here too.
+     *
+     * This is the path `/privacy` and `/terms` actually arrived by: not as
+     * repository routes, but as links in the signed-in shell's own footer. An
+     * exclusion that only covered `buildRouteCandidates` would have left the
+     * one source that produced them.
+     */
+    publiclyRendered?: ReadonlySet<string>;
+  },
 ): RouteCandidate[] {
   const seen = new Set(existing.map((candidate) => candidate.path));
   const added: RouteCandidate[] = [];
@@ -252,6 +335,7 @@ export function extendCandidates(
 
     const path = toSameOriginPath(link, options.origin);
     if (path === null || isNeverVisit(path) || seen.has(path)) continue;
+    if (options.publiclyRendered?.has(path)) continue;
 
     seen.add(path);
     added.push({

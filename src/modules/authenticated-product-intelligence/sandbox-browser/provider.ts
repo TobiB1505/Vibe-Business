@@ -12,6 +12,7 @@ import type {
   CreateBrowserSessionOptions,
   ProviderResult,
 } from "../provider";
+import { boundedOutput, describeError, reportBrowserFailure } from "./diagnostics";
 import { BROWSER_GUARD_ENV } from "./guard-program";
 import { BROWSER_SANDBOX, browserSandboxNameFor, chromiumCommand, guardCommand } from "./runtime";
 import { deriveBrowserSessionTokens } from "./tokens";
@@ -78,8 +79,16 @@ export type SandboxBrowserProviderDeps = {
 /** How long Vibe waits for the guard to report the VM usable. */
 const READY_TIMEOUT_MS = 45_000;
 const READY_POLL_MS = 500;
+/**
+ * How long the guard is given in the foreground, on a timeout only.
+ *
+ * Short: a guard that starts correctly never returns — it listens — so this
+ * probe is expected to time out, and the answer is whatever it printed first.
+ */
+const GUARD_PROBE_MS = 8_000;
 
 const READY_PATH = `${BROWSER_SANDBOX.root}/ready`;
+const FAILURE_PATH = `${BROWSER_SANDBOX.root}/guard-failure`;
 
 function failure<T>(error: AuthenticatedAnalysisFailure): ProviderResult<T> {
   return { ok: false, error };
@@ -192,23 +201,100 @@ export function createSandboxBrowserSessionProvider(
             [BROWSER_GUARD_ENV.publicPort]: String(BROWSER_SANDBOX.publicPort),
             [BROWSER_GUARD_ENV.devtoolsPort]: String(BROWSER_SANDBOX.devtoolsPort),
             [BROWSER_GUARD_ENV.readyFile]: READY_PATH,
+            [BROWSER_GUARD_ENV.failureFile]: FAILURE_PATH,
           },
         });
-      } catch {
+      } catch (error) {
+        reportBrowserFailure("session_create", { error: describeError(error) });
         return failure("browser_session_create_failed");
       }
 
       try {
         // Chromium first: the guard waits for it and refuses to report ready
         // without it, so the order here is what that wait is for.
-        await handle.runBackground({ command: chromiumCommand(), cwd: BROWSER_SANDBOX.root });
+        await handle.runBackground({
+          command: chromiumCommand(options.viewport),
+          cwd: BROWSER_SANDBOX.root,
+        });
         await handle.runBackground({ command: guardCommand(), cwd: BROWSER_SANDBOX.root });
-      } catch {
+      } catch (error) {
+        reportBrowserFailure("session_start_programs", { error: describeError(error) });
         await handle.stop().catch(() => undefined);
         return failure("browser_session_create_failed");
       }
 
       if (!(await waitUntilReady(handle))) {
+        /*
+         * The one failure with no exception behind it, so the two facts worth
+         * having are gathered rather than inferred.
+         *
+         * `guardFailure` is what the guard itself decided — absent means it
+         * never got far enough to decide, which is a different problem from
+         * "Chromium did not answer". `chromiumVersion` asks the binary whether
+         * it can start at all: a browser missing a shared library says so on
+         * its first line, and no amount of waiting would have revealed that.
+         *
+         * Both are bounded and best effort. A diagnosis that fails must not
+         * replace the failure it is diagnosing.
+         */
+        const guardFailure = await handle
+          .readFile({ path: FAILURE_PATH, maxBytes: 500 })
+          .catch(() => null);
+
+        const probe = await handle
+          .run({
+            command: { command: chromiumCommand().command, args: ["--version"] },
+            cwd: BROWSER_SANDBOX.root,
+            timeoutMs: 15_000,
+          })
+          .catch(() => null);
+
+        /*
+         * And the guard, in the foreground, where its output has a reader.
+         *
+         * With Chromium answering `Google Chrome for Testing 151.0.7922.34`
+         * and the failure file empty, the remaining question is about the
+         * other program — and nothing could see it, because `runBackground`
+         * detaches and a module that fails to import prints its reason and
+         * exits before any line of the guard's own code runs, which is exactly
+         * why `giveUp` recorded nothing.
+         *
+         * Both outcomes are answers. Output means the guard cannot start and
+         * says why; a clean timeout means it can, and the problem is somewhere
+         * this probe is not looking.
+         *
+         * Its files are the probe's own, so a second guard cannot write the
+         * ready file this session already gave up waiting for.
+         */
+        const guardProbe = await handle
+          .run({
+            command: guardCommand(),
+            cwd: BROWSER_SANDBOX.root,
+            timeoutMs: GUARD_PROBE_MS,
+            env: {
+              [BROWSER_GUARD_ENV.controlToken]: tokens.control,
+              [BROWSER_GUARD_ENV.viewToken]: tokens.view,
+              // A port nothing else holds: the point is to reach the guard's
+              // own code, not to lose to the instance already listening.
+              [BROWSER_GUARD_ENV.publicPort]: String(BROWSER_SANDBOX.publicPort + 1),
+              [BROWSER_GUARD_ENV.devtoolsPort]: String(BROWSER_SANDBOX.devtoolsPort),
+              [BROWSER_GUARD_ENV.readyFile]: `${READY_PATH}.probe`,
+              [BROWSER_GUARD_ENV.failureFile]: `${FAILURE_PATH}.probe`,
+            },
+          })
+          .catch(() => null);
+
+        reportBrowserFailure("session_ready_timeout", {
+          waitedMs: READY_TIMEOUT_MS,
+          guardFailure: guardFailure ?? "none recorded",
+          chromiumExitCode: probe?.exitCode ?? null,
+          chromiumOutput: probe ? boundedOutput(probe.output, 400) : "probe unavailable",
+          guardExitCode: guardProbe?.exitCode ?? null,
+          guardTimedOut: guardProbe?.timedOut ?? null,
+          guardOutput: guardProbe
+            ? boundedOutput(guardProbe.output, 600) || "(no output)"
+            : "probe unavailable",
+        });
         // A VM nobody can use is worse than none: it bills for its whole
         // timeout and shows a person a live view that never paints.
         await handle.stop().catch(() => undefined);
@@ -221,7 +307,8 @@ export function createSandboxBrowserSessionProvider(
         const ws = websocketOrigin(origin);
         if (!ws) throw new Error("unroutable");
         connectUrl = `${ws}/control?token=${tokens.control}`;
-      } catch {
+      } catch (error) {
+        reportBrowserFailure("session_public_origin", { error: describeError(error) });
         await handle.stop().catch(() => undefined);
         return failure("browser_provider_unavailable");
       }

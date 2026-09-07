@@ -44,8 +44,33 @@ export type LiveBrowserCanvasProps = {
    * It comes only from the authorized server action.
    */
   viewUrl: string;
-  /** Announced to the person when the socket has not come up. */
+  /**
+   * The socket could not be brought up, after every retry.
+   *
+   * Not called on a single failed attempt: the first one routinely fails
+   * (see `reconnectDelayMs`). When this fires, waiting longer is not the
+   * answer and the person needs to be told.
+   */
   onUnavailable?: () => void;
+  /**
+   * The two things this component is the only one that can know.
+   *
+   * The socket coming up and the first frame arriving are separate facts —
+   * a connected browser that has not painted is a different situation from one
+   * that has — and the dialog above shows them as steps that happened rather
+   * than as an animation on a timer.
+   */
+  onConnected?: () => void;
+  /**
+   * A frame was drawn, and what size it was.
+   *
+   * The size is not decoration. The dialog lays this picture out in a box, and
+   * a box whose aspect ratio is a constant living in another file stretches
+   * the frame the moment the two disagree — silently, because a click computed
+   * from the element's own geometry still looks correct in code. Reported from
+   * the only place that can know.
+   */
+  onPainted?: (frame: { w: number; h: number }) => void;
 };
 
 /** Printable single characters go to Chromium as text; everything else as a key. */
@@ -97,62 +122,226 @@ export function modifiersOf(event: {
   );
 }
 
-export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasProps) {
+/**
+ * Whether a keydown is the soft keyboard declining to say what was pressed.
+ *
+ * On a phone there is no hardware key behind a keystroke. iOS and Android
+ * report `key: "Unidentified"` and the historical composition sentinel
+ * `keyCode: 229` for ordinary characters, so forwarding that keydown sends
+ * Chromium a keystroke with no key in it — the field stays empty and the
+ * person believes the browser is frozen.
+ *
+ * When this is true the keystroke is left alone, the hidden field receives the
+ * text, and `charactersOf` turns it into characters the guard understands.
+ * Every real key — a hardware keyboard, Backspace, Enter, Tab, the arrows —
+ * reports itself properly and takes the ordinary path unchanged.
+ */
+export function isComposingKey(event: { key: string; keyCode: number }): boolean {
+  return event.key === "Unidentified" || event.keyCode === 229;
+}
+
+/**
+ * Typed text as the characters a person meant.
+ *
+ * Spread rather than `split("")`, because an emoji and several accented
+ * characters are two code units and splitting by index would send two halves
+ * of one character. Nobody types an emoji into a password field; somebody
+ * types `é` into a name field on the way to signing in.
+ */
+export function charactersOf(value: string): string[] {
+  return [...value];
+}
+
+/**
+ * Whether a touch was a tap rather than a scroll.
+ *
+ * The keyboard is raised on a tap and on nothing else. Raising it on every
+ * touch — which is what the first version did — means it reappears each time
+ * somebody drags to scroll the product, covering half of what they are trying
+ * to read, on a screen that had little enough of it to begin with.
+ *
+ * Eight pixels because a finger is not a mouse: a deliberate tap still moves a
+ * little, and a scroll moves much more than this before it is a scroll.
+ */
+export function isTap(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  threshold = 8,
+): boolean {
+  return Math.abs(end.x - start.x) <= threshold && Math.abs(end.y - start.y) <= threshold;
+}
+
+/**
+ * How long to wait before the next attempt at the view socket.
+ *
+ * A single attempt was the bug. The sandbox reports ready when the guard is
+ * listening *inside* the microVM, and its public URL becomes routable a moment
+ * later — so a client that connects at exactly the wrong instant gets one
+ * refused socket and, with no retry, a spinner that reads "Connecting to it"
+ * until the person gives up. That is what a founder saw: a live browser
+ * created, billed for, and never shown.
+ *
+ * The ladder is short at the start because the usual gap is short, and long at
+ * the end because a browser that has not answered in half a minute is not
+ * about to. `null` means stop asking — roughly 50 seconds of trying, which is
+ * longer than the sandbox has ever taken to become routable and short enough
+ * that a person is not left guessing.
+ *
+ * The count resets whenever a socket opens, so a session that drops mid-login
+ * gets the full ladder again rather than the tail of the previous one.
+ */
+const RECONNECT_DELAYS_MS = [500, 1_000, 2_000, 4_000, 4_000, 8_000, 8_000, 8_000, 8_000, 8_000];
+
+export function reconnectDelayMs(failures: number): number | null {
+  return RECONNECT_DELAYS_MS[failures] ?? null;
+}
+
+export function LiveBrowserCanvas({
+  viewUrl,
+  onUnavailable,
+  onConnected,
+  onPainted,
+}: LiveBrowserCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** The hidden field that exists so a phone will open its keyboard. */
+  const keyboardRef = useRef<HTMLInputElement>(null);
+  /** Where the current touch started, so a scroll can be told from a tap. */
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  /** The previous point of the current touch, for the wheel delta. */
+  const touchLast = useRef<{ x: number; y: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   /** The size of the last frame, which is the coordinate space the guard expects. */
   const frameSize = useRef({ w: 0, h: 0 });
+  /** The newest frame not yet drawn, and whether one is being decoded. */
+  const pending = useRef<Frame | null>(null);
+  const decoding = useRef(false);
   const [connected, setConnected] = useState(false);
   const [painted, setPainted] = useState(false);
 
   useEffect(() => {
-    const socket = new WebSocket(viewUrl);
-    socketRef.current = socket;
+    /*
+     * One live socket, and a ladder of attempts behind it.
+     *
+     * `disposed` and the identity check in `lost` are what keep the two apart:
+     * a refused socket fires `error` and then `close`, and a component that
+     * unmounts mid-ladder must not leave a timer that reconnects into nothing.
+     */
+    let disposed = false;
+    let failures = 0;
+    let retry: ReturnType<typeof setTimeout> | undefined;
 
-    socket.onopen = () => setConnected(true);
+    const connect = () => {
+      const socket = new WebSocket(viewUrl);
+      socketRef.current = socket;
 
-    socket.onmessage = (event) => {
-      let message: Frame;
-      try {
-        message = JSON.parse(String(event.data)) as Frame;
-      } catch {
-        return;
-      }
-      if (message.t !== "frame") return;
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const image = new Image();
-      image.onload = () => {
-        // The backing store matches the frame, so nothing is resampled twice:
-        // CSS scales the element, the browser scales the pixels once.
-        if (canvas.width !== message.w || canvas.height !== message.h) {
-          canvas.width = message.w;
-          canvas.height = message.h;
-        }
-        frameSize.current = { w: message.w, h: message.h };
-        canvas.getContext("2d")?.drawImage(image, 0, 0);
-        setPainted(true);
+      socket.onopen = () => {
+        // A ladder that is not reset would spend a mid-login drop's retries at
+        // eight-second intervals, which is a long time to watch a frozen page.
+        failures = 0;
+        setConnected(true);
+        onConnected?.();
       };
-      image.src = `data:image/jpeg;base64,${message.data}`;
+
+      socket.onmessage = (event) => {
+        let message: Frame;
+        try {
+          message = JSON.parse(String(event.data)) as Frame;
+        } catch {
+          return;
+        }
+        if (message.t !== "frame") return;
+
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+
+        /*
+         * Only the newest frame is worth decoding.
+         *
+         * Every arriving frame used to get its own `Image` and its own decode.
+         * When frames arrive faster than a device can decode them — which is a
+         * phone during a page load — that queues work whose only visible effect
+         * is the last one: each earlier frame is decoded, painted, and
+         * immediately replaced. The device pays for all of them and the person
+         * watches the picture run behind.
+         *
+         * So a decode in flight does not queue another. The newest frame is
+         * held, and taken as soon as the current one is done. A live browser has
+         * no use for a stale frame — there is nothing here to miss, only
+         * something to be late for.
+         */
+        pending.current = message;
+        if (decoding.current) return;
+
+        const drawNext = () => {
+          const next = pending.current;
+          pending.current = null;
+          if (!next) {
+            decoding.current = false;
+            return;
+          }
+          decoding.current = true;
+
+          const image = new Image();
+          image.onload = () => {
+            // The backing store matches the image, so nothing is resampled
+            // twice: CSS scales the element, the browser scales the pixels once.
+            if (canvas.width !== image.naturalWidth || canvas.height !== image.naturalHeight) {
+              canvas.width = image.naturalWidth;
+              canvas.height = image.naturalHeight;
+            }
+            // The coordinate space stays the browser's, not the picture's: a
+            // click is reported in the page's own pixels whatever size the frame
+            // arrived at.
+            frameSize.current = { w: next.w, h: next.h };
+            canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+            setPainted(true);
+            onPainted?.({ w: next.w, h: next.h });
+            drawNext();
+          };
+          // A frame that cannot be decoded must not stop the ones behind it.
+          image.onerror = () => drawNext();
+          image.src = `data:image/jpeg;base64,${next.data}`;
+        };
+
+        drawNext();
+      };
+
+      /*
+       * One handler for both events, and it must survive being called twice:
+       * scheduling two reconnects for one failure would spend the ladder at
+       * double speed without anyone noticing.
+       */
+      const lost = () => {
+        if (disposed || socketRef.current !== socket) return;
+        socketRef.current = null;
+        setConnected(false);
+
+        const delay = reconnectDelayMs(failures);
+        failures += 1;
+
+        if (delay === null) {
+          onUnavailable?.();
+          return;
+        }
+        retry = setTimeout(connect, delay);
+      };
+      socket.onerror = lost;
+      socket.onclose = lost;
     };
 
-    const lost = () => {
-      setConnected(false);
-      onUnavailable?.();
-    };
-    socket.onerror = lost;
-    socket.onclose = lost;
+    connect();
 
     return () => {
+      disposed = true;
+      clearTimeout(retry);
+      const socket = socketRef.current;
       socketRef.current = null;
       // Closing here matters: the component unmounts when the dialog is
       // dismissed, and a socket left open would keep streaming frames of a
       // signed-in product into a page nobody is looking at.
-      socket.close();
+      socket?.close();
     };
-  }, [viewUrl, onUnavailable]);
+  }, [viewUrl, onUnavailable, onConnected, onPainted]);
 
   const send = useCallback((message: Record<string, unknown>) => {
     const socket = socketRef.current;
@@ -168,18 +357,134 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
 
   const button = (which: number) => (which === 2 ? "right" : which === 1 ? "middle" : "left");
 
+  /**
+   * Raises the keyboard, on the gesture that asked for it.
+   *
+   * iOS opens the software keyboard only for a focused editable element, and
+   * only when `focus()` is called inside a user gesture. A canvas is neither,
+   * whatever its tabindex — which is why a phone could show this browser,
+   * scroll it and tap it, and never type a password into it.
+   */
+  const takeKeyboard = useCallback(() => {
+    keyboardRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  /** One press-and-release, for a character the keyboard would not name. */
+  const sendCharacter = useCallback(
+    (character: string) => {
+      send({ t: "key", type: "keyDown", key: character, text: character, modifiers: 0 });
+      send({ t: "key", type: "keyUp", key: character, modifiers: 0 });
+    },
+    [send],
+  );
+
+  const keyDown = useCallback(
+    (event: {
+      key: string;
+      code?: string;
+      keyCode: number;
+      altKey: boolean;
+      ctrlKey: boolean;
+      metaKey: boolean;
+      shiftKey: boolean;
+    }) => {
+      send({
+        t: "key",
+        type: "keyDown",
+        key: event.key,
+        code: event.code,
+        text: isPrintable(event.key) ? event.key : undefined,
+        keyCode: event.keyCode,
+        modifiers: modifiersOf(event),
+      });
+    },
+    [send],
+  );
+
+  /** A touch is a mouse the person is holding. */
+  const touchAt = useCallback(
+    (event: { touches: TouchList; changedTouches: TouchList }) => {
+      const touch = event.touches[0] ?? event.changedTouches[0];
+      return touch ? at(touch) : null;
+    },
+    [at],
+  );
+
   return (
-    <canvas
+    <div className="relative h-full w-full">
+      {/*
+        The keyboard's only reason to exist, and it is deliberately not a
+        control: it displays nothing, holds nothing, and is emptied after every
+        keystroke. What it provides is the one thing a canvas cannot — a
+        focusable editable element, which is what a phone requires before it
+        will show a keyboard at all.
+
+        Positioned over the canvas rather than off-screen: iOS scrolls a focused
+        field into view, and a field parked at -9999px takes the dialog with it.
+      */}
+      <input
+        ref={keyboardRef}
+        type="text"
+        // Never a password field: the browser would offer to save a credential
+        // that belongs to the customer's product, into Vibe's origin.
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        // Labelled rather than `aria-hidden`: an aria-hidden element that can
+        // still take focus is a thing a screen reader lands on and refuses to
+        // describe. Out of the tab order is what keeps it out of the way.
+        aria-label="Keyboard input for the temporary browser"
+        tabIndex={-1}
+        className="pointer-events-none absolute inset-0 h-full w-full resize-none border-0 bg-transparent p-0 text-transparent caret-transparent opacity-0 outline-none"
+        onKeyDown={(event) => {
+          if (event.key !== "Escape") {
+            // A key the keyboard named goes straight through, exactly as it
+            // does from the canvas. One it did not name is left alone, so the
+            // field receives the text and `onChange` below sends it.
+            if (!isComposingKey(event)) event.preventDefault();
+          }
+          if (!isComposingKey(event)) keyDown(event);
+        }}
+        onKeyUp={(event) => {
+          if (isComposingKey(event)) return;
+          if (event.key !== "Escape") event.preventDefault();
+          send({
+            t: "key",
+            type: "keyUp",
+            key: event.key,
+            code: event.code,
+            keyCode: event.keyCode,
+            modifiers: modifiersOf(event),
+          });
+        }}
+        onChange={(event) => {
+          for (const character of charactersOf(event.target.value)) sendCharacter(character);
+          // Emptied immediately: this field is a conduit, and text left in it
+          // would be a password sitting in Vibe's DOM.
+          event.target.value = "";
+        }}
+      />
+      <canvas
       ref={canvasRef}
-      // Focusable so a password can be typed into it at all. Without this the
-      // key handlers below never fire and the field stays empty while the
-      // person types, which reads as the browser being frozen.
+      // Focusable so a password can be typed into it at all — the keystrokes
+      // are received by the hidden field above, which this hands focus to.
       tabIndex={0}
       role="application"
       aria-label="Temporary browser for signing in to your product"
-      className="block h-full w-full cursor-default focus:outline-none"
+      /*
+       * The canvas remains the tab stop — it is the thing with a name and a
+       * role — and hands focus to the conduit the moment it receives it. A
+       * keyboard-only person tabs here and types; the field they are actually
+       * typing into displays nothing and is never announced.
+       */
+      onFocus={takeKeyboard}
+      // `touch-action: none`: without it a drag scrolls Vibe's page instead of
+      // reaching the product, and a double-tap zooms the picture rather than
+      // the page inside it.
+      className="block h-full w-full cursor-default touch-none focus:outline-none"
       onMouseDown={(event) => {
-        event.currentTarget.focus();
+        takeKeyboard();
         send({
           t: "mouse",
           type: "mousePressed",
@@ -209,36 +514,63 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
         })
       }
       onWheel={(event) => send({ t: "wheel", ...at(event), dx: event.deltaX, dy: event.deltaY })}
+      /*
+       * Touch, translated rather than left to the browser.
+       *
+       * Safari does synthesize mouse events from a tap, but only for a tap —
+       * not for a drag, and never soon enough to scroll a login page. So each
+       * touch is sent as the mouse it stands for, and `preventDefault` stops
+       * the synthesized pair arriving afterwards as a second click.
+       */
+      /*
+       * Touch, translated into the two things a finger actually means.
+       *
+       * The first version sent a press on touchstart and `mouseMoved` with the
+       * button still down on every move — which is not scrolling, it is
+       * **dragging a selection**, and that is exactly what it did: a swipe
+       * highlighted the page instead of moving it.
+       *
+       * A finger has no button. A drag is a scroll and becomes wheel deltas; a
+       * tap is a click and becomes a press and a release, sent only once the
+       * finger lifts and the movement is known to have been small. Nothing is
+       * pressed while a scroll is in progress, so there is nothing to select.
+       */
+      onTouchStart={(event) => {
+        event.preventDefault();
+        const point = touchAt(event.nativeEvent);
+        if (point) {
+          touchStart.current = point;
+          touchLast.current = point;
+        }
+      }}
+      onTouchMove={(event) => {
+        event.preventDefault();
+        const point = touchAt(event.nativeEvent);
+        const last = touchLast.current;
+        if (!point || !last) return;
+        touchLast.current = point;
+        // Inverted, because dragging the page down moves the content down,
+        // which is scrolling up — the same direction every touch surface uses.
+        send({ t: "wheel", x: point.x, y: point.y, dx: last.x - point.x, dy: last.y - point.y });
+      }}
+      onTouchEnd={(event) => {
+        event.preventDefault();
+        const point = touchAt(event.nativeEvent);
+        const began = touchStart.current;
+        touchStart.current = null;
+        touchLast.current = null;
+        if (!point || !began || !isTap(began, point)) return;
+        // A tap, and only now: a press sent on touchstart would have had to be
+        // released somewhere, and every release after a drag is a selection.
+        send({ t: "mouse", type: "mousePressed", ...point, button: "left", clickCount: 1, modifiers: 0 });
+        send({ t: "mouse", type: "mouseReleased", ...point, button: "left", clickCount: 1, modifiers: 0 });
+        // Still inside the gesture, which is the only moment iOS opens one.
+        takeKeyboard();
+      }}
       onContextMenu={(event) => event.preventDefault()}
-      onKeyDown={(event) => {
-        // Tab must reach the page, not walk out of the dialog — a login form
-        // is two fields and a button, and Tab is how people move between them.
-        if (event.key !== "Escape") event.preventDefault();
-        send({
-          t: "key",
-          type: "keyDown",
-          key: event.key,
-          code: event.code,
-          text: isPrintable(event.key) ? event.key : undefined,
-          keyCode: event.keyCode,
-          modifiers: modifiersOf(event),
-        });
-      }}
-      onKeyUp={(event) => {
-        if (event.key !== "Escape") event.preventDefault();
-        send({
-          t: "key",
-          type: "keyUp",
-          key: event.key,
-          code: event.code,
-          keyCode: event.keyCode,
-          modifiers: modifiersOf(event),
-        });
-      }}
-      // Two states worth telling apart: the socket is not up, and the socket is
-      // up but Chromium has not painted yet. They need different patience.
       data-connected={connected ? "true" : "false"}
       data-painted={painted ? "true" : "false"}
-    />
+      />
+    </div>
   );
 }

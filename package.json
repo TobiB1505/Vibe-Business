@@ -22,6 +22,7 @@
     "billing:refund": "vitest run --config vitest.probe.config.mts src/modules/credits/refund.operator.probe.ts",
     "billing:concurrency": "vitest run --config vitest.concurrency.config.mts",
     "execution:dogfood": "vitest run --config vitest.probe.config.mts src/modules/execution-contract",
+    "consistency:check": "vitest run --config vitest.probe.config.mts src/modules/internal-console/checks/consistency.probe.ts",
     "agent:preflight": "vitest run --config vitest.probe.config.mts src/modules/coding-agent",
     "agent:canary": "vitest run --config vitest.canary.config.mts",
     "agent:dogfood": "vitest run --config vitest.probe.config.mts src/modules/coding-agent/dogfood/",

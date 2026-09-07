@@ -229,6 +229,147 @@ describe("a VM nobody can use is stopped", () => {
     expect(fake.stopped()).toBe(true);
   });
 
+  /**
+   * A 45-second wait and nothing else was the third dead end of the first real
+   * Deep Scan. Chromium missing a shared library and the guard's own `ws`
+   * import failing are different problems, and from outside the VM they looked
+   * identical: no ready file, no exception, no output — `runBackground`
+   * detaches and nothing reads a detached process.
+   *
+   * So the timeout gathers two facts instead of inferring one. What the guard
+   * itself decided, and whether the binary can start at all.
+   */
+  it("says what the guard decided and whether Chromium can start", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fake = fakeSandboxProvider({
+      files: { [`${BROWSER_SANDBOX.root}/guard-failure`]: "chromium did not answer" },
+      results: {
+        [`${BROWSER_SANDBOX.root}/chromium --version`]: {
+          exitCode: 127,
+          output: "error while loading shared libraries: libnss3.so",
+        },
+      },
+    });
+    let clock = 0;
+    const browser = createSandboxBrowserSessionProvider({
+      sandboxes: fake,
+      image: workingImage,
+      sleep: async () => undefined,
+      now: () => (clock += 10_000),
+    });
+
+    await browser.createSession({ timeoutSeconds: 600 });
+    await Promise.resolve();
+
+    expect(reported).toHaveBeenCalledWith(
+      "deep scan: the browser session could not start",
+      expect.objectContaining({
+        step: "session_ready_timeout",
+        guardFailure: "chromium did not answer",
+        chromiumExitCode: 127,
+        chromiumOutput: expect.stringContaining("libnss3.so"),
+      }),
+    );
+
+    reported.mockRestore();
+  });
+
+  it("asks the guard itself when it recorded nothing", async () => {
+    /*
+     * Chromium answered `Google Chrome for Testing 151.0.7922.34` and the
+     * failure file was empty, which leaves the other program — and nothing
+     * could see it, because `runBackground` detaches and a module that fails
+     * to import exits before any of the guard's own code runs. That is exactly
+     * why `giveUp` recorded nothing.
+     */
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fake = fakeSandboxProvider({
+      results: {
+        "node /vibe-browser/guard.mjs": {
+          exitCode: 1,
+          output: "Error [ERR_MODULE_NOT_FOUND]: Cannot find package 'ws'",
+        },
+      },
+    });
+    let clock = 0;
+    const browser = createSandboxBrowserSessionProvider({
+      sandboxes: fake,
+      image: workingImage,
+      sleep: async () => undefined,
+      now: () => (clock += 10_000),
+    });
+
+    await browser.createSession({ timeoutSeconds: 600 });
+    await Promise.resolve();
+
+    expect(reported).toHaveBeenCalledWith(
+      "deep scan: the browser session could not start",
+      expect.objectContaining({
+        guardExitCode: 1,
+        guardOutput: expect.stringContaining("Cannot find package 'ws'"),
+      }),
+    );
+
+    reported.mockRestore();
+  });
+
+  it("does not let the probe write the files this session waited on", async () => {
+    // A second guard writing the ready file would turn a diagnosis into a
+    // session that reports itself usable after it was given up on.
+    const fake = fakeSandboxProvider({});
+    let clock = 0;
+    const browser = createSandboxBrowserSessionProvider({
+      sandboxes: fake,
+      image: workingImage,
+      sleep: async () => undefined,
+      now: () => (clock += 10_000),
+    });
+
+    await browser.createSession({ timeoutSeconds: 600 });
+
+    const probeRun = fake.events.find(
+      (event) => event.kind === "command" && event.command.includes("guard.mjs"),
+    );
+    expect(probeRun?.kind === "command" && probeRun.env?.[BROWSER_GUARD_ENV.readyFile]).toContain(
+      ".probe",
+    );
+  });
+
+  it("distinguishes a guard that never decided from one that did", async () => {
+    // No failure file: the guard never got far enough to write one, which is a
+    // different problem from Chromium not answering and used to look the same.
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const fake = fakeSandboxProvider({});
+    let clock = 0;
+    const browser = createSandboxBrowserSessionProvider({
+      sandboxes: fake,
+      image: workingImage,
+      sleep: async () => undefined,
+      now: () => (clock += 10_000),
+    });
+
+    await browser.createSession({ timeoutSeconds: 600 });
+    await Promise.resolve();
+
+    expect(reported).toHaveBeenCalledWith(
+      "deep scan: the browser session could not start",
+      expect.objectContaining({ guardFailure: "none recorded" }),
+    );
+
+    reported.mockRestore();
+  });
+
+  it("tells the guard where to record a failure", async () => {
+    // A file the guard is never told about is a file it never writes.
+    const fake = sandboxes();
+
+    await provider(fake).createSession({ timeoutSeconds: 600 });
+
+    expect(fake.createdWith()?.env?.[BROWSER_GUARD_ENV.failureFile]).toBe(
+      `${BROWSER_SANDBOX.root}/guard-failure`,
+    );
+  });
+
   it("stops the sandbox when the provider has no route to the port", async () => {
     const fake = sandboxes({ failPublicOrigin: true });
 

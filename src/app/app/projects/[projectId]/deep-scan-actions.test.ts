@@ -89,12 +89,49 @@ describe("authentication", () => {
   });
 
   it("has no parameter through which a caller could supply a user id", () => {
-    // Structural, not behavioural: impersonation is impossible because the
-    // argument does not exist.
-    expect(startDeepScanAction.length).toBe(1);
+    /*
+     * Structural, not behavioural: impersonation is impossible because the
+     * argument does not exist.
+     *
+     * This asserted arity — `startDeepScanAction.length === 1` — and broke the
+     * day the action gained a second, unrelated parameter. Arity was only ever
+     * a proxy for the property, and a proxy that fails on a safe change is one
+     * a person is tempted to relax rather than read. The property is that the
+     * id comes from the session, so that is what is asserted: every argument a
+     * caller can pass, passed as a user id, and the service still sees the
+     * server's.
+     */
     expect(analyzeDeepScanAction.length).toBe(2);
     expect(cancelDeepScanAction.length).toBe(2);
     expect(getDeepScanLiveViewAction.length).toBe(1);
+  });
+
+  it("cannot be made to act as someone else through any argument it does take", async () => {
+    await startDeepScanAction("p1", "user_intruder");
+
+    expect(startDeepScanMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ userId: SERVER_USER }),
+    );
+    // It arrives as the viewport hint, which is where a caller's string is
+    // *allowed* to go — the service validates that against a closed set, and
+    // `service.test.ts` is where that is proved. What matters here is that no
+    // argument this action takes can become the identity it acts as.
+    expect(startDeepScanMock.mock.calls[0]![2]).toMatchObject({ userId: SERVER_USER });
+    expect(startDeepScanMock.mock.calls[0]![2].userId).not.toBe("user_intruder");
+  });
+
+  it("passes the viewport hint through as a name, never as a size", async () => {
+    // It decides a window Chromium is launched with, so the service validates
+    // it against a closed set. The action's job is not to invent one.
+    await startDeepScanAction("p1", "mobile");
+
+    expect(startDeepScanMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ viewport: "mobile" }),
+    );
   });
 });
 

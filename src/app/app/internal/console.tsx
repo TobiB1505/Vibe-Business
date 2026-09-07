@@ -306,6 +306,43 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
         </div>
       </div>
 
+      <div className="mt-4">
+      <Panel
+        title="Contradictions"
+        note="Not a count of what happened — places where two parts of the system disagree, and one of them has to be false."
+      >
+        {snapshot.consistency.findings.length === 0 ? (
+          <p className="font-mono text-[12px] text-mint">nothing disagrees</p>
+        ) : (
+          <Rows
+            rows={snapshot.consistency.findings.map((row) => ({
+              key: `${row.check}:${row.subject}`,
+              label: `${row.check} · ${row.subject}${row.detail ? ` · ${row.detail}` : ""}`,
+              value: String(row.count),
+            }))}
+          />
+        )}
+        {snapshot.consistency.acknowledged.length > 0 && (
+          <div className="mt-3 border-t border-line-1 pt-2">
+            <p className="mb-1.5 font-mono text-[12px] text-fg-meta">
+              known and explained · see checks/schema.ts
+            </p>
+            <Rows
+              rows={snapshot.consistency.acknowledged.map((row) => ({
+                key: `${row.check}:${row.subject}`,
+                label: `${row.check} · ${row.subject}`,
+                value: String(row.count),
+              }))}
+            />
+          </div>
+        )}
+        <p className="mt-3 font-mono text-[12px] text-fg-faint">
+          Two checks run here. The rest need a full pass over the schema — <code>pnpm
+          consistency:check</code>.
+        </p>
+      </Panel>
+      </div>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <Panel title="Outcomes" note="Finished operations in this window, by type.">
           <Rows

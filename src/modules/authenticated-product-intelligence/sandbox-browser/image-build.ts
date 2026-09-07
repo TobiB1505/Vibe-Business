@@ -39,6 +39,36 @@ export const BROWSER_PLAYWRIGHT_VERSION = "1.62.1";
 const BROWSERS_DIR = `${BROWSER_SANDBOX.root}/browsers`;
 
 /**
+ * Where the build's commands run, and why it is not the directory they build.
+ *
+ * `/`, not `BROWSER_SANDBOX.root`, and this constant exists so the reason
+ * survives.
+ *
+ * The first real Deep Scan failed here, at command 0, after 3.8 seconds:
+ *
+ * ```
+ * failed to start process: chdir /vibe-browser: no such file or directory
+ * ```
+ *
+ * That command is the `mkdir -p` which **creates** `/vibe-browser`, and it was
+ * being started with `/vibe-browser` as its working directory. A process cannot
+ * `chdir` into a directory that does not exist yet, so the command whose whole
+ * job is to create the root could never run.
+ *
+ * It is specific to this sandbox, which is what hid it. A validation or preview
+ * sandbox is created from a **git source**, and the clone makes the working
+ * directory before any command runs. This one is `{ kind: "image" }` — no
+ * clone, no source, nothing on the filesystem but the base image — so the
+ * directory has to be made, and the making cannot happen inside itself.
+ *
+ * Every build command addresses its target absolutely (`mkdir -p` the root,
+ * `npm install --prefix` it, `PLAYWRIGHT_BROWSERS_PATH` under it, `node` with
+ * the program's full path), so none of them needs a working directory at all.
+ * `/` is simply somewhere that is certain to exist.
+ */
+export const IMAGE_BUILD_CWD = "/";
+
+/**
  * The commands that build the image, in the order they run.
  *
  * Every one is Vibe-constructed as `{ command, args[] }` and never a string a
@@ -46,31 +76,150 @@ const BROWSERS_DIR = `${BROWSER_SANDBOX.root}/browsers`;
  * reason. There is no interpolation point here that anything outside this file
  * can reach.
  */
-export function imageBuildCommands(): readonly SandboxCommand[] {
+/**
+ * Why the system libraries are Playwright's problem and not ours.
+ *
+ * `playwright install chromium` downloads a browser and not the libraries it
+ * links against, so the first attempt died at `libglib-2.0.so.0`. The obvious
+ * fix — install them ourselves — was tried and was wrong twice over.
+ *
+ * It assumed the distribution. Vercel's *build* image is Amazon Linux 2023,
+ * which is documented and which is a different machine from the sandbox: the
+ * build answered `sudo: dnf: command not found`. And it assumed a package list,
+ * hand-mapped from Playwright's Debian names to their RPM equivalents, which
+ * is a translation nobody can check without running it.
+ *
+ * `install-deps` removes both assumptions. Playwright detects the distribution
+ * itself and installs the packages *it* says that distribution needs — the same
+ * table `--with-deps` uses, maintained by the people who build the browser.
+ * Where it cannot, it says so in a sentence the instrument reports.
+ *
+ * It is the one step that runs as root, because a package manager needs it.
+ * The download stays unprivileged so the browser is owned by the user that
+ * runs it rather than by root.
+ */
+
+/**
+ * One build step.
+ *
+ * A wrapper rather than a `sudo` field on `SandboxCommand`, because that type
+ * is shared with validation and preview — where a command that can ask for
+ * root is precisely what must not exist. Root is a property of *this* build,
+ * so it is named here.
+ */
+export type ImageBuildStep = { command: SandboxCommand; sudo?: boolean };
+
+export function imageBuildCommands(): readonly ImageBuildStep[] {
   return [
-    { command: "mkdir", args: ["-p", BROWSER_SANDBOX.root, BROWSERS_DIR] },
+    { command: { command: "mkdir", args: ["-p", BROWSER_SANDBOX.root, BROWSERS_DIR] } },
+    // Root, and the only command in this repository that asks for it. It is
+    // safe here for the reason the whole sandbox is: there is no customer
+    // repository in this VM to hand root to. Nothing that runs a repository's
+    // own commands may do this — `sudo-scope.test.ts` enforces that.
+    /*
+     * Refreshing the package index, as its own step.
+     *
+     * `install-deps` does this itself, and that is exactly the problem: when it
+     * failed, apt went on to report thirty "Unable to locate package" lines and
+     * the one line that explained them was buried at the top of another
+     * command's output. Every package unavailable — `libx11-6` included — is
+     * not thirty missing packages, it is an empty index, and an empty index is
+     * one failure with one cause.
+     *
+     * So it is lifted out. A step that fails here fails with its own exit code
+     * and its own report, and cannot be mistaken for a browser whose
+     * dependencies have gone missing from Ubuntu.
+     *
+     * `apt-get` rather than something distribution-agnostic, because the
+     * distribution is no longer a guess: `/etc/os-release` in the failing build
+     * said `Ubuntu 26.04 LTS`. If that ever changes, this step reports
+     * `apt-get: command not found` by name — which is how the previous wrong
+     * assumption was caught, and cheaper than assuming again.
+     */
+    /*
+     * apt talks HTTPS, because the sandbox will not carry it any other way.
+     *
+     * The index refresh failed and, once both ends of the output were kept,
+     * said exactly why:
+     *
+     * ```
+     * Err:2 http://security.ubuntu.com/ubuntu resolute-security InRelease
+     *   Connection failed [IP: 91.189.91.81 80]
+     * ```
+     *
+     * DNS was fine — the allowlist covers these hosts and apt had their
+     * addresses. **Port 80 was not.** An `allow_domains` policy admits a name
+     * over TLS; Ubuntu's default sources are plain HTTP, so every index came
+     * back unreachable and apt then reported thirty packages it could not find.
+     *
+     * Measured before writing this, 2026-09-07: `archive.ubuntu.com` answers
+     * 200 over HTTPS, `security.ubuntu.com` redirects, and the actual
+     * `dists/…/InRelease` serves 200. So the archives support it and only the
+     * default configuration does not use it.
+     *
+     * `find` rather than a fixed path, because Ubuntu 26.04 keeps its sources
+     * in deb822 form under `sources.list.d/` while older layouts use
+     * `sources.list`, and a `sed` at one path is wrong on whichever layout it
+     * was not written for. No shell: `find` parses these arguments itself.
+     */
+    {
+      command: {
+        command: "find",
+        args: [
+          "/etc/apt",
+          "-type",
+          "f",
+          "(",
+          "-name",
+          "*.list",
+          "-o",
+          "-name",
+          "*.sources",
+          ")",
+          "-exec",
+          "sed",
+          "-i",
+          "s,http://,https://,g",
+          "{}",
+          "+",
+        ],
+      },
+      sudo: true,
+    },
+    { command: { command: "apt-get", args: ["update"] }, sudo: true },
+    {
+      command: {
+        command: "npx",
+        args: ["--yes", `playwright@${BROWSER_PLAYWRIGHT_VERSION}`, "install-deps", "chromium"],
+      },
+      sudo: true,
+    },
     // The guard's one dependency. `--ignore-scripts` for the same reason
     // validation installs that way: a lifecycle hook is the classic
     // supply-chain execution point, and this is the window with the network
     // open.
     {
-      command: "npm",
-      args: [
-        "install",
-        "--prefix",
-        BROWSER_SANDBOX.root,
-        "--no-save",
-        "--ignore-scripts",
-        "ws@8.18.0",
-        `playwright-core@${BROWSER_PLAYWRIGHT_VERSION}`,
-      ],
+      command: {
+        command: "npm",
+        args: [
+          "install",
+          "--prefix",
+          BROWSER_SANDBOX.root,
+          "--no-save",
+          "--ignore-scripts",
+          "ws@8.18.0",
+          `playwright-core@${BROWSER_PLAYWRIGHT_VERSION}`,
+        ],
+      },
     },
     // Chromium. `install` is the one place a lifecycle-style download is the
     // point rather than a hazard, and it is Playwright's own, at a pinned
     // version, into a directory Vibe named.
     {
-      command: "npx",
-      args: ["--yes", `playwright@${BROWSER_PLAYWRIGHT_VERSION}`, "install", "chromium"],
+      command: {
+        command: "npx",
+        args: ["--yes", `playwright@${BROWSER_PLAYWRIGHT_VERSION}`, "install", "chromium"],
+      },
     },
   ];
 }
@@ -94,11 +243,71 @@ export function imageBuildEnv(): Record<string, string> {
  * separate.
  */
 export const IMAGE_BUILD_HOSTS = [
+  // `npm install`, and `npx --yes playwright@…` fetching the installer itself.
   "registry.npmjs.org",
   "*.npmjs.org",
+  // Playwright's three CDN mirrors, as `PLAYWRIGHT_CDN_MIRRORS` lists them in
+  // the pinned release. Two names, because the second is the first's origin.
   "cdn.playwright.dev",
   "playwright.download.prss.microsoft.com",
   "*.blob.core.windows.net",
+  /*
+   * Where the browser actually comes from, which is not where it is asked for.
+   *
+   * The second real Deep Scan died here, on command 2, with
+   * `getaddrinfo EAI_AGAIN storage.googleapis.com` — a DNS refusal, because an
+   * allowlisted host answered with a redirect to one that was not.
+   *
+   * Measured rather than assumed, 2026-09-06:
+   *
+   *     HEAD https://cdn.playwright.dev/dbazure/download/playwright/…
+   *     307 → https://storage.googleapis.com/chrome-for-testing-public/…
+   *                                          /143.0.7499.4/linux64/chrome-linux64.zip
+   *
+   * Playwright's `chromium` on linux-x64 is Chrome for Testing, and Chrome for
+   * Testing is published to a Google Cloud Storage bucket. The CDN is a front
+   * for it. `*.blob.core.windows.net` above is the same shape one cloud over —
+   * the ESRP mirror's own redirect target — so the list already knew redirect
+   * targets belong in it and simply had the wrong one.
+   *
+   * Nothing in this repository references this host, so it reads like a stray
+   * entry. `image-build.test.ts` is what stops it being tidied away.
+   */
+  "storage.googleapis.com",
+  /*
+   * The distribution's own package repositories, for `install-deps`.
+   *
+   * Wider than the rest of this list and deliberately so, because the one
+   * thing the failures have established is that **the sandbox's distribution
+   * is not what the documentation for Vercel's build image says**: that is
+   * Amazon Linux 2023, and the sandbox answered `dnf: command not found`.
+   * Vercel publishes `universal`, `node:24` and `ubuntu` images and does not
+   * say what `universal` is built on.
+   *
+   * So all three families are named rather than one guessed at. Every entry is
+   * a Linux distribution's package archive, reached in a VM that holds no
+   * customer repository, no credential and no source — the same argument the
+   * rest of this window rests on. A name that turns out to be unnecessary
+   * costs nothing; a missing one fails visibly, as `EAI_AGAIN` naming the
+   * host it wanted.
+   */
+  "cdn.amazonlinux.com",
+  "deb.debian.org",
+  "security.debian.org",
+  "archive.ubuntu.com",
+  "security.ubuntu.com",
+  "ports.ubuntu.com",
+  "*.archive.ubuntu.com",
+  /*
+   * A third-party archive the base image ships with, observed in the same
+   * failing refresh: `Ign:1 https://cli.github.com/packages`.
+   *
+   * Named because `apt-get update` fails as a whole when any configured source
+   * fails, and an image Vibe does not control decides what is configured.
+   * Tolerating a broken source instead would be the pattern that hid this
+   * failure for two rounds.
+   */
+  "cli.github.com",
 ] as const;
 
 /**

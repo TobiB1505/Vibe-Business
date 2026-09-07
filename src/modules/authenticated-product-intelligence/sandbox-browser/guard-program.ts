@@ -47,20 +47,60 @@
  * because a reply that distinguishes "unknown verb" from "bad argument" is an
  * oracle, and this channel has nothing to tell its caller.
  *
+ * ## Why the control pipe passes the frame type along
+ *
+ * A byte pipe that forwards what it was handed is not a byte pipe if it
+ * changes how the bytes are framed. `ws` hands a message to its listener as a
+ * Buffer whatever the frame was, and `send(buffer)` writes a **binary** frame —
+ * so every CDP message Vibe forwarded arrived at Chromium as binary, where the
+ * protocol is text.
+ *
+ * Chromium closed the connection, and Playwright reported the only thing it
+ * could see:
+ *
+ * ```
+ * browserType.connectOverCDP: Target page, context or browser has been closed
+ *   <ws connected>    wss://…/control
+ *   <ws disconnected> code=1005
+ * ```
+ *
+ * Measured against `ws@8.18.0` rather than reasoned about: `send(buffer)`
+ * arrives BINARY, `send(buffer, { binary: false })` arrives TEXT. The listener
+ * is given an `isBinary` flag for exactly this, so the pipe forwards it and the
+ * framing survives the hop in both directions.
+ *
  * ## One note about the `ws` import, which belongs here rather than in the
  * program
  *
- * The package exports the WebSocket class as its module object with the server
- * constructor attached, so a named import of both relies on CJS interop
- * detecting a shape it does not always detect. Taking the default and
- * destructuring works under Node's ESM loader either way. The explanation is
- * out here because a backtick inside the program would end it — which is what
- * happened when this was written as a comment in there, and what the
- * no-backtick test exists to catch.
+ * **Named imports, and the reasoning that said otherwise was backwards.**
+ *
+ * This file used to take the default and destructure it, arguing that `ws`
+ * exports the WebSocket class as its module object with the server constructor
+ * attached, so a named import would depend on CJS interop detecting a shape it
+ * might not detect. Every clause of that was about the CommonJS entry point,
+ * and Node never reaches it: `ws` ships an `exports` map with an ESM wrapper,
+ * and the wrapper's default is the WebSocket class **alone**.
+ *
+ * So the destructure produced `undefined`, and the guard died on its first
+ * statement with `TypeError: WebSocketServer is not a constructor` — before any
+ * line of its own code ran, which is why it recorded no failure and why nine
+ * clicks were needed to see it.
+ *
+ * Measured against `ws@8.18.0` rather than argued about a second time:
+ *
+ * ```
+ * import WebSocket from "ws"   → typeof function, .WebSocketServer undefined
+ * import * as ns from "ws"     → Receiver, Sender, WebSocket,
+ *                                WebSocketServer, createWebSocketStream
+ * ```
+ *
+ * The explanation is out here because a backtick inside the program would end
+ * it — which is what happened when this was written as a comment in there, and
+ * what the no-backtick test exists to catch.
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v1";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v7";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {
@@ -77,24 +117,45 @@ export const BROWSER_GUARD_ENV = {
    * file says the one thing the caller needs: this session can be used now.
    */
   readyFile: "VIBE_READY_FILE",
+  /**
+   * Where the guard records why it gave up, when it does.
+   *
+   * The ready file answers "can this session be used"; nothing answered "and
+   * if not, which half failed". A 45-second timeout with no other signal is
+   * the same dead end `diagnostics.ts` was written to remove one layer up:
+   * Chromium missing a shared library and the guard's own `ws` import failing
+   * are different problems, and from outside the VM they looked identical.
+   *
+   * Written by the guard rather than logged, because `runBackground` detaches
+   * and nothing reads a detached process's output. A file, Vibe already knows
+   * how to read.
+   */
+  failureFile: "VIBE_FAILURE_FILE",
 } as const;
 
 export const BROWSER_GUARD_PROGRAM = `
 import { createServer } from "node:http";
 import { writeFileSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import WebSocket from "ws";
-const { WebSocketServer } = WebSocket;
+import { WebSocket, WebSocketServer } from "ws";
 
 const controlToken = process.env.VIBE_CONTROL_TOKEN;
 const viewToken = process.env.VIBE_VIEW_TOKEN;
 const publicPort = Number(process.env.VIBE_PUBLIC_PORT);
 const devtoolsPort = Number(process.env.VIBE_DEVTOOLS_PORT);
 const readyFile = process.env.VIBE_READY_FILE;
+const failureFile = process.env.VIBE_FAILURE_FILE;
+
+function giveUp(reason) {
+  console.error("guard: " + reason);
+  try {
+    if (failureFile) writeFileSync(failureFile, reason);
+  } catch {}
+  process.exit(1);
+}
 
 if (!controlToken || !viewToken || !publicPort || !devtoolsPort || !readyFile) {
-  console.error("guard: incomplete environment");
-  process.exit(1);
+  giveUp("incomplete environment");
 }
 
 /**
@@ -182,15 +243,15 @@ control.on("connection", async (client) => {
   let open = false;
   upstream.on("open", () => {
     open = true;
-    for (const message of queued) upstream.send(message);
+    for (const message of queued) upstream.send(message[0], { binary: message[1] });
     queued.length = 0;
   });
-  client.on("message", (data) => {
-    if (open) upstream.send(data);
-    else queued.push(data);
+  client.on("message", (data, isBinary) => {
+    if (open) upstream.send(data, { binary: isBinary });
+    else queued.push([data, isBinary]);
   });
-  upstream.on("message", (data) => {
-    if (client.readyState === WebSocket.OPEN) client.send(data);
+  upstream.on("message", (data, isBinary) => {
+    if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
   });
 
   const close = () => {
@@ -213,6 +274,18 @@ control.on("connection", async (client) => {
  * Written as a list rather than assembled from the incoming message, because a
  * method name built from input is a method name an input can choose.
  */
+/**
+ * How much may still be in flight before the next frame is asked for.
+ *
+ * Not zero: a socket is rarely at exactly zero, and requiring that would pace
+ * the stream to the poll interval rather than to the connection. One frame's
+ * worth of slack keeps a fast viewer at full rate and a slow one honest.
+ */
+const FRAME_BACKLOG_BYTES = 256 * 1024;
+/** The longest a frame is withheld before it is acked regardless. */
+const ACK_DEADLINE_MS = 1_000;
+const ACK_POLL_MS = 25;
+
 const MOUSE_TYPES = new Set(["mousePressed", "mouseReleased", "mouseMoved"]);
 const KEY_TYPES = new Set(["keyDown", "keyUp", "char"]);
 const BUTTONS = new Set(["none", "left", "middle", "right"]);
@@ -237,12 +310,43 @@ view.on("connection", async (client) => {
     send("Page.enable", {});
     send("Page.startScreencast", {
       format: "jpeg",
-      quality: 60,
-      maxWidth: 1280,
-      maxHeight: 800,
+      quality: 72,
+      maxWidth: 1920,
+      maxHeight: 1200,
       everyNthFrame: 1,
     });
   });
+
+  /**
+   * Acknowledges a frame once it has actually gone out.
+   *
+   * The ack is not a formality. Chromium sends no further frame until the
+   * previous one is acknowledged, which is precisely how a screencast paces
+   * itself to whatever is consuming it — and acking on arrival, before the
+   * frame had gone anywhere, threw that away. Chromium then produced at full
+   * speed regardless of whether a phone on a mobile connection could receive
+   * it, so a page under heavy repaint built a backlog and went smooth again
+   * only once it stopped repainting.
+   *
+   * The original concern is real and is kept: a missed ack is a frozen picture
+   * rather than a dropped one. So this never waits indefinitely. It acks as
+   * soon as the socket has drained, and acks anyway at the deadline — a late
+   * frame is a cost, a stalled stream is a broken product.
+   */
+  const ackWhenSent = (sessionId) => {
+    const ack = () => send("Page.screencastFrameAck", { sessionId });
+    if (client.bufferedAmount <= FRAME_BACKLOG_BYTES) {
+      ack();
+      return;
+    }
+    const deadline = Date.now() + ACK_DEADLINE_MS;
+    const poll = setInterval(() => {
+      const drained = client.bufferedAmount <= FRAME_BACKLOG_BYTES;
+      if (!drained && Date.now() < deadline && client.readyState === WebSocket.OPEN) return;
+      clearInterval(poll);
+      ack();
+    }, ACK_POLL_MS);
+  };
 
   page.on("message", (raw) => {
     let message;
@@ -253,11 +357,11 @@ view.on("connection", async (client) => {
     }
     if (message.method !== "Page.screencastFrame") return;
 
-    // Acked immediately and unconditionally: Chromium sends no further frame
-    // until the previous one is acknowledged, so a missed ack is a frozen
-    // picture rather than a dropped one.
-    send("Page.screencastFrameAck", { sessionId: message.params.sessionId });
-    if (client.readyState !== WebSocket.OPEN) return;
+    if (client.readyState !== WebSocket.OPEN) {
+      send("Page.screencastFrameAck", { sessionId: message.params.sessionId });
+      return;
+    }
+
     client.send(
       JSON.stringify({
         t: "frame",
@@ -266,6 +370,8 @@ view.on("connection", async (client) => {
         h: message.params.metadata.deviceHeight,
       }),
     );
+
+    ackWhenSent(message.params.sessionId);
   });
 
   client.on("message", (raw) => {
@@ -349,8 +455,7 @@ async function waitForChromium(deadlineMs) {
 
 server.listen(publicPort, "0.0.0.0", async () => {
   if (!(await waitForChromium(30000))) {
-    console.error("guard: chromium did not answer");
-    process.exit(1);
+    giveUp("chromium did not answer on the devtools port within 30s");
   }
   // The content is deliberately not a token, a URL or a port. Vibe already
   // knows all three; what it cannot know from outside is whether this VM is
