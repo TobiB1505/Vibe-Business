@@ -172,6 +172,9 @@ export const FORMS_SCENARIO = "study-forms";
 /** The heading scale, and the three ways to close the hole in it. */
 export const TYPE_SCENARIO = "study-type";
 
+/** The figure: a number that is the subject of a screen, at eight sizes. */
+export const FIGURE_SCENARIO = "study-figure";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }
