@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
-import { useMotionAllowed } from "@/components/nova/nova-motion";
+import { useMotionAllowed } from "./nova-motion";
 
 /**
  * The thread, arriving one message at a time, with Nova composing in between.
@@ -75,19 +75,19 @@ const BEAT_MS = 620;
 const LINE_MS = 220;
 
 /** One arrival: a node, and whether Nova pauses to compose before it. */
-export type ArrivingItem = {
+export type NovaArrivingItem = {
   key: string;
   node: ReactNode;
   /** True when this opens a turn — the first line, or something she made. */
   beat?: boolean;
 };
 
-export function Arriving({
+export function NovaArriving({
   items,
   /** Rendered under the thread once every message has arrived. */
   children,
 }: {
-  items: ArrivingItem[];
+  items: NovaArrivingItem[];
   children?: ReactNode;
 }) {
   const [arrived, setArrived] = useState(0);
@@ -157,9 +157,10 @@ function Composing() {
       {[0, 1, 2].map((index) => (
         <span
           key={index}
-          className="study-typing size-1.5 rounded-full bg-fg-muted"
-          /* Only the offset is inline; the animation is a class so the shell's
-             hidden-tab pause and the reduced-motion block can both reach it. */
+          className="nova-typing size-1.5 rounded-full bg-fg-muted"
+          /* Only the offset is inline; the animation is a class so the
+             root's hidden-tab pause and the reduced-motion block can both
+             reach it. */
           style={{ animationDelay: `${index * 0.18}s` }}
         />
       ))}

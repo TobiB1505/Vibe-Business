@@ -27,12 +27,12 @@ import {
   RenderBlock,
   Thinking,
 } from "./elements";
-import { Arriving } from "./arriving";
+import { NovaArriving as Arriving } from "@/components/nova/nova-arriving";
 import { AuditBlock } from "./audit-block";
-import { Clock } from "./clock";
+import { NovaClock as Clock } from "@/components/nova/nova-clock";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import { NO_FACTS } from "./moment-fixtures";
-import { speechBubbles } from "./speech-bubbles";
+import { speechBubbles } from "@/components/nova/nova-speech";
 import type { Study } from "./studies";
 
 /**

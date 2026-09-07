@@ -63,3 +63,37 @@ export function groupSpeech(texts: readonly string[]): string[][] {
 
   return prose ? [[...texts]] : texts.map((text) => [text]);
 }
+
+export type SpeechBubble = {
+  /** Stable across renders: the first sentence the bubble carries. */
+  key: string;
+  aside: boolean;
+  tail: boolean;
+  paragraphs: string[];
+};
+
+export function speechBubbles(
+  messages: readonly { id: string; text: string; emphasis: "primary" | "aside" }[],
+): SpeechBubble[] {
+  /* Runs of one register, in order. */
+  const runs = messages.reduce<{ aside: boolean; texts: string[] }[]>((rows, message) => {
+    const aside = message.emphasis === "aside";
+    const previous = rows.at(-1);
+    if (previous && previous.aside === aside) {
+      return [...rows.slice(0, -1), { aside, texts: [...previous.texts, message.text] }];
+    }
+    return [...rows, { aside, texts: [message.text] }];
+  }, []);
+
+  const bubbles = runs.flatMap((run) =>
+    groupSpeech(run.texts).map((paragraphs) => ({ aside: run.aside, paragraphs })),
+  );
+
+  return bubbles.map((bubble, index) => ({
+    key: bubble.paragraphs[0] ?? String(index),
+    aside: bubble.aside,
+    /* Speaking, and the thing before it was not. */
+    tail: !bubble.aside && (index === 0 || (bubbles[index - 1]?.aside ?? false)),
+    paragraphs: bubble.paragraphs,
+  }));
+}

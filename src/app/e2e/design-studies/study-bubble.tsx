@@ -6,7 +6,7 @@ import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
 import { buildNovaHomeView } from "@/modules/nova/home-view";
 import { Bubble, Context, Line, Move } from "./elements";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
-import { speechBubbles } from "./speech-bubbles";
+import { speechBubbles } from "@/components/nova/nova-speech";
 import type { Study } from "./studies";
 
 /**

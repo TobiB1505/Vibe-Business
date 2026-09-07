@@ -4,7 +4,7 @@ import {
   SPEECH_PARAGRAPH_CHARS,
   SPEECH_RUN_CHARS,
   SPEECH_RUN_MESSAGES,
-} from "./speech";
+} from "./nova-speech";
 
 const remark = "There is a change waiting for you to look at.";
 const paragraph = "x".repeat(SPEECH_PARAGRAPH_CHARS + 1);
@@ -44,7 +44,11 @@ describe("grouping a run of sentences into bubbles", () => {
   it("never returns a mixture", () => {
     // Every run is all-separate or all-merged. A run whose shape changed one
     // bubble at a time as sentences grew would be unreadable to design against.
-    for (const run of [[remark, remark], [remark, paragraph], [paragraph, paragraph]]) {
+    for (const run of [
+      [remark, remark],
+      [remark, paragraph],
+      [paragraph, paragraph],
+    ]) {
       const bubbles = groupSpeech(run);
       expect(bubbles.length === 1 || bubbles.every((bubble) => bubble.length === 1)).toBe(true);
     }

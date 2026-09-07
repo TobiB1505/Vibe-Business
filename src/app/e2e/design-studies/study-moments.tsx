@@ -18,7 +18,7 @@ import {
 } from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import { Bubble, Context, Line, Moves } from "./elements";
-import { BLOCK_FOR_MOMENT } from "./block-registry";
+import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
 

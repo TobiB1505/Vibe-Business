@@ -3,9 +3,9 @@
 import { buildNovaFirstRunFeed, buildNovaWorkflowExplanation } from "@/modules/nova/first-run";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaEntry } from "@/modules/nova/feed";
-import { Arriving } from "./arriving";
+import { NovaArriving as Arriving } from "@/components/nova/nova-arriving";
 import { Bubble, Context, Header, Line, Move, Moves } from "./elements";
-import { Clock } from "./clock";
+import { NovaClock as Clock } from "@/components/nova/nova-clock";
 import {
   OpeningMark,
   OpeningPanel,
@@ -13,7 +13,7 @@ import {
   useOpening,
 } from "@/components/nova/nova-opening";
 import { atLeast } from "@/components/nova/nova-opening-beats";
-import { speechBubbles } from "./speech-bubbles";
+import { speechBubbles } from "@/components/nova/nova-speech";
 import type { Study } from "./studies";
 
 /**

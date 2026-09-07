@@ -4,9 +4,9 @@ import {
   BLOCK_FOR_OPERATION,
   progressSequenceFor,
   watchableOperations,
-} from "./block-registry";
-import { FOCUS_CANDIDATE_KINDS } from "@/modules/nova/focus";
-import { OPERATION_TYPES } from "@/modules/operations/schema";
+} from "./blocks";
+import { FOCUS_CANDIDATE_KINDS } from "./focus";
+import { OPERATION_TYPES } from "../operations/schema";
 
 /**
  * The registry's whole job is to be total, so this checks it against the

@@ -35,7 +35,7 @@ import { formatLocalClock } from "@/lib/utils/format-datetime";
  * `formatLocalClock` is that file's one local-time function, hand-computed
  * from `Date`'s local getters, and it exists for exactly this call site.
  */
-export function Clock() {
+export function NovaClock() {
   const [now, setNow] = useState<string | null>(null);
 
   useEffect(() => {

@@ -1,6 +1,6 @@
-import type { FocusCandidateKind } from "@/modules/nova/focus";
-import { OPERATION_TYPES, type OperationType } from "@/modules/operations/schema";
-import type { ProgressSequenceId } from "@/modules/operations/view";
+import type { FocusCandidateKind } from "./focus";
+import { OPERATION_TYPES, type OperationType } from "../operations/schema";
+import type { ProgressSequenceId } from "../operations/view";
 
 /**
  * Which block shows which state, decided in one place.

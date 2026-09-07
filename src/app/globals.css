@@ -812,6 +812,230 @@
   transition-duration: 150ms;
 }
 
+/* ── Nova's thread ────────────────────────────────────────────────────────
+
+   The furniture around what Nova says: the glass status row, the render
+   block's entrance, the shimmer on a stage label, and the Move's lit edge.
+   Rendered by `src/components/nova/` and by the design lab, which draws the
+   same components rather than copies of them.
+
+   These read the product's motion tokens — `--duration-reveal`, `--ease-vibe`
+   — rather than the per-skin ones the direction studies defined. The direction
+   has been chosen; the skins were how it was chosen, and a component that
+   still read them would change appearance depending on which study drew it.
+
+   Obligations 1 and 2 are at the bottom of this block, hooked to the same
+   `data-motion="paused"` root attribute `MotionProvider` already stamps.
+*/
+
+/* Glass. Deliberately not a default: chrome, overlays and signature moments
+   only. `backdrop-filter` over stacked dense content is what makes a product
+   judder, and the thread spends it on the one row that is chrome. */
+.nova-glass {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow: var(--shadow-card);
+  position: relative;
+}
+
+/* The single specular edge that reads as "this is a pane, not a fill". */
+.nova-glass::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* A reading measure for prose that is not inside a bubble. */
+.nova-measure {
+  max-width: 68ch;
+}
+
+/* A render block arriving. Opacity and transform only, so nothing below it
+   moves while it is being read. */
+@keyframes nova-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.nova-rise {
+  animation: nova-rise var(--duration-reveal) var(--ease-vibe) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+/* The dot beside "Connecting…", which is the one moment a connection state is
+   genuinely unknown rather than merely false. */
+.nova-pulse {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+/*
+   What she is doing, in the shape ChatGPT taught everybody: a line of text
+   with light travelling across it.
+
+   Admissible under all three of `DESIGN.md`'s properties for decorative
+   motion. It renders only while an operation the product recorded is running.
+   The sentence is fully legible with it off — it is `OPERATION_STAGE_LABELS`,
+   the stage the executor actually wrote, never a model's account of its own
+   thinking (rule 43). And the sweep carries no timing: a fixed period,
+   unrelated to how long the run has taken or has left.
+*/
+@keyframes nova-thinking {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.nova-thinking {
+  background: linear-gradient(
+      90deg,
+      var(--color-fg-meta) 0%,
+      var(--color-fg-meta) 30%,
+      var(--color-fg) 45%,
+      var(--color-fg-meta) 60%,
+      var(--color-fg-meta) 100%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: nova-thinking 3.2s linear infinite;
+}
+
+/* Lines that were snapshots of a moment that has passed, leaving. */
+.nova-dissolve {
+  animation: nova-dissolve 420ms var(--ease-vibe) both;
+}
+
+@keyframes nova-dissolve {
+  from {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0);
+  }
+}
+
+:root[data-motion="paused"] .nova-thinking,
+:root[data-motion="paused"] .nova-pulse {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-rise,
+  .nova-dissolve {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+  .nova-pulse {
+    animation: none !important;
+    opacity: 1;
+  }
+  /* The gradient has to go with the animation, not just the animation: text
+     painted through a clipped background with `color: transparent` is
+     invisible the moment nothing moves. */
+  .nova-thinking {
+    animation: none !important;
+    background: none;
+    color: var(--color-fg-body);
+  }
+}
+
+/* The three dots, in the shape a phone taught everybody. A beat before an
+   arrival, never a standing report that somebody is at a keyboard. */
+.nova-typing {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+:root[data-motion="paused"] .nova-typing {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Three still dots rather than none: the bubble is what says she is
+     composing, and removing it would take information the motion only
+     decorated. */
+  .nova-typing {
+    animation: none !important;
+    opacity: 1;
+  }
+}
+
+/* ── The Move ─────────────────────────────────────────────────────────────
+
+   Variant B from the Move sheet, chosen at review: a dark surface with one
+   band of light along its top edge. The band is the control's only light —
+   at rest a hairline at partial width, on hover the full edge at full
+   strength — so the whole control does not have to change colour to say it
+   is pressable.
+*/
+.move-lit {
+  cursor: pointer;
+  transition:
+    background-color var(--duration-hover) var(--ease-emphasis),
+    border-color var(--duration-hover) var(--ease-emphasis),
+    transform var(--duration-hover) var(--ease-emphasis);
+}
+
+.move-lit-band {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-mint) 30%,
+    var(--color-mint) 70%,
+    transparent
+  );
+  opacity: 0.45;
+  transition:
+    opacity var(--duration-hover) var(--ease-emphasis),
+    transform var(--duration-hover) var(--ease-emphasis);
+  transform: scaleX(0.55);
+}
+
+.move-lit:hover .move-lit-band,
+.force-hover .move-lit-band {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.move-lit:hover,
+.force-hover .move-lit {
+  background-color: var(--color-surface-3);
+  border-color: var(--color-line-strong);
+}
+
+.move-lit:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-lit,
+  .move-lit-band {
+    transition: none !important;
+  }
+}
+
 /* ── Nova's speech ────────────────────────────────────────────────────────
 
    The bubble, its register and its tail. Rendered by
