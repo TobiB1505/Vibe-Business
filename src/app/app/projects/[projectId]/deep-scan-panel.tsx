@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
+import { ScanHandoff } from "./scan-handoff";
 import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { ProgressSteps } from "@/components/system/operation-progress";
@@ -283,13 +284,25 @@ function LiveViewDialog({
         tabIndex={-1}
         className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-line-2 bg-app p-4 focus:outline-none"
       >
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <h3 id="deep-scan-dialog-title" className="text-sm font-medium text-fg">
             Sign in to your product
           </h3>
           <p id="deep-scan-dialog-description" className="text-xs text-fg-secondary">
             Sign in normally inside this temporary browser. Vibe does not store your password or a
             reusable login session.
+          </p>
+          {/*
+            What happens after the part the founder can see.
+
+            The dialog described the step it was on and nothing beyond it, so
+            the ninety seconds that follow a successful login arrived
+            unannounced — and the first thing a person learns about them is
+            that the picture has gone. Three clauses, in order, on one line:
+            it costs nothing to read and it is the whole shape of the flow.
+          */}
+          <p className="text-fg-meta font-mono text-meta">
+            Sign in · Vibe reads your signed-in pages, about 90 seconds · you get the result
           </p>
         </div>
 
@@ -377,6 +390,20 @@ function LiveViewDialog({
               </div>
             </div>
           )}
+          {/*
+            The handoff, mounted over the picture while the analysis runs.
+
+            It is inside the frame's own box on purpose: the geometry is
+            already reserved by the aspect ratio above, so the switch-off and
+            the gathering happen in exactly the space the browser occupied and
+            nothing a person is reading moves.
+
+            `busy` is the observed state it is bound to — an analysis Vibe
+            started and has not yet heard back from. It cannot render over a
+            pending, cancelled or failed scan, because it is not mounted then.
+          */}
+          <ScanHandoff running={busy && !error} />
+
           {!error && !unreachable && stage !== "ready" && (
             <div
               role="status"
@@ -829,7 +856,51 @@ function NextScan({
 
 function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["lastResult"]> }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/*
+        The finding leads.
+
+        This opened with a three-row definition list — timestamp, page count,
+        completeness — and put what Vibe had actually *found* underneath it as
+        a row of small grey chips. That is a receipt with the answer stapled to
+        the back. A founder came to this panel to learn what their signed-in
+        product contains; the metadata is how Vibe knows, not what it knows.
+
+        So the surfaces are the first thing on the card and the largest thing
+        on it, and the receipt is a quiet line underneath.
+      */}
+      {result.surfaces.length > 0 ? (
+        <div className="space-y-2">
+          {/*
+            Not "Inside your signed-in product": the panel's own heading
+            already says that, and a label repeating its own card's title is
+            words a person has to read twice to learn nothing.
+
+            "Recognised" rather than "found", because that is the claim. These
+            are the surfaces Vibe has a name for; a product can contain
+            something Vibe does not recognise, and this list would not say so.
+          */}
+          <p className="text-fg-meta font-mono text-meta uppercase">Surfaces Vibe recognised</p>
+          <ul className="flex flex-wrap gap-2">
+            {result.surfaces.map((surface) => (
+              <li
+                key={surface.id}
+                className="border-line-2 bg-surface-2 text-fg-body rounded-nav border px-3 py-1.5 text-sm"
+              >
+                {surface.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        // Never a heading with nothing under it: a scan that recognised no
+        // surface is a real answer, and it has to read as one.
+        <p className="text-fg-prose max-w-[62ch] text-sm">
+          Vibe read your signed-in pages but did not recognise any of the surfaces it looks
+          for. The notes below say what it saw.
+        </p>
+      )}
+
       <dl className="space-y-1 text-sm">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-fg-muted">Last checked</dt>
@@ -875,24 +946,6 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             <>It also stops at a set number of pages, so one scan stays quick and cheap.</>
           )}
         </p>
-      )}
-
-      {result.surfaces.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
-            Pages Vibe found after signing in
-          </p>
-          <ul className="flex flex-wrap gap-1.5">
-            {result.surfaces.map((surface) => (
-              <li
-                key={surface.id}
-                className="rounded border border-line-2 px-2 py-0.5 text-xs text-fg-prose"
-              >
-                {surface.name}
-              </li>
-            ))}
-          </ul>
-        </div>
       )}
 
       {/*

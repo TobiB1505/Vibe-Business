@@ -151,8 +151,19 @@ test.describe("what a finished scan reports about itself", () => {
   test("counts failures, and groups the rest as what it is", async ({ page }) => {
     await page.goto("/e2e/deep-scan-completed-with-warnings");
 
-    // The result leads. The caveats are not above it.
-    await expect(page.getByText("Pages Vibe looked at")).toBeVisible();
+    /*
+     * The finding leads. This card opened with a three-row definition list and
+     * put what Vibe had actually found underneath it as small grey chips — a
+     * receipt with the answer stapled to the back.
+     */
+    const surfaces = page.getByText("Surfaces Vibe recognised");
+    const receipt = page.getByText("Pages Vibe looked at");
+    await expect(surfaces).toBeVisible();
+    await expect(receipt).toBeVisible();
+
+    const surfacesBox = await surfaces.boundingBox();
+    const receiptBox = await receipt.boundingBox();
+    expect(surfacesBox!.y).toBeLessThan(receiptBox!.y);
 
     /*
      * And the scan is not called half-done for having behaved.
