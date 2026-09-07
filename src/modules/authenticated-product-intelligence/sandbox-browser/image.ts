@@ -124,15 +124,33 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
           timeoutMs: BUILD_STEP_TIMEOUT_MS,
         });
         if (result.exitCode !== 0) {
-          // The output is Vibe's own build commands talking — a browser
-          // download and a package install, with no customer input anywhere in
-          // the VM. Bounded because a registry that answers with an HTML error
-          // page must not turn one failure into a megabyte of log.
+          /*
+           * The output is Vibe's own build commands talking — a browser
+           * download and a package install, with no customer input anywhere in
+           * the VM. Bounded because a registry that answers with an HTML error
+           * page must not turn one failure into a megabyte of log.
+           *
+           * `os` is asked because two build failures in a row turned on which
+           * machine this is. Vercel documents its *build* image as Amazon
+           * Linux 2023; the sandbox answered `dnf: command not found`, and the
+           * images list names `universal`, `node:24` and `ubuntu` without
+           * saying what `universal` is built on. Rather than guess a third
+           * time, every build failure now carries the answer.
+           */
+          const os = await handle
+            .run({
+              command: { command: "cat", args: ["/etc/os-release"] },
+              cwd: IMAGE_BUILD_CWD,
+              timeoutMs: 10_000,
+            })
+            .catch(() => null);
+
           reportBrowserFailure("image_build_command", {
             commandIndex: index,
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             output: result.output.slice(-1500),
+            os: os && os.exitCode === 0 ? os.output.slice(0, 300) : "unknown",
           });
           await discard(handle);
           return { ok: false, error: "browser_provider_unavailable" };
