@@ -40,4 +40,12 @@ She may **report** and she may **advise**. She may not **push**. The difference 
 
 `view.test.ts` sweeps every string for figures, causal claims, promises about what a re-run will produce, and the imperative forms. It also pins that the paragraph carries no founder name — the panel sets that as a lead-in — which is what keeps every word the builder produces Vibe's own and sweepable.
 
-`paragraph` is deliberately the only field a written one would replace. A model that turns a briefing into a sentence takes over that field and nothing else, which is why the composed one has to be good enough to ship on its own: it is also what runs when a written one is missing. `BRIEFING_SOURCE_NOTE` is on the panel unconditionally: a note that only appears in trouble teaches a founder that silence means live monitoring.
+## The half a model writes
+
+`situation` is the field a written sentence replaces, and it is the only one. `standing` — whether something is waiting — stays live and is never written down: it comes from the ranking, which moves when an agent run starts, so a stored sentence about it would be wrong within the hour. The panel renders the live clause in front of the written one, and a founder reads one paragraph.
+
+Generation is `voice/briefing-slot.ts` under [ADR 0086](../../../../docs/decisions/0086-nova-presentation-is-claimed-stored-and-attempted-once.md)'s five conditions, from the tail of the three operations that move the chain — a Product Scan, a business audit, a Move generation. One slot per operation, because `ai_usage_events_job_idx` is unique on `job_id` and a second call on that line writes a paid attempt the ledger drops. `audit_result` and `move_recommendation` had those lines and are parked.
+
+Two things the model is never given: any figure (`allowedNumericFacts` is empty, so the validator rejects every digit — which is what makes a bucket storable and a day count not), and the Move's own words (the panel prints them beneath, so a model that had them could only repeat them; absent beats forbidden).
+
+The clock is not a trigger. A bucket can flip with no operation behind it, and then nothing generates and the founder reads Vibe's own sentence about the new age. That is a real limit, and the honest one: a caller that fires on a clock is neither an operation tail nor allowed to write the usage ledger, and the template covers the case completely. `BRIEFING_SOURCE_NOTE` is on the panel unconditionally: a note that only appears in trouble teaches a founder that silence means live monitoring.

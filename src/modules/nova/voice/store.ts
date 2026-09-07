@@ -34,12 +34,14 @@ import type { NovaVoiceFallbackReason, NovaVoiceOutcome } from "./service";
  * edited, and a source contract in `store.test.ts` asserts the import stays a
  * type import.
  *
- * ## Nothing calls `ensureNovaVoiceMessage`
+ * ## Who calls `ensureNovaVoiceMessage`
  *
- * It composes claim → speak → resolve and is reachable from tests only, as
- * `speakNovaMessage` has been since Slice 9. Wiring it to a feed, a page or an
- * operation is a separate decision, including where the usage event is
- * written — nothing has been billed yet, so nothing is recorded yet.
+ * It composes claim → speak → resolve, and the one production caller is
+ * `speakAfterOperation` — the tail of a durable operation's final step, which
+ * is where all five of ADR 0086's conditions are already true rather than
+ * newly arranged. The slot it speaks is `briefing`, and the usage event is
+ * `recordAIUsage` under the operation run's id, on the line that already
+ * records that operation's own inference.
  */
 
 const TABLE = "nova_voice_messages";

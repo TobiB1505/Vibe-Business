@@ -62,6 +62,17 @@ type Scenario = {
   chain: ProvenanceInputs;
   focus: NovaFocus;
   topMove: { title: string; whyNow: string } | null;
+  /**
+   * A stored sentence, as a model would have written it about this exact
+   * situation. Absent means no message was ever generated for this identity —
+   * the ordinary state, and the one every other scenario is in.
+   *
+   * Fixed text rather than a live call: the point on screen is that the panel
+   * renders a written half in front of a live one, which is a property of the
+   * component and not of a provider. What the model actually produces is
+   * measured by the eval, not by a browser.
+   */
+  spoken?: string;
 };
 
 const SCENARIOS = {
@@ -158,6 +169,26 @@ const SCENARIOS = {
     focus: WAITING,
     topMove: null,
   },
+  /**
+   * The same situation as `briefing-audit-ageing`, with a sentence a model
+   * wrote about it stored against its identity.
+   *
+   * Two things have to be visible here and neither is about the wording. The
+   * live half — "Nothing is waiting on you right now" — is still Vibe's, in
+   * front of the written half, because whether something is waiting moves by
+   * the hour and is never written down. And the offer beneath is unchanged:
+   * the model wrote a sentence, not a decision.
+   */
+  "briefing-spoken": {
+    founderName: "Tobi",
+    projectName: "Vibe Business",
+    primaryGoal: "get_first_users",
+    chain: sound({ businessAudit: { producedAt: daysAgo(5), upToDate: true } }),
+    focus: IDLE,
+    topMove: TOP_MOVE,
+    spoken:
+      "Your business audit has been sitting for about a week. There is nothing wrong with it — I just have not read your product since, so if anything has moved, running it again would give me something newer to go on.",
+  },
 } as const satisfies Record<string, Scenario>;
 
 export const E2E_BRIEFING_SCENARIOS = SCENARIOS;
@@ -165,6 +196,18 @@ export type E2eBriefingScenario = keyof typeof SCENARIOS;
 
 export function isE2eBriefingScenario(value: string): value is E2eBriefingScenario {
   return Object.hasOwn(SCENARIOS, value);
+}
+
+/**
+ * The stored sentence for a scenario, when it has one.
+ *
+ * `undefined` is the ordinary case and means the panel shows `view.situation`
+ * — Vibe's own words, which is what a founder sees until an operation finishes
+ * and a durable step writes one.
+ */
+export function e2eBriefingVoice(scenario: E2eBriefingScenario): string | undefined {
+  const fixture: Scenario = SCENARIOS[scenario];
+  return fixture.spoken;
 }
 
 /** The view the panel renders, assembled by the code production uses. */

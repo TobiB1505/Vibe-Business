@@ -65,7 +65,7 @@ import BillingLoading from "@/app/app/(account)/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
 import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
 import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
-import { e2eBriefing, isE2eBriefingScenario } from "../briefing-scenarios";
+import { e2eBriefing, e2eBriefingVoice, isE2eBriefingScenario } from "../briefing-scenarios";
 import { BriefingPanel } from "@/app/app/projects/[projectId]/nova/briefing-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
@@ -1121,25 +1121,27 @@ export default async function E2eScenarioPage({
             ),
             review: (
               <>
-              {/*
+                {/*
                 The paths policy refused, on the stage a person decides from.
                 `AgentPreviewActions` binds real server actions and cannot be
                 mounted here, so the part that is new — naming what is not in
                 the change — is rendered on its own.
               */}
-              <WithheldPaths paths={files.filter((f) => f.withheldBy !== null).map((f) => f.path)} />
-              <AgentMergeStage
-                summary={mergeSummary}
-                files={mergeFiles}
-                allChecksPassed
-                branchName="vibe/feat-pricing-visibility"
-                baseBranch="main"
-                commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
-                compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
-                backHref="#"
-                canMerge
-                decision={<CostLine cost={cost} />}
-              />
+                <WithheldPaths
+                  paths={files.filter((f) => f.withheldBy !== null).map((f) => f.path)}
+                />
+                <AgentMergeStage
+                  summary={mergeSummary}
+                  files={mergeFiles}
+                  allChecksPassed
+                  branchName="vibe/feat-pricing-visibility"
+                  baseBranch="main"
+                  commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
+                  compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
+                  backHref="#"
+                  canMerge
+                  decision={<CostLine cost={cost} />}
+                />
               </>
             ),
           }}
@@ -1165,7 +1167,11 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-3xl p-8">
         {label}
-        <BriefingPanel view={e2eBriefing(scenario)} projectId="project_e2e" />
+        <BriefingPanel
+          view={e2eBriefing(scenario)}
+          voice={e2eBriefingVoice(scenario)}
+          projectId="project_e2e"
+        />
       </main>
     );
   }
@@ -1531,53 +1537,53 @@ export default async function E2eScenarioPage({
         >
           {view ? (
             <>
-            {/*
+              {/*
               The strip the Business Health route renders under its priced
               audit control, from the same builder — without it this density
               had no browser coverage at all.
             */}
-            <SourceCoverageStrip
-              sources={buildSourceCoverage({
-                repository: {
-                  result:
+              <SourceCoverageStrip
+                sources={buildSourceCoverage({
+                  repository: {
+                    result:
+                      E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
+                    completedAt: "2026-08-14T08:22:59.917Z",
+                  },
+                  live: {
+                    result: E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                    completedAt: "2026-08-14T08:24:11.000Z",
+                  },
+                  deepScan: { result: null },
+                  founder: { told: true, at: null },
+                  hrefs: {
+                    scan: "/app/projects/project_e2e/my-product",
+                    deepScan: "/app/projects/project_e2e/deep-scan",
+                    settings: "/app/projects/project_e2e/settings",
+                    founderIntent: "/app/projects/project_e2e/settings#founder-intent",
+                    connectRepository: "/app/projects/project_e2e/settings",
+                    addWebsite: "/app/projects/project_e2e/settings",
+                  },
+                  connected: { repository: true, productionUrl: true },
+                })}
+                className="mb-4"
+              />
+              <AuditOverview
+                view={view}
+                movesHref="/app/projects/project_e2e/plan"
+                hasMoves={hasMoves}
+                /*
+                 * The same comparison My Product renders, built from the same
+                 * fixtures rather than restated — the Brain carries it as
+                 * evidence about the business, and without this the branch had
+                 * no browser coverage at all.
+                 */
+                contradictions={
+                  crossCheckIntelligence(
                     E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
-                  completedAt: "2026-08-14T08:22:59.917Z",
-                },
-                live: {
-                  result: E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
-                  completedAt: "2026-08-14T08:24:11.000Z",
-                },
-                deepScan: { result: null },
-                founder: { told: true, at: null },
-                hrefs: {
-                  scan: "/app/projects/project_e2e/my-product",
-                  deepScan: "/app/projects/project_e2e/deep-scan",
-                  settings: "/app/projects/project_e2e/settings",
-                  founderIntent: "/app/projects/project_e2e/settings#founder-intent",
-                  connectRepository: "/app/projects/project_e2e/settings",
-                  addWebsite: "/app/projects/project_e2e/settings",
-                },
-                connected: { repository: true, productionUrl: true },
-              })}
-              className="mb-4"
-            />
-            <AuditOverview
-              view={view}
-              movesHref="/app/projects/project_e2e/plan"
-              hasMoves={hasMoves}
-              /*
-               * The same comparison My Product renders, built from the same
-               * fixtures rather than restated — the Brain carries it as
-               * evidence about the business, and without this the branch had
-               * no browser coverage at all.
-               */
-              contradictions={
-                crossCheckIntelligence(
-                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().snapshot,
-                  E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
-                ).checks
-              }
-            />
+                    E2E_INTELLIGENCE_SCENARIOS.repository_intelligence_contradiction().live,
+                  ).checks
+                }
+              />
             </>
           ) : (
             <p>This fixture predates the Business Brain.</p>

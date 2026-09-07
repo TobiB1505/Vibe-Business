@@ -110,10 +110,21 @@ function EvidenceRow({ row }: { row: BriefingRow }) {
 
 export function BriefingPanel({
   view,
+  voice,
   projectId,
   className,
 }: {
   view: BriefingView;
+  /**
+   * What to say about the evidence: a stored sentence a model wrote for this
+   * exact situation, or `view.situation` when none exists. Resolved by the
+   * caller's read — this component cannot reach a provider and never could.
+   *
+   * Only this half is ever a model's. `view.standing` is rendered live in
+   * front of it, because whether something is waiting changes by the hour and
+   * a written sentence about it would be wrong before it was read.
+   */
+  voice?: string;
   projectId: string;
   className?: string;
 }) {
@@ -138,16 +149,27 @@ export function BriefingPanel({
       </div>
 
       {/*
-        Nova's own paragraph, addressed. The name is a lead-in here rather than
-        part of the sentence so that every word `buildBriefingView` produces
-        stays Vibe's own and stays sweepable; an account that has not given one
-        simply starts at the sentence, with no placeholder and no "there".
+        Nova's own paragraph, addressed, in two halves that read as one.
+
+        `standing` is live and never stored — it comes from the ranking, which
+        moves whenever an agent run starts. `voice` is the half a model may
+        have written about the evidence, and falls through to Vibe's own
+        sentence whenever one was not written or was refused.
+
+        The name is a lead-in rather than part of either half, so every word
+        the builder produces stays Vibe's own and stays sweepable; an account
+        that has not given a name simply starts at the sentence, with no
+        placeholder and no "there".
       */}
-      <p className="text-fg-body text-sm leading-relaxed" data-testid="briefing-paragraph">
+      <p
+        className="text-fg-body text-sm leading-relaxed"
+        data-testid="briefing-paragraph"
+        data-briefing-voice={voice !== undefined && voice !== view.situation ? "" : undefined}
+      >
         {view.founderName !== null && (
           <span className="text-fg font-semibold">{view.founderName} — </span>
         )}
-        {view.paragraph}
+        {view.standing} {voice ?? view.situation}
       </p>
 
       {read.kind === "move" && (

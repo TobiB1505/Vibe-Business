@@ -7,6 +7,7 @@ import { liveProductFindingEvents, repositoryFindingEvents } from "@/modules/pro
 import { getProfileById } from "@/modules/product-understanding/store";
 import { inspectRepository } from "@/modules/repository-intelligence/service";
 import type { OperationFailureCode } from "../failures";
+import { speakAboutTheBriefing } from "../nova-briefing";
 import { getProjectOperationRunById, setOperationStage, type ProjectOperationRun } from "../store";
 import { completeOperationStep, failOperationStep, type ExecutionDeps, type StepOutcome } from "../product-understanding/execution";
 
@@ -236,6 +237,29 @@ export async function completeProductScanStep(
     title: "Product Scan complete",
     detail: "The Product Profile and every durable discovery are ready.",
     referenceId: profileId,
+  });
+
+  /*
+   * Nova says where the founder stands, once the scan that changed it is done.
+   *
+   * A Product Scan moves three links of the evidence chain at once — both
+   * scans and the understanding built on them — so the briefing after one is
+   * a genuinely different situation from the briefing before, with its own
+   * reuse identity and its own single attempt (ADR 0086).
+   *
+   * Here rather than inside the shared `completeOperationStep`, which product
+   * understanding also uses: a run that only rebuilt the profile has not moved
+   * the chain in a way worth a new sentence, and putting it there would spend
+   * on both.
+   *
+   * Last, past everything that decides whether the founder got what they paid
+   * for. `speakAboutTheBriefing` returns void and never throws, so a step that
+   * calls it behaves exactly like one that does not.
+   */
+  await speakAboutTheBriefing({
+    supabase: deps.supabase,
+    provider: deps.provider,
+    operation: loaded.operation,
   });
 }
 

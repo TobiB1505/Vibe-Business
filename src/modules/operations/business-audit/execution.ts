@@ -18,14 +18,8 @@ import {
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
-import { buildNovaAuditEntry } from "@/modules/nova/feed";
-import {
-  buildNovaAuditTemplate,
-  buildNovaAuditVoicePayload,
-} from "@/modules/nova/voice/audit-slot";
-import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
-import { speakAfterOperation } from "../nova-voice";
+import { speakAboutTheBriefing } from "../nova-briefing";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
 import {
@@ -767,11 +761,15 @@ export async function completeOperationStep(
     },
   });
 
-  await speakAboutTheAudit(deps, operation, auditId);
+  await speakAboutTheBriefing({
+    supabase: deps.supabase,
+    provider: deps.provider,
+    operation,
+  });
 }
 
 /**
- * Nova says one sentence about an audit that is already finished.
+ * Nova says where the founder stands, on the line the audit used to speak on.
  *
  * ## Why this line and no other
  *
@@ -789,46 +787,20 @@ export async function completeOperationStep(
  * is settled, the completion event is written. Nothing below this line can
  * change any of it, which is the whole reason the tier is allowed to exist.
  *
- * ## Why the view is built from so little
+ * ## Why the briefing and not the audit
  *
- * `buildBusinessBrainView` takes history, moves and a scan timestamp, and none
- * of them reach the five fields `buildNovaAuditEntry` reads — moves decorate a
- * problem's `move`/`moveCount`, readings decorate `recentChanges`. Passing
- * empty ones is not a shortcut around a read; it is declining to perform four
- * reads whose results are discarded on the next line. `audit-slot.test.ts`
- * pins that by asserting the entry is identical with them supplied.
+ * That uniqueness is also why it is *one* slot rather than two. `job_id` is
+ * unique per operation run, so a second voice call on this line would write a
+ * paid attempt the ledger silently drops — and a provider cost that is not
+ * recorded is the one failure this tier is not allowed to have (rule 47).
  *
- * Moves do not exist yet at this moment anyway: the opportunity engine runs
- * after the audit it reads.
+ * Given one, the briefing is the one worth spending on. `audit_result` asks a
+ * model to rephrase a sentence a model already wrote, which buys a synonym and
+ * a second chance to be wrong; the briefing is Vibe's own structured reading of
+ * the whole evidence chain, and no other sentence in the product says it. The
+ * audit slot stays built and tested in `voice/audit-slot.ts`, and its read
+ * resolves to Vibe's own words — it is parked, not deleted.
  */
-async function speakAboutTheAudit(
-  deps: ExecutionDeps,
-  operation: { id: string; userId: string; projectId: string },
-  auditId: string,
-): Promise<void> {
-  const stored = await getAuditById(deps.supabase, auditId);
-  const audit = stored?.result ?? null;
-  if (audit === null || !audit.synthesis) return;
-
-  const view = buildBusinessBrainView({
-    audit,
-    lastScanAt: null,
-    auditReadings: [],
-    movesByConclusion: {},
-  });
-  if (view === null) return;
-
-  const entry = buildNovaAuditEntry(view, audit.synthesis);
-
-  await speakAfterOperation({
-    supabase: deps.supabase,
-    provider: deps.provider,
-    operation,
-    payload: buildNovaAuditVoicePayload(entry),
-    template: buildNovaAuditTemplate(entry),
-  });
-}
-
 /** Terminal failure path, idempotent for the same reason. */
 export async function failOperationStep(
   deps: ExecutionDeps,

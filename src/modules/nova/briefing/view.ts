@@ -132,21 +132,30 @@ export type BriefingView = {
   projectName: string;
   /** Vibe's own label for the goal on file. Null when none is. */
   goalLabel: string | null;
+  /**
+   * Whether anything is waiting, in one clause.
+   *
+   * **Live, and never stored.** It comes from `deriveNovaFocus`, which moves
+   * whenever an agent run starts or a change is approved — so a sentence about
+   * it that was written yesterday is a sentence that can be wrong today. The
+   * panel renders this one itself, every time, and no model ever sees it.
+   */
   standing: string;
   /**
-   * Everything Nova says, as one paragraph.
+   * What the evidence says, as prose.
    *
-   * The standing line and the read's own sentences, joined — because a founder
-   * asked for a person telling them where they are, and a stack of labelled
-   * blocks is not that. It carries no name: the panel sets the founder's own
-   * as a lead-in, so every string in here stays Vibe's own words and stays
-   * sweepable by `view.test.ts`.
+   * **This is the seam a model takes over** (`voice/briefing-slot.ts`). It
+   * covers only the slow half — the chain and its age — because that is the
+   * half that is safe to write down: it changes when an operation finishes,
+   * which is exactly when a new sentence is generated. A written sentence
+   * replaces this field and nothing else, which is why the composed one has to
+   * read well enough to ship as it is: it is also the fallback.
    *
-   * This is also the seam a model would take over. A written paragraph would
-   * replace this field and nothing else — which is why the deterministic one
-   * has to be good enough to ship on its own, and is what runs when a written
-   * one is missing.
+   * It carries no founder name, so every string in here stays Vibe's own words
+   * and stays sweepable by `view.test.ts`.
    */
+  situation: string;
+  /** Both halves, joined — what the panel says when no model has spoken. */
   paragraph: string;
   rows: readonly BriefingRow[];
   read: BriefingRead;
@@ -163,6 +172,7 @@ export function buildBriefingView(briefing: NovaBriefing): BriefingView {
     projectName: briefing.project.name,
     goalLabel: briefing.goal?.label ?? null,
     standing,
+    situation: read.sentences.join(" "),
     paragraph: [standing, ...read.sentences].join(" "),
     rows: briefing.evidence.map((entry) => ({
       kind: entry.kind,

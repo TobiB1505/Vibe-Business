@@ -155,7 +155,7 @@ export async function NovaHome({
         summary above the thing it summarises.
       */}
       <NovaRise delay={0.28}>
-        <BriefingPanel view={data.briefing} projectId={project.id} />
+        <BriefingPanel view={data.briefing} voice={data.briefingVoice} projectId={project.id} />
       </NovaRise>
 
       {data.health ? (

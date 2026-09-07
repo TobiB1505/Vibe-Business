@@ -42,6 +42,8 @@ export const NOVA_VOICE_SLOTS = [
   "execution_result",
   /** "It is merged; here is what became observable." */
   "outcome_result",
+  /** "Here is where you stand on everything I hold." */
+  "briefing",
 ] as const;
 
 export type NovaVoiceSlot = (typeof NOVA_VOICE_SLOTS)[number];

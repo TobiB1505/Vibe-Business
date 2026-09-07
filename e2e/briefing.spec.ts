@@ -193,3 +193,31 @@ test.describe("at 390px", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+/**
+ * The half a model may write, and the half it may never touch.
+ *
+ * `briefing-spoken` is the same situation as `briefing-audit-ageing` with a
+ * stored sentence against its identity. What has to be visible is not the
+ * wording — that is the eval's question — but the seam: the live clause is
+ * still Vibe's, in front of the written one, and the offer beneath is
+ * unchanged, because the model wrote a sentence and not a decision.
+ */
+test.describe("when a model has written the situation", () => {
+  test("says the written half behind Vibe's own live one", async ({ page }) => {
+    await page.goto("/e2e/briefing-spoken");
+
+    const paragraph = page.getByTestId("briefing-paragraph");
+    await expect(paragraph).toHaveAttribute("data-briefing-voice", "");
+    await expect(paragraph).toHaveText(
+      /^Tobi — Nothing is waiting on you right now\. Your business audit has been sitting/,
+    );
+  });
+
+  test("changes nothing a founder can press", async ({ page }) => {
+    await page.goto("/e2e/briefing-spoken");
+
+    await expect(page.getByTestId("briefing-panel")).toHaveAttribute("data-briefing-read", "age");
+    await expect(page.getByTestId("briefing-remedy")).toHaveText(/run a new business audit/i);
+  });
+});

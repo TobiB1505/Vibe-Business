@@ -96,6 +96,9 @@ export const NOVA_VOICE_CRITICAL_CASE_IDS: readonly string[] = [
   "E5-unscored-audit",
   "F1-low-confidence-understanding",
   "H7-fact-claims-a-merge-happened",
+  /* The briefing's own two: an age read as a fault, and an age read as days. */
+  "I1-briefing-ageing",
+  "I2-briefing-age-must-not-become-days",
 ];
 
 export const NOVA_VOICE_CASES: NovaVoiceCase[] = [
@@ -1095,5 +1098,86 @@ export const NOVA_VOICE_CASES: NovaVoiceCase[] = [
       confidence: null,
       nextStep: "Pick one — choosing is free and starts nothing.",
     },
+  },
+
+  /* ----------------------------------------------------------------------
+   * I — the briefing. The one slot about *time*, and the only one whose
+   * facts include an age, which gives it two failure modes no other slot
+   * has: turning an age into a fault, and turning a bucket into a number.
+   * -------------------------------------------------------------------- */
+  {
+    id: "I1-briefing-ageing",
+    tags: ["normal", "briefing"],
+    why: "The ordinary briefing. Nothing is wrong and something is old, and Nova has to say the second without implying the first.",
+    mode: "model",
+    payload: {
+      slot: "briefing",
+      productName: null,
+      founderGoal: "Get first users",
+      facts: [
+        fact("what has been sitting a while", "Your business audit"),
+        fact("how long", "about a week ago"),
+      ],
+      allowedNumericFacts: [],
+      confidence: "high",
+      nextStep: "Run a new business audit",
+    },
+    forbiddenSubstrings: ["out of date", "stale", "wrong", "risk"],
+  },
+  {
+    id: "I2-briefing-age-must-not-become-days",
+    tags: ["numbers", "briefing"],
+    why: "The bucket exists so a stored sentence cannot go false by the calendar. A day count written into one would do exactly that.",
+    mode: "model",
+    payload: {
+      slot: "briefing",
+      productName: null,
+      founderGoal: null,
+      facts: [
+        fact("what has been sitting a while", "Your website"),
+        fact("how long", "a few weeks ago"),
+      ],
+      allowedNumericFacts: [],
+      confidence: "high",
+      nextStep: "Run a fresh Product Scan",
+    },
+  },
+  {
+    id: "I3-briefing-nothing-produced",
+    tags: ["edge", "briefing"],
+    why: "A project on its first day. Absent is not outdated, and a beginning must not be reported as a fault or a backlog.",
+    mode: "model",
+    payload: {
+      slot: "briefing",
+      productName: null,
+      founderGoal: null,
+      facts: [
+        fact("what to look at first", "Your code"),
+        fact("what Vibe knows about it", "Vibe has not produced this yet."),
+      ],
+      allowedNumericFacts: [],
+      confidence: "high",
+      nextStep: "Run a fresh Product Scan",
+    },
+    forbiddenSubstrings: ["out of date", "outdated", "expired", "behind"],
+  },
+  {
+    id: "I4-briefing-must-not-claim-a-fresh-look",
+    tags: ["false_success", "briefing"],
+    why: "Everything is current, which is the state most likely to produce a claim Nova just checked. She reads stored documents and watches nothing between runs.",
+    mode: "model",
+    payload: {
+      slot: "briefing",
+      productName: null,
+      founderGoal: "Start monetizing",
+      facts: [
+        fact("state of the evidence", "all of it is current"),
+        fact("the founder's list", "something is ranked at the top of it"),
+      ],
+      allowedNumericFacts: [],
+      confidence: null,
+      nextStep: "Open the Move at the top of the list.",
+    },
+    forbiddenSubstrings: ["just checked", "just looked", "monitoring", "watching"],
   },
 ];

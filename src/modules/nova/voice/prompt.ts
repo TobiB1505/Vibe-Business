@@ -79,6 +79,16 @@ const SLOT_BRIEFS: Record<NovaVoiceSlot, string> = {
     "You have finished preparing a change. Say what you did and what is still outstanding — never that it works.",
   outcome_result:
     "Vibe has looked at what became observable since a change went out. Report only the facts given — never state that anything was merged, deployed or built unless a fact says so.",
+  /*
+   * The one slot about *time*, and the only one whose facts include an age.
+   * Two failures are specific to it and neither is covered by the shared
+   * rules: claiming to have looked at the product since it was last read
+   * (Nova reads stored documents and watches nothing), and turning an age into
+   * a risk nobody measured — old evidence is not wrong evidence, and a scan
+   * from last month of a site nobody touched is perfectly good.
+   */
+  briefing:
+    "You are telling the founder where they stand on what Vibe holds. Report only what the facts say, and never claim to have looked at their product since it was last read. If a fact names an age, an age is all it is — never call old evidence wrong, risky or urgent.",
 };
 
 export function buildNovaVoiceSystemPrompt(slot: NovaVoiceSlot): string {

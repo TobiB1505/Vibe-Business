@@ -5,21 +5,12 @@ import type { EvidenceCitation } from "@/components/system/evidence-drawer";
 import type { CostBalance } from "@/components/system/cost-disclosure";
 import type { FindingSeverity } from "@/components/system/finding-card";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import {
-  getAuditCurrency,
-  getAuditReadiness,
-  readAuditEvidence,
-  type AuditEvidence,
-} from "@/modules/business-audit/service";
-import { getFounderName } from "@/modules/auth/founder-profile";
+import type { AuditEvidence } from "@/modules/business-audit/service";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
-import { getLatestOpportunities } from "@/modules/opportunities/service";
-import { buildNovaBriefing } from "@/modules/nova/briefing/briefing";
-import { buildBriefingView, type BriefingView } from "@/modules/nova/briefing/view";
+import { readBriefingView } from "@/modules/nova/briefing/read";
+import type { BriefingView } from "@/modules/nova/briefing/view";
+import { readNovaBriefingVoice } from "@/modules/nova/voice/briefing-slot";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
-import { readNovaFocus } from "@/modules/nova/read";
-import { buildProvenanceChain } from "@/modules/provenance/chain";
-import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { productDisplayName } from "@/modules/projects/display-name";
 import { buildHeadline } from "@/modules/product-understanding/view";
@@ -32,24 +23,25 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  *
  * This is the most-visited route in the product, and the audit's own risk note
  * for this slice was the read count on it. So the shape is deliberate: one
- * awaited evidence read, then a single concurrent wave, none of which fans out
+ * awaited briefing read, then a single concurrent wave, none of which fans out
  * per candidate.
  *
- * 0. `readAuditEvidence` — the six documents everything below shares, fetched
- *    once and handed down. Awaited first for the reason Business Health awaits
- *    it first: one round trip's latency buys back eight (VB-022).
- * 1. `readNovaFocus` — already batches its own eight queries internally and is
- *    the *only* place the ranking is decided.
- * 2. The product's identity row — three columns, one project.
- * 3. The balance — `getHeaderCreditBalance`, which is documented as the one
+ * 0. `readBriefingView` — the six evidence documents, the ranking, the Move
+ *    set, the currency judgements and the founder's name, assembled once. It
+ *    hands the evidence and the focus back, so the score and the ranking below
+ *    cost nothing more (VB-022). Awaited first for the reason Business Health
+ *    awaits its evidence first: one round trip's latency buys back eight.
+ * 1. The product's identity row — three columns, one project.
+ * 2. The balance — `getHeaderCreditBalance`, which is documented as the one
  *    billing read a per-page surface may make. Never `getBillingOverview`,
  *    which repairs on read.
- * 4. Currency and readiness, both given the prefetched evidence, so neither
- *    re-reads a snapshot; the Move set; and the founder's name.
+ * 3. `readNovaBriefingVoice` — one row by identity. It takes no provider and
+ *    cannot obtain one (ADR 0086, condition 5): a render resolves a stored
+ *    sentence or falls through to Vibe's own.
  *
- * The latest audit is no longer read at all — it arrives inside the evidence,
- * which is two queries fewer than the stamp-then-document pair this used to
- * make, and it is now the same audit the briefing's chain judges. Not the
+ * The latest audit is not read at all — it arrives inside the evidence, which
+ * is two queries fewer than the stamp-then-document pair this used to make,
+ * and it is now the same audit the briefing's chain judges. Not the
  * sixty-reading trend, which is Business Health's and draws a chart Home does
  * not have.
  *
@@ -91,6 +83,13 @@ export type NovaHomeData = {
   view: NovaHomeView;
   /** Where the founder stands, joined from the evidence this read already holds. */
   briefing: BriefingView;
+  /**
+   * What the panel says about the evidence: a stored sentence when a durable
+   * step wrote one for this exact situation, and `briefing.situation`
+   * otherwise. **Never a provider call** — this read cannot reach one
+   * (ADR 0086, condition 5).
+   */
+  briefingVoice: string;
   identity: NovaProductIdentity;
   /** Null when no audit has ever completed — not a score of zero. */
   health: NovaHealth | null;
@@ -216,49 +215,23 @@ export async function readNovaHomeData(
   params: { projectId: string; userId: string; projectName: string; now?: Date },
 ): Promise<NovaHomeData> {
   /*
-   * Genuinely first, so it is awaited before the wave rather than inside it —
-   * the same shape Business Health uses, and for the same reason. Everything
-   * below that judges currency takes it as `prefetched` and re-reads nothing,
-   * so the six documents are fetched once for the score, the chain and the
-   * briefing together (VB-022).
+   * The briefing's own read is genuinely first, so it is awaited before the
+   * wave rather than inside it — the same shape Business Health uses, and for
+   * the same reason. It hands back the evidence and the focus it assembled, so
+   * the score and the ranking cost nothing more (VB-022).
    */
-  const evidence = await readAuditEvidence(supabase, params.projectId);
+  const { view: briefing, evidence, focus } = await readBriefingView(supabase, params);
 
-  const [focus, identity, balance, currency, readiness, opportunities, founderName] =
-    await Promise.all([
-      readNovaFocus(supabase, params.projectId),
-      readIdentity(supabase, params.projectId, params.projectName),
-      getHeaderCreditBalance(supabase, { userId: params.userId }),
-      getAuditCurrency(supabase, params.projectId, evidence),
-      getAuditReadiness(supabase, params.projectId, evidence),
-      getLatestOpportunities(supabase, params.projectId),
-      getFounderName(supabase, params.userId),
-    ]);
-
-  /*
-   * The engine's own rank-1 Move, never a re-ranking. Passed whenever a set
-   * exists; whether it is worth *voicing* is the briefing's decision, and it
-   * only reaches the read once the chain says the set is sound.
-   */
-  const topMove =
-    opportunities?.set.opportunities.find((opportunity) => opportunity.rank === 1) ?? null;
-
-  const briefing = buildNovaBriefing({
-    founderName,
-    projectName: params.projectName,
-    primaryGoal: evidence.founderIntent.intent.primaryGoal,
-    chain: buildProvenanceChain(
-      provenanceInputsFrom({ evidence, readiness, currency, opportunities }),
-    ),
-    focus,
-    topMove: topMove ? { title: topMove.title, whyNow: topMove.whyNow } : null,
-    /* Injected so a render is a function of its inputs and one clock. */
-    now: params.now ?? new Date(),
-  });
+  const [identity, balance, briefingVoice] = await Promise.all([
+    readIdentity(supabase, params.projectId, params.projectName),
+    getHeaderCreditBalance(supabase, { userId: params.userId }),
+    readNovaBriefingVoice(supabase, { projectId: params.projectId, view: briefing }),
+  ]);
 
   return {
     view: buildNovaHomeView(focus),
-    briefing: buildBriefingView(briefing),
+    briefing,
+    briefingVoice: briefingVoice.message,
     identity,
     health: buildHealth(evidence.latestAudit),
     balance,
