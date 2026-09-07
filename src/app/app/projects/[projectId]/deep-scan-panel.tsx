@@ -10,6 +10,8 @@ import { ProgressSteps } from "@/components/system/operation-progress";
 import type { OperationProgressStep } from "@/modules/operations/view";
 import type {
   DeepScanNextScan,
+  DeepScanNote,
+  DeepScanNoteKind,
   DeepScanViewModel,
 } from "@/modules/authenticated-product-intelligence/view";
 import {
@@ -459,6 +461,62 @@ function LiveViewDialog({
   );
 }
 
+/** The heading each group of notes appears under, in the founder's terms. */
+const NOTE_GROUPS: { kind: DeepScanNoteKind; heading: string }[] = [
+  { kind: "failed", heading: "Could not be read" },
+  { kind: "by_design", heading: "Stopped on purpose" },
+  { kind: "observed", heading: "Left alone" },
+];
+
+function ResultNotes({ notes }: { notes: DeepScanNote[] }) {
+  const failures = notes.filter((note) => note.kind === "failed").length;
+  const rest = notes.length - failures;
+
+  /*
+   * The label leads with failures because that is the number a founder is
+   * deciding on, and mentions the rest without dressing it as a problem. When
+   * nothing failed it says so — "6 notes" over a clean scan would still read
+   * as six things gone wrong.
+   */
+  const label =
+    failures === 0
+      ? `Nothing failed · ${rest} note${rest === 1 ? "" : "s"}`
+      : `${failures} page${failures === 1 ? "" : "s"} Vibe could not read · ${rest} note${rest === 1 ? "" : "s"}`;
+
+  return (
+    <Disclosure label={label}>
+      <div className="flex flex-col gap-4">
+        {NOTE_GROUPS.map(({ kind, heading }) => {
+          const group = notes.filter((note) => note.kind === kind);
+          if (group.length === 0) return null;
+
+          return (
+            <div key={kind} className="space-y-2">
+              <p className="font-mono text-meta text-fg-meta uppercase">{heading}</p>
+              <ul className="flex flex-col gap-2">
+                {group.map((note) => (
+                  <li
+                    key={`${note.path ?? ""}${note.message}`}
+                    className="text-fg-prose max-w-[62ch] text-sm leading-relaxed"
+                  >
+                    {note.path && (
+                      // The path first, because it is what distinguishes two
+                      // notes that share a sentence.
+                      <span className="font-mono text-fg-body">{note.path}</span>
+                    )}
+                    {note.path ? " — " : null}
+                    {note.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </Disclosure>
+  );
+}
+
 /**
  * Seconds since the analysis started (UI-4 §6).
  *
@@ -765,29 +823,23 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
       )}
 
       {/*
-        Behind a disclosure, not in the summary. A warning is a caveat on a
-        result the founder came here to read, and putting four of them above
-        the result would make the caveats the finding. Nothing is hidden — the
-        count is in the label, so the disclosure says how much is behind it
-        before it is opened.
+        Behind a disclosure, not in the summary. A note is a caveat on a result
+        the founder came here to read, and putting six of them above the result
+        would make the caveats the finding. Nothing is hidden — the label
+        counts what is behind it before it is opened.
+
+        What the label counts is the part that was wrong. It said "6 things
+        Vibe could not check" over a list in which **one** was a failure: two
+        were facts Vibe had established by looking, one was the page budget
+        working as designed, and two were safety refusals. A founder reading
+        that heading learns Vibe failed six times.
+
+        So the count is of failures, the rest is grouped under what it actually
+        is, and each note carries its path — the two redirect lines were
+        identical sentences with nothing to tell them apart, which is exactly
+        how a correct message reads as a bug.
       */}
-      {result.warnings.length > 0 && (
-        <Disclosure
-          label={
-            result.warnings.length === 1
-              ? "1 thing Vibe could not check"
-              : `${result.warnings.length} things Vibe could not check`
-          }
-        >
-          <ul className="flex flex-col gap-2">
-            {result.warnings.map((warning) => (
-              <li key={warning} className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
-                {warning}
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      )}
+      {result.notes.length > 0 && <ResultNotes notes={result.notes} />}
 
       {result.accessMode === "included_first_scan" && (
         <p className="text-xs text-fg-muted">Included Deep Scan used.</p>

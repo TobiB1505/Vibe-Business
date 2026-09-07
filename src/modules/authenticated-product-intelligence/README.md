@@ -50,6 +50,14 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## What a scan says about itself
+
+A finished scan produced six notes and the panel headed all six with *"6 things Vibe could not check"*. **One** was a failure. Two were facts Vibe had established by looking, one was the page budget working exactly as designed, and two were safety refusals. A founder reading that heading learns Vibe failed six times.
+
+So every note carries the kind of statement it is — `failed`, `by_design`, `observed` — assigned by a total map over the warning codes, so a new code has to be classified rather than arriving as whatever a default would be. The label counts failures; the rest is grouped under what it actually is. And the path travels with the note: two identical redirect sentences with nothing to tell them apart is how a correct message reads as the same message printed twice.
+
+The same scan ended `partial` for one reason: 53 non-GET requests blocked. Most were analytics beacons, one per page view, and the result told the founder that *parts of this application may render via non-GET requests* — about requests that render nothing anywhere. Every non-GET is still refused, unchanged; what changed is what Vibe concludes from having refused it. `couldHaveRenderedPage` clears only kinds that are definitionally not page data (`ping`, `image`, `media`, `font`, `manifest`, `texttrack`); `fetch`, `xhr`, `document` and every unrecognised type stay capable, because a GraphQL POST is a `fetch` and the two errors do not cost the same. Both counts are reported, so the number does not silently shrink.
+
 ## Reading a product, not a framework
 
 Two detectors were testing the customer's stack rather than their product.

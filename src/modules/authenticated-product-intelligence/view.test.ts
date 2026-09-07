@@ -173,7 +173,7 @@ describe("buildDeepScanViewModel — completed", () => {
       pagesInspected: 7,
       completeness: "complete",
       surfaces: [{ id: "dashboard", name: "Dashboard" }],
-      warnings: [],
+      notes: [],
       accessMode: "included_first_scan",
     });
   });
@@ -182,8 +182,14 @@ describe("buildDeepScanViewModel — completed", () => {
    * The snapshot has carried warnings since it existed, and the view model
    * dropped them — so a partial scan could say only "finished: only partly"
    * about four specific things it had already written down.
+   *
+   * Then they arrived as one flat list, and a real scan produced six of them
+   * of which **one** was a failure. Two were facts Vibe had established by
+   * looking, one was the page budget working exactly as designed, two were
+   * safety refusals. Under a heading reading "6 things Vibe could not check",
+   * a founder learns that Vibe failed six times.
    */
-  it("carries what the scan could not check, in the words it recorded", () => {
+  it("carries what the scan recorded, with the kind of statement each one is", () => {
     const withWarnings = {
       ...completed,
       latestSnapshot: {
@@ -192,16 +198,48 @@ describe("buildDeepScanViewModel — completed", () => {
           ...completed.latestSnapshot!.result,
           warnings: [
             { code: "navigation_timeout", message: "One page took too long to load." },
-            { code: "surface_ambiguous", message: "Vibe could not tell two settings pages apart." },
+            {
+              code: "redirected_to_seen_page",
+              path: "/app/onboarding",
+              message: "This path redirected to a page Vibe had already inspected.",
+            },
+            { code: "repeated_screen_skipped", message: "7 screens exist in more copies." },
           ],
         },
       },
     } as typeof completed;
 
-    expect(build(withWarnings).lastResult?.warnings).toEqual([
-      "One page took too long to load.",
-      "Vibe could not tell two settings pages apart.",
+    expect(build(withWarnings).lastResult?.notes).toEqual([
+      { kind: "failed", path: null, message: "One page took too long to load." },
+      {
+        kind: "observed",
+        path: "/app/onboarding",
+        message: "This path redirected to a page Vibe had already inspected.",
+      },
+      { kind: "by_design", path: null, message: "7 screens exist in more copies." },
     ]);
+  });
+
+  it("counts one failure in a list of three, not three", () => {
+    // The whole point of the kind. A budget reached and a redirect observed
+    // are not failures, and presenting them as ones teaches a founder to
+    // distrust a scan that worked.
+    const notes = [
+      { code: "page_unreachable", path: "/app/reports", message: "A page could not be read." },
+      { code: "budget_reached", message: "The page budget was reached." },
+      { code: "non_get_request_blocked", message: "51 non-GET requests were blocked." },
+    ];
+    const model = build({
+      ...completed,
+      latestSnapshot: {
+        ...completed.latestSnapshot!,
+        result: { ...completed.latestSnapshot!.result, warnings: notes },
+      },
+    } as typeof completed);
+
+    const kinds = model.lastResult!.notes.map((note) => note.kind);
+    expect(kinds.filter((kind) => kind === "failed")).toHaveLength(1);
+    expect(kinds).toEqual(["failed", "by_design", "observed"]);
   });
 
   it("lists detected surfaces only, never the undetected ones", () => {

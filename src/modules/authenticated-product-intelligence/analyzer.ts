@@ -60,7 +60,22 @@ export type AnalysisBrowserPort = {
   /** Every open tab, including ones the user's OAuth flow opened. */
   pages(): Promise<AnalysisPagePort[]>;
   /** Blocked-request and download counters recorded by the transport. */
-  readonly blocked: { mutatingRequests: number; downloads: number; externalNavigations: number };
+  readonly blocked: {
+    /**
+     * Blocked non-GET requests that could plausibly have rendered something.
+     *
+     * The count that decides whether the result admits to being incomplete.
+     */
+    mutatingRequests: number;
+    /**
+     * Blocked non-GET requests that definitionally could not — beacons,
+     * images, fonts. Counted, reported, and never allowed to downgrade a
+     * scan: a blocked analytics beacon does not change what a page displays.
+     */
+    mutatingBeacons: number;
+    downloads: number;
+    externalNavigations: number;
+  };
 };
 
 export type AnalyzeInput = {
@@ -484,15 +499,27 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
   }
 
   const blocked = input.browser.blocked;
-  if (blocked.mutatingRequests > 0) {
+  const refused = blocked.mutatingRequests + blocked.mutatingBeacons;
+  if (refused > 0) {
     warnings.push(
       warning(
         "non_get_request_blocked",
-        `${blocked.mutatingRequests} non-GET request(s) were blocked during analysis.`,
+        `${refused} non-GET request(s) were blocked during analysis; ${blocked.mutatingBeacons} of them were beacons or media that cannot affect a page.`,
       ),
     );
-    // Said plainly rather than implied: if the app needed those requests to
-    // render, what we saw is incomplete and the result must not claim otherwise.
+  }
+  if (blocked.mutatingRequests > 0) {
+    /*
+     * Said plainly rather than implied: if the app needed those requests to
+     * render, what we saw is incomplete and the result must not claim
+     * otherwise.
+     *
+     * But only for requests that could have. A scan of 21 pages reported 53
+     * blocked non-GET requests and downgraded itself on all of them, when most
+     * were analytics beacons fired once per page view. Blocking is unchanged —
+     * every non-GET is still refused — and what changed is only what Vibe
+     * concludes from having refused it.
+     */
     warnings.push(
       warning(
         "application_requires_mutating_method_for_render",
