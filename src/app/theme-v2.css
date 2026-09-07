@@ -154,6 +154,11 @@
   --text-headline: 1.6875rem;
   --text-headline--line-height: 1.16;
   --text-headline--letter-spacing: -0.03em;
+  /* The moment, one notch tighter than v1's — the second palette sets its own
+     leading and tracking for every display step, and this is a display step. */
+  --text-moment: 1.5rem;
+  --text-moment--line-height: 1.24;
+  --text-moment--letter-spacing: -0.026em;
   --text-title: 1.1875rem;
   --text-title--line-height: 1.32;
   --text-title--letter-spacing: -0.02em;

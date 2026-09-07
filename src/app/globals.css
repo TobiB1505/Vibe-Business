@@ -169,6 +169,30 @@
   --text-headline: 1.75rem;
   --text-headline--line-height: 1.14;
   --text-headline--letter-spacing: -0.035em;
+  /*
+   * The line that speaks to the founder (UI-8).
+   *
+   * Vibe's scale had nothing between `title` (19px) and `headline` (28px), and
+   * the product needs that step twenty times: "Vibe needs your input", "Vibe
+   * knows your product.", "Your product is still connected.", every agent
+   * stage heading. With no name for it, twelve of those were written
+   * `text-xl` and eight `text-2xl` — two sizes for one job, both from
+   * Tailwind's scale, which means nothing here.
+   *
+   * 1.5rem because that is `text-2xl`, the larger of the two the product
+   * already writes. Rounding up rather than down for the same reason every
+   * other move in this sweep goes up: a heading that shrinks can rewrap into
+   * a line count it did not have before, and a heading that grows cannot.
+   *
+   * It is distinct from `headline` by four pixels, which is tight. They are
+   * kept apart by where they live rather than by size — a moment sits inside
+   * a panel and a headline names the page — and the alternative was to fold
+   * them, which puts a heading nested two levels deep at the page name's
+   * size.
+   */
+  --text-moment: 1.5rem;
+  --text-moment--line-height: 1.2;
+  --text-moment--letter-spacing: -0.028em;
   --text-title: 1.1875rem;
   --text-title--line-height: 1.3;
   --text-title--letter-spacing: -0.02em;
