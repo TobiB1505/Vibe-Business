@@ -592,18 +592,51 @@ describe("settledStepOutcomes", () => {
 
 describe("attestationPrompt", () => {
   it("keeps real-world work reading as the founder's own", () => {
-    const prompt = attestationPrompt({ actor: "founder_action" });
+    const prompt = attestationPrompt({ actor: "founder_action", changeKind: "external_setup" });
 
     expect(prompt.pill).toBe("Your action");
     expect(prompt.lead).toBeNull();
   });
 
   it("says Vibe cannot run it, and does not claim Vibe did", () => {
-    const prompt = attestationPrompt({ actor: "vibe" });
+    const prompt = attestationPrompt({ actor: "vibe", changeKind: "research" });
 
     expect(prompt.pill).not.toBe("Your action");
     expect(prompt.lead).toContain("isn't a change to your product");
     expect(prompt.footnote).toContain("does not claim Vibe did the work");
+  });
+
+  it("says a measurement produces a result, prompt or no prompt", () => {
+    /*
+     * The distinction is the change kind, not the tool. "The sitemap is
+     * submitted" is true or it is not and there is nothing to write down; "a
+     * subscription completes end to end" has a result, and closing it with a
+     * bare tick threw away the one thing the next planning run most needed.
+     */
+    const alone = attestationPrompt({ actor: "founder_action", changeKind: "measurement" });
+    const withPrompt = attestationPrompt(
+      { actor: "founder_action", changeKind: "measurement" },
+      "verify",
+    );
+    const setup = attestationPrompt({ actor: "founder_action", changeKind: "external_setup" });
+
+    expect(alone.finding).not.toBeNull();
+    expect(withPrompt.finding).not.toBeNull();
+    expect(setup.finding).toBeNull();
+  });
+
+  it("never says Vibe declined a check it simply cannot reach", () => {
+    // Same mechanism, opposite reasons. A verification that read "Vibe won't
+    // build this one" would claim there was something to build.
+    const verify = attestationPrompt(
+      { actor: "founder_action", changeKind: "measurement" },
+      "verify",
+    );
+    const build = attestationPrompt({ actor: "vibe", changeKind: "product_change" }, "build");
+
+    expect(verify.pill).not.toContain("build");
+    expect(build.pill).toContain("build");
+    expect(verify.footnote).toContain("not a check Vibe ran");
   });
 
   it("drops the criterion where the prompt above already carries it", () => {
@@ -616,9 +649,12 @@ describe("attestationPrompt", () => {
      * The two surfaces without a prompt keep it, and they ask for different
      * things: one is answered in writing, the other confirmed as true.
      */
-    expect(attestationPrompt({ actor: "vibe" }, true).criterion).toBeNull();
-    expect(attestationPrompt({ actor: "vibe" }).criterion?.label).toBe("Answer this");
-    expect(attestationPrompt({ actor: "founder_action" }).criterion?.label).toBe(
+    expect(attestationPrompt({ actor: "vibe", changeKind: "product_change" }, "build").criterion).toBeNull();
+    expect(
+      attestationPrompt({ actor: "founder_action", changeKind: "measurement" }, "verify").criterion,
+    ).toBeNull();
+    expect(attestationPrompt({ actor: "vibe", changeKind: "research" }).criterion?.label).toBe("Answer this");
+    expect(attestationPrompt({ actor: "founder_action", changeKind: "external_setup" }).criterion?.label).toBe(
       "Confirm when true",
     );
   });

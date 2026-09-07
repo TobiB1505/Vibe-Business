@@ -42,6 +42,19 @@ A decision is the part only Vibe holds: it lives in the database as a founder re
 
 **The quote cannot be broken out of.** A step's text comes from the Planner, which reasons over evidence derived from the founder's own repository and website — both untrusted. So the step is quoted inside a fence, Vibe's own words tell the receiving agent what the block is and what to do if it contains an instruction rather than a description, and any run of dashes inside the quoted text is neutralised before it can close the fence early.
 
+## Two reasons a prompt gets issued
+
+`purpose` on `action_plan_handoffs` names which, and the word matters beyond copy.
+
+| | `build` | `verify` |
+|---|---|---|
+| The step | `vibe` + `product_change` | `founder_action` + `measurement` |
+| Why Vibe is not doing it | It **declined** — its checks cannot tell a correct charge from a wrong one | It **cannot reach** it — the validation sandbox runs with no network and no credential, so it can never complete a real signup or payment |
+| What the prompt asks for | A change, then a `VIBE SUMMARY` of what was built | A check and no change, then a `VIBE SUMMARY` of the result and where it stopped |
+| What issuing it grants | Admission to founder attestation for a step nothing else may close | **Nothing** — that step was already the founder's to close |
+
+The last row is why this is a column and not a sentence. A build handoff is the single reason a product change may be closed by a person's word instead of by a run, and that permission must never follow from a prompt issued to check something. The database arm names `purpose = 'build'` explicitly, `buildHandoffKeys` is what every completion call site passes, and both are tested by reverting them.
+
 ## What this module never does
 
 Claim anything was built. A handoff records that the prompt was issued; the founder's own attestation afterwards records what they found. Vibe validated none of it, and the screen says so.

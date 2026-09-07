@@ -12,6 +12,7 @@ import type {
   ExecutionResolution,
   ExecutionResolutionReason,
 } from "@/modules/execution-contract/schema";
+import type { HandoffPurpose } from "@/modules/handoff/schema";
 import type { ActionPlanBlockReason } from "./service";
 import type {
   ActionPlanStep,
@@ -417,18 +418,41 @@ export type AttestationPrompt = {
 };
 
 export function attestationPrompt(
-  step: Pick<ActionPlanStep, "actor">,
+  step: Pick<ActionPlanStep, "actor" | "changeKind">,
   /**
-   * Whether Vibe handed this step to the founder's own tool (ADR 0096).
+   * Which prompt Vibe issued for this step, if any (ADR 0096).
    *
-   * A third reading, and it needs one: the `vibe` copy below says the step
-   * "isn't a change to your product", which is exactly what a handed-off step
-   * *is*. Vibe declined it — that is a different sentence, and saying the wrong
-   * one over a prompt Vibe just wrote would read as a contradiction.
+   * Three readings, not two, and each needs its own sentence. The `vibe` copy
+   * below says the step "isn't a change to your product", which is exactly what
+   * a **built** handoff *is* — Vibe declined it, and saying the wrong one over
+   * a prompt Vibe just wrote would read as a contradiction. A **verify** handoff
+   * is a third thing again: nothing was declined and nothing was built, so both
+   * of those sentences would be false.
    */
-  handedOff = false,
+  handoff: HandoffPurpose | null = null,
 ): AttestationPrompt {
-  if (handedOff) {
+  if (handoff === "verify") {
+    /*
+     * A result, not a report of work. The founder ran a check — possibly
+     * through their own tool, possibly by hand — and what the plan needs back
+     * is what happened, which is also what the prompt asked their tool to print.
+     */
+    return {
+      pill: "Only you can check this one",
+      lead: null,
+      footnote:
+        "Recorded against this exact plan step and given to the next planning run. It is your " +
+        "result, not a check Vibe ran.",
+      submitLabel: "Done — next step",
+      finding: {
+        label: "Paste the VIBE SUMMARY here",
+        help: "Your tool prints it when it's finished — a line of your own works too.",
+      },
+      criterion: null,
+    };
+  }
+
+  if (handoff === "build") {
     /*
      * A paste, not an essay (ADR 0096).
      *
@@ -470,6 +494,32 @@ export function attestationPrompt(
       finding: {
         label: "What did you find?",
         help: "In your own words. The next plan is written with this in front of it.",
+      },
+      criterion: { label: "Answer this" },
+    };
+  }
+
+  if (step.changeKind === "measurement") {
+    /*
+     * A measurement records what it found, whether or not a prompt was issued.
+     *
+     * The distinction is not the tool, it is the change kind. "The sitemap is
+     * submitted" is true or it is not and there is nothing to write down; "a
+     * subscription completes end to end" has a result, and closing it with a
+     * bare tick threw away the one thing the next planning run most needed. The
+     * database now requires it too, so this is the screen agreeing with the
+     * rule rather than restating it.
+     */
+    return {
+      pill: "Your action",
+      lead: null,
+      footnote:
+        "Recorded against this exact plan step and given to the next planning run. It is your " +
+        "result, not a check Vibe ran.",
+      submitLabel: "Record what happened",
+      finding: {
+        label: "What happened when you checked?",
+        help: "Whether it worked, and where it stopped if it did not.",
       },
       criterion: { label: "Answer this" },
     };

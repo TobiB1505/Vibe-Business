@@ -9,7 +9,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { compileHandoffPrompt, type LaterStep, type SettledStep } from "@/modules/handoff/prompt";
 import { HANDOFF_TOOL_CHOICES, HANDOFF_TOOL_LABELS } from "@/modules/handoff/view";
-import type { HandoffTool } from "@/modules/handoff/schema";
+import type { HandoffPurpose, HandoffTool } from "@/modules/handoff/schema";
 import { recordHandoffAction, type HandoffActionState } from "../handoff-action";
 
 /**
@@ -40,6 +40,42 @@ import { recordHandoffAction, type HandoffActionState } from "../handoff-action"
  * report of what their tool did — Vibe validated none of it, and the copy says
  * so rather than letting a completed step imply otherwise.
  */
+/**
+ * The two things this card can be, in the founder's words.
+ *
+ * Same mechanism, opposite reasons, and saying the wrong one would be a lie in
+ * either direction. A refusal that read "Vibe cannot reach this" would excuse
+ * a policy decision as a limitation; a measurement that read "Vibe won't build
+ * this" would claim there was something to build.
+ */
+const PURPOSE_COPY: Record<
+  HandoffPurpose,
+  { pill: string; lead: string; toolQuestion: string; toolFootnote: string }
+> = {
+  build: {
+    pill: "Vibe won't build this one",
+    lead:
+      "Vibe can only ship a change it can prove is sound, and its checks cannot tell a correct " +
+      "charge from a wrong one. Your own coding tool can build this — Vibe will write the " +
+      "instructions.",
+    toolQuestion: "What do you build with?",
+    toolFootnote:
+      "This writes no code and spends nothing. It records which tool you chose and gives you " +
+      "the prompt for it.",
+  },
+  verify: {
+    pill: "Only you can check this one",
+    lead:
+      "Vibe's checks run with no network and no keys, so they can never complete a real " +
+      "signup or payment. Your own tool runs where the keys and the live app are — Vibe " +
+      "will write what to check.",
+    toolQuestion: "Want a prompt to check it with?",
+    toolFootnote:
+      "Optional. This changes nothing and spends nothing — it gives you a prompt to run the " +
+      "check with. Already checked it? Just record what happened below.",
+  },
+};
+
 export function HandoffCard({
   projectId,
   actionPlanId,
@@ -48,6 +84,7 @@ export function HandoffCard({
   tool,
   settled,
   later,
+  purpose,
   confirmation,
 }: {
   projectId: string;
@@ -61,17 +98,20 @@ export function HandoffCard({
   settled: readonly SettledStep[];
   /** Steps after this one — named so they are not built by accident. */
   later: readonly LaterStep[];
+  /** Why the prompt is being issued — a refusal, or a check Vibe cannot reach. */
+  purpose: HandoffPurpose;
   /** The attestation card, rendered under the prompt once a handoff exists. */
   confirmation: React.ReactNode;
 }) {
-  const action = recordHandoffAction.bind(null, projectId, actionPlanId, step.id);
+  const copy = PURPOSE_COPY[purpose];
+  const action = recordHandoffAction.bind(null, projectId, actionPlanId, step.id, purpose);
   const [state, formAction, pending] = useActionState<HandoffActionState, FormData>(action, null);
 
   return (
     <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <StatusPill tone="waiting" dot>
-          Vibe won&apos;t build this one
+          {copy.pill}
         </StatusPill>
         <span className="text-fg-muted text-xs">Step {step.order}</span>
       </div>
@@ -79,16 +119,12 @@ export function HandoffCard({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
         <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
-        <p className="text-fg-muted text-sm leading-relaxed">
-          Vibe can only ship a change it can prove is sound, and its checks cannot tell a correct
-          charge from a wrong one. Your own coding tool can build this — Vibe will write the
-          instructions.
-        </p>
+        <p className="text-fg-muted text-sm leading-relaxed">{copy.lead}</p>
       </div>
 
       {tool === null ? (
         <form action={formAction} className="flex flex-col items-start gap-2.5">
-          <MonoLabel className="text-amber tracking-[0.12em]">What do you build with?</MonoLabel>
+          <MonoLabel className="text-amber tracking-[0.12em]">{copy.toolQuestion}</MonoLabel>
           <div className="flex flex-wrap gap-2" data-testid="handoff-tools">
             {HANDOFF_TOOL_CHOICES.map((choice) => (
               <Button
@@ -103,10 +139,7 @@ export function HandoffCard({
               </Button>
             ))}
           </div>
-          <p className="text-fg-muted text-xs">
-            This writes no code and spends nothing. It records which tool you chose and gives you
-            the prompt for it.
-          </p>
+          <p className="text-fg-muted text-xs">{copy.toolFootnote}</p>
           {state && !state.ok && (
             <p role="alert" className="text-coral text-sm">
               {state.message}
@@ -115,12 +148,20 @@ export function HandoffCard({
         </form>
       ) : (
         <HandoffPrompt
-          prompt={compileHandoffPrompt({ step, tool, repository, settled, later })}
+          prompt={compileHandoffPrompt({ step, tool, repository, settled, later, purpose })}
           toolLabel={HANDOFF_TOOL_LABELS[tool]}
         />
       )}
 
-      {tool !== null && confirmation}
+      {/*
+        A build handoff has nothing to confirm until the founder's tool has
+        built something, so the form waits for the prompt. A verification is the
+        other way round: they may have checked it already, by hand, and being
+        made to pick a tool first would be the product insisting on help nobody
+        asked for. Both paths, side by side — take the prompt, or just say what
+        happened.
+      */}
+      {(tool !== null || purpose === "verify") && confirmation}
     </Surface>
   );
 }

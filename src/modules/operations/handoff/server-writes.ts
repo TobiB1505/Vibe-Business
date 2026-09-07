@@ -2,7 +2,7 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { callRecordActionPlanHandoff } from "@/modules/action-plans/handoff-store";
-import type { HandoffTool } from "@/modules/handoff/schema";
+import type { HandoffPurpose, HandoffTool } from "@/modules/handoff/schema";
 
 export type RecordHandoffResult =
   | { ok: true; handoffId: string }
@@ -26,6 +26,8 @@ export async function recordActionPlanHandoff(params: {
   actionPlanId: string;
   stepKey: string;
   tool: HandoffTool;
+  /** Whether Vibe declined the work, or cannot reach the check (ADR 0096). */
+  purpose: HandoffPurpose;
 }): Promise<RecordHandoffResult> {
   const supabase = createServiceClient();
   const { data: project, error: projectError } = await supabase

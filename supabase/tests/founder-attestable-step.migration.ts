@@ -67,10 +67,21 @@ function addStep(params: {
   return params.key;
 }
 
-function handoff(stepKey: string, tool = "claude_code"): string {
+/** The shape a build handoff exists for, and the one attestation must refuse. */
+function addProductChange(key: string, order: number): string {
+  return addStep({
+    key,
+    order,
+    actor: "vibe",
+    changeKind: "product_change",
+    executionSupport: "not_yet_supported",
+  });
+}
+
+function handoff(stepKey: string, tool = "claude_code", purpose = "build"): string {
   return db.sql(
     `select public.record_action_plan_handoff('${fx.projectId}', '${planId}', '${stepKey}',
-       '${fx.userId}', '${tool}');`,
+       '${fx.userId}', '${tool}', '${purpose}');`,
   );
 }
 
@@ -281,16 +292,6 @@ describe("the finding a Vibe step is closed with", () => {
  * authoritative.
  */
 describe("a step Vibe handed to the founder", () => {
-  function addProductChange(key: string, order: number): string {
-    return addStep({
-      key,
-      order,
-      actor: "vibe",
-      changeKind: "product_change",
-      executionSupport: "not_yet_supported",
-    });
-  }
-
   it("cannot be attested before a handoff exists", () => {
     const key = addProductChange("handoff-before", 9);
 
@@ -345,7 +346,7 @@ describe("a step Vibe handed to the founder", () => {
     expect(() =>
       db.sql(
         `select public.record_action_plan_handoff('${fx.projectId}', '${planId}', '${key}',
-           '${other}', 'claude_code');`,
+           '${other}', 'claude_code', 'build');`,
       ),
     ).toThrow(/action_plan_step_not_handoffable/);
   });
@@ -366,5 +367,119 @@ describe("a step Vibe handed to the founder", () => {
          where action_plan_id = '${planId}' and action_plan_step_key = '${key}';`,
       ),
     ).toBe("1");
+  });
+});
+
+/**
+ * The second kind of handoff, and why it is a different word.
+ *
+ * A `build` handoff is a refusal: Vibe will not write this code. A `verify`
+ * handoff is the opposite — Vibe *cannot reach* the check, because its
+ * validation sandbox runs with no network and no credential and can therefore
+ * never complete a real checkout. The founder's own tool has the keys, the
+ * running app and the session.
+ *
+ * The distinction earns a column rather than a sentence because one of them
+ * grants something: a build handoff is what admits a `vibe` + `product_change`
+ * step to founder attestation, and that must never follow from a prompt issued
+ * to check something.
+ */
+describe("a handoff issued to check rather than to build", () => {
+  it("admits the founder's own measurement", () => {
+    const key = addStep({
+      key: "verify-measurement",
+      order: 8,
+      actor: "founder_action",
+      changeKind: "measurement",
+      executionSupport: "founder_acts",
+    });
+
+    expect(answerOf(handoff(key, "claude_code", "verify"))).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("refuses to verify a step Vibe would build", () => {
+    // The shapes do not overlap in either direction: a product change is not a
+    // measurement, and issuing a verify prompt for one would be a second way to
+    // hand out work the agent exists to do.
+    const key = addProductChange("verify-product-change", 9);
+
+    expect(() => handoff(key, "claude_code", "verify")).toThrow(
+      /action_plan_step_not_handoffable/,
+    );
+  });
+
+  it("refuses to build a step that is the founder's to measure", () => {
+    const key = "verify-measurement";
+
+    expect(() => handoff(key, "claude_code", "build")).toThrow(
+      /action_plan_step_not_handoffable/,
+    );
+  });
+
+  it("refuses a purpose outside the closed pair", () => {
+    const key = "verify-measurement";
+
+    expect(() => handoff(key, "claude_code", "audit")).toThrow(
+      /action_plan_handoff_purpose_unknown/,
+    );
+  });
+
+  it("does not let a verify handoff admit a product change to attestation", () => {
+    /*
+     * The reason the column exists. The attestation's handoff arm is the one
+     * place a `vibe` + `product_change` step may be closed by hand, and it now
+     * names `purpose = 'build'` — so a row written for verification cannot
+     * inherit that permission if the admitted shapes ever move.
+     */
+    const key = addProductChange("verify-cannot-admit", 7);
+    db.sql(
+      `insert into public.action_plan_handoffs
+         (project_id, action_plan_id, action_plan_step_key, action_plan_step_order, tool,
+          purpose, issued_to_user_id)
+       values ('${fx.projectId}', '${planId}', '${key}', 7, 'claude_code', 'verify',
+               '${fx.userId}');`,
+    );
+
+    expect(() => attest(key, "I built it")).toThrow(/founder_action_step_not_attestable/);
+  });
+});
+
+/**
+ * A measurement records what it found; every other founder action does not.
+ *
+ * The old rule keyed on the actor alone — `vibe` steps write a finding,
+ * everybody else must not — and it was right for real-world setup work: the
+ * sitemap is submitted or it is not, and there is nothing to write down. A
+ * measurement is the opposite. The result *is* the step's output, and closing
+ * it with a bare tick threw away the one thing the next planning run most
+ * needed.
+ */
+describe("what a founder step records when it closes", () => {
+  it("requires the result of a measurement", () => {
+    const key = addStep({
+      key: "measure-requires",
+      order: 8,
+      actor: "founder_action",
+      changeKind: "measurement",
+      executionSupport: "founder_acts",
+    });
+
+    expect(() => attest(key)).toThrow(/founder_step_finding_required/);
+    expect(answerOf(attest(key, "Paid the 19 tier, subscription active."))).toMatch(
+      /^[0-9a-f-]{36}$/,
+    );
+  });
+
+  it("still refuses one on real-world setup work", () => {
+    const key = addStep({
+      key: "setup-refuses-finding",
+      order: 9,
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+    });
+
+    expect(() => attest(key, "Submitted it")).toThrow(/founder_step_finding_not_accepted/);
+    expect(answerOf(attest(key))).toMatch(/^[0-9a-f-]{36}$/);
   });
 });

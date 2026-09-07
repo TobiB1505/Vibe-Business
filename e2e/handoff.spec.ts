@@ -281,3 +281,61 @@ test.describe("a plan with every step done", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+/**
+ * A check Vibe cannot reach (ADR 0096 follow-on).
+ *
+ * The same mechanism as a refusal, pointed at the opposite reason. Vibe's
+ * validation sandbox runs with no network and no credential, by design, so it
+ * can never complete a real signup or payment — the founder's own tool has the
+ * keys, the running app and the session. That is not a limitation to work
+ * around; it is why the prompt exists.
+ */
+test.describe("a step only the founder's environment can check", () => {
+  test("offers the prompt and the result field at once", async ({ page }) => {
+    await page.goto("/e2e/action_plan_verify_offer");
+
+    // A founder who already ran the check must not have to pick a tool before
+    // the product will listen to them.
+    await expect(page.getByTestId("handoff-tools")).toBeVisible();
+    await expect(page.getByTestId("attestation-finding")).toBeVisible();
+    await expect(page.getByText("Only you can check this one")).toBeVisible();
+  });
+
+  test("never says Vibe declined work it simply cannot reach", async ({ page }) => {
+    await page.goto("/e2e/action_plan_verify_offer");
+
+    await expect(page.getByText("Vibe won't build this one")).toHaveCount(0);
+    await expect(page.getByText("no network and no keys")).toBeVisible();
+  });
+
+  test("asks the tool to report, not to repair", async ({ page }) => {
+    await page.goto("/e2e/action_plan_verify_prompt");
+
+    const prompt = page.getByTestId("handoff-prompt");
+    await expect(prompt).toContainText("WHAT TO CHECK");
+    await expect(prompt).toContainText("Do not change any code");
+    await expect(prompt).toContainText("Result: passed, or failed");
+    // A branch instruction would invite it to change what it was asked to check.
+    await expect(prompt).not.toContainText("Work on a branch");
+  });
+
+  test("records the result rather than a bare tick", async ({ page }) => {
+    await page.goto("/e2e/action_plan_verify_prompt");
+
+    await expect(page.getByTestId("attestation-finding")).toBeVisible();
+    await expect(page.getByText("Paste the VIBE SUMMARY here")).toBeVisible();
+    await expect(page.getByText("not a check Vibe ran")).toBeVisible();
+  });
+
+  test("does not scroll sideways at 375px", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto("/e2e/action_plan_verify_prompt");
+    await expect(page.getByTestId("handoff-prompt")).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});

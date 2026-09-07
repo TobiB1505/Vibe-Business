@@ -50,8 +50,23 @@ describe("callers that decide what is finished", () => {
 
     // It reads them...
     expect(source).toMatch(/listHandoffsForPlan|handoffByStepKey/);
-    // ...and hands them on, rather than reading them for something else.
-    expect(source).toMatch(/new Set\(\s*(handoffs\.keys\(\)|Object\.keys\(current\.handoffByStepKey\))\s*,?\s*\)/);
+    /*
+     * ...and hands on the **build** ones, rather than every issued prompt.
+     *
+     * The set became narrower than "a prompt was issued" when verification
+     * handoffs arrived (ADR 0096 follow-on). A build handoff is what admits a
+     * `vibe` + `product_change` step to being closed by the founder's word; a
+     * verify handoff is issued for the founder's own measurement and grants
+     * nothing. A caller that kept passing every key would let a prompt issued
+     * to *check* something admit work the agent exists to write — which is the
+     * one thing this whole gate exists to prevent.
+     *
+     * `handoffByStepKey` on the view is already build-only, so a call site
+     * reading the view satisfies this by naming that field.
+     */
+    expect(source).toMatch(
+      /buildHandoffKeys\(\s*handoffs\s*\)|new Set\(\s*Object\.keys\(current\.handoffByStepKey\)\s*,?\s*\)/,
+    );
   });
 
   it("finds every call site it is supposed to be checking", () => {

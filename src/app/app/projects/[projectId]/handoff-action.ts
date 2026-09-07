@@ -6,7 +6,7 @@ import { getLatestActionPlan } from "@/modules/action-plans/service";
 import { requireSession } from "@/modules/auth/session";
 import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-preflight";
 import { REFUSAL_SHAPES } from "@/modules/execution-contract/view";
-import { HANDOFF_TOOLS, type HandoffTool } from "@/modules/handoff/schema";
+import { HANDOFF_TOOLS, type HandoffPurpose, type HandoffTool } from "@/modules/handoff/schema";
 import { recordActionPlanHandoff } from "@/modules/operations/handoff/server-writes";
 
 export type HandoffActionState = { ok: true } | { ok: false; message: string } | null;
@@ -15,6 +15,7 @@ const ERROR_COPY = {
   project_not_found: "This project is no longer available.",
   step_not_handoffable: "This step is no longer the one waiting on you. Reload the plan.",
   not_refused: "Vibe can build this one itself now, so there is nothing to hand over.",
+  not_measurable: "This step is not one you check yourself, so there is no prompt to give you.",
   unknown_tool: "Pick one of the listed tools.",
   handoff_failed: "That could not be saved. Please try again.",
 } as const;
@@ -34,11 +35,25 @@ const ERROR_COPY = {
  * `policy` is the only admitted shape. A repairable refusal has a fix, a
  * sequencing one has an order, and handing either out would tell a founder to
  * go and build something Vibe was about to be able to do.
+ *
+ * ## The second purpose, checked differently
+ *
+ * A `verify` handoff has no execution resolution to consult, because there is
+ * no execution: the step is `founder_action` + `measurement`, work that was
+ * never Vibe's. So its admission is the step's own immutable shape, read from
+ * the stored plan — not a live refusal, and not model prose.
+ *
+ * It also grants nothing. That step was already the founder's to close, so the
+ * prompt adds help and no permission. The narrow check is written anyway,
+ * because a purpose that admitted more than one shape would be one refactor
+ * away from admitting the shape `build` exists to gate.
  */
 export async function recordHandoffAction(
   projectId: string,
   actionPlanId: string,
   stepKey: string,
+  /** Bound by the surface that rendered the control, never read from the form. */
+  purpose: HandoffPurpose,
   _previous: HandoffActionState,
   formData: FormData,
 ): Promise<HandoffActionState> {
@@ -79,16 +94,22 @@ export async function recordHandoffAction(
     return { ok: false, message: ERROR_COPY.step_not_handoffable };
   }
 
-  const routes = await resolvePlanExecutionRoutes(supabase, {
-    projectId,
-    userId: session.userId,
-    plan: current.plan,
-  });
-  const resolution = routes.resolutions.find(
-    (entry) => entry.stepKey === stepKey,
-  );
-  if (!resolution || REFUSAL_SHAPES[resolution.reason] !== "policy") {
-    return { ok: false, message: ERROR_COPY.not_refused };
+  const step = current.firstActionableStep;
+
+  if (purpose === "verify") {
+    if (step.actor !== "founder_action" || step.changeKind !== "measurement") {
+      return { ok: false, message: ERROR_COPY.not_measurable };
+    }
+  } else {
+    const routes = await resolvePlanExecutionRoutes(supabase, {
+      projectId,
+      userId: session.userId,
+      plan: current.plan,
+    });
+    const resolution = routes.resolutions.find((entry) => entry.stepKey === stepKey);
+    if (!resolution || REFUSAL_SHAPES[resolution.reason] !== "policy") {
+      return { ok: false, message: ERROR_COPY.not_refused };
+    }
   }
 
   const result = await recordActionPlanHandoff({
@@ -97,6 +118,7 @@ export async function recordHandoffAction(
     actionPlanId,
     stepKey,
     tool,
+    purpose,
   });
   if (!result.ok) return { ok: false, message: ERROR_COPY[result.error] };
 

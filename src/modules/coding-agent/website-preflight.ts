@@ -41,7 +41,7 @@ import { classifyExecutionRisk } from "@/modules/execution-contract/risk";
 import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
 import { listStepExecutionEvidence } from "@/modules/action-plans/completion-store";
 import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
-import { listHandoffsForPlan } from "@/modules/action-plans/handoff-store";
+import { buildHandoffKeys, listHandoffsForPlan } from "@/modules/action-plans/handoff-store";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
@@ -375,8 +375,13 @@ async function routingCompletedSteps(
        * refuses if it moved from the analysed state (rules 55-56). If the
        * founder never pushed, the run works against the repository as it
        * actually is rather than as anyone assumed.
+       *
+       * **Build** handoffs only. A verify handoff is a prompt to check the
+       * founder's own measurement, which was already theirs to close — passing
+       * it here would mean a prompt issued to check something admits a product
+       * change the agent exists to write.
        */
-      new Set(handoffs.keys()),
+      buildHandoffKeys(handoffs),
     ),
     founderResolutions,
   };

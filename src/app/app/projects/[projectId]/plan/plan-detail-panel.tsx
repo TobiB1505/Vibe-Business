@@ -55,6 +55,7 @@ import { PrepareChangePanel } from "../prepare-change-panel";
 import { AttestationForm } from "./attestation-form";
 import { HandoffCard } from "./handoff-card";
 import { PlanCompleteCard } from "./plan-complete-card";
+import type { HandoffPurpose } from "@/modules/handoff/schema";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
@@ -299,6 +300,29 @@ function PlanBody({
   const completed = new Set(completedStepOrders);
   /* Serialized as an object across the server boundary; a Map here because the
      display functions ask it questions rather than iterate it. */
+  /*
+   * Whether this step comes with a prompt for the founder's own tool, and why.
+   *
+   * Two different questions, deliberately not merged. `handoffStepKey` is
+   * resolved by the route from a *live* refusal — Vibe declined to build this,
+   * and only the server may say so. A verification is the step's own immutable
+   * shape: `founder_action` + `measurement` is work that was never Vibe's, and
+   * whose check its sandbox structurally cannot run, having no network and no
+   * credential.
+   *
+   * Build wins where both could somehow match, because a refusal is the one
+   * that grants something and must never be shadowed by the one that does not.
+   */
+  const handoffPurpose: HandoffPurpose | null =
+    firstActionableStep === null
+      ? null
+      : handoffStepKey === firstActionableStep.id
+        ? "build"
+        : firstActionableStep.actor === "founder_action" &&
+            firstActionableStep.changeKind === "measurement"
+          ? "verify"
+          : null;
+
   const absorbedBy = new Map(
     Object.entries(planView.absorbedByStepOrder).map(([order, by]) => [Number(order), by]),
   );
@@ -402,18 +426,23 @@ function PlanBody({
             Three outcomes for the step that could happen next, in the order
             that keeps each one honest.
 
-            A handed-off step is *also* attestable — that is the whole point of
-            the handoff — so it has to be recognised first, or it would render
-            as a bare confirmation with no prompt and nothing explaining why
-            Vibe is not building it (ADR 0096).
+            A step with a prompt is *also* attestable — that is the whole point
+            of the handoff — so it has to be recognised first, or it would
+            render as a bare confirmation with no prompt and nothing explaining
+            why (ADR 0096).
           */}
-          {firstActionableStep !== null && handoffStepKey === firstActionableStep.id ? (
+          {firstActionableStep !== null && handoffPurpose !== null ? (
             <HandoffCard
               projectId={projectId}
               actionPlanId={plan.id}
               step={firstActionableStep}
               repository={repositoryFullName}
-              tool={planView.handoffByStepKey[firstActionableStep.id] ?? null}
+              purpose={handoffPurpose}
+              tool={
+                (handoffPurpose === "verify"
+                  ? planView.verifyHandoffByStepKey[firstActionableStep.id]
+                  : planView.handoffByStepKey[firstActionableStep.id]) ?? null
+              }
               /* What the plan already settled, in plan order and without the
                  step being handed over — a note that answers this step is the
                  step, not context for it (ADR 0096). Findings and decisions
@@ -435,7 +464,7 @@ function PlanBody({
                   projectId={projectId}
                   actionPlanId={plan.id}
                   step={firstActionableStep}
-                  handedOff
+                  handoff={handoffPurpose}
                 />
               }
             />

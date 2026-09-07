@@ -166,6 +166,31 @@ const STEPS: ActionPlanStep[] = [
   }),
 ];
 
+/**
+ * The same plan, ending in a check only the founder's environment can run.
+ *
+ * A seventh step rather than a changed one, so every existing scene keeps the
+ * plan it was written against. `founder_action` + `measurement` is the shape
+ * that earns a verification prompt: work that was never Vibe's, and whose check
+ * its sandbox structurally cannot run — no network, no credentials, so it can
+ * never complete a real signup or payment.
+ */
+const VERIFY_STEPS: ActionPlanStep[] = [
+  ...STEPS,
+  planStep({
+    id: "step-verify-subscription",
+    order: 7,
+    title: "Verify a real subscription completes end to end",
+    description: "Sign up, pay, and confirm the subscription shows as active.",
+    purpose: "Nothing about the pricing work is proven until one real payment goes through.",
+    actor: "founder_action",
+    changeKind: "measurement",
+    completionCriteria: "A signed-in account completes checkout and the subscription is active.",
+    dependsOn: [6],
+    executionSupport: "founder_acts",
+  }),
+];
+
 function plan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan {
   return {
     id: "plan_e2e",
@@ -247,6 +272,7 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     completedStepOrders: overrides.completedStepOrders ?? [],
     absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
     handoffByStepKey: overrides.handoffByStepKey ?? {},
+    verifyHandoffByStepKey: overrides.verifyHandoffByStepKey ?? {},
     findingByStepKey: overrides.findingByStepKey ?? {},
     decisionByStepKey: overrides.decisionByStepKey ?? {},
     founderInputRequest,
@@ -436,6 +462,54 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         handoffByStepKey: { "step-add-pricing-page": "claude_code" },
         // What the founder worked out on step 1, which the prompt carries in.
         findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * A check Vibe cannot reach, before the founder has asked for help.
+   *
+   * Both paths are on screen at once, and that is the point: the offer of a
+   * prompt, and the field to record the result. A founder who already ran the
+   * check must not have to pick a tool before the product will listen.
+   */
+  action_plan_verify_offer: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    const storedPlan = plan({ steps: VERIFY_STEPS, stepCount: VERIFY_STEPS.length });
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        plan: storedPlan,
+        firstActionableStep: firstActionableStep(VERIFY_STEPS, completed),
+        progress: planProgress(VERIFY_STEPS, completed),
+        completedStepOrders: [...completed],
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /** The same step once a tool was chosen: the prompt, and the result field. */
+  action_plan_verify_prompt: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    const storedPlan = plan({ steps: VERIFY_STEPS, stepCount: VERIFY_STEPS.length });
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        plan: storedPlan,
+        firstActionableStep: firstActionableStep(VERIFY_STEPS, completed),
+        progress: planProgress(VERIFY_STEPS, completed),
+        completedStepOrders: [...completed],
+        verifyHandoffByStepKey: { "step-verify-subscription": "claude_code" },
         founderInputRequest: null,
       }),
       activeOperation: null,

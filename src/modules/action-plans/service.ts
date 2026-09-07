@@ -37,7 +37,7 @@ import {
 } from "./completion";
 import { listAgentStepCompletionEvidence, listStepExecutionEvidence } from "./completion-store";
 import { listFounderActionCompletionEvidence, listProjectFindings } from "./founder-action-store";
-import { listHandoffsForPlan } from "./handoff-store";
+import { buildHandoffKeys, listHandoffsForPlan } from "./handoff-store";
 import type { HandoffTool } from "@/modules/handoff/schema";
 import {
   listActiveFounderResolutions,
@@ -421,6 +421,18 @@ export type ActionPlanView = {
    */
   handoffByStepKey: Record<string, HandoffTool>;
   /**
+   * Steps Vibe handed out to be **checked**, not built (ADR 0096 follow-on).
+   *
+   * Its own field rather than a `purpose` beside the tool above, because the
+   * two answer different questions and only one of them grants anything. A
+   * build handoff is what admits a `vibe` + `product_change` step to founder
+   * attestation; a verify handoff admits nothing — its step is the founder's
+   * own measurement and was already theirs to close. Keeping them apart means
+   * a caller cannot reach for "was a prompt issued" and get the permission by
+   * accident.
+   */
+  verifyHandoffByStepKey: Record<string, HandoffTool>;
+  /**
    * What the founder established on the steps they closed (ADR 0093).
    *
    * Free — it comes off the attestation evidence this view already reads. It is
@@ -486,8 +498,10 @@ export async function getLatestActionPlan(
     resolutions,
     agentEvidence.completion,
     founderActionEvidence,
-    // A handed-off step is attestable; every other product change is not.
-    new Set(handoffs.keys()),
+    // A step handed out **to build** is attestable; every other product change
+    // is not. A verify handoff is deliberately not in this set — see
+    // `buildHandoffKeys`.
+    buildHandoffKeys(handoffs),
   );
   /* What is finished, plus what nothing needs to do. Sequencing asks the wider
      question; `completedStepOrders` below still answers the narrow one. */
@@ -508,7 +522,16 @@ export async function getLatestActionPlan(
     progress: planProgress(plan.steps, satisfied),
     completedStepOrders: [...completed],
     absorbedByStepOrder: Object.fromEntries(absorption),
-    handoffByStepKey: Object.fromEntries(handoffs),
+    handoffByStepKey: Object.fromEntries(
+      [...handoffs]
+        .filter(([, handoff]) => handoff.purpose === "build")
+        .map(([stepKey, handoff]) => [stepKey, handoff.tool]),
+    ),
+    verifyHandoffByStepKey: Object.fromEntries(
+      [...handoffs]
+        .filter(([, handoff]) => handoff.purpose === "verify")
+        .map(([stepKey, handoff]) => [stepKey, handoff.tool]),
+    ),
     findingByStepKey: Object.fromEntries(
       founderActionEvidence
         .filter((item): item is typeof item & { finding: string } => item.finding !== null)
@@ -577,7 +600,7 @@ export async function getOnboardingFirstMove(
     resolutions,
     agentEvidence,
     founderActionEvidence,
-    new Set(handoffs.keys()),
+    buildHandoffKeys(handoffs),
   );
 
   return {

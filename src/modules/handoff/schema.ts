@@ -26,3 +26,21 @@ export const TOOL_WORKS_IN_REPOSITORY: Record<HandoffTool, boolean> = {
   // one. A wrong branch instruction is worse than no branch instruction.
   other: false,
 };
+
+/**
+ * Why the prompt was issued — a refusal, or a reach Vibe does not have.
+ *
+ * `build` is the original: Vibe will not write this code, and says so. `verify`
+ * is the opposite shape arriving at the same screen — Vibe *cannot reach* the
+ * check. Its validation sandbox runs with no network and no credential, by
+ * design, so it can never complete a real checkout or a real signup; the
+ * founder's own tool has the keys, the running app and the session.
+ *
+ * Two words rather than one, because one of them grants something. A `build`
+ * handoff is what admits a `vibe` + `product_change` step to founder
+ * attestation — the single place work the agent exists to do may be closed by
+ * hand — and that permission must never follow from a prompt issued to check
+ * something. The database enforces the same split.
+ */
+export const HANDOFF_PURPOSES = ["build", "verify"] as const;
+export type HandoffPurpose = (typeof HANDOFF_PURPOSES)[number];

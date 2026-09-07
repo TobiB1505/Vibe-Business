@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import type { HandoffPurpose } from "@/modules/handoff/schema";
 import { attestationPrompt } from "@/modules/action-plans/view";
 import {
   attestFounderActionStepAction,
@@ -29,15 +30,15 @@ export function AttestationForm({
   projectId,
   actionPlanId,
   step,
-  handedOff = false,
+  handoff = null,
 }: {
   projectId: string;
   actionPlanId: string;
   step: ActionPlanStep;
-  /** Whether Vibe handed this step to the founder's own tool (ADR 0096). */
-  handedOff?: boolean;
+  /** Which prompt Vibe issued for this step, if any (ADR 0096). */
+  handoff?: HandoffPurpose | null;
 }) {
-  const prompt = attestationPrompt(step, handedOff);
+  const prompt = attestationPrompt(step, handoff ?? null);
   const action = attestFounderActionStepAction.bind(null, projectId, actionPlanId, step.id);
   const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
     action,
