@@ -129,6 +129,8 @@ V0.1 foundational architecture decisions have been recorded:
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 
+**For scanning rather than reading**: `pnpm atlas` renders a searchable register of every decision and every sprint — number, title, status — in one page under `.atlas/`. It is generated from this directory on every run, so it cannot fall behind it. The entries below stay the long form, which is what they are for.
+
 ## Suggested format
 
 ```

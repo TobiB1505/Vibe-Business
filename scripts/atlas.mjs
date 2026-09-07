@@ -120,6 +120,29 @@ function readDecisions() {
   return out.sort((a, b) => b.number.localeCompare(a.number));
 }
 
+// -------------------------------------------------------------------- Protokolle
+
+/**
+ * Die Sprint-Protokolle, nur als Verzeichnis.
+ *
+ * 177 Protokolle in einer angehängten Liste sind vollständig und unlesbar. Der
+ * Fliesstext bleibt, wo er ist — hier steht nur, was es gibt, damit man es
+ * findet. Titel aus der ersten Überschrift, nicht aus dem Dateinamen: der
+ * Dateiname ist ein Slug, die Überschrift ist der Satz, den jemand geschrieben
+ * hat.
+ */
+function readSprints() {
+  const dir = join(ROOT, "docs/sprints");
+  if (!existsSync(dir)) return [];
+  const out = [];
+  for (const file of readdirSync(dir).filter((f) => /^\d{4}[a-z]?\d?-.*\.md$/.test(f))) {
+    const text = readFileSync(join(dir, file), "utf8");
+    const title = (text.match(/^#\s+(.+)$/m) ?? [, file])[1];
+    out.push({ file, number: (file.match(/^[\d a-z]*?(?=-)/) ?? [file.slice(0, 4)])[0], title });
+  }
+  return out.sort((a, b) => b.number.localeCompare(a.number));
+}
+
 // ---------------------------------------------------------------- Offene Lücken
 
 function readRoadmap() {
@@ -992,6 +1015,38 @@ Das sind die Werte, an denen man dreht, ohne Logik zu ändern. Gefunden in Datei
 Budgets, Preise, Richtlinien oder Limits enthalten.</p>
 ${knobBlocks}
 
+<h2 id="protokolle">Entscheidungen &amp; Protokolle</h2>
+<p class="hint">Das Gedächtnis des Projekts: ${decisions.length} Entscheidungen und ${sprints.length}
+Sprint-Protokolle. Beide Listen stehen ausgeschrieben in <code>docs/</code> — dort ist jeder Eintrag
+ein Absatz, was vollständig und zum Nachschlagen unbrauchbar ist. Hier steht nur, was es gibt.
+Das Suchfeld oben filtert beide Tabellen mit.</p>
+<details>
+  <summary><b>${decisions.length} Entscheidungen (ADR)</b> — neueste zuerst</summary>
+  <table>
+    <thead><tr><th>Nr.</th><th>Titel</th><th>Status</th><th>Datum</th></tr></thead>
+    <tbody>${decisions
+      .map(
+        (d) =>
+          `<tr data-such="${esc(`adr ${d.number} ${d.title} ${d.status}`)}"><td><code>${esc(d.number)}</code></td>` +
+          `<td>${esc(d.title.replace(/^\d{4}\s*-\s*/, ""))}</td><td>${esc(d.status)}</td><td>${esc(d.date)}</td></tr>`,
+      )
+      .join("")}</tbody>
+  </table>
+</details>
+<details>
+  <summary><b>${sprints.length} Sprint-Protokolle</b> — neueste zuerst</summary>
+  <table>
+    <thead><tr><th>Nr.</th><th>Titel</th></tr></thead>
+    <tbody>${sprints
+      .map(
+        (sp) =>
+          `<tr data-such="${esc(`sprint ${sp.number} ${sp.title}`)}"><td><code>${esc(sp.number)}</code></td>` +
+          `<td>${esc(sp.title)}</td></tr>`,
+      )
+      .join("")}</tbody>
+  </table>
+</details>
+
 <h2>Offene Lücken</h2>
 <p class="hint">Aus <code>docs/ROADMAP.md</code>, nur die Schlagzeilen — der Fliesstext dazu steht
 in der Datei. Eine Lücke ist etwas, das heute <em>nicht</em> stimmt oder fehlt, kein Wunschfeature.
@@ -1026,6 +1081,7 @@ const modules = readModules(tables);
 const allFiles = walk(join(ROOT, "src"));
 const knobs = readKnobs(allFiles);
 const decisions = readDecisions();
+const sprints = readSprints();
 const roadmap = readRoadmap();
 
 for (const d of decisions) {
@@ -1059,7 +1115,7 @@ mkdirSync(OUT_DIR, { recursive: true });
 const out = join(OUT_DIR, "index.html");
 writeFileSync(
   out,
-  render({ modules, knobs, decisions, roadmap, totals, stamp, tables, fileLoops }),
+  render({ modules, knobs, decisions, sprints, roadmap, totals, stamp, tables, fileLoops }),
   "utf8",
 );
 
