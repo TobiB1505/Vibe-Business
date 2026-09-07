@@ -44,6 +44,32 @@ export const BROWSER_SANDBOX = {
    */
   viewport: { width: 1920, height: 1200 },
   /**
+   * The window the founder signs in through, by the shape of their device.
+   *
+   * A phone driving a 1920-pixel desktop page is the fiddliest part of this
+   * whole flow: the layout a founder is tapping at is one their own phone
+   * users never see, at a scale where a password field is a few pixels tall.
+   * So the *login* window follows the device.
+   *
+   * The **analysis** does not. `connectReadOnly` puts the page back to
+   * `viewport` before it reads anything, because a mobile layout hides its
+   * navigation behind a menu — a phone-started scan would find fewer links and
+   * fewer surfaces, and two scans of the same product would stop being
+   * comparable depending on which device happened to start them.
+   *
+   * A closed set, not a size: nothing a client sends becomes a number on
+   * Chromium's command line.
+   *
+   * The mobile shape is a current large phone in CSS pixels. Both must stay at
+   * or under `viewport`, which is the screencast ceiling — asserted by
+   * `guard-program.test.ts`, because a window larger than the cast is scaled
+   * down and a scaled frame puts a person's tap somewhere they did not aim.
+   */
+  loginViewports: {
+    desktop: { width: 1920, height: 1200 },
+    mobile: { width: 430, height: 932 },
+  },
+  /**
    * Two vCPUs.
    *
    * Lower than validation's four, and the reason is what this sandbox spends
@@ -64,7 +90,12 @@ export const BROWSER_SANDBOX = {
  * A short list on purpose. Every flag is either what makes the browser usable
  * inside a microVM, or what stops it carrying something between sessions.
  */
-export function chromiumCommand(): SandboxCommand {
+export type BrowserViewportName = keyof typeof BROWSER_SANDBOX.loginViewports;
+
+export function chromiumCommand(viewport: BrowserViewportName = "desktop"): SandboxCommand {
+  // Indexed from the closed set, so the two numbers below are this file's,
+  // whatever a caller passed.
+  const window = BROWSER_SANDBOX.loginViewports[viewport] ?? BROWSER_SANDBOX.loginViewports.desktop;
   return {
     command: `${BROWSER_SANDBOX.root}/chromium`,
     args: [
@@ -76,7 +107,7 @@ export function chromiumCommand(): SandboxCommand {
       // "new" rather than the old headless that renders differently from what
       // their customers see.
       "--headless=new",
-      `--window-size=${BROWSER_SANDBOX.viewport.width},${BROWSER_SANDBOX.viewport.height}`,
+      `--window-size=${window.width},${window.height}`,
       // A microVM has no seccomp sandbox to nest inside, and Chromium refuses
       // to start without either. The isolation boundary here is the VM itself.
       "--no-sandbox",

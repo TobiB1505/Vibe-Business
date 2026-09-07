@@ -220,7 +220,19 @@ async function reportLandingFailure(reason: string): Promise<void> {
 export async function startDeepScan(
   supabase: SupabaseClient,
   provider: BrowserSessionProvider,
-  params: { projectId: string; userId: string },
+  params: {
+    projectId: string;
+    userId: string;
+    /**
+     * The shape of screen the founder is signing in from.
+     *
+     * A name, never a size, and re-validated here rather than trusted: this
+     * decides a window Chromium is launched with, and a caller is a client.
+     * An unrecognised value falls back to desktop, which is the shape the
+     * analysis uses anyway.
+     */
+    viewport?: string;
+  },
 ): Promise<StartDeepScanResult> {
   const project = await loadOwnedProject(supabase, params.projectId, params.userId);
   if (!project) return { ok: false, error: "project_not_found" };
@@ -258,7 +270,10 @@ export async function startDeepScan(
     await releaseDeepScanCredits({ projectId: params.projectId, sessionId, reason });
   };
 
-  const created = await provider.createSession({ timeoutSeconds: SESSION_TIMEOUT_SECONDS });
+  const created = await provider.createSession({
+    timeoutSeconds: SESSION_TIMEOUT_SECONDS,
+    viewport: params.viewport === "mobile" ? "mobile" : "desktop",
+  });
   if (!created.ok) {
     // The provider never gave us a browser. Nothing was delivered, so nothing
     // is owed — the same rule the included scan has always followed.

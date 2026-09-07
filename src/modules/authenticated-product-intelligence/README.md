@@ -50,6 +50,14 @@ Settling also decides *where* Vibe thinks it is. An application that redirects i
 
 Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
 
+## The window follows the device; the reading does not
+
+A phone driving a 1920-pixel desktop page is the fiddliest part of this flow — the founder taps at a layout their own phone users never see, at a scale where a password field is a few pixels tall. So the **login window** follows the device: `BROWSER_SANDBOX.loginViewports` holds two shapes, and the client sends a *name* from that closed set. Nothing a client sends becomes a number on Chromium's command line, and the service normalises an unrecognised hint to desktop rather than failing a scan over it.
+
+The **analysis** does not follow the device. `connectReadOnly` puts every page back to `BROWSER_SANDBOX.viewport` before it reads anything, because a mobile layout hides its navigation behind a menu: a phone-started scan would harvest fewer links and find fewer surfaces, and two scans of one product would stop being comparable depending on which device happened to start them. That override is best effort and never fatal — a browser that refuses it still holds a signed-in session worth reading.
+
+No image rebuild: the screencast ceiling only *limits* a frame, it never upscales one, so a narrow window simply arrives narrow. The dialog's box is sized from the frame, so a tall phone-shaped picture gets a tall phone-shaped box for free.
+
 ## Finished is not the same as unlimited
 
 `completeness: "partial"` rendered as **"Only partly"**, in amber, over a scan that had done everything it was ever going to do. The single reason was `mutation_blocked` — Vibe refuses every non-GET request because the session is the founder's own, and it always will. A permanent, deliberate safety property presented as a shortfall teaches a founder that Vibe half-works.

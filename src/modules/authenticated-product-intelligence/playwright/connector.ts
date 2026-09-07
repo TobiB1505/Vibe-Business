@@ -13,6 +13,7 @@ import {
   type SignInProbe,
 } from "../login-detection";
 import { couldHaveRenderedPage, decideRequest } from "../read-only-policy";
+import { BROWSER_SANDBOX } from "../sandbox-browser/runtime";
 
 /**
  * Playwright transport for authenticated analysis (Sprint 5 §16, §17, §18, §19).
@@ -298,6 +299,25 @@ export async function connectReadOnly(
   }
 
   const blocked = await attachReadOnlyGuards(context, origin);
+
+  /*
+   * The analysis reads the desktop product, whatever the founder signed in on.
+   *
+   * The login window follows their device, because a phone driving a
+   * 1920-pixel page is the fiddliest part of this flow. The analysis must not:
+   * a mobile layout hides its navigation behind a menu, so a phone-started
+   * scan would harvest fewer links and find fewer surfaces, and two scans of
+   * one product would stop being comparable depending on which device happened
+   * to start them.
+   *
+   * `setViewportSize` over CDP is `Emulation.setDeviceMetricsOverride`, which
+   * resizes the page without touching the window. Best effort and never fatal:
+   * a browser that refuses the override still has a signed-in session worth
+   * reading, and the snapshot records the pages it saw either way.
+   */
+  for (const page of context.pages()) {
+    await page.setViewportSize(BROWSER_SANDBOX.viewport).catch(() => undefined);
+  }
 
   const port: AnalysisBrowserPort = {
     pages: async () => context.pages().map((page) => new PlaywrightPagePort(page)),

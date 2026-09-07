@@ -574,6 +574,27 @@ function useElapsedSeconds(running: boolean): number {
   return Math.max(0, Math.floor((span.now - span.startedAt) / 1000));
 }
 
+/**
+ * The shape of screen this person is signing in from.
+ *
+ * A name, never a measurement — the server re-validates it against a closed
+ * set, and nothing measured here becomes a number on a command line.
+ *
+ * Read at click time rather than at render, because the answer is about the
+ * window as it is when the browser opens: a rotated phone and a resized
+ * desktop window are both real, and a value captured during hydration would
+ * be neither.
+ *
+ * `pointer: coarse` alongside the width, because width alone calls a narrow
+ * desktop window a phone — and a desktop founder who has dragged their window
+ * narrow still wants the desktop layout of their own product.
+ */
+function deviceViewport(): "desktop" | "mobile" {
+  if (typeof window === "undefined") return "desktop";
+  const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  return coarse && window.innerWidth < 900 ? "mobile" : "desktop";
+}
+
 /** How often the browser is asked whether the founder has finished signing in. */
 const SIGN_IN_POLL_MS = 4_000;
 /**
@@ -963,7 +984,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setStage("starting");
     setDialogOpen(true);
     startTransition(async () => {
-      const result = await startDeepScanAction(projectId);
+      const result = await startDeepScanAction(projectId, deviceViewport());
       setBusy(false);
       if (!result.ok) {
         // The dialog closes rather than holding a failure: the panel below is
