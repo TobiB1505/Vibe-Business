@@ -13,6 +13,10 @@ import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
 
 const analyzeMock = vi.fn();
 const connectMock = vi.fn();
+const landingMock = vi.fn(
+  async (_connectUrl: string, _origin: string) =>
+    ({ navigated: true }) as { navigated: boolean; reason?: string },
+);
 const disconnectMock = vi.fn(async () => undefined);
 
 /**
@@ -43,8 +47,17 @@ vi.mock("./analyzer", () => ({
   analyzeAuthenticatedProduct: (input: unknown) => analyzeMock(input),
 }));
 
+/*
+ * `openSessionAtOrigin` was missing from this mock, and nothing noticed.
+ *
+ * The call threw on every run — `undefined is not a function` — straight into
+ * the `catch {}` that used to wrap it, so the landing was never exercised by
+ * any test in this file while appearing to be. That is the same silence the
+ * production white screen came from, one layer up.
+ */
 vi.mock("./playwright/connector", () => ({
   connectReadOnly: (connectUrl: string, origin: string) => connectMock(connectUrl, origin),
+  openSessionAtOrigin: (connectUrl: string, origin: string) => landingMock(connectUrl, origin),
 }));
 
 const {
@@ -115,6 +128,8 @@ function setup(options: { productionUrl?: string | null } = {}) {
 beforeEach(() => {
   analyzeMock.mockReset();
   connectMock.mockReset();
+  landingMock.mockReset();
+  landingMock.mockResolvedValue({ navigated: true });
   holdMock.mockReset();
   settleMock.mockReset();
   releaseMock.mockReset();
@@ -740,5 +755,77 @@ describe("an additional Deep Scan is held, then settled or released (launch-v1)"
     expect(settleMock).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: started.sessionId }),
     );
+  });
+});
+
+/**
+ * A browser that lands nowhere, which is what a person actually saw.
+ *
+ * The first session in Vibe's own browser opened on a white canvas. The landing
+ * was best effort and swallowed twice — the connector discarded the reason and
+ * the service discarded the result — so `about:blank` and "reached the site and
+ * painted nothing" were the same observation from outside.
+ *
+ * It is not best effort any more, because the argument for that died with the
+ * DevTools frontend: the view is a JPEG on a canvas with four message shapes
+ * and no address bar, so a browser that lands nowhere is one the person cannot
+ * rescue.
+ */
+describe("startDeepScan — landing on the product", () => {
+  it("refuses rather than handing over a browser showing about:blank", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "TimeoutError: exceeded 20000ms" });
+
+    const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(result).toEqual({ ok: false, error: "page_unreachable" });
+  });
+
+  it("costs the customer nothing when it refuses", async () => {
+    // The browser ran and billed for its seconds; the customer got nothing
+    // from it. Vibe pays the provider, the customer pays no Credits.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "boom" });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(releaseMock).toHaveBeenCalled();
+    expect(settleMock).not.toHaveBeenCalled();
+  });
+
+  it("does not leave the browser running", async () => {
+    // A VM nobody can use bills for its whole timeout and shows a person a
+    // live view that never paints.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "boom" });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(provider.terminated).toHaveLength(1);
+  });
+
+  it("leaves the included scan available, because nothing was delivered", async () => {
+    // The consumption rule: only a persisted snapshot spends the entitlement.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "boom" });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    const status = await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER });
+
+    expect(status?.includedScanAvailable).toBe(true);
+  });
+
+  it("still starts normally when the browser does land", async () => {
+    // The guard against a refusal that fires on the happy path too.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(result.ok).toBe(true);
   });
 });
