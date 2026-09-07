@@ -38,11 +38,34 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
  * approved commit and Vibe read it back (rule 74).
  */
 export function ReviewBlock({
+  projectId,
   change,
   planHref,
+  /**
+   * Which gate this moment is about.
+   *
+   * `BLOCK_FOR_MOMENT` says a change gets a review block; `GATE_STAGE` in
+   * `home-view.ts` says which gate, because a failed validation and a change
+   * ready to merge are the same object at different points and showing the
+   * approval panel for the first would be offering a decision nobody has
+   * reached.
+   */
+  stage = "review",
 }: {
+  projectId: string;
   change: PreparedChangeWorkspaceItem;
   planHref: string;
+  stage?: "validate" | "review";
 }) {
-  return <ChangeGates projectId="project_e2e" change={change} planHref={planHref} stage="review" />;
+  return (
+    <ChangeGates
+      projectId={projectId}
+      change={change}
+      planHref={planHref}
+      stage={stage}
+      /* The thread says the status sentence above the block. `chrome` would
+         say it again, under it. */
+      chrome={false}
+    />
+  );
 }

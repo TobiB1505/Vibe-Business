@@ -28,7 +28,7 @@ import {
   Thinking,
 } from "./elements";
 import { NovaArriving as Arriving } from "@/components/nova/nova-arriving";
-import { AuditBlock } from "./audit-block";
+import { AuditBlock } from "@/components/nova/blocks/audit";
 import { NovaClock as Clock } from "@/components/nova/nova-clock";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import { NO_FACTS } from "./moment-fixtures";
@@ -604,4 +604,3 @@ function Plan() {
     </div>
   );
 }
-

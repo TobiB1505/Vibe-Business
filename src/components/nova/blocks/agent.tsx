@@ -1,8 +1,6 @@
 "use client";
 
-import {
-  AgentFileActivity,
-} from "@/app/app/projects/[projectId]/agent/agent-file-activity";
+import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import {
   AgentValidationChecks,
   type ValidationCheck,

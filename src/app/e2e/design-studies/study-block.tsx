@@ -5,14 +5,15 @@ import {
   type BusinessBrainView,
 } from "@/modules/projects/business-brain-view";
 import { buildOperationView, OPERATION_STAGE_LABELS } from "@/modules/operations/view";
-import { AgentChecks, AgentWorking } from "./agent-block";
-import { AskBlock, PlanAskBlock, WorkspaceAskBlock } from "./ask-block";
-import { MoveBlock } from "./move-block";
-import { ProgressBlock } from "./progress-block";
-import { ReviewBlock } from "./review-block";
+import { AgentChecks, AgentWorking } from "@/components/nova/blocks/agent";
+import { AskBlock, PlanAskBlock } from "@/components/nova/blocks/ask";
+import { WorkspaceAskBlock } from "@/components/nova/blocks/workspace";
+import { MoveBlock } from "@/components/nova/blocks/move";
+import { ProgressBlock } from "@/components/nova/blocks/progress";
+import { ReviewBlock } from "@/components/nova/blocks/review";
 import { labResolveAction } from "./lab-resolve-action";
-import { AuditBlock } from "./audit-block";
-import { ScanBlock } from "./scan-block";
+import { AuditBlock } from "@/components/nova/blocks/audit";
+import { ScanBlock } from "@/components/nova/blocks/scan";
 import { E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
 import { E2E_MOVES_SCENARIOS } from "../moves-scenarios";
 import { E2E_SCENARIOS } from "../scenarios";
@@ -192,7 +193,6 @@ const WORKSPACES: WorkspaceCandidate[] = [
 const MOVES_FIXTURE = E2E_MOVES_SCENARIOS.moves_ranked();
 const MOVE = MOVES_FIXTURE.opportunities[0]!;
 const MOVE_EXECUTION = MOVES_FIXTURE.executionStates[MOVE.id] ?? null;
-
 
 /**
  * The planning run, at a chosen point in its own stages.
@@ -479,9 +479,13 @@ export function StudyBlock({ study }: { study: Study }) {
           </Bubble>
           <RenderBlock label="Product scan" at="1h" namesItself index={1}>
             <ScanBlock
+              projectId="project_e2e"
               operation={SCAN.operation}
-              events={SCAN.events}
+              events={[...SCAN.events]}
               presentation={SCAN.presentation}
+              productName="Payflow"
+              hasProfile
+              canStart={false}
             />
           </RenderBlock>
           <div className="max-w-[24rem]">
@@ -562,6 +566,7 @@ export function StudyBlock({ study }: { study: Study }) {
           </Bubble>
           <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
             <AskBlock
+              projectId="project_e2e"
               interrupt={ASK_INTERRUPT}
               request={ASK_REQUEST}
               resolveAction={labResolveAction}
@@ -591,7 +596,7 @@ export function StudyBlock({ study }: { study: Study }) {
             <Line>The plan needs a decision only you can make.</Line>
           </Bubble>
           <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
-            <PlanAskBlock request={PLAN_REQUEST} resolveAction={labResolveAction} />
+            <PlanAskBlock projectId="project_e2e" request={PLAN_REQUEST} resolveAction={labResolveAction} />
           </RenderBlock>
         </div>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
@@ -599,11 +604,20 @@ export function StudyBlock({ study }: { study: Study }) {
             <Line>There is more than one app here, and I do not know which one to work on.</Line>
           </Bubble>
           <RenderBlock label="Needs your choice" tone="waiting" namesItself index={1}>
-            {/* No `action`: a render prop cannot cross from a server
-                component to a client one, so the block supplies the lab's
-                placeholder itself. In production the owning route is a client
-                component and passes the real control. */}
-            <WorkspaceAskBlock candidates={WORKSPACES} />
+            {/* The block requires a control, and requiring it is the point: a
+                render prop cannot cross from a server component to a client
+                one, so whoever supplies it has to be a client component. In
+                production that is `AgentWorkspaceChoiceAction`, which needs a
+                project the lab does not have. This one does nothing and does
+                not pretend otherwise. */}
+            <WorkspaceAskBlock
+              candidates={WORKSPACES}
+              action={() => (
+                <span className="shrink-0 rounded-nav border border-line-3 bg-surface-2 px-3 py-1.5 text-caption text-fg-meta">
+                  Choose
+                </span>
+              )}
+            />
           </RenderBlock>
         </div>
         <Context>
@@ -632,6 +646,7 @@ export function StudyBlock({ study }: { study: Study }) {
           </Bubble>
           <RenderBlock label="The change" tone="waiting" at="32m" index={2}>
             <ReviewBlock
+              projectId="project_e2e"
               change={E2E_SCENARIOS.change_awaiting_approval()}
               planHref="/app/projects/project_e2e/plan"
             />
@@ -675,6 +690,7 @@ export function StudyBlock({ study }: { study: Study }) {
           </Bubble>
           <RenderBlock label="The change" at="2h" index={1}>
             <ReviewBlock
+              projectId="project_e2e"
               change={E2E_SCENARIOS.outcome_not_started()}
               planHref="/app/projects/project_e2e/plan"
             />
