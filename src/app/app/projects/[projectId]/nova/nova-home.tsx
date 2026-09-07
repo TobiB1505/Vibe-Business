@@ -215,8 +215,24 @@ function FocusSection({
   const entry = data.view.primary;
   const control = entry.control;
 
+  /*
+   * The other moments, as sentences. `buildNovaHomeView` has ranked and capped
+   * them since this route existed and nothing rendered them — so a founder
+   * with three things pending saw one. The thread says them in the quiet
+   * register with no controls, which is what makes them a second true thing
+   * rather than a second wall of buttons.
+   */
+  const asides = data.view.secondary.map((moment) => moment.message);
+
   if (control.kind === "none") {
-    return <NovaFocusThread entry={entry} running={running} block={blockFor(data, entry)} />;
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry)}
+      />
+    );
   }
 
   if (control.kind === "answer") {
@@ -227,13 +243,14 @@ function FocusSection({
      * worse than a card with none. The sentence above it still stands.
      */
     if (!data.question) {
-      return <NovaFocusThread entry={entry} running={running} />;
+      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
         running={running}
+        asides={asides}
         block={
           <AskBlock
             projectId={projectId}
@@ -269,13 +286,14 @@ function FocusSection({
      * change that is not there would be worse than none.
      */
     if (!data.change) {
-      return <NovaFocusThread entry={entry} running={running} />;
+      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
         running={running}
+        asides={asides}
         block={
           <ReviewBlock
             projectId={projectId}
@@ -296,13 +314,14 @@ function FocusSection({
      * choice with nothing to choose from would be worse than none.
      */
     if (data.workspaceCandidates.length === 0) {
-      return <NovaFocusThread entry={entry} running={running} />;
+      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
     }
 
     return (
       <NovaFocusThread
         entry={entry}
         running={running}
+        asides={asides}
         block={
           <WorkspaceAskBlock
             candidates={data.workspaceCandidates}
@@ -330,6 +349,7 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         running={running}
+        asides={asides}
         controlLabel={control.label}
         control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
       />
@@ -359,6 +379,7 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         running={running}
+        asides={asides}
         block={blockFor(data, entry)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
@@ -369,7 +390,14 @@ function FocusSection({
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return <NovaFocusThread entry={entry} running={running} block={blockFor(data, entry)} />;
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry)}
+      />
+    );
   }
 
   const subject = control.option.subject;
@@ -384,6 +412,7 @@ function FocusSection({
     <NovaFocusThread
       entry={entry}
       running={running}
+      asides={asides}
       block={blockFor(data, entry)}
       controlLabel={control.option.label}
       /*

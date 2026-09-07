@@ -342,6 +342,26 @@ describe("Nova Home", () => {
      * the wrappers; production drew the copy; nothing compared them. Home goes
      * through the barrel now, so there is one of each.
      */
+    /**
+     * A second true thing is said, and is not a second thing to do.
+     *
+     * `buildNovaHomeView` has ranked and capped `secondary` since this route
+     * existed and Home discarded it, so a founder with three things pending
+     * saw one. They are bubbles in the quiet register now — no controls and no
+     * prices, which is the rule that keeps them from rebuilding the wall of
+     * equally weighted choices the ranking exists to replace.
+     */
+    it("says the other moments without offering them", () => {
+      const home = component("nova-home.tsx");
+      const thread = component("nova-focus-thread.tsx");
+
+      expect(home).toContain("data.view.secondary");
+      expect(thread).toContain("speechBubbles");
+      /* Rendered as asides, and the control slot is a different branch — an
+         aside that grew a button would be the stack of cards coming back. */
+      expect(thread).toMatch(/asideBubbles\.map[\s\S]*?<NovaBubble key=\{bubble\.key\} aside/);
+    });
+
     it("mounts the blocks rather than a second copy of their decisions", () => {
       const home = component("nova-home.tsx");
 

@@ -1,4 +1,5 @@
 import { NovaBubble } from "@/components/nova/nova-bubble";
+import { speechBubbles } from "@/components/nova/nova-speech";
 import { NovaAside, NovaLine, NovaRenderBlock } from "@/components/nova/nova-thread";
 import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { BLOCK_FOR_MOMENT, type BlockKind } from "@/modules/nova/blocks";
@@ -81,6 +82,33 @@ export function NovaFocusThread({
   running,
   /** The block for this moment, when the surface could read its subject. */
   block,
+  /**
+   * The other things that are also true, in Nova's quiet register.
+   *
+   * ## Why they came back
+   *
+   * They were a *stack of cards* under the thread and they were removed for
+   * being that — panels stapled to a conversation, each with its own frame and
+   * its own control, which is the wall of equally weighted choices Nova exists
+   * to replace. What went with them was the information: `buildNovaHomeView`
+   * has been computing `secondary` and Home has been discarding it, so a
+   * founder with three things pending saw one and never learned of the other
+   * two.
+   *
+   * A quiet line is not a card. These carry **no controls and no prices** —
+   * `buildNovaFeed` has made the same argument for its own asides since before
+   * this surface existed: they exist so that a second true thing is not
+   * silently unreachable, which is the entire reason the focus is a ranking,
+   * and giving each one a button would rebuild the wall.
+   *
+   * ## Why they are grouped rather than listed
+   *
+   * `speechBubbles` decides. Two short remarks are two bubbles; a run of five
+   * is one bubble with line breaks, because five separate grey blocks stacked
+   * with gutters is a list wearing a chat's clothes. It is the same rule the
+   * opening uses on Nova's introduction, asked here for the same reason.
+   */
+  asides,
   /** What the founder can do. Outside the bubble, as every control is. */
   control,
   /**
@@ -91,6 +119,7 @@ export function NovaFocusThread({
 }: {
   entry: NovaHomeEntry;
   running?: { kind: BlockKind; node: ReactNode };
+  asides?: readonly string[];
   block?: ReactNode;
   control?: ReactNode;
   controlLabel?: string;
@@ -104,6 +133,19 @@ export function NovaFocusThread({
    * labelled "Merge it" is one act with two names, and it returns null there.
    */
   const prompt = footnoteFor(entry.prompt, controlLabel);
+
+  /*
+   * One register, so `speechBubbles` has one run to group. It splits by
+   * register first and these are all asides, which is why the sentences can be
+   * handed over flat.
+   */
+  const asideBubbles = speechBubbles(
+    (asides ?? []).map((text, position) => ({
+      id: String(position),
+      text,
+      emphasis: "aside" as const,
+    })),
+  );
 
   return (
     <section className="flex flex-col gap-2.5" aria-label="What needs your attention">
@@ -151,6 +193,20 @@ export function NovaFocusThread({
       )}
 
       {control && <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">{control}</div>}
+
+      {/*
+        After the control, because they are about other moments and the control
+        belongs to this one. A founder reads the thing to do, sees the button
+        for it, and then hears what else is true — which is the order a person
+        speaks in, and the order `buildNovaFeed` already put them in.
+      */}
+      {asideBubbles.map((bubble, position) => (
+        <NovaBubble key={bubble.key} aside tail={false} index={5 + position}>
+          {bubble.paragraphs.map((text) => (
+            <NovaAside key={text}>{text}</NovaAside>
+          ))}
+        </NovaBubble>
+      ))}
     </section>
   );
 }
