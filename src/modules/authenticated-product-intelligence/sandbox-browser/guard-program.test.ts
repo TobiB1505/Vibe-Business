@@ -215,3 +215,44 @@ describe("the control channel forwards frames without changing what they are", (
     expect(BROWSER_GUARD_PROGRAM).toContain('upstream.on("message", (data, isBinary)');
   });
 });
+
+/**
+ * The ack is flow control, not a formality.
+ *
+ * Chromium sends no further frame until the previous one is acknowledged,
+ * which is how a screencast paces itself to whatever is consuming it. The
+ * guard acked on arrival, before the frame had gone anywhere, so Chromium
+ * produced at full speed regardless of whether a phone could receive it — a
+ * page under heavy repaint built a backlog and went smooth again only once it
+ * stopped repainting, which is exactly what was reported.
+ */
+describe("the screencast paces itself to the viewer", () => {
+  it("acknowledges a frame only after it has been sent on", () => {
+    // The order is the whole fix: send to the client, then ack.
+    const sent = BROWSER_GUARD_PROGRAM.indexOf("client.send(");
+    const ack = BROWSER_GUARD_PROGRAM.indexOf("ackWhenSent(message.params.sessionId)");
+
+    expect(sent).toBeGreaterThan(0);
+    expect(ack).toBeGreaterThan(sent);
+  });
+
+  it("never withholds an acknowledgement indefinitely", () => {
+    // The original concern, and it is right: a missed ack is a frozen picture
+    // rather than a dropped one. A late frame is a cost; a stalled stream is a
+    // broken product.
+    expect(BROWSER_GUARD_PROGRAM).toContain("ACK_DEADLINE_MS");
+    expect(BROWSER_GUARD_PROGRAM).toContain("clearInterval(poll)");
+  });
+
+  it("still acknowledges when nobody is listening", () => {
+    // A closed viewer must not leave the stream waiting on a socket that will
+    // never drain.
+    expect(BROWSER_GUARD_PROGRAM).toContain(
+      'if (client.readyState !== WebSocket.OPEN) {\n      send("Page.screencastFrameAck"',
+    );
+  });
+
+  it("measures the backlog rather than guessing at it", () => {
+    expect(BROWSER_GUARD_PROGRAM).toContain("client.bufferedAmount");
+  });
+});

@@ -100,7 +100,7 @@
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v5";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v6";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {
@@ -274,6 +274,18 @@ control.on("connection", async (client) => {
  * Written as a list rather than assembled from the incoming message, because a
  * method name built from input is a method name an input can choose.
  */
+/**
+ * How much may still be in flight before the next frame is asked for.
+ *
+ * Not zero: a socket is rarely at exactly zero, and requiring that would pace
+ * the stream to the poll interval rather than to the connection. One frame's
+ * worth of slack keeps a fast viewer at full rate and a slow one honest.
+ */
+const FRAME_BACKLOG_BYTES = 256 * 1024;
+/** The longest a frame is withheld before it is acked regardless. */
+const ACK_DEADLINE_MS = 1_000;
+const ACK_POLL_MS = 25;
+
 const MOUSE_TYPES = new Set(["mousePressed", "mouseReleased", "mouseMoved"]);
 const KEY_TYPES = new Set(["keyDown", "keyUp", "char"]);
 const BUTTONS = new Set(["none", "left", "middle", "right"]);
@@ -305,6 +317,37 @@ view.on("connection", async (client) => {
     });
   });
 
+  /**
+   * Acknowledges a frame once it has actually gone out.
+   *
+   * The ack is not a formality. Chromium sends no further frame until the
+   * previous one is acknowledged, which is precisely how a screencast paces
+   * itself to whatever is consuming it — and acking on arrival, before the
+   * frame had gone anywhere, threw that away. Chromium then produced at full
+   * speed regardless of whether a phone on a mobile connection could receive
+   * it, so a page under heavy repaint built a backlog and went smooth again
+   * only once it stopped repainting.
+   *
+   * The original concern is real and is kept: a missed ack is a frozen picture
+   * rather than a dropped one. So this never waits indefinitely. It acks as
+   * soon as the socket has drained, and acks anyway at the deadline — a late
+   * frame is a cost, a stalled stream is a broken product.
+   */
+  const ackWhenSent = (sessionId) => {
+    const ack = () => send("Page.screencastFrameAck", { sessionId });
+    if (client.bufferedAmount <= FRAME_BACKLOG_BYTES) {
+      ack();
+      return;
+    }
+    const deadline = Date.now() + ACK_DEADLINE_MS;
+    const poll = setInterval(() => {
+      const drained = client.bufferedAmount <= FRAME_BACKLOG_BYTES;
+      if (!drained && Date.now() < deadline && client.readyState === WebSocket.OPEN) return;
+      clearInterval(poll);
+      ack();
+    }, ACK_POLL_MS);
+  };
+
   page.on("message", (raw) => {
     let message;
     try {
@@ -314,11 +357,11 @@ view.on("connection", async (client) => {
     }
     if (message.method !== "Page.screencastFrame") return;
 
-    // Acked immediately and unconditionally: Chromium sends no further frame
-    // until the previous one is acknowledged, so a missed ack is a frozen
-    // picture rather than a dropped one.
-    send("Page.screencastFrameAck", { sessionId: message.params.sessionId });
-    if (client.readyState !== WebSocket.OPEN) return;
+    if (client.readyState !== WebSocket.OPEN) {
+      send("Page.screencastFrameAck", { sessionId: message.params.sessionId });
+      return;
+    }
+
     client.send(
       JSON.stringify({
         t: "frame",
@@ -327,6 +370,8 @@ view.on("connection", async (client) => {
         h: message.params.metadata.deviceHeight,
       }),
     );
+
+    ackWhenSent(message.params.sessionId);
   });
 
   client.on("message", (raw) => {
