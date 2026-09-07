@@ -57,13 +57,26 @@ function provider() {
   return getBrowserSessionProvider();
 }
 
-export async function startDeepScanAction(projectId: string): Promise<StartDeepScanActionState> {
+export async function startDeepScanAction(
+  projectId: string,
+  /**
+   * The shape of screen the founder is signing in from.
+   *
+   * A hint, not an instruction: the service re-validates it against a closed
+   * set, and the analysis viewport is fixed regardless of what arrives here.
+   */
+  viewport?: string,
+): Promise<StartDeepScanActionState> {
   const session = await requireSession();
   const supabase = await createClient();
 
   let result;
   try {
-    result = await startDeepScan(supabase, provider(), { projectId, userId: session.userId });
+    result = await startDeepScan(supabase, provider(), {
+      projectId,
+      userId: session.userId,
+      viewport,
+    });
   } catch {
     // Reaching here means the provider could not even be constructed — a
     // configuration problem, not a user-facing failure of their product.

@@ -61,7 +61,7 @@ function fakeBrowser(options: {
 
   const browser: AnalysisBrowserPort & { visited: string[] } = {
     pages: async () => [page, ...extraTabs],
-    blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0, ...options.blocked },
+    blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0, ...options.blocked },
     visited,
   };
 
@@ -219,7 +219,7 @@ describe("analyzeAuthenticatedProduct", () => {
     };
     const browser: AnalysisBrowserPort = {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     };
 
     const result = await analyzeAuthenticatedProduct({
@@ -374,7 +374,7 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
 
     const browser: AnalysisBrowserPort = {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     };
 
     return { browser, requested };
@@ -451,7 +451,7 @@ describe("analyzeAuthenticatedProduct — a single-page app interrupting its own
 
     const browser: AnalysisBrowserPort = {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     };
 
     return { browser, attempts };
@@ -496,7 +496,7 @@ describe("analyzeAuthenticatedProduct — a single-page app interrupting its own
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
       repository: repositoryWith(["/app/plan"]),
     });
@@ -538,7 +538,7 @@ describe("analyzeAuthenticatedProduct — pages the public scan already read", (
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
       publicProduct: publicWith([{ path: "/privacy", redirectedTo: null }]),
     });
@@ -623,7 +623,7 @@ describe("analyzeAuthenticatedProduct — a page is let go still before it is re
     return {
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       } satisfies AnalysisBrowserPort,
       order,
     };
@@ -704,7 +704,7 @@ describe("analyzeAuthenticatedProduct — a page is let go still before it is re
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
       repository: repositoryWith(["/app/settings"]),
     });
@@ -767,7 +767,7 @@ describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it
     return {
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       } satisfies AnalysisBrowserPort,
       visited,
     };
@@ -855,7 +855,7 @@ describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
     });
 
@@ -891,7 +891,7 @@ describe("analyzeAuthenticatedProduct — a redirect onto a seen page is a fact,
 
     return {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     } satisfies AnalysisBrowserPort;
   }
 
@@ -929,5 +929,89 @@ describe("analyzeAuthenticatedProduct — a redirect onto a seen page is a fact,
       result.snapshot.warnings.filter((entry) => entry.code === "redirected_to_seen_page"),
     ).toHaveLength(0);
     expect(result.snapshot.pages.map((entry) => entry.path)).toContain("/app/welcome");
+  });
+});
+
+/*
+ * A scan of 21 pages ended `partial` for one reason: 53 non-GET requests were
+ * blocked. Most were analytics beacons — one `sendBeacon` per page view — and
+ * the result told the founder that *parts of this application may render via
+ * non-GET requests*, about requests that render nothing anywhere.
+ */
+describe("analyzeAuthenticatedProduct — a blocked beacon is not an incomplete scan", () => {
+  function browserBlocking(blocked: Partial<AnalysisBrowserPort["blocked"]>): AnalysisBrowserPort {
+    let current = `${ORIGIN}/app`;
+    return {
+      pages: async () => [
+        {
+          url: () => current,
+          goto: async (url: string) => {
+            current = url;
+            return { status: 200 };
+          },
+          settle: async () => undefined,
+          extract: async () => extraction(),
+        },
+      ],
+      blocked: {
+        mutatingRequests: 0,
+        mutatingBeacons: 0,
+        downloads: 0,
+        externalNavigations: 0,
+        ...blocked,
+      },
+    };
+  }
+
+  it("does not downgrade a scan whose only blocked requests were beacons", async () => {
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserBlocking({ mutatingBeacons: 53 }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.snapshot.completeness.reasons).not.toContain("mutation_blocked");
+    expect(result.snapshot.completeness.status).toBe("complete");
+    // And it never claims surfaces may be missing on the strength of them.
+    expect(
+      result.snapshot.warnings.map((entry) => entry.code),
+    ).not.toContain("application_requires_mutating_method_for_render");
+  });
+
+  it("still downgrades when a request that could have rendered was blocked", async () => {
+    // A GraphQL POST is a `fetch`. Blocking one can genuinely leave a page
+    // half-rendered, and the result must keep saying so.
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserBlocking({ mutatingRequests: 1, mutatingBeacons: 52 }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.snapshot.completeness.reasons).toContain("mutation_blocked");
+    expect(result.snapshot.warnings.map((entry) => entry.code)).toContain(
+      "application_requires_mutating_method_for_render",
+    );
+  });
+
+  it("reports both counts, so the number is not silently smaller", async () => {
+    // Every non-GET is still refused. Hiding the beacons would replace one
+    // misleading number with another.
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserBlocking({ mutatingRequests: 2, mutatingBeacons: 51 }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const blocked = result.snapshot.warnings.find(
+      (entry) => entry.code === "non_get_request_blocked",
+    );
+    expect(blocked?.message).toContain("53");
+    expect(blocked?.message).toContain("51");
   });
 });

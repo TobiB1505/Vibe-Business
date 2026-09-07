@@ -2,6 +2,8 @@ import type { DeepScanAccessMode, DeepScanAccessStatus, DeepScanDenialReason } f
 import type { AuthenticatedSurfaceDetection } from "./surface-detection";
 import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
 import type { DeepScanSessionStatus } from "./store";
+import type { AuthenticatedWarning } from "./schema";
+import type { AuthenticatedWarningCode } from "./errors";
 import { creditUnits, type CreditUnits } from "@/modules/credits/units";
 
 /**
@@ -86,22 +88,165 @@ export type DeepScanSurface = { id: string; name: string };
 export type DeepScanResultSummary = {
   analyzedAt: string;
   pagesInspected: number;
-  completeness: "complete" | "partial";
+  /**
+   * How the scan ended, in a form the panel can render without judging.
+   *
+   * `completeness: "partial"` was the whole answer, and it rendered as
+   * **"Only partly"** in amber over a scan that had done everything it was
+   * ever going to do. The single reason was `mutation_blocked` — Vibe refuses
+   * every non-GET request because this analysis runs signed in as the
+   * customer, and it always will. Presenting a permanent, deliberate policy as
+   * a shortfall teaches a founder that Vibe half-works.
+   *
+   * So the reasons are read here rather than collapsed: something that went
+   * wrong is a different answer from a limit Vibe chose, and a limit Vibe
+   * chose *on purpose and for good* is different again from a budget that
+   * could be raised.
+   */
+  completion: DeepScanCompletion;
   /** Detected surfaces only, as id + label. No evidence internals. */
   surfaces: DeepScanSurface[];
   /**
-   * What the scan noticed but could not act on, in our own words.
+   * What the scan noticed, grouped by what kind of statement it is.
    *
-   * The snapshot has carried these since it existed and nothing rendered
-   * them, so "Check finished: only partly" was the whole account a founder
-   * got of a scan that had four specific things to say. Safe to display by
-   * construction: `AuthenticatedWarning.message` is authored here and never
-   * provider or page text, which is the rule that makes this a message and
-   * not a leak.
+   * These used to be one flat list under "N things Vibe could not check", and
+   * a real scan put six entries there of which **four were not that**. Two
+   * were facts Vibe had established by looking (a path redirected somewhere
+   * already read), one was the page budget working exactly as designed, and
+   * one was a safety refusal. Only one was a failure.
+   *
+   * A founder reading that heading learns that Vibe failed six times. It
+   * failed once. So the kind travels with the note, and the path travels with
+   * it too — the two redirect lines were identical sentences with no path
+   * shown, which is why they read as the same message printed twice.
+   *
+   * Safe to display by construction: `AuthenticatedWarning.message` is
+   * authored in this repository and is never provider or page text, and
+   * `path` is origin-relative with its query string already stripped.
    */
-  warnings: string[];
+  notes: DeepScanNote[];
   accessMode: DeepScanAccessMode;
 };
+
+/**
+ * Reasons Vibe will always have, whatever else changes.
+ *
+ * Refusing every non-GET request and every navigation off the product's origin
+ * are not shortfalls to be fixed later — they are what makes it safe to hand
+ * Vibe a signed-in session at all (Sprint 5 §15, §18). A scan that hit only
+ * these did everything it was ever going to do.
+ */
+const POLICY_REASONS = ["mutation_blocked", "external_navigation_blocked"] as const;
+
+/**
+ * Reasons that are a number someone chose, and could choose differently.
+ *
+ * Distinct from policy because the honest sentence differs: "Vibe will never
+ * do this" and "Vibe stopped after 25 pages" are both deliberate, but only one
+ * of them is an argument about safety.
+ */
+const BUDGET_REASONS = [
+  "page_budget_reached",
+  "candidate_budget_reached",
+  "depth_reached",
+  "timeout",
+] as const;
+
+export type DeepScanCompletion = {
+  /**
+   * `complete` — nothing limited it.
+   * `within_limits` — it finished; only Vibe's own policy or budgets applied.
+   * `incomplete` — something went wrong, and the result is short because of it.
+   */
+  kind: "complete" | "within_limits" | "incomplete";
+  /** Vibe refused something on purpose, and always will. */
+  policyLimited: boolean;
+  /** Vibe stopped at a number it chose. */
+  budgetLimited: boolean;
+};
+
+export function describeCompletion(completeness: {
+  status: "complete" | "partial";
+  reasons: readonly string[];
+}): DeepScanCompletion {
+  const reasons = completeness.reasons;
+  const policyLimited = POLICY_REASONS.some((reason) => reasons.includes(reason));
+  const budgetLimited = BUDGET_REASONS.some((reason) => reasons.includes(reason));
+
+  /*
+   * Anything that is neither policy nor budget is something that went wrong —
+   * `navigation_failed` today, and whatever is added tomorrow. Written as the
+   * remainder rather than as its own list so a new reason is treated as a
+   * failure until someone decides otherwise, which is the safe direction for a
+   * label a founder trusts.
+   */
+  const failed = reasons.some(
+    (reason) =>
+      !POLICY_REASONS.includes(reason as (typeof POLICY_REASONS)[number]) &&
+      !BUDGET_REASONS.includes(reason as (typeof BUDGET_REASONS)[number]),
+  );
+
+  if (failed) return { kind: "incomplete", policyLimited, budgetLimited };
+  if (completeness.status === "complete" || reasons.length === 0) {
+    return { kind: "complete", policyLimited: false, budgetLimited: false };
+  }
+  return { kind: "within_limits", policyLimited, budgetLimited };
+}
+
+/**
+ * What kind of statement a note is.
+ *
+ * Three kinds, because a founder reading one list needs to know which of these
+ * they are looking at before the sentence means anything:
+ *
+ *  - `failed` — Vibe tried and could not. This is the only kind that is a
+ *    problem, and the only kind that should ever be counted as one.
+ *  - `by_design` — Vibe stopped on purpose. A budget reached is the system
+ *    working; presenting it as a failure teaches a founder to distrust a
+ *    number that is correct.
+ *  - `observed` — Vibe looked and this is what it found, including what it
+ *    deliberately left alone. A redirect onto a page already read is a fact
+ *    about the product, not a shortfall.
+ */
+export type DeepScanNoteKind = "failed" | "by_design" | "observed";
+
+export type DeepScanNote = {
+  kind: DeepScanNoteKind;
+  /** Origin-relative, query already stripped, when the note is about one page. */
+  path: string | null;
+  message: string;
+};
+
+/**
+ * The kind for each warning code.
+ *
+ * Written as a total map rather than a default, so a new code has to be
+ * classified rather than silently arriving as whatever the fallback is. The
+ * `satisfies` is what enforces that at compile time.
+ */
+const NOTE_KINDS = {
+  page_unreachable: "failed",
+  navigation_timeout: "failed",
+  // Vibe's own decisions, which are the system working rather than failing.
+  budget_reached: "by_design",
+  repeated_screen_skipped: "by_design",
+  // Looked at, and this is what was there — or what Vibe declined to touch.
+  redirected_to_seen_page: "observed",
+  origin_mismatch_skipped: "observed",
+  external_navigation_blocked: "observed",
+  download_blocked: "observed",
+  extra_tab_ignored: "observed",
+  non_get_request_blocked: "observed",
+  application_requires_mutating_method_for_render: "observed",
+} satisfies Record<AuthenticatedWarningCode, DeepScanNoteKind>;
+
+export function describeWarning(warning: AuthenticatedWarning): DeepScanNote {
+  return {
+    kind: NOTE_KINDS[warning.code],
+    path: warning.path ?? null,
+    message: warning.message,
+  };
+}
 
 /** Why the last attempt ended, in typed form. The UI maps it to copy. */
 export type DeepScanLastFailure = {
@@ -255,11 +400,11 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
       ? {
           analyzedAt: latestSnapshot.completedAt ?? latestSnapshot.createdAt,
           pagesInspected: latestSnapshot.result.crawl.pagesInspected,
-          completeness: latestSnapshot.result.completeness.status,
+          completion: describeCompletion(latestSnapshot.result.completeness),
           surfaces: latestSnapshot.result.productSurfaces
             .filter((surface) => surface.detected)
             .map((surface) => ({ id: surface.id, name: surface.name })),
-          warnings: latestSnapshot.result.warnings.map((warning) => warning.message),
+          notes: latestSnapshot.result.warnings.map(describeWarning),
           accessMode: latestSnapshot.accessMode,
         }
       : null;

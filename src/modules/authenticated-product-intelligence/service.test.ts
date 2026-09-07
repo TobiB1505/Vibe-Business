@@ -973,3 +973,43 @@ describe("probeDeepScanSignIn — a question, not an action", () => {
     expect(releaseMock).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * The login window follows the founder's device, because a phone driving a
+ * 1920-pixel page is the fiddliest part of this flow. That means a value from
+ * a client decides a window Chromium is launched with — so it is a name from a
+ * closed set, and this is where the set is enforced.
+ */
+describe("startDeepScan — the viewport hint is a name, never a size", () => {
+  it("passes the mobile shape through when the founder is on a phone", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER, viewport: "mobile" });
+
+    expect(provider.createdWith).toEqual({ viewport: "mobile" });
+  });
+
+  it("refuses anything that is not one of the two shapes", async () => {
+    for (const hint of ["", "1920x1200", "--headless", "../../etc", "DESKTOP", "tablet"]) {
+      const { supabase, projectId } = setup();
+      const provider = new FakeBrowserProvider();
+
+      await startDeepScan(supabase, provider, { projectId, userId: OWNER, viewport: hint });
+
+      // Not rejected — normalised. An unrecognised hint is a client Vibe does
+      // not recognise, not an attack to fail the scan over, and desktop is the
+      // shape the analysis uses anyway.
+      expect(provider.createdWith, hint).toEqual({ viewport: "desktop" });
+    }
+  });
+
+  it("defaults to desktop when no hint is given at all", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(provider.createdWith).toEqual({ viewport: "desktop" });
+  });
+});

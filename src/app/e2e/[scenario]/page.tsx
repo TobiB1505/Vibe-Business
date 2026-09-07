@@ -189,6 +189,7 @@ import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
 import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import { agentReadyForecastNotes } from "../agent-stage-scenarios";
@@ -1839,6 +1840,45 @@ export default async function E2eScenarioPage({
    * model's own types. No browser provider, no session, no Credit hold — the
    * panel's start action is a Server Action these fixtures never reach.
    */
+  /*
+   * The handoff animation, alone in a box.
+   *
+   * It cannot be reached through the panel here — it renders while an analysis
+   * Vibe actually started is running, and that is a Server Action these
+   * fixtures never call. It still has to be reachable in a browser, because
+   * the defect it shipped with was a render loop: every source assertion about
+   * it passed while the component threw on mount and a founder watched 42
+   * seconds of live browser where it should have been.
+   */
+  /* The closing check, which cannot be reached without a real analysis result. */
+  if (scenario === "deep-scan-handoff-sealed") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <div
+          data-testid="handoff-box"
+          className="border-line-2 bg-surface-2 rounded-card relative aspect-[16/10] w-full overflow-hidden border"
+        >
+          <ScanHandoff running succeeded />
+        </div>
+      </main>
+    );
+  }
+
+  if (scenario === "deep-scan-handoff") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <div
+          data-testid="handoff-box"
+          className="border-line-2 bg-surface-2 rounded-card relative aspect-[16/10] w-full overflow-hidden border"
+        >
+          <ScanHandoff running />
+        </div>
+      </main>
+    );
+  }
+
   if (isE2eDeepScanScenario(scenario)) {
     return (
       <main className="mx-auto max-w-3xl p-8">

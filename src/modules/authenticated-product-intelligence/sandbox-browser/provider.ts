@@ -212,7 +212,10 @@ export function createSandboxBrowserSessionProvider(
       try {
         // Chromium first: the guard waits for it and refuses to report ready
         // without it, so the order here is what that wait is for.
-        await handle.runBackground({ command: chromiumCommand(), cwd: BROWSER_SANDBOX.root });
+        await handle.runBackground({
+          command: chromiumCommand(options.viewport),
+          cwd: BROWSER_SANDBOX.root,
+        });
         await handle.runBackground({ command: guardCommand(), cwd: BROWSER_SANDBOX.root });
       } catch (error) {
         reportBrowserFailure("session_start_programs", { error: describeError(error) });

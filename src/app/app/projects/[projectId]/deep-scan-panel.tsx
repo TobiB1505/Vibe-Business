@@ -4,12 +4,16 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
+import { ScanHandoff } from "./scan-handoff";
 import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { ProgressSteps } from "@/components/system/operation-progress";
 import type { OperationProgressStep } from "@/modules/operations/view";
 import type {
+  DeepScanCompletion,
   DeepScanNextScan,
+  DeepScanNote,
+  DeepScanNoteKind,
   DeepScanViewModel,
 } from "@/modules/authenticated-product-intelligence/view";
 import {
@@ -174,6 +178,7 @@ function LiveViewDialog({
   error,
   busy,
   unreachable,
+  frame,
   signIn,
   onCancel,
   onAnalyze,
@@ -181,6 +186,10 @@ function LiveViewDialog({
   onPainted,
   onRetryView,
   onUnavailable,
+  sealing,
+  analysing,
+  onSealed,
+  onLoginExpired,
 }: {
   liveViewUrl: string | null;
   stage: BrowserStartupStage;
@@ -188,18 +197,46 @@ function LiveViewDialog({
   busy: boolean;
   /** Every attempt at the view socket failed. */
   unreachable: boolean;
+  /** The size of the last frame drawn, once one has been. */
+  frame: { w: number; h: number } | null;
   signIn: SignInWatch;
   onCancel: () => void;
   onAnalyze: () => void;
   onConnected: () => void;
-  onPainted: () => void;
+  onPainted: (frame: { w: number; h: number }) => void;
   onRetryView: () => void;
   onUnavailable: () => void;
+  /** The analysis returned; the dialog is showing the result before it closes. */
+  sealing: boolean;
+  /** Vibe has the browser and is reading it. Not the same as busy. */
+  analysing: boolean;
+  onSealed: () => void;
+  /** The founder ran out of time to sign in. */
+  onLoginExpired: () => void;
 }) {
-  const elapsedSeconds = useElapsedSeconds(busy);
+  /*
+   * The analysis clock, and it counts the analysis.
+   *
+   * It was `busy`, which is also true while Vibe is *creating* a browser — so
+   * the panel said "Vibe is looking around your signed-in product" with a
+   * running counter under it during the twenty seconds before there was a
+   * browser to look around in. Same wrong signal as the animation, same
+   * sentence: busy means a server action is in flight, not that Vibe is
+   * reading.
+   */
+  const elapsedSeconds = useElapsedSeconds(analysing);
   // A second clock, and it runs on a different question: how long the browser
   // has been opening, not how long the analysis has been running.
   const startupSeconds = useElapsedSeconds(stage !== "ready" && !unreachable);
+  /*
+   * Armed only while the founder could actually be signing in: the picture is
+   * up, nothing is running, and the analysis has not started. It is not armed
+   * while the browser is still opening, because that wait is Vibe's.
+   */
+  const loginSecondsLeft = useLoginCountdown(
+    stage === "ready" && !busy && !sealing && !unreachable && error === null,
+    onLoginExpired,
+  );
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -277,7 +314,7 @@ function LiveViewDialog({
         tabIndex={-1}
         className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-line-2 bg-app p-4 focus:outline-none"
       >
-        <div className="space-y-1">
+        <div className="space-y-1.5">
           <h3 id="deep-scan-dialog-title" className="text-sm font-medium text-fg">
             Sign in to your product
           </h3>
@@ -285,13 +322,48 @@ function LiveViewDialog({
             Sign in normally inside this temporary browser. Vibe does not store your password or a
             reusable login session.
           </p>
+          {/*
+            What happens after the part the founder can see.
+
+            The dialog described the step it was on and nothing beyond it, so
+            the ninety seconds that follow a successful login arrived
+            unannounced — and the first thing a person learns about them is
+            that the picture has gone. Three clauses, in order, on one line:
+            it costs nothing to read and it is the whole shape of the flow.
+          */}
+          <p className="text-fg-meta font-mono text-meta">
+            Sign in · Vibe reads your signed-in pages, about 90 seconds · you get the result
+          </p>
         </div>
 
-        {/* The aspect ratio matches the viewport Chromium is launched with
-            (`BROWSER_SANDBOX.viewport`). Any other ratio would letterbox the
-            frame, and a letterboxed frame puts a person's click somewhere
-            other than where they aimed. */}
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
+        {/*
+          The box is the shape of the frame that actually arrived.
+          
+          It used to be a hardcoded `aspect-[16/10]` matching
+          `BROWSER_SANDBOX.viewport` — a constant in another module, restated
+          here as a Tailwind class, with nothing keeping the two equal. Any
+          disagreement stretches the picture, and stretching is the worst kind
+          of wrong: a click computed from this element's own geometry still
+          looks correct in code, so the only symptom is a person's tap landing
+          somewhere else on their own signed-in product.
+          
+          The frame's own ratio cannot disagree with the frame. Before one
+          arrives the viewport's ratio is the honest guess, and the overlay
+          covering the box until then is what a person actually sees.
+        */}
+        <div
+          style={{ aspectRatio: frame ? `${frame.w} / ${frame.h}` : "16 / 10" }}
+          /*
+           * `rounded-card`, the largest radius the design system defines, and
+           * the one the surfaces this frame sits between already use. At
+           * `rounded-md` the picture read as a raw embed dropped into the
+           * dialog rather than as part of it.
+           *
+           * `overflow-hidden` is what makes the radius real: the canvas is a
+           * replaced element and would paint square corners straight over it.
+           */
+          className="relative w-full overflow-hidden rounded-card border border-line-2 bg-surface-2"
+        >
           {liveViewUrl && !error && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
@@ -348,6 +420,24 @@ function LiveViewDialog({
               </div>
             </div>
           )}
+          {/*
+            The handoff, mounted over the picture while the analysis runs.
+
+            It is inside the frame's own box on purpose: the geometry is
+            already reserved by the aspect ratio above, so the switch-off and
+            the gathering happen in exactly the space the browser occupied and
+            nothing a person is reading moves.
+
+            `busy` is the observed state it is bound to — an analysis Vibe
+            started and has not yet heard back from. It cannot render over a
+            pending, cancelled or failed scan, because it is not mounted then.
+          */}
+          <ScanHandoff
+            running={handoffRunning({ analysing, sealing, error })}
+            succeeded={sealing}
+            onSealed={onSealed}
+          />
+
           {!error && !unreachable && stage !== "ready" && (
             <div
               role="status"
@@ -378,11 +468,30 @@ function LiveViewDialog({
           session they could not finish. A phone can drive this now; a larger
           screen is genuinely easier, and that is all this says.
         */}
-        <p className="text-xs text-fg-muted">
-          Tap or click to interact. A larger screen makes signing in easier.
-        </p>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <p className="text-xs text-fg-muted">
+            Tap or click to interact. A larger screen makes signing in easier.
+          </p>
+          {loginSecondsLeft !== null && (
+            /*
+             * A visible deadline, because the alternative is being cut off
+             * without warning. `role="timer"` with a polite live region: a
+             * screen reader should be able to ask for it, not have every
+             * second announced.
+             */
+            <p
+              role="timer"
+              aria-live="off"
+              className={`font-mono text-meta ${
+                loginSecondsLeft * 1000 <= LOGIN_URGENT_MS ? "text-amber" : "text-fg-meta"
+              }`}
+            >
+              {formatCountdown(loginSecondsLeft)} to sign in
+            </p>
+          )}
+        </div>
 
-        {busy && (
+        {analysing && (
           /*
            * What a founder is owed while this runs (UI-4 §6): what is
            * happening, roughly how long it takes, and that leaving would lose
@@ -443,6 +552,175 @@ function LiveViewDialog({
 }
 
 /**
+ * What "finished" says, and why there are three answers rather than two.
+ *
+ * `Fully` and `Only partly` were the two, and a scan that had done everything
+ * it was ever going to do got the amber one. The middle answer is the true one
+ * for a read-only analysis: it ran to the end, within limits Vibe holds on
+ * purpose.
+ */
+const COMPLETION_LABELS: Record<DeepScanCompletion["kind"], string> = {
+  complete: "Fully",
+  within_limits: "Yes, within Vibe's limits",
+  incomplete: "Only partly",
+};
+
+/** The heading each group of notes appears under, in the founder's terms. */
+const NOTE_GROUPS: { kind: DeepScanNoteKind; heading: string }[] = [
+  { kind: "failed", heading: "Could not be read" },
+  { kind: "by_design", heading: "Stopped on purpose" },
+  { kind: "observed", heading: "Left alone" },
+];
+
+function ResultNotes({ notes }: { notes: DeepScanNote[] }) {
+  const failures = notes.filter((note) => note.kind === "failed").length;
+  const rest = notes.length - failures;
+
+  /*
+   * The label leads with failures because that is the number a founder is
+   * deciding on, and mentions the rest without dressing it as a problem. When
+   * nothing failed it says so — "6 notes" over a clean scan would still read
+   * as six things gone wrong.
+   */
+  const label =
+    failures === 0
+      ? `Nothing failed · ${rest} note${rest === 1 ? "" : "s"}`
+      : `${failures} page${failures === 1 ? "" : "s"} Vibe could not read · ${rest} note${rest === 1 ? "" : "s"}`;
+
+  return (
+    <Disclosure label={label}>
+      <div className="flex flex-col gap-4">
+        {NOTE_GROUPS.map(({ kind, heading }) => {
+          const group = notes.filter((note) => note.kind === kind);
+          if (group.length === 0) return null;
+
+          return (
+            <div key={kind} className="space-y-2">
+              <p className="font-mono text-meta text-fg-meta uppercase">{heading}</p>
+              <ul className="flex flex-col gap-2">
+                {group.map((note) => (
+                  <li
+                    key={`${note.path ?? ""}${note.message}`}
+                    className="text-fg-prose max-w-[62ch] text-sm leading-relaxed"
+                  >
+                    {note.path && (
+                      // The path first, because it is what distinguishes two
+                      // notes that share a sentence.
+                      <span className="font-mono text-fg-body">{note.path}</span>
+                    )}
+                    {note.path ? " — " : null}
+                    {note.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
+    </Disclosure>
+  );
+}
+
+/**
+ * Whether the handoff animation should be on screen.
+ *
+ * Pure and exported, because binding it to the wrong signal is exactly the
+ * mistake that shipped: it was `busy`, and `busy` means *a server action is in
+ * flight* — which is true while the browser is being **created**, not only
+ * while the analysis runs. So clicking "Run Deep Scan" opened the dialog and
+ * started the switch-off in the same tick, over a frame that had not connected
+ * yet, and the founder saw the animation fire on opening the panel.
+ *
+ * `analysing` is the narrower fact and the only one that earns this: Vibe has
+ * the browser and is reading. `sealing` extends it through the closing check,
+ * and an error ends it, because a failed scan is settled and still.
+ */
+export function handoffRunning(state: {
+  analysing: boolean;
+  sealing: boolean;
+  error: string | null;
+}): boolean {
+  return (state.analysing || state.sealing) && state.error === null;
+}
+
+/**
+ * How long a founder has to sign in before Vibe gives the browser back.
+ *
+ * A sandbox bills for every second it exists, and this one exists to hold a
+ * login form. Ten minutes of it — the provider-side ceiling — is nine minutes
+ * of paying for an empty room when somebody walks away mid-flow.
+ *
+ * Two minutes is the founder's number and it is one constant, deliberately, so
+ * it is a decision rather than an excavation. It is on the tight side for a
+ * password manager plus a second factor on a phone, and the honest mitigation
+ * is that it is *visible*: a person who can see thirty seconds left knows to
+ * hurry, where a person who cannot see anything is simply cut off.
+ *
+ * The clock starts when the browser is on screen, not when the dialog opens —
+ * a cold sandbox can take two minutes to build, and charging that to the
+ * founder's login time would be billing them for Vibe's own wait.
+ */
+const LOGIN_DEADLINE_MS = 120_000;
+/** Where the countdown stops being information and starts being a warning. */
+const LOGIN_URGENT_MS = 30_000;
+
+/**
+ * Seconds left on the login deadline, or `null` when it is not running.
+ *
+ * The clock is armed once and never re-armed: a hook that restarted whenever
+ * its argument changed would hand a founder a fresh two minutes every time the
+ * dialog re-rendered, which is most seconds.
+ */
+function useLoginCountdown(armed: boolean, onExpired: () => void): number | null {
+  /*
+   * The deadline lives in a ref and the remaining time in state, and the split
+   * is what keeps both lint rules satisfied at once: `Date.now()` is impure so
+   * it cannot be read during render, and setting state synchronously in an
+   * effect body cascades renders. A ref written in an effect is neither.
+   *
+   * The countdown is *derived* from `armed` on the way out rather than cleared
+   * on disarm, so a stale number cannot outlive the state it described.
+   */
+  const deadlineRef = useRef<number | null>(null);
+  const [remainingMs, setRemainingMs] = useState(LOGIN_DEADLINE_MS);
+
+  useEffect(() => {
+    if (!armed) {
+      deadlineRef.current = null;
+      return;
+    }
+    // Set once per arming. A hook that re-derived this per render would hand a
+    // founder a fresh two minutes every second.
+    deadlineRef.current = Date.now() + LOGIN_DEADLINE_MS;
+
+    const tick = () => {
+      const deadline = deadlineRef.current;
+      if (deadline === null) return;
+
+      const left = deadline - Date.now();
+      if (left > 0) {
+        setRemainingMs(left);
+        return;
+      }
+      clearInterval(timer);
+      setRemainingMs(0);
+      onExpired();
+    };
+
+    const timer = setInterval(tick, 500);
+    return () => clearInterval(timer);
+  }, [armed, onExpired]);
+
+  return armed ? Math.max(0, Math.ceil(remainingMs / 1000)) : null;
+}
+
+/** `2:00`, never `120s`. A deadline is a clock, and people read clocks. */
+export function formatCountdown(seconds: number): string {
+  const safe = Math.max(0, Math.floor(seconds));
+  return `${Math.floor(safe / 60)}:${String(safe % 60).padStart(2, "0")}`;
+}
+
+/**
  * Seconds since the analysis started (UI-4 §6).
  *
  * The only honest progress signal available here. Deep Scan runs inside the
@@ -473,6 +751,27 @@ function useElapsedSeconds(running: boolean): number {
   if (!running || !span) return 0;
 
   return Math.max(0, Math.floor((span.now - span.startedAt) / 1000));
+}
+
+/**
+ * The shape of screen this person is signing in from.
+ *
+ * A name, never a measurement — the server re-validates it against a closed
+ * set, and nothing measured here becomes a number on a command line.
+ *
+ * Read at click time rather than at render, because the answer is about the
+ * window as it is when the browser opens: a rotated phone and a resized
+ * desktop window are both real, and a value captured during hydration would
+ * be neither.
+ *
+ * `pointer: coarse` alongside the width, because width alone calls a narrow
+ * desktop window a phone — and a desktop founder who has dragged their window
+ * narrow still wants the desktop layout of their own product.
+ */
+function deviceViewport(): "desktop" | "mobile" {
+  if (typeof window === "undefined") return "desktop";
+  const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
+  return coarse && window.innerWidth < 900 ? "mobile" : "desktop";
 }
 
 /** How often the browser is asked whether the founder has finished signing in. */
@@ -709,7 +1008,51 @@ function NextScan({
 
 function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["lastResult"]> }) {
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
+      {/*
+        The finding leads.
+
+        This opened with a three-row definition list — timestamp, page count,
+        completeness — and put what Vibe had actually *found* underneath it as
+        a row of small grey chips. That is a receipt with the answer stapled to
+        the back. A founder came to this panel to learn what their signed-in
+        product contains; the metadata is how Vibe knows, not what it knows.
+
+        So the surfaces are the first thing on the card and the largest thing
+        on it, and the receipt is a quiet line underneath.
+      */}
+      {result.surfaces.length > 0 ? (
+        <div className="space-y-2">
+          {/*
+            Not "Inside your signed-in product": the panel's own heading
+            already says that, and a label repeating its own card's title is
+            words a person has to read twice to learn nothing.
+
+            "Recognised" rather than "found", because that is the claim. These
+            are the surfaces Vibe has a name for; a product can contain
+            something Vibe does not recognise, and this list would not say so.
+          */}
+          <p className="text-fg-meta font-mono text-meta uppercase">Surfaces Vibe recognised</p>
+          <ul className="flex flex-wrap gap-2">
+            {result.surfaces.map((surface) => (
+              <li
+                key={surface.id}
+                className="border-line-2 bg-surface-2 text-fg-body rounded-nav border px-3 py-1.5 text-sm"
+              >
+                {surface.name}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        // Never a heading with nothing under it: a scan that recognised no
+        // surface is a real answer, and it has to read as one.
+        <p className="text-fg-prose max-w-[62ch] text-sm">
+          Vibe read your signed-in pages but did not recognise any of the surfaces it looks
+          for. The notes below say what it saw.
+        </p>
+      )}
+
       <dl className="space-y-1 text-sm">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-fg-muted">Last checked</dt>
@@ -723,54 +1066,58 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
         </div>
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-fg-muted">Check finished</dt>
-          <dd className={result.completeness === "complete" ? "text-mint" : "text-amber"}>
-            {result.completeness === "complete" ? "Fully" : "Only partly"}
+          <dd className={result.completion.kind === "incomplete" ? "text-amber" : "text-mint"}>
+            {COMPLETION_LABELS[result.completion.kind]}
           </dd>
         </div>
       </dl>
 
-      {result.surfaces.length > 0 && (
-        <div className="space-y-1">
-          <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
-            Pages Vibe found after signing in
-          </p>
-          <ul className="flex flex-wrap gap-1.5">
-            {result.surfaces.map((surface) => (
-              <li
-                key={surface.id}
-                className="rounded border border-line-2 px-2 py-0.5 text-xs text-fg-prose"
-              >
-                {surface.name}
-              </li>
-            ))}
-          </ul>
-        </div>
+      {/*
+        The sentence that used to be missing entirely.
+
+        "Only partly", in amber, was the whole account of a scan whose single
+        limit was that Vibe refuses every non-GET request — which it does
+        because the session is the founder's own, and which it always will.
+        A permanent, deliberate safety property presented as a shortfall
+        teaches a person that Vibe half-works.
+
+        So the limits say what they are, and say plainly that the refusal is
+        not a setting anyone is going to change.
+      */}
+      {(result.completion.policyLimited || result.completion.budgetLimited) && (
+        <p className="max-w-[62ch] text-xs text-fg-muted leading-relaxed">
+          {result.completion.policyLimited && (
+            <>
+              Vibe only ever reads. It refuses anything that could change your data, and
+              anything that leaves your product — so a few requests are always turned down,
+              by design and not by configuration.
+            </>
+          )}
+          {result.completion.policyLimited && result.completion.budgetLimited && " "}
+          {result.completion.budgetLimited && (
+            <>It also stops at a set number of pages, so one scan stays quick and cheap.</>
+          )}
+        </p>
       )}
 
       {/*
-        Behind a disclosure, not in the summary. A warning is a caveat on a
-        result the founder came here to read, and putting four of them above
-        the result would make the caveats the finding. Nothing is hidden — the
-        count is in the label, so the disclosure says how much is behind it
-        before it is opened.
+        Behind a disclosure, not in the summary. A note is a caveat on a result
+        the founder came here to read, and putting six of them above the result
+        would make the caveats the finding. Nothing is hidden — the label
+        counts what is behind it before it is opened.
+
+        What the label counts is the part that was wrong. It said "6 things
+        Vibe could not check" over a list in which **one** was a failure: two
+        were facts Vibe had established by looking, one was the page budget
+        working as designed, and two were safety refusals. A founder reading
+        that heading learns Vibe failed six times.
+
+        So the count is of failures, the rest is grouped under what it actually
+        is, and each note carries its path — the two redirect lines were
+        identical sentences with nothing to tell them apart, which is exactly
+        how a correct message reads as a bug.
       */}
-      {result.warnings.length > 0 && (
-        <Disclosure
-          label={
-            result.warnings.length === 1
-              ? "1 thing Vibe could not check"
-              : `${result.warnings.length} things Vibe could not check`
-          }
-        >
-          <ul className="flex flex-col gap-2">
-            {result.warnings.map((warning) => (
-              <li key={warning} className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
-                {warning}
-              </li>
-            ))}
-          </ul>
-        </Disclosure>
-      )}
+      {result.notes.length > 0 && <ResultNotes notes={result.notes} />}
 
       {result.accessMode === "included_first_scan" && (
         <p className="text-xs text-fg-muted">Included Deep Scan used.</p>
@@ -796,6 +1143,26 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const [error, setError] = useState<string | null>(null);
   /** Every attempt at the view socket failed. Not a stage — a failure. */
   const [unreachable, setUnreachable] = useState(false);
+  /** The shape of the picture, so the box can be the shape of the picture. */
+  const [frame, setFrame] = useState<{ w: number; h: number } | null>(null);
+  /**
+   * The analysis came back with a result, and the dialog is playing the check.
+   *
+   * A separate state from `busy`, because the two mean different things: busy
+   * is "Vibe is still reading", sealed is "Vibe has finished and is saying so".
+   * The dialog stays open through the second one — closing on the answer would
+   * mean the founder's confirmation is a modal disappearing.
+   */
+  const [sealing, setSealing] = useState(false);
+  /**
+   * Vibe has the browser and is reading it.
+   *
+   * Deliberately *not* `busy`. Busy means a server action is in flight, and
+   * that is equally true while the browser is being created — which is how the
+   * handoff came to fire the moment the dialog opened, over a picture that did
+   * not exist yet.
+   */
+  const [analysing, setAnalysing] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
@@ -814,6 +1181,9 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const closeDialog = useCallback(() => {
     setDialogOpen(false);
     setUnreachable(false);
+    setFrame(null);
+    setSealing(false);
+    setAnalysing(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -839,7 +1209,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setStage("starting");
     setDialogOpen(true);
     startTransition(async () => {
-      const result = await startDeepScanAction(projectId);
+      const result = await startDeepScanAction(projectId, deviceViewport());
       setBusy(false);
       if (!result.ok) {
         // The dialog closes rather than holding a failure: the panel below is
@@ -864,15 +1234,50 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       // The server terminates the browser; the modal closes only afterwards.
       await cancelDeepScanAction(projectId, sessionId);
       setBusy(false);
+      // Not closed here. The handoff draws its check and calls `handleSealed`,
+      // which is what ends the dialog — so the last thing a founder sees is
+      // Vibe finishing, rather than a window vanishing.
+      setSealing(true);
+    });
+  }, [projectId, sessionId, closeDialog]);
+
+  /**
+   * The login deadline ran out.
+   *
+   * The same path as pressing Cancel — the server terminates the browser — so
+   * a founder is never charged for a scan that never read anything, and the
+   * message says what happened rather than leaving a dialog that closed by
+   * itself unexplained.
+   */
+  const handleLoginExpired = useCallback(() => {
+    if (!sessionId) return;
+    setBusy(true);
+    startTransition(async () => {
+      await cancelDeepScanAction(projectId, sessionId);
+      setBusy(false);
       setSessionId(null);
       closeDialog();
+      setError(
+        "The temporary browser closed because sign-in took longer than two minutes. Nothing was charged — you can start it again.",
+      );
       router.refresh();
     });
   }, [projectId, sessionId, closeDialog, router]);
 
+  const handleSealed = useCallback(() => {
+    setSealing(false);
+    setAnalysing(false);
+    setSessionId(null);
+    closeDialog();
+    router.refresh();
+  }, [closeDialog, router]);
+
   const handleAnalyze = useCallback(() => {
     if (!sessionId) return;
     setBusy(true);
+    // The one place this is set. Everything else that makes the panel busy is
+    // Vibe starting or ending a browser, not reading one.
+    setAnalysing(true);
     setError(null);
     startTransition(async () => {
       const result = await analyzeDeepScanAction(projectId, sessionId);
@@ -883,6 +1288,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         const code = result.error;
         const recoverable = code === "authenticated_origin_not_reached" || code === "authentication_not_confirmed";
         setError(messageFor(code));
+        setAnalysing(false);
         if (!recoverable) {
           setSessionId(null);
           closeDialog();
@@ -932,7 +1338,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setStage("connecting");
     void loadLiveView(sessionId);
   }, [sessionId, loadLiveView]);
-  const handlePainted = useCallback(() => setStage("ready"), []);
+  const handlePainted = useCallback((painted: { w: number; h: number }) => {
+    setStage("ready");
+    // Written only when it changes, because this is on the paint path: a new
+    // object every frame would re-render the dialog sixty times a second to
+    // say the same two numbers.
+    setFrame((current) =>
+      current && current.w === painted.w && current.h === painted.h ? current : painted,
+    );
+  }, []);
 
   const disabled = busy || pending;
 
@@ -1138,6 +1552,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           error={error}
           busy={disabled}
           unreachable={unreachable}
+          frame={frame}
           signIn={signIn}
           onCancel={handleCancel}
           onAnalyze={handleAnalyze}
@@ -1145,6 +1560,10 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           onPainted={handlePainted}
           onRetryView={handleRetryView}
           onUnavailable={handleUnavailable}
+          sealing={sealing}
+          analysing={analysing}
+          onSealed={handleSealed}
+          onLoginExpired={handleLoginExpired}
         />
       )}
     </>
