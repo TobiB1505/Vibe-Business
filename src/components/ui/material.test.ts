@@ -313,3 +313,63 @@ function* walkTsx(dir: string): Generator<string> {
     else if (path.endsWith(".tsx") && !path.endsWith(".test.tsx")) yield path;
   }
 }
+
+/**
+ * "Nothing here yet" is one component.
+ *
+ * ## What this exists to catch
+ *
+ * Twelve empty states, and four of them were written by hand. `EmptyState`
+ * was left-aligned with no icon; the four were centred, carried a mark, and
+ * reserved `min-h-52`, `min-h-56`, `min-h-72` and `min-h-48` — four heights,
+ * none of them chosen. Two of them said the same sentence about a search that
+ * matched nothing, in two layouts.
+ *
+ * Most of why they were hand-written is that the component had nowhere to put
+ * the mark. It has one now, and an `as` for the heading — a screen whose whole
+ * content is "No products yet" belongs in the outline rather than as a styled
+ * paragraph, which is the same argument `MonoLabel` records.
+ *
+ * ## Why left, and asserted
+ *
+ * Centred is a different rhetorical register: it states "nothing here" as a
+ * poster, where the rest of the product states the situation and gives one way
+ * forward as a sentence. Nine of the twelve were already left. If the default
+ * flips, twelve screens change register at once and nothing else fails.
+ */
+describe("an empty state is one component", () => {
+  const STATES = "src/components/ui/states.tsx";
+
+  it("stays left-aligned, with a slot for the mark that made three hand-roll it", () => {
+    const source = readFileSync(STATES, "utf8");
+    const body = source.slice(source.indexOf("export function EmptyState"));
+    // To the next top-level declaration: the props object closes with `\n}` of
+    // its own, so stopping there would read the signature and call it the
+    // render.
+    const end = body.indexOf("\n/**", 1);
+    const render = end === -1 ? body : body.slice(0, end);
+    expect(render).toContain("items-start");
+    expect(render).not.toContain("text-center");
+    // Rendered, not merely accepted: a prop that is destructured and dropped
+    // reads the same in a signature and puts the mark nowhere.
+    expect(render).toContain("{icon && (");
+    // The heading escape hatch. Without it the title is always a `<p>`.
+    expect(render).toContain("as: Title");
+  });
+
+  it("leaves no centred, height-reserving empty block anywhere else", () => {
+    const CENTRED =
+      /className="[^"]*(?:min-h-\d+[^"]*justify-center[^"]*text-center|justify-center[^"]*text-center[^"]*min-h-\d+)[^"]*"/;
+    const offenders: string[] = [];
+    for (const file of walkTsx(join(process.cwd(), "src"))) {
+      const path = file.replace(process.cwd() + "/", "");
+      if (path === STATES || path.startsWith("src/app/e2e/design-studies/")) continue;
+      if (CENTRED.test(readFileSync(file, "utf8"))) offenders.push(path);
+    }
+    expect(
+      offenders,
+      `Use EmptyState from ${STATES}. Four hand-written ones is how the ` +
+        "product ended up with four reserved heights and two registers.",
+    ).toEqual([]);
+  });
+});

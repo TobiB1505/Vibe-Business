@@ -13,6 +13,8 @@ import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
 import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { Figure } from "@/components/ui/figure";
+import { EmptyState } from "@/components/ui/states";
+import { InlineAction } from "@/components/ui/inline-action";
 import { cn } from "@/lib/utils/cn";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { ProductListCard } from "./product-list-card";
@@ -149,27 +151,21 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
           ))}
         </ul>
       ) : (
-        <Surface
-          level="panel"
-          padding="lg"
-          className="flex min-h-52 flex-col items-center justify-center text-center"
-        >
-          <SearchIcon size={24} className="text-fg-meta" />
-          <h2 className="text-fg mt-4 text-title font-semibold">No matching products</h2>
-          <p className="text-fg-muted mt-2 max-w-md text-body">
-            Try another search or reset the filter to see every connected product.
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setQuery("");
-              setFilter("all");
-            }}
-            className="text-mint hover:text-mint-hover mt-5 rounded-inline text-body font-semibold transition-interactive"
-          >
-            Clear search and filters
-          </button>
-        </Surface>
+        <EmptyState
+          as="h2"
+          title="No matching products"
+          description="Try another search or reset the filter to see every connected product."
+          action={
+            <InlineAction
+              onClick={() => {
+                setQuery("");
+                setFilter("all");
+              }}
+            >
+              Clear search and filters
+            </InlineAction>
+          }
+        />
       )}
     </div>
   );

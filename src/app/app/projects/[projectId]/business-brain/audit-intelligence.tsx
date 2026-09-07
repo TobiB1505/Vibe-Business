@@ -22,6 +22,7 @@ import { ArrowRightIcon } from "@/components/ui/icons.generated";
 import { InlineAction } from "@/components/ui/inline-action";
 import { figureClasses } from "@/components/ui/figure";
 import { RatingChip } from "@/components/ui/status-pill";
+import { EmptyState } from "@/components/ui/states";
 
 /*
  * No `evidence` tab.
@@ -603,11 +604,14 @@ function SelectedPanel({
 
 function HonestTabEmpty({ title, body }: { title: string; body: string }) {
   return (
-    <div className="business-brain-insight-card flex min-h-48 flex-col items-center justify-center p-6 text-center">
-      <span aria-hidden="true" className="border-line-2 bg-surface-4 text-fg-muted flex size-11 items-center justify-center rounded-full border">—</span>
-      <h3 className="text-fg mt-4 text-title font-semibold">{title}</h3>
-      <p className="text-fg-muted mt-2 max-w-[42ch] text-body leading-relaxed">{body}</p>
-    </div>
+    <EmptyState
+      as="h3"
+      // The tab's own surface, so this contributes the shape and not a second
+      // border inside it.
+      className="business-brain-insight-card border-0 bg-transparent"
+      title={title}
+      description={body}
+    />
   );
 }
 

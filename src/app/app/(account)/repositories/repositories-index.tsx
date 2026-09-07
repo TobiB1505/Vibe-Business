@@ -19,7 +19,6 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
-import { cn } from "@/lib/utils/cn";
 import type { ConnectedRepository } from "@/modules/projects/account-repositories";
 import {
   filterAndSortRepositories,
@@ -33,6 +32,8 @@ import {
 import { proseLinkClasses } from "@/components/ui/text-link";
 import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { Figure } from "@/components/ui/figure";
+import { EmptyState } from "@/components/ui/states";
+import { InlineAction } from "@/components/ui/inline-action";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -58,7 +59,15 @@ function RepositoryTile({ repository }: { repository: ConnectedRepository }) {
   );
 }
 
-function TrustItem({ icon, title, description }: { icon: ReactNode; title: string; description: string }) {
+function TrustItem({
+  icon,
+  title,
+  description,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
     <div className="flex items-start gap-3">
       <span className="bg-mint-tint-soft text-mint rounded-nav flex size-9 shrink-0 items-center justify-center">
@@ -229,24 +238,25 @@ export function RepositoriesIndex({
       </Surface>
 
       {repositories.length === 0 ? (
-        <Surface level="panel" padding="lg" className="flex min-h-72 flex-col items-center justify-center text-center">
-          <span className="bg-mint-tint-soft text-mint rounded-card flex size-12 items-center justify-center">
-            <RepositoriesIcon size={22} />
-          </span>
-          <h2 className="text-fg mt-4 text-title font-semibold">No repositories connected</h2>
-          <p className="text-fg-muted mt-2 max-w-md text-body leading-6">
-            Connect a GitHub repository to create a product and give Vibe the bounded context it needs.
-          </p>
-          <Link href="/app/connect/github" className={cn(buttonClasses({ size: "sm" }), "mt-5")}>
-            Connect GitHub
-          </Link>
-        </Surface>
+        <EmptyState
+          as="h2"
+          icon={<RepositoriesIcon size={22} />}
+          title="No repositories connected"
+          description="Connect a GitHub repository to create a product and give Vibe the bounded context it needs."
+          action={
+            <Link href="/app/connect/github" className={buttonClasses({ size: "sm" })}>
+              Connect GitHub
+            </Link>
+          }
+        />
       ) : (
         <Surface level="panel" padding="none" className="overflow-hidden">
           <div className="border-line-2 flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <h2 className="text-fg text-title font-semibold">Connected repositories</h2>
-              <p className="text-fg-meta mt-1 text-caption">Stored connection details, without unverified live activity.</p>
+              <p className="text-fg-meta mt-1 text-caption">
+                Stored connection details, without unverified live activity.
+              </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="border-line-2 bg-field focus-within:border-mint-line rounded-nav flex min-w-0 items-center gap-2.5 border px-3.5 py-2.5 sm:w-64">
@@ -321,16 +331,29 @@ export function RepositoriesIndex({
                 <table className="w-full min-w-[760px] border-collapse text-left">
                   <thead>
                     <tr className="text-fg-meta text-caption">
-                      <th scope="col" className="px-5 py-3 font-medium">Repository</th>
-                      <th scope="col" className="px-5 py-3 font-medium">Product</th>
-                      <th scope="col" className="px-5 py-3 font-medium">Connection</th>
-                      <th scope="col" className="px-5 py-3 font-medium">Connected</th>
-                      <th scope="col" className="w-16 px-5 py-3"><span className="sr-only">Open product</span></th>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Repository
+                      </th>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Product
+                      </th>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Connection
+                      </th>
+                      <th scope="col" className="px-5 py-3 font-medium">
+                        Connected
+                      </th>
+                      <th scope="col" className="w-16 px-5 py-3">
+                        <span className="sr-only">Open product</span>
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
                     {pagination.items.map((repository) => (
-                      <tr key={repository.projectId} className="border-line-2 hover:bg-surface-hover border-t transition-interactive">
+                      <tr
+                        key={repository.projectId}
+                        className="border-line-2 hover:bg-surface-hover border-t transition-interactive"
+                      >
                         <td className="px-5 py-4">
                           <div className="flex min-w-0 items-center gap-3">
                             <RepositoryTile repository={repository} />
@@ -343,13 +366,20 @@ export function RepositoriesIndex({
                               >
                                 {repository.name}
                               </a>
-                              <span className="text-fg-meta block truncate font-mono text-meta">{repository.owner}/{repository.name}</span>
+                              <span className="text-fg-meta block truncate font-mono text-meta">
+                                {repository.owner}/{repository.name}
+                              </span>
                               {repository.accessRevokedAt && <AccessRevokedNotice />}
                             </div>
                           </div>
                         </td>
                         <td className="px-5 py-4">
-                          <Link href={`/app/projects/${repository.projectId}`} className="text-fg-body hover:text-mint text-body font-medium transition-interactive">{repository.projectName}</Link>
+                          <Link
+                            href={`/app/projects/${repository.projectId}`}
+                            className="text-fg-body hover:text-mint text-body font-medium transition-interactive"
+                          >
+                            {repository.projectName}
+                          </Link>
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-col gap-1.5">
@@ -360,10 +390,15 @@ export function RepositoriesIndex({
                                   ? "Private"
                                   : "Public"}
                             </StatusPill>
-                            <span className="text-fg-meta flex items-center gap-1.5 font-mono text-meta"><BranchIcon size={13} />{repository.defaultBranch}</span>
+                            <span className="text-fg-meta flex items-center gap-1.5 font-mono text-meta">
+                              <BranchIcon size={13} />
+                              {repository.defaultBranch}
+                            </span>
                           </div>
                         </td>
-                        <td className="text-fg-muted px-5 py-4 text-body">{formatTimestamp(repository.connectedAt)}</td>
+                        <td className="text-fg-muted px-5 py-4 text-body">
+                          {formatTimestamp(repository.connectedAt)}
+                        </td>
                         <td className="px-5 py-4 text-right">
                           <Link
                             href={`/app/projects/${repository.projectId}`}
@@ -416,7 +451,10 @@ export function RepositoriesIndex({
                           </div>
                         )}
                         <div className="text-fg-meta mt-4 flex flex-wrap items-center justify-between gap-2 text-caption">
-                          <span className="flex items-center gap-1.5 font-mono"><BranchIcon size={13} />{repository.defaultBranch}</span>
+                          <span className="flex items-center gap-1.5 font-mono">
+                            <BranchIcon size={13} />
+                            {repository.defaultBranch}
+                          </span>
                           <span>{formatTimestamp(repository.connectedAt)}</span>
                         </div>
                       </div>
@@ -431,20 +469,45 @@ export function RepositoriesIndex({
                 </p>
                 {pagination.pageCount > 1 && (
                   <nav aria-label="Repository pages" className="flex items-center gap-2">
-                    <button type="button" disabled={pagination.page === 1} onClick={() => replaceParams((params) => params.set("page", String(pagination.page - 1)))} className="border-line-2 text-fg-body hover:border-mint-line rounded-nav border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40">Previous</button>
-                    <span className="text-fg-muted px-2" aria-current="page">Page {pagination.page} of {pagination.pageCount}</span>
-                    <button type="button" disabled={pagination.page === pagination.pageCount} onClick={() => replaceParams((params) => params.set("page", String(pagination.page + 1)))} className="border-line-2 text-fg-body hover:border-mint-line rounded-nav border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40">Next</button>
+                    <button
+                      type="button"
+                      disabled={pagination.page === 1}
+                      onClick={() =>
+                        replaceParams((params) => params.set("page", String(pagination.page - 1)))
+                      }
+                      className="border-line-2 text-fg-body hover:border-mint-line rounded-nav border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <span className="text-fg-muted px-2" aria-current="page">
+                      Page {pagination.page} of {pagination.pageCount}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={pagination.page === pagination.pageCount}
+                      onClick={() =>
+                        replaceParams((params) => params.set("page", String(pagination.page + 1)))
+                      }
+                      className="border-line-2 text-fg-body hover:border-mint-line rounded-nav border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Next
+                    </button>
                   </nav>
                 )}
               </div>
             </>
           ) : (
-            <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center" aria-live="polite">
-              <SearchIcon size={22} className="text-fg-meta" />
-              <h3 className="text-fg mt-4 text-title font-semibold">No matching repositories</h3>
-              <p className="text-fg-muted mt-2 max-w-md text-body">Try another repository, product or branch name, or reset the visibility filter.</p>
-              <button type="button" onClick={clearSearchAndFilters} className="text-mint hover:text-mint-hover mt-5 rounded-inline text-body font-semibold transition-interactive">Clear search and filters</button>
-            </div>
+            <EmptyState
+              as="h3"
+              className="border-0 bg-transparent"
+              title="No matching repositories"
+              description="Try another repository, product or branch name, or reset the visibility filter."
+              action={
+                <InlineAction onClick={clearSearchAndFilters}>
+                  Clear search and filters
+                </InlineAction>
+              }
+            />
           )}
         </Surface>
       )}
@@ -452,10 +515,26 @@ export function RepositoriesIndex({
       <Surface level="section" padding="md">
         <h2 className="text-fg text-title font-semibold">How repositories are used</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          <TrustItem icon={<CodeIcon size={17} />} title="Bounded analysis" description="Vibe reads only the targeted context needed for product intelligence." />
-          <TrustItem icon={<ProductsIcon size={17} />} title="Product context" description="Each repository belongs to one product workspace and its business evidence." />
-          <TrustItem icon={<LockIcon size={17} />} title="Secure by design" description="Repository access follows the permissions granted through your GitHub App installation." />
-          <TrustItem icon={<RepositoriesIcon size={17} />} title="You stay in control" description="Manage repository access at any time from your GitHub installation settings." />
+          <TrustItem
+            icon={<CodeIcon size={17} />}
+            title="Bounded analysis"
+            description="Vibe reads only the targeted context needed for product intelligence."
+          />
+          <TrustItem
+            icon={<ProductsIcon size={17} />}
+            title="Product context"
+            description="Each repository belongs to one product workspace and its business evidence."
+          />
+          <TrustItem
+            icon={<LockIcon size={17} />}
+            title="Secure by design"
+            description="Repository access follows the permissions granted through your GitHub App installation."
+          />
+          <TrustItem
+            icon={<RepositoriesIcon size={17} />}
+            title="You stay in control"
+            description="Manage repository access at any time from your GitHub installation settings."
+          />
         </div>
       </Surface>
     </div>
