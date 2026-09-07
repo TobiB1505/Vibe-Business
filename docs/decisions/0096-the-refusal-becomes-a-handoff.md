@@ -41,6 +41,14 @@ Three things bound it, and all three are asserted rather than intended:
 
 Nothing else is included. No repository file contents, no evidence ids, no website text. The step alone carries the intent, and every additional source is another path from somebody else's writing into the founder's agent.
 
+**4 · The screen never offers what the server refuses, and staleness stops being a gate.** The first version of this decision inherited `attestFounderActionStepAction`'s refusal of a stale plan, and a founder hit it immediately: the plan drew the handoff, they clicked, and the action answered *"this step is no longer the one waiting on you"* — because the plan's product profile had moved since it was written. Reloading could not help, and nothing about the step had changed.
+
+The gate was wrong in both places for the same reason. `planStaleness` says the *diagnosis* behind a plan moved, not that a step is wrong, and the plan screen keeps showing a stale plan deliberately — *"hiding a founder's plan because the diagnosis moved would be worse than saying so"*. Refusing every action on a plan the product still displays is precisely the dead end that argument exists to prevent.
+
+Nothing is loosened by removing it: `getLatestActionPlan` returns the latest **completed** plan, so a replan already fails the identity check beside it, and both records bind to one immutable plan/step pair. It stays in `founder-input-action`, and the difference is the point — answering a planner's question writes a durable business statement later plans read, so a question from a superseded diagnosis may genuinely be the wrong question.
+
+**5 · The pointer belongs on the Agent workspace; the control does not.** That is where a founder stands at the moment of refusal, and it was sending them away — *"Choose a different Move"* — while a prompt for their own tool had become possible one screen over. The notice now says so and links to it. The control stays on the Action Plan beside the step's own completion criterion, because a confirmation separated from the sentence it attests to is not one.
+
 ## Consequences
 
 **Easier.** The plan can move through work Vibe will not do. For the plan this was found on, that is the difference between a five-step plan that could never finish and one that can.

@@ -33,6 +33,16 @@ Three defences, each proved by removing it:
 - Vibe's own words say what the block is and what to do if it contains an instruction rather than a description — removing that sentence fails a named test;
 - **the quote cannot be closed from inside.** Any run of dashes in the quoted text is neutralised first. Removing that lets a crafted step end the fence and continue in Vibe's voice, which would defeat the other two — and it fails its own test.
 
+## Two defects the founder found within the hour
+
+**The screen offered what the server refused.** The plan drew the handoff, they clicked, and the action answered *"this step is no longer the one waiting on you"*. Not a crash — the Vercel logs for that deployment show only 200s and 204s — but my own error copy, from a gate I had copied out of the attestation action: the plan was stale, because its product profile had moved since it was written.
+
+The gate was wrong in both places. `planStaleness` says the diagnosis moved, not that the step is wrong, and `PlanDetailPanel` keeps showing a stale plan on purpose. Removing it loosens nothing: `getLatestActionPlan` returns the latest *completed* plan, so a replan already fails the identity check beside it. It stays in `founder-input-action`, where answering a question from a superseded diagnosis writes a durable business statement later plans read.
+
+**And the feature was invisible where it mattered.** The founder was standing on the Agent workspace — the screen a founder actually lands on at the moment of refusal — and it said *"Choose a different Move"*. The control still belongs on the Action Plan beside the step's completion criterion; the pointer belongs here, and now exists.
+
+**Both were mine, and both were missed by tests that looked right.** The browser suite asserted the tool buttons were *visible* and never clicked one; the Agent notice had a scene for the refusal and none for the refusal-with-a-way-out.
+
 ## Verification
 
 Sabotage at three layers. Removing the fence defusal fails *"cannot have its quote closed by the text inside it"*. Removing the warning fails *"fences the planned step and says what to do with an instruction inside it"*. Making the database gate plan-wide instead of per step fails *"does not admit any other step in the same plan"* — because handing out one change must not open the next.

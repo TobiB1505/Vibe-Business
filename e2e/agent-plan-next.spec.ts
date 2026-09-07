@@ -68,6 +68,30 @@ test.describe("a Move whose next step Vibe cannot run", () => {
     await expect(page.getByTestId("agent-plan-next-link")).toHaveText("Choose a different Move");
   });
 
+  test("points at the prompt when the founder can build it themselves", async ({ page }) => {
+    /*
+     * The founder stood exactly here and asked where the new function was. The
+     * Agent workspace is where they land at the moment of refusal, and it was
+     * sending them away — "Choose a different Move" — while a prompt for their
+     * own tool had just become possible one screen over (ADR 0096).
+     *
+     * The control stays on the Action Plan, beside the step's own completion
+     * criterion. What belongs here is the pointer.
+     */
+    await page.goto("/e2e/agent-plan-next-handoff");
+
+    const notice = page.getByTestId("agent-plan-next");
+    await expect(notice).toContainText("Vibe will not build this one");
+    await expect(notice).toContainText("Your own coding tool can build this");
+    await expect(page.getByTestId("agent-plan-next-link")).toHaveText(
+      "Get a prompt for your own tool",
+    );
+
+    // The sentence that was true of Vibe and stopped being the whole truth.
+    await expect(notice).not.toContainText("Nothing you change here will unlock it");
+    await expect(notice).not.toContainText("Choose a different Move");
+  });
+
   test("starts nothing from here", async ({ page }) => {
     // The way on is a link to the screen that owns the step's completion
     // criterion. A control here would separate the click from the sentence it

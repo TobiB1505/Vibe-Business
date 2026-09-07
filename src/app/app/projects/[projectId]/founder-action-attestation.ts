@@ -30,6 +30,24 @@ export async function attestFounderActionStepAction(
   formData: FormData,
 ): Promise<FounderActionAttestationState> {
   void _previous;
+  /*
+   * Staleness is deliberately *not* a gate here (ADR 0096).
+   *
+   * `planStaleness` says the diagnosis behind the plan moved — a new product
+   * profile, a newer audit. It does not say this step is wrong, and the plan
+   * screen keeps showing a stale plan on purpose: "hiding a founder's plan
+   * because the diagnosis moved would be worse than saying so". Refusing every
+   * action on a plan the product still displays is the dead end that argument
+   * exists to prevent, and it is what a founder actually hit.
+   *
+   * Nothing is loosened by removing it. `getLatestActionPlan` returns the
+   * latest completed plan, so a replan already fails the identity check on the
+   * line above, and the record binds to one immutable plan/step pair either
+   * way. The one place staleness still gates is `founder-input-action`, and
+   * that difference is the point: answering a planner's question writes a
+   * durable business statement later plans read, so a question from a
+   * superseded diagnosis may genuinely be the wrong question.
+   */
   const session = await requireSession();
   const supabase = await createClient();
   const current = await getLatestActionPlan(supabase, projectId);
@@ -37,7 +55,6 @@ export async function attestFounderActionStepAction(
   if (
     !current ||
     current.plan.id !== actionPlanId ||
-    current.staleness.length > 0 ||
     current.firstActionableStep?.id !== stepKey ||
     /* One predicate, shared with the completion projection and the database
        function behind this call, so the three cannot drift into disagreeing
