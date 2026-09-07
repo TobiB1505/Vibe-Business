@@ -10,6 +10,8 @@ import {
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/modules/auth/actions";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
+import { PaletteSwitch } from "@/components/layout/palette-switch";
+import { activePalette, paletteSwitchable } from "@/app/palette";
 
 const ACTIONS = [
   {
@@ -134,11 +136,19 @@ export function AccountMenu({
       <div
         className={cn(
           "border-line-2 bg-app rounded-panel z-40 border p-2 shadow-card",
-          placement === "above" &&
-            "absolute right-0 bottom-[calc(100%+0.75rem)] left-0",
+          placement === "above" && "absolute right-0 bottom-[calc(100%+0.75rem)] left-0",
         )}
       >
         <AccountActions />
+        {/*
+          The redesign's own switch, under the account destinations because it
+          is where a person already goes to change what they are looking at —
+          and because every screen in the redesign now has to be checked in
+          both palettes, which is a lot of redeploys otherwise.
+
+          Rendered only outside production; `paletteSwitchable()` says why.
+        */}
+        {paletteSwitchable() && <PaletteSwitch deployed={activePalette()} />}
       </div>
     </details>
   );

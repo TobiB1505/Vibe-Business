@@ -46,10 +46,38 @@
  * nothing and answers the question by being there.
  */
 
+import { getAppEnvironment } from "@/lib/env/app-url";
+
 export type Palette = "v1" | "v2";
 
 /** The variable, named once so a test and a doc can both point at it. */
 export const PALETTE_ENV = "VIBE_PALETTE";
+
+/**
+ * Where a local override lives, named once for the same reason.
+ *
+ * The environment variable answers "what does this deployment show". This
+ * answers "what am I looking at", per browser, and only outside production —
+ * see `palette-switch.tsx`. The blocking script in `layout.tsx` reads this key
+ * before first paint, so it appears in three places and must be one string.
+ */
+export const PALETTE_STORAGE_KEY = "vibe-palette";
+
+/**
+ * The script that applies a stored override before the first paint.
+ *
+ * Inlined into `<head>` and deliberately blocking. Without it the document
+ * paints the deployment's palette and swaps a frame later, which on a switch
+ * that changes the ground, the corners and the type is the whole product
+ * flashing on every navigation.
+ *
+ * Written as a string because it has to run before React does, and kept to one
+ * expression with its own try/catch: a private window throws on
+ * `localStorage`, and an exception in a blocking head script stops the parse.
+ */
+export const PALETTE_BOOT_SCRIPT =
+  `try{var p=localStorage.getItem(${JSON.stringify(PALETTE_STORAGE_KEY)});` +
+  `if(p==="v1"||p==="v2")document.documentElement.dataset.vibe=p}catch(e){}`;
 
 /**
  * The palette this deployment renders, from configuration.
@@ -59,4 +87,22 @@ export const PALETTE_ENV = "VIBE_PALETTE";
  */
 export function activePalette(source: Record<string, string | undefined> = process.env): Palette {
   return source[PALETTE_ENV]?.trim() === "v2" ? "v2" : "v1";
+}
+
+/**
+ * Whether this deployment offers the local switch.
+ *
+ * Everywhere but production. It is a tool for the person doing the redesign,
+ * not a preference — a customer offered a choice between a finished design and
+ * an unfinished one has been handed a decision that is not theirs.
+ *
+ * `getAppEnvironment()` already answers "which tier is this", primarily from
+ * Vercel's own `VERCEL_ENV`, so this gate costs no new configuration. It, the
+ * switch and the boot script all disappear together when v2 is simply what
+ * everybody has.
+ */
+export function paletteSwitchable(
+  source: Record<string, string | undefined> = process.env,
+): boolean {
+  return getAppEnvironment(source as Parameters<typeof getAppEnvironment>[0]) !== "production";
 }

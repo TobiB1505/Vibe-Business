@@ -9,7 +9,7 @@ import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
 import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
-import { activePalette } from "./palette";
+import { activePalette, paletteSwitchable, PALETTE_BOOT_SCRIPT } from "./palette";
 
 /**
  * The technical typeface is declared in `./fonts.ts` and exposed to the
@@ -60,6 +60,21 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       navigates. See `palette.ts` and ADR 0098.
     */
     <html lang="en" data-vibe={activePalette()} className={`h-full antialiased ${fontVariables}`}>
+      {paletteSwitchable() && (
+        <head>
+          {/*
+            The stored override, applied before the first paint.
+            `localStorage` cannot be read while the server renders, so without
+            this the document paints the deployment's palette and swaps a frame
+            later — on a switch that moves the ground, the corners and the type,
+            that is the whole product flashing on every navigation.
+
+            Blocking on purpose, and shipped only where the switch itself is:
+            production has no override to read.
+          */}
+          <script dangerouslySetInnerHTML={{ __html: PALETTE_BOOT_SCRIPT }} />
+        </head>
+      )}
       <body className="bg-app text-fg-body h-full font-sans">
         {/*
           The ground, before anything that stands on it. Two inert fixed

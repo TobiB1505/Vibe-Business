@@ -139,6 +139,14 @@ dynamic routes and leaves those four on the old palette, which looks like a bug
 and is not one. Vercel prompts for a redeploy when an environment variable
 changes; take it.
 
+**For looking at a screen in both, use the switch, not this.** Every
+non-production deployment carries a palette control in the account menu, at the
+foot of the rail under the profile card. It writes the choice to
+`localStorage`, applies it before the first paint, and marks the rail "local
+override" so a screenshot says whether it shows the deployment or your browser.
+It is a tool for the redesign and never renders in production — see
+`src/app/palette.ts` and `src/components/layout/palette-switch.tsx`.
+
 ### The paid-operations kill switch
 
 `PAID_OPERATIONS_DISABLED=1` makes `createOperationRun` refuse every start that
