@@ -340,3 +340,59 @@ describe("what the handoff is bound to", () => {
     expect(panel).not.toContain("useElapsedSeconds(busy)");
   });
 });
+
+/*
+ * The closing check never appeared, and a cancelled scan drew one.
+ *
+ * The edit that was meant to hold the dialog open for the check landed on
+ * `handleCancel` instead of `handleAnalyze` — both handlers ended with the
+ * same four lines, and a first-match replace took the earlier one. So a
+ * successful analysis closed the dialog instantly, and pressing Cancel
+ * celebrated with a green tick: success animated where there was no success,
+ * which is the exact thing the motion rules forbid.
+ *
+ * Unit tests passed. The component was correct in isolation and the wiring was
+ * inverted, so the assertions below are about *which handler* owns which
+ * ending — the thing that was actually wrong.
+ */
+describe("which ending belongs to which handler", () => {
+  const panel = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  function handler(name: string): string {
+    const start = panel.indexOf(`const ${name} = useCallback`);
+    expect(start, `${name} must exist`).toBeGreaterThan(-1);
+    const body = panel.slice(start);
+    return body.slice(0, body.indexOf("\n  }, ["));
+  }
+
+  it("gives the check to a result and to nothing else", () => {
+    const arms = panel.match(/setSealing\(true\)/g) ?? [];
+    expect(arms).toHaveLength(1);
+    expect(handler("handleAnalyze")).toContain("setSealing(true)");
+  });
+
+  it("does not celebrate a cancellation", () => {
+    const cancel = handler("handleCancel");
+    expect(cancel).not.toContain("setSealing");
+    // It closes, which is the whole point of pressing it.
+    expect(cancel).toContain("closeDialog()");
+  });
+
+  it("does not celebrate a login that ran out of time", () => {
+    const expired = handler("handleLoginExpired");
+    expect(expired).not.toContain("setSealing");
+    expect(expired).toContain("closeDialog()");
+  });
+
+  it("does not close the dialog on the answer it is meant to show", () => {
+    // The success path hands the ending to the animation; `handleSealed` is
+    // what actually closes, after the check has played.
+    const analyse = handler("handleAnalyze");
+    const success = analyse.slice(analyse.lastIndexOf("return;"));
+    expect(success).not.toContain("closeDialog()");
+    expect(handler("handleSealed")).toContain("closeDialog()");
+  });
+});

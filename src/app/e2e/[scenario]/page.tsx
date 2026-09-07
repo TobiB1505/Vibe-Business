@@ -140,6 +140,7 @@ import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
 import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
+import { DeepScanDialogFixture } from "./deep-scan-dialog-fixture";
 import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import { agentReadyForecastNotes } from "../agent-stage-scenarios";
@@ -1612,6 +1613,24 @@ export default async function E2eScenarioPage({
    * it passed while the component threw on mount and a founder watched 42
    * seconds of live browser where it should have been.
    */
+  /*
+   * The sign-in dialog, in the two states it only reaches through a real
+   * browser session and a real analysis result.
+   *
+   * The panel opens this on a click and drives it with Server Actions the
+   * fixtures never call, so every state below was unreachable to any test —
+   * which is how a countdown and a closing check both shipped without
+   * appearing on screen.
+   */
+  if (scenario === "deep-scan-dialog-awaiting-login" || scenario === "deep-scan-dialog-sealing") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <DeepScanDialogFixture sealing={scenario === "deep-scan-dialog-sealing"} />
+      </main>
+    );
+  }
+
   /* The closing check, which cannot be reached without a real analysis result. */
   if (scenario === "deep-scan-handoff-sealed") {
     return (
