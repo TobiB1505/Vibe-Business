@@ -133,7 +133,7 @@ function FocusBlock({
   return (
     <div className="border-line-2 flex flex-col gap-2 border-t pt-5" data-testid="agent-focus">
       <MonoLabel>Working on</MonoLabel>
-      <p className="text-fg text-base leading-snug font-semibold">
+      <p className="text-fg text-card-title font-semibold">
         {/* The engine's persisted rank, not a position in a list. */}
         <span className="text-fg-meta font-mono text-meta">
           {String(focus.move.rank).padStart(2, "0")}

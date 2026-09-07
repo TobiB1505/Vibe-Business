@@ -199,7 +199,7 @@ export function BusinessImpactPanel({
             : "space-y-2 border-t border-line-2 pt-4"
         }
       >
-        <h4 className="text-body font-medium text-fg-secondary">Impact tracking</h4>
+        <h4 className="text-card-title font-medium text-fg-secondary">Impact tracking</h4>
         <p className="text-body text-fg-muted">Long-term impact has not been measured.</p>
 
         {/* Kept, but demoted: planning is free and deterministic — no analytics
@@ -230,7 +230,7 @@ export function BusinessImpactPanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-body font-medium text-fg-body">Business impact</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Business impact</h4>
 
       {card.state === "scheduled" ? (
         <div className="space-y-2">

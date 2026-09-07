@@ -129,7 +129,7 @@ export function AgentActivity({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "relative flex size-[22px] items-center justify-center rounded-full border-[1.5px] text-[11px]",
+                    "relative flex size-[22px] items-center justify-center rounded-full border-[1.5px] text-meta",
                     RING[step.state],
                   )}
                   style={
@@ -158,7 +158,7 @@ export function AgentActivity({
                 >
                   {step.label}
                 </span>
-                <span className={cn("text-[0.8125rem]", STATUS_TONE[step.state])}>
+                <span className={cn("text-ui", STATUS_TONE[step.state])}>
                   {STATUS[step.state]}
                   {step.detail !== null && <span className="text-fg-meta"> · {step.detail}</span>}
                 </span>

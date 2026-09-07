@@ -137,7 +137,7 @@ export function HomeStatus({
             <>
               <div className="flex flex-wrap items-center gap-2.5">
                 <StatusDot tone="active" />
-                <p className="text-fg text-base leading-snug font-semibold">{nextMove.title}</p>
+                <p className="text-fg text-card-title font-semibold">{nextMove.title}</p>
               </div>
               <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
                 {nextMove.problem}

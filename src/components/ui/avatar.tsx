@@ -68,7 +68,7 @@ export function Avatar({
         className={cn(
           shared,
           "bg-surface-hover text-fg-body inline-flex items-center justify-center",
-          "text-[0.6875rem] font-semibold tracking-[0.02em]",
+          "text-meta font-semibold tracking-[0.02em]",
         )}
       >
         {initials}

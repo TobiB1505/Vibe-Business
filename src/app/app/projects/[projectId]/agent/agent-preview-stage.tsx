@@ -163,10 +163,10 @@ export function AgentPreviewStage({
       <div className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-col gap-2">
           <MonoLabel className="text-mint">Stage 4 of 5</MonoLabel>
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
+          <h3 className="text-fg text-moment font-bold">
             Your change is ready to preview
           </h3>
-          <p className="text-fg-muted max-w-[46ch] text-[0.9375rem] leading-relaxed">
+          <p className="text-fg-muted max-w-[46ch] text-lead leading-relaxed">
             Vibe has prepared the changes below. Review what&rsquo;s new before deciding.
           </p>
         </div>
@@ -242,7 +242,7 @@ export function AgentPreviewStage({
                   </span>
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="text-fg-body text-body font-semibold">{change.title}</span>
-                    <span className="text-fg-muted text-[0.8125rem] leading-relaxed">
+                    <span className="text-fg-muted text-ui leading-relaxed">
                       {change.detail}
                     </span>
                   </span>

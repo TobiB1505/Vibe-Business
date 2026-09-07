@@ -32,7 +32,7 @@ export function UnderstandingStatus({
         nothing to do about it (UI-S1 §14).
       */}
       <div className="flex flex-col gap-2">
-        <h2 className="text-fg text-2xl font-semibold">
+        <h2 className="text-fg text-moment font-semibold">
           {STAGE_COPY[operation.stage] ?? "Vibe is getting to know your product"}
         </h2>
         {/*

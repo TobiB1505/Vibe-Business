@@ -87,7 +87,7 @@ export default async function ProjectSettingsPage({
         */}
         <Surface id="founder-intent" level="section" padding="lg" className="scroll-mt-32 flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">What you told Vibe</h3>
+            <h3 className="text-fg text-title font-semibold">What you told Vibe</h3>
             <p className="text-fg-muted max-w-[65ch] text-body">
               Vibe works out what your product is on its own. This is the part only you know — and
               it changes which problems Vibe puts first.
@@ -98,7 +98,7 @@ export default async function ProjectSettingsPage({
 
         <Surface level="section" padding="lg" className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">Production website</h3>
+            <h3 className="text-fg text-title font-semibold">Production website</h3>
             <p className="text-fg-muted max-w-[65ch] text-body">
               The address a visitor reaches. Vibe checks what is actually served there, which is
               the only way to confirm what your code suggests.
@@ -112,7 +112,7 @@ export default async function ProjectSettingsPage({
 
         <Surface level="section" padding="lg" className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">Repository</h3>
+            <h3 className="text-fg text-title font-semibold">Repository</h3>
             {project.repository ? (
               <p className="text-fg-muted max-w-[65ch] text-body">
                 Vibe reads{" "}
@@ -167,7 +167,7 @@ export default async function ProjectSettingsPage({
           docblock: neither is scoped to a single project.
         */}
         <Surface level="section" padding="lg" className="flex flex-col gap-3">
-          <h3 className="text-fg text-base font-semibold">Elsewhere</h3>
+          <h3 className="text-fg text-title font-semibold">Elsewhere</h3>
           <ul className="flex flex-col gap-2">
             <li className="flex flex-wrap items-baseline justify-between gap-3">
               <span className="text-fg-secondary text-body">

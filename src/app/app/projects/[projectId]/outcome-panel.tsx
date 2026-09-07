@@ -308,7 +308,7 @@ export function OutcomePanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-body font-medium text-fg-body">Outcome</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Outcome</h4>
 
       {current.state === "not_started" ? (
         <div className="space-y-2">

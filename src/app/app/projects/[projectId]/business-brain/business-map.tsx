@@ -363,7 +363,7 @@ export function BusinessMap({
           style={{ transform: "translate(-50%, -50%)" }}
         >
           <span className="text-fg text-[3.9rem] leading-none font-semibold tracking-[-0.065em] tabular-nums">{view.overall.score ?? "—"}</span>
-          <span className="text-fg mt-2.5 text-base font-semibold">Business Health</span>
+          <span className="text-fg mt-2.5 text-title font-semibold">Business Health</span>
           <span className={cn("mt-2.5 rounded-full px-3 py-1 text-[0.7rem] font-medium", SCORE_STATE_CHIP[view.overall.state])}>{view.overall.stateLabel}</span>
         </div>
 

@@ -105,7 +105,7 @@ export function FounderInputCard({
               <CheckIcon size={16} />
             </span>
             <div className="flex min-w-0 flex-col gap-1">
-              <h3 className="text-fg text-lg font-semibold">Got it</h3>
+              <h3 className="text-fg text-title font-semibold">Got it</h3>
               <p className="text-fg-body text-body">{resolvedAnswer}</p>
               <p className="text-fg-muted text-caption leading-relaxed">
                 {openRequestCount > 1
@@ -135,7 +135,7 @@ export function FounderInputCard({
         </div>
 
         <div className="flex flex-col gap-2">
-          <h3 className="text-fg text-xl leading-snug font-semibold">{request.question}</h3>
+          <h3 className="text-fg text-moment font-semibold">{request.question}</h3>
           <p className="text-fg-prose text-body leading-relaxed">
             Choose the direction that fits your business right now.
           </p>
@@ -256,7 +256,7 @@ export function FounderInputCard({
             Needs your {request.kind === "decision" ? "decision" : "input"}
           </StatusPill>
         </div>
-        <h3 className="text-fg text-xl leading-snug font-semibold">{request.question}</h3>
+        <h3 className="text-fg text-moment font-semibold">{request.question}</h3>
         <p className="text-fg-prose max-w-2xl text-body leading-relaxed">{request.whyNeeded}</p>
         {runtime ? (
           <p className="text-fg-muted text-caption leading-relaxed">

@@ -69,8 +69,8 @@ function Panel({
 }) {
   return (
     <section className="rounded-[14px] border border-line-2 bg-app p-4">
-      <h2 className="text-[13px] font-semibold text-fg">{title}</h2>
-      {note ? <p className="mt-0.5 text-[12px] text-fg-meta">{note}</p> : null}
+      <h2 className="text-ui font-semibold text-fg">{title}</h2>
+      {note ? <p className="mt-0.5 text-caption text-fg-meta">{note}</p> : null}
       <div className="mt-3">{children}</div>
     </section>
   );
@@ -98,10 +98,10 @@ function spendValue(row: {
 
 function Rows({ rows }: { rows: readonly { key: string; label: string; value: string }[] }) {
   if (rows.length === 0) {
-    return <p className="font-mono text-[12px] text-fg-disabled">nothing in this window</p>;
+    return <p className="font-mono text-caption text-fg-disabled">nothing in this window</p>;
   }
   return (
-    <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 font-mono text-[12px]">
+    <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-1.5 font-mono text-caption">
       {rows.map((row) => (
         <div key={row.key} className="contents">
           <dt className="truncate text-fg-muted">{row.label}</dt>
@@ -183,7 +183,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
       <header className="flex flex-wrap items-baseline justify-between gap-3 border-b border-line-2 pb-4">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-fg">Internal console</h1>
-          <p className="mt-1 text-[13px] text-fg-muted">
+          <p className="mt-1 text-ui text-fg-muted">
             Read-only. No action here writes anything. Identifiers are truncated and no page, prompt
             or repository content is read.
           </p>
@@ -196,7 +196,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
                 type="button"
                 onClick={() => setWindow(option)}
                 aria-pressed={option === window_}
-                className={`px-3 py-1.5 font-mono text-[12px] first:rounded-l-[9px] last:rounded-r-[9px] ${
+                className={`px-3 py-1.5 font-mono text-caption first:rounded-l-[9px] last:rounded-r-[9px] ${
                   option === window_ ? "bg-mint-tint text-mint" : "text-fg-muted"
                 }`}
               >
@@ -205,7 +205,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
             ))}
           </div>
           <p
-            className={`font-mono text-[12px] tabular-nums ${failing ? "text-coral" : "text-fg-meta"}`}
+            className={`font-mono text-caption tabular-nums ${failing ? "text-coral" : "text-fg-meta"}`}
             aria-live="polite"
           >
             {failing ? "refresh failed · " : ""}
@@ -215,7 +215,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
       </header>
 
       {snapshot.truncated ? (
-        <p className="mt-4 rounded-[10px] border border-amber-line bg-amber-tint-soft px-3 py-2 text-[12px] text-amber-deep">
+        <p className="mt-4 rounded-[10px] border border-amber-line bg-amber-tint-soft px-3 py-2 text-caption text-amber-deep">
           A query reached its bound, so the totals below are a floor rather than a total.
         </p>
       ) : null}
@@ -225,7 +225,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
           title="Feed"
           note="Newest first, by the last thing that happened to the operation — not by when it started."
         >
-          <ol className="max-h-[560px] overflow-y-auto font-mono text-[12px] leading-[1.7]">
+          <ol className="max-h-[560px] overflow-y-auto font-mono text-caption leading-[1.7]">
             {snapshot.feed.length === 0 ? (
               <li className="text-fg-disabled">nothing in this window</li>
             ) : (
@@ -268,7 +268,7 @@ export function OperatorConsole({ initial }: { initial: ConsoleSnapshot }) {
                 },
               ]}
             />
-            <p className="mt-3 border-t border-line-1 pt-2 font-mono text-[12px] text-fg-meta">
+            <p className="mt-3 border-t border-line-1 pt-2 font-mono text-caption text-fg-meta">
               {inFlight.oldest
                 ? `oldest · ${inFlight.oldest.operationType} · ${inFlight.oldest.stage} · ${duration(inFlight.oldest.ageMs)}`
                 : "nothing unfinished"}

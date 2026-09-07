@@ -168,7 +168,7 @@ export function UnderstandingPanel({
                 </div>
               </div>
 
-              {headline.understanding ? <p className="text-fg-prose mt-7 max-w-[58ch] text-base leading-7 sm:text-[1.05rem]">{headline.understanding}</p> : <p className="text-fg-muted mt-7 max-w-[58ch] text-base leading-7">{headline.title}</p>}
+              {headline.understanding ? <p className="text-fg-prose mt-7 max-w-[58ch] text-lead leading-7">{headline.understanding}</p> : <p className="text-fg-muted mt-7 max-w-[58ch] text-lead leading-7">{headline.title}</p>}
               {headline.synthesisNote && <p className="text-fg-muted mt-3 max-w-[58ch] text-body leading-6">{headline.synthesisNote}</p>}
             </div>
 
@@ -203,7 +203,7 @@ export function UnderstandingPanel({
           {view.dna.map((fact) => (
             <article key={fact.id} className="border-line-1 bg-surface-2 flex min-h-48 flex-col rounded-xl border p-4">
               <div className="text-mint flex size-10 items-center justify-center rounded-xl border border-mint/20 bg-mint/[0.055]"><ProductGlyph kind={fact.id} /></div>
-              <h3 className="text-fg mt-4 text-body font-semibold">{fact.label}</h3>
+              <h3 className="text-fg mt-4 text-card-title font-semibold">{fact.label}</h3>
               <p className={`${TONE_TEXT[fact.tone]} mt-2 flex-1 text-body leading-6`}>{fact.value}</p>
               <p className="text-fg-meta mt-4 flex items-center gap-2 text-[0.7rem]"><span className={`${TONE_DOT[fact.tone]} size-1.5 rounded-full`} aria-hidden />{fact.note}</p>
               {/*
@@ -243,7 +243,7 @@ export function UnderstandingPanel({
       <Surface level="panel" padding="lg" className="grid gap-7 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
         <div className="min-w-0">
           <SectionLabel>What Vibe discovered</SectionLabel>
-          <h3 className="text-fg mt-3 text-base font-semibold">Product capabilities</h3>
+          <h3 className="text-fg mt-3 text-title font-semibold">Product capabilities</h3>
           {view.capabilities.length > 0 ? (
             <ul className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
               {view.capabilities.map((capability) => (
@@ -256,7 +256,7 @@ export function UnderstandingPanel({
           ) : <p className="text-fg-muted mt-4 text-body">Vibe could not establish a supported capability yet.</p>}
         </div>
         <div className="border-line-1 min-w-0 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
-          <h3 className="text-fg text-body font-semibold">Product journey</h3>
+          <h3 className="text-fg text-card-title font-semibold">Product journey</h3>
           <ol className="mt-5 flex flex-col gap-0">
             {view.journey.map((stage, index) => (
               <li key={stage.id} className="relative flex gap-3 pb-4 last:pb-0">
@@ -329,7 +329,7 @@ export function UnderstandingPanel({
       </Surface>
 
       <Surface level="panel" tone={confirmedAt === null ? "mint" : undefined} padding="lg" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-4"><span className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind="scan" className="size-6" /></span><div><h3 className="text-fg text-base font-semibold">{confirmedAt === null ? "Is this correct?" : "You confirmed this product profile"}</h3><p className="text-fg-muted mt-1 max-w-xl text-body leading-6">{confirmedAt === null ? "Your corrections become the strongest source in this product profile and survive future scans." : "Vibe will preserve your corrections when it refreshes the evidence behind this profile."}</p></div></div>
+        <div className="flex min-w-0 items-start gap-4"><span className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind="scan" className="size-6" /></span><div><h3 className="text-fg text-title font-semibold">{confirmedAt === null ? "Is this correct?" : "You confirmed this product profile"}</h3><p className="text-fg-muted mt-1 max-w-xl text-body leading-6">{confirmedAt === null ? "Your corrections become the strongest source in this product profile and survive future scans." : "Vibe will preserve your corrections when it refreshes the evidence behind this profile."}</p></div></div>
         {confirmedAt === null ? <div className="shrink-0">{actions}</div> : <span className="border-mint/20 bg-mint/[0.06] text-mint shrink-0 rounded-full border px-3 py-1.5 text-caption">Confirmed {formatTimestamp(confirmedAt)}</span>}
       </Surface>
     </div>

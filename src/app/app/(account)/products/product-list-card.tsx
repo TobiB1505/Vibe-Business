@@ -117,7 +117,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <h2 className="text-fg truncate text-base font-bold" title={displayName}>
+                    <h2 className="text-fg truncate text-card-title font-bold" title={displayName}>
                       {displayName}
                     </h2>
                     <StatusPill
@@ -177,7 +177,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
 
             <div className="border-line-1 flex items-center justify-between gap-6 border-t pt-5 xl:block xl:border-0 xl:pt-0">
               <div>
-                <p className="text-fg-meta text-[0.6875rem]">Business signal</p>
+                <p className="text-fg-meta text-meta">Business signal</p>
                 {product.scoreState === "scored" && product.score !== null ? (
                   <p className="mt-1 flex items-baseline gap-1 font-semibold tabular-nums">
                     <span className={cn("text-lg", statusToneText(statusForScoreTone(display.tone)))}>
@@ -192,7 +192,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                       : "No data yet"}
                   </p>
                 )}
-                <p className="text-fg-meta mt-1 text-[0.6875rem] xl:hidden">
+                <p className="text-fg-meta mt-1 text-meta xl:hidden">
                   Analysed {formatDate(product.lastAnalysedAt) ?? "not yet"}
                 </p>
               </div>
@@ -201,7 +201,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                 {series.readingCount > 0 && <Sparkline segments={series.segments} tone={tone} />}
               </div>
 
-              <p className="text-fg-meta mt-2 hidden text-[0.6875rem] xl:block">
+              <p className="text-fg-meta mt-2 hidden text-meta xl:block">
                 Analysed {formatDate(product.lastAnalysedAt) ?? "not yet"}
               </p>
             </div>

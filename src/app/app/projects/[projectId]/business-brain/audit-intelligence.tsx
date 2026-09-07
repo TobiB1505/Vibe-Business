@@ -186,7 +186,7 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
 
   return (
     <section className="business-brain-side-card flex flex-col gap-4 p-5" data-testid="recent-changes">
-      <h3 className="text-fg text-body font-semibold">Recent changes</h3>
+      <h3 className="text-fg text-card-title font-semibold">Recent changes</h3>
       {change ? (
         <div className="flex items-start gap-3">
           <span
@@ -250,7 +250,7 @@ function DefaultPanel({
       transition={{ duration: reducedMotion ? 0.08 : 0.16, ease: "easeOut" }}
     >
       <section className="business-brain-side-card flex flex-col gap-4 p-4 sm:p-5">
-        <h2 className="text-fg text-base font-semibold tracking-[-0.02em]">What matters now</h2>
+        <h2 className="text-fg text-title font-semibold">What matters now</h2>
         {view.primaryPriority ? (
           <>
             <PriorityCard
@@ -312,7 +312,7 @@ function DefaultPanel({
       */}
       {contradictions.length > 0 && (
         <section className="business-brain-side-card flex flex-col gap-4 p-4 sm:p-5">
-          <h2 className="text-fg text-base font-semibold tracking-[-0.02em]">
+          <h2 className="text-fg text-title font-semibold">
             Your code against your live product
           </h2>
           {contradictions.map((check) => (
@@ -406,7 +406,7 @@ function SelectedPanel({
             Selected dimension
           </span>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h2 className="text-fg text-2xl leading-tight font-semibold tracking-[-0.035em]">
+            <h2 className="text-fg text-moment font-semibold">
               {node.label}
             </h2>
             <span className={cn("rounded-full border px-3 py-1 text-caption font-medium", node.health === "weak" ? "border-coral/25 bg-coral/[0.08] text-coral" : node.health === "strong" ? "border-mint/25 bg-mint/[0.08] text-mint" : "border-amber/25 bg-amber/[0.08] text-amber")}>
@@ -459,7 +459,7 @@ function SelectedPanel({
               <div className="business-brain-insight-card flex gap-3 p-4">
                 <DetailInsightIcon kind="found" />
                 <div className="min-w-0">
-                  <h3 className="text-fg text-body font-semibold">What we found</h3>
+                  <h3 className="text-fg text-card-title font-semibold">What we found</h3>
                   <p className="text-fg-secondary mt-1.5 text-body leading-relaxed">
                     {node.problem?.explanation ??
                       "The available evidence did not support a concise diagnosis for this area."}
@@ -470,7 +470,7 @@ function SelectedPanel({
               <div className="business-brain-insight-card flex gap-3 p-4">
                 <DetailInsightIcon kind="matter" />
                 <div className="min-w-0">
-                  <h3 className="text-fg text-body font-semibold">Why it matters</h3>
+                  <h3 className="text-fg text-card-title font-semibold">Why it matters</h3>
                   <p className="text-fg-secondary mt-1.5 text-body leading-relaxed">
                     {node.problem?.whyItMatters ?? "This audit did not record a separate impact explanation for this area."}
                   </p>
@@ -480,7 +480,7 @@ function SelectedPanel({
               <div className="business-brain-insight-card flex gap-3 p-4">
                 <DetailInsightIcon kind="connected" />
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-fg text-body font-semibold">Connected areas</h3>
+                  <h3 className="text-fg text-card-title font-semibold">Connected areas</h3>
                   <p className="text-fg-muted mt-1 text-caption">Areas joined by the same audit conclusion.</p>
                   {relationships.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -506,10 +506,10 @@ function SelectedPanel({
                   <DetailInsightIcon kind="move" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-fg text-body font-semibold">What to do next</h3>
+                      <h3 className="text-fg text-card-title font-semibold">What to do next</h3>
                       {node.problem && <span className="text-coral text-[0.65rem] font-semibold tracking-[0.08em] uppercase">#{node.problem.rank} priority</span>}
                     </div>
-                    <p className="text-fg mt-2 text-lg font-semibold tracking-[-0.02em]">
+                    <p className="text-fg mt-2 text-title font-semibold">
                       {node.problem?.move?.title ?? node.problem?.headline ?? "No next move is linked yet"}
                     </p>
                     {node.problem?.move && (
@@ -550,7 +550,7 @@ function SelectedPanel({
                 <div className="flex items-start justify-between gap-5">
                   <div className="min-w-0">
                     <span className="text-fg-meta text-[0.68rem] font-medium tracking-[0.1em] uppercase">Current lens score</span>
-                    <h3 id={`${tabId}-score-heading`} className="text-fg mt-1 text-base font-semibold">{node.label}</h3>
+                    <h3 id={`${tabId}-score-heading`} className="text-fg mt-1 text-title font-semibold">{node.label}</h3>
                   </div>
                   <p className={cn("shrink-0 text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", scoreTone)}>
                     {node.score ?? "—"}<span className="text-fg-meta ml-1 text-caption font-normal tracking-normal">/100</span>
@@ -568,7 +568,7 @@ function SelectedPanel({
                 <section aria-labelledby={`${tabId}-signals-heading`}>
                   <div className="mb-3 flex items-end justify-between gap-3">
                     <div>
-                      <h3 id={`${tabId}-signals-heading`} className="text-fg text-body font-semibold">Signals behind this score</h3>
+                      <h3 id={`${tabId}-signals-heading`} className="text-fg text-card-title font-semibold">Signals behind this score</h3>
                       <p className="text-fg-muted mt-1 text-caption">{evidence.length} recorded across {signalsBySource.length} {signalsBySource.length === 1 ? "source" : "sources"}</p>
                     </div>
                   </div>
@@ -608,7 +608,7 @@ function HonestTabEmpty({ title, body }: { title: string; body: string }) {
   return (
     <div className="business-brain-insight-card flex min-h-48 flex-col items-center justify-center p-6 text-center">
       <span aria-hidden="true" className="border-line-2 bg-surface-4 text-fg-muted flex size-11 items-center justify-center rounded-full border">—</span>
-      <h3 className="text-fg mt-4 text-base font-semibold">{title}</h3>
+      <h3 className="text-fg mt-4 text-title font-semibold">{title}</h3>
       <p className="text-fg-muted mt-2 max-w-[42ch] text-body leading-relaxed">{body}</p>
     </div>
   );
@@ -656,7 +656,7 @@ export function AuditIntelligence({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <h2 className="text-fg text-xl font-semibold tracking-[-0.03em]">Business Map</h2>
+                <h2 className="text-fg text-title font-semibold">Business Map</h2>
                 <p className="text-fg-muted text-body">Select any area to explore how the pieces connect.</p>
               </div>
             )}

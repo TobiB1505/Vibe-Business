@@ -17,7 +17,7 @@ export function AgentRunTaskHeader({
         {task === null ? (
           <div className="flex flex-col gap-2">
             <MonoLabel className="text-mint">Current task</MonoLabel>
-            <p className="text-fg-body text-base">Task details are unavailable for this run.</p>
+            <p className="text-fg-body text-lead">Task details are unavailable for this run.</p>
           </div>
         ) : (
           <AgentTaskPanel task={task} compact summary />

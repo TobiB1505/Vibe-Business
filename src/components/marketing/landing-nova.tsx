@@ -91,7 +91,7 @@ export function LandingNova() {
             >
               Your co-founder has a name.
             </h2>
-            <p className="text-fg-prose max-w-[58ch] text-lg leading-relaxed">
+            <p className="text-fg-prose max-w-[58ch] text-lead leading-relaxed">
               Nova reads your product, judges the business behind it, and puts the one thing that
               matters next in front of you. She is the first thing you see when you sign in — an
               aperture around a light curve, because her whole job is to look at what you built and

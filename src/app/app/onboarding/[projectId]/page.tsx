@@ -325,7 +325,7 @@ export default async function ProjectOnboardingPage({
         <section className="flex max-w-[50rem] flex-col gap-7">
           <header className="flex flex-col gap-3">
             <MonoLabel>Connect · Product found</MonoLabel>
-            <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">
+            <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">
               One more view of your product.
             </h1>
             <p className="text-fg-prose max-w-[58ch] leading-relaxed">
@@ -384,7 +384,9 @@ export default async function ProjectOnboardingPage({
             <Surface level="card" padding="lg" className="flex flex-col gap-5">
               <VibeMark size={40} />
               <div className="flex flex-col gap-2">
-                <h2 className="text-fg text-xl font-semibold">Your product is still connected.</h2>
+                <h2 className="text-fg text-moment font-semibold">
+                  Your product is still connected.
+                </h2>
                 <p className="text-fg-muted text-body">
                   Vibe does not yet have a picture of your product. Nothing else needs repeating —
                   your repository stays connected.
@@ -414,11 +416,11 @@ export default async function ProjectOnboardingPage({
             )}
             <div className="flex flex-col gap-3">
               <MonoLabel>Understand · Product reveal</MonoLabel>
-              <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">
+              <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">
                 {understanding.headline.title}
               </h1>
               {understanding.headline.productName && (
-                <p className="text-fg-body text-xl font-semibold">
+                <p className="text-fg-body text-moment font-semibold">
                   {understanding.headline.productName}
                 </p>
               )}
@@ -459,7 +461,7 @@ export default async function ProjectOnboardingPage({
         <section className="flex flex-col gap-6">
           <header className="flex flex-col gap-3">
             <MonoLabel>Audit</MonoLabel>
-            <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">
+            <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">
               {surface === "parked_no_live_product"
                 ? "Vibe knows your product."
                 : "Now Vibe is looking at the business around it."}
@@ -533,7 +535,7 @@ export default async function ProjectOnboardingPage({
           <OperationWatcher projectId={projectId} operation={opportunityOperation} />
           <header className="flex flex-col gap-3">
             <MonoLabel>First move</MonoLabel>
-            <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">
+            <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">
               Vibe knows what your business needs next.
             </h1>
           </header>
@@ -545,7 +547,7 @@ export default async function ProjectOnboardingPage({
               className="border-mint/30 flex flex-col gap-4 border"
             >
               <MonoLabel className="text-mint">This is where I&apos;d start</MonoLabel>
-              <h2 className="text-fg text-2xl font-semibold">
+              <h2 className="text-fg text-moment font-semibold">
                 {onboarding.opportunities.set.opportunities[0].title}
               </h2>
               <p className="text-fg-prose leading-relaxed">
@@ -574,7 +576,7 @@ export default async function ProjectOnboardingPage({
             </Surface>
           ) : opportunityOperation ? (
             <Surface level="card" padding="lg" className="flex flex-col gap-3" role="status">
-              <h2 className="text-fg text-xl font-semibold">
+              <h2 className="text-fg text-moment font-semibold">
                 Vibe is finding your highest-impact opportunity.
               </h2>
               <p className="text-fg-muted text-body">
@@ -590,7 +592,7 @@ export default async function ProjectOnboardingPage({
 
           {!opportunityOperation && (
             <Surface level="section" padding="lg" className="flex flex-col gap-4">
-              <h2 className="text-fg text-xl font-semibold">Vibe knows your product.</h2>
+              <h2 className="text-fg text-moment font-semibold">Vibe knows your product.</h2>
               <p className="text-fg-prose">
                 Vibe understands what you built and your first business audit is ready. Setup is
                 done — your workspace is where everything lives from here.

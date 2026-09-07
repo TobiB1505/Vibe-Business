@@ -114,10 +114,10 @@ export function AgentMergeStage({
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex min-w-0 flex-col gap-2">
           <MonoLabel className="text-mint">Stage 5 of 5</MonoLabel>
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
+          <h3 className="text-fg text-moment font-bold">
             Review and merge with your GitHub repository
           </h3>
-          <p className="text-fg-muted max-w-[52ch] text-[0.9375rem] leading-relaxed">
+          <p className="text-fg-muted max-w-[52ch] text-lead leading-relaxed">
             Review the changes and merge when you&rsquo;re ready.
           </p>
         </div>
@@ -186,7 +186,7 @@ export function AgentMergeStage({
                 <path d="m9 12.2 2.2 2.2 4-4.4" />
               </svg>
               <span className="flex flex-col gap-1">
-                <span className="text-fg-body text-[0.9375rem] font-semibold">
+                <span className="text-fg-body text-card-title font-semibold">
                   All checks passed
                 </span>
                 {/*
@@ -230,16 +230,16 @@ export function AgentMergeStage({
                 <span className="border-line-2 bg-well text-fg-meta flex-none rounded border px-1.5 py-0.5 font-mono text-[0.625rem]">
                   {extensionOf(file.path)}
                 </span>
-                <span className="text-fg-body min-w-0 flex-1 truncate font-mono text-[0.8125rem]">
+                <span className="text-fg-body min-w-0 flex-1 truncate font-mono text-ui">
                   {file.path}
                 </span>
                 {file.added !== undefined && (
-                  <span className="text-mint flex-none font-mono text-[0.75rem]">
+                  <span className="text-mint flex-none font-mono text-caption">
                     +{file.added}
                   </span>
                 )}
                 {file.removed !== undefined && (
-                  <span className="text-coral flex-none font-mono text-[0.75rem]">
+                  <span className="text-coral flex-none font-mono text-caption">
                     −{file.removed}
                   </span>
                 )}
@@ -276,7 +276,7 @@ export function AgentMergeStage({
           </p>
           <p className="text-fg-muted text-body leading-relaxed">
             Vibe prepared one exact change for{" "}
-            <span className="border-line-2 bg-well text-fg-body rounded-full border px-2 py-0.5 font-mono text-[0.6875rem]">
+            <span className="border-line-2 bg-well text-fg-body rounded-full border px-2 py-0.5 font-mono text-meta">
               {baseBranch}
             </span>
             .
@@ -284,14 +284,14 @@ export function AgentMergeStage({
           {commitSha !== null && (
             <div className="border-line-3 flex items-center justify-between gap-3 border-y py-3">
               <MonoLabel>Prepared commit</MonoLabel>
-              <span className="text-fg-body font-mono text-[0.8125rem]">
+              <span className="text-fg-body font-mono text-ui">
                 {commitSha.slice(0, 12)}
               </span>
             </div>
           )}
           {addedShare !== null && (
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-3 font-mono text-[0.6875rem]">
+              <div className="flex items-center justify-between gap-3 font-mono text-meta">
                 <span className="text-mint">+{summary.linesAdded} additions</span>
                 <span className="text-coral">−{summary.linesRemoved} deletions</span>
               </div>
@@ -320,7 +320,7 @@ export function AgentMergeStage({
           {files[0] !== undefined && (
             <div className="rounded-well border-line-2 bg-well overflow-hidden border">
               <div className="border-line-2 flex items-center justify-between gap-3 border-b px-3 py-2.5">
-                <span className="text-fg-prose min-w-0 truncate font-mono text-[0.6875rem]">
+                <span className="text-fg-prose min-w-0 truncate font-mono text-meta">
                   {files[0].path}
                 </span>
                 <span className="flex-none font-mono text-[0.625rem]">
@@ -357,7 +357,7 @@ export function AgentMergeStage({
 
       <div className="border-line-2 flex flex-wrap items-center justify-between gap-5 border-t pt-6">
         <div className="flex min-w-0 max-w-[52ch] flex-col gap-1.5">
-          <span className="text-fg-body text-[0.9375rem] font-semibold">What happens next?</span>
+          <span className="text-fg-body text-card-title font-semibold">What happens next?</span>
           {/*
             Neither of the two easy lies. Vibe does not deploy — it moves the
             default branch and reads it back. But "nothing happens" is equally

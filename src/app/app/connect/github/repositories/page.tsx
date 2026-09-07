@@ -78,7 +78,7 @@ export default async function ConnectGithubRepositoriesPage({
       <section className="flex max-w-[52rem] flex-col gap-5 py-4 sm:py-10">
         <div className="space-y-2">
           <p className="text-mint font-mono text-caption tracking-[0.12em] uppercase">Connect · Choose product</p>
-          <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">Which product should Vibe get to know?</h1>
+          <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">Which product should Vibe get to know?</h1>
           <p className="text-fg-muted text-body">
             From <span className="text-fg-body">{installation.accountLogin}</span>. You can connect one
             repository per project.

@@ -135,13 +135,11 @@ export function AgentFileActivity({
                 <span className="flex items-baseline justify-between gap-3">
                   <span className="text-fg-body text-body font-medium">{event.summary}</span>
                   {clock !== null && (
-                    <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
-                      {clock}
-                    </span>
+                    <span className="text-fg-meta flex-none font-mono text-meta">{clock}</span>
                   )}
                 </span>
                 {path !== null && (
-                  <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-[0.6875rem]">
+                  <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-meta">
                     {path}
                   </span>
                 )}
@@ -158,7 +156,7 @@ export function AgentFileActivity({
           it. Every event is here; the list simply opens.
         */
         <details className="group border-line-2 border-t pt-3.5">
-          <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-[0.8125rem]">
+          <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-ui">
             <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
             <span className="group-open:hidden">
               Show {remaining} more {remaining === 1 ? "change" : "changes"}
@@ -180,13 +178,13 @@ export function AgentFileActivity({
                       <span className="flex items-baseline justify-between gap-3">
                         <span className="text-fg-body text-body font-medium">{event.summary}</span>
                         {clock !== null && (
-                          <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
+                          <span className="text-fg-meta flex-none font-mono text-meta">
                             {clock}
                           </span>
                         )}
                       </span>
                       {path !== null && (
-                        <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-[0.6875rem]">
+                        <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-meta">
                           {path}
                         </span>
                       )}

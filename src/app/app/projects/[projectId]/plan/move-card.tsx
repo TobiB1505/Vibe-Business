@@ -131,7 +131,7 @@ export function MoveCard({
           <h2 className="text-fg text-headline leading-tight font-bold" aria-current="step">
             {opportunity.title}
           </h2>
-          <p className="text-fg-prose mt-2 text-base leading-relaxed">{opportunity.problem}</p>
+          <p className="text-fg-prose mt-2 text-lead leading-relaxed">{opportunity.problem}</p>
         </div>
 
         {opportunity.dependencies.length > 0 ? (

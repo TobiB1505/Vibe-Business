@@ -128,7 +128,7 @@ export function UnderstandingConfirm({
     <Surface level="section" padding="lg" className="w-full text-left">
       <form action={saveAction} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
-          <h3 className="text-fg text-base font-semibold">Tell Vibe what it got wrong</h3>
+          <h3 className="text-fg text-title font-semibold">Tell Vibe what it got wrong</h3>
           <p className="text-fg-muted text-body">
             Anything you write here outranks what Vibe worked out on its own, and it stays that way
             the next time Vibe looks at your product.

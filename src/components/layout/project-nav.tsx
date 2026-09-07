@@ -139,7 +139,7 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
               />
               <span className="whitespace-nowrap">{item.label}</span>
               {typeof item.status === "string" ? (
-                <span className="text-mint ml-auto inline-flex items-center gap-1.5 font-mono text-[0.65625rem] tracking-[0.1em] uppercase">
+                <span className="text-mint ml-auto inline-flex items-center gap-1.5 font-mono text-label tracking-[0.1em] uppercase">
                   <span
                     aria-hidden="true"
                     className="bg-mint shadow-dot-mint size-[5px] rounded-full motion-safe:animate-[vibe-soft-pulse_var(--duration-pulse)_var(--ease-vibe)_infinite]"
@@ -150,7 +150,7 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
                 typeof item.count === "number" && (
                 <span
                   className={cn(
-                    "ml-auto rounded-full px-2 py-0.5 font-mono text-[0.65625rem]",
+                    "ml-auto rounded-full px-2 py-0.5 font-mono text-label",
                     item.countTone === "accent"
                       ? "bg-mint-tint text-mint"
                       : "bg-surface-hover text-fg-prose",

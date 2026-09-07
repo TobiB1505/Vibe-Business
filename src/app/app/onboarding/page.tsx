@@ -39,7 +39,7 @@ export default async function NewProjectOnboardingPage() {
           <h1 className="text-fg max-w-[14ch] text-[2.75rem] leading-[1.02] font-semibold tracking-[-0.055em] text-balance sm:text-[4.5rem]">
             Show Vibe what you built.
           </h1>
-          <p className="text-fg-prose max-w-[58ch] text-base leading-relaxed sm:text-lg">
+          <p className="text-fg-prose max-w-[58ch] text-lead leading-relaxed">
             Vibe reads your product, works out the business around it, and tells you where to
             start. Connect the code you already built.
           </p>
@@ -52,7 +52,7 @@ export default async function NewProjectOnboardingPage() {
             characterising the permissions the App holds. */}
         <Surface level="card" padding="lg" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1.5">
-            <h2 className="text-fg text-lg font-semibold">Connect your code</h2>
+            <h2 className="text-fg text-title font-semibold">Connect your code</h2>
             <p className="text-fg-muted max-w-[44ch] text-body">
               GitHub will ask which repositories Vibe may access. You choose — Vibe only ever sees
               the ones you pick, and you can change that in GitHub at any time.

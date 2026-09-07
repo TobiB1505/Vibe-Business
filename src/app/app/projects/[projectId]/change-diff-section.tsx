@@ -105,7 +105,7 @@ export function ChangeDiffSection({
       {/* A direct child of the section, like every other panel's heading. The
           browser suite scopes each panel by exactly that relationship, so a
           heading nested inside a layout wrapper is a panel no test can name. */}
-      <h4 className="text-body font-medium text-fg-body">What changed</h4>
+      <h4 className="text-card-title font-medium text-fg-body">What changed</h4>
 
       {classification && (
         <div className="space-y-1">

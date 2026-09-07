@@ -141,7 +141,7 @@ function Shell({
         <MonoLabel as="h2" className="text-fg-secondary">
           {label}
         </MonoLabel>
-        <p className="text-fg max-w-[38ch] text-2xl leading-tight font-semibold tracking-[-0.03em]">
+        <p className="text-fg max-w-[38ch] text-moment font-semibold">
           {headline}
         </p>
         {children}
@@ -207,7 +207,7 @@ export function AuditWaitingHeader() {
       <MonoLabel as="h2" className="text-mint">
         Vibe needs you · Business audit waiting for you
       </MonoLabel>
-      <p className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em]">
+      <p className="text-fg max-w-[46ch] text-moment font-semibold">
         Vibe found the one part of the business only you can clarify.
       </p>
       <p className="text-fg-muted max-w-[58ch] text-body leading-relaxed">

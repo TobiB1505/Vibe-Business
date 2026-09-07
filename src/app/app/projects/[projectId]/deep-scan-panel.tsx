@@ -102,7 +102,7 @@ function Heading({ title, status }: { title: string; status?: string }) {
       {/* `h3`: the workspace section that wraps this panel owns the `h2`
           (UI-1), so this is a level below it. Two `h2`s with the same text
           inside one section made the outline claim two Deep Scans. */}
-      <h3 className="text-fg-body text-body font-medium">{title}</h3>
+      <h3 className="text-fg-body text-card-title font-medium">{title}</h3>
       {status && <span className="text-fg-muted text-caption">{status}</span>}
     </div>
   );
@@ -213,7 +213,7 @@ function LiveViewDialog({
         className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-line-2 bg-app p-4 focus:outline-none"
       >
         <div className="space-y-1">
-          <h3 id="deep-scan-dialog-title" className="text-body font-medium text-fg">
+          <h3 id="deep-scan-dialog-title" className="text-card-title font-medium text-fg">
             Sign in to your product
           </h3>
           <p id="deep-scan-dialog-description" className="text-caption text-fg-secondary">

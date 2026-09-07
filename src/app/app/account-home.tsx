@@ -146,7 +146,7 @@ export function AccountHome({
         <h1 className="text-fg text-headline sm:text-display font-bold tracking-[-0.04em] text-balance">
           {headline}
         </h1>
-        {projects.length > 0 && <p className="text-fg-muted text-base">{summary}</p>}
+        {projects.length > 0 && <p className="text-fg-muted text-lead">{summary}</p>}
       </header>
 
       {hero && (

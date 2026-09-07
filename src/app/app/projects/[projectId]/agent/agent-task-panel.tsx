@@ -119,8 +119,8 @@ export function AgentTaskPanel({
 
       <h2
         className={cn(
-          "text-fg leading-tight font-bold tracking-[-0.03em] text-balance",
-          summary ? "text-[1.625rem]" : compact ? "text-2xl" : "text-[2rem]",
+          "text-fg font-bold text-balance",
+          compact || summary ? "text-moment" : "text-headline",
         )}
         data-testid="agent-task-headline"
       >
@@ -129,7 +129,7 @@ export function AgentTaskPanel({
 
       <div className="flex flex-wrap items-center gap-3">
         {task.lens !== null && (
-          <span className="text-fg-body flex items-center gap-2.5 text-[0.9375rem] font-medium">
+          <span className="text-fg-body flex items-center gap-2.5 text-card-title font-medium">
             <svg
               viewBox="0 0 24 24"
               width="18"
@@ -165,8 +165,8 @@ export function AgentTaskPanel({
         className={cn(
           "text-fg-prose text-pretty",
           summary
-            ? "max-w-[56ch] text-[0.9375rem] leading-relaxed"
-            : "max-w-[46ch] text-base leading-relaxed",
+            ? "max-w-[56ch] text-lead leading-relaxed"
+            : "max-w-[46ch] text-lead leading-relaxed",
         )}
       >
         {task.problem}
@@ -180,7 +180,7 @@ export function AgentTaskPanel({
               <motion.li
                 key={`${step.kind}:${step.title}`}
                 data-testid={`agent-task-step-${step.kind}`}
-                className="text-fg-body flex items-center gap-3 text-[0.9375rem]"
+                className="text-fg-body flex items-center gap-3 text-card-title"
                 initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
@@ -192,7 +192,7 @@ export function AgentTaskPanel({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "flex size-5 flex-none items-center justify-center rounded-full border text-[11px]",
+                    "flex size-5 flex-none items-center justify-center rounded-full border text-meta",
                     step.kind === "delivery"
                       ? "border-mint-line bg-mint-tint text-mint"
                       : "border-line-3 text-fg-meta",
@@ -244,7 +244,7 @@ export function AgentTaskPanel({
             <path d="M18.5 15.5c.25 1.6 1.1 2.45 2.5 2.75-1.4.3-2.25 1.15-2.5 2.75-.25-1.6-1.1-2.45-2.5-2.75 1.4-.3 2.25-1.15 2.5-2.75Z" />
           </svg>
           <span className="flex flex-col gap-1.5">
-            <span className="text-fg-body text-[0.9375rem] font-semibold">Why this task?</span>
+            <span className="text-fg-body text-card-title font-semibold">Why this task?</span>
             <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">
               {task.whyNow}
             </span>

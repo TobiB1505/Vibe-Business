@@ -191,7 +191,7 @@ export function RepositoriesIndex({
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
-                <h2 className="text-fg text-base font-semibold">
+                <h2 className="text-fg text-title font-semibold">
                   {isConnected ? "GitHub connected" : "Connect GitHub"}
                 </h2>
                 {isConnected && <StatusPill tone="success">Connected</StatusPill>}
@@ -233,7 +233,7 @@ export function RepositoriesIndex({
           <span className="bg-mint-tint-soft text-mint rounded-card flex size-12 items-center justify-center">
             <RepositoriesIcon size={22} />
           </span>
-          <h2 className="text-fg mt-4 text-lg font-semibold">No repositories connected</h2>
+          <h2 className="text-fg mt-4 text-title font-semibold">No repositories connected</h2>
           <p className="text-fg-muted mt-2 max-w-md text-body leading-6">
             Connect a GitHub repository to create a product and give Vibe the bounded context it needs.
           </p>
@@ -245,7 +245,7 @@ export function RepositoriesIndex({
         <Surface level="panel" padding="none" className="overflow-hidden">
           <div className="border-line-2 flex flex-col gap-4 border-b p-5 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <h2 className="text-fg text-base font-semibold">Connected repositories</h2>
+              <h2 className="text-fg text-title font-semibold">Connected repositories</h2>
               <p className="text-fg-meta mt-1 text-caption">Stored connection details, without unverified live activity.</p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -441,7 +441,7 @@ export function RepositoriesIndex({
           ) : (
             <div className="flex min-h-56 flex-col items-center justify-center p-6 text-center" aria-live="polite">
               <SearchIcon size={22} className="text-fg-meta" />
-              <h3 className="text-fg mt-4 text-base font-semibold">No matching repositories</h3>
+              <h3 className="text-fg mt-4 text-title font-semibold">No matching repositories</h3>
               <p className="text-fg-muted mt-2 max-w-md text-body">Try another repository, product or branch name, or reset the visibility filter.</p>
               <button type="button" onClick={clearSearchAndFilters} className="text-mint hover:text-mint-hover mt-5 rounded-sm text-body font-semibold transition-interactive">Clear search and filters</button>
             </div>
@@ -450,7 +450,7 @@ export function RepositoriesIndex({
       )}
 
       <Surface level="section" padding="md">
-        <h2 className="text-fg text-base font-semibold">How repositories are used</h2>
+        <h2 className="text-fg text-title font-semibold">How repositories are used</h2>
         <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <TrustItem icon={<CodeIcon size={17} />} title="Bounded analysis" description="Vibe reads only the targeted context needed for product intelligence." />
           <TrustItem icon={<ProductsIcon size={17} />} title="Product context" description="Each repository belongs to one product workspace and its business evidence." />

@@ -133,7 +133,7 @@ export function StatusPill({
     <span
       className={cn(
         "inline-flex items-center gap-2 rounded-full border px-3 py-1",
-        "text-[0.65625rem] font-semibold tracking-[0.06em] uppercase",
+        "text-label font-semibold tracking-[0.06em] uppercase",
         TONE_CLASSES[tone],
         className,
       )}
@@ -158,7 +158,7 @@ export function RatingChip({ children, className }: { children: ReactNode; class
     <span
       className={cn(
         "bg-surface-hover border-line-4 text-fg-prose inline-flex items-center rounded-full border px-2.5 py-1",
-        "text-[0.65625rem] font-medium",
+        "text-label font-medium",
         className,
       )}
     >

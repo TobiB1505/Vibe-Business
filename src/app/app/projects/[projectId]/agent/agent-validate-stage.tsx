@@ -31,11 +31,11 @@ export function AgentValidateStage({
         <div className="flex min-w-0 flex-col gap-4">
           <MonoLabel className="text-mint">Stage 3 of 5</MonoLabel>
 
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em] text-balance">
+          <h3 className="text-fg text-moment font-bold text-balance">
             {running ? "Validating your changes" : "The checks Vibe ran"}
           </h3>
 
-          <p className="text-fg-prose max-w-[46ch] text-base leading-relaxed text-pretty">
+          <p className="text-fg-prose max-w-[46ch] text-lead leading-relaxed text-pretty">
             {running
               ? "Vibe is running checks in an isolated environment before showing you a preview."
               : "Each check ran in an isolated environment on this exact change, before any preview existed."}
@@ -57,7 +57,7 @@ export function AgentValidateStage({
               <path d="M13.2 2.5 4.8 13.2h6L10 21.5l8.4-10.7h-6l.8-8.3Z" />
             </svg>
             <span className="flex flex-col gap-1.5">
-              <span className="text-fg-body text-[0.9375rem] font-semibold">
+              <span className="text-fg-body text-card-title font-semibold">
                 What happens next?
               </span>
               <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">

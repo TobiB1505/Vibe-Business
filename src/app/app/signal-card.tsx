@@ -156,7 +156,7 @@ function ScoreChart({
         the `0` label down past the baseline it labels.
       */}
       <div className="relative h-36 pl-9">
-        <div className="text-fg-meta absolute inset-y-0 left-0 flex flex-col justify-between text-[0.6875rem] tabular-nums">
+        <div className="text-fg-meta absolute inset-y-0 left-0 flex flex-col justify-between text-meta tabular-nums">
           <span>100</span>
           <span>50</span>
           <span>0</span>
@@ -206,7 +206,7 @@ function NextMove({ project }: { project: DashboardProject }) {
       {move ? (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex min-w-0 flex-col gap-2">
-            <p className="text-fg text-lg font-semibold tracking-[-0.02em] text-balance">
+            <p className="text-fg text-title font-semibold text-balance">
               {move.title}
             </p>
             <p className="text-fg-prose max-w-[58ch] text-body leading-relaxed">{move.problem}</p>
@@ -312,7 +312,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
         >
           <ScoreRing score={project.score as number} />
           <div className="flex min-w-0 flex-col items-start gap-3">
-            <p className="text-fg text-xl font-semibold tracking-[-0.025em] text-balance">
+            <p className="text-fg text-moment font-semibold text-balance">
               {heading}
             </p>
             <TrendPill delta={series.delta} />
@@ -328,7 +328,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
         </div>
       ) : (
         <div className="flex flex-col items-start gap-4">
-          <p className="text-fg text-xl font-semibold">
+          <p className="text-fg text-moment font-semibold">
             {project.scoreState === "insufficient_coverage"
               ? "More evidence is needed"
               : "Your first signal is waiting"}

@@ -102,7 +102,7 @@ export function NeedsUserPanel({
 
         <h3
           id="needs-user-heading"
-          className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em] sm:text-2xl"
+          className="text-fg max-w-[46ch] text-moment font-semibold"
         >
           {question.prompt}
         </h3>

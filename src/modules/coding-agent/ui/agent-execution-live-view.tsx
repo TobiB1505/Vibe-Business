@@ -86,7 +86,7 @@ function ExecutionHeader({ model }: { model: AgentExecutionLiveModel }) {
     <Surface level="section" padding="md" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-fg-body text-lg font-medium">
+          <h2 className="text-fg-body text-title font-medium">
             {live ? "Building your change" : headline(operation.status)}
           </h2>
           {model.currentAction ? (

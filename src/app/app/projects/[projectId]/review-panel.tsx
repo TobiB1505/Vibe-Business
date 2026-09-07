@@ -195,7 +195,7 @@ export function ReviewPanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-body font-medium text-fg-body">Visual comparison</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Visual comparison</h4>
 
       {capturing ? (
         <div className="space-y-2">

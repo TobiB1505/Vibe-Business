@@ -101,7 +101,7 @@ export function ProductCard({ project }: { project: DashboardProject }) {
         </span>
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <h3 className="text-fg truncate text-body font-semibold" title={displayName}>
+          <h3 className="text-fg truncate text-card-title font-semibold" title={displayName}>
             {displayName}
           </h3>
           <p

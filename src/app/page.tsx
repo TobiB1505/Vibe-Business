@@ -84,7 +84,7 @@ export default function HomePage() {
             You built the product. Now build <span className="text-mint">the business.</span>
           </h1>
 
-          <p className="text-fg-prose max-w-[58ch] text-lg leading-relaxed text-balance">
+          <p className="text-fg-prose max-w-[58ch] text-lead leading-relaxed text-balance">
             Vibe Business understands what you built, finds what is holding the business back,
             prioritizes what to do next, and helps you execute it with AI.
           </p>
@@ -184,7 +184,7 @@ export default function HomePage() {
           </div>
           <div className="border-coral-line bg-coral-tint/30 rounded-card border p-6 sm:p-8">
             <MonoLabel className="text-coral">What matters now</MonoLabel>
-            <h3 className="text-fg mt-5 text-2xl font-semibold tracking-[-0.03em]">
+            <h3 className="text-fg mt-5 text-moment font-semibold">
               One prioritized move, not another report.
             </h3>
             <p className="text-fg-secondary mt-3 leading-relaxed">
@@ -321,14 +321,14 @@ export default function HomePage() {
                 }`}
               >
                 <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-fg text-xl font-semibold">{plan.name}</h3>
+                  <h3 className="text-fg text-title font-semibold">{plan.name}</h3>
                   {featured && (
                     <span className="text-mint rounded-full border border-mint-line bg-mint-tint px-3 py-1 text-caption font-semibold">
                       For active builders
                     </span>
                   )}
                 </div>
-                <p className="text-fg mt-7 text-4xl font-bold tracking-[-0.05em]">
+                <p className="text-fg mt-7 text-display font-bold">
                   {plan.priceCents === 0 ? "€0" : `€${plan.priceCents / 100}`}
                   <span className="text-fg-muted ml-2 text-body font-normal tracking-normal">
                     / month

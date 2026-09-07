@@ -56,7 +56,7 @@ export function AuthShell({
             * Styling is unchanged: it still renders as the hero line.
             */}
           <p className="text-fg text-hero font-bold text-balance">{headline}</p>
-          {intro && <p className="text-fg-secondary max-w-[38ch] text-base leading-relaxed">{intro}</p>}
+          {intro && <p className="text-fg-secondary max-w-[38ch] text-lead leading-relaxed">{intro}</p>}
           {assurances && assurances.length > 0 && (
             <ul className="text-fg-prose flex flex-col gap-3 text-body">
               {assurances.map((assurance) => (

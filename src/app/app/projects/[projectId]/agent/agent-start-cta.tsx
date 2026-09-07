@@ -82,7 +82,7 @@ export function AgentStartCta({
 
       {creditEstimate && forecastNotes && forecastNotes.length > 0 && (
         <ul
-          className="text-fg-muted flex w-full flex-col gap-1.5 text-[0.8125rem] leading-snug"
+          className="text-fg-muted flex w-full flex-col gap-1.5 text-ui leading-snug"
           data-testid="agent-run-forecast"
         >
           {forecastNotes.map((sentence) => (
@@ -111,7 +111,7 @@ export function AgentStartCta({
         )}
       </div>
 
-      <span className="text-fg-muted flex items-center gap-2 text-[0.8125rem]">
+      <span className="text-fg-muted flex items-center gap-2 text-ui">
         <svg
           viewBox="0 0 24 24"
           width="14"

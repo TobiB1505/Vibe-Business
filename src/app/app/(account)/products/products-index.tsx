@@ -157,7 +157,7 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
           className="flex min-h-52 flex-col items-center justify-center text-center"
         >
           <SearchIcon size={24} className="text-fg-meta" />
-          <h2 className="text-fg mt-4 text-base font-semibold">No matching products</h2>
+          <h2 className="text-fg mt-4 text-title font-semibold">No matching products</h2>
           <p className="text-fg-muted mt-2 max-w-md text-body">
             Try another search or reset the filter to see every connected product.
           </p>

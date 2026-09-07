@@ -42,7 +42,7 @@ function Finding({ finding }: { finding: HumanFinding }) {
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           <span aria-hidden className={`size-2 shrink-0 rounded-full ${TONE_DOT[finding.tone]}`} />
-          <h4 className="text-fg text-[0.9375rem] font-semibold">{finding.title}</h4>
+          <h4 className="text-fg text-card-title font-semibold">{finding.title}</h4>
           <MonoLabel className="tracking-[0.14em]">{TONE_WORD[finding.tone]}</MonoLabel>
         </div>
         {finding.whyItMatters && (

@@ -58,7 +58,7 @@ export function ChangeOrigin({
   return (
     <section className="space-y-3 border-t border-line-2 pt-4">
       <div className="space-y-1">
-        <h4 className="text-body font-medium text-fg-body">What this change was for</h4>
+        <h4 className="text-card-title font-medium text-fg-body">What this change was for</h4>
         {moveHref ? (
           <p className="text-body text-fg-prose">
             <StandaloneLink href={moveHref}>{origin.title}</StandaloneLink>

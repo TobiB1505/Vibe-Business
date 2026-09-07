@@ -65,7 +65,7 @@ function ConfirmDialog({
 }) {
   return (
     <div className="space-y-3 rounded-md border border-line-4 bg-surface-2 p-4">
-      <h4 className="text-body font-medium text-fg">Prepare {capabilityLabel}?</h4>
+      <h4 className="text-card-title font-medium text-fg">Prepare {capabilityLabel}?</h4>
       <div className="space-y-2 text-body text-fg-secondary">
         <p>Vibe will create an isolated GitHub branch and commit the proposed change.</p>
         <p>Your default branch and production site will not be changed.</p>

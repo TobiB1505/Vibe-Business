@@ -56,7 +56,7 @@ export function OnboardingAuditReveal({
       {blocker && (
         <section className="border-mint/30 bg-mint/[0.035] flex max-w-[50rem] flex-col gap-2 rounded-xl border p-5">
           <MonoLabel className="text-mint">What matters first</MonoLabel>
-          <h2 className="text-fg text-xl font-semibold">{blocker.headline}</h2>
+          <h2 className="text-fg text-moment font-semibold">{blocker.headline}</h2>
           <p className="text-fg-prose text-body leading-relaxed">{blocker.explanation}</p>
         </section>
       )}

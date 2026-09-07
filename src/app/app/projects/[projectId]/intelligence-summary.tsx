@@ -84,7 +84,7 @@ function Capability({
             {CAPABILITY_STATUS_LABELS[capability.status]}
           </StatusPill>
         </div>
-        <h4 className="text-fg text-[0.9375rem] font-semibold">{capability.title}</h4>
+        <h4 className="text-fg text-card-title font-semibold">{capability.title}</h4>
         <p className="text-fg-prose max-w-[70ch] text-body leading-relaxed">{capability.basis}</p>
         {capability.whyItMatters && (
           <p className="text-fg-muted max-w-[70ch] text-body leading-relaxed">

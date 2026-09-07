@@ -470,7 +470,7 @@ export function WorkspaceSection({
               {title}
             </h1>
             {description && (
-              <p className={cn("max-w-[70ch] text-[0.9375rem]", intelligence ? "text-fg-secondary" : "text-fg-muted")}>
+              <p className={cn("max-w-[70ch] text-lead", intelligence ? "text-fg-secondary" : "text-fg-muted")}>
                 {description}
               </p>
             )}

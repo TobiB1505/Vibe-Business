@@ -47,7 +47,7 @@ export default async function ChooseGithubAccountPage() {
       <section className="flex max-w-[48rem] flex-col gap-5 py-4 sm:py-10">
         <div className="space-y-2">
           <p className="text-mint font-mono text-caption tracking-[0.12em] uppercase">Connect · Product source</p>
-          <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">Where is the product you built?</h1>
+          <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">Where is the product you built?</h1>
           <p className="text-fg-muted text-body">
             You have connected more than one GitHub account or organization.
           </p>

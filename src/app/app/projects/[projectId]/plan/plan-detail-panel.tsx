@@ -325,7 +325,7 @@ function PlanBody({
             {moveEyebrow && (
               <MonoLabel className="text-amber tracking-[0.14em]">{moveEyebrow}</MonoLabel>
             )}
-            <h3 className="text-fg text-xl leading-tight font-semibold">Vibe needs your input</h3>
+            <h3 className="text-fg text-moment font-semibold">Vibe needs your input</h3>
             <p className="text-fg-muted text-body leading-relaxed">
               Answer the current question so Vibe can finish planning{" "}
               {moveTitle ? `“${moveTitle}”` : "this move"}.
@@ -357,7 +357,7 @@ function PlanBody({
           <Disclosure label={`See the full planned work · ${planMetaSummary(steps)}`}>
             <div className="flex flex-col gap-4">
               {plan.goal && (
-                <h4 className="text-fg text-body leading-snug font-semibold">{plan.goal}</h4>
+                <h4 className="text-fg text-card-title font-semibold">{plan.goal}</h4>
               )}
               {plan.whyNow && <ExpandableText text={plan.whyNow} />}
               {plannedSteps}
@@ -369,7 +369,7 @@ function PlanBody({
           <div className="flex flex-col gap-2">
             <p className="text-fg-muted text-ui">What Vibe plans to do</p>
             {plan.goal && (
-              <h3 className="text-fg text-base leading-snug font-semibold">{plan.goal}</h3>
+              <h3 className="text-fg text-card-title font-semibold">{plan.goal}</h3>
             )}
             <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
           </div>
@@ -544,7 +544,7 @@ function FounderActionCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
+        <h3 className="text-fg text-card-title font-semibold">{step.title}</h3>
         <p className="text-fg-prose text-body leading-relaxed">{step.description}</p>
         {prompt.lead && (
           <p className="text-fg-muted text-body leading-relaxed">{prompt.lead}</p>
@@ -760,7 +760,7 @@ export function PlanDetailPanel({
 
       {whyThisMove ? (
         <section className="border-line-2 flex flex-col gap-2 border-b pb-6" aria-labelledby="why-this-move">
-          <h3 id="why-this-move" className="text-fg text-base font-semibold">Why this move</h3>
+          <h3 id="why-this-move" className="text-fg text-title font-semibold">Why this move</h3>
           <ExpandableText text={whyThisMove} />
           {lineageHeadline ? (
             <p className="text-fg-muted text-caption leading-relaxed" data-testid="move-lineage">
@@ -783,7 +783,7 @@ export function PlanDetailPanel({
         >
           {running && operation ? (
             <div className="flex flex-col gap-4" role="status">
-              <h3 className="text-fg text-xl font-semibold">Generating planned work</h3>
+              <h3 className="text-fg text-moment font-semibold">Generating planned work</h3>
               <OperationProgress sequence="action_planning" operation={operation} />
             </div>
           ) : planView ? (
@@ -806,7 +806,7 @@ export function PlanDetailPanel({
             </Notice>
           ) : executionOwnsPrimary ? (
             <div className="flex flex-col gap-1.5">
-              <h3 className="text-fg text-xl font-semibold">Ready for the next step</h3>
+              <h3 className="text-fg text-moment font-semibold">Ready for the next step</h3>
               <p className="text-fg-prose text-body leading-relaxed">
                 Vibe has enough grounded context to act on this Move. Review the action below
                 before anything is prepared.
@@ -815,7 +815,7 @@ export function PlanDetailPanel({
           ) : (
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <h3 className="text-fg text-xl font-semibold">Plan the work</h3>
+                <h3 className="text-fg text-moment font-semibold">Plan the work</h3>
                 <p className="text-fg-prose text-body leading-relaxed">
                   {moveTitle
                     ? `Vibe can work out how to do “${moveTitle}” — what changes, who owns each part, and where to start.`

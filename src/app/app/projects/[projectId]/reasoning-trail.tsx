@@ -103,7 +103,7 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
           terminus of the arrow, and the whole section exists to show that these
           many observations resolve into this one sentence.
         */}
-        <p className="text-fg max-w-[62ch] text-[0.9375rem] leading-relaxed">
+        <p className="text-fg max-w-[62ch] text-lead leading-relaxed">
           {conclusion.headline}
         </p>
 

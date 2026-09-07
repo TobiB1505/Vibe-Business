@@ -220,7 +220,7 @@ export function MergePanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-body font-medium text-fg-body">Merge</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Merge</h4>
 
       {confirming ? (
         <MergeDialog

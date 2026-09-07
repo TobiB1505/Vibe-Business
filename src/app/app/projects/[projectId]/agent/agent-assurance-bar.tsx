@@ -99,7 +99,7 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
             </svg>
           </span>
           <span className="flex min-w-0 flex-col gap-1">
-            <span className="text-fg-body text-[0.8125rem] font-semibold">{item.title}</span>
+            <span className="text-fg-body text-ui font-semibold">{item.title}</span>
             <span className="text-fg-muted max-w-[30ch] text-caption leading-relaxed">
               {item.detail}
             </span>

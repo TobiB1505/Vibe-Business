@@ -264,7 +264,7 @@ export function ValidationPanel({
       {/* "Safety checks" rather than "Validation" (Sprint UI-3.5). The
           internal vocabulary is unchanged — the stored status is still
           `passed`/`failed`, and it is shown verbatim in the details below. */}
-      <h4 className="text-body font-medium text-fg-body">Safety checks</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Safety checks</h4>
 
       {running ? (
         <div className="space-y-3">

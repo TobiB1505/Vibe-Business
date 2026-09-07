@@ -622,7 +622,7 @@ function DiscoveringPanel({
   return (
     <aside className="flex h-[31rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-body font-semibold text-fg">What we&apos;re discovering</h3>
+        <h3 className="text-card-title font-semibold text-fg">What we&apos;re discovering</h3>
         <SparklesIcon size={17} className="text-mint" />
       </div>
 
@@ -711,7 +711,7 @@ function LiveActivity({
         <span
           className={`size-2 rounded-full ${active ? "bg-mint shadow-[0_0_10px_var(--color-mint)]" : "bg-mint/70"}`}
         />
-        <h3 className="text-body font-semibold text-fg">Live activity</h3>
+        <h3 className="text-card-title font-semibold text-fg">Live activity</h3>
       </div>
       <ol className="mt-3 grid flex-1 grid-rows-8 overflow-hidden">
         {visibleEvents.length ? (
@@ -769,7 +769,7 @@ function DiscoveriesGrid({
   return (
     <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-body font-semibold text-fg">What we&apos;ve discovered so far</h3>
+        <h3 className="text-card-title font-semibold text-fg">What we&apos;ve discovered so far</h3>
         <span className="rounded-full border border-mint/25 bg-mint/[0.06] px-2.5 py-1 font-mono text-[0.66rem] text-mint">
           {found} found
         </span>
@@ -1049,10 +1049,7 @@ export function ProductScanExperience({
               </span>
               <div className="min-w-0 flex-1">
                 <MonoLabel className="text-mint">Product scan · complete</MonoLabel>
-                <h2
-                  id="product-scan-title"
-                  className="mt-1 text-lg font-semibold tracking-[-0.02em] text-fg"
-                >
+                <h2 id="product-scan-title" className="mt-1 text-title font-semibold text-fg">
                   Your product picture is ready
                 </h2>
                 <p className="mt-1 text-caption text-fg-muted">
@@ -1089,11 +1086,11 @@ export function ProductScanExperience({
                 </MonoLabel>
                 <h2
                   id="product-scan-title"
-                  className="mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl"
+                  className="mt-2 text-balance text-display font-semibold text-fg"
                 >
                   Understanding <span className="text-mint">your product</span>
                 </h2>
-                <p className="mt-2 max-w-2xl text-body leading-6 text-fg-muted sm:text-base">
+                <p className="mt-2 max-w-2xl text-body leading-6 text-fg-muted">
                   Vibe is learning what you built, how it works, and what kind of business it could
                   become.
                 </p>
