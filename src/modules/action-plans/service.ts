@@ -422,6 +422,100 @@ export type ActionPlanView = {
   openFounderInputCount: number;
 };
 
+/**
+ * The plan as a checklist, and nothing else.
+ *
+ * ## Why this exists beside `getLatestActionPlan`
+ *
+ * That one answers everything the Action Plan page asks — staleness against
+ * four other artefacts, the open question for the current step, how many
+ * questions the plan has outstanding — and costs nine reads to do it. Nova's
+ * rail asks one question: *what is the sequence, and where in it are we.*
+ *
+ * So this reads the plan and the three pieces of completion evidence, and
+ * derives the rest with the same functions the page uses — `completedStepsFromEvidence`,
+ * `satisfiedStepsFromEvidence`, `absorptionByStepOrder`, `firstActionableStep`.
+ * Four reads rather than nine, and no second opinion about what "done" means:
+ * a rail that computed completion its own way is a rail that would eventually
+ * disagree with the page it summarises.
+ *
+ * Null when no plan has completed. Not an empty checklist — a project with no
+ * plan has no sequence, and a list of nothing would read as a plan with every
+ * step finished.
+ */
+export type ActionPlanChecklist = {
+  steps: ActionPlanStep[];
+  /** What could genuinely happen next, or null when nothing can. */
+  firstActionableOrder: number | null;
+  /** Carried out. The narrow set, exactly as the page means it. */
+  completedStepOrders: number[];
+  /** Covered step order → the order of the step whose run absorbed it. */
+  absorbedByStepOrder: Record<number, number>;
+};
+
+/**
+ * What a plan's steps have to show for themselves, read once.
+ *
+ * ## Why this is a shape rather than an answer
+ *
+ * Two callers ask different questions of the same three tables. The rail asks
+ * *where is the founder in the sequence*; the execution resolver asks *which
+ * step could Vibe build next*, and its answer is deliberately stricter — a
+ * step absorbed by a change counts as satisfied for routing only once that
+ * change is on the default branch, which the rail does not require to draw a
+ * ticked box.
+ *
+ * So the derivations stay separate and the *reads* are shared. Before this,
+ * one load of Nova Home read these three tables twice and the plan itself
+ * twice, for two answers neither of which could be computed from the other.
+ */
+export type PlanEvidence = {
+  founderResolutions: Awaited<ReturnType<typeof listActiveFounderResolutions>>;
+  agentEvidence: Awaited<ReturnType<typeof listStepExecutionEvidence>>;
+  founderActionEvidence: Awaited<ReturnType<typeof listFounderActionCompletionEvidence>>;
+};
+
+export async function readPlanEvidence(
+  supabase: SupabaseClient,
+  params: { projectId: string; actionPlanId: string },
+): Promise<PlanEvidence> {
+  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+    listActiveFounderResolutions(supabase, params.projectId),
+    listStepExecutionEvidence(supabase, params),
+    listFounderActionCompletionEvidence(supabase, params),
+  ]);
+
+  return { founderResolutions, agentEvidence, founderActionEvidence };
+}
+
+/**
+ * The rail's checklist, from evidence somebody already read.
+ *
+ * Pure, so the projection can be tested without a database and so a caller
+ * that has the evidence in hand pays nothing to ask this second question.
+ */
+export function checklistFromEvidence(
+  steps: ActionPlanStep[],
+  evidence: PlanEvidence,
+): ActionPlanChecklist {
+  const completed = completedStepsFromEvidence(
+    steps,
+    evidence.founderResolutions,
+    evidence.agentEvidence.completion,
+    evidence.founderActionEvidence,
+  );
+  const satisfied = satisfiedStepsFromEvidence(completed, evidence.agentEvidence.absorbed);
+
+  return {
+    steps,
+    firstActionableOrder: firstActionableStep(steps, satisfied)?.order ?? null,
+    completedStepOrders: [...completed],
+    absorbedByStepOrder: Object.fromEntries(
+      absorptionByStepOrder(completed, evidence.agentEvidence.absorbed),
+    ),
+  };
+}
+
 export async function getLatestActionPlan(
   supabase: SupabaseClient,
   projectId: string,

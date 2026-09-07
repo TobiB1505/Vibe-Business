@@ -419,8 +419,8 @@ export function buildNovaFeed(focus: NovaFocus): NovaEntry[] {
   if (focus.working !== null) {
     entries.push({
       kind: "nova.progress",
-      id: `progress:${focus.working.operationId}`,
-      operation: focus.working,
+      id: `progress:${focus.working.view.operationId}`,
+      operation: focus.working.view,
     });
   }
 

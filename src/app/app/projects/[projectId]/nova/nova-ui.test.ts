@@ -37,10 +37,8 @@ describe("Nova Home", () => {
     for (const name of [
       "nova-home.tsx",
       "nova-focus-thread.tsx",
-      "attention-stack.tsx",
-      "working-strip.tsx",
-      "product-identity.tsx",
-      "health-score.tsx",
+      "nova-rail.tsx",
+      "nova-header-live.tsx",
     ]) {
       expect(component(name), name).not.toBe("");
     }
@@ -56,13 +54,13 @@ describe("Nova Home", () => {
 
     it("renders a price through the one component that resolves it", () => {
       /*
-       * `ActionBlock` renders `CostDisclosure`, which resolves the retail kind
-       * to a figure. No screen formats Credits by hand.
+       * `CostDisclosure` resolves a retail kind to a figure, and it is the
+       * only thing that does. No screen formats Credits by hand.
        *
-       * It moved from the Focus Card to Home when the card became a thread:
-       * the thread has no equivalent, so the control slot carries it — and the
-       * price stays above the button rather than inside the consequence
-       * disclosure, which is the rule the component exists to hold.
+       * Where it renders moved: it used to be a line above the button, and it
+       * is now inside the control, because `study-move` chose the design where
+       * cost and action are one object. `ActionBlock` stays for the
+       * consequence disclosure.
        */
       expect(component("nova-home.tsx")).toContain("<ActionBlock");
       for (const { name, body } of FILES) {
@@ -71,13 +69,38 @@ describe("Nova Home", () => {
       }
     });
 
+    it("carries the price on the control, and only there", () => {
+      /*
+       * One commitment, one object. `ActionBlock` would render a second copy
+       * of the same figure above the same button if it were given `operation`
+       * as well, which is the two-objects-for-one-decision shape the Move was
+       * chosen to end.
+       */
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/<NovaServerActionControl[\s\S]*?operation=\{meta\.price\}/);
+      expect(home).not.toMatch(/<ActionBlock\s+operation=/);
+    });
+
     it("never hides the price behind the consequence disclosure", () => {
-      // `ActionBlock` renders the cost inline and the consequence in a
-      // `Disclosure`. Nova passes `operation` for the price and
-      // `consequence` for the prose — never the price as the prose.
+      // Nova passes `operation` for the price and `consequence` for the prose
+      // — never the price as the prose. A price a founder has to expand to see
+      // is a price disclosed after the decision.
       const home = component("nova-home.tsx");
       expect(home).toContain("operation={meta.price}");
       expect(home).not.toMatch(/consequence=\{[^}]*price/);
+    });
+
+    /*
+     * The chosen Move, not the filled mint block every earlier study drew.
+     * `study-move` compared three in all four states and B won on the ground
+     * that emphasis should come from luminance rather than from area of
+     * accent — which is the chosen direction's own sentence.
+     */
+    it("presses through the Move rather than a generic button", () => {
+      const control = component("nova-control.tsx");
+      expect(control).toContain("NovaMoveButton");
+      expect(control).toContain("NovaMoveLink");
+      expect(control).not.toMatch(/<Button\b|buttonClasses\(/);
     });
   });
 
@@ -133,8 +156,20 @@ describe("Nova Home", () => {
       }
     });
 
-    it("resolves citations through the shared resolver", () => {
-      expect(component("nova-home-data.ts")).toContain("describeEvidenceId");
+    /*
+     * Home used to resolve citations itself, for a finding card it rendered
+     * under the business score. Both are gone: the score belongs to Business
+     * Health and the audit's own blocker is inside the audit block, which is
+     * the shipped component and resolves its own evidence.
+     *
+     * So the assertion inverts. Home holds no evidence resolver of its own,
+     * because a second one is how two surfaces come to describe one id
+     * differently.
+     */
+    it("resolves no evidence itself", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toContain("describeEvidenceId");
+      }
     });
 
     /**
@@ -201,15 +236,113 @@ describe("Nova Home", () => {
       expect(stack).not.toMatch(/<Button|<form|ActionBlock|CostDisclosure/);
     });
 
-    it("is a column rather than a dashboard grid", () => {
-      expect(component("nova-home.tsx")).toContain("flex flex-col");
-      expect(component("nova-home.tsx")).not.toMatch(/grid-cols-[2-9]/);
+    /*
+     * Two columns, not a grid of tiles, and the distinction is the whole
+     * point. The rail is the work and the thread is the conversation; they are
+     * different *kinds* of thing at different widths, which is why one is
+     * fixed at 300px and the other takes what is left.
+     *
+     * A symmetric grid is the shape the audit found and this design replaced:
+     * six equal doors on arrival, with nothing saying which to open. So the
+     * check is that no equal-column grid appears, rather than that no grid
+     * does.
+     */
+    it("is a rail and a thread, never a grid of equal tiles", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("lg:grid-cols-[300px_1fr]");
+      expect(home).not.toMatch(/grid-cols-[2-9]\b/);
+      expect(home).not.toMatch(/grid-cols-(?:repeat|\[repeat)/);
+    });
+
+    /*
+     * The status row is chrome and stays while the thread scrolls, which is
+     * what `sticky top-0` on it is for. A sticky element can only stick within
+     * its own containing block, so a wrapper that hugs it — an entrance
+     * animation, say — is a wrapper with no room to stick in, and the header
+     * leaves with the thread. It shipped that way once.
+     */
+    it("does not wrap the sticky header in anything that hugs it", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/<NovaHeaderLive/);
+      expect(home).not.toMatch(/<NovaRise[^>]*>\s*<NovaHeaderLive/);
+    });
+
+    /*
+     * And the rail goes second on a phone. A founder who opens this on a phone
+     * came for what Nova says; the plan and the log above it means scrolling
+     * past everything to reach the one thing that speaks.
+     */
+    it("puts the conversation first on a narrow screen", () => {
+      expect(component("nova-home.tsx")).toContain("max-lg:order-2");
+      expect(component("nova-home.tsx")).toContain("max-lg:order-1");
     });
 
     it("has no chat input anywhere", () => {
       for (const { name, body } of FILES) {
         expect(body, name).not.toMatch(/<textarea|type="text"|placeholder=/);
       }
+    });
+  });
+
+  /**
+   * A block is chosen by the registry, never at the call site.
+   *
+   * `BLOCK_FOR_MOMENT` is total over every moment the domain can raise, so a
+   * new one fails the build until somebody decides what a founder sees. A
+   * screen that picked its own block would be a second answer to that
+   * question, and the two would disagree the first time either moved.
+   */
+  describe("the blocks", () => {
+    it("asks the registry which block a moment gets", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("BLOCK_FOR_MOMENT");
+      expect(home).toContain("<AuditBlock");
+      expect(home).toContain("<MoveBlock");
+    });
+
+    /*
+     * The run's block belongs to the *run* rather than to the moment, and the
+     * other registry picks it. This used to be the progress checklist and
+     * nothing else, so twelve of the fifteen operation types ran behind a
+     * blank column.
+     */
+    it("asks the registry which block a running operation gets", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toContain("BLOCK_FOR_OPERATION");
+      expect(home).toContain("<ProgressBlock");
+      expect(home).toContain("<ScanBlock");
+    });
+
+    /*
+     * The stage list comes from `progressSequenceFor` by way of
+     * `novaWorkingEntry`. A screen free to pass either one is a screen free to
+     * draw the planning rows while an opportunity run is going.
+     */
+    it("never names a progress sequence at a call site", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toMatch(/sequence=\{"(action_planning|opportunity_generation)"\}/);
+      }
+      expect(component("nova-home.tsx")).toContain("working.sequence");
+    });
+
+    /*
+     * The thread frames blocks and chooses none. Both registries are read
+     * where the data is, which is what keeps the thread renderable from a
+     * study with fixtures.
+     */
+    it("leaves the choice of block out of the thread", () => {
+      const thread = component("nova-focus-thread.tsx");
+      expect(thread).not.toContain("BLOCK_FOR_OPERATION");
+      expect(thread).not.toMatch(/<ProgressBlock|<ScanBlock|<AuditBlock|<MoveBlock/);
+    });
+
+    /*
+     * A scan that is still running has written no profile, so there is no
+     * reading to put under it. Carrying an earlier one in would show a founder
+     * last week's answer beneath a live progress line.
+     */
+    it("shows no reading under a scan that is still running", () => {
+      expect(component("nova-home.tsx")).toContain("presentation={null}");
     });
   });
 
@@ -238,16 +371,32 @@ describe("Nova Home", () => {
   });
 
   describe("honest absence", () => {
-    it("renders a missing score through the one function that knows n/a", () => {
-      const health = component("health-score.tsx");
-      expect(health).toContain("scoreDisplay");
-      // Never a zero standing in for "nothing was measurable".
-      expect(health).not.toMatch(/score\s*\?\?\s*0|score\s*\|\|\s*0/);
+    /*
+     * Home used to render the business score, and these two assertions were
+     * about the shapes it had to keep honest: never a zero standing in for
+     * "nothing was measurable", and a never-audited project distinct from an
+     * unscored one. Home renders no score at all now — Business Health owns
+     * the reading — so the strongest thing to check here is that it did not
+     * grow one back, in prose or in a figure.
+     *
+     * Rule 44 itself is enforced where the number lives, and is tested there.
+     */
+    it("states no score of its own", () => {
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toMatch(/scoreDisplay|<HealthScore|overall\.score/);
+      }
     });
 
-    it("keeps a never-audited project distinct from an unscored one", () => {
-      expect(component("health-score.tsx")).toContain("HealthScoreAbsent");
-      expect(component("nova-home.tsx")).toContain("HealthScoreAbsent");
+    /*
+     * The thread's version of the same refusal. `deriveNovaFocus` decides what
+     * leads, and every sentence it produces comes from the feed's table — so a
+     * template literal building one here would be Home writing copy the domain
+     * did not.
+     */
+    it("writes none of Nova's sentences itself", () => {
+      const thread = component("nova-focus-thread.tsx");
+      expect(thread).toContain("entry.message");
+      expect(thread).not.toMatch(/`[^`]*\$\{entry\.(kind|tier)\}/);
     });
 
     it("offers no control when there is nothing to do", () => {
@@ -258,18 +407,21 @@ describe("Nova Home", () => {
 
   describe("status", () => {
     it("takes every word from the shared vocabulary", () => {
-      for (const name of ["working-strip.tsx", "attention-stack.tsx", "nova-focus-thread.tsx"]) {
+      for (const name of ["nova-focus-thread.tsx", "nova-home.tsx"]) {
         expect(component(name), name).toMatch(/statusFor(OperationPhase|FocusTier|Candidate)/);
       }
     });
 
     it("never depends on colour alone", () => {
-      // Every tone in this slice is rendered by a component that also prints
-      // the word: `StatusPill` takes children, `StatusDot` is aria-hidden and
-      // is always paired with one here.
-      const strip = component("working-strip.tsx");
-      expect(strip).toContain("status.word");
-      expect(component("attention-stack.tsx")).toContain("status.word");
+      /*
+       * The one dot left on this screen is the header's, and it is
+       * `aria-hidden` with the state's word beside it — the header takes both
+       * as one `status` object, so a tone cannot arrive without the sentence
+       * that explains it.
+       */
+      const header = component("nova-header-live.tsx");
+      expect(header).toMatch(/word:|resting/);
+      expect(header).toContain("stageLabel");
     });
   });
 });

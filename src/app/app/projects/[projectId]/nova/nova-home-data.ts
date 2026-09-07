@@ -1,12 +1,28 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { EvidenceCitation } from "@/components/system/evidence-drawer";
 import type { CostBalance } from "@/components/system/cost-disclosure";
-import type { FindingSeverity } from "@/components/system/finding-card";
-import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import type { AuditEvidence } from "@/modules/business-audit/service";
+import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
+import type { AuditSynthesis } from "@/modules/business-audit/schema";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
+import { situationAside } from "@/modules/nova/briefing/aside";
+import type { NovaSituation } from "@/modules/nova/briefing/situation";
+import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
+import type { FocusCandidateKind } from "@/modules/nova/focus";
+import { buildNovaAuditEntry } from "@/modules/nova/feed";
+import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
+import { readNovaMoveVoice } from "@/modules/nova/voice/move-slot";
+import { readSituation } from "@/modules/operations/nova-situation";
+import type { PrimaryGoal } from "@/modules/projects/founder-intent";
+import type { ActionPlanChecklist } from "@/modules/action-plans/service";
+import { getMoveWithExecution } from "@/modules/execution/service";
+import type { OpportunityActionState } from "@/modules/execution/view";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
+import { listAuditEventsForProject } from "@/modules/audit-log/queries";
+import { BLOCK_FOR_OPERATION } from "@/modules/nova/blocks";
+import { getProductScanEvents } from "@/modules/product-scan/store";
+import type { ProductScanEvent } from "@/modules/product-scan/schema";
+import { buildActivityFeed, type ActivityEntry } from "@/modules/audit-log/view";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { WorkspaceCandidate } from "@/modules/validation/profile";
@@ -16,17 +32,8 @@ import {
   type PreparedChangeWorkspaceItem,
 } from "@/modules/execution/workspace";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
-import type { BusinessOpportunity } from "@/modules/opportunities/schema";
-import type { PrimaryGoal } from "@/modules/projects/founder-intent";
-import { situationAside } from "@/modules/nova/briefing/aside";
-import { readBriefing } from "@/modules/nova/briefing/read";
-import type { NovaSituation } from "@/modules/nova/briefing/situation";
-import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
-import type { FocusCandidateKind } from "@/modules/nova/focus";
-import { buildNovaAuditEntry } from "@/modules/nova/feed";
-import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
-import { readNovaMoveVoice } from "@/modules/nova/voice/move-slot";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
+import { readNovaHomeReading } from "@/modules/nova/read";
 import {
   buildBusinessBrainView,
   type BusinessBrainView,
@@ -41,32 +48,45 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * ## Why the reads are counted
  *
  * This is the most-visited route in the product, and the audit's own risk note
- * for this slice was the read count on it. So the shape is deliberate: one
- * awaited briefing read, then a short concurrent wave, none of which fans out
- * per candidate — and then at most one conditional read, decided by what the
- * ranking put first and described on `question`, `change` and
- * `workspaceCandidates` below. Those three are mutually exclusive by
- * construction: one primary candidate is one moment, and each belongs to a
- * different set of kinds.
+ * for this slice was the read count on it. So the shape is deliberate: five
+ * concurrent reads, none of which fans out per candidate — and then at most
+ * two conditional reads, in one batch, answering two different questions.
  *
- * 0. `readBriefing` — the six evidence documents, the ranking, the Move set,
- *    the currency judgements and the founder's name, assembled once. It hands
- *    the evidence and the focus back, so the score and the ranking below cost
- *    nothing more (VB-022). Awaited first for the reason Business Health
- *    awaits its evidence first: one round trip's latency buys back eight.
- * 1. The product's identity row — three columns, one project.
- * 2. The balance — `getHeaderCreditBalance`, which is documented as the one
+ * Four of them answer *what did the ranking put first*, and are described on
+ * `question`, `change`, `workspaceCandidates` and `move` below. They are
+ * mutually exclusive by construction: one primary candidate is one moment, and
+ * each of the four belongs to a different set of kinds.
+ *
+ * The fifth answers *what is running*, which is a different question and can
+ * be true at the same time as any of the four — a scan can be in flight while
+ * the moment that leads is a change to review. It is `scanEvents`, and it is
+ * why the count above says two rather than one.
+ *
+ * One of the five arrived with the rail and was weighed rather than assumed:
+ * the event log, one query for six rows. The rail's checklist is not a sixth —
+ * it comes back from `readNovaHomeReading` with the ranking, for the reason
+ * below.
+ *
+ * ## The overlap that was here, and is not any more
+ *
+ * On a project with a plan this route briefly read the plan twice and its
+ * three evidence tables twice: once to answer *which step could Vibe build*
+ * and once to answer *where is the founder in the sequence*.
+ *
+ * The answers still differ — an absorbed step counts as satisfied for routing
+ * only once the change that absorbed it is merged, which the rail does not
+ * require to draw a ticked box — so the derivations stayed apart and the reads
+ * came together. `readNovaHomeReading` makes them once and returns both, which
+ * is why the checklist arrives from there rather than from a call of its own.
+ *
+ * 1. `readNovaFocus` — already batches its own eight queries internally and is
+ *    the *only* place the ranking is decided.
+ * 2. The product's identity row — three columns, one project.
+ * 3. The latest audit — a stamp, then that one document. Not the sixty-reading
+ *    trend, which is Business Health's and draws a chart Home does not have.
+ * 4. The balance — `getHeaderCreditBalance`, which is documented as the one
  *    billing read a per-page surface may make. Never `getBillingOverview`,
  *    which repairs on read.
- * 3. Then, and only when the ranking put one of three moments first, the one
- *    subject that moment needs: the open question, the prepared change, or the
- *    applications to choose between.
- *
- * The latest audit is not read at all — it arrives inside the evidence, which
- * is two queries fewer than the stamp-then-document pair this used to make,
- * and it is now the same audit the briefing's chain judges. Not the
- * sixty-reading trend, which is Business Health's and draws a chart Home does
- * not have.
  *
  * ## What it deliberately does not carry
  *
@@ -89,37 +109,18 @@ export type NovaProductIdentity = {
   understood: "confirmed" | "unconfirmed" | "not_read";
 };
 
-export type NovaPriorityFinding = {
-  headline: string;
-  explanation: string;
-  whyItMatters: string | null;
-  severity: FindingSeverity;
-  citations: EvidenceCitation[];
-};
-
-export type NovaHealth = {
-  /**
-   * The audit's own reading, kept rather than discarded.
-   *
-   * `buildBusinessBrainView` was already being called to produce the four
-   * numbers below and then thrown away, which meant Home held the whole map
-   * and rendered a score. The thread shows it when the audit is the moment,
-   * and the read did not grow by a row.
-   */
-  view: BusinessBrainView;
-  score: number | null;
-  stateLabel: string;
-  scoredLenses: number;
-  eligibleLenses: number;
-  insufficientCoverageReason: string | null;
-  priority: NovaPriorityFinding | null;
-};
-
 export type NovaHomeData = {
   view: NovaHomeView;
   identity: NovaProductIdentity;
-  /** Null when no audit has ever completed — not a score of zero. */
-  health: NovaHealth | null;
+  /**
+   * The audit's own reading, or null when none has ever completed.
+   *
+   * Not a score of zero — nothing has been measured. It used to be six fields
+   * projected out of this view for a panel Home no longer has, and the file's
+   * own rule applied: a number nothing renders is a read nobody can see going
+   * stale. So the view travels whole and the audit block draws it.
+   */
+  audit: BusinessBrainView | null;
   /** Null when the account has no Credit account yet. */
   balance: CostBalance | null;
   /**
@@ -182,6 +183,52 @@ export type NovaHomeData = {
    * interpolated into a href, a class, or anything a browser would execute.
    */
   workspaceCandidates: readonly WorkspaceCandidate[];
+  /**
+   * The Move to read, when the ranking put one first.
+   *
+   * The third of the conditional reads, and the one with an argument behind
+   * its execution half: `MoveCard` reads a null execution as "no executor
+   * summary exists" and says so, which would be a guess if nobody had looked.
+   * `getMoveWithExecution` looks, with the builder the Action Plan uses, and a
+   * Move that genuinely has no summary still resolves to null.
+   */
+  move: { opportunity: BusinessOpportunity; execution: OpportunityActionState | null } | null;
+  /**
+   * The running scan's own event stream, for the block that watches it.
+   *
+   * Empty unless a Product Scan is in flight. `ProductScanExperience` polls
+   * from there on and refreshes this route when the run lands, so this is the
+   * first frame rather than the whole story — and it is deliberately the same
+   * read the product page makes, because the thread composes that component
+   * rather than reproducing it.
+   *
+   * There is no presentation beside it. A presentation is built from a
+   * completed profile, and a run that is still going has not written one; the
+   * component's own poll supplies it the moment it exists. Passing a stale one
+   * would be showing a founder last week's reading under a live progress line.
+   */
+  scanEvents: ProductScanEvent[];
+  /**
+   * The plan as a sequence, for the rail. Null when no plan has completed.
+   *
+   * No reads of its own: `readNovaHomeReading` already fetched the plan and
+   * its evidence to answer which step Vibe could build, and this is the second
+   * answer from the same rows. It derives completion with the Action Plan
+   * page's own functions, so the summary and the page cannot come to
+   * disagree — and it asks nothing about staleness or open questions, which
+   * are the five reads that make the page's own call cost nine.
+   */
+  checklist: ActionPlanChecklist | null;
+  /**
+   * What has already happened, oldest last.
+   *
+   * The event log, which has existed since the audit trail shipped and which
+   * no founder-facing surface but Settings has ever rendered. It is the only
+   * half of this screen that is a *record*: everything else is re-derived on
+   * every load and carries no timestamp, because a sentence computed now was
+   * never sent at any particular time.
+   */
+  activity: ActivityEntry[];
 };
 
 type IdentityRow = {
@@ -268,36 +315,23 @@ async function readWorkspaceCandidates(
 }
 
 /**
- * A citation, resolved to the sentence a founder reads.
+ * The audit's reading, whole.
  *
- * The id never leaves this function. `describeEvidenceId` is the same resolver
- * the Business Brain uses, so the drawer on Home and the evidence on Business
- * Health say the same thing about the same id.
+ * A stamp, then that one document, then the module's own view boundary —
+ * never the sixty-reading trend, which is Business Health's and draws a chart
+ * Home does not have, and never the per-conclusion Move counts, which are the
+ * Action Plan's. `buildBusinessBrainView` treats both as empty.
  */
-function citation(id: string): EvidenceCitation {
-  const described = describeEvidenceId(id);
-  return { detail: described.detail, source: described.source, certainty: described.certainty };
-}
+async function readAudit(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<{ view: BusinessBrainView; synthesis: AuditSynthesis } | null> {
+  const stamp = await getLatestAuditStamp(supabase, projectId);
+  if (!stamp) return null;
 
-/**
- * The business reading, from the audit the evidence read already holds.
- *
- * It used to fetch its own — a stamp, then that document by id — which was two
- * queries for the row `readAuditEvidence` returns as `latestAudit`. Now that
- * the briefing needs the evidence anyway, taking the audit from it is two
- * reads back rather than two more, and it removes the way the two could
- * disagree: Home's score and Home's briefing are the same audit by
- * construction.
- */
-function buildHealth(latestAudit: AuditEvidence["latestAudit"]): NovaHealth | null {
-  const stored = latestAudit;
-  if (!stored?.result) return null;
+  const stored = await getProjectAuditById(supabase, { projectId, auditId: stamp.id });
+  if (!stored?.result?.synthesis) return null;
 
-  /*
-   * No readings and no moves. Home draws no trend and offers no per-conclusion
-   * Move count that it could act on, so asking for either would be reading
-   * rows to throw them away. `buildBusinessBrainView` treats both as empty.
-   */
   const view = buildBusinessBrainView({
     audit: stored.result,
     lastScanAt: stored.completedAt ?? stored.createdAt,
@@ -305,29 +339,15 @@ function buildHealth(latestAudit: AuditEvidence["latestAudit"]): NovaHealth | nu
     movesByConclusion: {},
   });
 
-  if (!view) return null;
-
-  const priority = view.primaryPriority;
-
-  return {
-    view,
-    score: view.overall.score,
-    stateLabel: view.overall.stateLabel,
-    scoredLenses: view.overall.scoredLenses,
-    eligibleLenses: view.overall.eligibleLenses,
-    // The sentence behind a missing score. Computed by the scorer since the
-    // audit shipped, and until now rendered nowhere.
-    insufficientCoverageReason: stored.result.overall.insufficientCoverageReason,
-    priority: priority
-      ? {
-          headline: priority.headline,
-          explanation: priority.explanation,
-          whyItMatters: priority.whyItMatters,
-          severity: priority.tone,
-          citations: priority.evidence.map((item) => citation(item.id)),
-        }
-      : null,
-  };
+  /*
+   * The synthesis travels beside the view rather than being re-read.
+   *
+   * Only `NovaHomeData.audit` needs the view; the synthesis is what
+   * `buildNovaAuditEntry` needs to recompute the identity of the sentence Nova
+   * wrote about this audit. Reading the document twice to get the two halves
+   * would be the read count this file is written to defend.
+   */
+  return view ? { view, synthesis: stored.result.synthesis } : null;
 }
 
 /**
@@ -357,33 +377,33 @@ function buildHealth(latestAudit: AuditEvidence["latestAudit"]): NovaHealth | nu
  * ## Why the situation has to be passed in
  *
  * It is part of the identity the durable step wrote under, composed by
- * `readBriefing` from the same chain. Recomputing it differently here would
- * resolve to nothing at all, permanently, and look exactly like Nova never
- * having spoken.
+ * `readSituation` through the same `novaSituationFrom` the step used.
+ * Recomputing it differently here would resolve to nothing at all,
+ * permanently, and look exactly like Nova never having spoken.
  */
 async function readMomentVoice(
   supabase: SupabaseClient,
   params: {
     projectId: string;
     moment: FocusCandidateKind;
-    latestAudit: AuditEvidence["latestAudit"];
-    health: NovaHealth | null;
-    topMove: BusinessOpportunity | null;
+    audit: { view: BusinessBrainView; synthesis: AuditSynthesis } | null;
+    move: { opportunity: BusinessOpportunity } | null;
     primaryGoal: PrimaryGoal | null;
-    situation: NovaSituation;
+    situation: NovaSituation | null;
   },
 ): Promise<string | null> {
+  if (params.situation === null) return null;
+
   const block = BLOCK_FOR_MOMENT[params.moment];
 
   if (block === "audit") {
-    const synthesis = params.latestAudit?.result?.synthesis ?? null;
-    if (!params.health || synthesis === null) return null;
+    if (!params.audit) return null;
 
     const read = await readNovaAuditVoice(supabase, {
       projectId: params.projectId,
       /* The same entry Business Health builds, from the same view — which is
          what makes the two surfaces resolve one message rather than two. */
-      entry: buildNovaAuditEntry(params.health.view, synthesis),
+      entry: buildNovaAuditEntry(params.audit.view, params.audit.synthesis),
       situation: params.situation,
     });
 
@@ -394,11 +414,11 @@ async function readMomentVoice(
   }
 
   if (block === "move") {
-    if (!params.topMove) return null;
+    if (!params.move) return null;
 
     const read = await readNovaMoveVoice(supabase, {
       projectId: params.projectId,
-      move: params.topMove,
+      move: params.move.opportunity,
       primaryGoal: params.primaryGoal,
       situation: params.situation,
     });
@@ -417,35 +437,53 @@ export async function readNovaHomeData(
     projectName: string;
     /** The connected repository, for the gates' preflight. Null when none is. */
     repositoryFullName: string | null;
-    /** Injected so a briefing is a function of its inputs and one clock. */
-    now?: Date;
   },
 ): Promise<NovaHomeData> {
-  /*
-   * The briefing's own read is genuinely first, so it is awaited before the
-   * wave rather than inside it — the same shape Business Health uses, and for
-   * the same reason. It hands back the evidence and the focus it assembled, so
-   * the score and the ranking cost nothing more (VB-022).
-   */
-  const { evidence, focus, situation, topMove } = await readBriefing(supabase, params);
-
-  const [identity, balance] = await Promise.all([
+  const [reading, identity, audit, balance, events, situation] = await Promise.all([
+    readNovaHomeReading(supabase, params.projectId, params.userId),
     readIdentity(supabase, params.projectId, params.projectName),
+    readAudit(supabase, params.projectId),
     getHeaderCreditBalance(supabase, { userId: params.userId }),
+    listAuditEventsForProject(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+      /* Six rows. The rail is a reminder of what happened, not the audit trail
+         — Settings owns that, with paging. A column that scrolled would be a
+         second log beside the one that already exists. */
+      limit: 6,
+    }),
+    /*
+     * Where the founder stands, composed by the same function the durable step
+     * that generates a sentence uses. It depends on nothing the ranking
+     * decides, so it belongs in this wave — and it is what both halves below
+     * need: the identity of a stored sentence, and Vibe's own line when there
+     * is none.
+     */
+    readSituation(supabase, params.projectId),
   ]);
 
-  const view = buildNovaHomeView(focus);
+  const view = buildNovaHomeView(reading.focus);
 
   /*
-   * After the wave, not beside it: the id to read comes out of the ranking, so
-   * this cannot join the batch above. It runs on the loads where the top of
+   * After the four, not beside them: the id to read comes out of the ranking,
+   * so this cannot join the batch above. It runs on the loads where the top of
    * the ranking is a question and on no others — which is what keeps the
-   * documented read count honest rather than quietly one more.
+   * documented read count honest rather than quietly five.
    */
   const control = view.primary.control;
-  const health = buildHealth(evidence.latestAudit);
+  /*
+   * The candidate carries the Move's id, rank and title — enough to rank it,
+   * not enough to read it. The card wants the whole opportunity.
+   */
+  const primaryMove = "move" in view.primary.candidate ? view.primary.candidate.move : null;
 
-  const [question, change, workspaceCandidates, momentVoice] = await Promise.all([
+  /*
+   * Not keyed on the control: a run in flight and the moment that leads are
+   * different questions, and a project can be in both at once.
+   */
+  const running = view.working;
+
+  const [question, change, workspaceCandidates, move, scanEvents] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -460,38 +498,61 @@ export async function readNovaHomeData(
     control.kind === "choose"
       ? readWorkspaceCandidates(supabase, params.projectId)
       : Promise.resolve([]),
+    primaryMove
+      ? getMoveWithExecution(supabase, {
+          projectId: params.projectId,
+          opportunityId: primaryMove.id,
+        })
+      : Promise.resolve(null),
     /*
-     * The sentence Nova already wrote about whatever this moment is about, if
-     * she wrote one. One row by identity, and only for the two moments that
-     * have a document behind them — see `readMomentVoice`.
+     * One query, on the loads where a scan is actually running. Both operation
+     * types that draw the scan block write to the same event table keyed by
+     * the operation, so the registry's answer is the whole condition — a
+     * legacy run with no events renders the component's own empty state.
      */
-    readMomentVoice(supabase, {
-      projectId: params.projectId,
-      moment: view.primary.kind,
-      latestAudit: evidence.latestAudit,
-      health,
-      topMove,
-      primaryGoal: evidence.founderIntent.intent.primaryGoal,
-      situation,
-    }),
+    running && BLOCK_FOR_OPERATION[running.type] === "scan"
+      ? getProductScanEvents(supabase, {
+          projectId: params.projectId,
+          operationId: running.operationId,
+        })
+      : Promise.resolve<ProductScanEvent[]>([]),
   ]);
+
+  /*
+   * Last, because it needs the answer to *which document is this moment about*
+   * and, for a Move, the Move itself. One row by identity on the moments that
+   * have a document behind them, and nothing at all on the rest.
+   */
+  const momentVoice = await readMomentVoice(supabase, {
+    projectId: params.projectId,
+    moment: view.primary.kind,
+    audit,
+    move,
+    primaryGoal: situation?.primaryGoal ?? null,
+    situation: situation?.situation ?? null,
+  });
 
   return {
     view,
     identity,
-    /* From the evidence already read, not from a stamp-then-document pair of
-       its own — which is two reads fewer and makes the score and the briefing
-       the same audit by construction. */
-    health,
+    audit: audit?.view ?? null,
     balance,
+    momentVoice,
+    situationAside:
+      situation === null
+        ? null
+        : situationAside({
+            situation: situation.situation,
+            moment: view.primary.kind,
+            spoken: momentVoice !== null,
+          }),
     question,
     change,
     workspaceCandidates,
-    momentVoice,
-    situationAside: situationAside({
-      situation,
-      moment: view.primary.kind,
-      spoken: momentVoice !== null,
-    }),
+    move,
+    scanEvents,
+    checklist: reading.checklist,
+    /* Oldest last: a thread reads downward and the log arrives newest first. */
+    activity: buildActivityFeed(events.events).reverse(),
   };
 }

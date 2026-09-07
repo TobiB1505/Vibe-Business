@@ -24,10 +24,10 @@ import {
 import { creditsToUnits } from "@/modules/credits/units";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { FocusCard } from "../design-studies/legacy-focus-card";
-import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
-import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
-import { ProductIdentity } from "@/app/app/projects/[projectId]/nova/product-identity";
-import { HealthScore } from "@/app/app/projects/[projectId]/nova/health-score";
+import { AttentionStack } from "../design-studies/legacy-attention-stack";
+import { WorkingStrip } from "../design-studies/legacy-working-strip";
+import { ProductIdentity } from "../design-studies/legacy-product-identity";
+import { HealthScore } from "../design-studies/legacy-health-score";
 import { FindingCard } from "@/components/system/finding-card";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { StudyShell } from "../design-studies/study-shell";
@@ -42,6 +42,7 @@ import { StudyMove } from "../design-studies/study-move";
 import { StudyBubble } from "../design-studies/study-bubble";
 import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
+import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
@@ -58,6 +59,7 @@ import {
   MOVE_SCENARIO,
   BUBBLE_SCENARIO,
   BLOCK_SCENARIO,
+  RAIL_SCENARIO,
   OPENING_SCENARIO,
   OPENING_WALKTHROUGH_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
@@ -307,6 +309,15 @@ export default async function E2eScenarioPage({
     return (
       <StudyShell study={chosen}>
         <StudyBlock study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === RAIL_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyRail study={chosen} />
       </StudyShell>
     );
   }

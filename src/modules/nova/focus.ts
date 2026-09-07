@@ -1,6 +1,7 @@
 import type { ChangeStage } from "../execution/change-progress";
 import type { FounderInputRequestOrigin } from "../founder-input/schema";
 import type { OperationView } from "../operations/view";
+import type { OperationType } from "../operations/schema";
 import type { NovaActionId } from "./actions";
 import type { AttentionTier } from "../projects/attention";
 import { TIER_ORDER } from "../projects/attention";
@@ -318,7 +319,7 @@ export type NovaFocusFacts = {
    * validation — are not candidates. Nothing is asked of the founder while
    * they run, so they belong here rather than in a list of things to decide.
    */
-  working: OperationView | null;
+  working: NovaWorkingFact | null;
 };
 
 /** A candidate about one prepared change. Carries the change's own sentence. */
@@ -345,6 +346,17 @@ type BareCandidateKind =
   | "scan_stalled"
   | "audit_stalled";
 
+/**
+ * The run that is happening, and what kind of run it is.
+ *
+ * The type travels with the view because a stage list is not a property of an
+ * operation row — `PROGRESS_SEQUENCES` is keyed by type, and a surface that
+ * wanted to draw the named stages otherwise would have to guess which sequence
+ * it was looking at. Two of the fifteen types have one; the rest report a
+ * stage and no sequence, which is a true answer rather than a missing one.
+ */
+export type NovaWorkingFact = { type: OperationType; view: OperationView };
+
 export type FocusCandidate =
   | { kind: ChangeCandidateKind; preparedChangeId: string; headline: string }
   | {
@@ -363,7 +375,7 @@ export type NovaFocus = {
   primary: FocusCandidate;
   /** True, and not what to do now. */
   secondary: FocusCandidate[];
-  working: OperationView | null;
+  working: NovaWorkingFact | null;
   /** The one control the primary carries. */
   nextAction: NovaActionId | null;
 };

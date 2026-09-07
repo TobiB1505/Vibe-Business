@@ -123,7 +123,9 @@ describe("what a feed is made of", () => {
   });
 
   it("shows what is running as progress, not as something to decide", () => {
-    const entries = buildNovaFeed(focusWith({ working: RUNNING }));
+    const entries = buildNovaFeed(
+      focusWith({ working: { type: "business_audit", view: RUNNING } }),
+    );
     const progress = entries.filter((entry) => entry.kind === "nova.progress");
 
     expect(progress).toHaveLength(1);
@@ -161,7 +163,7 @@ describe("what a feed is made of", () => {
           { preparedChangeId: "change-b", stage: "awaiting_approval", headline: "h" },
         ],
         auditOutdated: true,
-        working: RUNNING,
+        working: { type: "business_audit", view: RUNNING },
       }),
     );
     const ids = entries.map((entry) => entry.id);

@@ -64,6 +64,20 @@ export function NovaFocusThread({
    * is open. `briefing/aside.ts` decides whether it appears at all.
    */
   aside,
+  /**
+   * The run in flight, when one is and its kind draws something.
+   *
+   * Below the moment rather than instead of it, because the two are different
+   * questions: the moment is what needs deciding, and this is what is
+   * happening while it waits.
+   *
+   * It used to be the progress checklist and nothing else, which meant a
+   * founder who started a Product Scan from here watched a blank column while
+   * it ran. `BLOCK_FOR_OPERATION` already decided what each kind of run shows;
+   * this asks it the same way the moment asks `BLOCK_FOR_MOMENT`, so a run
+   * with a block draws it and a run without one draws nothing.
+   */
+  running,
   /** The block for this moment, when the surface could read its subject. */
   block,
   /** What the founder can do. Outside the bubble, as every control is. */
@@ -77,6 +91,7 @@ export function NovaFocusThread({
   entry: NovaHomeEntry;
   voice?: string | null;
   aside?: string | null;
+  running?: { kind: BlockKind; node: ReactNode };
   block?: ReactNode;
   control?: ReactNode;
   controlLabel?: string;
@@ -137,8 +152,24 @@ export function NovaFocusThread({
       )}
 
       {block && kind !== "none" && (
-        <NovaRenderBlock label={BLOCK_LABEL[kind]} tone={status.tone} index={4}>
+        <NovaRenderBlock
+          label={BLOCK_LABEL[kind]}
+          namesItself={BLOCK_NAMES_ITSELF[kind]}
+          tone={status.tone}
+          index={4}
+        >
           {block}
+        </NovaRenderBlock>
+      )}
+
+      {running && (
+        <NovaRenderBlock
+          label={BLOCK_LABEL[running.kind]}
+          namesItself={BLOCK_NAMES_ITSELF[running.kind]}
+          tone="active"
+          index={5}
+        >
+          {running.node}
         </NovaRenderBlock>
       )}
 
@@ -163,4 +194,26 @@ const BLOCK_LABEL: Record<BlockKind, string> = {
   ask: "Needs your answer",
   progress: "Working on it",
   none: "",
+};
+
+/**
+ * Which blocks write their own name, so the frame does not write it again.
+ *
+ * A composed surface often carries its own heading — the Product Scan's
+ * "Product scan · live", the file list's "Files touched" — and a frame that
+ * printed the label above it put the same words on screen twice. That is the
+ * duplication this whole surface keeps removing, so it is decided here, once,
+ * total over the kinds, rather than remembered at each call site.
+ *
+ * The label still travels: it is the region's accessible name either way.
+ */
+const BLOCK_NAMES_ITSELF: Record<BlockKind, boolean> = {
+  audit: false,
+  scan: true,
+  agent: true,
+  review: false,
+  move: false,
+  ask: false,
+  progress: false,
+  none: false,
 };
