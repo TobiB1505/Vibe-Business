@@ -167,6 +167,18 @@
   --text-card-title--line-height: 1.35;
   /* v2 answers v1's body step. Same size — the direction is tighter in the
      display range and unchanged where a founder reads. */
+  /* The figures, one notch tighter — the second palette sets its own tracking
+     for every display step, and a figure is one. */
+  --text-figure-sm: 1.25rem;
+  --text-figure-sm--line-height: 1;
+  --text-figure-sm--letter-spacing: -0.018em;
+  --text-figure: 2.25rem;
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.042em;
+  --text-figure-lg: 3.25rem;
+  --text-figure-lg--line-height: 1;
+  --text-figure-lg--letter-spacing: -0.055em;
+
   --text-body: 0.875rem;
   /* v1 keeps Tailwind's 1.4286 so the sweep moves nothing there. Loosening
      prose is one of the things a second palette is for, and this is where

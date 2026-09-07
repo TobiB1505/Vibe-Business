@@ -233,6 +233,47 @@
   --text-caption: 0.75rem;
   /* 16/12, for the same reason: 251 of 293 take the default. */
   --text-caption--line-height: 1rem;
+  /*
+   * Figures: a number that is the subject, not a number in a sentence (UI-8).
+   *
+   * ## Why numerals get their own steps
+   *
+   * A digit has no ascender and no descender. Every value on the type scale
+   * above is tuned for words that do — `--text-hero` reserves 1.04 line-height
+   * for parts of a letterform a numeral never reaches — so a figure set from
+   * it sits low in a box that is taller than anything in it. Measured: an
+   * 18px figure in a 22.5px line box, four times over in the product.
+   *
+   * These carry `line-height: 1` so that cannot happen, and their own
+   * tracking, because tracking a numeral is a different problem from tracking
+   * a word and the product proved it: three people independently wrote -0.06em
+   * or tighter where `hero` gives -0.04em.
+   *
+   * ## Why the sizes are these
+   *
+   * Ten call sites had eight sizes between them — 18, 20, 20, 20, 21.6, 30,
+   * 36, 50.4, 52, 62.4 — and the same object (a business-map node score) was
+   * two of them. 20 is the size four of the ten already write; 52 is the
+   * signal number exactly. 36 is `--text-display`'s size on purpose: same
+   * size, different object, the way `--text-lead` and `--text-card-title` are
+   * both 0.9375rem and differ only in leading.
+   *
+   * ## Why the tracking scales and the hand-written values did not
+   *
+   * -0.04em appeared at 21.6px, at 30px and at 50.4px, and then 52px took
+   * -0.06em. Optical tracking is a function of size — bigger needs tighter —
+   * which a scale can express and a value typed per call site cannot.
+   */
+  --text-figure-sm: 1.25rem;
+  --text-figure-sm--line-height: 1;
+  --text-figure-sm--letter-spacing: -0.02em;
+  --text-figure: 2.25rem;
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.045em;
+  --text-figure-lg: 3.25rem;
+  --text-figure-lg--line-height: 1;
+  --text-figure-lg--letter-spacing: -0.06em;
+
   --text-label: 0.65625rem;
   --text-label--line-height: 1.4;
   --text-label--letter-spacing: 0.16em;
