@@ -27,6 +27,7 @@ import {
   sanitizeRequestedOpportunityId,
 } from "@/modules/action-plans/source";
 import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-preflight";
+import { REFUSAL_SHAPES } from "@/modules/execution-contract/view";
 import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
 import { NovaMoveVoice } from "../nova-move-voice";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
@@ -160,6 +161,31 @@ export default async function ProjectMovesPage({
         })
       : null;
   const stepResolutions = stepRoutes?.resolutions ?? [];
+
+  /*
+   * The step Vibe refuses permanently, if that is what the plan is waiting on
+   * (ADR 0096).
+   *
+   * Resolved here because this is where the live resolution is, and because the
+   * *shape* of a refusal is the thing a screen must not re-derive from labels.
+   * `policy` only: a repairable refusal has a fix and a sequencing one has an
+   * order, and handing either to the founder would send them to build something
+   * Vibe was about to be able to do.
+   *
+   * A render is never authority — the action re-derives all of this against
+   * live state before it writes anything (rule 55).
+   */
+  const actionableStep = actionPlanView?.firstActionableStep ?? null;
+  const handoffStepKey =
+    actionableStep !== null &&
+    actionableStep.actor === "vibe" &&
+    actionableStep.changeKind === "product_change" &&
+    REFUSAL_SHAPES[
+      stepResolutions.find((resolution) => resolution.stepOrder === actionableStep.order)?.reason ??
+        "dependency_unsatisfied"
+    ] === "policy"
+      ? actionableStep.id
+      : null;
 
   const responsibilityByStepKey: Record<string, StepResponsibility> = Object.fromEntries(
     planSteps.map((step) => [
@@ -318,6 +344,8 @@ export default async function ProjectMovesPage({
         defaultMoveTitle={defaultMove?.title ?? null}
         planReadinessByOpportunity={planReadinessByOpportunity}
         responsibilityByStepKey={responsibilityByStepKey}
+        handoffStepKey={handoffStepKey}
+        repositoryFullName={project.repository?.fullName ?? null}
         planView={actionPlanView}
         // Project-wide, not scoped to `plannedMove` — `action_planning`
         // operations are keyed by input identity (which does include the

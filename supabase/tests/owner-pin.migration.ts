@@ -296,10 +296,11 @@ describe("VB-026 — policies resolve the caller once per statement", () => {
   it("keeps every policy it rewrote", () => {
     // 119 before this batch, minus the two INSERT policies VB-036 drops from
     // the provider ledgers below, plus the one SELECT policy ADR 0086 adds to
-    // `nova_voice_messages`. Stated as the arithmetic rather than as a magic
-    // number, so a future change has to say which of the three it moved.
+    // `nova_voice_messages`, plus the one ADR 0096 adds to
+    // `action_plan_handoffs`. Stated as the arithmetic rather than as a magic
+    // number, so a future change has to say which of the four it moved.
     expect(Number(db.sql(`select count(*) from pg_policies where schemaname = 'public';`))).toBe(
-      119 - 2 + 1,
+      119 - 2 + 1 + 1,
     );
   });
 });

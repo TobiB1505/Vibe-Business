@@ -246,6 +246,7 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     ...overrides,
     completedStepOrders: overrides.completedStepOrders ?? [],
     absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
+    handoffByStepKey: overrides.handoffByStepKey ?? {},
     founderInputRequest,
     // Derived from the request the fixture just built, so a scenario can never
     // claim open questions it does not carry.
@@ -286,6 +287,8 @@ export type ActionPlanFixture = {
    * state and renders the stored classification exactly as it always did.
    */
   responsibilityByStepKey?: Record<string, StepResponsibility>;
+  /** The actionable step, when the scene is one Vibe refuses permanently. */
+  handoffStepKey?: string | null;
 };
 
 export const E2E_ACTION_PLAN_SCENARIOS = {
@@ -379,6 +382,54 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         firstActionableStep: firstActionableStep(STEPS, completed),
         progress: planProgress(STEPS, completed),
         completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0096).
+   *
+   * "Build a dedicated pricing page" stands in for the founder's real step —
+   * `vibe` + `product_change`, which Vibe declines when it touches payments,
+   * and which no attestation admitted either. The plan simply stopped there.
+   *
+   * Two scenes because the card has two states, and the second is the one that
+   * has to be seen: before the choice it asks which tool, after it the prompt
+   * is on screen and the confirmation sits under it.
+   */
+  action_plan_handoff_offer: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      handoffStepKey: "step-add-pricing-page",
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  action_plan_handoff_prompt: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      handoffStepKey: "step-add-pricing-page",
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        handoffByStepKey: { "step-add-pricing-page": "claude_code" },
         founderInputRequest: null,
       }),
       activeOperation: null,

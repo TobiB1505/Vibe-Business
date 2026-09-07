@@ -55,6 +55,7 @@ import {
 import { getOperationStatusAction } from "../run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "../plan-action";
 import { PrepareChangePanel } from "../prepare-change-panel";
+import { HandoffCard } from "./handoff-card";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
@@ -268,6 +269,8 @@ function PlanBody({
   moveRank,
   moveLens,
   responsibilityByStepKey,
+  handoffStepKey,
+  repositoryFullName,
   onFounderResolved,
 }: {
   projectId: string;
@@ -276,6 +279,16 @@ function PlanBody({
   moveRank: number | null;
   moveLens: string | null;
   responsibilityByStepKey: Record<string, StepResponsibility>;
+  /**
+   * The actionable step, when Vibe refuses it permanently (ADR 0096).
+   *
+   * Resolved by the route, never here: it is the *shape* of a live refusal, and
+   * a panel deriving it from labels would be reading Vibe's prose back as a
+   * machine answer. Null whenever the step has any other outcome.
+   */
+  handoffStepKey: string | null;
+  /** `owner/name`, or null when Vibe holds no repository for this project. */
+  repositoryFullName: string | null;
   onFounderResolved: () => void;
 }) {
   const reduceMotion = useReducedMotion();
@@ -383,7 +396,35 @@ function PlanBody({
             <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
           </div>
 
-          {firstActionableStep !== null && isFounderAttestable(firstActionableStep) ? (
+          {/*
+            Three outcomes for the step that could happen next, in the order
+            that keeps each one honest.
+
+            A handed-off step is *also* attestable — that is the whole point of
+            the handoff — so it has to be recognised first, or it would render
+            as a bare confirmation with no prompt and nothing explaining why
+            Vibe is not building it (ADR 0096).
+          */}
+          {firstActionableStep !== null && handoffStepKey === firstActionableStep.id ? (
+            <HandoffCard
+              projectId={projectId}
+              actionPlanId={plan.id}
+              step={firstActionableStep}
+              repository={repositoryFullName}
+              tool={planView.handoffByStepKey[firstActionableStep.id] ?? null}
+              confirmation={
+                <FounderActionCard
+                  projectId={projectId}
+                  actionPlanId={plan.id}
+                  step={firstActionableStep}
+                />
+              }
+            />
+          ) : firstActionableStep !== null &&
+            isFounderAttestable(
+              firstActionableStep,
+              new Set(Object.keys(planView.handoffByStepKey)),
+            ) ? (
             <FounderActionCard
               projectId={projectId}
               actionPlanId={plan.id}
@@ -622,6 +663,8 @@ export function PlanDetailPanel({
   defaultMoveTitle,
   readiness,
   responsibilityByStepKey,
+  handoffStepKey,
+  repositoryFullName,
   planView,
   activeOperation,
   execution = null,
@@ -648,6 +691,16 @@ export function PlanDetailPanel({
   readiness: ActionPlanReadiness;
   /** What each step's responsibility line says, resolved by the route. */
   responsibilityByStepKey: Record<string, StepResponsibility>;
+  /**
+   * The actionable step, when Vibe refuses it permanently (ADR 0096).
+   *
+   * Resolved by the route, never here: it is the *shape* of a live refusal, and
+   * a panel deriving it from labels would be reading Vibe's prose back as a
+   * machine answer. Null whenever the step has any other outcome.
+   */
+  handoffStepKey: string | null;
+  /** `owner/name`, or null when Vibe holds no repository for this project. */
+  repositoryFullName: string | null;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
   execution?: OpportunityActionState | null;
@@ -804,6 +857,8 @@ export function PlanDetailPanel({
               moveRank={moveRank}
               moveLens={moveLens}
               responsibilityByStepKey={responsibilityByStepKey}
+              handoffStepKey={handoffStepKey}
+              repositoryFullName={repositoryFullName}
               onFounderResolved={() => router.refresh()}
             />
           ) : blockNotice !== null ? (

@@ -371,6 +371,40 @@ describe("which steps a founder may confirm", () => {
     expect(isFounderAttestable(step)).toBe(false);
   });
 
+  it("never admits a product change on a handoff for a different step", () => {
+    // The gate is per step, not per plan: handing out step 3 must not make
+    // step 4 confirmable.
+    const step = fakePlanStep({ id: "4-link", actor: "vibe", changeKind: "product_change" });
+
+    expect(isFounderAttestable(step, new Set(["3-checkout"]))).toBe(false);
+    expect(isFounderAttestable(step, new Set(["4-link"]))).toBe(true);
+  });
+
+  it("admits a product change only once Vibe handed it out", () => {
+    /*
+     * The exclusion above is what stops a founder confirming away work the
+     * agent would build, so the exception cannot be a shape — it has to be a
+     * durable fact. A handoff row is written only where Vibe refuses by policy.
+     */
+    const step = fakePlanStep({ id: "3-checkout", actor: "vibe", changeKind: "product_change" });
+
+    expect(isFounderAttestable(step)).toBe(false);
+    expect(isFounderAttestable(step, new Set())).toBe(false);
+    expect(isFounderAttestable(step, new Set(["3-checkout"]))).toBe(true);
+  });
+
+  it("completes a handed-off step from the founder's own attestation", () => {
+    const step = fakePlanStep({ id: "3-checkout", actor: "vibe", changeKind: "product_change" });
+    const evidence = founderActionEvidence({ stepKey: step.id, stepOrder: step.order });
+
+    // The handoff set reaches the projection too: without it the founder
+    // attests, the database accepts, and the plan never counts it.
+    expect([...completedStepsFromEvidence([step], [], [], [evidence])]).toEqual([]);
+    expect(
+      [...completedStepsFromEvidence([step], [], [], [evidence], new Set([step.id]))],
+    ).toEqual([step.order]);
+  });
+
   it("completes the Vibe step no execution could reach", () => {
     const step = fakePlanStep({
       id: "1-research-establish-what-the-billing-route-does",

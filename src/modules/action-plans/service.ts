@@ -37,6 +37,8 @@ import {
 } from "./completion";
 import { listAgentStepCompletionEvidence, listStepExecutionEvidence } from "./completion-store";
 import { listFounderActionCompletionEvidence, listProjectFindings } from "./founder-action-store";
+import { listHandoffsForPlan } from "./handoff-store";
+import type { HandoffTool } from "@/modules/handoff/schema";
 import {
   listActiveFounderResolutions,
   listFounderInputRequestsForPlan,
@@ -409,6 +411,14 @@ export type ActionPlanView = {
    * either number becoming a claim that the covered step ran.
    */
   absorbedByStepOrder: Record<number, number>;
+  /**
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0096).
+   *
+   * The value is the tool they picked, because the prompt's opening sentence
+   * differs for an agent working in a checked-out repository and a hosted
+   * builder that has no branch. Serialized as an object across the boundary.
+   */
+  handoffByStepKey: Record<string, HandoffTool>;
   /** The request for the current actionable founder-owned step, if one is open. */
   founderInputRequest: FounderInputRequest | null;
   /**
@@ -438,6 +448,7 @@ export async function getLatestActionPlan(
     requests,
     agentEvidence,
     founderActionEvidence,
+    handoffs,
   ] =
     await Promise.all([
       getLatestSuccessfulAudit(supabase, projectId),
@@ -448,6 +459,7 @@ export async function getLatestActionPlan(
       listFounderInputRequestsForPlan(supabase, plan.id),
       listStepExecutionEvidence(supabase, { projectId, actionPlanId: plan.id }),
       listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+      listHandoffsForPlan(supabase, { projectId, actionPlanId: plan.id }),
     ]);
 
   const completed = completedStepsFromEvidence(
@@ -455,6 +467,8 @@ export async function getLatestActionPlan(
     resolutions,
     agentEvidence.completion,
     founderActionEvidence,
+    // A handed-off step is attestable; every other product change is not.
+    new Set(handoffs.keys()),
   );
   /* What is finished, plus what nothing needs to do. Sequencing asks the wider
      question; `completedStepOrders` below still answers the narrow one. */
@@ -475,6 +489,7 @@ export async function getLatestActionPlan(
     progress: planProgress(plan.steps, satisfied),
     completedStepOrders: [...completed],
     absorbedByStepOrder: Object.fromEntries(absorption),
+    handoffByStepKey: Object.fromEntries(handoffs),
     openFounderInputCount: requests.filter((request) => request.status === "open").length,
     founderInputRequest:
       actionable === null

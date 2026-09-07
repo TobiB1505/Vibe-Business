@@ -67,6 +67,13 @@ function addStep(params: {
   return params.key;
 }
 
+function handoff(stepKey: string, tool = "claude_code"): string {
+  return db.sql(
+    `select public.record_action_plan_handoff('${fx.projectId}', '${planId}', '${stepKey}',
+       '${fx.userId}', '${tool}');`,
+  );
+}
+
 function attest(stepKey: string, finding: string | null = null): string {
   const arg = finding === null ? "null" : `'${finding.replace(/'/g, "''")}'`;
   return db.sql(
@@ -258,5 +265,106 @@ describe("the finding a Vibe step is closed with", () => {
     expect(() => attest(key, "x".repeat(1201))).toThrow(
       /action_plan_founder_attestations_finding_shape/,
     );
+  });
+});
+
+/**
+ * A step Vibe declined and handed out (ADR 0096).
+ *
+ * `vibe` + `product_change` is excluded from attestation on purpose: it is the
+ * work the agent exists to build, and letting a founder tick it off would be
+ * the one way to lose it. So the exception cannot be a *shape* — a resolver's
+ * opinion at render time would do — it has to be a durable fact, written only
+ * where Vibe refuses by policy and bound to one immutable plan/step pair.
+ *
+ * These tests exist because that gate lives in the database and nowhere else is
+ * authoritative.
+ */
+describe("a step Vibe handed to the founder", () => {
+  function addProductChange(key: string, order: number): string {
+    return addStep({
+      key,
+      order,
+      actor: "vibe",
+      changeKind: "product_change",
+      executionSupport: "not_yet_supported",
+    });
+  }
+
+  it("cannot be attested before a handoff exists", () => {
+    const key = addProductChange("handoff-before", 9);
+
+    expect(() => attest(key, "I built it")).toThrow(/founder_action_step_not_attestable/);
+  });
+
+  it("can be attested once one does, and still carries its finding", () => {
+    const key = addProductChange("handoff-after", 9);
+    handoff(key);
+
+    expect(answerOf(attest(key, "Claude Code wired Stripe checkout."))).toMatch(
+      /^[0-9a-f-]{36}$/,
+    );
+    expect(
+      db.sql(
+        `select finding from public.action_plan_founder_attestations
+         where action_plan_id = '${planId}' and action_plan_step_key = '${key}';`,
+      ),
+    ).toBe("Claude Code wired Stripe checkout.");
+  });
+
+  it("does not admit any other step in the same plan", () => {
+    // Per step, never per plan: handing out one change must not open the next.
+    const handed = addProductChange("handoff-scoped-a", 8);
+    handoff(handed);
+    const other = addProductChange("handoff-scoped-b", 9);
+
+    expect(() => attest(other, "I built it")).toThrow(/founder_action_step_not_attestable/);
+  });
+
+  it("refuses a handoff for work that is not the agent's to begin with", () => {
+    // A founder_action step is already attestable and a decision is answered,
+    // not built. Issuing a handoff there would create a second way to close
+    // work that already has one.
+    const founderWork = addStep({
+      key: "handoff-founder-work",
+      order: 9,
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+    });
+
+    expect(() => handoff(founderWork)).toThrow(/action_plan_step_not_handoffable/);
+  });
+
+  it("refuses a handoff in someone else's project", () => {
+    const key = addProductChange("handoff-intruder", 9);
+    const other = db
+      .sql(`select user_id from public.build_lifecycle_fixture('handoff-intruder-fx');`)
+      .split("|")[0];
+
+    expect(() =>
+      db.sql(
+        `select public.record_action_plan_handoff('${fx.projectId}', '${planId}', '${key}',
+           '${other}', 'claude_code');`,
+      ),
+    ).toThrow(/action_plan_step_not_handoffable/);
+  });
+
+  it("refuses a tool outside the closed list", () => {
+    const key = addProductChange("handoff-bad-tool", 9);
+
+    expect(() => handoff(key, "my_own_agent")).toThrow(/action_plan_handoffs_tool_check/);
+  });
+
+  it("converges a retry on the one row", () => {
+    const key = addProductChange("handoff-retry", 9);
+
+    expect(answerOf(handoff(key))).toBe(answerOf(handoff(key)));
+    expect(
+      db.sql(
+        `select count(*) from public.action_plan_handoffs
+         where action_plan_id = '${planId}' and action_plan_step_key = '${key}';`,
+      ),
+    ).toBe("1");
   });
 });

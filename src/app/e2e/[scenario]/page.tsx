@@ -470,6 +470,8 @@ export default async function E2eScenarioPage({
           selectedOpportunityId={fixture.opportunities[0]?.id ?? null}
           defaultMoveTitle={fixture.opportunities[0]?.title ?? null}
           planReadinessByOpportunity={planReadinessByOpportunity}
+          handoffStepKey={null}
+          repositoryFullName="TobiB1505/Vibe-Business"
           responsibilityByStepKey={{}}
           planView={null}
           planOperation={null}
@@ -1584,6 +1586,8 @@ export default async function E2eScenarioPage({
           moveRank={fixture.opportunityId ? 1 : null}
           moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
+          handoffStepKey={fixture.handoffStepKey ?? null}
+          repositoryFullName="TobiB1505/Vibe-Business"
           responsibilityByStepKey={fixture.responsibilityByStepKey ?? {}}
           readiness={fixture.readiness}
           planView={fixture.planView}

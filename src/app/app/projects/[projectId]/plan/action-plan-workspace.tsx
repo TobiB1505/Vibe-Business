@@ -60,6 +60,8 @@ export function ActionPlanWorkspace({
   defaultMoveTitle,
   planReadinessByOpportunity,
   responsibilityByStepKey,
+  handoffStepKey,
+  repositoryFullName,
   planView,
   planOperation,
   planOperationOpportunityId,
@@ -90,6 +92,10 @@ export function ActionPlanWorkspace({
    * the execution contract keeps those out of a component.
    */
   responsibilityByStepKey: Record<string, StepResponsibility>;
+  /** The actionable step, when Vibe refuses it permanently (ADR 0096). */
+  handoffStepKey: string | null;
+  /** `owner/name`, or null when Vibe holds no repository for this project. */
+  repositoryFullName: string | null;
   /** The project-wide latest plan. It is shown only for its own Move. */
   planView: ActionPlanView | null;
   planOperation: OperationView | null;
@@ -323,6 +329,8 @@ export function ActionPlanWorkspace({
                     defaultMoveTitle={defaultMoveTitle}
                     readiness={planReadinessByOpportunity[activeOpportunity.id]}
                     responsibilityByStepKey={responsibilityByStepKey}
+                    handoffStepKey={handoffStepKey}
+                    repositoryFullName={repositoryFullName}
                     planView={
                       planView?.plan.opportunityId === activeOpportunity.id ? planView : null
                     }

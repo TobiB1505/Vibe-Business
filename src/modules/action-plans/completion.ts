@@ -131,17 +131,41 @@ function completedByAgentExecution(
  * which is the same sentence a `founder_action` attestation has always meant.
  */
 export function isFounderAttestable(
-  step: Pick<ActionPlanStep, "actor" | "changeKind" | "executionSupport">,
+  step: Pick<ActionPlanStep, "id" | "actor" | "changeKind" | "executionSupport">,
+  /**
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0096).
+   *
+   * The third admitted case, and the only one keyed on a fact rather than on
+   * the step's own shape. `vibe` + `product_change` stays excluded in general
+   * — that exclusion is what stops a founder confirming away work the agent
+   * would build — but a step Vibe *declined and handed out* is no longer that
+   * work. The handoff is a durable row, written only where Vibe refuses by
+   * policy and bound to one immutable plan/step pair, so it cannot be inherited
+   * by a replan or inferred from a resolver's opinion at render time.
+   *
+   * Defaulted to empty rather than required: a caller that knows nothing about
+   * handoffs gets exactly the behaviour it had before, which is the safe one.
+   */
+  handedOffStepKeys: ReadonlySet<string> = new Set(),
 ): boolean {
   if (step.actor === "founder_action") return step.executionSupport === "founder_acts";
-  return step.actor === "vibe" && step.changeKind !== "product_change";
+  if (step.actor !== "vibe") return false;
+  if (step.changeKind !== "product_change") return true;
+  return handedOffStepKeys.has(step.id);
 }
 
 function completedByFounderAttestation(
   step: ActionPlanStep,
   evidence: readonly FounderActionCompletionEvidence[],
+  handedOffStepKeys: ReadonlySet<string>,
 ): boolean {
-  if (!isFounderAttestable(step)) return false;
+  /*
+   * The database already refused an attestation the step was not admitted for,
+   * so this cannot be the authority — it is the local half of the same rule,
+   * kept because a projection that trusts a row's existence alone would also
+   * complete a row written before the rule existed.
+   */
+  if (!isFounderAttestable(step, handedOffStepKeys)) return false;
 
   return evidence.some(
     (item) => item.stepKey === step.id && item.stepOrder === step.order,
@@ -163,12 +187,16 @@ export function completedStepsFromEvidence(
   founderResolutions: readonly FounderCompletionEvidence[],
   agentEvidence: readonly AgentStepCompletionEvidence[],
   founderActionEvidence: readonly FounderActionCompletionEvidence[] = [],
+  /** Steps Vibe handed to the founder to build themselves (ADR 0096). */
+  handedOffStepKeys: ReadonlySet<string> = new Set(),
 ): ReadonlySet<number> {
   const completed = new Set(completedStepsFromFounderResolutions(steps, founderResolutions));
 
   for (const step of steps) {
     if (completedByAgentExecution(step, agentEvidence)) completed.add(step.order);
-    if (completedByFounderAttestation(step, founderActionEvidence)) completed.add(step.order);
+    if (completedByFounderAttestation(step, founderActionEvidence, handedOffStepKeys)) {
+      completed.add(step.order);
+    }
   }
 
   return completed;
@@ -275,6 +303,7 @@ export function completedStepsForExecutionRouting(
   mergedPreparedChangeIds: ReadonlySet<string>,
   founderActionEvidence: readonly FounderActionCompletionEvidence[] = [],
   absorbed: readonly AbsorbedStepSatisfaction[] = [],
+  handedOffStepKeys: ReadonlySet<string> = new Set(),
 ): ReadonlySet<number> {
   const merged = agentEvidence.filter((item) =>
     mergedPreparedChangeIds.has(item.preparedChangeId),
@@ -284,6 +313,7 @@ export function completedStepsForExecutionRouting(
     founderResolutions,
     merged,
     founderActionEvidence,
+    handedOffStepKeys,
   );
 
   /*
