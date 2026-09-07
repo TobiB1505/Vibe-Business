@@ -90,15 +90,12 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href="/signup" className={`${buttonClasses()} px-6 py-4 text-base`}>
+            <Link href="/signup" className={buttonClasses({ size: "lg" })}>
               <GithubIcon />
               Start with your GitHub repo
               <ArrowRightIcon size={17} />
             </Link>
-            <Link
-              href="#how"
-              className={`${buttonClasses({ variant: "secondary" })} px-6 py-4 text-base`}
-            >
+            <Link href="#how" className={buttonClasses({ variant: "secondary", size: "lg" })}>
               See how it works
             </Link>
           </div>
@@ -335,7 +332,8 @@ export default function HomePage() {
                   </span>
                 </p>
                 <p className="text-fg-secondary mt-3 text-body">
-                  {credits} {plan.key === "free" ? "Welcome Credits once" : "Credits each paid month"}
+                  {credits}{" "}
+                  {plan.key === "free" ? "Welcome Credits once" : "Credits each paid month"}
                 </p>
                 <ul className="my-7 flex flex-col gap-3">
                   {PLAN_FEATURES[plan.key]?.map((feature) => (
@@ -390,7 +388,7 @@ export default function HomePage() {
               Bring the product you already built. Vibe will show you what matters next.
             </p>
           </div>
-          <Link href="/signup" className={`${buttonClasses()} px-6 py-4 text-base`}>
+          <Link href="/signup" className={buttonClasses({ size: "lg" })}>
             Start for free <ArrowRightIcon size={17} />
           </Link>
         </div>

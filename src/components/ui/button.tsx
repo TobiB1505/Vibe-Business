@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils/cn";
  * and not "a red primary".
  */
 export type ButtonVariant = "primary" | "secondary" | "accent" | "danger";
-export type ButtonSize = "md" | "sm";
+export type ButtonSize = "lg" | "md" | "sm";
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-mint text-mint-ink font-bold shadow-mint hover:bg-mint-hover",
@@ -25,6 +25,24 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
+  /*
+   * The marketing call to action, and it exists because three call sites were
+   * already writing it: `` `${buttonClasses()} px-6 py-4 text-base` ``.
+   *
+   * Half of that was doing nothing. `cn` is a join, not a merge, so the
+   * appended class list carried *both* `text-body` and `text-base`, and the
+   * one later in the generated stylesheet won — measured, those three
+   * buttons rendered at 14px while their class string said 16. The padding
+   * grew and the type did not, for the whole life of the landing page. It is
+   * the same failure `Surface` records for tones, where a tint was "written,
+   * generated, shipped, and invisible".
+   *
+   * `text-lead` rather than either: the intent was type a step larger than a
+   * medium button's, `text-base` names no Vibe step, and 15px is the step the
+   * scale actually has there. So the CTA grows by one pixel and the class
+   * that never applied is gone.
+   */
+  lg: "px-6 py-4 text-lead",
   md: "px-5 py-3 text-body",
   sm: "px-4 py-2.5 text-ui",
 };

@@ -487,14 +487,16 @@ describe("the body and caption steps name what they replaced", () => {
  *
  * ## Why exceptions are counted rather than described
  *
- * Twelve uses remain and they are not type. They are a glyph sized as an icon
- * (a `×`, a `!`, an avatar initial), a large CTA whose size belongs to
- * `buttonClasses`, a mono rank, and one price sized together with its coin.
- * None of them is a heading, and folding them into the type scale to make a
- * test pass would be the wrong fix.
+ * Nine uses remain and they are not type. They are a glyph sized as an icon
+ * (a `×`, a `!`, an avatar initial), a mono rank, and one price sized
+ * together with its coin. None of them is a heading, and folding them into
+ * the type scale to make a test pass would be the wrong fix.
  *
- * The metrics that used to be on this list are gone: they were figures, and
- * `--text-figure-*` names them now.
+ * Two groups that used to be on this list are gone. The metrics were figures
+ * and `--text-figure-*` names them now. The marketing CTAs were a third
+ * button size written by hand — and half of it never applied, because `cn`
+ * joins rather than merges and `text-body` won over the appended
+ * `text-base`. `buttonClasses({ size: "lg" })` owns it.
  *
  * So they are named by file *with a count*. A file may keep exactly what it
  * has; one more makes this fail. That is what stops the allowlist from
@@ -506,19 +508,29 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
    * The remaining uses, and what each file is doing with them.
    *
    * glyph — a character sized as an icon: `×`, `!`, an avatar initial
-   * cta   — a large marketing button, whose size belongs to `buttonClasses`
    */
   const NOT_TYPE: [string, number][] = [
     ["src/app/app/(account)/products/product-list-card.tsx", 2], // glyph — an avatar initial
     ["src/app/app/(account)/repositories/repositories-index.tsx", 1], // glyph — a × that clears
     ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 3], // glyph ×3
     ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // a mono rank, "01"
-    ["src/app/page.tsx", 3], // cta ×3
     ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
     ["src/components/ui/credit-amount.tsx", 1], // the price, sized with its coin
   ];
 
   const SCALE = /\btext-(base|lg|xl|2xl|3xl|4xl)\b/g;
+
+  /**
+   * Prose is not a class list.
+   *
+   * A docblock that explains why `text-base` is gone contains `text-base`, and
+   * a test that counts it fails on an edit to a comment — which is a test that
+   * teaches people not to write the explanation down. `button.tsx` names it
+   * three times while recording that half of it never applied.
+   */
+  function withoutComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/[^\n]*/g, "$1");
+  }
 
   function uses(): Map<string, number> {
     const found = new Map<string, number>();
@@ -527,7 +539,7 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
       const path = file.replace(process.cwd() + "/", "");
       // A study renders the replaced thing beside the replacement on purpose.
       if (path.startsWith("src/app/e2e/design-studies/")) continue;
-      const count = (readFileSync(file, "utf8").match(SCALE) ?? []).length;
+      const count = (withoutComments(readFileSync(file, "utf8")).match(SCALE) ?? []).length;
       if (count > 0) found.set(path, count);
     }
     return found;
