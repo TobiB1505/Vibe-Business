@@ -865,3 +865,69 @@ describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it
     expect(settings).not.toContain(new URL(broken).pathname);
   });
 });
+
+/*
+ * The snapshot said `onboarding: detected false, evidence: []`.
+ *
+ * `/app/onboarding` exists, was a candidate, and was navigated to. It
+ * redirected to the dashboard — the founder is long past onboarding — and the
+ * loop dropped it without a trace, so the only account of it was an absence.
+ * "This surface sent Vibe somewhere it had already been" and "Vibe found no
+ * onboarding" are different sentences.
+ */
+describe("analyzeAuthenticatedProduct — a redirect onto a seen page is a fact, not a silence", () => {
+  function redirectingTo(seen: string, from: string) {
+    let current = `${ORIGIN}/app`;
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        current = new URL(url).pathname === from ? `${ORIGIN}${seen}` : url;
+        return { status: 200 };
+      },
+      settle: async () => undefined,
+      extract: async () => extraction(),
+    };
+
+    return {
+      pages: async () => [page],
+      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+    } satisfies AnalysisBrowserPort;
+  }
+
+  it("records the path that redirected instead of dropping it", async () => {
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: redirectingTo("/app", "/app/onboarding"),
+      repository: repositoryWith(["/app/onboarding"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const redirected = result.snapshot.warnings.filter(
+      (entry) => entry.code === "redirected_to_seen_page",
+    );
+    expect(redirected).toHaveLength(1);
+    expect(redirected[0]!.path).toBe("/app/onboarding");
+
+    // And it is still not counted as a page: nothing new was read.
+    expect(result.snapshot.pages.map((entry) => entry.path)).toEqual(["/app"]);
+  });
+
+  it("says nothing when a redirect lands somewhere genuinely new", async () => {
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: redirectingTo("/app/welcome", "/app/onboarding"),
+      repository: repositoryWith(["/app/onboarding"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(
+      result.snapshot.warnings.filter((entry) => entry.code === "redirected_to_seen_page"),
+    ).toHaveLength(0);
+    expect(result.snapshot.pages.map((entry) => entry.path)).toContain("/app/welcome");
+  });
+});
