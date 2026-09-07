@@ -25,11 +25,24 @@ export const BROWSER_SANDBOX = {
   /**
    * The viewport, and therefore the frame size a person sees.
    *
-   * Matched to the screencast ceiling in the guard rather than chosen twice:
-   * a window larger than the cast would be scaled down and make a person's
-   * click land somewhere other than where they aimed.
+   * It was 1280×800, and a founder on a high-density display said the picture
+   * looked wrong "resolution-wise". They were right twice over. The dialog
+   * lays the frame out about 1120 CSS pixels wide, which on a 2× screen is
+   * 2240 device pixels — a 1280-pixel JPEG stretched most of the way to
+   * double. And 1280 is a *narrow* desktop: an application with a sidebar
+   * renders its cramped layout there, so the analysis was reading a product
+   * shape its customers do not see.
+   *
+   * 1920×1200 fixes both and keeps 16:10 exactly, which matters because the
+   * frame's own aspect ratio is what the dialog's box is now sized from.
+   *
+   * Matched to the screencast ceiling in the guard — asserted by
+   * `guard-program.test.ts`, not merely stated here, because the guard holds
+   * these as literals (it contains no interpolation, by design) and a comment
+   * is not a constraint. A window larger than the cast would be scaled down
+   * and make a person's click land somewhere other than where they aimed.
    */
-  viewport: { width: 1280, height: 800 },
+  viewport: { width: 1920, height: 1200 },
   /**
    * Two vCPUs.
    *

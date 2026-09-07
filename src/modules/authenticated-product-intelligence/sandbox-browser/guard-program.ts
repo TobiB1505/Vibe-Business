@@ -100,7 +100,7 @@
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v6";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v7";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {
@@ -310,9 +310,9 @@ view.on("connection", async (client) => {
     send("Page.enable", {});
     send("Page.startScreencast", {
       format: "jpeg",
-      quality: 60,
-      maxWidth: 1280,
-      maxHeight: 800,
+      quality: 72,
+      maxWidth: 1920,
+      maxHeight: 1200,
       everyNthFrame: 1,
     });
   });

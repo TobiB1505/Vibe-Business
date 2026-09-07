@@ -154,3 +154,46 @@ describe("a browser that cannot be reached says so", () => {
     expect(load.slice(0, load.indexOf("const result"))).toContain("setUnreachable(false)");
   });
 });
+
+/*
+ * A founder on a high-density display said the preview looked wrong
+ * "resolution-wise". Two separate causes, and the second is the dangerous one.
+ *
+ * The box was `aspect-[16/10]`, a Tailwind class restating
+ * `BROWSER_SANDBOX.viewport` from another module, with nothing keeping the two
+ * equal. A disagreement stretches the frame — and stretching is the worst kind
+ * of wrong here, because the click coordinates are computed from this
+ * element's own geometry and still look correct in code. The only symptom is
+ * a person's tap landing somewhere else on their own signed-in product.
+ */
+describe("the picture is never stretched to fit a box", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  it("sizes the box from the frame that actually arrived", () => {
+    expect(source).toContain("aspectRatio: frame ? `${frame.w} / ${frame.h}`");
+    // The constant is gone, not merely overridden.
+    expect(source).not.toContain("aspect-[16/10] w-full");
+  });
+
+  it("keeps the viewport's ratio only as the guess before a frame exists", () => {
+    expect(source).toContain('"16 / 10"');
+  });
+
+  it("does not re-render the dialog on every painted frame", () => {
+    // `onPainted` fires per frame. A new object each time would re-render the
+    // whole dialog sixty times a second to report the same two numbers.
+    const painted = source.slice(source.indexOf("const handlePainted = useCallback"));
+    expect(painted.slice(0, painted.indexOf("}, ["))).toContain(
+      "current.w === painted.w && current.h === painted.h ? current : painted",
+    );
+  });
+
+  it("forgets the shape when the dialog closes", () => {
+    // A stale ratio would size the next session's box before its first frame.
+    const close = source.slice(source.indexOf("const closeDialog = useCallback"));
+    expect(close.slice(0, close.indexOf("}, ["))).toContain("setFrame(null)");
+  });
+});

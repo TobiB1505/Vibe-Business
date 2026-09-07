@@ -61,7 +61,16 @@ export type LiveBrowserCanvasProps = {
    * than as an animation on a timer.
    */
   onConnected?: () => void;
-  onPainted?: () => void;
+  /**
+   * A frame was drawn, and what size it was.
+   *
+   * The size is not decoration. The dialog lays this picture out in a box, and
+   * a box whose aspect ratio is a constant living in another file stretches
+   * the frame the moment the two disagree — silently, because a click computed
+   * from the element's own geometry still looks correct in code. Reported from
+   * the only place that can know.
+   */
+  onPainted?: (frame: { w: number; h: number }) => void;
 };
 
 /** Printable single characters go to Chromium as text; everything else as a key. */
@@ -286,7 +295,7 @@ export function LiveBrowserCanvas({
             frameSize.current = { w: next.w, h: next.h };
             canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
             setPainted(true);
-            onPainted?.();
+            onPainted?.({ w: next.w, h: next.h });
             drawNext();
           };
           // A frame that cannot be decoded must not stop the ones behind it.

@@ -174,6 +174,7 @@ function LiveViewDialog({
   error,
   busy,
   unreachable,
+  frame,
   signIn,
   onCancel,
   onAnalyze,
@@ -188,11 +189,13 @@ function LiveViewDialog({
   busy: boolean;
   /** Every attempt at the view socket failed. */
   unreachable: boolean;
+  /** The size of the last frame drawn, once one has been. */
+  frame: { w: number; h: number } | null;
   signIn: SignInWatch;
   onCancel: () => void;
   onAnalyze: () => void;
   onConnected: () => void;
-  onPainted: () => void;
+  onPainted: (frame: { w: number; h: number }) => void;
   onRetryView: () => void;
   onUnavailable: () => void;
 }) {
@@ -287,11 +290,25 @@ function LiveViewDialog({
           </p>
         </div>
 
-        {/* The aspect ratio matches the viewport Chromium is launched with
-            (`BROWSER_SANDBOX.viewport`). Any other ratio would letterbox the
-            frame, and a letterboxed frame puts a person's click somewhere
-            other than where they aimed. */}
-        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
+        {/*
+          The box is the shape of the frame that actually arrived.
+          
+          It used to be a hardcoded `aspect-[16/10]` matching
+          `BROWSER_SANDBOX.viewport` — a constant in another module, restated
+          here as a Tailwind class, with nothing keeping the two equal. Any
+          disagreement stretches the picture, and stretching is the worst kind
+          of wrong: a click computed from this element's own geometry still
+          looks correct in code, so the only symptom is a person's tap landing
+          somewhere else on their own signed-in product.
+          
+          The frame's own ratio cannot disagree with the frame. Before one
+          arrives the viewport's ratio is the honest guess, and the overlay
+          covering the box until then is what a person actually sees.
+        */}
+        <div
+          style={{ aspectRatio: frame ? `${frame.w} / ${frame.h}` : "16 / 10" }}
+          className="relative w-full overflow-hidden rounded-md border border-line-2 bg-surface-2"
+        >
           {liveViewUrl && !error && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
@@ -796,6 +813,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const [error, setError] = useState<string | null>(null);
   /** Every attempt at the view socket failed. Not a stage — a failure. */
   const [unreachable, setUnreachable] = useState(false);
+  /** The shape of the picture, so the box can be the shape of the picture. */
+  const [frame, setFrame] = useState<{ w: number; h: number } | null>(null);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
@@ -814,6 +833,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const closeDialog = useCallback(() => {
     setDialogOpen(false);
     setUnreachable(false);
+    setFrame(null);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -932,7 +952,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setStage("connecting");
     void loadLiveView(sessionId);
   }, [sessionId, loadLiveView]);
-  const handlePainted = useCallback(() => setStage("ready"), []);
+  const handlePainted = useCallback((painted: { w: number; h: number }) => {
+    setStage("ready");
+    // Written only when it changes, because this is on the paint path: a new
+    // object every frame would re-render the dialog sixty times a second to
+    // say the same two numbers.
+    setFrame((current) =>
+      current && current.w === painted.w && current.h === painted.h ? current : painted,
+    );
+  }, []);
 
   const disabled = busy || pending;
 
@@ -1138,6 +1166,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           error={error}
           busy={disabled}
           unreachable={unreachable}
+          frame={frame}
           signIn={signIn}
           onCancel={handleCancel}
           onAnalyze={handleAnalyze}
