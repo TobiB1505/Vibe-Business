@@ -54,13 +54,13 @@ describe("Nova Home", () => {
 
     it("renders a price through the one component that resolves it", () => {
       /*
-       * `ActionBlock` renders `CostDisclosure`, which resolves the retail kind
-       * to a figure. No screen formats Credits by hand.
+       * `CostDisclosure` resolves a retail kind to a figure, and it is the
+       * only thing that does. No screen formats Credits by hand.
        *
-       * It moved from the Focus Card to Home when the card became a thread:
-       * the thread has no equivalent, so the control slot carries it — and the
-       * price stays above the button rather than inside the consequence
-       * disclosure, which is the rule the component exists to hold.
+       * Where it renders moved: it used to be a line above the button, and it
+       * is now inside the control, because `study-move` chose the design where
+       * cost and action are one object. `ActionBlock` stays for the
+       * consequence disclosure.
        */
       expect(component("nova-home.tsx")).toContain("<ActionBlock");
       for (const { name, body } of FILES) {
@@ -69,13 +69,38 @@ describe("Nova Home", () => {
       }
     });
 
+    it("carries the price on the control, and only there", () => {
+      /*
+       * One commitment, one object. `ActionBlock` would render a second copy
+       * of the same figure above the same button if it were given `operation`
+       * as well, which is the two-objects-for-one-decision shape the Move was
+       * chosen to end.
+       */
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/<NovaServerActionControl[\s\S]*?operation=\{meta\.price\}/);
+      expect(home).not.toMatch(/<ActionBlock\s+operation=/);
+    });
+
     it("never hides the price behind the consequence disclosure", () => {
-      // `ActionBlock` renders the cost inline and the consequence in a
-      // `Disclosure`. Nova passes `operation` for the price and
-      // `consequence` for the prose — never the price as the prose.
+      // Nova passes `operation` for the price and `consequence` for the prose
+      // — never the price as the prose. A price a founder has to expand to see
+      // is a price disclosed after the decision.
       const home = component("nova-home.tsx");
       expect(home).toContain("operation={meta.price}");
       expect(home).not.toMatch(/consequence=\{[^}]*price/);
+    });
+
+    /*
+     * The chosen Move, not the filled mint block every earlier study drew.
+     * `study-move` compared three in all four states and B won on the ground
+     * that emphasis should come from luminance rather than from area of
+     * accent — which is the chosen direction's own sentence.
+     */
+    it("presses through the Move rather than a generic button", () => {
+      const control = component("nova-control.tsx");
+      expect(control).toContain("NovaMoveButton");
+      expect(control).toContain("NovaMoveLink");
+      expect(control).not.toMatch(/<Button\b|buttonClasses\(/);
     });
   });
 

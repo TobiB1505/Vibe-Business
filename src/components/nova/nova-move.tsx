@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { Ref } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import type { CostBalance } from "@/components/system/cost-disclosure";
@@ -9,7 +11,113 @@ import type { RetailOperationKind } from "@/modules/credits/retail";
  * Written in the design lab and moved here when the product began rendering
  * it. The lab still draws it — by importing this file, because two copies of
  * one control is how a lab stops being an answer to anything.
+ *
+ * ## Three exports, one surface
+ *
+ * The lab needs a picture; the product needs something pressable. Both are
+ * here because the alternative is the surface written twice, and the second
+ * copy is always the one that misses the next change.
+ *
+ * `NovaMove` is the span the sheets draw. `NovaMoveButton` and `NovaMoveLink`
+ * are the same surface on a real element, with the two states a study never
+ * meets and production always does: **busy** and **disabled**.
  */
+
+/**
+ * The surface, as classes, so three elements can wear it.
+ *
+ * Hover, the lit band and the press live on `.move-lit` in `globals.css`,
+ * keyed by class rather than by element — which is why a button and a link
+ * behave identically without either restating the treatment. The focus ring
+ * needs nothing here: the product defines one `:focus-visible` rule for every
+ * element, so putting this on a `<button>` is what earns it.
+ */
+function moveSurface(layout: "row" | "tile", className?: string): string {
+  return `move-lit relative flex w-full overflow-hidden rounded-nav border border-line-3 bg-surface-2 text-left ${
+    layout === "tile"
+      ? // A tile on a wide screen and a row on a phone. Three tiles in one
+        // column is three short controls with an empty line under each,
+        // which is the shape the stacking was meant to avoid.
+        "min-h-[5.25rem] flex-col justify-between gap-2 px-4 py-3.5 max-sm:min-h-0 max-sm:flex-row max-sm:items-center max-sm:gap-4 max-sm:px-4 max-sm:py-3"
+      : "items-center justify-between gap-4 px-4 py-3"
+  } ${className ?? ""}`;
+}
+
+/**
+ * What every Move contains: the lit edge, the verb, and one thing on the right.
+ *
+ * The right-hand slot is the control's *state*, and only one thing can be
+ * there at a time. At rest it is the cost. Where pressing leaves the product
+ * it is where it goes, said before the click rather than after it. While the
+ * press is in flight it is the status word — because a price is a claim about
+ * what a decision will cost, and the decision has been made.
+ *
+ * The verb never changes. It is what was pressed, and a control that renamed
+ * itself mid-press would leave a founder unsure what they had started.
+ */
+function MoveFace({
+  label,
+  operation,
+  balance,
+  leavesTo,
+  status,
+  layout,
+  muted = false,
+}: {
+  label: string;
+  operation: RetailOperationKind | null;
+  balance?: CostBalance | null;
+  leavesTo?: string;
+  status?: string;
+  layout: "row" | "tile";
+  muted?: boolean;
+}) {
+  const tile = layout === "tile";
+  const dim = muted ? "opacity-45" : "";
+
+  return (
+    <>
+      {/*
+        The control's only light. A hairline at partial width at rest, reaching
+        the full edge on hover — nothing moves position, so there is no reflow
+        and nothing to reserve.
+      */}
+      <span
+        aria-hidden
+        className="move-lit-band pointer-events-none absolute inset-x-0 top-0 h-px"
+      />
+      <span
+        className={`text-ui font-semibold ${muted ? "text-fg-disabled" : "text-mint"} ${
+          tile ? "text-balance" : ""
+        }`}
+      >
+        {label}
+      </span>
+      {/*
+        A tile always reserves the second line, priced or not. Three tiles whose
+        heights depended on whether each one cost something would be three
+        different sizes of decision on one row, which is the thing a row of
+        equals is for saying they are not.
+      */}
+      <span className={tile ? "min-h-[1.25rem] max-sm:min-h-0" : "contents"}>
+        {/*
+          Muted with the label, never separately — a disabled control whose
+          price stayed bright reads as an available price beside an unavailable
+          verb. The class goes on the contents rather than on this wrapper,
+          because in `row` layout the wrapper is `display: contents` and has no
+          box for an opacity to apply to.
+        */}
+        {status ? (
+          <span className="shrink-0 text-caption text-fg-meta">{status}</span>
+        ) : leavesTo ? (
+          <span className={`shrink-0 text-caption text-fg-meta ${dim}`}>{leavesTo}</span>
+        ) : (
+          <CostDisclosure operation={operation} balance={balance} className={dim} />
+        )}
+      </span>
+    </>
+  );
+}
 
 /**
  * The one action a moment offers, with its cost inside it.
@@ -68,45 +176,127 @@ export function NovaMove({
   layout?: "row" | "tile";
   className?: string;
 }) {
-  const tile = layout === "tile";
-
   return (
-    <span
-      className={`move-lit relative flex w-full overflow-hidden rounded-nav border border-line-3 bg-surface-2 ${
-        tile
-          ? // A tile on a wide screen and a row on a phone. Three tiles in one
-            // column is three short controls with an empty line under each,
-            // which is the shape the stacking was meant to avoid.
-            "min-h-[5.25rem] flex-col justify-between gap-2 px-4 py-3.5 max-sm:min-h-0 max-sm:flex-row max-sm:items-center max-sm:gap-4 max-sm:px-4 max-sm:py-3"
-          : "items-center justify-between gap-4 px-4 py-3"
-      } ${className ?? ""}`}
-    >
-      {/*
-        The control's only light. A hairline at partial width at rest, reaching
-        the full edge on hover — nothing moves position, so there is no reflow
-        and nothing to reserve.
-      */}
-      <span
-        aria-hidden
-        className="move-lit-band pointer-events-none absolute inset-x-0 top-0 h-px"
+    <span className={moveSurface(layout, className)}>
+      <MoveFace
+        label={label}
+        operation={operation}
+        balance={balance}
+        leavesTo={leavesTo}
+        layout={layout}
       />
-      <span className={`text-ui font-semibold text-mint ${tile ? "text-balance" : ""}`}>
-        {label}
-      </span>
-      {/*
-        A tile always reserves the second line, priced or not. Three tiles whose
-        heights depended on whether each one cost something would be three
-        different sizes of decision on one row, which is the thing a row of
-        equals is for saying they are not.
-      */}
-      <span className={tile ? "min-h-[1.25rem] max-sm:min-h-0" : "contents"}>
-        {leavesTo ? (
-          <span className="shrink-0 text-caption text-fg-meta">{leavesTo}</span>
-        ) : (
-          <CostDisclosure operation={operation} balance={balance} />
-        )}
-      </span>
     </span>
+  );
+}
+
+/**
+ * The Move as something a founder can actually press.
+ *
+ * ## Why a button rather than the span with a handler on it
+ *
+ * Because a button is focusable, reachable by keyboard, announced as a
+ * control, and submits a form. None of that is styling, and all of it is what
+ * separates a design sheet from a product. The surface is identical — the same
+ * classes, so the lit edge and the press cannot drift between the picture and
+ * the thing.
+ *
+ * ## The two states the studies never had to draw
+ *
+ * **Busy.** The right-hand slot carries the status word instead of the price,
+ * for the reason `MoveFace` states: the cost was a claim about a decision that
+ * has now been made. Geometry does not change, so nothing reflows under the
+ * cursor that just pressed.
+ *
+ * **Disabled.** The label drops to the disabled ramp and the surface stops
+ * responding, but the border stays — the same rule `Button` follows, so a
+ * control that exists and is unavailable never reads as an empty gap.
+ */
+export function NovaMoveButton({
+  label,
+  operation = null,
+  balance,
+  leavesTo,
+  layout = "row",
+  className,
+  type = "button",
+  busy = false,
+  /** What the right-hand slot says while the press is in flight. */
+  busyLabel = "Starting…",
+  disabled = false,
+  onClick,
+  ref,
+}: {
+  label: string;
+  operation?: RetailOperationKind | null;
+  balance?: CostBalance | null;
+  leavesTo?: string;
+  layout?: "row" | "tile";
+  className?: string;
+  type?: "button" | "submit";
+  busy?: boolean;
+  busyLabel?: string;
+  disabled?: boolean;
+  onClick?: () => void;
+  ref?: Ref<HTMLButtonElement>;
+}) {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      disabled={disabled}
+      aria-busy={busy || undefined}
+      onClick={onClick}
+      className={`${moveSurface(layout, className)} disabled:pointer-events-none disabled:border-line-2 disabled:bg-surface-3`}
+    >
+      <MoveFace
+        label={label}
+        operation={operation}
+        balance={balance}
+        leavesTo={leavesTo}
+        status={busy ? busyLabel : undefined}
+        layout={layout}
+        muted={disabled}
+      />
+    </button>
+  );
+}
+
+/**
+ * The Move for a decision that lives on another screen.
+ *
+ * Same surface, and deliberately so: going somewhere to decide is still the
+ * one thing this moment offers, and drawing it as a lesser control would say
+ * the moment is lesser. What differs is the right-hand slot — `leavesTo` for a
+ * destination outside the product, and otherwise nothing, because navigating
+ * inside Vibe costs nothing and a price of zero is not a fact worth printing.
+ */
+export function NovaMoveLink({
+  href,
+  label,
+  operation = null,
+  balance,
+  leavesTo,
+  layout = "row",
+  className,
+}: {
+  href: string;
+  label: string;
+  operation?: RetailOperationKind | null;
+  balance?: CostBalance | null;
+  leavesTo?: string;
+  layout?: "row" | "tile";
+  className?: string;
+}) {
+  return (
+    <Link href={href} className={moveSurface(layout, className)}>
+      <MoveFace
+        label={label}
+        operation={operation}
+        balance={balance}
+        leavesTo={leavesTo}
+        layout={layout}
+      />
+    </Link>
   );
 }
 

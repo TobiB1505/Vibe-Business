@@ -372,15 +372,16 @@ function FocusSection({
       block={blockFor(data, entry)}
       controlLabel={control.option.label}
       /*
-       * `ActionBlock` rather than the bare control, because the price is not
-       * optional: it goes above the button and never inside the consequence
-       * disclosure. The card used to supply this and the thread has no
-       * equivalent, so the control slot carries it.
+       * `ActionBlock` for the consequence, and no longer for the price.
+       *
+       * The rule it enforces is that a price is never behind the disclosure,
+       * and the Move satisfies it more strongly than a line above the button
+       * did: the cost is a child of the control, so the two cannot come apart.
+       * Passing `operation` here as well would print the same figure twice for
+       * one commitment.
        */
       control={
         <ActionBlock
-          operation={meta.price}
-          balance={data.balance}
           consequence={control.option.confirmationNote}
           control={
             <NovaServerActionControl
@@ -391,6 +392,8 @@ function FocusSection({
               consequential={control.option.consequential}
               requiresConfirmation={control.option.requiresConfirmation}
               confirmationNote={control.option.confirmationNote}
+              operation={meta.price}
+              balance={data.balance}
             />
           }
         />

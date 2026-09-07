@@ -3,6 +3,7 @@ import { creditsToUnits } from "@/modules/credits/units";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import type { RetailOperationKind } from "@/modules/credits/retail";
+import { NovaMoveButton, NovaMoveLink } from "@/components/nova/nova-move";
 import { Move } from "./elements";
 import type { Study } from "./studies";
 
@@ -68,6 +69,18 @@ import type { Study } from "./studies";
  * tier: under 120ms, `--ease-emphasis`, no overshoot. Each variant states what
  * moves. Hover is rendered forced in the second row of the sheet, because a
  * still screenshot cannot otherwise show the treatment that separates B.
+ *
+ * ## The two states a sheet does not produce
+ *
+ * Four states were enough to *choose* between three designs, and not enough to
+ * ship one. A control in a lab is never pressed, so it is never **busy**, and
+ * a lab has nothing to be unavailable about, so it is never **disabled**. Both
+ * happen constantly in the product, and the moment a chosen design meets a
+ * state nobody drew is the moment it turns back into three slightly different
+ * controls.
+ *
+ * So they are drawn here too, on the real `NovaMoveButton` — the element the
+ * product presses, not a picture of it.
  */
 
 const BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
@@ -287,6 +300,86 @@ export function StudyMove({ study }: { study: Study }) {
           </div>
         </section>
       ))}
+
+      <ShippedStates panel={panel} />
     </div>
+  );
+}
+
+/**
+ * B as the product actually renders it.
+ *
+ * Every Move above is a `<span>`: a picture, which is all a sheet comparing
+ * three designs needs. What ships is a `<button>` and a `<Link>` wearing the
+ * same surface — same function, same classes, so the picture and the thing
+ * cannot drift — and they meet two states no sheet produces.
+ *
+ * **Busy** puts the status word where the price was. The verb never changes,
+ * because the verb is what was pressed; the price yields, because it was a
+ * claim about a decision that has now been made. Nothing moves position.
+ *
+ * **Disabled** keeps the border and drops the label to the disabled ramp. A
+ * control that exists and is unavailable must still read as a control — the
+ * failure it prevents is an invisible gap where a founder expects something.
+ */
+function ShippedStates({ panel }: { panel: string }) {
+  const rows = [
+    {
+      label: "Busy",
+      note: "Pressed, and in flight. The status word takes the cost slot; the verb and the geometry hold.",
+      node: (
+        <NovaMoveButton
+          label="Run the audit again"
+          operation="business_audit"
+          balance={BALANCE}
+          busy
+        />
+      ),
+    },
+    {
+      label: "Disabled",
+      note: "Exists, unavailable. The border stays so it never reads as an empty gap.",
+      node: (
+        <NovaMoveButton
+          label="Run the audit again"
+          operation="business_audit"
+          balance={BALANCE}
+          disabled
+        />
+      ),
+    },
+    {
+      label: "A place to go",
+      note: "Navigation inside Vibe costs nothing, and a price of zero is not a fact worth printing.",
+      node: <NovaMoveLink href="#" label="Go to the plan" />,
+    },
+  ];
+
+  return (
+    <section className="flex flex-col gap-4" aria-labelledby="move-shipped">
+      <div className="flex flex-col gap-1.5">
+        <Label>
+          <span id="move-shipped">B — as the product renders it</span>
+        </Label>
+        <p className="study-measure text-ui text-fg-body">
+          The chosen surface on a real button and a real link, in the two states a sheet cannot
+          produce.
+        </p>
+      </div>
+
+      <div className={`flex flex-col divide-y divide-line-1 ${panel}`}>
+        {rows.map((row) => (
+          <div
+            key={row.label}
+            className="grid gap-4 p-5 sm:grid-cols-[minmax(0,22rem)_1fr] sm:items-center"
+          >
+            {row.node}
+            <p className="text-caption text-fg-secondary">
+              <span className="text-fg-body">{row.label}.</span> {row.note}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
