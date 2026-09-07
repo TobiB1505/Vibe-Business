@@ -8,6 +8,9 @@ import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { getLatestAuditStamp, getProjectAuditById } from "@/modules/business-audit/store";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
+import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import type { WorkspaceCandidate } from "@/modules/validation/profile";
+import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import {
   getPreparedChangeWorkspaceItem,
   type PreparedChangeWorkspaceItem,
@@ -29,8 +32,9 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * for this slice was the read count on it. So the shape is deliberate: four
  * concurrent reads, none of which fans out per candidate — and then at most
  * one conditional read, decided by what the ranking put first and described on
- * `question` and `change` below. They are mutually exclusive by construction:
- * a primary candidate is a question or a change or neither, never both.
+ * `question`, `change` and `workspaceCandidates` below. They are mutually
+ * exclusive by construction: one primary candidate is one moment, and each of
+ * the three belongs to a different set of kinds.
  *
  * 1. `readNovaFocus` — already batches its own eight queries internally and is
  *    the *only* place the ranking is decided.
@@ -117,6 +121,18 @@ export type NovaHomeData = {
    * is not there.
    */
   change: PreparedChangeWorkspaceItem | null;
+  /**
+   * The applications to choose between, when the ranking put that first.
+   *
+   * Empty is the ordinary answer, and also the answer when the question has
+   * been settled since the ranking read it — a repository with one application
+   * poses no choice, and neither does one whose owner has already answered.
+   *
+   * Repository-derived and therefore untrusted data (rule 25): directory names
+   * and framework ids are rendered as text by `AgentWorkspaceChoice`, never
+   * interpolated into a href, a class, or anything a browser would execute.
+   */
+  workspaceCandidates: readonly WorkspaceCandidate[];
 };
 
 type IdentityRow = {
@@ -167,6 +183,39 @@ async function readIdentity(
     category: headline?.category ?? null,
     understood: row === null ? "not_read" : row.confirmed_at ? "confirmed" : "unconfirmed",
   };
+}
+
+/**
+ * The applications Vibe found, for the one moment that is a choice between them.
+ *
+ * Two reads, and `readNovaFocus` has already made both — it resolves the same
+ * target to decide whether to raise the candidate at all, then keeps the
+ * boolean and discards the list. Reading it again here is the price of the
+ * ranking model staying a ranking model: `FocusCandidate` is deliberately bare
+ * for this kind, and threading a repository-derived list of directories
+ * through it so that one surface can render them would put data in the domain
+ * that nothing ranks on.
+ *
+ * It is paid only where the choice leads, which is a state a project is in
+ * once, briefly, and never again after it answers.
+ */
+async function readWorkspaceCandidates(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<readonly WorkspaceCandidate[]> {
+  const snapshot = await getLatestSuccessfulSnapshot(supabase, projectId);
+  if (!snapshot?.result) return [];
+
+  const target = await resolveProjectValidationTarget(supabase, {
+    projectId,
+    snapshot: snapshot.result,
+  });
+
+  /* Anything else is not this question. A supported target has no choice to
+     make, and an outdated analysis is a different refusal with its own moment. */
+  if (target.supported || target.reason !== "workspace_choice_required") return [];
+
+  return target.candidates ?? [];
 }
 
 /**
@@ -250,7 +299,7 @@ export async function readNovaHomeData(
    * documented read count honest rather than quietly five.
    */
   const control = view.primary.control;
-  const [question, change] = await Promise.all([
+  const [question, change, workspaceCandidates] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -262,7 +311,10 @@ export async function readNovaHomeData(
           preparedChangeId: control.preparedChangeId,
         })
       : Promise.resolve(null),
+    control.kind === "choose"
+      ? readWorkspaceCandidates(supabase, params.projectId)
+      : Promise.resolve([]),
   ]);
 
-  return { view, identity, health, balance, question, change };
+  return { view, identity, health, balance, question, change, workspaceCandidates };
 }

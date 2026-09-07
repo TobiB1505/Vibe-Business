@@ -219,11 +219,35 @@ describe("Nova Home view", () => {
      * an approval id that no candidate carries; a build needs a plan step key.
      * Answering needs neither, which is why exactly one of these moved.
      */
-    it("keeps sending away the decisions whose arguments are still missing", () => {
+    /*
+     * This used to assert `elsewhere`, on the reasoning that the candidate
+     * names no application. It does not — but the list was never an argument
+     * the ranking was withholding, it is a read, and the surface can make it.
+     * The control carries nothing, which is the honest shape.
+     */
+    it("chooses between applications here, from a list the surface reads", () => {
       const view = viewOf({ workspaceChoiceRequired: true });
 
       expect(view.primary.kind).toBe("workspace_choice_required");
+      expect(view.primary.control.kind).toBe("choose");
+      // The panel is the control, so a verb beside it would be a second one.
+      expect(novaControlLabel(view.primary.control)).toBeNull();
+    });
+
+    /*
+     * The one that is still genuinely missing an argument, and the only entry
+     * left in ELSEWHERE. `read.ts` fixes `executableStep` at null until the
+     * execution resolver is wired, so this state cannot presently arise at all
+     * — the routing is asserted here so it stays honest the day it can.
+     */
+    it("still sends a build to the plan, which holds the step", () => {
+      const view = viewOf({ executableStep: { order: 2, title: "Add the pricing page" } });
+
+      expect(view.primary.kind).toBe("execution_offered");
       expect(view.primary.control.kind).toBe("elsewhere");
+      if (view.primary.control.kind === "elsewhere") {
+        expect(view.primary.control.section).toBe("action-plan");
+      }
     });
 
     it("gives a label to every control that has one, and none to a card", () => {

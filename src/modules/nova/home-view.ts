@@ -60,7 +60,13 @@ import type { FocusCandidate, FocusCandidateKind, NovaFocus, NovaFocusTier } fro
  * `elsewhere`, and sending somebody to a decision Home cannot hold is still
  * better than a button that fails.
  */
-export type NovaControlKind = "server_action" | "navigation" | "elsewhere" | "answer" | "gate";
+export type NovaControlKind =
+  | "server_action"
+  | "navigation"
+  | "elsewhere"
+  | "answer"
+  | "gate"
+  | "choose";
 
 export type NovaHomeControl =
   | { kind: "server_action"; option: NovaChoiceOption }
@@ -80,6 +86,15 @@ export type NovaHomeControl =
    * about, which is the same narrowing the Agent route does.
    */
   | { kind: "gate"; preparedChangeId: string; stage: "validate" | "review" }
+  /**
+   * Chosen here, from the applications Vibe found.
+   *
+   * Carries nothing, and that is the honest shape: the candidate genuinely
+   * names no application, because the list comes from the repository analysis
+   * rather than from the ranking. The surface reads it — which is a read, not
+   * an argument the view model was withholding.
+   */
+  | { kind: "choose" }
   /** Go and decide where the decision lives. Carries its own honest label. */
   | { kind: "elsewhere"; label: string; section: NovaHomeSection }
   /** Nothing to press. `nothing_to_do` has no control, and inventing one would be work Nova made up. */
@@ -133,23 +148,28 @@ export type NovaHomeView = {
  * candidate cannot presently arise at all. The entry stays because the routing
  * must stay honest the day it can.
  *
- * `workspace_choice_required` names no application: the list of candidate
- * roots comes from the repository analysis rather than from the ranking, so
- * Home has nothing to render a choice *of*.
+ * One.
  *
- * The four that left did so for two different reasons, and both are worth
- * keeping straight.
+ * `execution_offered` needs the plan step key, and `read.ts` fixes
+ * `executableStep` at null until the execution resolver is wired, so the
+ * candidate cannot presently arise at all. The entry stays because the routing
+ * must stay honest the day it can.
+ *
+ * The five that left did so for three different reasons, and they are worth
+ * keeping straight, because each is a different kind of "Home cannot".
  *
  * The questions carry the id of what is being asked, which is the whole of
  * what answering needs. The merge does not carry an approval id — and that
- * turned out to be the wrong thing to look for. A merge control is not
- * something to lift out of the gates; the *gates* are what travels, and they
- * name their own approval. See `gate` above.
+ * turned out to be the wrong thing to look for: the *gates* are what travels,
+ * not a button lifted out of them, and they name their own approval.
+ *
+ * The workspace choice was the last, and its reason was the weakest of the
+ * three. The candidate names no application — true — but the list was never an
+ * argument the ranking was withholding. It is a read, and Home can make it.
  */
 const ELSEWHERE: Partial<Record<FocusCandidateKind, { label: string; section: NovaHomeSection }>> =
   {
     execution_offered: { label: "Go to the plan", section: "action-plan" },
-    workspace_choice_required: { label: "Choose in the Agent", section: "agent" },
   };
 
 /**
@@ -200,6 +220,9 @@ function controlFor(candidate: FocusCandidate): NovaHomeControl {
     return { kind: "answer", founderInputRequestId: candidate.founderInputRequestId };
   }
 
+  /* The choice is made from a list the surface reads, not from the candidate. */
+  if (candidate.kind === "workspace_choice_required") return { kind: "choose" };
+
   /* A change is decided through its own gates, and the candidate names it. */
   const stage = gateStage(candidate.kind);
   if (stage !== null && "preparedChangeId" in candidate) {
@@ -235,6 +258,7 @@ export function novaControlLabel(control: NovaHomeControl): string | null {
       return control.label;
     case "answer":
     case "gate":
+    case "choose":
     case "none":
       return null;
   }

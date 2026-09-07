@@ -9,6 +9,8 @@ import { novaPresenceState } from "@/components/system/status-vocabulary";
 import type { NovaPresenceState } from "@/components/nova/nova-presence";
 
 import { ChangeGates } from "../agent/change-gates";
+import { AgentWorkspaceChoice } from "../agent/agent-workspace-choice";
+import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveFounderInputAction } from "../founder-input-action";
 
@@ -284,6 +286,39 @@ function FocusSection({
            * duplication this surface keeps removing.
            */
           chrome={false}
+        />
+      </FocusCard>
+    );
+  }
+
+  if (control.kind === "choose") {
+    /*
+     * The ranking saw a repository with more than one application; this reads
+     * the list to render it. Empty means the question has been settled since —
+     * answered in the Agent, or the analysis re-read and resolved — and a
+     * choice with nothing to choose from would be worse than none.
+     */
+    if (data.workspaceCandidates.length === 0) {
+      return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    }
+
+    return (
+      <FocusCard entry={entry} presence={presence} seed={seed}>
+        <AgentWorkspaceChoice
+          candidates={data.workspaceCandidates}
+          /*
+           * The panel asks; the control answers. Splitting them is what lets
+           * the same question be posed on two surfaces without either of them
+           * restating the options — and it is why choosing here and choosing
+           * in the Agent cannot come to mean different things.
+           */
+          action={(candidate) => (
+            <AgentWorkspaceChoiceAction
+              projectId={projectId}
+              candidate={candidate}
+              chosen={false}
+            />
+          )}
         />
       </FocusCard>
     );
