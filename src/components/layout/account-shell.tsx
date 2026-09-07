@@ -123,7 +123,7 @@ export function AccountSidebar({
         // Desktop: a full-height rail that stays put while content scrolls.
         // Below `lg` it becomes a strip at the top, for the same reason
         // `ProjectSidebar` does — a 248px rail on a 375px screen eats the page.
-        "lg:sticky lg:top-0 lg:h-dvh lg:w-[17.5rem] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-6 lg:py-7",
+        "lg:sticky lg:top-0 lg:h-dvh lg:w-[17.5rem] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-6 lg:pt-11 lg:pb-7",
       )}
     >
       <div className="px-1">
