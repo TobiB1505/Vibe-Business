@@ -6,8 +6,13 @@ import type { NovaEntry } from "@/modules/nova/feed";
 import { Arriving } from "./arriving";
 import { Bubble, Context, Header, Line, Move, Moves } from "./elements";
 import { Clock } from "./clock";
-import { OpeningMark, OpeningPanel, OpeningStage, useOpening } from "./opening";
-import { atLeast } from "./opening-beats";
+import {
+  OpeningMark,
+  OpeningPanel,
+  OpeningStage,
+  useOpening,
+} from "@/components/nova/nova-opening";
+import { atLeast } from "@/components/nova/nova-opening-beats";
 import { speechBubbles } from "./speech-bubbles";
 import type { Study } from "./studies";
 

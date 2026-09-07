@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { NOVA_INTRODUCTION_MS } from "@/components/nova/nova-presence";
-import { atLeast, beatIndex, BEATS } from "./opening-beats";
+import { NOVA_INTRODUCTION_MS } from "./nova-presence";
+import { atLeast, beatIndex, BEATS } from "./nova-opening-beats";
 
 /**
  * The opening is a sequence, so the things worth checking are ordering and

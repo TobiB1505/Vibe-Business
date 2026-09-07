@@ -2,9 +2,9 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { motion } from "motion/react";
-import { NovaPresence } from "@/components/nova/nova-presence";
-import { BEATS, type OpeningBeat } from "./opening-beats";
-import { useMotionAllowed } from "./arriving";
+import { NovaPresence } from "./nova-presence";
+import { BEATS, type OpeningBeat } from "./nova-opening-beats";
+import { useMotionAllowed } from "./nova-motion";
 
 /**
  * The first time a founder ever sees Nova.
@@ -21,6 +21,11 @@ import { useMotionAllowed } from "./arriving";
  *
  * So this file holds beats and timings and nothing else. It draws no shape of
  * its own, and every visual it stages is a component that ships.
+ *
+ * It lives beside the mark rather than in the design lab because the product
+ * renders it: the lab draws the same components, which is what stops the
+ * opening a founder meets and the opening a reviewer looks at from drifting
+ * apart.
  *
  * ## Why the mark travels rather than fading out and in
  *

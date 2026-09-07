@@ -811,3 +811,136 @@
   transition-timing-function: var(--ease-vibe);
   transition-duration: 150ms;
 }
+
+/* ── Nova's speech ────────────────────────────────────────────────────────
+
+   The bubble, its register and its tail. Rendered by
+   `src/components/nova/nova-bubble.tsx` and by the design lab, which draws the
+   same component rather than a copy of it.
+*/
+
+/*
+   Rounder than the rest of the system, and deliberately out of step with it.
+   Every other surface here uses `--radius-card` (12px) because a panel holding
+   dense data wants a tight corner. A speech bubble is not that object — it is
+   the one shape on the screen a founder has already learned somewhere else,
+   and the thing they learned is soft. A 12px bubble reads as a card with a
+   spike on it.
+*/
+.bubble {
+  position: relative;
+  background: var(--bubble-fill);
+  border: var(--bubble-width) var(--bubble-stroke) var(--bubble-line);
+  border-radius: 17px;
+  --bubble-stroke: solid;
+  --bubble-dash: none;
+}
+
+/* The tail squares off the corner it grows from. Without this the tail meets a
+   17px curve and reads as a chip stuck to the side of a pill. */
+.bubble-tailed {
+  border-top-left-radius: 4px;
+}
+
+/*
+   Offset by the contour's own width, because an absolutely positioned child is
+   placed against the *padding* box — `top: 0` puts the tail a border-width
+   below the outline it is supposed to continue, which is a one-pixel step at
+   exactly the joint a reader looks at.
+*/
+.bubble-tail {
+  position: absolute;
+  top: calc(var(--bubble-width) * -1);
+  left: calc(-9px - var(--bubble-width));
+  overflow: visible;
+  pointer-events: none;
+}
+
+/*
+   Every fill here is opaque, and that is not a stylistic preference — it is
+   what makes the tail possible. A translucent fill painted over the bubble's
+   own left border does not hide it, it composites with it, and the joint shows
+   as a hairline running through the middle of the tail. Opaque panels are also
+   this direction's own sentence: glass is spent on chrome, never on the
+   surfaces text sits on.
+*/
+
+/* A plain fact. Nothing is being claimed beyond the sentence itself. */
+.bubble-neutral {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-line-3);
+  --bubble-width: 1px;
+}
+
+/* Something is available to start. */
+.bubble-active {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-mint-line);
+  --bubble-width: 1px;
+}
+
+/* Your turn. */
+.bubble-waiting {
+  --bubble-fill: color-mix(in srgb, var(--color-app), #fff 7%);
+  --bubble-line: var(--color-amber-line);
+  --bubble-width: 1px;
+}
+
+/*
+   Something is wrong. The only tinted fill and the only double contour — the
+   one register that has to be found before the others are read.
+*/
+.bubble-problem {
+  --bubble-fill: color-mix(in srgb, var(--color-app), var(--color-coral) 13%);
+  --bubble-line: var(--color-coral-line);
+  --bubble-width: 2px;
+}
+
+/*
+   Nothing has concluded. Dashed, and the dash is tighter than the browser's
+   default: the tail's outline is barely twenty pixels long, and at the default
+   length it drew one mark and a gap — a tail that disappears on one register
+   is a register that cannot speak.
+*/
+.bubble-open {
+  --bubble-stroke: dashed;
+  --bubble-dash: 3 2.5;
+}
+
+/*
+   Arrival, rebuilt.
+
+   The first version unfolded from the top-left over 480ms and read as wrong
+   for a reason worth naming: a message does not grow out of its own tail, it
+   arrives from below and pushes the thread up. So the origin is the bottom
+   edge, the travel is upward, and the whole thing is over in 280ms — a chat
+   bubble that takes half a second to appear is a chat bubble somebody is
+   waiting for.
+
+   Opacity and transform only, so nothing below a bubble moves while it is
+   being read.
+*/
+@keyframes bubble-arrive {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.bubble-arrive {
+  transform-origin: bottom left;
+  animation: bubble-arrive 280ms var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bubble-arrive {
+    animation: none !important;
+    opacity: 1;
+    transform: none;
+  }
+}

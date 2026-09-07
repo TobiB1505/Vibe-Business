@@ -1,9 +1,9 @@
-import { NOVA_INTRODUCTION_MS } from "@/components/nova/nova-presence";
+import { NOVA_INTRODUCTION_MS } from "./nova-presence";
 
 /**
  * The opening's timing, with no React in it.
  *
- * Separated from `opening.tsx` so the order and the durations can be checked
+ * Separated from `nova-opening.tsx` so the order and the durations can be checked
  * without rendering anything — and because the one bug worth a regression test
  * here was arithmetic, not visual: the first build held the mark for 1500ms
  * and moved it while its light curve was still being drawn.

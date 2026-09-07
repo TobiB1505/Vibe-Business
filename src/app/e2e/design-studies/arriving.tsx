@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { useMotionAllowed } from "@/components/nova/nova-motion";
 
 /**
  * The thread, arriving one message at a time, with Nova composing in between.
@@ -137,31 +138,6 @@ export function Arriving({
       {/* The controls wait for the last word, the way a person does. */}
       {settled && children}
     </div>
-  );
-}
-
-/**
- * Whether this reader wants motion, answered `false` on the server.
- *
- * A subscription rather than a flag set from an effect: the server and the
- * hydrating client agree on "no staging", so the complete thread is what the
- * markup contains and staging is only ever added afterwards.
- *
- * Exported because the opening choreography needs the same answer, and two
- * readings of one preference is how a screen ends up half-staged: the thread
- * present from the first frame while the panel around it is still assembling.
- */
-export function useMotionAllowed(): boolean {
-  const subscribe = useCallback((onChange: () => void) => {
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    media.addEventListener("change", onChange);
-    return () => media.removeEventListener("change", onChange);
-  }, []);
-
-  return useSyncExternalStore(
-    subscribe,
-    () => !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    () => false,
   );
 }
 
