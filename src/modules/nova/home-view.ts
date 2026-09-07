@@ -156,19 +156,6 @@ export type NovaHomeView = {
 /**
  * The decisions Home genuinely cannot hold.
  *
- * Two.
- *
- * `execution_offered`, and the reason changed under it. The old one was that
- * `read.ts` fixed `executableStep` at null, so the candidate could not arise;
- * the resolver is read now and it can.
- *
- * What Home still cannot hold is the *decision*. `startAgentRunAction` takes a
- * step key and a `chain` boolean — build this step, or build the run of steps
- * it heads — and those are two different pieces of work at two different
- * prices. The Agent workspace resolves the chain, forecasts both, and shows
- * them side by side. Offering one of them here would be offering half a
- * decision at a price the founder was not shown the alternative to.
- *
  * One.
  *
  * `execution_offered`, and the reason changed under it. The old one was that
