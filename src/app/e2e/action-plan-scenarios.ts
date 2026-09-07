@@ -248,6 +248,7 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
     handoffByStepKey: overrides.handoffByStepKey ?? {},
     findingByStepKey: overrides.findingByStepKey ?? {},
+    decisionByStepKey: overrides.decisionByStepKey ?? {},
     founderInputRequest,
     // Derived from the request the fixture just built, so a scenario can never
     // claim open questions it does not carry.
@@ -433,6 +434,39 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         handoffByStepKey: { "step-add-pricing-page": "claude_code" },
         // What the founder worked out on step 1, which the prompt carries in.
         findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * A handoff in the middle of a plan, where the prompt has an edge to state.
+   *
+   * The scene above hands off the plan's last step, so nothing comes after it
+   * and the prompt has no later work to rule out. This one hands off step 3 of
+   * six — which is also the shape the founder hit in production — so the prompt
+   * has to carry both halves of what Vibe knows: what the earlier steps settled
+   * (a recorded finding and a founder decision) and where this task stops.
+   */
+  action_plan_handoff_midplan: (): ActionPlanFixture => {
+    const completed = new Set([1, 2]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      handoffStepKey: "step-seo-foundations",
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        handoffByStepKey: { "step-seo-foundations": "claude_code" },
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        // The half that was missing entirely: a decision lives only in Vibe's
+        // database, so a prompt that referred to one without carrying it sent
+        // the founder's tool after something it could not reach.
+        decisionByStepKey: { "step-decide-segment": "Prioritize small product teams." },
         founderInputRequest: null,
       }),
       activeOperation: null,

@@ -20,6 +20,22 @@ But the founder is a vibe coder. They already have a coding agent, with their cr
 
 The durable half lives elsewhere, because it belongs to the plan rather than to the prompt: `action-plans/handoff-store.ts` reads which steps were handed off, `operations/handoff/server-writes.ts` records one, and the `action_plan_handoffs` table is what admits a handed-off step to founder attestation.
 
+## What the prompt carries, and why each part is there
+
+A first version carried the step and nothing else, and the founder read the result back to us: it referred to "the confirmed plan structure" without containing it, and it said "build whatever is missing" without saying where that stops. Both are failures [Anthropic's own guidance](https://code.claude.com/docs/en/best-practices) names — a spec should be self-contained, state what is out of scope, and end with a check — and both were free to fix, because Vibe already held the missing halves.
+
+| Part | Where it comes from |
+|---|---|
+| What to build, why it matters, done when | The plan step, quoted inside its fence |
+| What earlier steps settled | Founder findings **and founder decisions** on closed steps of the same plan |
+| Where this task stops | The plan's own later steps, named so they are not built by accident |
+| Plan first, then change | Vibe's words |
+| Check `DONE WHEN` yourself, then print `VIBE SUMMARY` | Vibe's words; the block is what the founder pastes back |
+
+A decision is the part only Vibe holds: it lives in the database as a founder resolution, never in the repository, so a prompt that referred to one without carrying it sent the founder's tool after something it could not reach.
+
+**Still not carried, and known:** the repository paths the audit's evidence points at. Naming the files the analysis actually read is the next thing worth adding, and it needs the evidence pack resolved at the call site.
+
 ## Two properties this module exists to hold
 
 **Assembled, never generated.** No model call. Not to save money, though it is free and instant: a model writing this would put fresh, unreviewed output into a prompt the founder pastes into an agent running with their credentials. The plan step is already written, already on screen, already the thing they approved.

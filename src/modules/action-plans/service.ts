@@ -44,6 +44,7 @@ import {
   listFounderInputRequestsForPlan,
 } from "@/modules/founder-input/store";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
+import { matchingFounderResolution } from "@/modules/founder-input/completion";
 
 /**
  * Action Plan readiness, staleness and read models (CORE-2b §42, §59).
@@ -427,6 +428,16 @@ export type ActionPlanView = {
    * sending them to rediscover something they had already worked out.
    */
   findingByStepKey: Record<string, string>;
+  /**
+   * What the founder decided on the decision steps they closed (ADR 0096).
+   *
+   * The same argument as `findingByStepKey` and the same cost — nothing new is
+   * read, because deciding what is finished already needs these resolutions.
+   * It is here because a handoff prompt that says "using the confirmed plan
+   * structure" and does not carry the confirmed plan structure has sent the
+   * founder's own tool after something only Vibe's database holds.
+   */
+  decisionByStepKey: Record<string, string>;
   /** The request for the current actionable founder-owned step, if one is open. */
   founderInputRequest: FounderInputRequest | null;
   /**
@@ -502,6 +513,12 @@ export async function getLatestActionPlan(
       founderActionEvidence
         .filter((item): item is typeof item & { finding: string } => item.finding !== null)
         .map((item) => [item.stepKey, item.finding]),
+    ),
+    decisionByStepKey: Object.fromEntries(
+      plan.steps.flatMap((step) => {
+        const resolution = matchingFounderResolution(step, resolutions);
+        return resolution ? [[step.id, resolution.resolvedStatement] as const] : [];
+      }),
     ),
     openFounderInputCount: requests.filter((request) => request.status === "open").length,
     founderInputRequest:

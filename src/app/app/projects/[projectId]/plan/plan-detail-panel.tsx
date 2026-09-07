@@ -409,15 +409,30 @@ function PlanBody({
               step={firstActionableStep}
               repository={repositoryFullName}
               tool={planView.handoffByStepKey[firstActionableStep.id] ?? null}
-              /* What the founder already worked out, in plan order and without
-                 the step being handed over — a note that answers this step is
-                 the step, not context for it (ADR 0096). */
-              priorFindings={steps
-                .filter((entry) => entry.id !== firstActionableStep.id)
-                .flatMap((entry) => {
-                  const finding = planView.findingByStepKey[entry.id];
-                  return finding ? [{ stepTitle: entry.title, finding }] : [];
-                })}
+              /* What the plan already settled, in plan order and without the
+                 step being handed over — a note that answers this step is the
+                 step, not context for it (ADR 0096). Findings and decisions
+                 both count: the prompt used to say "the confirmed plan
+                 structure" while carrying neither. */
+              settled={steps
+                .filter(
+                  (entry) =>
+                    entry.id !== firstActionableStep.id &&
+                    planView.completedStepOrders.includes(entry.order),
+                )
+                .map((entry) => ({
+                  order: entry.order,
+                  title: entry.title,
+                  outcome:
+                    planView.findingByStepKey[entry.id] ??
+                    planView.decisionByStepKey[entry.id] ??
+                    null,
+                }))}
+              /* Everything after this step, so the receiving tool is told where
+                 this task stops rather than left to guess an edge. */
+              later={steps
+                .filter((entry) => entry.order > firstActionableStep.order)
+                .map((entry) => ({ order: entry.order, title: entry.title }))}
               confirmation={
                 <AttestationForm
                   projectId={projectId}

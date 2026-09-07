@@ -95,6 +95,43 @@ test.describe("a step Vibe will not build", () => {
     await expect(prompt).toContainText("context, not");
   });
 
+  test("carries the decision the plan already settled", async ({ page }) => {
+    /*
+     * The defect the founder reported off a real prompt: it said "using the
+     * confirmed plan structure" and did not carry it. A decision lives only in
+     * Vibe's database, so the receiving tool had no way to reach it — the
+     * sentence read as though the information had been supplied.
+     *
+     * Asserted in the browser rather than only against the compiler, because
+     * what was broken was the wiring: the value was loaded, and nothing passed
+     * it on.
+     */
+    await page.goto("/e2e/action_plan_handoff_midplan");
+
+    await expect(page.getByTestId("handoff-prompt")).toContainText(
+      "Prioritize small product teams.",
+    );
+  });
+
+  test("tells the tool where this task stops", async ({ page }) => {
+    // A step with no stated edge lets an agent work until its context runs out.
+    // Vibe does not invent the edge: the plan's later steps are the edge.
+    await page.goto("/e2e/action_plan_handoff_midplan");
+
+    const prompt = page.getByTestId("handoff-prompt");
+    await expect(prompt).toContainText("NOT THIS TASK");
+    await expect(prompt).toContainText("Step 4 · Submit the sitemap to Search Console");
+    await expect(prompt).toContainText("Step 6 · Build a dedicated pricing page");
+  });
+
+  test("states no edge when the handed-off step is the plan's last", async ({ page }) => {
+    // The counter-case, so the block is a fact about the plan rather than
+    // boilerplate every prompt carries.
+    await page.goto("/e2e/action_plan_handoff_prompt");
+
+    await expect(page.getByTestId("handoff-prompt")).not.toContainText("NOT THIS TASK");
+  });
+
   test("ends by asking the tool to print the summary", async ({ page }) => {
     await page.goto("/e2e/action_plan_handoff_prompt");
 
