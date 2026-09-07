@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getBrowserSessionProvider } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
+import type { DeepScanProgress } from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScan,
   cancelDeepScan,
   getDeepScanLiveView,
+  getDeepScanProgress,
   probeDeepScanSignIn,
   startDeepScan,
 } from "@/modules/authenticated-product-intelligence/service";
@@ -39,6 +41,29 @@ export type LiveViewActionState =
   | { ok: false; error: DeepScanActionFailure };
 
 export type SimpleDeepScanActionState = { ok: true } | { ok: false; error: DeepScanActionFailure };
+
+export type DeepScanProgressActionState = DeepScanProgress | null;
+
+/**
+ * How far the running analysis has got.
+ *
+ * Polled while the scan runs, so it is the cheapest thing here: one read, no
+ * writes, no revalidation. A failure answers `null` — the panel then shows the
+ * animation without a count, which is the state it was in before this existed
+ * and is never worse than the alternative of an error over a working scan.
+ */
+export async function deepScanProgressAction(
+  sessionId: string,
+): Promise<DeepScanProgressActionState> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  try {
+    return await getDeepScanProgress(supabase, { sessionId, userId: session.userId });
+  } catch {
+    return null;
+  }
+}
 
 export type SignInProbeActionState =
   | { ok: true; signedIn: boolean }

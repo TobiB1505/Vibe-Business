@@ -28,6 +28,7 @@ export function DeepScanDialogFixture({ sealing }: { sealing: boolean }) {
       signIn={{ signedIn: false, startsInSeconds: null, postpone: noop }}
       sealing={sealing}
       analysing={sealing}
+      progress={sealing ? { pagesInspected: 14, maxPages: 25 } : null}
       onCancel={noop}
       onAnalyze={noop}
       onConnected={noop}

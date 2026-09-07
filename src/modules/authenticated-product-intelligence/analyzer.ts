@@ -106,6 +106,24 @@ export type AnalyzeInput = {
    * (ADR 0011).
    */
   onDiagnostic?: (event: { step: string; path: string; detail: string }) => void;
+  /**
+   * A page was read, and how many that makes.
+   *
+   * The one honest source of progress this scan has. The analysis runs inside
+   * a single request and reports nothing until it returns, so a founder
+   * watched ninety seconds of animation that could not say whether anything
+   * was happening — and the alternative on offer was a bar timed against a
+   * guess, which is a percentage nobody measured.
+   *
+   * Called after a page is *recorded*, never before it is read: the number is
+   * pages that exist in the snapshot, not pages attempted. A page that failed
+   * to load moves nothing, which is correct — it taught us nothing.
+   *
+   * A seam rather than a write, for the same reason `onDiagnostic` is one: the
+   * analyzer stays a function of its inputs, and where progress goes is the
+   * caller's business.
+   */
+  onProgress?: (progress: { pagesInspected: number; maxPages: number }) => void;
 };
 
 export type AnalyzeResult =
@@ -462,6 +480,7 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     const landedShape = routeShape(landedPath);
     shapeVisits.set(landedShape, (shapeVisits.get(landedShape) ?? 0) + 1);
     tracker.recordPage();
+    input.onProgress?.({ pagesInspected: pages.length, maxPages: budgets.maxPages });
     maxDepthReached = Math.max(maxDepthReached, candidate.depth);
 
     if (candidate.depth < budgets.maxDepth) {
