@@ -42,6 +42,15 @@ export type AnalysisPagePort = {
   url(): string;
   /** Same-origin GET navigation. Returns the HTTP status when known. */
   goto(url: string, options: { timeoutMs: number }): Promise<{ status: number | null }>;
+  /**
+   * Waits until the page stops navigating itself.
+   *
+   * Required rather than optional, and never allowed to throw. An optional
+   * method is one a fake can omit and a production path can quietly skip —
+   * this module has already paid for that once, with a connector mock that
+   * never provided `openSessionAtOrigin` and a `catch {}` that hid it.
+   */
+  settle(options: { quietMs: number; timeoutMs: number }): Promise<void>;
   /** Runs the extraction script in the page. */
   extract(): Promise<RawPageExtraction>;
 };
@@ -194,15 +203,26 @@ function interruptedByAnotherNavigation(error: unknown): boolean {
  * budget spent on it, which is the failure the budgets exist to prevent.
  */
 async function navigate(
-  page: { goto: (path: string, options: { timeoutMs: number }) => Promise<{ status: number | null }> },
+  page: AnalysisPagePort,
   target: string,
-  timeoutMs: number,
+  options: { timeoutMs: number; quietMs: number; settleTimeoutMs: number },
 ): Promise<{ status: number | null }> {
   try {
-    return await page.goto(target, { timeoutMs });
+    return await page.goto(target, { timeoutMs: options.timeoutMs });
   } catch (error) {
     if (!interruptedByAnotherNavigation(error)) throw error;
-    return await page.goto(target, { timeoutMs });
+    /*
+     * Wait for the interrupting navigation before asking again.
+     *
+     * The first version of this retried immediately, and the message it
+     * produced changed from "interrupted by another navigation to /app" to
+     * "interrupted by another navigation to /plan" — the same URL, because the
+     * second attempt was now being aborted by the tail of the first. Retrying
+     * without settling is not a retry; it is the same collision one step
+     * later.
+     */
+    await page.settle({ quietMs: options.quietMs, timeoutMs: options.settleTimeoutMs });
+    return await page.goto(target, { timeoutMs: options.timeoutMs });
   }
 }
 
@@ -289,7 +309,13 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     if (!(candidate.source === "landing" && navigationCount === 0)) {
       try {
         navigationCount += 1;
-        status = (await navigate(page, target, tracker.remainingNavigationTimeoutMs)).status;
+        status = (
+          await navigate(page, target, {
+            timeoutMs: tracker.remainingNavigationTimeoutMs,
+            quietMs: budgets.settleQuietMs,
+            settleTimeoutMs: budgets.settleTimeoutMs,
+          })
+        ).status;
       } catch (error) {
         tracker.note("navigation_failed");
         warnings.push(warning("page_unreachable", "A page could not be loaded.", candidate.path));
@@ -301,6 +327,21 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
         continue;
       }
     }
+
+    /*
+     * Let the page finish arriving before anything is read from it.
+     *
+     * This is the line the whole scan was missing. Without it the loop read a
+     * page mid-boot and then navigated away mid-boot, so a run inspected one
+     * page of sixteen and every other failure named the page before it —
+     * "Execution context was destroyed" for the read, "interrupted by another
+     * navigation" for the next hop. Both are the same missing wait.
+     *
+     * It also decides *where* we think we are: an application that redirects
+     * itself after `goto` returns has not finished choosing its URL yet, so
+     * reading `page.url()` before this settles records the wrong path.
+     */
+    await page.settle({ quietMs: budgets.settleQuietMs, timeoutMs: budgets.settleTimeoutMs });
 
     // After navigating, confirm we are still where we think we are: a redirect
     // to an identity provider or a marketing site must not be analysed.

@@ -56,6 +56,19 @@ export type AuthenticatedCrawlBudgets = {
   maxLinksPerPage: number;
   /** Per-navigation ceiling. */
   navigationTimeoutMs: number;
+  /**
+   * How long a page must hold still before it counts as settled.
+   *
+   * A single-page application answers `goto` when the document exists and then
+   * keeps routing on its own — an auth check, a redirect to a canonical path,
+   * a shell that replaces the URL once its data arrives. Reading during that
+   * gets "Execution context was destroyed"; navigating during it aborts the
+   * next page. Both were happening: one scan inspected **one** page of
+   * sixteen and every failure named the page before it.
+   */
+  settleQuietMs: number;
+  /** The longest Vibe waits for a page to hold still before reading it anyway. */
+  settleTimeoutMs: number;
   /** Wall-clock ceiling for the whole analysis, checked between navigations. */
   maxDurationMs: number;
   /** Longest single extracted label retained. */
@@ -72,6 +85,17 @@ export const DEFAULT_AUTHENTICATED_BUDGETS: AuthenticatedCrawlBudgets = {
   maxDepth: 2,
   maxLinksPerPage: 60,
   navigationTimeoutMs: 15_000,
+  /*
+   * Half a second of stillness, waited up to five.
+   *
+   * Long enough to outlast a framework's own redirect, which is one paint, and
+   * short enough that twenty-five settled pages still fit inside the
+   * three-minute ceiling below with room to spare. Reaching the timeout is not
+   * a failure: the page is read as it stands, because a page that never stops
+   * moving is still worth describing.
+   */
+  settleQuietMs: 500,
+  settleTimeoutMs: 5_000,
   /*
    * Three minutes, and it stays the thing that ends a scan.
    *

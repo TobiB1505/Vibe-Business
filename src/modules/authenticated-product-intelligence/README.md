@@ -32,6 +32,16 @@ It also refuses to spend a page on something the public scan already read. A pag
 
 Page content is untrusted data, never instruction (rule 36): what is extracted is sanitized into typed signals, and what is stored is derived intelligence with short evidence labels — never page source, body text, cookies or query strings (rule 37).
 
+## Reading a page instead of passing through it
+
+`goto` resolves when the document exists, which for a single-page application is the beginning of its work rather than the end: it then checks the session, redirects to a canonical path, or replaces the URL once its data arrives. The loop used to read and then navigate inside that window, so a page was killed by the page before it — `Execution context was destroyed` for the read, `interrupted by another navigation` for the next hop. One measured run inspected **one** page of sixteen.
+
+So every page is now let go still before anything is read from it: `AnalysisPagePort.settle` waits for the URL to hold still for half a second, then best-effort for the network to go quiet, capped at five. URL stability is the signal that always terminates; `networkidle` is the one that catches a shell fetching its data without changing the URL, and it is best effort because a logged-in application often polls and would never reach it. Reaching the cap is not a failure — the page is read as it stands.
+
+Settling also decides *where* Vibe thinks it is. An application that redirects itself after `goto` returns has not finished choosing its URL, so the landed path is read after the wait, not before it.
+
+Vibe navigates by URL and **never clicks** (`FORBIDDEN_INTERACTIONS`). Links found in the signed-in UI do become candidates — that is the crawl — but a click's destination and side effects are whatever the page decides they are, and this analysis runs logged in as the customer.
+
 ## Noticing the login instead of asking about it
 
 The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.

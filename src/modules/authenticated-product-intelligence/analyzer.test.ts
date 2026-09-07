@@ -44,6 +44,7 @@ function fakeBrowser(options: {
       current = url;
       return { status: 200 };
     }),
+    settle: vi.fn(async () => undefined),
     extract: vi.fn(async () => {
       const path = new URL(current).pathname;
       return options.extractionFor ? options.extractionFor(path) : extraction();
@@ -53,6 +54,7 @@ function fakeBrowser(options: {
   const extraTabs = (options.urls ?? []).slice(1).map<AnalysisPagePort>((url) => ({
     url: () => url,
     goto: vi.fn(async () => ({ status: 200 })),
+    settle: vi.fn(async () => undefined),
     extract: vi.fn(async () => extraction()),
   }));
 
@@ -211,6 +213,7 @@ describe("analyzeAuthenticatedProduct", () => {
         current = url.includes("settings") ? "https://accounts.google.com/reauth" : url;
         return { status: 200 };
       }),
+      settle: async () => undefined,
       extract: vi.fn(async () => extraction()),
     };
     const browser: AnalysisBrowserPort = {
@@ -364,6 +367,7 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
         current = `${ORIGIN}${redirects[path] ?? path}`;
         return { status: 200 };
       },
+      settle: async () => undefined,
       extract: async () => extraction({ sameOriginLinks: links }),
     };
 
@@ -440,6 +444,7 @@ describe("analyzeAuthenticatedProduct — a single-page app interrupting its own
         current = url;
         return { status: 200 };
       },
+      settle: async () => undefined,
       extract: async () => extraction(),
     };
 
@@ -482,6 +487,7 @@ describe("analyzeAuthenticatedProduct — a single-page app interrupting its own
         current = url;
         return { status: 200 };
       },
+      settle: async () => undefined,
       extract: async () => extraction(),
     };
 
@@ -522,6 +528,7 @@ describe("analyzeAuthenticatedProduct — pages the public scan already read", (
         current = url;
         return { status: 200 };
       },
+      settle: async () => undefined,
       extract: async () =>
         extraction({ sameOriginLinks: [`${ORIGIN}/privacy`, `${ORIGIN}/app/settings`] }),
     };
@@ -554,5 +561,158 @@ describe("analyzeAuthenticatedProduct — pages the public scan already read", (
 
     expect(result.ok).toBe(true);
     expect(visited.map((url) => new URL(url).pathname)).toContain("/app/reports");
+  });
+});
+
+/*
+ * The wait the whole loop was missing.
+ *
+ * A run inspected **one** page of sixteen. Every other failure named the page
+ * before it: "Execution context was destroyed" when Vibe read, "interrupted by
+ * another navigation" when it moved on. The founder described it exactly —
+ * "er liest nicht sondern springt im Sekundentakt" — because a single-page
+ * application answers `goto` when the document exists and then keeps routing:
+ * an auth check, a canonical redirect, a shell replacing the URL once its data
+ * lands. Reading and navigating both landed inside that window.
+ *
+ * The first attempt at a fix retried the interrupted navigation immediately,
+ * and the production message changed from "interrupted by … /app" to
+ * "interrupted by … /plan" — the same URL, the second attempt now aborted by
+ * the tail of the first. Retrying without settling is the same collision one
+ * step later, which is why these tests assert *order*, not counts.
+ */
+describe("analyzeAuthenticatedProduct — a page is let go still before it is read", () => {
+  /** A tab that behaves like a framework: it is unreadable until it settles. */
+  function routingBrowser(options: { interrupt?: Set<string> } = {}) {
+    const interrupt = options.interrupt ?? new Set<string>();
+    let current = `${ORIGIN}/app`;
+    let settled = true;
+    const order: string[] = [];
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        const path = new URL(url).pathname;
+        order.push(`goto ${path}`);
+        if (interrupt.has(path)) {
+          interrupt.delete(path);
+          settled = false;
+          throw new Error(
+            `page.goto: Navigation to "${url}" is interrupted by another navigation to "${url}"`,
+          );
+        }
+        current = url;
+        // The document exists; the application has not finished with it.
+        settled = false;
+        return { status: 200 };
+      },
+      settle: async () => {
+        order.push("settle");
+        settled = true;
+      },
+      extract: async () => {
+        order.push("extract");
+        if (!settled) {
+          throw new Error("page.evaluate: Execution context was destroyed, most likely because of a navigation");
+        }
+        return extraction();
+      },
+    };
+
+    return {
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      } satisfies AnalysisBrowserPort,
+      order,
+    };
+  }
+
+  it("settles every page before reading it", async () => {
+    const { browser, order } = routingBrowser();
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser,
+      repository: repositoryWith(["/app/settings", "/app/billing"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // The point of the fake: an unsettled read throws, so a page in the
+    // snapshot is a page that was let go still first.
+    expect(result.snapshot.pages.map((page) => page.path)).toEqual(
+      expect.arrayContaining(["/app", "/app/settings", "/app/billing"]),
+    );
+    expect(result.snapshot.warnings.filter((w) => w.code === "page_unreachable")).toHaveLength(0);
+
+    // Never `extract` straight after `goto`.
+    for (let i = 0; i < order.length - 1; i += 1) {
+      if (order[i]!.startsWith("goto")) expect(order[i + 1]).toBe("settle");
+    }
+  });
+
+  it("settles before retrying an interrupted navigation, not immediately", async () => {
+    const { browser, order } = routingBrowser({ interrupt: new Set(["/app/settings"]) });
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser,
+      repository: repositoryWith(["/app/settings"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const settings = order.indexOf("goto /app/settings");
+    expect(settings).toBeGreaterThanOrEqual(0);
+    // The retry waits for the interrupting navigation instead of racing it.
+    expect(order.slice(settings, settings + 3)).toEqual([
+      "goto /app/settings",
+      "settle",
+      "goto /app/settings",
+    ]);
+    expect(result.snapshot.pages.map((page) => page.path)).toContain("/app/settings");
+  });
+
+  it("reads the path the application chose, not the one it was sent to", async () => {
+    // An application that redirects itself after `goto` returns has not
+    // finished choosing its URL. Reading `page.url()` before settling records
+    // the wrong path — and marks the wrong one visited.
+    let current = `${ORIGIN}/app`;
+    let redirecting = false;
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        current = url;
+        redirecting = new URL(url).pathname === "/app/settings";
+        return { status: 200 };
+      },
+      settle: async () => {
+        if (redirecting) {
+          current = `${ORIGIN}/app/settings/profile`;
+          redirecting = false;
+        }
+      },
+      extract: async () => extraction(),
+    };
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      },
+      repository: repositoryWith(["/app/settings"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const paths = result.snapshot.pages.map((entry) => entry.path);
+    expect(paths).toContain("/app/settings/profile");
+    expect(paths).not.toContain("/app/settings");
   });
 });
