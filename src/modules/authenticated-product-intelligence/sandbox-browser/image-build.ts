@@ -136,6 +136,56 @@ export function imageBuildCommands(): readonly ImageBuildStep[] {
      * `apt-get: command not found` by name — which is how the previous wrong
      * assumption was caught, and cheaper than assuming again.
      */
+    /*
+     * apt talks HTTPS, because the sandbox will not carry it any other way.
+     *
+     * The index refresh failed and, once both ends of the output were kept,
+     * said exactly why:
+     *
+     * ```
+     * Err:2 http://security.ubuntu.com/ubuntu resolute-security InRelease
+     *   Connection failed [IP: 91.189.91.81 80]
+     * ```
+     *
+     * DNS was fine — the allowlist covers these hosts and apt had their
+     * addresses. **Port 80 was not.** An `allow_domains` policy admits a name
+     * over TLS; Ubuntu's default sources are plain HTTP, so every index came
+     * back unreachable and apt then reported thirty packages it could not find.
+     *
+     * Measured before writing this, 2026-09-07: `archive.ubuntu.com` answers
+     * 200 over HTTPS, `security.ubuntu.com` redirects, and the actual
+     * `dists/…/InRelease` serves 200. So the archives support it and only the
+     * default configuration does not use it.
+     *
+     * `find` rather than a fixed path, because Ubuntu 26.04 keeps its sources
+     * in deb822 form under `sources.list.d/` while older layouts use
+     * `sources.list`, and a `sed` at one path is wrong on whichever layout it
+     * was not written for. No shell: `find` parses these arguments itself.
+     */
+    {
+      command: {
+        command: "find",
+        args: [
+          "/etc/apt",
+          "-type",
+          "f",
+          "(",
+          "-name",
+          "*.list",
+          "-o",
+          "-name",
+          "*.sources",
+          ")",
+          "-exec",
+          "sed",
+          "-i",
+          "s,http://,https://,g",
+          "{}",
+          "+",
+        ],
+      },
+      sudo: true,
+    },
     { command: { command: "apt-get", args: ["update"] }, sudo: true },
     {
       command: {
@@ -248,6 +298,16 @@ export const IMAGE_BUILD_HOSTS = [
   "security.ubuntu.com",
   "ports.ubuntu.com",
   "*.archive.ubuntu.com",
+  /*
+   * A third-party archive the base image ships with, observed in the same
+   * failing refresh: `Ign:1 https://cli.github.com/packages`.
+   *
+   * Named because `apt-get update` fails as a whole when any configured source
+   * fails, and an image Vibe does not control decides what is configured.
+   * Tolerating a broken source instead would be the pattern that hid this
+   * failure for two rounds.
+   */
+  "cli.github.com",
 ] as const;
 
 /**
