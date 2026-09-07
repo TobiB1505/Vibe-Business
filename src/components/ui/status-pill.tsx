@@ -41,6 +41,27 @@ const DOT_CLASSES: Record<StatusTone, string> = {
 };
 
 /**
+ * A tone as a chip's fill, border and text.
+ *
+ * ## Why this is exported and `TONE_CLASSES` is not enough
+ *
+ * Because four call sites had already retyped it. Two of them character for
+ * character — `bg-mint-tint border-mint-line text-mint` beside
+ * `bg-coral-tint border-coral-line text-coral` beside
+ * `bg-surface-hover border-line-4 text-fg-muted` — in a local `cn()` that
+ * branched on a domain state. Written that way, a change to the coral tint
+ * reaches `StatusPill` and misses them, and nothing says so.
+ *
+ * They are not `StatusPill`s: that is uppercase `text-label`, and these are
+ * sentence-case `text-caption` health labels. Whether the case should
+ * converge is a separate question and a visible one. The *colour* is not a
+ * question, so it stops being copied now.
+ */
+export function statusToneChip(tone: StatusTone): string {
+  return TONE_CLASSES[tone];
+}
+
+/**
  * A tone as plain foreground colour, for a status word set in prose (UI-6 §2).
  *
  * ## Why this is separate from `TONE_CLASSES`
@@ -168,12 +189,49 @@ export function RatingChip({ children, className }: { children: ReactNode; class
 }
 
 /**
+ * A machine value, in a chip.
+ *
+ * A path, a branch, a short SHA — the thing `Metric` sets in mono, but sitting
+ * on its own rather than under a label. Three call sites drew it by hand with
+ * one class string and one variant that differed only in a quarter of a
+ * pixel's padding.
+ *
+ * Not a `StatusPill`: this reports no state and takes no tone. Not a
+ * `RatingChip`: that is a reading of an axis, in the interface face, because a
+ * rating is a judgement rather than output. The face is the whole distinction
+ * — mono is what Vibe read, not what Vibe concluded.
+ *
+ * `bg-well` rather than a surface: a machine value is quoted material and
+ * belongs in a recess, the same argument `Well` makes for anything a founder
+ * did not write.
+ */
+export function MonoChip({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "border-line-2 bg-well text-fg-prose inline-flex items-center rounded-full border",
+        "px-2.5 py-0.5 font-mono text-meta",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
  * The small glowing dot used in list rows and the sidebar to carry a project's
  * state. It is decorative on its own — every use must sit next to text that
  * says the same thing, which is why it takes no label of its own and is hidden
  * from assistive technology.
  */
-export function StatusDot({ tone = "neutral", className }: { tone?: StatusTone; className?: string }) {
+export function StatusDot({
+  tone = "neutral",
+  className,
+}: {
+  tone?: StatusTone;
+  className?: string;
+}) {
   return (
     <span
       aria-hidden

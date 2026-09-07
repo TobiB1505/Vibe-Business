@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { MonoLabel } from "@/components/ui/typography";
 import { Well } from "@/components/ui/surface";
+import { RatingChip } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils/cn";
 import { LENS_LABELS } from "@/modules/business-audit/map-view";
 import { buildChainCompletionNote } from "@/modules/coding-agent/view";
@@ -149,16 +150,8 @@ export function AgentTaskPanel({
         )}
         {/* Ratings are the Move's own. A task recovered from a stored origin
             has none, and guessing "medium" would be an assessment nobody made. */}
-        {task.impact !== null && (
-          <span className="rounded-full border-mint-line bg-mint-tint text-mint border px-3 py-1 text-caption font-semibold">
-            {IMPACT_LABELS[task.impact]}
-          </span>
-        )}
-        {task.effort !== null && (
-          <span className="rounded-full border-amber-line bg-amber-tint text-amber border px-3 py-1 text-caption font-semibold">
-            {EFFORT_LABELS[task.effort]}
-          </span>
-        )}
+        {task.impact !== null && <RatingChip>{IMPACT_LABELS[task.impact]}</RatingChip>}
+        {task.effort !== null && <RatingChip>{EFFORT_LABELS[task.effort]}</RatingChip>}
       </div>
 
       <p

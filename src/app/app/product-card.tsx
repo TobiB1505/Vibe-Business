@@ -3,7 +3,7 @@ import { ArrowRightIcon } from "@/components/ui/dashboard-icons";
 import { scoreDisplay } from "@/components/ui/score-display";
 import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { Sparkline } from "@/components/ui/sparkline";
-import { statusToneText } from "@/components/ui/status-pill";
+import { statusToneChip, statusToneText } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
@@ -116,9 +116,7 @@ export function ProductCard({ project }: { project: DashboardProject }) {
           <span
             className={cn(
               "rounded-full border px-2 py-0.5 text-[0.625rem] font-semibold",
-              analysedState
-                ? "bg-mint-tint border-mint-line text-mint"
-                : "bg-surface-hover border-line-4 text-fg-muted",
+              statusToneChip(analysedState ? "success" : "neutral"),
             )}
           >
             {analysedState ? "Analysed" : "Setup"}

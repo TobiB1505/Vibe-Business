@@ -7,6 +7,7 @@ import { planMoveHref } from "@/modules/action-plans/source";
 import { IMPACT_LABELS } from "@/modules/opportunities/schema";
 import type { HomeView } from "@/modules/projects/command-center";
 import { proseLinkClasses } from "@/components/ui/text-link";
+import { RatingChip } from "@/components/ui/status-pill";
 
 /**
  * The one thing Home is for (CORE-5).
@@ -143,7 +144,7 @@ export function HomeStatus({
                 {nextMove.problem}
               </p>
               {/* The engine's own rating, named rather than re-derived here. */}
-              <p className="text-fg-meta font-mono text-meta">{IMPACT_LABELS[nextMove.impact]}</p>
+              <RatingChip>{IMPACT_LABELS[nextMove.impact]}</RatingChip>
             </>
           )}
 

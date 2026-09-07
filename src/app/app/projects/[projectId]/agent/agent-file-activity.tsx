@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { formatTime } from "@/lib/utils/format-datetime";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
+import { MonoChip } from "@/components/ui/status-pill";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 
 /**
@@ -138,11 +139,7 @@ export function AgentFileActivity({
                     <span className="text-fg-meta flex-none font-mono text-meta">{clock}</span>
                   )}
                 </span>
-                {path !== null && (
-                  <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-meta">
-                    {path}
-                  </span>
-                )}
+                {path !== null && <MonoChip className="self-start">{path}</MonoChip>}
               </span>
             </motion.li>
           );
@@ -183,11 +180,7 @@ export function AgentFileActivity({
                           </span>
                         )}
                       </span>
-                      {path !== null && (
-                        <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-meta">
-                          {path}
-                        </span>
-                      )}
+                      {path !== null && <MonoChip className="self-start">{path}</MonoChip>}
                     </span>
                   </li>
                 );

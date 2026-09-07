@@ -4,10 +4,11 @@ import { ArrowRightIcon, InfoIcon } from "@/components/ui/dashboard-icons";
 import { scoreDisplay } from "@/components/ui/score-display";
 import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { Sparkline, sparklineBreakCaption } from "@/components/ui/sparkline";
-import { statusToneText } from "@/components/ui/status-pill";
+import { statusToneChip, statusToneText } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { figureClasses } from "@/components/ui/figure";
+import { RatingChip } from "@/components/ui/status-pill";
 import { formatDate, formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
@@ -121,9 +122,7 @@ function TrendPill({ delta }: { delta: number | null }) {
     <span
       className={cn(
         "w-fit rounded-full border px-3 py-1 text-caption font-semibold tabular-nums",
-        tone === "success" && "bg-mint-tint border-mint-line text-mint",
-        tone === "problem" && "bg-coral-tint border-coral-line text-coral",
-        tone === "neutral" && "bg-surface-hover border-line-4 text-fg-muted",
+        statusToneChip(tone),
       )}
     >
       {sign}
@@ -210,12 +209,8 @@ function NextMove({ project }: { project: DashboardProject }) {
             <p className="text-fg-prose max-w-[58ch] text-body leading-relaxed">{move.problem}</p>
             <div className="flex flex-wrap gap-2 pt-1">
               {/* The maps carry the noun already — appending one read "High impact impact". */}
-              <span className="bg-mint-tint text-mint border-mint-line rounded-full border px-3 py-1 text-caption font-semibold">
-                {IMPACT_LABELS[move.impact]}
-              </span>
-              <span className="bg-amber-tint text-amber border-amber-line rounded-full border px-3 py-1 text-caption font-semibold">
-                {EFFORT_LABELS[move.effort]}
-              </span>
+              <RatingChip>{IMPACT_LABELS[move.impact]}</RatingChip>
+              <RatingChip>{EFFORT_LABELS[move.effort]}</RatingChip>
             </div>
           </div>
           <Link

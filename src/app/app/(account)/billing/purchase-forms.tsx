@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import { buttonClasses } from "@/components/ui/button";
 import { ArrowRightIcon } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
+import { StatusPill } from "@/components/ui/status-pill";
 import {
   claimWelcomeCreditsAction,
   openBillingPortalAction,
@@ -143,9 +144,9 @@ export function StartPlanForm({
           {buys && <p className="text-fg-secondary mt-2 text-body">{buys} each month</p>}
         </div>
         {current ? (
-          <span className="bg-mint-tint text-mint border-mint-line shrink-0 rounded-full border px-3 py-1 text-caption font-semibold">
+          <StatusPill tone="active" className="shrink-0">
             Current<span className="sr-only"> plan</span>
-          </span>
+          </StatusPill>
         ) : disabled ? (
           <button
             type="button"

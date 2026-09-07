@@ -6,6 +6,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 import { StandaloneLink } from "@/components/ui/text-link";
+import { MonoChip, StatusPill } from "@/components/ui/status-pill";
 
 /**
  * Stage five — review and merge (UI-19, artboard 2e).
@@ -122,9 +123,9 @@ export function AgentMergeStage({
           </p>
         </div>
         {canMerge && (
-          <span className="border-mint-line bg-mint-tint text-mint flex-none rounded-full border px-3 py-1 text-caption font-semibold">
+          <StatusPill tone="success" className="flex-none">
             Ready to merge
-          </span>
+          </StatusPill>
         )}
       </div>
 
@@ -276,9 +277,9 @@ export function AgentMergeStage({
           </p>
           <p className="text-fg-muted text-body leading-relaxed">
             Vibe prepared one exact change for{" "}
-            <span className="border-line-2 bg-well text-fg-body rounded-full border px-2 py-0.5 font-mono text-meta">
+            <MonoChip>
               {baseBranch}
-            </span>
+            </MonoChip>
             .
           </p>
           {commitSha !== null && (

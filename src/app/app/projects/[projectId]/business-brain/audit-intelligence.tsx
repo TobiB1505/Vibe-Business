@@ -21,6 +21,7 @@ import { BusinessLensIcon, BusinessMap } from "./business-map";
 import { ArrowRightIcon } from "@/components/ui/icons.generated";
 import { InlineAction } from "@/components/ui/inline-action";
 import { figureClasses } from "@/components/ui/figure";
+import { RatingChip } from "@/components/ui/status-pill";
 
 /*
  * No `evidence` tab.
@@ -153,12 +154,8 @@ function PriorityCard({
         </div>
         {priority.move && (
           <div className="flex flex-wrap gap-2">
-            <span className="bg-mint/10 text-mint rounded-full px-2.5 py-1 text-[0.7rem] font-medium">
-              {IMPACT_LABELS[priority.move.impact]}
-            </span>
-            <span className="bg-amber/10 text-amber rounded-full px-2.5 py-1 text-[0.7rem] font-medium">
-              {EFFORT_LABELS[priority.move.effort]}
-            </span>
+            <RatingChip>{IMPACT_LABELS[priority.move.impact]}</RatingChip>
+            <RatingChip>{EFFORT_LABELS[priority.move.effort]}</RatingChip>
           </div>
         )}
         {lens && (
@@ -515,9 +512,8 @@ function SelectedPanel({
                     </p>
                     {node.problem?.move && (
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-caption">
-                        <span className="text-fg-secondary">{IMPACT_LABELS[node.problem.move.impact]}</span>
-                        <span aria-hidden="true" className="text-fg-disabled">•</span>
-                        <span className="text-amber">{EFFORT_LABELS[node.problem.move.effort]}</span>
+                        <RatingChip>{IMPACT_LABELS[node.problem.move.impact]}</RatingChip>
+                        <RatingChip>{EFFORT_LABELS[node.problem.move.effort]}</RatingChip>
                       </div>
                     )}
                   </div>

@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -239,3 +239,77 @@ describe("motion uses one vocabulary", () => {
     expect(V2).toContain("--ease-emphasis:");
   });
 });
+
+/**
+ * A rating is one object, and the tone table has one home.
+ *
+ * ## What this exists to catch
+ *
+ * The same rating — impact and effort, from `IMPACT_LABELS` and
+ * `EFFORT_LABELS` — was drawn five ways across five files: `RatingChip` in
+ * one, a mint-and-amber bordered pill in two, a borderless `bg-mint/10` pill
+ * in a third, plain text with the effort in amber in a fourth, and mono text
+ * in a fifth.
+ *
+ * The colour was the tell. Impact was always mint and effort always amber
+ * whatever the *value*, so "Low impact" arrived in Vibe's success colour and
+ * "Low effort" — good news — in the waiting colour. The tone was a column,
+ * not a reading, and `RatingChip`'s own docblock had already argued why:
+ * "low is not a problem and high is not a success".
+ *
+ * ## And the tone table
+ *
+ * Two call sites had retyped `TONE_CLASSES` character for character in a
+ * local `cn()`. A change to the coral tint would reach `StatusPill` and miss
+ * them, with nothing to say so.
+ */
+describe("a rating is drawn one way", () => {
+  const CHIP_FAMILY = "src/components/ui/status-pill.tsx";
+
+  function productFiles(): { path: string; text: string }[] {
+    const out: { path: string; text: string }[] = [];
+    for (const file of walkTsx(join(process.cwd(), "src"))) {
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      out.push({ path, text: readFileSync(file, "utf8") });
+    }
+    return out;
+  }
+
+  it("renders every impact and effort label through RatingChip", () => {
+    const wrong = productFiles()
+      .filter(({ text }) => /(IMPACT|EFFORT)_LABELS\[/.test(text))
+      .filter(({ text }) => {
+        // Every line that renders one must be inside a RatingChip.
+        return [...text.matchAll(/[^\n]*(?:IMPACT|EFFORT)_LABELS\[[^\n]*/g)].some(
+          ([line]) => !line.includes("RatingChip"),
+        );
+      })
+      .map(({ path }) => path);
+    expect(
+      wrong,
+      "A coarse rating is a RatingChip. Painting impact mint and effort amber " +
+        "makes the tone a column rather than a reading, and puts good news in " +
+        "the waiting colour.",
+    ).toEqual([]);
+  });
+
+  it("keeps the chip tone table in one place", () => {
+    // The two halves that were retyped. If either appears outside the chip
+    // family, the table has been copied again.
+    const copies = productFiles()
+      .filter(({ path }) => path !== CHIP_FAMILY)
+      .filter(({ text }) => /"bg-mint-tint border-mint-line text-mint"/.test(text))
+      .map(({ path }) => path);
+    expect(copies, `use statusToneChip from ${CHIP_FAMILY}`).toEqual([]);
+  });
+});
+
+/** Every `.tsx` under a directory, tests excluded. */
+function* walkTsx(dir: string): Generator<string> {
+  for (const entry of readdirSync(dir)) {
+    const path = join(dir, entry);
+    if (statSync(path).isDirectory()) yield* walkTsx(path);
+    else if (path.endsWith(".tsx") && !path.endsWith(".test.tsx")) yield path;
+  }
+}
