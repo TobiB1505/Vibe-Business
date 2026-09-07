@@ -143,3 +143,42 @@ describe("the runtime is versioned", () => {
     expect(BROWSER_RUNTIME_VERSION).toMatch(/^browser-runtime-v\d+$/);
   });
 });
+
+/**
+ * The import that killed the guard on its first statement.
+ *
+ * `import WebSocket from "ws"` followed by `const { WebSocketServer } =
+ * WebSocket` produced `undefined`, and `new undefined(...)` threw before any
+ * line of the guard's own code ran — which is why it wrote no failure file, and
+ * why the readiness timeout said nothing for two rounds.
+ *
+ * The reasoning behind it was about the CommonJS entry point, which Node never
+ * reaches: `ws` ships an `exports` map with an ESM wrapper whose default is the
+ * WebSocket class alone. Measured against `ws@8.18.0`:
+ *
+ *     import WebSocket from "ws"   → typeof function, .WebSocketServer undefined
+ *     import * as ns from "ws"     → WebSocketServer is a function
+ *
+ * A source assertion rather than a runtime one, because `ws` is not a
+ * dependency of this repository — it is installed into the sandbox image. What
+ * can be pinned here is the form, and the form is what was wrong.
+ */
+describe("the guard imports ws the way the package actually exports it", () => {
+  it("takes both bindings by name", () => {
+    expect(BROWSER_GUARD_PROGRAM).toContain('import { WebSocket, WebSocketServer } from "ws"');
+  });
+
+  it("never destructures the default export", () => {
+    // The exact shape that failed. `ws`'s ESM default is the class alone, so
+    // anything pulled off it is undefined and fails at its first use.
+    expect(BROWSER_GUARD_PROGRAM).not.toMatch(/=\s*WebSocket;/);
+    expect(BROWSER_GUARD_PROGRAM).not.toMatch(/import\s+WebSocket\s+from\s+"ws"/);
+  });
+
+  it("still uses both, so neither import is decoration", () => {
+    // `WebSocketServer` for the two channels, `WebSocket` for the upstream
+    // connections and its `OPEN` constant.
+    expect(BROWSER_GUARD_PROGRAM).toContain("new WebSocketServer(");
+    expect(BROWSER_GUARD_PROGRAM).toContain("WebSocket.OPEN");
+  });
+});

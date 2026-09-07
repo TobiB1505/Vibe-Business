@@ -50,17 +50,35 @@
  * ## One note about the `ws` import, which belongs here rather than in the
  * program
  *
- * The package exports the WebSocket class as its module object with the server
- * constructor attached, so a named import of both relies on CJS interop
- * detecting a shape it does not always detect. Taking the default and
- * destructuring works under Node's ESM loader either way. The explanation is
- * out here because a backtick inside the program would end it — which is what
- * happened when this was written as a comment in there, and what the
- * no-backtick test exists to catch.
+ * **Named imports, and the reasoning that said otherwise was backwards.**
+ *
+ * This file used to take the default and destructure it, arguing that `ws`
+ * exports the WebSocket class as its module object with the server constructor
+ * attached, so a named import would depend on CJS interop detecting a shape it
+ * might not detect. Every clause of that was about the CommonJS entry point,
+ * and Node never reaches it: `ws` ships an `exports` map with an ESM wrapper,
+ * and the wrapper's default is the WebSocket class **alone**.
+ *
+ * So the destructure produced `undefined`, and the guard died on its first
+ * statement with `TypeError: WebSocketServer is not a constructor` — before any
+ * line of its own code ran, which is why it recorded no failure and why nine
+ * clicks were needed to see it.
+ *
+ * Measured against `ws@8.18.0` rather than argued about a second time:
+ *
+ * ```
+ * import WebSocket from "ws"   → typeof function, .WebSocketServer undefined
+ * import * as ns from "ws"     → Receiver, Sender, WebSocket,
+ *                                WebSocketServer, createWebSocketStream
+ * ```
+ *
+ * The explanation is out here because a backtick inside the program would end
+ * it — which is what happened when this was written as a comment in there, and
+ * what the no-backtick test exists to catch.
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
-export const BROWSER_RUNTIME_VERSION = "browser-runtime-v3";
+export const BROWSER_RUNTIME_VERSION = "browser-runtime-v4";
 
 /** Environment names the guard reads. Mirrored by the provider, asserted by tests. */
 export const BROWSER_GUARD_ENV = {
@@ -97,8 +115,7 @@ export const BROWSER_GUARD_PROGRAM = `
 import { createServer } from "node:http";
 import { writeFileSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import WebSocket from "ws";
-const { WebSocketServer } = WebSocket;
+import { WebSocket, WebSocketServer } from "ws";
 
 const controlToken = process.env.VIBE_CONTROL_TOKEN;
 const viewToken = process.env.VIBE_VIEW_TOKEN;
