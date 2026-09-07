@@ -74,7 +74,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     lastResult: {
       analyzedAt: "2026-08-30T09:12:00.000Z",
       pagesInspected: 7,
-      completeness: "partial",
+      completion: { kind: "within_limits", policyLimited: true, budgetLimited: true },
       surfaces: [
         { id: "dashboard", name: "Dashboard" },
         { id: "settings", name: "Settings" },
@@ -133,7 +133,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     lastResult: {
       analyzedAt: "2026-08-11T22:30:00.000Z",
       pagesInspected: 6,
-      completeness: "complete",
+      completion: { kind: "complete", policyLimited: false, budgetLimited: false },
       surfaces: [
         { id: "dashboard", name: "Dashboard" },
         { id: "project_workspace", name: "Project workspace" },
@@ -157,7 +157,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     lastResult: {
       analyzedAt: "2026-08-11T22:30:00.000Z",
       pagesInspected: 6,
-      completeness: "complete",
+      completion: { kind: "complete", policyLimited: false, budgetLimited: false },
       surfaces: [{ id: "dashboard", name: "Dashboard" }],
       notes: [],
       accessMode: "included_first_scan",

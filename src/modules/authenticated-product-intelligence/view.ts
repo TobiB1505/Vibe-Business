@@ -88,7 +88,22 @@ export type DeepScanSurface = { id: string; name: string };
 export type DeepScanResultSummary = {
   analyzedAt: string;
   pagesInspected: number;
-  completeness: "complete" | "partial";
+  /**
+   * How the scan ended, in a form the panel can render without judging.
+   *
+   * `completeness: "partial"` was the whole answer, and it rendered as
+   * **"Only partly"** in amber over a scan that had done everything it was
+   * ever going to do. The single reason was `mutation_blocked` — Vibe refuses
+   * every non-GET request because this analysis runs signed in as the
+   * customer, and it always will. Presenting a permanent, deliberate policy as
+   * a shortfall teaches a founder that Vibe half-works.
+   *
+   * So the reasons are read here rather than collapsed: something that went
+   * wrong is a different answer from a limit Vibe chose, and a limit Vibe
+   * chose *on purpose and for good* is different again from a budget that
+   * could be raised.
+   */
+  completion: DeepScanCompletion;
   /** Detected surfaces only, as id + label. No evidence internals. */
   surfaces: DeepScanSurface[];
   /**
@@ -112,6 +127,71 @@ export type DeepScanResultSummary = {
   notes: DeepScanNote[];
   accessMode: DeepScanAccessMode;
 };
+
+/**
+ * Reasons Vibe will always have, whatever else changes.
+ *
+ * Refusing every non-GET request and every navigation off the product's origin
+ * are not shortfalls to be fixed later — they are what makes it safe to hand
+ * Vibe a signed-in session at all (Sprint 5 §15, §18). A scan that hit only
+ * these did everything it was ever going to do.
+ */
+const POLICY_REASONS = ["mutation_blocked", "external_navigation_blocked"] as const;
+
+/**
+ * Reasons that are a number someone chose, and could choose differently.
+ *
+ * Distinct from policy because the honest sentence differs: "Vibe will never
+ * do this" and "Vibe stopped after 25 pages" are both deliberate, but only one
+ * of them is an argument about safety.
+ */
+const BUDGET_REASONS = [
+  "page_budget_reached",
+  "candidate_budget_reached",
+  "depth_reached",
+  "timeout",
+] as const;
+
+export type DeepScanCompletion = {
+  /**
+   * `complete` — nothing limited it.
+   * `within_limits` — it finished; only Vibe's own policy or budgets applied.
+   * `incomplete` — something went wrong, and the result is short because of it.
+   */
+  kind: "complete" | "within_limits" | "incomplete";
+  /** Vibe refused something on purpose, and always will. */
+  policyLimited: boolean;
+  /** Vibe stopped at a number it chose. */
+  budgetLimited: boolean;
+};
+
+export function describeCompletion(completeness: {
+  status: "complete" | "partial";
+  reasons: readonly string[];
+}): DeepScanCompletion {
+  const reasons = completeness.reasons;
+  const policyLimited = POLICY_REASONS.some((reason) => reasons.includes(reason));
+  const budgetLimited = BUDGET_REASONS.some((reason) => reasons.includes(reason));
+
+  /*
+   * Anything that is neither policy nor budget is something that went wrong —
+   * `navigation_failed` today, and whatever is added tomorrow. Written as the
+   * remainder rather than as its own list so a new reason is treated as a
+   * failure until someone decides otherwise, which is the safe direction for a
+   * label a founder trusts.
+   */
+  const failed = reasons.some(
+    (reason) =>
+      !POLICY_REASONS.includes(reason as (typeof POLICY_REASONS)[number]) &&
+      !BUDGET_REASONS.includes(reason as (typeof BUDGET_REASONS)[number]),
+  );
+
+  if (failed) return { kind: "incomplete", policyLimited, budgetLimited };
+  if (completeness.status === "complete" || reasons.length === 0) {
+    return { kind: "complete", policyLimited: false, budgetLimited: false };
+  }
+  return { kind: "within_limits", policyLimited, budgetLimited };
+}
 
 /**
  * What kind of statement a note is.
@@ -320,7 +400,7 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
       ? {
           analyzedAt: latestSnapshot.completedAt ?? latestSnapshot.createdAt,
           pagesInspected: latestSnapshot.result.crawl.pagesInspected,
-          completeness: latestSnapshot.result.completeness.status,
+          completion: describeCompletion(latestSnapshot.result.completeness),
           surfaces: latestSnapshot.result.productSurfaces
             .filter((surface) => surface.detected)
             .map((surface) => ({ id: surface.id, name: surface.name })),

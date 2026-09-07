@@ -154,6 +154,17 @@ test.describe("what a finished scan reports about itself", () => {
     // The result leads. The caveats are not above it.
     await expect(page.getByText("Pages Vibe looked at")).toBeVisible();
 
+    /*
+     * And the scan is not called half-done for having behaved.
+     *
+     * "Only partly", in amber, was the whole account of a scan whose single
+     * limit was that Vibe refuses every non-GET request — which it does
+     * because the session is the founder's own, and always will.
+     */
+    await expect(page.getByText("Yes, within Vibe's limits")).toBeVisible();
+    await expect(page.getByText(/refuses anything that could change your data/i)).toBeVisible();
+    await expect(page.getByText(/by design and not by configuration/i)).toBeVisible();
+
     // One failure in three notes, and the label says exactly that.
     const disclosure = page.getByText("1 page Vibe could not read · 2 notes");
     await expect(disclosure).toBeVisible();
