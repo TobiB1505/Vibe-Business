@@ -9,7 +9,7 @@ import {
   readAuditEvidence,
   type AuditEvidence,
 } from "@/modules/business-audit/service";
-import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { getLatestOpportunities, type OpportunitySetView } from "@/modules/opportunities/service";
 import { buildProvenanceChain } from "@/modules/provenance/chain";
 import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
 
@@ -59,6 +59,14 @@ export type BriefingRead = {
    * it was read a line above either way.
    */
   topMove: BusinessOpportunity | null;
+  /**
+   * The Move set itself, when one exists.
+   *
+   * A surface drawing the Move a *moment* names needs the set, not the rank-1
+   * shortcut: the ranking can put a different Move first than the engine did.
+   * It was read a line above either way.
+   */
+  opportunities: OpportunitySetView | null;
   /** Handed back so a caller that also needs the audit does not re-read it. */
   evidence: AuditEvidence;
   /** Handed back for the same reason: the ranking is decided once. */
@@ -123,6 +131,7 @@ export async function readBriefing(
     briefing,
     situation: buildNovaSituation(chain, now),
     topMove,
+    opportunities,
     evidence,
     focus,
   };

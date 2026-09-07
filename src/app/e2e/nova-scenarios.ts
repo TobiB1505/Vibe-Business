@@ -35,6 +35,8 @@ export const E2E_NOVA_SCENARIOS = [
   "nova-stalled",
   /** An audit that could not be scored. A dash and the reason for it. */
   "nova-unscored",
+  /** A Move and nothing else, so the ranking puts the Move first. */
+  "nova-moves",
 ] as const;
 
 export type E2eNovaScenario = (typeof E2E_NOVA_SCENARIOS)[number];
@@ -104,6 +106,8 @@ const FACTS_BY_SCENARIO: Record<E2eNovaScenario, NovaFocusFacts> = {
     working: operation({ stalled: true }),
   }),
   "nova-unscored": facts({ auditOutdated: true }),
+  /* A Move and nothing else, so the Move is what the ranking puts first. */
+  "nova-moves": facts({ moves: [{ id: "opportunity_e2e", rank: 1, title: "Add a pricing page" }] }),
 };
 
 export function novaScenarioView(scenario: E2eNovaScenario): NovaHomeView {

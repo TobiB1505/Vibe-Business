@@ -3,7 +3,9 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getAuditCurrency } from "@/modules/business-audit/service";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
+import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import type { OperationFailureCode } from "@/modules/operations/failures";
@@ -16,6 +18,7 @@ import {
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
+import { buildOpportunityActionState, type OpportunityActionState } from "./view";
 import { resolveAppRoot } from "./app-root";
 import { resolveExecutionCapability } from "./capabilities";
 import { branchNameFor, computeExecutionIdentity } from "./identity";
@@ -402,6 +405,90 @@ export async function getOpportunityExecutionSummaries(
       };
     }),
   );
+}
+
+/**
+ * One Move's execution state, for a surface that holds one Move.
+ *
+ * ## Why this exists beside `getOpportunityExecutionSummaries`
+ *
+ * That one answers "all of them", and it fans out — a reuse lookup per Move,
+ * which is right for the Action Plan's grid and wrong everywhere else. Nova's
+ * thread shows the single Move a moment is about, and calling the plural
+ * version there would have been twenty round trips to render one card on the
+ * product's most-visited route.
+ *
+ * ## Why the caller passes so much in
+ *
+ * Because a caller that has a Move in hand already read the set it came from,
+ * the repository snapshot behind it and the project row — all three are what
+ * put the Move on screen in the first place. Taking them as arguments is what
+ * keeps this three reads rather than six, and it is the same VB-022 shape the
+ * audit's evidence uses.
+ *
+ * The three that remain are genuinely per-Move and cannot be shared: whether a
+ * change is already prepared for this exact execution identity, whether one is
+ * being prepared now, and whether the last attempt failed. Missing the last of
+ * those is what silently re-offered a start button after a failure on the
+ * first three production attempts.
+ */
+export async function getOpportunityExecutionState(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    opportunity: BusinessOpportunity;
+    /** The set the Move came from, for the execution identity. */
+    opportunitySetId: string;
+    /** The snapshot the capability was resolved against. */
+    repositorySnapshotId: string;
+    repository: RepositoryIntelligenceSnapshot;
+    hasProductionOrigin: boolean;
+  },
+): Promise<OpportunityActionState> {
+  const capability = resolveExecutionCapability({
+    opportunity: params.opportunity,
+    repository: params.repository,
+    hasProductionOrigin: params.hasProductionOrigin,
+  });
+
+  /* No executor: nothing to look up, and the state is decided by the Move. */
+  const preparedChangeId = capability.supported
+    ? ((
+        await findReusablePreparedChange(supabase, {
+          projectId: params.projectId,
+          executionIdentity: computeExecutionIdentity({
+            projectId: params.projectId,
+            opportunitySetId: params.opportunitySetId,
+            opportunityId: params.opportunity.id,
+            capability: capability.capability,
+            capabilityVersion: capabilityVersionFor(capability.capability),
+            repositorySnapshotId: params.repositorySnapshotId,
+            baseSha: params.repository.source.commitSha,
+          }),
+        })
+      )?.id ?? null)
+    : null;
+
+  const [activeOperation, failedOperation] = await Promise.all([
+    getActivePreparationFor(supabase, {
+      projectId: params.projectId,
+      opportunityId: params.opportunity.id,
+    }),
+    getLatestFailedPreparationFor(supabase, {
+      projectId: params.projectId,
+      opportunityId: params.opportunity.id,
+    }),
+  ]);
+
+  return buildOpportunityActionState({
+    opportunity: params.opportunity,
+    capability: capability.supported ? capability.capability : null,
+    preparedChangeId,
+    activeOperation,
+    failedOperation,
+    /* Decided by the surface that offers the start, never here. */
+    blockedReason: null,
+  });
 }
 
 /**
