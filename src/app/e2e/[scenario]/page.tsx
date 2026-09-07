@@ -1654,7 +1654,7 @@ export default async function E2eScenarioPage({
           data-testid="handoff-box"
           className="border-line-2 bg-surface-2 rounded-card relative aspect-[16/10] w-full overflow-hidden border"
         >
-          <ScanHandoff running />
+          <ScanHandoff running progress={{ pagesInspected: 7, maxPages: 25 }} />
         </div>
       </main>
     );

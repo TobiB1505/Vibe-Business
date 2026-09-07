@@ -1015,3 +1015,110 @@ describe("analyzeAuthenticatedProduct — a blocked beacon is not an incomplete 
     expect(blocked?.message).toContain("51");
   });
 });
+
+/*
+ * The animation ran for ninety seconds and could not say whether anything was
+ * happening, because the analysis lives inside one request and reports nothing
+ * until it returns. The alternative on offer was a bar timed against a guess,
+ * which is a percentage nobody measured.
+ */
+describe("analyzeAuthenticatedProduct — progress is counted, never estimated", () => {
+  function browserWith(links: string[]) {
+    let current = `${ORIGIN}/app`;
+    return {
+      pages: async () => [
+        {
+          url: () => current,
+          goto: async (url: string) => {
+            current = url;
+            return { status: 200 };
+          },
+          settle: async () => undefined,
+          extract: async () => extraction({ sameOriginLinks: links }),
+        },
+      ],
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
+    } satisfies AnalysisBrowserPort;
+  }
+
+  it("reports after every page, counting up by one", async () => {
+    const seen: number[] = [];
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([`${ORIGIN}/app/settings`, `${ORIGIN}/app/billing`]),
+      onProgress: ({ pagesInspected }) => seen.push(pagesInspected),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(seen).toEqual([1, 2, 3]);
+    // And the last number is the number in the snapshot: this is the same
+    // fact, reported earlier — not a second count that could disagree.
+    expect(seen.at(-1)).toBe(result.snapshot.crawl.pagesInspected);
+  });
+
+  it("carries the budget, so the number has a ceiling and not a forecast", async () => {
+    const seen: { pagesInspected: number; maxPages: number }[] = [];
+
+    await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([]),
+      onProgress: (progress) => seen.push(progress),
+    });
+
+    expect(seen[0]?.maxPages).toBe(DEFAULT_AUTHENTICATED_BUDGETS.maxPages);
+  });
+
+  it("does not move for a page that failed to load", async () => {
+    /*
+     * Progress is pages the snapshot has, not pages attempted. A page that
+     * could not be read taught us nothing, and a counter that moved for it
+     * would be counting Vibe's own failures as work.
+     */
+    let current = `${ORIGIN}/app`;
+    const seen: number[] = [];
+
+    await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [
+          {
+            url: () => current,
+            goto: async (url: string) => {
+              if (url.endsWith("/app/broken")) throw new Error("page.goto: Timeout exceeded");
+              current = url;
+              return { status: 200 };
+            },
+            settle: async () => undefined,
+            extract: async () => extraction({ sameOriginLinks: [`${ORIGIN}/app/broken`] }),
+          },
+        ],
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
+      },
+      onProgress: ({ pagesInspected }) => seen.push(pagesInspected),
+    });
+
+    // One page read, one page failed, one report.
+    expect(seen).toEqual([1]);
+  });
+
+  it("is optional, and a scan without it is unchanged", async () => {
+    const withReporter = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([`${ORIGIN}/app/settings`]),
+      onProgress: () => {},
+    });
+    const without = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([`${ORIGIN}/app/settings`]),
+    });
+
+    expect(withReporter.ok && without.ok).toBe(true);
+    if (!withReporter.ok || !without.ok) return;
+    expect(withReporter.snapshot.pages.map((page) => page.path)).toEqual(
+      without.snapshot.pages.map((page) => page.path),
+    );
+  });
+});

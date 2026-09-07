@@ -58,6 +58,20 @@ A sandbox bills for every second it exists, and this one exists to hold a login 
 
 Two minutes is tight for a password manager plus a second factor on a phone. The mitigation is that it is *visible*: somebody who can see thirty seconds left knows to hurry, where somebody who can see nothing is simply cut off.
 
+## Progress is counted, never estimated
+
+The analysis lives inside a single request and reports nothing until it returns, so the handoff ran for ninety seconds unable to say whether anything was happening. The alternative on offer was a bar timed against the expected duration — a percentage nobody measured, and the exact thing the motion rules forbid.
+
+So the analyzer reports each page as it *records* it (`onProgress`), the service writes that count to the running snapshot row, and the panel polls it every two and a half seconds. `pages_inspected` already exists on that row and is written at completion; this writes it during the crawl, so there is no schema change — a migration for an animation would have been the wrong trade.
+
+Three properties, each with a test:
+
+- **Pages read, not pages attempted.** The report fires after a page is in the snapshot, so a page that failed to load moves nothing. A counter that advanced on a failure would be counting Vibe's own failures as work.
+- **The budget is a ceiling, not a forecast.** The copy says "up to 25", because a scan usually stops earlier — it runs out of product before it runs out of budget — and "of 25" promises an ending that rarely arrives.
+- **The write can never fail the scan.** Fire-and-forget with a swallowed error, and the count only ever moves forward on the client: the row is read while it is being written, and a number that went backwards would read as work being undone.
+
+The count is the one piece of *information* in that scene, so it is the one thing announced — the decorative wrapper's `aria-hidden` moved onto the decorations after a browser test found `role="status"` unreachable inside it.
+
 ## The handoff, and why it is allowed to be decoration
 
 The live view is useful for the first seconds of an analysis — a person can watch the crawl start — and after that it is a video of pages flicking past that nobody is driving. What followed was a spinner and a seconds counter.

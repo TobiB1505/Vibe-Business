@@ -248,6 +248,17 @@ export function describeWarning(warning: AuthenticatedWarning): DeepScanNote {
   };
 }
 
+/**
+ * How far a running analysis has got.
+ *
+ * Declared here rather than in `service.ts` because the panel needs it and
+ * `service.ts` is `server-only`. A type import is erased, so it would compile
+ * either way — but a client file importing from a server module is a trap the
+ * next person has to re-derive, and this module already exists to be the shape
+ * both sides agree on.
+ */
+export type DeepScanProgress = { pagesInspected: number; maxPages: number };
+
 /** Why the last attempt ended, in typed form. The UI maps it to copy. */
 export type DeepScanLastFailure = {
   status: Extract<DeepScanSessionStatus, "failed" | "cancelled" | "expired">;

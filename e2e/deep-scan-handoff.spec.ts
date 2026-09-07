@@ -124,3 +124,33 @@ test.describe("the scenes", () => {
     await expect(box.locator("img")).toHaveCount(0);
   });
 });
+
+/*
+ * The animation ran for ninety seconds and could not say whether anything was
+ * happening. The alternative on offer was a bar timed against a guess, which
+ * is a percentage nobody measured — so the count is read from the analysis
+ * itself, page by page, as the crawl records them.
+ */
+test.describe("what the scan has actually done", () => {
+  test("says how many pages have been read", async ({ page }) => {
+    await page.goto("/e2e/deep-scan-handoff");
+
+    const box = page.getByTestId("handoff-box");
+    await expect(box.getByRole("status")).toBeVisible({ timeout: 10_000 });
+    await expect(box.getByRole("status")).toContainText("7 pages read");
+  });
+
+  test("names the budget as a ceiling, not as a forecast", async ({ page }) => {
+    /*
+     * A scan usually stops before the budget because it runs out of product,
+     * so "of 25" would promise an ending that rarely arrives. "Up to" is the
+     * true shape of the number.
+     */
+    await page.goto("/e2e/deep-scan-handoff");
+
+    const status = page.getByTestId("handoff-box").getByRole("status");
+    await expect(status).toBeVisible({ timeout: 10_000 });
+    await expect(status).toContainText("up to 25");
+    await expect(status).not.toContainText("of 25");
+  });
+});

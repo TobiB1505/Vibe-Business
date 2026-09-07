@@ -11,6 +11,7 @@ import { ProgressSteps } from "@/components/system/operation-progress";
 import type { OperationProgressStep } from "@/modules/operations/view";
 import type {
   DeepScanCompletion,
+  DeepScanProgress,
   DeepScanNextScan,
   DeepScanNote,
   DeepScanNoteKind,
@@ -20,6 +21,7 @@ import {
   analyzeDeepScanAction,
   cancelDeepScanAction,
   getDeepScanLiveViewAction,
+  deepScanProgressAction,
   probeDeepScanSignInAction,
   startDeepScanAction,
 } from "./deep-scan-actions";
@@ -198,6 +200,7 @@ export function LiveViewDialog({
   onUnavailable,
   sealing,
   analysing,
+  progress,
   onSealed,
   onLoginExpired,
 }: {
@@ -220,6 +223,8 @@ export function LiveViewDialog({
   sealing: boolean;
   /** Vibe has the browser and is reading it. Not the same as busy. */
   analysing: boolean;
+  /** Pages read so far, once the running scan has answered. */
+  progress: DeepScanProgress | null;
   onSealed: () => void;
   /** The founder ran out of time to sign in. */
   onLoginExpired: () => void;
@@ -445,6 +450,7 @@ export function LiveViewDialog({
           <ScanHandoff
             running={handoffRunning({ analysing, sealing, error })}
             succeeded={sealing}
+            progress={progress}
             onSealed={onSealed}
           />
 
@@ -793,6 +799,55 @@ function deviceViewport(): "desktop" | "mobile" {
   if (typeof window === "undefined") return "desktop";
   const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
   return coarse && window.innerWidth < 900 ? "mobile" : "desktop";
+}
+
+/** How often the running analysis is asked how far it has got. */
+const PROGRESS_POLL_MS = 2_500;
+
+/**
+ * Pages read so far, while the analysis runs.
+ *
+ * `null` until the first answer, and `null` again if the read fails — the
+ * animation then runs without a count, which is exactly where it was before
+ * this existed and is better than an error over a working scan.
+ *
+ * Two and a half seconds because that is roughly the pace a page is read at.
+ * Polling faster would ask the same question twice for one answer.
+ */
+function useScanProgress(sessionId: string | null, running: boolean): DeepScanProgress | null {
+  const [progress, setProgress] = useState<DeepScanProgress | null>(null);
+
+  useEffect(() => {
+    if (!running || sessionId === null) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const ask = async () => {
+      const answer = await deepScanProgressAction(sessionId);
+      if (cancelled) return;
+      // Only ever forward. The row is read while it is being written, so a
+      // read that lands between two updates can answer with the earlier
+      // number — and a count that goes backwards reads as work being undone.
+      setProgress((current) =>
+        answer === null || (current !== null && answer.pagesInspected < current.pagesInspected)
+          ? current
+          : answer,
+      );
+    };
+
+    void ask();
+    const timer = setInterval(() => void ask(), PROGRESS_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [sessionId, running]);
+
+  // Belongs to one run: a finished scan's number must not seed the next one.
+  return running ? progress : null;
 }
 
 /** How often the browser is asked whether the founder has finished signing in. */
@@ -1332,6 +1387,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
    * still opening, and a probe would be a round trip that cannot learn
    * anything.
    */
+  const progress = useScanProgress(sessionId, analysing);
+
   const signIn = useSignInWatch({
     sessionId,
     active: dialogOpen && stage === "ready" && !busy && !pending,
@@ -1585,6 +1642,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           onUnavailable={handleUnavailable}
           sealing={sealing}
           analysing={analysing}
+          progress={progress}
           onSealed={handleSealed}
           onLoginExpired={handleLoginExpired}
         />

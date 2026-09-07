@@ -23,6 +23,7 @@ import {
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
 import { detectSignedIn, type SignInReason } from "./login-detection";
+import type { DeepScanProgress } from "./view";
 import type { BrowserSessionProvider, BrowserSessionUsage } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
@@ -43,6 +44,8 @@ import {
   recordDeepScanUsage,
   updateSessionStatus,
   type StoredDeepScanSession,
+  recordSnapshotProgress,
+  getRunningSnapshotProgress,
 } from "./store";
 
 /**
@@ -434,6 +437,35 @@ export async function getDeepScanLiveView(
 }
 
 /**
+ * How far the running analysis has got, for the caller's own session.
+ *
+ * Polled while the scan runs, and the only honest thing this flow has to say
+ * about progress: the analysis lives inside one request and reports nothing
+ * until it returns, so without this the choice was silence or a bar timed
+ * against a guess.
+ *
+ * A read, and nothing else. It writes nothing, charges nothing, and cannot
+ * start or stop anything — `maxPages` comes from Vibe's own budget rather than
+ * from the row, because it is a fact about the scan's design and not about
+ * this run.
+ */
+export async function getDeepScanProgress(
+  supabase: SupabaseClient,
+  params: { sessionId: string; userId: string },
+): Promise<DeepScanProgress | null> {
+  const session = await getSessionWithProviderId(supabase, params.sessionId);
+  if (!session) return null;
+
+  const project = await loadOwnedProject(supabase, session.projectId, params.userId);
+  if (!project) return null;
+
+  const progress = await getRunningSnapshotProgress(supabase, session.id);
+  if (!progress) return null;
+
+  return { pagesInspected: progress.pagesInspected, maxPages: DEFAULT_AUTHENTICATED_BUDGETS.maxPages };
+}
+
+/**
  * Whether the founder has finished signing in, asked of the live browser.
  *
  * The flow used to ask *them* — a button reading "I'm logged in — Analyze" —
@@ -623,6 +655,18 @@ export async function analyzeDeepScan(
       browser: readOnly.port,
       repository: repository?.result ?? null,
       publicProduct: publicProduct?.result ?? null,
+      /*
+       * Written as the crawl goes, so the panel can say how far it has got.
+       *
+       * Fire-and-forget with a swallowed error: a progress write is a nicety
+       * and the scan is not, so it must never be able to fail one. Twenty-five
+       * of them across ninety seconds is not a load worth batching.
+       */
+      onProgress: ({ pagesInspected }) => {
+        void recordSnapshotProgress(supabase, run.snapshotId, pagesInspected).catch(
+          () => undefined,
+        );
+      },
       onDiagnostic: (event) => {
         pageFailures.push(`${event.step} ${event.path}: ${event.detail}`);
       },
