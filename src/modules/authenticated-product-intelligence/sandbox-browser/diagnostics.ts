@@ -68,6 +68,25 @@ export function describeError(error: unknown): string {
 }
 
 /**
+ * A command's output, bounded from **both** ends.
+ *
+ * The tail alone was wrong, and it cost a round trip to learn why. A failing
+ * `apt-get install` prints one "Unable to locate package" line per package, so
+ * the last 1,500 characters were thirty of those and nothing else — while the
+ * fact that decided the case, whether `apt-get update` had succeeded at all,
+ * was in the first few lines and had been thrown away.
+ *
+ * A build's output is like that generally: the cause is near the start and the
+ * consequences fill the end. Keeping both ends and saying how much was dropped
+ * is what makes a truncated log honest rather than merely short.
+ */
+export function boundedOutput(text: string, keep = 1200): string {
+  if (text.length <= keep * 2) return text;
+  const dropped = text.length - keep * 2;
+  return `${text.slice(0, keep)}\n… [${dropped} characters omitted] …\n${text.slice(-keep)}`;
+}
+
+/**
  * Reports a step that failed, and returns nothing.
  *
  * Deliberately fire-and-forget: this is called on a path that is already

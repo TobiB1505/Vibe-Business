@@ -230,6 +230,39 @@ describe("a failed build costs one sandbox and no retry loop", () => {
     reported.mockRestore();
   });
 
+  it("keeps both ends of a long output, not just the tail", async () => {
+    /*
+     * The tail alone cost a round trip. A failing `apt-get install` prints one
+     * line per package, so the last 1,500 characters were thirty of those and
+     * the fact that decided the case — whether the index refresh had worked —
+     * was in the first few lines and had been dropped.
+     */
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
+    const sandboxes = fakeSandboxProvider({
+      results: {
+        [[install!.command.command, ...install!.command.args].join(" ")]: {
+          exitCode: 1,
+          output: `THE CAUSE\n${"filler line\n".repeat(600)}THE CONSEQUENCE`,
+        },
+      },
+    });
+    const { resolver } = image(sandboxes);
+
+    await resolver.resolve();
+    await Promise.resolve();
+
+    const context = reported.mock.calls[0]?.[1] as { output: string };
+    expect(context.output).toContain("THE CAUSE");
+    expect(context.output).toContain("THE CONSEQUENCE");
+    // Still bounded: a registry answering with a page of HTML must not turn one
+    // failure into a megabyte of log.
+    expect(context.output.length).toBeLessThan(3000);
+    expect(context.output).toContain("characters omitted");
+
+    reported.mockRestore();
+  });
+
   it("keeps the provider's account out of what the customer is told", async () => {
     // §17: no provider message, no exit code, no stack. The operator gets the
     // detail; the person waiting gets a sentence they can act on.
