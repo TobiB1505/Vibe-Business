@@ -143,18 +143,33 @@ export async function attachReadOnlyGuards(
  * Best effort: a site that is slow or down must not fail session creation,
  * because the user can still drive the browser by hand.
  */
+/**
+ * The landing, and why it now says why it failed.
+ *
+ * This returned a bare `navigated: boolean` and swallowed the reason, and the
+ * one caller discarded even that. The first session in Vibe's own browser
+ * opened on a **white canvas**, and between those two silences there was
+ * nothing anywhere to say whether the browser had failed to reach the
+ * customer's site or had reached it and painted nothing.
+ *
+ * The reason is a short string for the operator, never for the customer:
+ * ADR 0011's rule is that no provider-shaped text escapes this adapter towards
+ * a caller who renders it, and the caller maps this to a typed code.
+ */
+export type SessionLanding = { navigated: true } | { navigated: false; reason: string };
+
 export async function openSessionAtOrigin(
   connectUrl: string,
   origin: string,
   options: { timeoutMs?: number } = {},
-): Promise<{ navigated: boolean }> {
+): Promise<SessionLanding> {
   const { chromium } = await import("playwright-core");
 
   let browser: Browser | undefined;
   try {
     browser = await chromium.connectOverCDP(connectUrl, { timeout: options.timeoutMs ?? 20_000 });
     const context = browser.contexts()[0];
-    if (!context) return { navigated: false };
+    if (!context) return { navigated: false, reason: "the browser reported no context" };
 
     // A brand-new session already has one blank page; reuse it rather than
     // leaving a stray tab the analyzer would later have to ignore.
@@ -164,8 +179,11 @@ export async function openSessionAtOrigin(
       timeout: options.timeoutMs ?? 20_000,
     });
     return { navigated: true };
-  } catch {
-    return { navigated: false };
+  } catch (error) {
+    // Bounded, and a message rather than an object: a Playwright error carries
+    // a stack and sometimes a URL, and neither belongs in a log line.
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : "unknown";
+    return { navigated: false, reason: reason.slice(0, 300) };
   } finally {
     // Closes our CDP connection only. The remote session, and the page we just
     // navigated, stay exactly where they are for the user.
