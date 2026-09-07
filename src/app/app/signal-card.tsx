@@ -98,9 +98,7 @@ function ScoreRing({ score }: { score: number }) {
         />
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span
-          className={figureClasses("lg", statusToneText(statusForScoreTone(tone)))}
-        >
+        <span className={figureClasses("lg", statusToneText(statusForScoreTone(tone)))}>
           {score}
         </span>
         <span className="text-fg-meta mt-1 text-body font-medium">/ 100</span>
@@ -135,7 +133,9 @@ function ScoreChart({
   series,
   tone,
   caption,
+  className,
 }: {
+  className?: string;
   series: ScoreSeries;
   tone: "mint" | "amber" | "coral";
   /** Why the line breaks. Belongs beside the break, not at the card's foot. */
@@ -146,7 +146,7 @@ function ScoreChart({
   const lastDate = formatDate(points[points.length - 1]?.recordedAt);
 
   return (
-    <div className="flex min-w-0 flex-col">
+    <div className={cn("flex min-w-0 flex-col", className)}>
       {/*
         The axis is absolute against the plot alone. It used to be absolute
         against everything below it too, so adding the caption inside pushed
@@ -158,7 +158,10 @@ function ScoreChart({
           <span>50</span>
           <span>0</span>
         </div>
-        <div className="absolute inset-y-0 right-0 left-9 flex flex-col justify-between" aria-hidden>
+        <div
+          className="absolute inset-y-0 right-0 left-9 flex flex-col justify-between"
+          aria-hidden
+        >
           {[0, 1, 2].map((line) => (
             <span key={line} className="border-line-1 block border-t" />
           ))}
@@ -203,9 +206,7 @@ function NextMove({ project }: { project: DashboardProject }) {
       {move ? (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="flex min-w-0 flex-col gap-2">
-            <p className="text-fg text-title font-semibold text-balance">
-              {move.title}
-            </p>
+            <p className="text-fg text-title font-semibold text-balance">{move.title}</p>
             <p className="text-fg-prose max-w-[58ch] text-body leading-relaxed">{move.problem}</p>
             <div className="flex flex-wrap gap-2 pt-1">
               {/* The maps carry the noun already — appending one read "High impact impact". */}
@@ -267,7 +268,7 @@ export function SignalCard({ project }: { project: DashboardProject }) {
        */
       aria-labelledby="signal-heading signal-product"
       padding="lg"
-      className="flex flex-col gap-7"
+      className="@container/hero flex flex-col gap-7"
     >
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex items-center gap-2">
@@ -295,19 +296,32 @@ export function SignalCard({ project }: { project: DashboardProject }) {
       </div>
 
       {scored ? (
+        /*
+          Laid out against the *card's* width, not the viewport's.
+          `@container` because this card no longer spans the page: the
+          dashboard puts the attention panel beside it, so at `xl` the card is
+          652px while the viewport is 1440. The old rule was a viewport
+          breakpoint, and the moment the card narrowed it kept the three-column
+          track list — 696px of hard minimum inside a 586px content box, which
+          hung the chart 77px outside the card and over the panel next to it.
+          Measured, not guessed; a container query is the only thing that can
+          be right for both.
+
+          `@3xl` = 48rem, comfortably above the track minimums. Below it the
+          chart takes a row of its own at full width, which is the better
+          shape at that size anyway.
+        */
         <div
           className={cn(
-            "grid items-center gap-8",
+            "grid items-center gap-x-8 gap-y-6",
             drawChart
-              ? "xl:grid-cols-[9.5rem_minmax(12rem,0.9fr)_minmax(18rem,1.3fr)]"
-              : "sm:grid-cols-[9.5rem_minmax(0,1fr)]",
+              ? "@sm/hero:grid-cols-[9.5rem_minmax(0,1fr)] @3xl/hero:grid-cols-[9.5rem_minmax(12rem,0.9fr)_minmax(18rem,1.3fr)]"
+              : "@sm/hero:grid-cols-[9.5rem_minmax(0,1fr)]",
           )}
         >
           <ScoreRing score={project.score as number} />
           <div className="flex min-w-0 flex-col items-start gap-3">
-            <p className="text-fg text-moment font-semibold text-balance">
-              {heading}
-            </p>
+            <p className="text-fg text-moment font-semibold text-balance">{heading}</p>
             <TrendPill delta={series.delta} />
             {!drawChart && (
               <p className="text-fg-meta text-caption">
@@ -317,7 +331,14 @@ export function SignalCard({ project }: { project: DashboardProject }) {
               </p>
             )}
           </div>
-          {drawChart && <ScoreChart series={series} tone={chartTone} caption={caption} />}
+          {drawChart && (
+            <ScoreChart
+              series={series}
+              tone={chartTone}
+              caption={caption}
+              className="@sm/hero:col-span-2 @3xl/hero:col-span-1"
+            />
+          )}
         </div>
       ) : (
         <div className="flex flex-col items-start gap-4">

@@ -143,7 +143,13 @@ export function AccountSidebar({
 
       {/* Pinned to the bottom of the rail on desktop; inline on the strip. */}
       <div className="flex flex-col gap-3 lg:mt-auto">
-        <Wallet credits={credits} href="/app/billing" className="max-lg:hidden" />
+        {/*
+          On the phone strip too. The rail's old credits link was `hidden
+          lg:flex`, so on a phone the account shell showed no balance at all —
+          on screens that offer priced actions. A price without a balance is
+          half a disclosure, and that argument does not stop at 1024px.
+        */}
+        <Wallet credits={credits} href="/app/billing" />
         {footer}
       </div>
     </nav>
@@ -151,13 +157,7 @@ export function AccountSidebar({
 }
 
 /** Rail + content column. */
-export function AccountShell({
-  sidebar,
-  children,
-}: {
-  sidebar: ReactNode;
-  children: ReactNode;
-}) {
+export function AccountShell({ sidebar, children }: { sidebar: ReactNode; children: ReactNode }) {
   return (
     <div className="text-fg-body flex min-h-dvh flex-col lg:flex-row">
       {sidebar}

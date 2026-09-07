@@ -13,15 +13,27 @@ import { expect, test } from "@playwright/test";
  *
  * ## What the numbers are
  *
- * CORE-6 removed the attention list and the activity feed from `/app`. The
- * reference-led pass that followed adds useful structure inside the same four
- * objects — signal, next move, products and connect — without bringing either
- * feed back.
+ * CORE-6 removed the attention list and the activity feed from `/app`, and the
+ * ceiling was 36: room for a couple of small additions and not for a fourth
+ * section.
  *
- * The ceiling below is 36, so a couple of small additions still fit and a
- * fourth section (five elements or more) does not. It is measured against
- * `AccountHome`, the same component `/app` renders — a composition this file
- * assembled itself would measure a screen that exists nowhere.
+ * **The attention model came back, and the ceiling moved with it.** The
+ * argument is in `attention-stack.tsx` and the short form is that a product
+ * raises more than one item — `attention.ts` says in its own comment that
+ * hiding the second behind the first means the user never sees it — and a card
+ * has one action. Measured on the three-product fixture, a blocked validation
+ * was reachable from nowhere on this screen.
+ *
+ * What the budget exists to stop is a screen that grows unrelated strips, and
+ * the *object* count is unchanged at four: the signal and the next move are
+ * one card, the stack takes the column beside it, and connect moved into that
+ * column. Measured today: 31, of which the stack is 7. Its worst case is four
+ * rows rather than two, which is 37, so the ceiling is 40 — the same three or
+ * four elements of headroom the old number left.
+ *
+ * It is measured against `AccountHome`, the same component `/app` renders — a
+ * composition this file assembled itself would measure a screen that exists
+ * nowhere.
  */
 
 const THREE = "/e2e/account-three-products";
@@ -34,8 +46,8 @@ const UNSCORED = "/e2e/account-unscored";
  */
 const ELEMENTS = "[data-mono-label], h1, h2, h3, p, a, button";
 
-/** Measured at three products, plus room for two small additions. */
-const BUDGET = 36;
+/** Measured at three products with a full attention stack, plus headroom. */
+const BUDGET = 40;
 
 test.describe("the account dashboard stays calmer than the project workspace", () => {
   test("keeps the whole screen inside its element budget at three products", async ({ page }) => {
@@ -93,17 +105,43 @@ test.describe("the account dashboard stays calmer than the project workspace", (
   });
 
   /**
-   * Both sections left in CORE-6 and neither may come back here. The attention
-   * list said per-product what each card's single action already says; the
-   * activity feed was eight rows of metadata with no action at all.
+   * The activity feed stays gone. It was eight rows of metadata with no action
+   * at all, and nothing about it has changed.
+   *
+   * The attention list is the half that came back, and it came back as a
+   * ranked stack beside the hero rather than as a strip above the grid —
+   * because what it uniquely carries is the *tier* and the second item a
+   * product raises, neither of which fits on a card with one action.
    */
-  test("renders no attention list and no activity feed", async ({ page }) => {
+  test("renders no activity feed, and no second copy of the ranking", async ({ page }) => {
     await page.goto(THREE);
 
-    await expect(page.getByTestId("attention-list")).toHaveCount(0);
     await expect(page.getByTestId("dashboard-activity")).toHaveCount(0);
     await expect(page.getByRole("heading", { name: /recent activity/i })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: /needs your attention/i })).toHaveCount(0);
+
+    // One stack, not one per section.
+    await expect(page.getByRole("heading", { name: "Also waiting" })).toHaveCount(1);
+  });
+
+  /**
+   * The row the old screen could not show anywhere.
+   *
+   * Payflow raises two items — a failed validation and waiting moves. The hero
+   * answers the moves; the card below says "Review change", which is the
+   * *waiting* change, not the failed one. So before this stack existed, the
+   * word "failed" appeared nowhere on the dashboard for a product whose
+   * validation had failed.
+   */
+  test("shows a second item from a product the hero already covers", async ({ page }) => {
+    await page.goto(THREE);
+
+    const stack = page.getByRole("region", { name: "Also waiting" });
+    await expect(stack).toContainText("Payflow");
+    await expect(stack).toContainText(/failed validation/i);
+    await expect(stack).toContainText("Blocked");
+
+    // And it does not repeat what the hero's own control already offers.
+    await expect(stack).not.toContainText(/View action plan/i);
   });
 });
 

@@ -4,9 +4,14 @@ import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { ArrowRightIcon, PlusIcon } from "@/components/ui/dashboard-icons";
-import { buildAttentionItems, orderProjectsByAttention } from "@/modules/projects/attention";
+import {
+  buildAttentionItems,
+  orderProjectsByAttention,
+  type AttentionKind,
+} from "@/modules/projects/attention";
 import { productDisplayName } from "@/modules/projects/display-name";
 import type { DashboardProject } from "@/modules/projects/dashboard";
+import { AttentionStack } from "./attention-stack";
 import { ProductCard } from "./product-card";
 import { SignalCard } from "./signal-card";
 
@@ -80,6 +85,45 @@ function EmptyDashboard() {
   );
 }
 
+/**
+ * The way to add another product.
+ *
+ * A route, not an offer. It carried a 64px mint tile and a two-line pitch,
+ * which gave a utility link the visual weight of the work above it — on a
+ * screen whose whole claim is that one thing matters most. One row, one
+ * sentence, one way in.
+ *
+ * It sits in the right-hand column rather than under the grid, because that
+ * column is otherwise a tall empty space beside a tall card, and "add another"
+ * is the one thing on this screen that belongs *next to* the list rather than
+ * after it.
+ */
+function ConnectRoute() {
+  return (
+    <Surface
+      level="section"
+      padding="md"
+      className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"
+    >
+      <div className="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden
+          className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
+        >
+          <PlusIcon size={18} />
+        </span>
+        <h3 className="text-fg text-ui font-semibold">Connect a new product</h3>
+      </div>
+      <Link
+        href="/app/connect/github"
+        className={buttonClasses({ variant: "secondary", size: "sm" })}
+      >
+        Connect product
+      </Link>
+    </Surface>
+  );
+}
+
 export function AccountHome({
   projects,
   connectError = null,
@@ -103,6 +147,33 @@ export function AccountHome({
    */
   const ordered = orderProjectsByAttention(projects);
   const hero = ordered[0] ?? null;
+
+  /*
+   * Everything still waiting, minus the one thing the hero already answers.
+   *
+   * Not "the hero's first item" — that was wrong in the obvious case. The hero
+   * card's control is about the *move*, so on a product that also has a
+   * prepared change waiting, dropping by position removed the change and left
+   * the move, and the screen then offered the move twice while never
+   * mentioning the change.
+   *
+   * So it is dropped by what the control actually does. Everything else the
+   * hero product raises stays: `attention.ts` is explicit that a product
+   * needing attention twice must be seen twice, and a card has one action.
+   */
+  const heroAnswers: AttentionKind | null = !hero
+    ? null
+    : hero.repositoryFullName === null
+      ? "no_repository"
+      : hero.scoreState === "not_audited"
+        ? "never_audited"
+        : hero.topMove
+          ? "moves_waiting"
+          : null;
+
+  const alsoWaiting = attention.filter(
+    (item) => !(hero !== null && item.projectId === hero.id && item.kind === heroAnswers),
+  );
 
   /**
    * The headline states a fact or says there is nothing. No greeting by name
@@ -150,7 +221,31 @@ export function AccountHome({
       </header>
 
       {hero && (
-        <SignalCard project={hero} />
+        /*
+          The screen's two halves, side by side above `xl`.
+          `minmax(0,1.6fr)` and `minmax(19rem,1fr)`: the hero holds a score
+          ring, a chart and a paragraph of prose and needs the room; the stack
+          holds four short rows and stops being readable much past 26rem. The
+          `minmax(0,…)` on the first track is what keeps the chart from forcing
+          the grid wider than the page — a `1.6fr` track's automatic minimum is
+          its content, and an SVG's is not zero.
+
+          Below `xl` they stack, hero first, which is also the DOM order: the
+          one thing to do, then everything else that is waiting.
+        */
+        <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(19rem,1fr)]">
+          <SignalCard project={hero} />
+          {/*
+            Sticky, because the hero is genuinely tall — a ring, a chart and a
+            move — and a column that ends two thirds of the way up leaves a
+            void beside it. Pinned at the same 44px the content column opens
+            at, so it lines up with the heading rather than floating.
+          */}
+          <div className="flex flex-col gap-5 xl:sticky xl:top-11">
+            <AttentionStack items={alsoWaiting} />
+            {projects.length > 0 && <ConnectRoute />}
+          </div>
+        </div>
       )}
 
       {projects.length === 0 ? (
@@ -181,34 +276,6 @@ export function AccountHome({
               </li>
             ))}
           </ul>
-
-          {/*
-            A route, not an offer. This carried a 64px mint tile and a
-            two-line pitch, which gave a utility link the visual weight of the
-            work above it — on a screen whose whole claim is that one thing
-            matters most. One row, one sentence, one way in.
-          */}
-          <Surface
-            level="section"
-            padding="md"
-            className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3"
-          >
-            <div className="flex min-w-0 items-center gap-3">
-              <span
-                aria-hidden
-                className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
-              >
-                <PlusIcon size={18} />
-              </span>
-              <h3 className="text-fg text-ui font-semibold">Connect a new product</h3>
-            </div>
-            <Link
-              href="/app/connect/github"
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-            >
-              Connect product
-            </Link>
-          </Surface>
         </section>
       )}
     </div>
