@@ -23,7 +23,7 @@ export const metadata: Metadata = {
  * Deep Scan (Sprint UI-2 Part 2).
  *
  * The Deep Scan analysis runs inside this route segment's function, and its
- * own budget is 90 seconds (`DEFAULT_AUTHENTICATED_BUDGETS.maxDurationMs`).
+ * own budget is 180 seconds (`DEFAULT_AUTHENTICATED_BUDGETS.maxDurationMs`).
  * Without this the platform default (15s on Pro) would kill the function
  * mid-analysis — the user would have signed in, been charged for a browser
  * session, and got nothing back.
@@ -35,7 +35,7 @@ export const metadata: Metadata = {
  * on the single project page, which meant every section of the workspace ran
  * under a 120-second function.
  */
-export const maxDuration = 120;
+export const maxDuration = 240;
 
 export default async function ProjectDeepScanPage({
   params,

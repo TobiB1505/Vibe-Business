@@ -127,10 +127,31 @@ export function charactersOf(value: string): string[] {
   return [...value];
 }
 
+/**
+ * Whether a touch was a tap rather than a scroll.
+ *
+ * The keyboard is raised on a tap and on nothing else. Raising it on every
+ * touch — which is what the first version did — means it reappears each time
+ * somebody drags to scroll the product, covering half of what they are trying
+ * to read, on a screen that had little enough of it to begin with.
+ *
+ * Eight pixels because a finger is not a mouse: a deliberate tap still moves a
+ * little, and a scroll moves much more than this before it is a scroll.
+ */
+export function isTap(
+  start: { x: number; y: number },
+  end: { x: number; y: number },
+  threshold = 8,
+): boolean {
+  return Math.abs(end.x - start.x) <= threshold && Math.abs(end.y - start.y) <= threshold;
+}
+
 export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   /** The hidden field that exists so a phone will open its keyboard. */
   const keyboardRef = useRef<HTMLInputElement>(null);
+  /** Where the current touch started, so a scroll can be told from a tap. */
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   /** The size of the last frame, which is the coordinate space the guard expects. */
   const frameSize = useRef({ w: 0, h: 0 });
@@ -367,9 +388,11 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
        */
       onTouchStart={(event) => {
         event.preventDefault();
-        takeKeyboard();
         const point = touchAt(event.nativeEvent);
         if (point) {
+          // Where it began, so the release can tell a tap from a scroll. The
+          // keyboard is not raised here: it would come up on every drag.
+          touchStart.current = point;
           send({ t: "mouse", type: "mousePressed", ...point, button: "left", clickCount: 1, modifiers: 0 });
         }
       }}
@@ -381,9 +404,13 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
       onTouchEnd={(event) => {
         event.preventDefault();
         const point = touchAt(event.nativeEvent);
-        if (point) {
-          send({ t: "mouse", type: "mouseReleased", ...point, button: "left", clickCount: 1, modifiers: 0 });
-        }
+        const began = touchStart.current;
+        touchStart.current = null;
+        if (!point) return;
+        send({ t: "mouse", type: "mouseReleased", ...point, button: "left", clickCount: 1, modifiers: 0 });
+        // Still inside the gesture, which is the only moment iOS will open a
+        // keyboard — and only for a tap, so scrolling leaves it alone.
+        if (began && isTap(began, point)) takeKeyboard();
       }}
       onContextMenu={(event) => event.preventDefault()}
       data-connected={connected ? "true" : "false"}

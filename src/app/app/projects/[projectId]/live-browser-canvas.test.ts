@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { charactersOf, frameCoordinates, isComposingKey, modifiersOf } from "./live-browser-canvas";
+import {
+  charactersOf,
+  frameCoordinates,
+  isComposingKey,
+  isTap,
+  modifiersOf,
+} from "./live-browser-canvas";
 
 /**
  * The two pure halves of driving a remote browser by hand.
@@ -140,6 +146,27 @@ describe("typed text becomes the characters a person meant", () => {
  * exactly what made the browser unusable on a phone, each of which is one
  * deletion away from coming back.
  */
+describe("the keyboard comes up on a tap and not on a scroll", () => {
+  /*
+   * The first version raised it on every touch, so it reappeared on each drag
+   * — covering half the product on a screen that had little enough of it.
+   */
+  it("treats a still finger as a tap", () => {
+    expect(isTap({ x: 100, y: 200 }, { x: 100, y: 200 })).toBe(true);
+  });
+
+  it("forgives the wobble a deliberate tap has", () => {
+    // A finger is not a mouse. Requiring an exact pixel would mean the
+    // keyboard sometimes does not come up, which is the original bug again.
+    expect(isTap({ x: 100, y: 200 }, { x: 104, y: 197 })).toBe(true);
+  });
+
+  it("treats a drag as a scroll, in either direction", () => {
+    expect(isTap({ x: 100, y: 200 }, { x: 100, y: 340 })).toBe(false);
+    expect(isTap({ x: 100, y: 200 }, { x: 260, y: 200 })).toBe(false);
+  });
+});
+
 describe("the temporary browser can be operated by touch", () => {
   const source = readFileSync(
     join(process.cwd(), "src/app/app/projects/[projectId]/live-browser-canvas.tsx"),
@@ -163,6 +190,12 @@ describe("the temporary browser can be operated by touch", () => {
     // for a focused editable element, and a canvas is not one.
     expect(source).toContain("keyboardRef");
     expect(source).toContain("focus({ preventScroll: true })");
+  });
+
+  it("raises the keyboard only from the gesture that asked for it", () => {
+    // iOS opens a keyboard only inside a user gesture, and `touchend` is one.
+    // Moving this out of the handler is how it silently stops working.
+    expect(source).toContain("if (began && isTap(began, point)) takeKeyboard()");
   });
 
   it("never leaves what was typed sitting in Vibe's DOM", () => {
