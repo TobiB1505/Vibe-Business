@@ -23,7 +23,7 @@ import {
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
 import { creditsToUnits } from "@/modules/credits/units";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
-import { FocusCard } from "@/app/app/projects/[projectId]/nova/focus-card";
+import { FocusCard } from "../design-studies/legacy-focus-card";
 import { AttentionStack } from "@/app/app/projects/[projectId]/nova/attention-stack";
 import { WorkingStrip } from "@/app/app/projects/[projectId]/nova/working-strip";
 import { ProductIdentity } from "@/app/app/projects/[projectId]/nova/product-identity";

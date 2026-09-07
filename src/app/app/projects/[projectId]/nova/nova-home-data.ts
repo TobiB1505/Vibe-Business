@@ -18,7 +18,10 @@ import {
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { buildNovaHomeView, type NovaHomeView } from "@/modules/nova/home-view";
 import { readNovaFocus } from "@/modules/nova/read";
-import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
+import {
+  buildBusinessBrainView,
+  type BusinessBrainView,
+} from "@/modules/projects/business-brain-view";
 import { productDisplayName } from "@/modules/projects/display-name";
 import { buildHeadline } from "@/modules/product-understanding/view";
 import type { ProductProfile } from "@/modules/product-understanding/schema";
@@ -75,6 +78,15 @@ export type NovaPriorityFinding = {
 };
 
 export type NovaHealth = {
+  /**
+   * The audit's own reading, kept rather than discarded.
+   *
+   * `buildBusinessBrainView` was already being called to produce the four
+   * numbers below and then thrown away, which meant Home held the whole map
+   * and rendered a score. The thread shows it when the audit is the moment,
+   * and the read did not grow by a row.
+   */
+  view: BusinessBrainView;
   score: number | null;
   stateLabel: string;
   scoredLenses: number;
@@ -254,6 +266,7 @@ async function readHealth(supabase: SupabaseClient, projectId: string): Promise<
   const priority = view.primaryPriority;
 
   return {
+    view,
     score: view.overall.score,
     stateLabel: view.overall.stateLabel,
     scoredLenses: view.overall.scoredLenses,

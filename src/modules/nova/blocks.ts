@@ -114,9 +114,15 @@ export const BLOCK_FOR_MOMENT: Record<FocusCandidateKind, BlockKind> = {
   /* A question, answered in the card that owns the options. */
   agent_question: "ask",
   founder_input_required: "ask",
-  /* Not an ask: the candidate names no application, because the list comes
-     from the repository analysis rather than from the ranking. */
-  workspace_choice_required: "none",
+  /*
+   * Also an ask, though it took a while to see it.
+   *
+   * This said `none` on the reasoning that the candidate names no application
+   * — true, and beside the point. The list is a read, and the surface makes
+   * it; a founder is being asked which app Vibe should work on, and the panel
+   * that asks brings its own options and its own submit like every other ask.
+   */
+  workspace_choice_required: "ask",
 
   /* A change, read through its own gate. */
   validation_failed: "review",

@@ -7,9 +7,17 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
-import { footnoteFor } from "./footnote";
+import { footnoteFor } from "@/app/app/projects/[projectId]/nova/footnote";
 
 /**
+ * The Focus Card, kept as the picture of what the thread replaced.
+ *
+ * Production does not render this. Home is a thread now — a bubble, a render
+ * block and a control, none inside another — and this is the card that held
+ * all three inside one raised surface. It lives in the lab so
+ * `study-nova-home` can still draw the before, and so the production folder
+ * holds only what production renders.
+ *
  * The one thing Vibe leads with (UI Sourcing Spec C1; audit E1).
  *
  * ## Why this is the page's only raised surface
