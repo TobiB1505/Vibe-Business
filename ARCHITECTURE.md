@@ -378,6 +378,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0095](docs/decisions/0095-design-tooling-is-repo-native.md) | Design tooling is repo-native, and a registry cannot reach Vibe's primitives | UI and design tooling |
 | [0096](docs/decisions/0096-the-second-design-system-arrives-scoped.md) | The second design system arrives as a scope, not as a rewrite | UI and design tooling |
 | [0097](docs/decisions/0097-icon-paths-come-from-lucide-the-frame-stays-vibes.md) | Icon paths come from Lucide; the frame stays Vibe's | UI and design tooling |
+| [0098](docs/decisions/0098-the-palette-ships-behind-one-switch.md) | The palette ships behind one switch, not one route at a time | UI and design tooling |
 
 ### Layers with no section above
 

@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { activePalette } from "./palette";
 
 /**
  * The colour tokens, measured rather than trusted (UI-6 §7).
@@ -173,20 +174,43 @@ describe("v2 redefines the whole colour vocabulary", () => {
     expect(extra, `v2-only colour tokens: ${extra.join(", ")}`).toEqual([]);
   });
 
-  it("changes nothing until something opts in", () => {
+  it("is switched in exactly one place, and that place reads configuration", () => {
     /*
-     * Every v2 declaration is scoped to `[data-vibe="v2"]`. Nothing in the
-     * product sets that attribute yet, which is what makes S1 a foundation
-     * rather than a redesign — and what makes it reversible by deleting one
-     * attribute rather than by reverting 162 files.
+     * S1 shipped the tokens unswitched and this asserted that nothing in the
+     * product carried the attribute. S4 switches it on, so the claim changes
+     * shape rather than disappearing: **one** element sets `data-vibe`, it is
+     * the root, and the value comes from `activePalette()` rather than being
+     * written in.
+     *
+     * A literal `data-vibe="v2"` anywhere would be a second switch — a route
+     * that is v2 whatever the deployment says, which is the half-migrated
+     * state ADR 0098 rejected because the fixed ground would flicker between
+     * screens.
      */
+    const setters: string[] = [];
+    const literals: string[] = [];
     for (const file of walk(join(process.cwd(), "src"))) {
       if (!file.endsWith(".tsx")) continue;
-      expect(
-        withoutComments(readFileSync(file, "utf8")),
-        `${file.slice(process.cwd().length + 1)} opts into v2; S1 ships the tokens unswitched`,
-      ).not.toContain('data-vibe="v2"');
+      const path = file.slice(process.cwd().length + 1);
+      const source = withoutComments(readFileSync(file, "utf8"));
+      if (/data-vibe=/.test(source)) setters.push(path);
+      if (/data-vibe="v[12]"/.test(source)) literals.push(path);
     }
+    expect(setters, "the palette is chosen once, in the root layout").toEqual([
+      "src/app/layout.tsx",
+    ]);
+    expect(literals, "a written-in palette is a route that ignores the switch").toEqual([]);
+    expect(readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8")).toContain(
+      "data-vibe={activePalette()}",
+    );
+  });
+
+  it("defaults to the palette customers already have", () => {
+    // The switch exists so v2 can be looked at, not so it arrives by accident.
+    // An unset variable, a typo and an empty string all mean v1.
+    expect(activePalette({})).toBe("v1");
+    expect(activePalette({ VIBE_PALETTE: "V2" })).toBe("v1");
+    expect(activePalette({ VIBE_PALETTE: "v2" })).toBe("v2");
   });
 });
 

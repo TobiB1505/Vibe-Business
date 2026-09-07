@@ -1,3 +1,4 @@
+import { inflateSync } from "node:zlib";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -80,6 +81,68 @@ test.describe("the ground exists and stays out of the way", () => {
     // The ramp is still there — a route that does not opt in gets the quiet
     // ground, never no ground at all.
     expect((await layer(page, ".vibe-atmosphere")).image).toContain("linear-gradient");
+  });
+
+  /**
+   * The assertion the rest of this file cannot make.
+   *
+   * Every other test here reads a computed style, and a computed style is
+   * exactly what `.vibe-atmosphere` had while it was dead code: a rule that
+   * resolved, on a class nothing wore, over a product drawing glass on a flat
+   * field. Reading the rule proves the rule exists. Only pixels prove the
+   * ground is *there*.
+   *
+   * The first version of this compared two 1×1 screenshots for inequality, and
+   * it survived deleting the ramp — the grain alone makes two pixels differ,
+   * and so does a changed `--color-app`. Difference is not a ramp. So this
+   * decodes the pixel and asserts the *direction and size* of the gradient,
+   * which is the only claim that fails when the ground goes away.
+   */
+  async function luminance(page: Page, y: number): Promise<number> {
+    // A 1×1 PNG: signature, chunks, one IDAT holding a filter byte and one
+    // pixel. Small enough to decode here rather than to take a dependency.
+    const png = await page.screenshot({ clip: { x: 4, y, width: 1, height: 1 } });
+    let offset = 8;
+    let data = Buffer.alloc(0);
+    let channels = 3;
+    while (offset < png.length) {
+      const length = png.readUInt32BE(offset);
+      const type = png.toString("ascii", offset + 4, offset + 8);
+      if (type === "IHDR") channels = png[offset + 8 + 9] === 6 ? 4 : 3;
+      if (type === "IDAT")
+        data = Buffer.concat([data, png.subarray(offset + 8, offset + 8 + length)]);
+      offset += 12 + length;
+    }
+    const raw = inflateSync(data);
+    // Byte 0 is the row's filter. On a 1×1 image every PNG predictor — Sub,
+    // Up, Average, Paeth — reads a left neighbour and a row above that do not
+    // exist and are defined as zero, so the stored bytes *are* the sample
+    // whichever filter the encoder picked. Chromium picks Paeth.
+    expect(raw[0], "unknown PNG filter").toBeLessThanOrEqual(4);
+    const [r, g, b] = [raw[1], raw[2], raw[3]];
+    expect(channels).toBeGreaterThanOrEqual(3);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }
+
+  test("is a flat field in v1 and a lit ramp in v2, in decoded pixels", async ({ page }) => {
+    await page.goto(NOVA);
+    const flatTop = await luminance(page, 8);
+    const flatBottom = await luminance(page, 600);
+    expect(
+      Math.abs(flatTop - flatBottom),
+      "v1 is one colour top to bottom; a difference means the ground leaked into the first palette",
+    ).toBeLessThan(0.5);
+
+    await paletteV2(page);
+    const litTop = await luminance(page, 8);
+    const litBottom = await luminance(page, 600);
+    // Measured at 2.01× when this was written. The bar is deliberately well
+    // under that: the claim is that a ramp exists and runs downward, not that
+    // it keeps one exact value.
+    expect(
+      litTop / Math.max(litBottom, 0.01),
+      `v2 must light the ground from the top: ${litTop.toFixed(2)} over ${litBottom.toFixed(2)}`,
+    ).toBeGreaterThan(1.3);
   });
 
   test("takes no pointer and no tab stop", async ({ page }) => {

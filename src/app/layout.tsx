@@ -9,6 +9,7 @@ import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
 import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
+import { activePalette } from "./palette";
 
 /**
  * The technical typeface is declared in `./fonts.ts` and exposed to the
@@ -40,14 +41,25 @@ export const metadata: Metadata = {
   title: {
     default: "Vibe Business",
     template: "%s — Vibe Business",
-    
   },
   description: "The business layer for AI-built products.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`h-full antialiased ${fontVariables}`}>
+    /*
+      The one place the design system is chosen, from configuration.
+      `theme-v2.css` scopes every redefinition to `[data-vibe="v2"]`, so this
+      attribute is the whole switch — and the attribute is written in both
+      states rather than only in v2, because "why is it still the old design"
+      should be answerable by looking at the document rather than by finding
+      out which deployment read which variable.
+
+      Global rather than per route: `.vibe-atmosphere` is `position: fixed`, so
+      a half-migrated product changes its own background as a founder
+      navigates. See `palette.ts` and ADR 0098.
+    */
+    <html lang="en" data-vibe={activePalette()} className={`h-full antialiased ${fontVariables}`}>
       <body className="bg-app text-fg-body h-full font-sans">
         {/*
           The ground, before anything that stands on it. Two inert fixed

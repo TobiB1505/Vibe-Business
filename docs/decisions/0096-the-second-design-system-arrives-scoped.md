@@ -1,6 +1,6 @@
 # 0096 - The second design system arrives as a scope, not as a rewrite
 
-Status: Accepted
+Status: Accepted; its **rollout clause** — "a route opts in by carrying the attribute on a layout wrapper" — is superseded by [0098](0098-the-palette-ships-behind-one-switch.md) on 2026-09-07. Everything this ADR decided about the *shape* of the second system — same token names, new values, one scoped attribute, no compatibility layer at the end — stands unchanged and is what 0098 switches on. What did not survive is the assumption that a route could opt in alone: `.vibe-atmosphere` turned out to be a fixed full-viewport layer, so a half-migrated product changes its own background between screens.
 Date: 2026-09-06
 
 Introduces `src/app/theme-v2.css` and five self-hosted Geist subsets. Redefines the whole colour, type and shape vocabulary under `[data-vibe="v2"]`, which nothing in the product carries yet, so production renders byte-identically. Adds no runtime dependency and changes no component.
