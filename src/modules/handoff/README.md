@@ -34,7 +34,7 @@ A first version carried the step and nothing else, and the founder read the resu
 
 A decision is the part only Vibe holds: it lives in the database as a founder resolution, never in the repository, so a prompt that referred to one without carrying it sent the founder's tool after something it could not reach.
 
-**Still not carried, and known:** the repository paths the audit's evidence points at. Naming the files the analysis actually read is the next thing worth adding, and it needs the evidence pack resolved at the call site.
+**Deliberately not carried: repository file paths.** The audit's evidence points at paths, and "point to sources" is standard advice, so this is a decision rather than an omission. Two reasons against. A path is only as fresh as the snapshot it came from, and a *wrong* path is worse than none, because the receiving agent has no reason to doubt it and will work outward from the wrong place. And a prompt naming specific files stops being one instruction and becomes an instruction plus a layout claim — more surface, more to go stale, individual to one repository state. The agent is in the repository with a search tool; finding the file is the one thing it is unambiguously better at than Vibe.
 
 ## Two properties this module exists to hold
 
