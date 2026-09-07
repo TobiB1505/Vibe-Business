@@ -146,6 +146,43 @@ describe("typed text becomes the characters a person meant", () => {
  * exactly what made the browser unusable on a phone, each of which is one
  * deletion away from coming back.
  */
+/**
+ * Frames arriving faster than a device can decode them.
+ *
+ * Each frame used to get its own `Image` and its own decode. On a phone during
+ * a page load that queues work whose only visible effect is the last one: every
+ * earlier frame is decoded, painted, and immediately replaced. The device pays
+ * for all of them and the person watches the picture run behind.
+ */
+describe("only the newest frame is decoded", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/live-browser-canvas.tsx"),
+    "utf8",
+  );
+
+  it("holds the newest frame instead of queueing every one", () => {
+    expect(source).toContain("pending.current = message");
+    expect(source).toContain("if (decoding.current) return");
+  });
+
+  it("takes the held frame as soon as the current decode finishes", () => {
+    // Without this the newest frame waits for another to arrive, and a
+    // browser that stops changing freezes one frame behind.
+    expect(source).toContain("drawNext()");
+  });
+
+  it("does not let one bad frame stop the ones behind it", () => {
+    expect(source).toContain("image.onerror");
+  });
+
+  it("keeps the coordinate space the browser's, not the picture's", () => {
+    // The frame may arrive smaller than the viewport. A click is still
+    // reported in the page's own pixels, or it lands somewhere else entirely.
+    expect(source).toContain("frameSize.current = { w: next.w, h: next.h }");
+    expect(source).toContain("drawImage(image, 0, 0, canvas.width, canvas.height)");
+  });
+});
+
 describe("the keyboard comes up on a tap and not on a scroll", () => {
   /*
    * The first version raised it on every touch, so it reappeared on each drag

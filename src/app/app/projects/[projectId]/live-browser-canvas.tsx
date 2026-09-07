@@ -155,6 +155,9 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
   const socketRef = useRef<WebSocket | null>(null);
   /** The size of the last frame, which is the coordinate space the guard expects. */
   const frameSize = useRef({ w: 0, h: 0 });
+  /** The newest frame not yet drawn, and whether one is being decoded. */
+  const pending = useRef<Frame | null>(null);
+  const decoding = useRef(false);
   const [connected, setConnected] = useState(false);
   const [painted, setPainted] = useState(false);
 
@@ -176,19 +179,55 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      const image = new Image();
-      image.onload = () => {
-        // The backing store matches the frame, so nothing is resampled twice:
-        // CSS scales the element, the browser scales the pixels once.
-        if (canvas.width !== message.w || canvas.height !== message.h) {
-          canvas.width = message.w;
-          canvas.height = message.h;
+      /*
+       * Only the newest frame is worth decoding.
+       *
+       * Every arriving frame used to get its own `Image` and its own decode.
+       * When frames arrive faster than a device can decode them — which is a
+       * phone during a page load — that queues work whose only visible effect
+       * is the last one: each earlier frame is decoded, painted, and
+       * immediately replaced. The device pays for all of them and the person
+       * watches the picture run behind.
+       *
+       * So a decode in flight does not queue another. The newest frame is
+       * held, and taken as soon as the current one is done. A live browser has
+       * no use for a stale frame — there is nothing here to miss, only
+       * something to be late for.
+       */
+      pending.current = message;
+      if (decoding.current) return;
+
+      const drawNext = () => {
+        const next = pending.current;
+        pending.current = null;
+        if (!next) {
+          decoding.current = false;
+          return;
         }
-        frameSize.current = { w: message.w, h: message.h };
-        canvas.getContext("2d")?.drawImage(image, 0, 0);
-        setPainted(true);
+        decoding.current = true;
+
+        const image = new Image();
+        image.onload = () => {
+          // The backing store matches the image, so nothing is resampled
+          // twice: CSS scales the element, the browser scales the pixels once.
+          if (canvas.width !== image.naturalWidth || canvas.height !== image.naturalHeight) {
+            canvas.width = image.naturalWidth;
+            canvas.height = image.naturalHeight;
+          }
+          // The coordinate space stays the browser's, not the picture's: a
+          // click is reported in the page's own pixels whatever size the frame
+          // arrived at.
+          frameSize.current = { w: next.w, h: next.h };
+          canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+          setPainted(true);
+          drawNext();
+        };
+        // A frame that cannot be decoded must not stop the ones behind it.
+        image.onerror = () => drawNext();
+        image.src = `data:image/jpeg;base64,${next.data}`;
       };
-      image.src = `data:image/jpeg;base64,${message.data}`;
+
+      drawNext();
     };
 
     const lost = () => {
