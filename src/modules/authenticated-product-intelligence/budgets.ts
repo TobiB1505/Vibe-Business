@@ -1,13 +1,49 @@
 /**
  * Central budgets for authenticated analysis (Sprint 5 §20).
  *
- * Deliberately *smaller* than the public crawler's. A real browser rendering a
- * logged-in application is expensive in provider seconds and can contain real
- * customer data, so the goal is a product's authenticated *shape* — dashboard,
- * onboarding, settings, billing — not a copy of a SaaS app.
+ * Deliberately *smaller* than the public crawler's. The goal is a product's
+ * authenticated **shape** — dashboard, onboarding, settings, billing — not a
+ * copy of a SaaS app, and a browser rendering someone's logged-in application
+ * can put real customer data on a screen.
  *
  * Reaching a budget is never an error. It downgrades the snapshot to `partial`
  * with a machine-readable reason, and whatever was learned is still returned.
+ *
+ * ## Why `maxPages` moved, and what it is sized against now
+ *
+ * It was 8, and the sentence justifying it said a real browser "is expensive in
+ * provider seconds". That was true of Browserbase. Since
+ * [ADR 0076](../../../docs/decisions/0076-the-browser-we-own.md) the browser is
+ * a Vercel sandbox at 2 vCPU, and the first real scan measured what that costs:
+ * a 128-second session — 112 of them a person typing a password — for
+ * **$0.0121** against $0.441 of revenue.
+ *
+ * But cost is not the argument for the new number, because cost was the wrong
+ * argument for the old one. **The list of surfaces this analysis exists to find
+ * is ten long** (`AuthenticatedSurfaceId`), and a budget of eight pages cannot
+ * describe ten surfaces — not even if every page visited were a different one,
+ * none of them the landing page, and no surface ever needed two pages to
+ * recognise. The number was never sized against the job.
+ *
+ * Twenty-five is: roughly two pages per surface, because a settings area is a
+ * list and a detail, plus the landing page, plus room for pages that turn out
+ * to be none of them. The first real scan found **72 candidates and inspected
+ * 8**, reaching depth 1 of an allowed 2 — it ran out of pages before it ran out
+ * of product.
+ *
+ * What that costs, at the same 2.0 seconds per page that scan measured: about
+ * $0.0153 typically and $0.0248 if a slow login is followed by a full
+ * analysis — **96.5% and 94.4% margin**. Even the 10-minute session ceiling,
+ * which no analysis approaches, is 87%.
+ *
+ * `maxCandidates` moves for a different reason: 50 truncated a list of 72
+ * *before prioritisation*, so it did not merely shorten the crawl, it changed
+ * which pages were eligible to be chosen. Candidates are URLs held in memory
+ * and cost nothing to consider.
+ *
+ * `maxDepth`, `maxLinksPerPage` and `navigationTimeoutMs` are unchanged. Depth
+ * is the guard against wandering out of the product, and the scan that
+ * prompted this never reached its limit.
  */
 export type AuthenticatedCrawlBudgets = {
   /** Authenticated pages actually inspected. */
@@ -29,12 +65,23 @@ export type AuthenticatedCrawlBudgets = {
 };
 
 export const DEFAULT_AUTHENTICATED_BUDGETS: AuthenticatedCrawlBudgets = {
-  maxPages: 8,
-  maxCandidates: 50,
+  /** Ten surfaces to find, about two pages each, plus the landing page. */
+  maxPages: 25,
+  /** Above what a real product offered, so prioritisation chooses from all of it. */
+  maxCandidates: 150,
   maxDepth: 2,
   maxLinksPerPage: 60,
   navigationTimeoutMs: 15_000,
-  maxDurationMs: 90_000,
+  /*
+   * Three minutes, and it stays the thing that ends a scan.
+   *
+   * 25 pages at the measured 2.0 seconds each is 50; the rest is room for
+   * pages that take the 15-second navigation ceiling rather than two. The
+   * route's own `maxDuration` is set above this on purpose — see
+   * `product/deep-scan/page.tsx` — so a scan ends because Vibe decided it had
+   * seen enough, never because the platform killed the function.
+   */
+  maxDurationMs: 180_000,
   maxLabelLength: 120,
   maxLabelsPerList: 12,
 };
