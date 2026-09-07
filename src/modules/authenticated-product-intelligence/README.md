@@ -24,6 +24,14 @@ That guard is a string constant rather than a file for the same reason the agent
 
 It contains **no interpolation** — not one `${`, not one backtick. Both tokens, both ports and the viewport arrive through the process environment and are read inside the sandbox, so there is no point at which a token, a URL or anything a user typed could become program text. A test asserts that absence rather than trusting a reading of the file.
 
+## The picture, and why its size is a decision
+
+Chromium runs at **1920×1200** and the screencast casts at exactly that, at JPEG quality 72. It was 1280×800 at quality 60, and a founder on a high-density display said the preview looked wrong "resolution-wise" — twice over. The dialog lays the frame out around 1120 CSS pixels, which on a 2× screen is 2240 device pixels, so a 1280-pixel JPEG was being stretched most of the way to double. And 1280 is a *narrow* desktop: an application with a sidebar renders its cramped layout there, so the analysis was reading a product shape the customer's own users do not see.
+
+The viewport and the cast ceiling must be equal — a cast smaller than the window is scaled down, and the canvas maps a click through the frame's coordinate space, so the tap lands somewhere other than where the person aimed. The guard holds those numbers as literals, because it contains no interpolation and that absence is a security property, so `guard-program.test.ts` asserts the equality rather than a comment claiming it.
+
+The dialog's box is sized **from the frame**, not from a constant. A hardcoded aspect ratio in the UI restating a viewport in the runtime is a disagreement waiting to happen, and stretching is the worst symptom to ship: the click maths still looks right in code.
+
 ## Smaller budgets than the public crawl, deliberately
 
 A real browser rendering a logged-in application is expensive in provider seconds and can contain real customer data. `budgets.ts` is therefore _tighter_ than the public crawler's, and reaching a budget degrades the result to partial rather than crawling on (rule 39).
