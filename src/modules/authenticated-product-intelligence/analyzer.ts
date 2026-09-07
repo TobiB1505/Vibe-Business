@@ -5,6 +5,7 @@ import {
   buildRouteCandidates,
   extendCandidates,
   isSafeAnalysisTarget,
+  routeShape,
   sortCandidates,
   toSameOriginPath,
   type RouteCandidateSource,
@@ -274,6 +275,14 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
 
   const pages: AuthenticatedPageSummary[] = [];
   const visited = new Set<string>();
+  /*
+   * How many pages each route template has already spent, and which templates
+   * had more instances than the budget inspects. The second is a warning, not
+   * a failure: skipping a repeat is the budget working, and the founder is
+   * told the product has more of a screen than Vibe looked at.
+   */
+  const shapeVisits = new Map<string, number>();
+  const repeatedScreens = new Set<string>();
   const candidateSources: Record<RouteCandidateSource, number> = {
     landing: 0,
     repository_route: 0,
@@ -293,6 +302,27 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
 
     const candidate = candidates.shift()!;
     if (visited.has(candidate.path)) continue;
+
+    /*
+     * A screen is worth a page; the same screen with different rows is not.
+     *
+     * `/app/projects/<a>/settings` and `/app/projects/<b>/settings` are one
+     * template. The first run that read pages properly spent all 25 on four
+     * copies of a project workspace's seven tabs, and then reported
+     * `integrations` and `onboarding` as absent — it had never reached
+     * `/app/connect/github` or `/app/onboarding`, because seventeen of its
+     * pages went on repetitions.
+     *
+     * Checked before the navigation, so a skipped repeat costs nothing at all,
+     * and counted on *inspected* pages rather than on candidates: a page that
+     * failed to load taught us nothing and must not hold a slot.
+     */
+    const shape = routeShape(candidate.path);
+    if ((shapeVisits.get(shape) ?? 0) >= budgets.maxPagesPerRouteShape) {
+      repeatedScreens.add(shape);
+      continue;
+    }
+
     visited.add(candidate.path);
 
     const target = `${new URL(input.origin).origin}${candidate.path}`;
@@ -390,6 +420,9 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     });
 
     pages.push(summary);
+    // Counted on the landed path, because that is the page that was read.
+    const landedShape = routeShape(landedPath);
+    shapeVisits.set(landedShape, (shapeVisits.get(landedShape) ?? 0) + 1);
     tracker.recordPage();
     maxDepthReached = Math.max(maxDepthReached, candidate.depth);
 
@@ -410,6 +443,21 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
 
   if (pages.length === 0) {
     return { ok: false, error: "analysis_failed" };
+  }
+
+  if (repeatedScreens.size > 0) {
+    /*
+     * Said once, with a count, and never as a failure. The founder should know
+     * their product has more instances of a screen than Vibe looked at — that
+     * is a fact about the product — without a warning per skipped page turning
+     * a working budget into a list of complaints.
+     */
+    warnings.push(
+      warning(
+        "repeated_screen_skipped",
+        `${repeatedScreens.size} screen(s) exist in more copies than Vibe inspected. Each was read up to ${budgets.maxPagesPerRouteShape} time(s).`,
+      ),
+    );
   }
 
   const blocked = input.browser.blocked;

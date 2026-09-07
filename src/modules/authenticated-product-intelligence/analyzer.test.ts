@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { analyzeAuthenticatedProduct, selectAuthenticatedPage, type AnalysisBrowserPort, type AnalysisPagePort } from "./analyzer";
 import { DEFAULT_AUTHENTICATED_BUDGETS } from "./budgets";
+import { routeShape } from "./routes";
 import type { RawPageExtraction } from "./extract";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
@@ -714,5 +715,153 @@ describe("analyzeAuthenticatedProduct — a page is let go still before it is re
     const paths = result.snapshot.pages.map((entry) => entry.path);
     expect(paths).toContain("/app/settings/profile");
     expect(paths).not.toContain("/app/settings");
+  });
+});
+
+/*
+ * The run that finally read pages properly, reproduced.
+ *
+ * Snapshot `97cecfa7`: 25 pages inspected, 106 seconds, no navigation failure
+ * — and **8 screens**. Four projects × seven workspace tabs filled the budget,
+ * so `/app/billing`, `/app/settings`, `/app/products`, `/app/onboarding` and
+ * `/app/connect/github` were never reached, and the snapshot reported
+ * `integrations` and `onboarding` as *not detected*. That is a scan answering
+ * a question about the product with a fact about its own budget.
+ */
+describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it is not", () => {
+  const PROJECTS = [
+    "88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b",
+    "9b702a96-7863-4c29-8ece-c0055bfac24f",
+    "b95779dc-73ca-40d8-bc60-40878d079ca7",
+    "c0c9bec0-519d-43a3-89ac-78bb9216557e",
+  ];
+  const TABS = ["", "/agent", "/experiments", "/health", "/plan", "/product", "/settings"];
+  const SINGLETONS = [
+    "/app/billing",
+    "/app/settings",
+    "/app/products",
+    "/app/onboarding",
+    "/app/connect/github",
+  ];
+
+  /** The shell links to every project tab and to the account-level screens. */
+  function workspaceBrowser() {
+    let current = `${ORIGIN}/app`;
+    const visited: string[] = [];
+    const links = [
+      ...PROJECTS.flatMap((id) => TABS.map((tab) => `${ORIGIN}/app/projects/${id}${tab}`)),
+      ...SINGLETONS.map((path) => `${ORIGIN}${path}`),
+    ];
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        visited.push(new URL(url).pathname);
+        current = url;
+        return { status: 200 };
+      },
+      settle: async () => undefined,
+      extract: async () => extraction({ sameOriginLinks: links }),
+    };
+
+    return {
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      } satisfies AnalysisBrowserPort,
+      visited,
+    };
+  }
+
+  it("reads two of a repeated screen and spends the rest on screens it has not seen", async () => {
+    const { browser } = workspaceBrowser();
+
+    const result = await analyzeAuthenticatedProduct({ ...baseInput, browser });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const paths = result.snapshot.pages.map((page) => page.path);
+    const shapes = new Map<string, number>();
+    for (const path of paths) {
+      const shape = routeShape(path);
+      shapes.set(shape, (shapes.get(shape) ?? 0) + 1);
+    }
+
+    // No template is read more than the budget allows.
+    for (const [shape, count] of shapes) {
+      expect(count, shape).toBeLessThanOrEqual(DEFAULT_AUTHENTICATED_BUDGETS.maxPagesPerRouteShape);
+    }
+
+    // And the pages that were freed went to the screens the real run missed.
+    for (const path of SINGLETONS) {
+      expect(paths, `${path} should have been reached`).toContain(path);
+    }
+  });
+
+  it("says the product has more copies than it looked at", async () => {
+    const { browser } = workspaceBrowser();
+
+    const result = await analyzeAuthenticatedProduct({ ...baseInput, browser });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const repeated = result.snapshot.warnings.filter((w) => w.code === "repeated_screen_skipped");
+    // Once, with a count — not one warning per skipped page.
+    expect(repeated).toHaveLength(1);
+    expect(repeated[0]!.message).toMatch(/screen\(s\) exist in more copies/);
+  });
+
+  it("never spends a navigation on a copy it is going to skip", async () => {
+    const { browser, visited } = workspaceBrowser();
+
+    const result = await analyzeAuthenticatedProduct({ ...baseInput, browser });
+    expect(result.ok).toBe(true);
+
+    const perShape = new Map<string, number>();
+    for (const path of visited) {
+      const shape = routeShape(path);
+      perShape.set(shape, (perShape.get(shape) ?? 0) + 1);
+    }
+    for (const [shape, count] of perShape) {
+      expect(count, shape).toBeLessThanOrEqual(DEFAULT_AUTHENTICATED_BUDGETS.maxPagesPerRouteShape);
+    }
+  });
+
+  it("does not let a page that failed to load hold a slot", async () => {
+    // A screen read zero times has taught us nothing, so the next instance of
+    // it is still worth a page.
+    let current = `${ORIGIN}/app`;
+    const read: string[] = [];
+    const broken = `${ORIGIN}/app/projects/${PROJECTS[0]}/settings`;
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        if (url === broken) throw new Error("page.goto: Timeout 15000ms exceeded");
+        current = url;
+        return { status: 200 };
+      },
+      settle: async () => undefined,
+      extract: async () => {
+        read.push(new URL(current).pathname);
+        return extraction({
+          sameOriginLinks: PROJECTS.map((id) => `${ORIGIN}/app/projects/${id}/settings`),
+        });
+      },
+    };
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [page],
+        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const settings = read.filter((path) => path.endsWith("/settings"));
+    expect(settings).toHaveLength(DEFAULT_AUTHENTICATED_BUDGETS.maxPagesPerRouteShape);
+    expect(settings).not.toContain(new URL(broken).pathname);
   });
 });

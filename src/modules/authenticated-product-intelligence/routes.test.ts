@@ -6,6 +6,7 @@ import {
   extendCandidates,
   isNeverVisit,
   isSafeAnalysisTarget,
+  routeShape,
   toSameOriginPath,
 } from "./routes";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
@@ -412,5 +413,66 @@ describe("route priority refinement (Sprint 6 §5)", () => {
     );
 
     expect(link.priority).toBeGreaterThan(seeded!.priority);
+  });
+});
+
+/*
+ * The first run that read pages properly inspected 25 pages and saw 8 screens:
+ * four copies each of a project workspace's seven tabs. It then reported
+ * `integrations` and `onboarding` as absent — it had never reached
+ * `/app/connect/github` or `/app/onboarding`, because seventeen of its pages
+ * went on repetitions.
+ *
+ * A shape that is too greedy is the worse failure of the two: collapsing a
+ * real route hides a surface, where an uncollapsed duplicate merely costs a
+ * page. So these tests spend most of their weight on what must survive.
+ */
+describe("routeShape", () => {
+  it("collapses instances of one screen onto one template", () => {
+    expect(routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b/settings")).toBe(
+      "/app/projects/:id/settings",
+    );
+    expect(routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b/settings")).toBe(
+      routeShape("/app/projects/9b702a96-7863-4c29-8ece-c0055bfac24f/settings"),
+    );
+  });
+
+  it("recognises the identifier shapes a product actually uses", () => {
+    expect(routeShape("/orders/48217")).toBe("/orders/:id");
+    expect(routeShape("/u/a3f9c1d4e5b60718")).toBe("/u/:id");
+    // A Stripe-style key and a nanoid: long, and mixing digits with letters.
+    expect(routeShape("/invoices/in_1P9xQ2eZvKYlo2C")).toBe("/invoices/:id");
+    expect(routeShape("/d/V1StGXR8Z5jdHi6B")).toBe("/d/:id");
+  });
+
+  it("leaves real routes alone", () => {
+    // Collapsing one of these would hide a surface rather than a duplicate,
+    // which is the expensive direction to be wrong in.
+    for (const path of [
+      "/",
+      "/app",
+      "/app/billing",
+      "/app/settings",
+      "/app/onboarding",
+      "/app/connect/github/repositories",
+      "/app/products",
+      "/dashboard/analytics",
+      "/teams/engineering/members",
+      "/blog/how-we-built-our-onboarding",
+    ]) {
+      expect(routeShape(path), path).toBe(path);
+    }
+  });
+
+  it("does not mistake a long hyphenated slug for an id", () => {
+    // Words, no digits — a human chose this, so it names a page.
+    expect(routeShape("/help/getting-started-with-projects")).toBe(
+      "/help/getting-started-with-projects",
+    );
+  });
+
+  it("is stable and idempotent", () => {
+    const shaped = routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b");
+    expect(routeShape(shaped)).toBe(shaped);
   });
 });
