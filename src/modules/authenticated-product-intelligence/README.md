@@ -62,7 +62,7 @@ Two minutes is tight for a password manager plus a second factor on a phone. The
 
 The analysis lives inside a single request and reports nothing until it returns, so the handoff ran for ninety seconds unable to say whether anything was happening. The alternative on offer was a bar timed against the expected duration — a percentage nobody measured, and the exact thing the motion rules forbid.
 
-So the analyzer reports each page as it *records* it (`onProgress`), the service writes that count to the running snapshot row, and the panel polls it every two and a half seconds. `pages_inspected` already exists on that row and is written at completion; this writes it during the crawl, so there is no schema change — a migration for an animation would have been the wrong trade.
+So the analyzer reports each page as it *records* it (`onProgress`), the service writes that count to the running snapshot row, and the panel polls it every two and a half seconds — **over a route handler, not a Server Action**. That is not a style choice: Next.js executes Server Actions from one client one at a time, and the analysis is itself an action that lasts ninety seconds, so as an action every poll queued behind it. A real run produced about thirty, and the runtime log shows all thirty arriving in a burst over eight seconds *after* the analysis returned — which is also why the panel sat blank for half a minute before the result appeared. One cause, two symptoms. `pages_inspected` already exists on that row and is written at completion; this writes it during the crawl, so there is no schema change — a migration for an animation would have been the wrong trade.
 
 Three properties, each with a test:
 

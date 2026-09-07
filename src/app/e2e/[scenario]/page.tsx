@@ -1622,11 +1622,18 @@ export default async function E2eScenarioPage({
    * which is how a countdown and a closing check both shipped without
    * appearing on screen.
    */
-  if (scenario === "deep-scan-dialog-awaiting-login" || scenario === "deep-scan-dialog-sealing") {
+  if (
+    scenario === "deep-scan-dialog-awaiting-login" ||
+    scenario === "deep-scan-dialog-sealing" ||
+    scenario === "deep-scan-dialog-expired"
+  ) {
     return (
       <main className="mx-auto max-w-3xl p-8">
         {label}
-        <DeepScanDialogFixture sealing={scenario === "deep-scan-dialog-sealing"} />
+        <DeepScanDialogFixture
+          sealing={scenario === "deep-scan-dialog-sealing"}
+          expired={scenario === "deep-scan-dialog-expired"}
+        />
       </main>
     );
   }
