@@ -6,10 +6,29 @@ import { ALL_CONSOLE_COLUMNS, FORBIDDEN_COLUMNS, selection } from "./columns";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-function moduleSources(): { file: string; source: string }[] {
-  return readdirSync(HERE)
-    .filter((name) => /\.tsx?$/.test(name) && !name.endsWith(".test.ts"))
-    .map((name) => ({ file: name, source: readFileSync(join(HERE, name), "utf8") }));
+/**
+ * Every source file in this module, at any depth.
+ *
+ * It walked one directory level until `checks/` existed, which would have put a
+ * query one folder down outside every rule below — and a rule applied to a list
+ * that does not contain the file cannot fail. That is the same hole this
+ * repository found in four action-allowlist tests, and the walk in
+ * `workspace-routes.test.ts` was widened for the same reason.
+ */
+function moduleSources(dir: string = HERE, prefix = ""): { file: string; source: string }[] {
+  const out: { file: string; source: string }[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      out.push(...moduleSources(join(dir, entry.name), `${prefix}${entry.name}/`));
+      continue;
+    }
+    if (!/\.tsx?$/.test(entry.name) || entry.name.endsWith(".test.ts")) continue;
+    out.push({
+      file: `${prefix}${entry.name}`,
+      source: readFileSync(join(dir, entry.name), "utf8"),
+    });
+  }
+  return out;
 }
 
 /**

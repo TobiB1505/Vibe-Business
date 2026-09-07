@@ -74,16 +74,30 @@ are zero in all 21 production rows. What survived the move — status, failure
 code, duration, changed files — is on the run row, and that is what the panel
 reads now.
 
+## One panel is not a measurement
+
+Every other panel counts something that happened, and a count is never wrong — only uninteresting. **Contradictions** is the exception: it shows places where two parts of the system disagree and one of them has to be false ([ADR 0096](../../../docs/decisions/0096-a-contradiction-is-not-a-measurement.md)).
+
+Two checks run here, from rows the console already has plus one bounded read of the ledger's stamps: a charge naming a rate card no policy registry defines, and an operation nothing is carrying — `running` past the deadline its own type declares, or `queued` long past anything starting it. "Stuck" is imported from `operations/staleness.ts` rather than redefined here; a second definition of one word is the species of defect this panel exists to find.
+
+**Acknowledged findings are shown apart from news.** Thirteen agent charges name a book [ADR 0092](../../../docs/decisions/0092-the-agent-runs-as-the-product.md) deleted, which is what that decision means rather than a defect. A panel that is red every day is a panel nobody reads, so those carry their reason in `checks/schema.ts` and sit under their own heading.
+
+The static half of the same family lives in `src/lib/consistency/` and runs in CI, and `pnpm consistency:check` runs these same checks from the command line with an exit code.
+
 ## What lives here
 
-| File          | Purpose                                                                 |
-| ------------- | ----------------------------------------------------------------------- |
-| `operator.ts` | Who may open the console. Unset means nobody.                           |
-| `columns.ts`  | Every column the console may read, and the ones deliberately absent.    |
-| `schema.ts`   | What the console shows: windows, bounds, and the snapshot type.         |
-| `shape.ts`    | Rows into views. Pure, clock-injected, so "is this stuck?" is testable. |
-| `store.ts`    | The reads. The reviewed rule 53 exception.                              |
-| `service.ts`  | The one entry point: authorize, gather, shape.                          |
+| File                | Purpose                                                                 |
+| ------------------- | ----------------------------------------------------------------------- |
+| `operator.ts`       | Who may open the console. Unset means nobody.                           |
+| `columns.ts`        | Every column the console may read, and the ones deliberately absent.    |
+| `schema.ts`         | What the console shows: windows, bounds, and the snapshot type.         |
+| `shape.ts`          | Rows into views. Pure, clock-injected, so "is this stuck?" is testable. |
+| `store.ts`          | The reads. The reviewed rule 53 exception.                              |
+| `service.ts`        | The one entry point: authorize, gather, shape.                          |
+| `checks/schema.ts`  | What a contradiction is, and which ones are already explained.          |
+| `checks/shape.ts`   | Rows into contradictions. Pure, clock- and predicate-injected.          |
+| `checks/store.ts`   | The ledger stamp read, under the same rule 53 exception.                |
+| `checks/service.ts` | One pass, with the product's own staleness predicate supplied.          |
 
 ## What this module deliberately cannot do
 
