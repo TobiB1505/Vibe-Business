@@ -46,6 +46,16 @@ export type LiveBrowserCanvasProps = {
   viewUrl: string;
   /** Announced to the person when the socket has not come up. */
   onUnavailable?: () => void;
+  /**
+   * The two things this component is the only one that can know.
+   *
+   * The socket coming up and the first frame arriving are separate facts —
+   * a connected browser that has not painted is a different situation from one
+   * that has — and the dialog above shows them as steps that happened rather
+   * than as an animation on a timer.
+   */
+  onConnected?: () => void;
+  onPainted?: () => void;
 };
 
 /** Printable single characters go to Chromium as text; everything else as a key. */
@@ -146,7 +156,12 @@ export function isTap(
   return Math.abs(end.x - start.x) <= threshold && Math.abs(end.y - start.y) <= threshold;
 }
 
-export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasProps) {
+export function LiveBrowserCanvas({
+  viewUrl,
+  onUnavailable,
+  onConnected,
+  onPainted,
+}: LiveBrowserCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   /** The hidden field that exists so a phone will open its keyboard. */
   const keyboardRef = useRef<HTMLInputElement>(null);
@@ -165,7 +180,10 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
     const socket = new WebSocket(viewUrl);
     socketRef.current = socket;
 
-    socket.onopen = () => setConnected(true);
+    socket.onopen = () => {
+      setConnected(true);
+      onConnected?.();
+    };
 
     socket.onmessage = (event) => {
       let message: Frame;
@@ -220,6 +238,7 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
           frameSize.current = { w: next.w, h: next.h };
           canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
           setPainted(true);
+          onPainted?.();
           drawNext();
         };
         // A frame that cannot be decoded must not stop the ones behind it.
@@ -244,7 +263,7 @@ export function LiveBrowserCanvas({ viewUrl, onUnavailable }: LiveBrowserCanvasP
       // signed-in product into a page nobody is looking at.
       socket.close();
     };
-  }, [viewUrl, onUnavailable]);
+  }, [viewUrl, onUnavailable, onConnected, onPainted]);
 
   const send = useCallback((message: Record<string, unknown>) => {
     const socket = socketRef.current;

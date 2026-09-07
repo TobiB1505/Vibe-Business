@@ -6,6 +6,8 @@ import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
 import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
+import { ProgressSteps } from "@/components/system/operation-progress";
+import type { OperationProgressStep } from "@/modules/operations/view";
 import type {
   DeepScanNextScan,
   DeepScanViewModel,
@@ -88,6 +90,47 @@ function waitHint(retryAvailableAt: string | null, now: number | null): string |
   return minutes <= 1 ? "You can try again in about a minute." : `You can try again in about ${minutes} minutes.`;
 }
 
+/**
+ * How far the temporary browser has got, as things that happened.
+ *
+ * Opening the dialog on the click rather than on the answer is most of what a
+ * person asked for — a browser takes twenty seconds when Vibe's image is warm
+ * and a couple of minutes when it has to be built, and staring at an unchanged
+ * button for either is the same as nothing happening.
+ *
+ * What fills that wait is deliberately **not** a bar. `OperationProgress` in
+ * this repository states the rule it is built on — *a tick is a fact, not an
+ * animation that advances on a timer* — and the elapsed-seconds helper below
+ * states the other half: the start runs inside one request, so no fraction of
+ * it is knowable from here.
+ *
+ * Three things *are* knowable, because this component watches each of them
+ * happen: the server action answered, the view socket opened, and the first
+ * frame arrived. Those are the rows.
+ */
+export type BrowserStartupStage = "starting" | "connecting" | "painting" | "ready";
+
+export function startupSteps(stage: BrowserStartupStage): OperationProgressStep[] {
+  const reached = (at: BrowserStartupStage[]) => at.includes(stage);
+  const state = (done: boolean, current: boolean): OperationProgressStep["state"] =>
+    done ? "done" : current ? "current" : "pending";
+
+  return [
+    {
+      label: "Starting a temporary browser",
+      state: state(!reached(["starting"]), reached(["starting"])),
+    },
+    {
+      label: "Connecting to it",
+      state: state(reached(["painting", "ready"]), reached(["connecting"])),
+    },
+    {
+      label: "Showing your product",
+      state: state(reached(["ready"]), reached(["painting"])),
+    },
+  ];
+}
+
 function Section({ children }: { children: React.ReactNode }) {
   // `id` is the jump target for the audit section's "Run included Deep Scan".
   return (
@@ -122,20 +165,27 @@ const FOCUSABLE =
 
 function LiveViewDialog({
   liveViewUrl,
-  loading,
+  stage,
   error,
   busy,
   onCancel,
   onAnalyze,
+  onConnected,
+  onPainted,
 }: {
   liveViewUrl: string | null;
-  loading: boolean;
+  stage: BrowserStartupStage;
   error: string | null;
   busy: boolean;
   onCancel: () => void;
   onAnalyze: () => void;
+  onConnected: () => void;
+  onPainted: () => void;
 }) {
   const elapsedSeconds = useElapsedSeconds(busy);
+  // A second clock, and it runs on a different question: how long the browser
+  // has been opening, not how long the analysis has been running.
+  const startupSeconds = useElapsedSeconds(stage !== "ready");
 
   const dialogRef = useRef<HTMLDivElement>(null);
 
@@ -227,23 +277,48 @@ function LiveViewDialog({
             (`BROWSER_SANDBOX.viewport`). Any other ratio would letterbox the
             frame, and a letterboxed frame puts a person's click somewhere
             other than where they aimed. */}
-        <div className="aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
-          {loading && (
-            <p role="status" className="p-4 text-sm text-fg-secondary">
-              Opening a temporary browser…
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="p-4 text-sm text-amber">
-              {error}
-            </p>
-          )}
+        <div className="relative aspect-[16/10] w-full overflow-hidden rounded-md border border-line-2 bg-surface-2">
           {liveViewUrl && !error && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
             // page; this is a JPEG on a canvas, which executes nothing
             // (ADR 0076). The URL comes only from the authorized server action.
-            <LiveBrowserCanvas viewUrl={liveViewUrl} />
+            //
+            // Mounted as soon as there is a URL, and *underneath* the waiting
+            // panel rather than after it: the socket cannot open until this
+            // exists, so a panel that waits for the canvas before mounting it
+            // would be waiting for itself.
+            <LiveBrowserCanvas
+              viewUrl={liveViewUrl}
+              onConnected={onConnected}
+              onPainted={onPainted}
+            />
+          )}
+          {error && (
+            <p role="alert" className="absolute inset-0 bg-surface-2 p-4 text-sm text-amber">
+              {error}
+            </p>
+          )}
+          {!error && stage !== "ready" && (
+            <div
+              role="status"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+            >
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-fg-body">Opening a temporary browser</p>
+                {/*
+                  The honest expectation, and the reason for the slow case.
+                  Vibe builds its browser image about once a week; a person who
+                  is told that waits differently than one who is not.
+                */}
+                <p className="text-xs text-fg-muted">
+                  Usually about twenty seconds. Occasionally a couple of minutes, when Vibe
+                  has to build its browser first — that happens roughly once a week.
+                </p>
+              </div>
+              <ProgressSteps steps={startupSteps(stage)} className="max-w-md" />
+              <p className="font-mono text-meta text-fg-meta">{startupSeconds}s elapsed</p>
+            </div>
           )}
         </div>
 
@@ -501,15 +576,14 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const [dialogOpen, setDialogOpen] = useState(false);
   // Held in memory only, for the lifetime of the open dialog (§6).
   const [liveViewUrl, setLiveViewUrl] = useState<string | null>(null);
-  const [liveViewLoading, setLiveViewLoading] = useState(false);
+  /** How far the temporary browser has got. See `startupSteps`. */
+  const [stage, setStage] = useState<BrowserStartupStage>("starting");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
-    setLiveViewLoading(true);
     setError(null);
     const result = await getDeepScanLiveViewAction(id);
-    setLiveViewLoading(false);
 
     if (!result.ok) {
       setLiveViewUrl(null);
@@ -523,12 +597,16 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setDialogOpen(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
+    setStage("starting");
   }, []);
 
   /** Re-enters an in-progress login: the capability is fetched afresh (§6). */
   const handleReopen = () => {
     if (!sessionId) return;
     setError(null);
+    // The browser already exists, so the first row is a fact before the dialog
+    // is even on screen.
+    setStage("connecting");
     setDialogOpen(true);
     void loadLiveView(sessionId);
   };
@@ -536,15 +614,23 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const handleStart = () => {
     setError(null);
     setBusy(true);
+    // Opened on the click, not on the answer. Starting a browser takes twenty
+    // seconds warm and a couple of minutes cold, and an unchanged button for
+    // either is indistinguishable from nothing having happened.
+    setStage("starting");
+    setDialogOpen(true);
     startTransition(async () => {
       const result = await startDeepScanAction(projectId);
       setBusy(false);
       if (!result.ok) {
+        // The dialog closes rather than holding a failure: the panel below is
+        // where a refusal belongs, next to the control that caused it.
+        closeDialog();
         setError(messageFor(result.error));
         return;
       }
       setSessionId(result.sessionId);
-      setDialogOpen(true);
+      setStage("connecting");
       void loadLiveView(result.sessionId);
     });
   };
@@ -591,6 +677,15 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       router.refresh();
     });
   };
+
+  /*
+   * Two facts, reported by the only component that can see them. Neither
+   * advances on a timer: the socket opened, and a frame arrived.
+   */
+  const handleConnected = useCallback(() => {
+    setStage((current) => (current === "ready" ? current : "painting"));
+  }, []);
+  const handlePainted = useCallback(() => setStage("ready"), []);
 
   const disabled = busy || pending;
 
@@ -792,11 +887,13 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       {dialogOpen && (
         <LiveViewDialog
           liveViewUrl={liveViewUrl}
-          loading={liveViewLoading}
+          stage={stage}
           error={error}
           busy={disabled}
           onCancel={handleCancel}
           onAnalyze={handleAnalyze}
+          onConnected={handleConnected}
+          onPainted={handlePainted}
         />
       )}
     </>
