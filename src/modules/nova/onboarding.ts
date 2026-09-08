@@ -100,23 +100,25 @@ export function novaRevealBundlesAudit(gate: AuditCreditGate): boolean {
  */
 export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
   connect_source:
-    "We start with your code. Show me the repository your product lives in and I can begin reading it.",
+    "Let's start with the product itself. Connect the repository and I'll begin learning how it's put together.",
   add_live_product:
-    "Now — where does somebody actually find your product? Give me the address and I will look at what a visitor sees.",
+    "Now I want to see the product the way a customer does. Give me the live address and I'll hold what's there against what I find in the code.",
   product_scanning:
-    "I am reading through your product now. You do not have to wait here; I will still be at it when you come back.",
+    "I'm getting to know your product now. I'll read through the code and the live experience — you don't need to stay here while I do it.",
   product_reveal:
-    "Here is what I understood about your product. Have a look — if I have any of it wrong, tell me and I will put it right.",
-  audit_preparing: "Right. I am getting ready to look at the business around your product.",
+    "I've got a good picture of what you built. Here's how I understand it — take a look, and if I've misunderstood anything important, tell me before I go further.",
+  audit_preparing:
+    "Good. Now I'm going to look at the business around the product — what's working for it, what's in its way, and what deserves attention first.",
   audit_needs_user:
-    "I have stopped part-way through. There is something only you can tell me before I carry on.",
+    "I need one thing from you before I can keep going. It's something I can't reliably learn from the product itself.",
   audit_running:
-    "I am working through your business now, area by area. Nothing here needs you until I am done.",
+    "That's enough for me to work with. I'm going through the business now, and I'll come back when I know what I'd start with.",
   audit_reveal:
-    "Here is what I found. I have put the thing I would deal with first at the top of it.",
-  first_move: "So this is the first thing I would actually do about it, if you want me to.",
+    "I found a few things worth your attention. One of them stands out — if this were my product, that's where I'd start.",
+  first_move:
+    "This is the first move I'd make. It won't settle everything, and it doesn't need to — it's the best place to start from where the product is today.",
   complete:
-    "That is your setup behind us. From here I tell you what matters as it changes, and you will find me here whenever you come back.",
+    "We're set up. From here I keep track of the product with you — what matters, what changed, and what I think is worth doing next. Whenever you come back, I'll pick up where we left off.",
 };
 
 /**
@@ -140,9 +142,9 @@ export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
  */
 export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
   connect_source:
-    "GitHub will ask which repositories I may see. That choice is entirely yours, and I only ever get the ones you pick.",
+    "GitHub will ask which repositories I can access. You stay in control of that — I only ever get the ones you pick.",
   add_live_product:
-    "It lets me hold what the code says against what somebody out there can actually reach.",
+    "It tells me not just how the product is built, but what people actually run into.",
 
   /* The scan reports its own stages, from rows it writes as it goes. */
   product_scanning: null,
@@ -162,7 +164,7 @@ export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
    * makes the control below a choice rather than the last gate of setup.
    */
   first_move:
-    "Your setup is behind us either way — this is a choice, not the last gate. Your workspace is where everything lives from here.",
+    "Your setup is behind us either way — this is a choice, not the last gate. And you'll see anything I build before it goes anywhere.",
   /* The handover says itself. */
   complete: null,
 };

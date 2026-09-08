@@ -25,9 +25,12 @@ import { NovaLine } from "@/components/nova/nova-thread";
  * the markup rather than in a reviewer's memory:
  *
  * 1. It renders inside a block whose label says it is an example.
- * 2. The caption above it says outright that it is made up and not about their
- *    product. It comes *first*, so a reader meets the disclaimer before the
- *    sentence — including a reader hearing it read aloud.
+ * 2. The sentence introducing it — *it is only to show you how working with me
+ *    feels, it is not about your product* — is the last thing said before this
+ *    renders, so a reader meets the disclaimer before the example, including a
+ *    reader hearing it read aloud. It lives in `first-run.ts` with the rest of
+ *    her copy rather than here, because a disclaimer in JSX is a sentence no
+ *    test reads.
  * 3. The Move is `NovaMove`, the span, and it is held down to an illustration:
  *    `pointer-events-none` so it never lights on hover the way a real one
  *    does, and dimmed so it does not read as the live control it sits three
@@ -51,11 +54,6 @@ import { NovaLine } from "@/components/nova/nova-thread";
 export function NovaHowItWorks() {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-fg-meta text-caption">
-        Made up, to show you the shape of it. Nothing here is about your product, and nothing in it
-        can be pressed.
-      </p>
-
       <div
         role="group"
         aria-label="An example of one message and the control under it"
@@ -63,8 +61,10 @@ export function NovaHowItWorks() {
       >
         <NovaBubble tail>
           <NovaLine>
-            Your pricing page does not say what anything costs until somebody starts signing up.
+            Your pricing page makes people start signing up before they can see what the product
+            costs.
           </NovaLine>
+          <NovaLine>I&apos;d make the pricing visible upfront.</NovaLine>
         </NovaBubble>
 
         <div className="pointer-events-none flex max-w-[24rem] flex-col gap-2.5 pt-1 opacity-60">
@@ -73,8 +73,7 @@ export function NovaHowItWorks() {
       </div>
 
       <p className="text-fg-meta text-caption">
-        When something I offer costs money, the price sits inside that button — before you press it,
-        never after.
+        If an action costs Credits, the price appears right here before you start it.
       </p>
     </div>
   );

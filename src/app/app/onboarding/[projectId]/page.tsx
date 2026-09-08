@@ -805,13 +805,13 @@ export default async function ProjectOnboardingPage({
                               formAction={completeOnboardingAction.bind(null, projectId)}
                               className="text-fg-secondary hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
                             >
-                              Go to your workspace
+                              Go to my workspace
                             </button>
                           }
                         />
                       ) : (
                         <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
-                          <NovaMoveButton type="submit" label="Go to your workspace" />
+                          <NovaMoveButton type="submit" label="Go to my workspace" />
                         </form>
                       )}
                     </>

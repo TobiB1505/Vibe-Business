@@ -321,7 +321,7 @@ describe("what Nova's sentences may say", () => {
     expect(novaGreeting(null)).not.toContain("ada-lovelace");
     /* And the nameless form is a greeting rather than a gap where one was. */
     expect(novaGreeting(null)).toMatch(/^Hi\b/);
-    expect(novaGreeting(null)).toContain("I am Nova");
+    expect(novaGreeting(null)).toContain("I'm Nova");
   });
 
   /**
@@ -332,16 +332,24 @@ describe("what Nova's sentences may say", () => {
    * up hunting for a text box. Asserted because it is the claim, not decoration
    * — §M is why there is no input to find.
    */
-  it("says outright that there is nothing to type", () => {
+  it("tells a founder they do not have to work out what to ask", () => {
     const walkthrough = buildNovaWorkflowExplanation()
       .filter((entry) => entry.kind === "nova.message")
       .map((entry) => entry.text)
       .join(" ");
 
-    expect(walkthrough).toMatch(/not a chat box/i);
-    expect(walkthrough).toMatch(/nothing here to type/i);
-    /* And that pressing is the whole interaction. */
-    expect(walkthrough).toMatch(/you press it/i);
+    /*
+     * The thing a person genuinely does not know on meeting this screen is
+     * what kind of thing they are talking to — and the useful answer is what
+     * it means *for them*, not what Nova is not. So: they write nothing, she
+     * leads, and one step arrives at a time.
+     */
+    expect(walkthrough).toMatch(/don['’]t need to write prompts/i);
+    expect(walkthrough).toMatch(/I['’]ll guide us/i);
+    expect(walkthrough).toMatch(/one clear next step/i);
+    /* The price is before the press, and the review is before the branch. */
+    expect(walkthrough).toMatch(/before you start it/i);
+    expect(walkthrough).toMatch(/you review it before/i);
   });
 
   /**
@@ -393,40 +401,57 @@ describe("what Nova's sentences may say", () => {
   });
 
   /**
-   * One voice, and the convention it already kept without anybody writing it
-   * down.
+   * One voice, and what it is a voice *of*.
    *
-   * Nova has never used a verbal contraction. Not "I'm", not "you'll", not
-   * "let's" — every sentence in the product says *I am*, *you will*, *we
-   * start*. That is a real register and it reads as considered rather than
-   * chatty, which is the difference between an assistant and a mascot.
+   * ## The rule
    *
-   * It had no test, and a warmer pass at the copy put "Let's get started" and
-   * "Right, let's set up my project" on two buttons before anybody noticed the
-   * other nineteen labels did not talk that way. Warmth comes from rhythm and
-   * from saying the true thing plainly; it does not need an apostrophe.
+   * **Nova speaks like a trusted operator sitting beside the founder — not
+   * like an AI assistant explaining its capabilities.** She is competent,
+   * calm, opinionated and not a know-all: *I've seen enough to know where I'd
+   * start*, *I wouldn't spend time on that yet*, *this part is good, I'd leave
+   * it alone*.
    *
-   * Possessives are untouched — "your product's name" is not a contraction.
+   * ## What this replaced, and why
+   *
+   * A test asserting she never uses a contraction. It was a real observation —
+   * every sentence said *I am*, *you will*, *we start* — and it was mistaken
+   * for a register. Read aloud, contraction-free English is a briefing, not
+   * somebody sitting next to you, and the copy it was protecting proved it:
+   * the walkthrough opened *"I am not a chat box"*, which is an assistant
+   * describing what it is not.
+   *
+   * So the register is contractions, and what is guarded is the failure the
+   * old rule was reaching for: sentences about the assistant rather than about
+   * the founder's product.
    */
-  const CONTRACTION =
-    /\b\w+n['’]t\b|\b\w+['’](re|ll|ve|d|m)\b|\b(let|it|that|here|there|what|who|he|she|we|you|they)['’]s\b/i;
+  const ASSISTANT_SPEAK =
+    /\b(as an ai|an ai (assistant|model)|language model|my capabilities|i am (an|a) (ai|assistant|bot|chatbot)|chat ?box|chatbot|prompt(s)? (to|for) me|i cannot help with)\b/i;
 
-  it("speaks in one register, with no contractions", () => {
+  it("never explains itself as an assistant", () => {
     /* Proved live first: a sweep asserting nothing matches passes just as
        cleanly when the detector is broken. */
-    expect("Let's get started").toMatch(CONTRACTION);
-    expect("I'm reading it").toMatch(CONTRACTION);
-    expect("your product's name").not.toMatch(CONTRACTION);
+    expect("I am not a chat box.").toMatch(ASSISTANT_SPEAK);
+    expect("As an AI, I cannot do that.").toMatch(ASSISTANT_SPEAK);
+    expect("I would start with the pricing page.").not.toMatch(ASSISTANT_SPEAK);
 
     for (const { kind, text } of everyMessage) {
-      expect(text, `${kind}: ${text}`).not.toMatch(CONTRACTION);
+      expect(text, `${kind}: ${text}`).not.toMatch(ASSISTANT_SPEAK);
     }
   });
 
-  /** And the verbs on her controls, which are her voice as much as the lines. */
-  it("keeps the same register on every control it offers", () => {
+  /**
+   * And the verbs on her controls, which are the *founder's* voice, not hers.
+   *
+   * A button is a person deciding, so it says what they are choosing —
+   * *Set up my product*, *Show me how you work*, *Yes, that's my product*.
+   * "Straight to it, then" shipped for one commit and was Nova answering her
+   * own question on the founder's behalf, which is the tell: a label in the
+   * first person is a label that has taken the wrong side of the conversation.
+   */
+  it("puts every control in the founder's voice, never Nova's", () => {
     for (const [actionId, meta] of Object.entries(NOVA_ACTION_META)) {
-      expect(meta.label, actionId).not.toMatch(CONTRACTION);
+      expect(meta.label, actionId).not.toMatch(/\bI(['’]| )?(m|ll|ve|d)?\b/);
+      expect(meta.label, actionId).not.toMatch(ASSISTANT_SPEAK);
       expect(meta.label.length, actionId).toBeGreaterThan(2);
     }
   });

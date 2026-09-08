@@ -215,7 +215,7 @@ describe("leaving and arriving are coherent", () => {
   });
 
   it("names the final control after where it actually goes", () => {
-    expect(PAGE).toContain("Go to your workspace");
+    expect(PAGE).toContain("Go to my workspace");
     expect(copyOf(PAGE)).not.toContain("Go to dashboard");
   });
 });
@@ -322,7 +322,9 @@ describe("the first journey speaks to a founder", () => {
        `/you choose/i` and failed on a rewrite that says the same thing in
        better English — a test that pins a sentence rather than its meaning
        makes every improvement to the copy look like a regression. */
-    expect(disclosure).toMatch(/you choose|choice is (entirely )?yours|yours to (make|choose)/i);
+    expect(disclosure).toMatch(
+      /you choose|you stay in control|choice is (entirely )?yours|yours to (make|choose)/i,
+    );
     expect(disclosure).toMatch(/only .*(the ones you|what you)/i);
 
     /* And the state that carries it is the one the page renders for the
@@ -395,7 +397,7 @@ describe("the last screen offers the Move it just recommended", () => {
 
   it("keeps leaving free, and keeps naming where it goes", () => {
     expect(PAGE).toContain("completeOnboardingAction");
-    expect(PAGE).toContain("Go to your workspace");
+    expect(PAGE).toContain("Go to my workspace");
     // Comments quote the phrase they explain, so the check reads the markup.
     expect(copyOf(PAGE)).not.toContain("Go to dashboard");
   });

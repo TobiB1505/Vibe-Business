@@ -134,14 +134,20 @@ export function deriveNovaFirstRun(facts: NovaFirstRunFacts): NovaFirstRunPositi
  */
 export function novaGreeting(name: string | null): string {
   return name
-    ? `Hi ${name} — I am Nova. I will be the one working on your product with you, and I will walk you through the setup now.`
-    : "Hi — I am Nova. I will be the one working on your product with you, and I will walk you through the setup now.";
+    ? `Hi ${name} — I'm Nova. I'll be working on your product with you.`
+    : "Hi — I'm Nova. I'll be working on your product with you.";
 }
 
-/** What she says after hello, and before anything is asked of anybody. */
+/**
+ * What she says after hello, and before anything is asked of anybody.
+ *
+ * Two sentences rather than a description of the pipeline. The first says what
+ * she will do next; the second says what she can do, and closes on the only
+ * promise Vibe actually makes.
+ */
 const INTRODUCTION = [
-  "After that: I read your code and your live product, work out what is holding the business back, and then I build the changes myself.",
-  "You stay in charge of what ships. Nothing reaches your default branch until you have looked at it and said yes.",
+  "I'll get to know what you built, look at the business around it, and work out what's worth improving first.",
+  "When there's something I can build for you, I can do that too. You'll always see the result before anything reaches your default branch.",
 ] as const;
 
 /**
@@ -152,7 +158,7 @@ const INTRODUCTION = [
  * rather than an absence.
  */
 const WORKFLOW_OFFER =
-  "Before we start — shall we get straight to it, or would you like me to show you how I work first?";
+  "Before we start — want to get straight to your product, or should I show you how working with me works first?";
 
 /**
  * How she works, for somebody who asked.
@@ -170,14 +176,32 @@ const WORKFLOW_OFFER =
  * follows shows the shape rather than describing it again.
  */
 const WORKFLOW_STEPS = [
-  "I am not a chat box. There is nothing here to type, and I will never ask you to write out what you want.",
-  "I say one thing at a time, and under it I put the one thing I think is worth doing next. You press it, or you do not — that is the whole of it.",
-  "Anything that costs money carries its price inside the button, before you press. Reading, looking and changing your mind are free.",
-  "And when I have built something, you see it before it goes anywhere. Nothing reaches your default branch until you say so.",
+  "One thing before we start.",
+  "You don't need to write prompts or work out what to ask me. I'll guide us through this.",
+  "I'll show you what I'm looking at, tell you what I think matters, and give you one clear next step at a time.",
+  "You decide what we do. And if something costs Credits, you'll see the price before you start it — never afterwards.",
+  "If I build something, you review it before it goes anywhere.",
 ] as const;
 
-/** The line that hands over to the example, so the block is not unannounced. */
-const WORKFLOW_EXAMPLE_LEAD = "Here is what that looks like.";
+/**
+ * The line that hands over to the example, so the block is not unannounced.
+ *
+ * The component finds it by id and puts the block underneath, which is why the
+ * id is exported rather than left as a string two files know about.
+ */
+export const WORKFLOW_EXAMPLE_ID = "first-run:walkthrough:example";
+
+const WORKFLOW_EXAMPLE_LEAD =
+  "Here's a quick example. It's only to show you how working with me feels — it isn't about your product.";
+
+/**
+ * And the line under the example, which is the seam.
+ *
+ * Everything above it is Nova describing herself; everything after it is her
+ * working. Saying so out loud is what stops the example being mistaken for the
+ * beginning of the real thing.
+ */
+const WORKFLOW_HANDOVER = "That's it. From here on, everything you see is about your product.";
 
 /**
  * The feed for a first-run position, or nothing when the screen is not Nova's.
@@ -282,13 +306,21 @@ export function buildNovaWorkflowExplanation(): NovaEntry[] {
       emphasis: index === 0 ? ("primary" as const) : ("aside" as const),
     })),
     /*
-     * Last, because the block it announces is rendered under the sentences and
-     * a lead that arrived anywhere else would be pointing at nothing.
+     * The lead, and the block goes under it. `NovaFirstRun` finds this entry
+     * by id and inserts the example there rather than at the end, because the
+     * sentence after it is about what happens *next* — a handover printed
+     * above the thing it hands over from would read as part of the example.
      */
     {
       kind: "nova.message" as const,
-      id: "first-run:walkthrough:example",
+      id: WORKFLOW_EXAMPLE_ID,
       text: WORKFLOW_EXAMPLE_LEAD,
+      emphasis: "primary" as const,
+    },
+    {
+      kind: "nova.message" as const,
+      id: "first-run:walkthrough:handover",
+      text: WORKFLOW_HANDOVER,
       emphasis: "primary" as const,
     },
     /*

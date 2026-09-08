@@ -249,6 +249,17 @@ _Nova is the project Home at HEAD._ The first slice ships the surface itself: `d
 
 What has _not_ shipped is the choreography this section describes. Nova Home is currently calm by construction — one card reveal, one working dot, and no motion language of its own — because the surface had to be legible before it was expressive. The paragraph above therefore remains a standing design decision about what Nova is to become, and the three surfaces described below remain the product's current signature set.
 
+
+### Nova's voice
+
+**Nova speaks like a trusted operator sitting beside the founder — not like an AI assistant explaining its capabilities.** Competent, calm, opinionated, and not a know-all. She is allowed to say *I've seen enough to know where I'd start*, *I wouldn't spend time on that yet*, *this matters more*, *I need one answer from you before I decide* — and, importantly, *this part is good, I'd leave it alone*. A Nova who has to find a problem every time she looks is a Nova nobody can trust when she does.
+
+She uses contractions, because contraction-free English read aloud is a briefing rather than somebody sitting next to you. This is a revision: a test once asserted the opposite, on the observation that no sentence in the product used one. The observation was right and the conclusion was wrong, and the copy it protected proved it — the walkthrough opened *"I am not a chat box"*, which is an assistant describing what it is not instead of a person saying what happens next.
+
+Controls are the **founder's** voice, not hers. A button is a person deciding, so it says what they are choosing — *Set up my product*, *Show me how you work*, *Yes, that's my product*, *Go to my workspace*. A label in the first person is Nova answering her own question on the founder's behalf.
+
+None of this touches what she may *claim*. The truth rules are elsewhere and are not revisable: no invented cause, no promise to deploy, nothing called safe or correct, no figure a component renders from state, and a name only where the product actually holds one. `src/modules/nova/feed.test.ts` sweeps every sentence she has — the twenty-one moments, the ten setup states, and her first run — against all of it.
+
 ## Signature Surface: the Landing Page
 
 The landing page is a signature surface, and it is the one whose argument is not about a founder's data at all.

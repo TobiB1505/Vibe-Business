@@ -59,7 +59,7 @@ const CONTROL_FOR_STATE: Record<OnboardingState, string | null> = {
   audit_needs_user: null,
   audit_running: null,
   audit_reveal: null,
-  first_move: "Go to your workspace",
+  first_move: "Go to my workspace",
   complete: null,
 };
 
@@ -197,10 +197,11 @@ export function StudyOnboarding({ study }: { study: Study }) {
           </p>
           <p className="study-measure text-ui text-fg-body">
             She has said who she is, and this is the only question asked before setup begins. Behind
-            the left-hand answer: four sentences on what kind of thing she is — not a chat box,
-            nothing to type, one suggestion at a time — and a worked example of one message and the
-            control under it. It is at <code>study-first-run-shipped</code>, which is the only place
-            it can be looked at twice.
+            the left-hand answer: what working with her is actually like — nobody has to write a
+            prompt, she leads, one clear next step at a time, the price before the press and the
+            review before the branch — then a worked example of one message and the control under
+            it, and the line that hands over to the real product. It is at{" "}
+            <code>study-first-run-shipped</code>, which is the only place it can be looked at twice.
           </p>
         </div>
         <div className={`p-5 max-sm:p-4 ${panel}`}>

@@ -7,7 +7,7 @@ import { NovaMoveButton } from "@/components/nova/nova-move";
 import { speechBubbles } from "@/components/nova/nova-speech";
 import { NovaLine, NovaRenderBlock } from "@/components/nova/nova-thread";
 import { NovaHowItWorks } from "./nova-how-it-works";
-import { buildNovaWorkflowExplanation } from "@/modules/nova/first-run";
+import { WORKFLOW_EXAMPLE_ID, buildNovaWorkflowExplanation } from "@/modules/nova/first-run";
 import type { NovaEntry } from "@/modules/nova/feed";
 import { markNovaIntroducedAction, setNovaWorkflowStatusAction } from "./actions";
 
@@ -70,12 +70,26 @@ export function NovaFirstRun({
   const [walkthrough, setWalkthrough] = useState<NovaEntry[] | null>(null);
 
   const shown = walkthrough ?? entries;
-  const bubbles = speechBubbles(
-    shown.filter(
-      (entry): entry is Extract<NovaEntry, { kind: "nova.message" }> =>
-        entry.kind === "nova.message",
-    ),
+  const messages = shown.filter(
+    (entry): entry is Extract<NovaEntry, { kind: "nova.message" }> => entry.kind === "nova.message",
   );
+
+  /*
+   * Split at the line that announces the example, and group each half on its
+   * own.
+   *
+   * `speechBubbles` merges a run of same-register lines into one bubble, so
+   * grouping the whole walkthrough at once puts the lead and the handover
+   * after it into a single bubble — and there is no longer anywhere between
+   * them to put the block. Two calls is the honest fix: the split is a real
+   * boundary in the thread, not a rendering detail.
+   *
+   * `lead` is -1 everywhere else, and then `after` is empty and this is one
+   * group exactly as it was.
+   */
+  const lead = messages.findIndex((entry) => entry.id === WORKFLOW_EXAMPLE_ID);
+  const before = speechBubbles(lead === -1 ? messages : messages.slice(0, lead + 1));
+  const after = lead === -1 ? [] : speechBubbles(messages.slice(lead + 1));
 
   /*
    * The controls the domain offers at this position, by the labels the catalog
@@ -111,7 +125,7 @@ export function NovaFirstRun({
     <section className="flex max-w-[44rem] flex-col gap-2.5" aria-label="Before we start">
       <NovaArriving
         items={[
-          ...bubbles.map((bubble, position) => ({
+          ...before.map((bubble, position) => ({
             key: bubble.key,
             /* One beat for the turn, not one per line. She is explaining one
                thing, not sending four separate messages. */
@@ -125,15 +139,13 @@ export function NovaFirstRun({
             ),
           })),
           /*
-            The example, and it opens a beat of its own — a thing she *made* is
-            a different kind of arrival from a thing she said, which is the
-            distinction `NovaArriving` was built around.
-
-            Only in the walkthrough. The offer above it is one question and
-            needs no demonstration of anything.
+            The example, under the line that announces it. It opens a beat of
+            its own, because a thing she *made* is a different kind of arrival
+            from a thing she said.
           */
-          ...(walkthrough
-            ? [
+          ...(lead === -1
+            ? []
+            : [
                 {
                   key: "walkthrough:example",
                   beat: true,
@@ -143,8 +155,19 @@ export function NovaFirstRun({
                     </NovaRenderBlock>
                   ),
                 },
-              ]
-            : []),
+              ]),
+          /* And the handover, which is her speaking again after showing it. */
+          ...after.map((bubble) => ({
+            key: bubble.key,
+            beat: true,
+            node: (
+              <NovaBubble tail={bubble.tail}>
+                {bubble.paragraphs.map((text) => (
+                  <NovaLine key={text}>{text}</NovaLine>
+                ))}
+              </NovaBubble>
+            ),
+          })),
         ]}
       >
         {options.length > 0 && (

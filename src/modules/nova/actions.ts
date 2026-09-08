@@ -164,7 +164,7 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
      * not happen.
      */
     control: "server_action",
-    label: "Straight to it, then",
+    label: "Let's start",
     price: null,
     consequential: false,
     requiresConfirmation: false,
@@ -184,14 +184,14 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
      * thing, by the person who read it.
      */
     control: "server_action",
-    label: "Set up my project",
+    label: "Set up my product",
     price: null,
     consequential: false,
     requiresConfirmation: false,
   },
   "nova.confirm_product": {
     control: "server_action",
-    label: "Yes, that is right",
+    label: "Yes, that's my product",
     price: null,
     consequential: false,
     requiresConfirmation: false,
