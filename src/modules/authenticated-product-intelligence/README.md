@@ -92,6 +92,18 @@ The **analysis** does not follow the device. `connectReadOnly` puts every page b
 
 No image rebuild: the screencast ceiling only *limits* a frame, it never upscales one, so a narrow window simply arrives narrow. The dialog's box is sized from the frame, so a tall phone-shaped picture gets a tall phone-shaped box for free.
 
+## The overview a scan is worth
+
+A founder spends 25 Credits and ninety seconds letting Vibe into their signed-in product. What came back was a timestamp, a page count and a row of grey chips — while the snapshot held, for every one of those chips, the pages and headings that were the reason Vibe said it. The evidence had been stored since the module existed and none of it reached a screen.
+
+Three things the result now says, in the order a founder needs them:
+
+**Every surface can be checked.** Each recognised surface carries its evidence through Vibe's own `EvidenceDrawer` — `describeEvidence` turns a stored `{ kind, path, detail }` into a sentence with the page as its source, because that component takes `{ detail, source }` and never an id. A record whose kind cannot be made readable is *dropped* rather than rendered as a bare kind name: an unreadable citation is worse than one fewer (rule 45).
+
+**The pages are screens.** `groupIntoScreens` collapses them onto the same route templates the crawl already uses to stop spending its budget four times on one screen. Twenty-one paths is a list nobody reads; eight screens is the shape of a product, and the instances stay behind the template. Read order is kept — sorting would bury the page the founder actually handed over.
+
+**What was on them.** Navigation labels, and how many pages carried a form, a table, an empty state. Pages that *have* one, not how many there were: three forms on one page is one page with a form. Behind a disclosure, because it is the second question.
+
 ## Finished is not the same as unlimited
 
 `completeness: "partial"` rendered as **"Only partly"**, in amber, over a scan that had done everything it was ever going to do. The single reason was `mutation_blocked` — Vibe refuses every non-GET request because the session is the founder's own, and it always will. A permanent, deliberate safety property presented as a shortfall teaches a founder that Vibe half-works.

@@ -76,9 +76,40 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
       pagesInspected: 7,
       completion: { kind: "within_limits", policyLimited: true, budgetLimited: true },
       surfaces: [
-        { id: "dashboard", name: "Dashboard" },
-        { id: "settings", name: "Settings" },
+        {
+          id: "dashboard",
+          name: "Dashboard",
+          confidence: "high",
+          evidence: [
+            { detail: "Vibe opened this page while signed in.", source: "/app" },
+            { detail: "Its heading reads “Welcome back”.", source: "/app" },
+          ],
+        },
+        {
+          id: "settings",
+          name: "Settings",
+          confidence: "medium",
+          evidence: [{ detail: "Its heading reads “Project Settings”.", source: "/app/settings" }],
+        },
       ],
+      screens: [
+        { template: "/app", heading: "Welcome back", pages: [{ path: "/app", heading: "Welcome back" }] },
+        {
+          template: "/app/projects/:id/settings",
+          heading: "Project Settings",
+          pages: [
+            { path: "/app/projects/88d1c463/settings", heading: "Project Settings" },
+            { path: "/app/projects/9b702a96/settings", heading: "Project Settings" },
+          ],
+        },
+      ],
+      shape: {
+        landingPath: "/app",
+        navigation: ["Home", "My Products", "Billing"],
+        pagesWithForms: 4,
+        pagesWithTables: 2,
+        pagesWithEmptyState: 1,
+      },
       notes: [
         {
           kind: "failed",
@@ -135,10 +166,18 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
       pagesInspected: 6,
       completion: { kind: "complete", policyLimited: false, budgetLimited: false },
       surfaces: [
-        { id: "dashboard", name: "Dashboard" },
-        { id: "project_workspace", name: "Project workspace" },
-        { id: "integrations", name: "Integrations" },
+        { id: "dashboard", name: "Dashboard", confidence: "high", evidence: [] },
+        { id: "project_workspace", name: "Project workspace", confidence: "high", evidence: [] },
+        { id: "integrations", name: "Integrations", confidence: "medium", evidence: [] },
       ],
+      screens: [],
+      shape: {
+        landingPath: "/app",
+        navigation: [],
+        pagesWithForms: 0,
+        pagesWithTables: 0,
+        pagesWithEmptyState: 0,
+      },
       notes: [],
       accessMode: "included_first_scan",
     },
@@ -158,7 +197,15 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
       analyzedAt: "2026-08-11T22:30:00.000Z",
       pagesInspected: 6,
       completion: { kind: "complete", policyLimited: false, budgetLimited: false },
-      surfaces: [{ id: "dashboard", name: "Dashboard" }],
+      surfaces: [{ id: "dashboard", name: "Dashboard", confidence: "high", evidence: [] }],
+      screens: [],
+      shape: {
+        landingPath: "/app",
+        navigation: [],
+        pagesWithForms: 0,
+        pagesWithTables: 0,
+        pagesWithEmptyState: 0,
+      },
       notes: [],
       accessMode: "included_first_scan",
     },
