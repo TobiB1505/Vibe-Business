@@ -1,16 +1,7 @@
 import { WorkspaceSection } from "@/components/layout/project-shell";
 import { EmptyState } from "@/components/ui/states";
-import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
-import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
-import {
-  getLatestSession,
-  getLatestSuccessfulAuthenticatedSnapshot,
-} from "@/modules/authenticated-product-intelligence/store";
-import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
-import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
-import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { DeepScanPanel } from "../../deep-scan-panel";
 import type { Metadata } from "next";
 
@@ -45,43 +36,16 @@ export default async function ProjectDeepScanPage({
   const { projectId } = await params;
   const { supabase, userId, project } = await requireProjectAccess(projectId);
 
-  const [deepScanAccess, latestSnapshot, latestLiveSnapshot, latestDeepScanSnapshot, latestSession] =
-    await Promise.all([
-      getDeepScanAccessStatus(supabase, {
-        projectId,
-        userId,
-        owned: { productionUrl: project.productionUrl },
-      }),
-      getLatestSuccessfulSnapshot(supabase, projectId),
-      getLatestSuccessfulLiveSnapshot(supabase, projectId),
-      getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
-      getLatestSession(supabase, projectId),
-    ]);
-
-  // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
-  // cooldown and eligibility are the domain's answers, not React's.
-  const deepScanModel = deepScanAccess
-    ? buildDeepScanViewModel({
-        accessStatus: deepScanAccess,
-        latestSnapshot: latestDeepScanSnapshot
-          ? {
-              result: latestDeepScanSnapshot.result,
-              accessMode: latestDeepScanSnapshot.accessMode,
-              completedAt: latestDeepScanSnapshot.completedAt,
-              createdAt: latestDeepScanSnapshot.createdAt,
-              pagesInspected: latestDeepScanSnapshot.pagesInspected,
-            }
-          : null,
-        latestSession: latestSession
-          ? { status: latestSession.status, failureCode: latestSession.failureCode }
-          : null,
-        surfaceDetection: detectAuthenticatedSurfaces({
-          repository: latestSnapshot?.result ?? null,
-          publicProduct: latestLiveSnapshot?.result ?? null,
-        }),
-        providerConfigured: isBrowserProviderConfigured(),
-      })
-    : null;
+  /*
+   * Entitlement, the live session, the last snapshot and the recommendation
+   * evidence are one question with one answer, and My Product's spotlight asks
+   * it too. Assembled in the module so the two cannot drift apart.
+   */
+  const deepScanModel = await loadDeepScanViewModel(supabase, {
+    projectId,
+    userId,
+    owned: { productionUrl: project.productionUrl },
+  });
 
   return (
     <WorkspaceSection id="deep-scan">

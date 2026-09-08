@@ -202,3 +202,53 @@ test.describe("what a finished scan reports about itself", () => {
     await expect(page.getByText("/app/reports")).toBeVisible();
   });
 });
+
+/*
+ * A founder spends 25 Credits and ninety seconds letting Vibe into their
+ * signed-in product, and got back a timestamp, a page count and seven grey
+ * chips. The evidence behind every one of those chips was in the snapshot the
+ * whole time — which pages, which headings — and none of it reached the screen.
+ */
+test.describe("the overview after a scan", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/e2e/deep-scan-completed-with-warnings");
+  });
+
+  test("lets a founder check any surface it claims", async ({ page }) => {
+    // The claim, and the way to the proof, on the same row.
+    const dashboard = page.getByRole("listitem").filter({ hasText: "Dashboard" }).first();
+    await expect(dashboard).toContainText("Dashboard");
+
+    await dashboard.getByRole("button", { name: /source/i }).click();
+
+    // The pages that are the reason Vibe says it, in sentences and not ids.
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toContainText("Vibe opened this page while signed in");
+    await expect(drawer).toContainText("Welcome back");
+    await expect(drawer).toContainText("/app");
+  });
+
+  test("names the screens it read, not the paths", async ({ page }) => {
+    /*
+     * Twenty-one paths is a list nobody reads. The template carries the
+     * instance count instead, because "which three projects" is a real
+     * question and not the first one.
+     */
+    await expect(page.getByText("2 screens Vibe read")).toBeVisible();
+    await expect(page.getByText("/app/projects/:id/settings")).toBeVisible();
+    await expect(page.getByText("2 of them")).toBeVisible();
+  });
+
+  test("says what was on those pages, behind the first answer", async ({ page }) => {
+    const shape = page.getByText("What was on those pages");
+    await expect(shape).toBeVisible();
+
+    // Second question, so it is not open by default.
+    await expect(page.getByText("Navigation Vibe saw")).toBeHidden();
+    await shape.click();
+
+    await expect(page.getByText("Navigation Vibe saw")).toBeVisible();
+    await expect(page.getByText("My Products")).toBeVisible();
+    await expect(page.getByText("Pages with a form")).toBeVisible();
+  });
+});
