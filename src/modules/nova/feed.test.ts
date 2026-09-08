@@ -8,6 +8,8 @@ import { creditsToUnits } from "../credits/units";
 import { buildNovaAuditEntry, buildNovaExecutionOffer, buildNovaFeed } from "./feed";
 import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
+import { ONBOARDING_STATES } from "../onboarding/state";
+import { NOVA_ONBOARDING_MESSAGE } from "./onboarding";
 import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
 
 /**
@@ -239,14 +241,34 @@ describe("what a control may be offered for", () => {
 });
 
 describe("what Nova's sentences may say", () => {
-  const everyMessage = EVERY_CANDIDATE.flatMap((candidate) =>
-    feedFor(candidate)
-      .filter((entry) => entry.kind === "nova.message")
-      .map((entry) => ({ kind: candidate.kind, text: entry.text })),
-  );
+  /**
+   * Every sentence she has, not every sentence one surface has.
+   *
+   * The five rules below were written for the twenty-one moments and swept
+   * only those, while the onboarding lane wrote its own copy a module away and
+   * was held to none of them. That is the shape a rule takes when it is a
+   * property of a *sweep* rather than of Nova: the moment somebody adds a
+   * second table, half her voice leaves the check without anybody deciding to
+   * let it.
+   *
+   * So the onboarding states join it. `NOVA_ONBOARDING_MESSAGE` is total over
+   * `OnboardingState`, so an eleventh state arrives here as well as at the
+   * build — a new sentence cannot be added anywhere without passing this.
+   */
+  const everyMessage = [
+    ...EVERY_CANDIDATE.flatMap((candidate) =>
+      feedFor(candidate)
+        .filter((entry) => entry.kind === "nova.message")
+        .map((entry) => ({ kind: candidate.kind, text: entry.text })),
+    ),
+    ...ONBOARDING_STATES.map((state) => ({
+      kind: `onboarding:${state}`,
+      text: NOVA_ONBOARDING_MESSAGE[state],
+    })),
+  ];
 
-  it("has a sentence for every candidate", () => {
-    expect(everyMessage).toHaveLength(FOCUS_CANDIDATE_KINDS.length);
+  it("has a sentence for every candidate and every onboarding state", () => {
+    expect(everyMessage).toHaveLength(FOCUS_CANDIDATE_KINDS.length + ONBOARDING_STATES.length);
     for (const { kind, text } of everyMessage) {
       expect(text.length, kind).toBeGreaterThan(10);
     }

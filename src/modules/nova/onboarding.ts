@@ -63,9 +63,57 @@ export function novaRevealBundlesAudit(gate: AuditCreditGate): boolean {
   return gate.kind === "not_applicable";
 }
 
-const SCANNING_MESSAGE = "I am reading your product now.";
+/**
+ * What Nova says at each point of the setup, in her own voice.
+ *
+ * ## Why this is total over `OnboardingState`
+ *
+ * Because onboarding already has a ranking and nobody was reading it as one.
+ * `deriveOnboardingState` is the same shape as `deriveNovaFocus` — pure, facts
+ * in, one state out, reconciled from canonical records so a run finishing while
+ * the founder is away cannot strand them on an obsolete screen. Ten states, in
+ * priority order. What it never had was a sentence per state, so the page
+ * rendered ten sections of its own chrome and Nova appeared beside two of them.
+ *
+ * A total record means an eleventh state fails the build here until somebody
+ * decides what Nova says about it — the same guarantee `BLOCK_FOR_MOMENT` gives
+ * the twenty-one moments, which is what stopped a new moment rendering nothing
+ * at all.
+ *
+ * ## The rules these are held to
+ *
+ * The five `feed.test.ts` runs over every candidate sentence, and it runs them
+ * over these now too: no claimed cause, no promise to deploy or ship or
+ * publish, nothing called safe or correct or finished, no figure — a number in
+ * a sentence is a second copy of something the interface renders from state —
+ * and long enough to say something.
+ *
+ * ## `complete`, which is the handover
+ *
+ * It is the one state whose sentence is not about setup. The page redirects to
+ * the project the moment it is reached, so this is the last thing Nova says
+ * before Home's own ranking takes over the same thread. Written here rather
+ * than left blank because a total record with a hole in it is a record that
+ * stopped being total, and because the sentence is the seam: onboarding ends
+ * by saying what happens next, and Home continues.
+ */
+export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
+  connect_source: "I cannot read anything yet. Point me at the repository your product lives in.",
+  add_live_product:
+    "Tell me where a visitor finds your product, and I will read what they actually see.",
+  product_scanning: "I am reading your product now.",
+  product_reveal: "Here is what I understood about your product. Tell me if I have it wrong.",
+  audit_preparing: "I am getting ready to look at your business.",
+  audit_needs_user: "I stopped part-way through, and I need something from you before I go on.",
+  audit_running: "I am working through your business now.",
+  audit_reveal: "Here is what I found, and where I would start.",
+  first_move: "This is the first thing I would do about it.",
+  complete: "That is the setup behind us. From here I tell you what matters as it changes.",
+};
 
-const REVEAL_MESSAGE = "Here is what I understood about your product. Tell me if I have it wrong.";
+const SCANNING_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_scanning;
+
+const REVEAL_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_reveal;
 
 function option(actionId: NovaActionId): NovaChoiceOption {
   const meta = NOVA_ACTION_META[actionId];
