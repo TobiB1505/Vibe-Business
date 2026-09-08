@@ -15,17 +15,26 @@ import { LiveViewDialog } from "@/app/app/projects/[projectId]/deep-scan-panel";
 export function DeepScanDialogFixture({
   sealing = false,
   expired = false,
+  /**
+   * A live view URL, for the states that are *about* the picture.
+   *
+   * Most of these scenarios are about the dialog around the picture, so the
+   * default is none. But "the browser is closed" is a claim about the picture
+   * itself — it was rendered over one that kept scrolling — and that can only
+   * be checked where a canvas would otherwise be mounted. The socket goes
+   * nowhere; the element is what the test is about.
+   */
+  liveViewUrl = null,
 }: {
   sealing?: boolean;
   expired?: boolean;
+  liveViewUrl?: string | null;
 }) {
   const noop = () => {};
 
   return (
     <LiveViewDialog
-      // No live view: the fixture is about the dialog around the picture, and
-      // a socket to nowhere would only add a reconnect ladder to the test.
-      liveViewUrl={null}
+      liveViewUrl={liveViewUrl}
       stage="ready"
       error={null}
       busy={sealing}

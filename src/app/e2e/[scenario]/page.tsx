@@ -1632,14 +1632,20 @@ export default async function E2eScenarioPage({
   if (
     scenario === "deep-scan-dialog-awaiting-login" ||
     scenario === "deep-scan-dialog-sealing" ||
-    scenario === "deep-scan-dialog-expired"
+    scenario === "deep-scan-dialog-expired" ||
+    scenario === "deep-scan-dialog-expired-over-picture"
   ) {
     return (
       <main className="mx-auto max-w-3xl p-8">
         {label}
         <DeepScanDialogFixture
           sealing={scenario === "deep-scan-dialog-sealing"}
-          expired={scenario === "deep-scan-dialog-expired"}
+          expired={scenario.startsWith("deep-scan-dialog-expired")}
+          liveViewUrl={
+            scenario === "deep-scan-dialog-expired-over-picture"
+              ? "wss://127.0.0.1:9/live"
+              : null
+          }
         />
       </main>
     );

@@ -58,6 +58,16 @@ A sandbox bills for every second it exists, and this one exists to hold a login 
 
 Two minutes is tight for a password manager plus a second factor on a phone. The mitigation is that it is *visible*: somebody who can see thirty seconds left knows to hurry, where somebody who can see nothing is simply cut off.
 
+## An overlay has to cover something
+
+A founder's sign-in ran out on a phone, and the notice that says so was drawn in `bg-surface-2` — 3% white, a *layer* colour meant to stack on the app ground. Over a live picture of a browser it covers nothing: two paragraphs of white text landed on top of a headline and a green button, unreadable, and that is what reached them.
+
+Underneath it the browser kept going. The picture scrolled, and then reached the signed-in home, while the sentence over it said Vibe had closed the browser. One defect with two faces — an overlay that covers nothing, over a socket that stops for nothing — and the second half is the serious one: the screencast outlives the session it belongs to, so nothing but unmounting the canvas makes the sentence true rather than merely written.
+
+The tense was wrong too. "Vibe closed the temporary browser" was rendered before `cancelDeepScanAction` had returned, which is a completed fact claimed about a request still in flight.
+
+All four overlays in this dialog sit over a live picture and now use the opaque ground, the same token the account menu and the project switcher already use for the same reason. A browser test reads the notice's computed alpha, because "looks covered" is exactly the judgement that shipped this.
+
 ## Progress is counted, never estimated
 
 The analysis lives inside a single request and reports nothing until it returns, so the handoff ran for ninety seconds unable to say whether anything was happening. The alternative on offer was a bar timed against the expected duration — a percentage nobody measured, and the exact thing the motion rules forbid.

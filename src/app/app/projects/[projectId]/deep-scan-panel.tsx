@@ -382,7 +382,7 @@ export function LiveViewDialog({
            */
           className="relative w-full overflow-hidden rounded-card border border-line-2 bg-surface-2"
         >
-          {liveViewUrl && !error && (
+          {liveViewUrl && !error && !expired && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
             // page; this is a JPEG on a canvas, which executes nothing
@@ -392,6 +392,15 @@ export function LiveViewDialog({
             // panel rather than after it: the socket cannot open until this
             // exists, so a panel that waits for the canvas before mounting it
             // would be waiting for itself.
+            //
+            // Unmounted the moment the session ends, which is not a detail of
+            // rendering. A founder was shown "Vibe closed the temporary
+            // browser" over a picture that went on scrolling and then
+            // *finished signing in* underneath the sentence. The socket
+            // outlives the session it belongs to, so the only way the message
+            // and the picture cannot contradict each other is for the picture
+            // to be gone — closing the socket is what makes the sentence true
+            // rather than merely written.
             <LiveBrowserCanvas
               viewUrl={liveViewUrl}
               onConnected={onConnected}
@@ -400,7 +409,7 @@ export function LiveViewDialog({
             />
           )}
           {error && (
-            <p role="alert" className="absolute inset-0 bg-surface-2 p-4 text-sm text-amber">
+            <p role="alert" className="absolute inset-0 bg-app p-4 text-sm text-amber">
               {error}
             </p>
           )}
@@ -419,7 +428,7 @@ export function LiveViewDialog({
              */
             <div
               role="status"
-              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-sm font-medium text-fg-body">
@@ -469,16 +478,16 @@ export function LiveViewDialog({
              */
             <div
               role="alert"
-              className="bg-surface-2 absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
+              className="bg-app absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-fg-body text-sm font-medium">
                   Sign-in took longer than two minutes
                 </p>
                 <p className="max-w-[54ch] text-xs text-fg-muted">
-                  Vibe closed the temporary browser rather than leave it running. Nothing was
-                  charged. You can start again — Vibe waits two minutes between attempts, and
-                  closing this shows when.
+                  Vibe is closing the temporary browser rather than leaving it running.
+                  Nothing was charged. You can start again — Vibe waits two minutes between
+                  attempts, and closing this shows when.
                 </p>
               </div>
               <div>
@@ -492,7 +501,7 @@ export function LiveViewDialog({
           {!error && !expired && !unreachable && stage !== "ready" && (
             <div
               role="status"
-              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-sm font-medium text-fg-body">Opening a temporary browser</p>
