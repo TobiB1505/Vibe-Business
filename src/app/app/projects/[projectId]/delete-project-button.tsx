@@ -48,7 +48,20 @@ const FAILURE_MESSAGES: Record<DeleteProjectFailure, string> = {
 
 const initialState: DeleteProjectActionState = null;
 
-export function DeleteProjectButton({ projectId }: { projectId: string }) {
+export function DeleteProjectButton({
+  projectId,
+  projectName,
+}: {
+  projectId: string;
+  /**
+   * Typed back before this can run (UI-24).
+   *
+   * The name rather than a fixed phrase, because the mistake this prevents is
+   * not "I did not mean to delete anything" — it is "I deleted the wrong one".
+   * Somebody with four products reaches this page from a switcher.
+   */
+  projectName: string;
+}) {
   const [confirming, setConfirming] = useState(false);
   const openerRef = useReturnFocus<HTMLButtonElement>(confirming);
   const action = deleteProjectAction.bind(null, projectId);
@@ -66,6 +79,8 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
           tone="caution"
           confirmLabel="Delete project"
           confirmType="submit"
+          confirmPhrase={projectName}
+          confirmPhraseLabel={`Type ${projectName} to confirm`}
           // Disables both buttons and shows the busy state, so a second click
           // cannot submit a second delete while the first is in flight.
           pending={pending}

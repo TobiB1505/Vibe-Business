@@ -78,6 +78,7 @@ export default async function ProjectSettingsPage({
   return (
     <ProjectSettingsView
       projectId={project.id}
+      projectName={project.name}
       repository={project.repository}
       productionUrl={project.productionUrl}
       founderIntent={founderIntent.intent}

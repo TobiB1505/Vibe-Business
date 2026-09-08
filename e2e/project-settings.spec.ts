@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The screen that disconnects a repository and deletes a product (UI-21).
@@ -49,7 +50,18 @@ test.describe("project settings", () => {
     // skipping a level — which no unit test can see and no reader notices
     // until they are navigating by heading.
     expect(levels[0]).toBe("H1");
-    expect(levels.slice(1).every((tag) => tag === "H2"), levels.join(",")).toBe(true);
+
+    // The rule is "no level is skipped", not "everything is an h2": since
+    // UI-24 the danger zone is an `h2` with its rows as `h3`s under it, which
+    // is the nesting it actually has. What was wrong before was h1 straight to
+    // h3, and that is what this still refuses.
+    const depths = levels.map((tag) => Number(tag.slice(1)));
+    for (let index = 1; index < depths.length; index += 1) {
+      expect(
+        depths[index]! - depths[index - 1]!,
+        `${levels.join(",")} skips a heading level`,
+      ).toBeLessThanOrEqual(1);
+    }
   });
 
   test("says each thing once", async ({ page }) => {
@@ -58,46 +70,91 @@ test.describe("project settings", () => {
     const opener = "Vibe works out what your product is on its own";
     const count = await page.evaluate(
       (text: string) =>
-        [...document.querySelectorAll("main p")].filter((n) =>
-          (n.textContent ?? "").includes(text),
-        ).length,
+        [...document.querySelectorAll("main p")].filter((n) => (n.textContent ?? "").includes(text))
+          .length,
       opener,
     );
     expect(count, "the same sentence is printed twice").toBe(1);
   });
 
-  test("keeps deleting out of the repository card", async ({ page }) => {
+  test("puts both sharp controls in the danger zone, and neither in a card", async ({ page }) => {
     await open(page, CONNECTED);
 
-    const deleteSection = page.getByTestId("delete-project");
-    await expect(deleteSection).toBeVisible();
+    const zone = page.getByTestId("danger-zone");
+    await expect(zone).toBeVisible();
+    await expect(zone.getByRole("button", { name: "Delete project" })).toBeVisible();
+    await expect(zone.getByRole("button", { name: "Disconnect repository" })).toBeVisible();
 
-    // Not a row inside the card about the repository.
+    // Neither is a row inside the card about the repository any more.
     const inRepositoryCard = await page.evaluate(() => {
       const heading = [...document.querySelectorAll("main h2")].find(
         (n) => n.textContent?.trim() === "Repository",
       );
       const card = heading?.closest("section, div[class*='vibe-surface']");
-      return !!card?.querySelector("[data-testid='delete-project']");
+      return card?.textContent?.includes("Disconnect") ?? false;
     });
-    expect(inRepositoryCard, "deleting is back inside the Repository card").toBe(false);
+    expect(inRepositoryCard, "disconnecting is back inside the Repository card").toBe(false);
 
-    // And it is the last thing on the page: everything above is a fact, a
-    // destination or a reversible action.
+    // And the zone is the last thing on the page.
     const isLast = await page.evaluate(() => {
       const sections = [...document.querySelectorAll("main h2")];
       return sections.at(-1)?.textContent?.trim();
     });
-    expect(isLast).toBe("Delete this product");
+    expect(isLast).toBe("Danger zone");
+  });
+
+  /**
+   * The region groups; it must not flatten. Disconnecting keeps everything the
+   * project learned and deleting destroys it, and a reader has to be able to
+   * tell which is which before pressing either.
+   */
+  test("says which of the two can be undone", async ({ page }) => {
+    await open(page, CONNECTED);
+
+    const zone = page.getByTestId("danger-zone");
+    const rows = zone.getByRole("listitem");
+
+    await expect(rows.filter({ hasText: "Disconnect the repository" })).toContainText("Reversible");
+    await expect(rows.filter({ hasText: "Delete this product" })).toContainText("Permanent");
+  });
+
+  /**
+   * A confirmation answered by one click can be answered by muscle memory, and
+   * this page is reached from a switcher by somebody with several products.
+   * The mistake it prevents is deleting the wrong one.
+   */
+  test("will not delete until the product is named", async ({ page }) => {
+    await open(page, CONNECTED);
+
+    await page.getByRole("button", { name: "Delete project" }).click();
+    const confirm = page.getByRole("button", { name: "Delete project" }).last();
+    await expect(confirm).toBeDisabled();
+
+    await page.getByTestId("confirm-phrase").fill("Acmes");
+    await expect(confirm).toBeDisabled();
+
+    await page.getByTestId("confirm-phrase").fill("Acme");
+    await expect(confirm).toBeEnabled();
+  });
+
+  /** Disconnecting is reversible, so it asks for a click and not a name. */
+  test("asks for no name to disconnect", async ({ page }) => {
+    await open(page, CONNECTED);
+
+    await page.getByRole("button", { name: "Disconnect repository" }).click();
+    await expect(page.getByTestId("confirm-phrase")).toHaveCount(0);
   });
 
   test("keeps each control beside the sentence that explains it", async ({ page }) => {
     await open(page, CONNECTED);
 
-    const column = (await page.locator("main h2").first().evaluate((n) => {
-      const card = n.closest("[class*='vibe-surface']") as HTMLElement;
-      return card.getBoundingClientRect().width;
-    }))!;
+    const column = (await page
+      .locator("main h2")
+      .first()
+      .evaluate((n) => {
+        const card = n.closest("[class*='vibe-surface']") as HTMLElement;
+        return card.getBoundingClientRect().width;
+      }))!;
 
     // A settings page is a column of facts and controls, and a column has a
     // measure. It was 1080px with its prose capped at 65ch.
@@ -137,10 +194,13 @@ test.describe("project settings", () => {
     // Nothing to disconnect.
     await expect(main.getByRole("button", { name: "Disconnect repository" })).toHaveCount(0);
 
-    // Deleting survives, which is the point of it having its own section: a
-    // project that was disconnected is the one somebody is most likely to want
-    // gone (ADR 0056 §1).
-    await expect(page.getByTestId("delete-project")).toBeVisible();
+    // Deleting survives, which is the point of the zone being its own region:
+    // a project that was disconnected is the one somebody is most likely to
+    // want gone (ADR 0056 §1).
+    const zone = page.getByTestId("danger-zone");
+    await expect(zone.getByRole("button", { name: "Delete project" })).toBeVisible();
+    // And the zone holds only what is still true.
+    await expect(zone.getByText("Disconnect the repository")).toHaveCount(0);
   });
 
   for (const [name, width] of [
@@ -150,10 +210,7 @@ test.describe("project settings", () => {
     test(`fits ${name}`, async ({ page }) => {
       await open(page, CONNECTED, width);
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
+      await expectNoHorizontalOverflow(page);
     });
   }
 });

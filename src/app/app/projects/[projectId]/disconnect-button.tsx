@@ -44,7 +44,8 @@ const FAILURE_MESSAGES: Record<DisconnectProjectFailure, string> = {
   merge_in_progress: "A change is being merged right now. Disconnect once it has finished.",
   billing_not_finalized:
     "A Credit hold for this project has not settled yet. Disconnect again in a moment.",
-  detach_failed: "The repository could not be disconnected, and is still connected. Try again in a moment.",
+  detach_failed:
+    "The repository could not be disconnected, and is still connected. Try again in a moment.",
 };
 
 const initialState: DisconnectProjectActionState = null;
@@ -91,7 +92,13 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
     // Not `w-full`: this sits in the settings row's `justify-between` flex
     // line, and a full-width child would wrap the control onto its own line.
     // The column keeps the failure directly under the control that caused it.
-    <div className="flex flex-col items-end gap-2">
+    /*
+      `items-start` since UI-24: this sat at the right of a `justify-between`
+      line inside the Repository card. It is a danger-zone row now, under the
+      paragraph that explains it, and a control at the far edge of a region is
+      a control separated from its own sentence.
+    */
+    <div className="flex flex-col items-start gap-2">
       <InlineAction
         ref={openerRef}
         type="button"

@@ -1386,6 +1386,7 @@ export default async function E2eScenarioPage({
           <ProjectBreadcrumb projectName="Acme" />
           <ProjectSettingsView
             projectId="project_e2e"
+            projectName="Acme"
             repository={
               connected
                 ? {

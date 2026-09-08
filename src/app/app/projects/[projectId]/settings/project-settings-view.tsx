@@ -1,5 +1,6 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import { SettingsColumn } from "@/components/layout/settings-column";
+import { DangerRow, DangerZone } from "@/components/system/danger-zone";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { proseLinkClasses, StandaloneLink } from "@/components/ui/text-link";
@@ -25,16 +26,19 @@ import { ProductionUrlForm } from "../production-url-form";
  * user-visible state, and *is the actual browser-visible state tested* was the
  * one this page answered "no" to.
  *
- * ## Why deleting is not in the repository card
+ * ## Why the two sharp controls are in one marked region
  *
- * It was: three rows in one `Surface` headed *Repository* — what Vibe reads,
- * then disconnect, then delete. Two of those are about a repository and the
- * third destroys the project and everything Vibe has learned about it.
+ * They were three rows in one `Surface` headed *Repository* — what Vibe reads,
+ * then disconnect, then delete — two about a repository and the third
+ * destroying the project and everything Vibe learned about it, all the same
+ * `InlineAction` with the same icon one border-top apart.
  *
- * Both are `InlineAction`s carrying the same icon, one border-top apart. The
- * account's General page states the rule and follows it — *"a row above it
- * that looked the same would be a trap"* — and this page did the opposite.
- * Deleting has its own section now, last, after the links.
+ * UI-21 pulled deleting out to a plain section at the foot. That fixed the
+ * flattening and left a different gap: position was the only signal, so a
+ * reader learned a control was destructive by reaching the end of the page.
+ * UI-24 groups both in a `DangerZone` where each row states its own
+ * consequence and whether it can be undone — the region says *these are the
+ * sharp ones*, the row says *and this is what this one does*.
  */
 export type ProjectSettingsRepository = {
   fullName: string;
@@ -44,12 +48,15 @@ export type ProjectSettingsRepository = {
 
 export function ProjectSettingsView({
   projectId,
+  projectName,
   repository,
   productionUrl,
   founderIntent,
   reconnectHref,
 }: {
   projectId: string;
+  /** Typed back before the product can be deleted. */
+  projectName: string;
   /** `null` when no repository is connected — a state this page must render. */
   repository: ProjectSettingsRepository | null;
   productionUrl: string | null;
@@ -123,15 +130,6 @@ export function ProjectSettingsView({
               </div>
             )}
           </div>
-          {repository && (
-            <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-              <p className="text-fg-muted max-w-[65ch] text-caption">
-                Disconnecting stops Vibe reading this repository. The project and everything it has
-                learned stay.
-              </p>
-              <DisconnectButton projectId={projectId} />
-            </div>
-          )}
         </Surface>
 
         {/*
@@ -161,36 +159,38 @@ export function ProjectSettingsView({
         </Surface>
 
         {/*
-          Last, and on its own — the same treatment the account's own delete
-          section gets, and for the same reason it gives: everything above is a
-          fact, a destination or a reversible action, and a row that looked the
-          same beside it would be a trap. Not a coloured card: nothing else in
-          this product marks destruction that way, and the button carries its
-          own danger tone.
+          Both consequential controls, in one marked region (UI-24).
 
-          Deleting is offered whether or not a repository is connected — a
-          project that was disconnected is exactly the one somebody is most
-          likely to want gone (ADR 0056 §1) — which is the other reason it
-          cannot live inside a card that disappears with the repository.
+          Disconnect used to be a row inside the Repository card and deleting
+          had a plain section of its own at the foot of the page. Position
+          alone said which was which, which works exactly once — and it left a
+          reader no way to know a control was destructive before scrolling to
+          the end.
+
+          They are grouped and **not** flattened: the row says which one can be
+          had back. Deleting is offered whether or not a repository is
+          connected, because a project that was disconnected is exactly the one
+          somebody is most likely to want gone (ADR 0056 §1).
         */}
-        <Surface
-          level="section"
-          padding="lg"
-          data-testid="delete-project"
-          className="flex flex-col gap-3"
+        <DangerZone
+          data-testid="danger-zone"
+          description="What Vibe stops doing, and what it destroys. Read the row before the button."
         >
-          <div className="flex flex-col gap-2">
-            <h2 className="text-fg text-title font-semibold">Delete this product</h2>
-            <p className="text-fg-muted max-w-[65ch] text-body">
-              Removes the project and everything Vibe has learned about it — every audit, every
-              plan, every prepared change. Your repository and your code are untouched. This cannot
-              be undone.
-            </p>
-          </div>
-          <div>
-            <DeleteProjectButton projectId={projectId} />
-          </div>
-        </Surface>
+          {repository && (
+            <DangerRow
+              title="Disconnect the repository"
+              consequence={`Vibe stops reading ${repository.fullName}. The project, and everything it has already learned about your product, stay exactly as they are — reconnect and analysis resumes.`}
+              reversible
+              action={<DisconnectButton projectId={projectId} />}
+            />
+          )}
+          <DangerRow
+            title="Delete this product"
+            consequence="Removes the project and everything Vibe has learned about it — every audit, every plan, every prepared change. Your repository and your code are untouched."
+            reversible={false}
+            action={<DeleteProjectButton projectId={projectId} projectName={projectName} />}
+          />
+        </DangerZone>
       </SettingsColumn>
     </WorkspaceSection>
   );
