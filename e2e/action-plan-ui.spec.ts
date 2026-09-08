@@ -116,14 +116,19 @@ test.describe("priority deviation (§83 extension)", () => {
    * still never makes that substitution itself — this is the one place it is
    * required to say so, or the deviation is invisible.
    */
-  test("discloses when the selected Move is not the engine's own top priority", async ({ page }) => {
+  test("discloses when the selected Move is not the engine's own top priority", async ({
+    page,
+  }) => {
     await page.goto("/e2e/action_plan_priority_deviation");
 
     await expect(page.getByText("Planned out of priority order")).toBeVisible();
     await expect(
-      page.getByText('Vibe\'s own top priority is currently "Make your product findable in search"', {
-        exact: false,
-      }),
+      page.getByText(
+        'Vibe\'s own top priority is currently "Make your product findable in search"',
+        {
+          exact: false,
+        },
+      ),
     ).toBeVisible();
     await expect(page.getByText("Add discoverability foundations", { exact: false })).toBeVisible();
   });
@@ -174,7 +179,9 @@ test.describe("ready plan — founder input focus", () => {
     await expect(page.getByRole("heading", { name: "Vibe needs your input" })).toBeVisible();
     await expect(page.getByText("1 open question")).toBeVisible();
 
-    await expect(page.getByText("See the full planned work · 6 steps · 1 founder decision")).toBeVisible();
+    await expect(
+      page.getByText("See the full planned work · 6 steps · 1 founder decision"),
+    ).toBeVisible();
   });
 
   /**
@@ -343,7 +350,9 @@ test.describe("ready plan — a step no execution can finish", () => {
     await expect(field).toBeVisible();
     await expect(field).toHaveAttribute("required", "");
     await expect(page.getByText("What did you find?")).toBeVisible();
-    await expect(page.getByText("The next plan is written with this in front of it.")).toBeVisible();
+    await expect(
+      page.getByText("The next plan is written with this in front of it."),
+    ).toBeVisible();
 
     // No invented choices. The step's criterion is model-written prose and Vibe
     // never turns it into options — it is shown, and the founder answers it.
@@ -443,7 +452,9 @@ test.describe("ready plan — compact checklist", () => {
     // Scoped to this row: the same text is also this dependency's own
     // (always-visible) step title elsewhere on the page, so an unscoped
     // locator would match twice.
-    await expect(row.getByText("Publish the missing robots.txt and sitemap", { exact: true })).toBeVisible();
+    await expect(
+      row.getByText("Publish the missing robots.txt and sitemap", { exact: true }),
+    ).toBeVisible();
   });
 
   test("keeps blocked rows compact, then names the exact dependency when opened", async ({
@@ -463,9 +474,7 @@ test.describe("ready plan — compact checklist", () => {
     ).toBeVisible();
   });
 
-  test("distinguishes the primary task from another task that is also ready", async ({
-    page,
-  }) => {
+  test("distinguishes the primary task from another task that is also ready", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
     await openFullPlannedWork(page);
 
@@ -476,9 +485,7 @@ test.describe("ready plan — compact checklist", () => {
     ).toHaveCount(1);
   });
 
-  test("distinguishes every responsibility without exposing an internal enum", async ({
-    page,
-  }) => {
+  test("distinguishes every responsibility without exposing an internal enum", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
     await openFullPlannedWork(page);
 
@@ -506,9 +513,7 @@ test.describe("ready plan — compact checklist", () => {
     await expect(row.getByText("Not automated yet")).toBeVisible();
   });
 
-  test("shows approval only inside the expanded task", async ({
-    page,
-  }) => {
+  test("shows approval only inside the expanded task", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
     await openFullPlannedWork(page);
 
@@ -593,9 +598,7 @@ test.describe("ready plan — regressions", () => {
 });
 
 test.describe("stale", () => {
-  test("shows the plan and says why it may be out of date, without hiding it", async ({
-    page,
-  }) => {
+  test("shows the plan and says why it may be out of date, without hiding it", async ({ page }) => {
     await page.goto("/e2e/action_plan_stale");
 
     await expect(page.getByText("This plan may be out of date")).toBeVisible();
@@ -711,4 +714,3 @@ test.describe("a step Vibe cannot build says why", () => {
     }
   });
 });
-

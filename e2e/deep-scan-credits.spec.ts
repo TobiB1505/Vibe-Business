@@ -31,7 +31,9 @@ test.describe("an additional Deep Scan, priced", () => {
   test("says that a scan which finds nothing is not charged", async ({ page }) => {
     // The hold is released on every outcome that does not persist a snapshot.
     // Somebody deciding whether to spend deserves to know that while deciding.
-    await expect(page.getByText("You're only charged if Vibe comes back with a result.")).toBeVisible();
+    await expect(
+      page.getByText("You're only charged if Vibe comes back with a result."),
+    ).toBeVisible();
   });
 
   test("offers no checkout it cannot honour", async ({ page }) => {

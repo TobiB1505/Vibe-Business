@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * "Which app should Vibe work on?", in a real browser (Stufe 4).
@@ -82,10 +83,7 @@ test.describe("a repository with more than one application", () => {
     await page.setViewportSize({ width: 375, height: 800 });
     await open(page, "workspace-choice");
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });
 

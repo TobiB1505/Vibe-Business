@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * "This Move's next step is not one Vibe can run" — in a real browser.
@@ -83,10 +84,7 @@ test.describe("a Move whose next step Vibe cannot run", () => {
     await page.goto("/e2e/agent-plan-next-confirm");
     await expect(page.getByTestId("agent-plan-next")).toBeVisible();
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 
   /*

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The three ways a preview is not offered (Stufe 7, Stufe 8).
@@ -71,10 +72,7 @@ test.describe("Vibe cannot tell which application to run", () => {
     await page.goto("/e2e/preview-repository-not-ready");
     await expect(page.getByTestId("preview-repository-not-ready")).toBeVisible();
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });
 

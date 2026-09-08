@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Cookies: what is asked, and what is actually loaded (UI-23).
@@ -43,7 +44,10 @@ test.describe("before anybody has answered", () => {
     // The point of the whole feature. Not "disabled" — absent.
     await expect(page.locator(ANALYTICS_SCRIPT)).toHaveCount(0);
     await expect(page.locator(SPEED_SCRIPT)).toHaveCount(0);
-    expect(await consentCookie(page), "a decision was recorded before one was made").toBeUndefined();
+    expect(
+      await consentCookie(page),
+      "a decision was recorded before one was made",
+    ).toBeUndefined();
   });
 
   /**
@@ -184,9 +188,9 @@ test.describe("a decision that no longer answers the question", () => {
 
   test("asks again when the record is not one this code wrote", async ({ page }) => {
     await page.context().clearCookies();
-    await page.context().addCookies([
-      { name: "vibe-consent", value: "accept-all", domain: "127.0.0.1", path: "/" },
-    ]);
+    await page
+      .context()
+      .addCookies([{ name: "vibe-consent", value: "accept-all", domain: "127.0.0.1", path: "/" }]);
     await page.goto("/");
 
     await expect(page.getByTestId("consent-banner")).toBeVisible();
@@ -225,10 +229,6 @@ test.describe("changing your mind, in Settings", () => {
     await page.goto("/e2e/cookie-settings");
     await page.evaluate(() => document.fonts.ready);
 
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      ),
-    ).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });

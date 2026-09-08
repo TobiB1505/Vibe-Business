@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Product understanding, in a real browser (CORE-1 §51–§54).
@@ -396,12 +397,9 @@ test.describe("responsive", () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(READY);
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
       // One pixel of tolerance for sub-pixel layout rounding; anything more is
       // a real horizontal scrollbar.
-      expect(overflow).toBeLessThanOrEqual(1);
+      await expectNoHorizontalOverflow(page, undefined, 1);
     });
   }
 
@@ -414,10 +412,7 @@ test.describe("responsive", () => {
     await page.getByRole("button", { name: "Let me fix it" }).click();
     await expect(page.getByLabel("Product name")).toBeVisible();
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(1);
+    await expectNoHorizontalOverflow(page);
   });
 });
 

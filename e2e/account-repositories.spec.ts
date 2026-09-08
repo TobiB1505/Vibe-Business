@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 const REPOSITORIES = "/e2e/account-repositories";
 
@@ -83,10 +84,7 @@ for (const width of [1440, 1024, 768, 375]) {
     // fallback face is wider, and nothing here waited for the web fonts.
     await page.evaluate(() => document.fonts.ready);
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 }
 

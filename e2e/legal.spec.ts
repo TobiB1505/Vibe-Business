@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The two documents a stranger reads before connecting a repository (UI-17).
@@ -127,11 +128,7 @@ for (const path of PAGES) {
       await disclosure.locator("summary").click();
       await expect(disclosure.getByRole("link").first()).toBeVisible();
 
-      expect(
-        await page.evaluate(
-          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        ),
-      ).toBe(0);
+      await expectNoHorizontalOverflow(page);
     });
   });
 }

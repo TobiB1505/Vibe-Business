@@ -1,10 +1,13 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 test.describe("Product Scan", () => {
   test("shows grounded individual discoveries and one re-scan action", async ({ page }) => {
     await page.goto("/e2e/product_scan_complete");
 
-    await expect(page.getByRole("heading", { name: "Your product picture is ready" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Your product picture is ready" }),
+    ).toBeVisible();
     await expect(page.getByRole("heading", { name: "Understanding your product" })).toHaveCount(0);
     await page.getByRole("button", { name: "Open scan & rescan" }).click();
 
@@ -19,11 +22,18 @@ test.describe("Product Scan", () => {
     await expect(page.getByText("No invented percentage")).toHaveCount(0);
 
     await page.getByRole("button", { name: "Collapse scan" }).click();
-    await expect(page.getByRole("heading", { name: "Your product picture is ready" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Open scan & rescan" })).toHaveAttribute("aria-expanded", "false");
+    await expect(
+      page.getByRole("heading", { name: "Your product picture is ready" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open scan & rescan" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
   });
 
-  test("keeps a partial source visible without treating it as a failed product", async ({ page }) => {
+  test("keeps a partial source visible without treating it as a failed product", async ({
+    page,
+  }) => {
     await page.goto("/e2e/product_scan_partial");
 
     await page.getByRole("button", { name: "Open scan & rescan" }).click();
@@ -39,10 +49,11 @@ test.describe("Product Scan", () => {
 
     await page.getByRole("button", { name: "Open scan & rescan" }).click();
 
-    await expect(page.getByTestId("product-scan-graph").getByText("Product type", { exact: true })).toBeVisible();
+    await expect(
+      page.getByTestId("product-scan-graph").getByText("Product type", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByText("Brand / identity", { exact: true }).first()).toBeVisible();
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect(overflow).toBeLessThanOrEqual(1);
+    await expectNoHorizontalOverflow(page, "the scan graph scrolls sideways", 1);
   });
 
   test("preserves every finding with reduced motion", async ({ browser }) => {
@@ -62,12 +73,20 @@ test.describe("Product Scan", () => {
 
     const scanner = page.getByTestId("product-scan-graph");
     const experience = page.getByRole("region", { name: "Understanding your product" });
-    const scannerHeightBefore = await scanner.evaluate((element) => element.getBoundingClientRect().height);
-    const experienceHeightBefore = await experience.evaluate((element) => element.getBoundingClientRect().height);
+    const scannerHeightBefore = await scanner.evaluate(
+      (element) => element.getBoundingClientRect().height,
+    );
+    const experienceHeightBefore = await experience.evaluate(
+      (element) => element.getBoundingClientRect().height,
+    );
 
     await expect(page.getByTestId("product-logo").first()).toBeVisible({ timeout: 12_000 });
 
-    expect(await scanner.evaluate((element) => element.getBoundingClientRect().height)).toBe(scannerHeightBefore);
-    expect(await experience.evaluate((element) => element.getBoundingClientRect().height)).toBe(experienceHeightBefore);
+    expect(await scanner.evaluate((element) => element.getBoundingClientRect().height)).toBe(
+      scannerHeightBefore,
+    );
+    expect(await experience.evaluate((element) => element.getBoundingClientRect().height)).toBe(
+      experienceHeightBefore,
+    );
   });
 });

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Repository intelligence, in a real browser (Sprint UI-3.6).
@@ -52,13 +53,17 @@ test.describe("the answer comes first", () => {
     await expect(page.getByRole("heading", { level: 3 })).toContainText("Vibe understands");
     await expect(page.getByText("Customers can create an account and sign in.")).toBeVisible();
     await expect(
-      page.getByText("Payment functionality appears to be started, but the buying flow isn't clear yet."),
+      page.getByText(
+        "Payment functionality appears to be started, but the buying flow isn't clear yet.",
+      ),
     ).toBeVisible();
 
     expect(external).toEqual([]);
   });
 
-  test("keeps package names, file paths and scan counts out of the default view", async ({ page }) => {
+  test("keeps package names, file paths and scan counts out of the default view", async ({
+    page,
+  }) => {
     await page.goto(CODE_ONLY);
 
     const body = await page.locator("body").innerText();
@@ -83,25 +88,30 @@ test.describe("the answer comes first", () => {
     // Read from the landmarks rather than the headings: the group heading is
     // uppercased by CSS, and its accessible name is what a screen reader
     // announces in the same order a sighted reader meets it.
-    const groups = await page.locator("section[aria-label]").evaluateAll((sections) =>
-      sections.map((section) => section.getAttribute("aria-label")),
-    );
+    const groups = await page
+      .locator("section[aria-label]")
+      .evaluateAll((sections) => sections.map((section) => section.getAttribute("aria-label")));
 
-    expect(groups).toEqual(["What already exists", "What needs checking", "What Vibe couldn't find"]);
+    expect(groups).toEqual([
+      "What already exists",
+      "What needs checking",
+      "What Vibe couldn't find",
+    ]);
   });
 
   test("states the business consequence of a gap and offers one way forward", async ({ page }) => {
     await page.goto(CODE_ONLY);
 
-    await expect(page.getByText("You may not know what visitors do after they arrive.")).toBeVisible();
+    await expect(
+      page.getByText("You may not know what visitors do after they arrive."),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Review next moves" }).first()).toHaveAttribute(
       "href",
       "/app/projects/project_e2e/plan",
     );
-    await expect(page.getByRole("link", { name: "Check the live product" }).first()).toHaveAttribute(
-      "href",
-      "#live-product-check",
-    );
+    await expect(
+      page.getByRole("link", { name: "Check the live product" }).first(),
+    ).toHaveAttribute("href", "#live-product-check");
   });
 });
 
@@ -153,7 +163,9 @@ test.describe("the two intelligence layers", () => {
     await page.goto(CODE_ONLY);
 
     await expect(page.getByText("What Vibe learned from your code")).toBeVisible();
-    await expect(page.getByText("Only checking the live product can show whether it works")).toBeVisible();
+    await expect(
+      page.getByText("Only checking the live product can show whether it works"),
+    ).toBeVisible();
   });
 
   test("turns a disagreement between code and live product into a business finding", async ({
@@ -162,7 +174,9 @@ test.describe("the two intelligence layers", () => {
     await page.goto(CONTRADICTION);
 
     await expect(
-      page.getByText("Your product can take payments, but nothing a visitor can reach leads to paying."),
+      page.getByText(
+        "Your product can take payments, but nothing a visitor can reach leads to paying.",
+      ),
     ).toBeVisible();
     await expect(page.getByText("Repository signal")).toHaveCount(0);
   });
@@ -211,16 +225,15 @@ test.describe("375px", () => {
       for (const details of document.querySelectorAll("details")) details.open = true;
     });
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 
   test("shows the conclusion and its next step without expanding anything", async ({ page }) => {
     await page.goto(CODE_ONLY);
 
-    await expect(page.getByText("You may not know what visitors do after they arrive.")).toBeVisible();
+    await expect(
+      page.getByText("You may not know what visitors do after they arrive."),
+    ).toBeVisible();
     await expect(page.getByRole("link", { name: "Review next moves" }).first()).toBeVisible();
   });
 });

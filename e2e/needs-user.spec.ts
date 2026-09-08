@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * "Vibe needs you", in a real browser (CORE-2a.4 §30, §31, §47, §48).
@@ -180,10 +181,7 @@ test.describe("375px", () => {
   test("does not scroll sideways", async ({ page }) => {
     await page.goto(FIRST_CUSTOMER);
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 
   test("keeps both answers reachable on a phone", async ({ page }) => {

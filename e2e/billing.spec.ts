@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The Credits screen, in a real browser (BILLING CORE-2 §49–§55, §93, §94).
@@ -139,7 +140,9 @@ test.describe("buying Credits", () => {
     }
   });
 
-  test("posts a SKU key and nothing else — no price, currency or amount (§23)", async ({ page }) => {
+  test("posts a SKU key and nothing else — no price, currency or amount (§23)", async ({
+    page,
+  }) => {
     await open(page, "billing-free");
 
     /*
@@ -235,7 +238,9 @@ test.describe("recent activity", () => {
 });
 
 test.describe("the balance answers more than one number (§50)", () => {
-  test("says what is left of the included monthly Credits, and when they renew", async ({ page }) => {
+  test("says what is left of the included monthly Credits, and when they renew", async ({
+    page,
+  }) => {
     await open(page, "billing-builder");
 
     // One line since UI-22: the share and the date were two sentences in two
@@ -459,10 +464,7 @@ test.describe("accessibility (§93)", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await open(page, "billing-free");
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });
 

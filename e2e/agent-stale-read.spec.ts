@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * "Vibe's read of your code is out of date" — in a real browser (Stufe 4).
@@ -57,9 +58,6 @@ test.describe("a repository Vibe last read under an older analysis", () => {
     await page.goto("/e2e/agent-stale-read");
     await expect(page.getByTestId("agent-stale-read")).toBeVisible();
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });

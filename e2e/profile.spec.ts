@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Profile.
@@ -95,10 +96,7 @@ test.describe("it fits", () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(CONNECTED);
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
+      await expectNoHorizontalOverflow(page);
     });
   }
 });

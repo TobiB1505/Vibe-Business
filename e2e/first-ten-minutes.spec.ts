@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The first ten minutes, in a real browser (UI-S1 §22–§24).
@@ -45,14 +46,6 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
   return attempted;
 }
 
-/** Nothing may scroll sideways. A landing page that does is broken on a phone. */
-async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow, "horizontal overflow in px").toBeLessThanOrEqual(1);
-}
-
 test.describe("the landing page", () => {
   test("sends the primary call to action to sign-up, not sign-in", async ({ page }) => {
     await page.goto("/");
@@ -74,9 +67,10 @@ test.describe("the landing page", () => {
     // In the shell every public page wears since UI-19, rather than in the
     // hero. What matters is that an existing customer finds the way back in
     // without the page asking a stranger to sign in first.
-    await expect(
-      page.getByRole("banner").getByRole("link", { name: "Sign in" }),
-    ).toHaveAttribute("href", "/login");
+    await expect(page.getByRole("banner").getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
   });
 
   test("says what the product does, in one heading a founder can act on", async ({ page }) => {
@@ -339,9 +333,7 @@ test.describe("a product logo that will not load", () => {
 
     // The remote asset was genuinely attempted and genuinely refused, so the
     // fallback below is the browser's real error path rather than a stub.
-    await expect
-      .poll(() => attempted.some((url) => url.includes("acme.test")))
-      .toBe(true);
+    await expect.poll(() => attempted.some((url) => url.includes("acme.test"))).toBe(true);
 
     await expect(page.getByTestId("product-logo")).toHaveCount(0);
     const mark = page.locator("img[src*='vibe-mark']");
@@ -366,7 +358,9 @@ test.describe("meeting Nova before signing up", () => {
 
     const section = page.getByTestId("landing-nova");
     await expect(section).toBeVisible();
-    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+    await expect(
+      section.getByRole("heading", { name: /your co-founder has a name/i }),
+    ).toBeVisible();
   });
 
   /*
@@ -400,10 +394,12 @@ test.describe("meeting Nova before signing up", () => {
     await page.goto("/");
 
     const section = page.getByTestId("landing-nova");
-    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+    await expect(
+      section.getByRole("heading", { name: /your co-founder has a name/i }),
+    ).toBeVisible();
     await expect(section.getByText(/what her mark tells you/i)).toBeVisible();
     // The mark itself is present at first paint, not assembled into existence.
-    await expect(section.locator('[data-nova-presence]').first()).toBeVisible();
+    await expect(section.locator("[data-nova-presence]").first()).toBeVisible();
   });
 });
 
