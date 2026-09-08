@@ -3,8 +3,6 @@ import { hasStripeConfiguration } from "@/lib/env/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getBillingOverview } from "@/modules/billing/overview";
-import { listAuditEventsForAccount } from "@/modules/audit-log/queries";
-import { buildActivityFeed } from "@/modules/audit-log/view";
 import { BillingView } from "./billing-view";
 
 /**
@@ -32,18 +30,9 @@ export default async function BillingPage({
   const session = await requireSession("/app/settings/billing");
   const supabase = await createClient();
 
-  const [overview, params, accountActivity] = await Promise.all([
+  const [overview, params] = await Promise.all([
     getBillingOverview(supabase, { userId: session.userId }),
     searchParams,
-    /*
-     * The account's own record (audit R24).
-     *
-     * `audit_events` is written per user, and the rows with no project — a
-     * Credit purchase, a GitHub account connected or disconnected — could not
-     * be read by the project-scoped query, which filters on exactly the column
-     * they have nothing in. They were written and displayed nowhere.
-     */
-    listAuditEventsForAccount(supabase, { userId: session.userId }),
   ]);
 
   return (
@@ -52,7 +41,6 @@ export default async function BillingPage({
         overview={overview}
         stripeReady={hasStripeConfiguration()}
         checkoutState={params.checkout}
-        accountActivity={buildActivityFeed(accountActivity.events)}
       />
     </>
   );

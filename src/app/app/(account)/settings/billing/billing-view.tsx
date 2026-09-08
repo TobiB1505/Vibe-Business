@@ -1,40 +1,15 @@
-import { cn } from "@/lib/utils/cn";
 import { formatDate } from "@/lib/utils/format-datetime";
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
-import {
-  ArrowRightIcon,
-  InfoIcon,
-  LockIcon,
-  PlusIcon,
-  SparklesIcon,
-} from "@/components/ui/dashboard-icons";
+import { ArrowRightIcon, LockIcon, PlusIcon } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
-import { ActivityFeed } from "@/app/app/projects/[projectId]/activity-feed";
-import type { ActivityEntry } from "@/modules/audit-log/view";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
+import { getPlan, listCreditPacks, listPaidPlans } from "@/modules/billing/catalog";
+import type { BillingOverview } from "@/modules/billing/overview";
+import { retailChargeFor } from "@/modules/credits/retail";
 import {
-  getPlan,
-  listCreditPacks,
-  listPaidPlans,
-} from "@/modules/billing/catalog";
-import type {
-  BillingOverview,
-  CreditActivityEntry,
-} from "@/modules/billing/overview";
-import {
-  RETAIL_OPERATION_KINDS,
-  resolveRetailPrice,
-  retailChargeFor,
-  type ResolvedRetailPrice,
-  type RetailOperationKind,
-} from "@/modules/credits/retail";
-import {
-  EXECUTION_PRICING_CLASSES,
-  type ExecutionPricingClass,
-} from "@/modules/economy/execution-class";
-import {
+  CREDIT_UNITS_PER_CREDIT,
   formatCreditsForDisplay,
   type CreditUnits,
 } from "@/modules/credits/units";
@@ -44,8 +19,8 @@ import {
   ManageBillingForm,
   StartPlanForm,
 } from "./purchase-forms";
-import { StandaloneLink } from "@/components/ui/text-link";
 import { figureClasses } from "@/components/ui/figure";
+import { AllowanceMeter } from "@/components/ui/allowance-meter";
 
 /** Checkout return states. A redirect never grants Credits; the webhook does. */
 export const CHECKOUT_NOTICES: Record<
@@ -62,38 +37,6 @@ export const CHECKOUT_NOTICES: Record<
     label: "Checkout cancelled",
     body: "Nothing was purchased and you weren't charged.",
   },
-};
-
-const OPERATION_NAMES: Record<RetailOperationKind, string> = {
-  business_audit: "Business Audit",
-  opportunity_generation: "Next moves",
-  action_plan: "Action Plan",
-  product_understanding: "Understanding your product",
-  deep_scan: "Deep Scan (additional)",
-  agent_execution: "Agent improvement",
-};
-
-/**
- * What a class-priced row shows instead of one number.
- *
- * Agent work costs one of three amounts and which one is decided by the step,
- * before anything runs. A price table has no step, so it shows all three rather
- * than a range or a "from" — a customer comparing plans needs to know the top
- * of the scale, and "from 150 Credits" hides exactly the number they would want
- * to budget against.
- */
-const EXECUTION_CLASS_NAMES: Record<ExecutionPricingClass, string> = {
-  small: "Focused",
-  standard: "Standard",
-  complex: "Broad",
-};
-
-/** One rendered row: an operation the policy in force actually sells. */
-type PriceRow = {
-  operation: RetailOperationKind;
-  resolved: Omit<ResolvedRetailPrice, "price"> & {
-    price: Exclude<ResolvedRetailPrice["price"], { kind: "not_priced" }>;
-  };
 };
 
 function formatPrice(cents: number): string {
@@ -115,11 +58,6 @@ function planTiming(overview: BillingOverview): string {
   return overview.plan.endingAtPeriodEnd ? `Ends on ${renews}` : `Renews on ${renews}`;
 }
 
-function activityIcon(entry: CreditActivityEntry) {
-  if (entry.creditDelta > 0) return <PlusIcon size={17} />;
-  return <SparklesIcon size={17} />;
-}
-
 /**
  * The reference composition, constrained to real billing data. This does not
  * fabricate a usage chart, product split, card suffix, invoices or an email:
@@ -129,20 +67,11 @@ export function BillingView({
   overview,
   stripeReady,
   checkoutState,
-  accountActivity = [],
   at = new Date(),
 }: {
   overview: BillingOverview;
   stripeReady: boolean;
   checkoutState?: string;
-  /**
-   * The account's own record — the events that belong to no product.
-   *
-   * A Credit purchase and a GitHub connection are written to `audit_events`
-   * with no `project_id`, which is exactly what the project-scoped read
-   * filters out, so they had been recorded and shown nowhere.
-   */
-  accountActivity?: ActivityEntry[];
   /**
    * The instant the price table resolves at. Defaults to now.
    *
@@ -162,52 +91,30 @@ export function BillingView({
   const plans = listPaidPlans();
   const currentPlan = getPlan(overview.plan.key);
 
-  // Resolved once, so the table and the footnote below cannot disagree about
-  // which prices exist.
-  const priceRows = RETAIL_OPERATION_KINDS.map((operation) => ({
-    operation,
-    resolved: resolveRetailPrice(operation, at),
-  }))
-    .filter((row): row is PriceRow => {
-      // An operation the policy does not sell has no row at all. A "—" would
-      // still be a claim about a price.
-      return row.resolved !== null && row.resolved.price.kind !== "not_priced";
-    })
-    /*
-     * Priced rows first, included ones last.
-     *
-     * `RETAIL_OPERATION_KINDS` is ordered by the product's own journey, which
-     * put "Understanding your product · Free" in the middle of four amounts —
-     * so the one column a reader is scanning stopped being a column of numbers
-     * halfway down. Order within each group is left exactly as the policy
-     * declares it; only the two groups are separated.
-     */
-    .sort(
-      (a, b) =>
-        Number(a.resolved.price.kind === "free") -
-        Number(b.resolved.price.kind === "free"),
-    );
-
-  // Shown only when a row above actually needs it. A footnote explaining
-  // agent tiers and Deep Scan under a policy that prices neither is a
-  // statement about rows that are not on the page.
-  const hasQualifiedPrice = priceRows.some(
-    (row) => row.resolved.basis !== "measured",
-  );
-
-  // Whether the balance has any context worth a line beneath it.
+  /*
+   * Whether the `dl` under the meter has anything in it.
+   *
+   * Exactly the three conditions that list renders, and not one more. It used
+   * to include `monthlyAllowance` and the renewal date, which UI-22 moved up
+   * beside the meter — leaving the list true and empty on the most common
+   * screen there is, and an empty `dl` still occupies its margins. The result
+   * was a visible hole between the meter and the buttons, in the card that is
+   * supposed to be the calmest thing on the page. The same defect the original
+   * comment here warned about, reintroduced by moving its contents.
+   */
+  const showsRenewalHere =
+    overview.monthlyAllowance === null &&
+    overview.plan.renewsAt !== null &&
+    !overview.plan.endingAtPeriodEnd;
   const hasBalanceFacts =
-    overview.monthlyAllowance !== null ||
-    (overview.plan.renewsAt !== null && !overview.plan.endingAtPeriodEnd) ||
-    overview.reservedCredits > 0 ||
-    overview.nextExpiry !== null;
+    showsRenewalHere || overview.reservedCredits > 0 || overview.nextExpiry !== null;
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
       <SectionHeader
         level={1}
         title="Billing"
-        description="Manage your plan, Credits and billing."
+        description="Your Credits, your plan, and where they went."
       />
 
       {notice && (
@@ -215,183 +122,6 @@ export function BillingView({
           {notice.body}
         </Notice>
       )}
-
-      {/*
-        The balance leads, and the plan sits beside it.
-
-        Three equal cards is three equal claims on attention, and the question
-        somebody opens this page with is not "what plan am I on" — it is "how
-        many Credits do I have". So the balance takes two thirds and everything
-        it needs to be understood sits inside it: the number, what share of the
-        included allowance is left, when that renews, anything a running job is
-        holding, and what lapses next. A card that answers one question with a
-        number and leaves the rest of the sentence on another card is how a
-        customer ends up doing arithmetic on a billing page.
-
-        The card that used to sit third — "How Credits work", three lines of
-        static copy and a jump link — is gone. Its one real sentence now sits
-        under the price table it was pointing at.
-      */}
-      <section
-        aria-label="Billing overview"
-        className="grid gap-4 lg:grid-cols-3"
-      >
-        <Surface
-          level="panel"
-          padding="md"
-          className="flex flex-col lg:col-span-2"
-        >
-          <MonoLabel className="text-mint">Available Credits</MonoLabel>
-
-          <p
-            className={figureClasses("lg", "text-fg mt-5")}
-            data-testid="credit-balance"
-          >
-            {overview.displayAvailable}
-            <span className="sr-only"> Credits</span>
-          </p>
-          <p className="text-fg-muted mt-2 text-body">Credits available</p>
-
-          {/*
-            Rendered only when there is something to say.
-
-            An account with no plan, no hold and no expiry has no facts to list,
-            and an empty `dl` still occupies its margins — which on the
-            zero-balance screen left a visible hole between "Credits available"
-            and the buttons, in the card that is supposed to be the calmest
-            thing on the page.
-          */}
-          {hasBalanceFacts && (
-            <dl className="mt-6 flex flex-col gap-2.5 text-body">
-              {overview.monthlyAllowance && (
-                <BalanceFact term="Included this month">
-                  <span className="text-fg font-semibold tabular-nums">
-                    {overview.monthlyAllowance.displayRemaining}
-                  </span>{" "}
-                  of {overview.monthlyAllowance.displayInitial} monthly Credits
-                  left
-                </BalanceFact>
-              )}
-
-              {overview.plan.renewsAt && !overview.plan.endingAtPeriodEnd && (
-                <BalanceFact term="Renews">
-                  Your included Credits renew on{" "}
-                  {formatDate(overview.plan.renewsAt)}
-                </BalanceFact>
-              )}
-
-              {/*
-              Shown only while something is actually holding Credits.
-
-              A permanent "0 Credits reserved" line would teach every customer
-              what a reservation is in order to tell them nothing, which is
-              exactly the internal vocabulary §52 keeps off this page. When it
-              is not zero it is the only thing on the screen that explains a
-              balance the history does not add up to.
-            */}
-              {overview.reservedCredits > 0 && (
-                <BalanceFact term="In progress">
-                  <span className="text-fg font-semibold tabular-nums">
-                    {overview.displayReserved}
-                  </span>{" "}
-                  Credits are held for work that is still running
-                </BalanceFact>
-              )}
-
-              {overview.nextExpiry && (
-                <BalanceFact term="Expiring">
-                  <span className="text-fg font-semibold tabular-nums">
-                    {overview.nextExpiry.displayCredits}
-                  </span>{" "}
-                  expire on {formatDate(overview.nextExpiry.expiresAt)}
-                </BalanceFact>
-              )}
-            </dl>
-          )}
-
-          <div className="mt-auto flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
-            <a
-              href="#credit-packs"
-              className={buttonClasses({ variant: "primary", size: "sm" })}
-            >
-              Buy Credits
-              <PlusIcon size={16} />
-            </a>
-            <StandaloneLink href="#credit-prices">
-              See what Credits buy
-              <ArrowRightIcon size={15} />
-            </StandaloneLink>
-          </div>
-        </Surface>
-
-        {/*
-          The plan card states the plan and offers the one control that manages
-          it. It used to also list the plan's benefits — which is the `#plans`
-          section's job, two screens down, where the plans are actually
-          compared. Saying it twice made the page longer without answering
-          anything a second time.
-        */}
-        <Surface level="panel" padding="md" className="flex flex-col">
-          <div className="flex items-start justify-between gap-4">
-            <MonoLabel className="text-mint">Your plan</MonoLabel>
-            <span
-              aria-hidden="true"
-              className="bg-mint-tint text-mint flex size-10 items-center justify-center rounded-full"
-            >
-              <SparklesIcon size={20} />
-            </span>
-          </div>
-
-          <h2 className="text-fg mt-4 text-[1.65rem] leading-none font-bold">
-            {overview.plan.name}
-          </h2>
-          <p className="text-fg mt-2 flex items-baseline gap-1.5">
-            <span className="text-title font-semibold">
-              {formatPrice(currentPlan.priceCents)}
-            </span>
-            {currentPlan.priceCents > 0 && (
-              <span className="text-fg-muted text-body">/ month</span>
-            )}
-          </p>
-          <p
-            className={
-              overview.plan.endingAtPeriodEnd
-                ? "text-amber mt-2 text-body"
-                : "text-fg-muted mt-2 text-body"
-            }
-          >
-            {planTiming(overview)}
-          </p>
-
-          <p className="text-fg-prose mt-4 text-body">
-            {overview.plan.key === "free"
-              ? "Your first Business Audit and first Deep Scan for each product are included."
-              : `${formatCreditsForDisplay(currentPlan.monthlyCreditUnits)} Credits included every month.`}
-          </p>
-
-          <div className="mt-auto pt-6">
-            {overview.plan.key !== "free" && stripeReady ? (
-              <ManageBillingForm />
-            ) : overview.plan.key === "free" ? (
-              <Link
-                href="#plans"
-                className={buttonClasses({ variant: "secondary", size: "sm" })}
-              >
-                View plans
-                <ArrowRightIcon size={15} />
-              </Link>
-            ) : (
-              <button
-                type="button"
-                disabled
-                className={`${buttonClasses({ variant: "secondary", size: "sm" })} w-full`}
-              >
-                Management unavailable
-              </button>
-            )}
-          </div>
-        </Surface>
-      </section>
 
       {!overview.welcomeGranted && (
         <Surface
@@ -405,163 +135,198 @@ export function BillingView({
             <p className="text-fg mt-2 font-semibold">
               Your account is eligible for 100 Welcome Credits.
             </p>
-            <p className="text-fg-muted mt-1 text-body">
-              They are valid for 30 days.
-            </p>
+            <p className="text-fg-muted mt-1 text-body">They are valid for 30 days.</p>
           </div>
           <ClaimWelcomeCreditsForm />
         </Surface>
       )}
 
       {/*
-        Four rows, not two columns that stop at different heights.
+        One panel, not two (UI-22).
 
-        The page was one grid whose left column ran on for a full screen
-        after the right had ended — prices, two activity panels and the
-        ledger on one side, packs and plans on the other. `DESIGN.md` asks
-        for a compact financial-dashboard composition, and the shape that
-        produces is a row per question rather than a tall column beside a
-        short one.
-
-        Prices and packs still pair, for the reason they were paired in the
-        first place: the price table is about twice the height of the pack
-        list, so as two full-width rows the packs would sit alone above a lot
-        of nothing. Both also answer "what does this cost".
-        Plans take the full width because they are the page's one real
-        decision and were the narrowest thing on it. The two short
-        histories pair, and the long ledger gets the width it always
-        needed. Reading order is unchanged.
+        The balance and the plan were two cards in a 2:1 grid, and answering
+        "can I run this, and until when" meant reading across a gap: the number
+        on the left, what renews it on the right. They are one question. The
+        plan sits on the same card as a line, the meter shows what the two
+        numbers under it make a reader divide, and both controls are in one row.
       */}
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
-          <Surface
-          as="section"
-          aria-labelledby="credit-prices-heading"
-          id="credit-prices"
-          level="panel"
-          padding="none"
-          className="scroll-mt-6 overflow-hidden"
-        >
-          <div className="border-line-2 flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-6">
-            <div className="min-w-0">
-              <MonoLabel
-                id="credit-prices-heading"
-                as="h2"
-                className="text-mint"
-              >
-                Credit prices
-              </MonoLabel>
-              <p className="text-fg mt-2 font-semibold">
-                Know the cost before you start
-              </p>
-              <p className="text-fg-prose mt-1.5 max-w-[46ch] text-body">
-                Credits power Vibe&rsquo;s business intelligence and Agent
-                work. Every task shows what it costs beside the button that
-                starts it.
-              </p>
-            </div>
-            <span className="text-fg-meta hidden shrink-0 items-center gap-1.5 pt-1 text-caption sm:inline-flex">
-              <InfoIcon size={14} /> Known before you start
-            </span>
-          </div>
-          <ul className="divide-line-2 divide-y">
-            {priceRows.map(({ operation, resolved }) => {
-              const price = resolved.price;
-
-              return (
-                /*
-                 * Stacked on a phone, opposed on a desktop.
-                 *
-                 * The agent row is three label/amount pairs, and on a narrow
-                 * screen forcing it to share a line with the operation name
-                 * squeezed both into two-line wraps. Below `sm` the name gets
-                 * the full width and the amounts sit under it, indented past
-                 * the icon so the column still reads as a column.
-                 */
-                <li
-                  key={operation}
-                  className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
-                    >
-                      <SparklesIcon size={16} />
-                    </span>
-                    <span className="text-fg-body text-body">
-                      {OPERATION_NAMES[operation]}
-                      {resolved.basis !== "measured" && (
-                        <sup className="text-fg-meta ml-0.5 text-[0.65rem]">
-                          *
-                        </sup>
-                      )}
-                    </span>
-                  </div>
-
-                  {price.kind === "by_execution_class" ? (
-                    <span className="flex shrink-0 flex-col gap-1 pl-12 sm:items-end sm:pl-0">
-                      {EXECUTION_PRICING_CLASSES.map((pricingClass) => (
-                        <span
-                          key={pricingClass}
-                          className="flex items-baseline justify-between gap-2 sm:justify-end"
-                        >
-                          <span className="text-fg-meta text-caption">
-                            {EXECUTION_CLASS_NAMES[pricingClass]}
-                          </span>
-                          <span className="text-fg text-body font-semibold tabular-nums">
-                            {formatCreditsForDisplay(
-                              price.creditUnitsByClass[pricingClass],
-                            )}{" "}
-                            Credits
-                          </span>
-                        </span>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="text-fg shrink-0 pl-12 text-body font-semibold tabular-nums sm:pl-0">
-                      {price.kind === "free"
-                        ? "Free"
-                        : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-
-          {/*
-          The footnote, not a badge.
-
-          A badge next to a price reads as a property of the offer — "new",
-          "popular", "discounted". This is a statement about Vibe's own
-          confidence in the number, which is a smaller and more honest claim,
-          and it belongs where a reader looks after the table rather than
-          beside the figure they are trying to compare.
-        */}
-          {/*
-          The settlement truth, in the customer's words.
-
-          `settleOperationCredits` settles at the reserved amount and
-          `releaseOperationCredits` returns the whole hold, so an Agent
-          improvement costs exactly its tier price or exactly nothing —
-          there is no partial charge anywhere in the system. "Up to 200
-          Credits" would therefore be the wrong kind of hedge: it implies a
-          variable settlement no code path can produce, and a customer who
-          budgeted for "up to" and was charged the top of it every time would
-          be right to feel misled. What is genuinely conditional is not the
-          amount but whether anything is charged at all, and that is what
-          this says.
-        */}
-          {hasQualifiedPrice && (
-            <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-caption sm:px-6">
-              <span aria-hidden="true">*</span> Agent prices scale with how
-              broad a change is, and Vibe tells you which before you start.
-              You are charged only if the Agent delivers a change &mdash; if
-              it doesn&rsquo;t, the Credits stay yours. A Deep Scan price
-              covers the browser session that reads your signed-in product.
+      <Surface
+        as="section"
+        aria-labelledby="balance-heading"
+        level="panel"
+        padding="lg"
+        className="flex flex-col gap-6"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+          <div className="min-w-0">
+            <MonoLabel id="balance-heading" as="h2" className="text-mint">
+              Available Credits
+            </MonoLabel>
+            <p className={figureClasses("lg", "text-fg mt-4")} data-testid="credit-balance">
+              {overview.displayAvailable}
+              <span className="sr-only"> Credits</span>
             </p>
+            <p className="text-fg-muted mt-2 text-body">Credits available</p>
+          </div>
+
+          {/*
+            The plan as a fact on this card rather than a card of its own. It
+            answers "what refills this", which is the second half of the
+            sentence the number above starts.
+          */}
+          <div className="flex min-w-0 flex-col items-start gap-1.5 sm:items-end">
+            <span className="text-fg-meta text-caption">Your plan</span>
+            {/*
+              A heading, because it names a thing. It was one on the plan card
+              this replaced, and dropping to a `<p>` took the plan out of the
+              document outline — invisible on screen and immediately visible to
+              anyone navigating by heading.
+            */}
+            <div className="flex items-baseline gap-2">
+              {/*
+                The price is beside the heading, not inside it: a heading
+                named "Builder €19 / month" is not the plan's name, and it is
+                what a reader navigating by heading would hear.
+              */}
+              <h3 className="text-fg text-title font-semibold">{overview.plan.name}</h3>
+              <span className="text-fg-muted text-body">
+                {formatPrice(currentPlan.priceCents)}
+                {currentPlan.priceCents > 0 && " / month"}
+              </span>
+            </div>
+            <p
+              className={
+                overview.plan.endingAtPeriodEnd
+                  ? "text-amber text-caption"
+                  : "text-fg-muted text-caption"
+              }
+            >
+              {planTiming(overview)}
+            </p>
+            {/*
+              What the Free plan includes, which no meter can show: it has no
+              monthly allowance to be a share of, so without this sentence the
+              only plan a new account is on says nothing about what it gives.
+              A paid plan needs no second sentence — the meter above states its
+              allowance in the numbers it is a share of.
+            */}
+            {overview.plan.key === "free" && (
+              <p className="text-fg-prose max-w-[38ch] text-caption sm:text-right">
+                Your first Business Audit and first Deep Scan for each product are included.
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/*
+          The meter, only where there is an allowance to be a share of. On a
+          plan that includes none there is no denominator, and a full bar
+          would be a claim about a limit that does not exist.
+        */}
+        {overview.monthlyAllowance && (
+          <div className="flex flex-col gap-2">
+            <AllowanceMeter
+              label="Monthly Credits remaining"
+              /*
+                Credits, not the internal sub-units the ledger stores in. The
+                ratio is identical either way, but `aria-valuenow` is read
+                aloud where `aria-valuetext` is absent, and "1,000,000" is the
+                internal vocabulary §52 keeps off this page — said out loud, to
+                the reader least able to check it.
+              */
+              remaining={overview.monthlyAllowance.remaining / CREDIT_UNITS_PER_CREDIT}
+              total={overview.monthlyAllowance.initial / CREDIT_UNITS_PER_CREDIT}
+              valueText={`${overview.monthlyAllowance.displayRemaining} of ${overview.monthlyAllowance.displayInitial} monthly Credits left`}
+            />
+            <p className="text-fg-prose text-body">
+              <span className="text-fg font-semibold tabular-nums">
+                {overview.monthlyAllowance.displayRemaining}
+              </span>{" "}
+              of {overview.monthlyAllowance.displayInitial} monthly Credits left
+              {overview.plan.renewsAt && !overview.plan.endingAtPeriodEnd && (
+                <> · renews {formatDate(overview.plan.renewsAt)}</>
+              )}
+            </p>
+          </div>
+        )}
+
+        {/*
+          Rendered only when there is something to say. An account with no
+          hold and no expiry has no facts to list, and an empty `dl` still
+          occupies its margins.
+        */}
+        {hasBalanceFacts && (
+          <dl className="flex flex-col gap-2 text-body">
+            {/*
+              The renewal line lives beside the meter above when there is an
+              allowance, and here when there is not — so a plan with a renewal
+              date and no monthly Credits still says when it renews.
+            */}
+            {showsRenewalHere && overview.plan.renewsAt && (
+              <BalanceFact term="Renews">
+                Your included Credits renew on {formatDate(overview.plan.renewsAt)}
+              </BalanceFact>
+            )}
+
+            {/*
+              Shown only while something is actually holding Credits.
+
+              A permanent "0 Credits reserved" line would teach every customer
+              what a reservation is in order to tell them nothing, which is
+              exactly the internal vocabulary §52 keeps off this page.
+            */}
+            {overview.reservedCredits > 0 && (
+              <BalanceFact term="In progress">
+                <span className="text-fg font-semibold tabular-nums">
+                  {overview.displayReserved}
+                </span>{" "}
+                Credits are held for work that is still running
+              </BalanceFact>
+            )}
+
+            {overview.nextExpiry && (
+              <BalanceFact term="Expiring">
+                <span className="text-fg font-semibold tabular-nums">
+                  {overview.nextExpiry.displayCredits}
+                </span>{" "}
+                expire on {formatDate(overview.nextExpiry.expiresAt)}
+              </BalanceFact>
+            )}
+          </dl>
+        )}
+
+        <div className="border-line-2 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
+          <a href="#credit-packs" className={buttonClasses({ variant: "primary", size: "sm" })}>
+            Buy Credits
+            <PlusIcon size={16} />
+          </a>
+          {overview.plan.key !== "free" && stripeReady ? (
+            <ManageBillingForm />
+          ) : overview.plan.key === "free" ? (
+            <Link href="#plans" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+              View plans
+              <ArrowRightIcon size={15} />
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
+              Management unavailable
+            </button>
           )}
-        </Surface>
+        </div>
+      </Surface>
+
+      {/*
+        Top-ups and plans, side by side.
+
+        They were two full-width rows separated by the price table. Both answer
+        "how do I get more Credits" — one for now, one for every month — so a
+        reader comparing them no longer scrolls between them.
+      */}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         <div className="flex flex-col gap-4">
           <Surface
             as="section"
@@ -571,12 +336,8 @@ export function BillingView({
             padding="none"
             className="scroll-mt-6 overflow-hidden"
           >
-            <div className="border-line-2 border-b px-5 py-5 sm:px-6">
-              <MonoLabel
-                id="credit-packs-heading"
-                as="h2"
-                className="text-mint"
-              >
+            <div className="border-line-2 border-b px-5 py-4 sm:px-6">
+              <MonoLabel id="credit-packs-heading" as="h2" className="text-mint">
                 Top up Credits
               </MonoLabel>
               <p className="text-fg mt-2 font-semibold">One-off purchases</p>
@@ -598,131 +359,59 @@ export function BillingView({
             between two sections that both still look purchasable. */}
           {!stripeReady && (
             <Notice tone="info" label="Not available yet">
-              Payments aren&rsquo;t set up on this deployment yet, so Credits
-              can&rsquo;t be purchased.
+              Payments aren&rsquo;t set up on this deployment yet, so Credits can&rsquo;t be
+              purchased.
             </Notice>
           )}
         </div>
-      </div>
 
-      <Surface
-        as="section"
-        aria-labelledby="plans-heading"
-        id="plans"
-        level="panel"
-        padding="none"
-        className="scroll-mt-6 overflow-hidden"
-      >
-        <div className="border-line-2 border-b px-5 py-5 sm:px-6">
-          <MonoLabel id="plans-heading" as="h2" className="text-mint">
-            Plans
-          </MonoLabel>
-          {/*
-          "Choose a plan", not "Monthly Credits".
-
-          The activity list now labels a plan renewal "Monthly Credits", and
-          this panel headed the same two words — two different things saying
-          the same thing on one screen. This one is a chooser, so it says so.
-        */}
-          <p className="text-fg mt-2 font-semibold">Choose a plan</p>
-        </div>
-        <div className="divide-line-2 grid divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-          {plans.map((plan) => (
-            <StartPlanForm
-              key={plan.key}
-              planKey={plan.key}
-              planName={plan.name}
-              price={`${formatPrice(plan.priceCents)} / month`}
-              credits={formatCreditsForDisplay(plan.monthlyCreditUnits)}
-              buys={planPurchasingPower(plan.monthlyCreditUnits, at)}
-              disabled={!stripeReady}
-              current={overview.plan.key === plan.key}
-            />
-          ))}
-        </div>
-
-      </Surface>
-
-      {/*
-        A pair only when there are two. Both panels are conditional — a new
-        account has neither, and an account that has spent nothing has only the
-        first — so a fixed two-column grid leaves whichever one survives at half
-        width beside an empty half. `lg:grid-cols-2` is applied when the second
-        panel is actually there.
-      */}
-      <div
-        className={cn(
-          "grid items-start gap-4",
-          accountActivity.length > 0 &&
-            overview.spendByProduct.length > 0 &&
-            "lg:grid-cols-2",
-        )}
-      >
-      {accountActivity.length > 0 && (
         <Surface
           as="section"
-          aria-labelledby="account-activity-heading"
+          aria-labelledby="plans-heading"
+          id="plans"
           level="panel"
-          padding="lg"
-          className="flex flex-col gap-4"
+          padding="none"
+          className="scroll-mt-6 overflow-hidden"
         >
-          <div>
-            <MonoLabel id="account-activity-heading" as="h2" className="text-mint">
-              Your account
+          <div className="border-line-2 border-b px-5 py-4 sm:px-6">
+            <MonoLabel id="plans-heading" as="h2" className="text-mint">
+              Plans
             </MonoLabel>
-            <p className="text-fg mt-2 font-semibold">Account activity</p>
-            <p className="text-fg-muted mt-1 text-ui">
-              What happened to the account itself — Credits bought, accounts connected.
-            </p>
-          </div>
-          <ActivityFeed entries={accountActivity} hasMore={false} />
-        </Surface>
-      )}
-
-      {/*
-        Where the Credits went, per product (audit R24). The history below
-        says what happened; this says which product it happened to — the
-        question a founder with four products asks first, and the one the
-        ledger could answer all along and never did.
-      */}
-      {overview.spendByProduct.length > 0 && (
-        <Surface
-          as="section"
-          aria-labelledby="spend-by-product-heading"
-          level="panel"
-          padding="lg"
-          className="flex flex-col gap-4"
-        >
-          <div>
-            <MonoLabel id="spend-by-product-heading" as="h2" className="text-mint">
-              Where it went
-            </MonoLabel>
-            <p className="text-fg mt-2 font-semibold">Spend by product</p>
             {/*
-              Over the history below, not ever. A total that silently
-              covered the last hundred movements would be read as lifetime.
+              "Choose a plan", not "Monthly Credits".
+
+              The activity list labels a plan renewal "Monthly Credits", and
+              this panel headed the same two words — two different things
+              saying the same thing on one screen. This one is a chooser.
             */}
-            <p className="text-fg-muted mt-1 text-ui">
-              Across the activity shown below.
-            </p>
+            <p className="text-fg mt-2 font-semibold">Choose a plan</p>
           </div>
-          <ul className="divide-line-2 divide-y" data-testid="spend-by-product">
-            {overview.spendByProduct.map((product) => (
-              <li
-                key={product.projectId}
-                className="flex items-baseline justify-between gap-4 py-2.5 first:pt-0 last:pb-0"
-              >
-                <span className="text-fg-body truncate text-body">{product.name}</span>
-                <span className="text-fg-secondary text-body tabular-nums">
-                  {product.displayCredits} Credits
-                </span>
-              </li>
+          <div className="divide-line-2 divide-y">
+            {plans.map((plan) => (
+              <StartPlanForm
+                key={plan.key}
+                planKey={plan.key}
+                planName={plan.name}
+                price={`${formatPrice(plan.priceCents)} / month`}
+                credits={formatCreditsForDisplay(plan.monthlyCreditUnits)}
+                buys={planPurchasingPower(plan.monthlyCreditUnits, at)}
+                disabled={!stripeReady}
+                current={overview.plan.key === plan.key}
+              />
             ))}
-          </ul>
+          </div>
         </Surface>
-      )}
       </div>
 
+      {/*
+        Where the Credits went — one panel, two readings.
+
+        "Spend by product" was a panel of its own beside "Account activity".
+        The account panel is gone (it listed Credits bought and accounts
+        connected, both of which the ledger below already records), and the
+        product split is a strip at the head of the ledger it summarises rather
+        than a card two sections away from it.
+      */}
       <Surface
         as="section"
         aria-labelledby="recent-activity-heading"
@@ -730,31 +419,48 @@ export function BillingView({
         padding="none"
         className="overflow-hidden"
       >
-        <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
+        <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-6">
           <div>
-            <MonoLabel
-              id="recent-activity-heading"
-              as="h2"
-              className="text-mint"
-            >
+            <MonoLabel id="recent-activity-heading" as="h2" className="text-mint">
               Recent usage
             </MonoLabel>
-            <p className="text-fg mt-2 font-semibold">
-              Latest Credit activity
-            </p>
+            <p className="text-fg mt-2 font-semibold">Latest Credit activity</p>
           </div>
           <span className="text-fg-meta text-caption">Newest first</span>
         </div>
+
+        {overview.spendByProduct.length > 0 && (
+          <div className="border-line-2 flex flex-wrap items-center gap-x-6 gap-y-2 border-b px-5 py-3 sm:px-6">
+            {/*
+              "Across the activity shown below", not ever: the page reads a
+              capped page of the ledger, and a total that silently covered the
+              last hundred movements would be read as lifetime.
+            */}
+            <span className="text-fg-meta text-caption">Across the activity below</span>
+            <ul
+              className="flex flex-wrap items-center gap-x-5 gap-y-1.5"
+              data-testid="spend-by-product"
+            >
+              {overview.spendByProduct.map((product) => (
+                <li key={product.projectId} className="flex items-baseline gap-2">
+                  <span className="text-fg-body truncate text-caption">{product.name}</span>
+                  <span className="text-fg-secondary text-caption tabular-nums">
+                    {product.displayCredits} Credits
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {overview.recentActivity.length === 0 ? (
           /*
-          An empty history is a normal state, not a missing one. It says
-          what will fill it, so a new account reads this as "nothing has
-          happened yet" rather than "something failed to load".
-        */
+            An empty history is a normal state, not a missing one. It says what
+            will fill it, so a new account reads this as "nothing has happened
+            yet" rather than "something failed to load".
+          */
           <div className="px-5 py-8 sm:px-6">
-            <p className="text-fg-body text-body font-medium">
-              No Credit activity yet
-            </p>
+            <p className="text-fg-body text-body font-medium">No Credit activity yet</p>
             <p className="text-fg-muted mt-1.5 max-w-[42ch] text-body">
               Credits you add and tasks you run will appear here.
             </p>
@@ -764,30 +470,19 @@ export function BillingView({
             {overview.recentActivity.map((entry) => (
               <li
                 key={entry.id}
-                className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6"
+                className="flex items-center justify-between gap-4 px-5 py-2.5 sm:px-6"
               >
-                <div className="flex min-w-0 items-center gap-3">
-                  <span
-                    aria-hidden="true"
-                    className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
-                  >
-                    {activityIcon(entry)}
+                <div className="flex min-w-0 items-baseline gap-3">
+                  <span className="text-fg-body truncate text-body font-medium">{entry.label}</span>
+                  <span className="text-fg-meta shrink-0 text-caption">
+                    {/* Which product, when the movement belongs to one. */}
+                    {entry.productName ? `${entry.productName} · ` : ""}
+                    {formatDate(entry.at)}
                   </span>
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-fg-body truncate text-body font-medium">
-                      {entry.label}
-                    </span>
-                    <span className="text-fg-meta text-caption">
-                      {/* Which product, when the movement belongs to one. */}
-                      {entry.productName ? `${entry.productName} · ` : ""}
-                      {formatDate(entry.at)}
-                    </span>
-                  </div>
                 </div>
                 {/* The sign carries the meaning, so it is never colour
                   alone (§93) — a "+" and a "-" are readable without it.
-                  No unit suffix here: unlike the price list and plan
-                  benefit rows, this text must stay exactly the signed
+                  No unit suffix here: this text must stay exactly the signed
                   amount, and a browser test asserts on it verbatim. */}
                 <span
                   className={
@@ -805,8 +500,8 @@ export function BillingView({
       </Surface>
 
       <footer className="text-fg-meta flex items-center justify-center gap-2 px-4 pb-2 text-center text-caption">
-        <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe
-        never stores your card details.
+        <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe never stores your
+        card details.
       </footer>
     </div>
   );
@@ -820,10 +515,7 @@ export function BillingView({
  * billing page cannot afford. Returns null when nothing in the card is priced,
  * so a policy with no prices renders no claim rather than "0 audits".
  */
-function planPurchasingPower(
-  monthlyCreditUnits: CreditUnits,
-  at: Date,
-): string | null {
+function planPurchasingPower(monthlyCreditUnits: CreditUnits, at: Date): string | null {
   if (monthlyCreditUnits <= 0) return null;
 
   const agent = retailChargeFor("agent_execution", at, {
@@ -836,15 +528,12 @@ function planPurchasingPower(
   if (agent.kind === "charge") {
     const runs = Math.floor(monthlyCreditUnits / agent.creditUnits);
     if (runs > 0)
-      parts.push(
-        `${runs} standard agent ${runs === 1 ? "improvement" : "improvements"}`,
-      );
+      parts.push(`${runs} standard agent ${runs === 1 ? "improvement" : "improvements"}`);
   }
 
   if (audit.kind === "charge") {
     const audits = Math.floor(monthlyCreditUnits / audit.creditUnits);
-    if (audits > 0)
-      parts.push(`${audits} Business ${audits === 1 ? "Audit" : "Audits"}`);
+    if (audits > 0) parts.push(`${audits} Business ${audits === 1 ? "Audit" : "Audits"}`);
   }
 
   return parts.length === 0 ? null : `${parts.join(", or ")}`;
@@ -859,13 +548,7 @@ function planPurchasingPower(
  * ("… monthly Credits left", "expire on …"), and printing both would say
  * everything twice.
  */
-function BalanceFact({
-  term,
-  children,
-}: {
-  term: string;
-  children: React.ReactNode;
-}) {
+function BalanceFact({ term, children }: { term: string; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-2">
       <dt className="sr-only">{term}</dt>

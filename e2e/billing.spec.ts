@@ -178,34 +178,6 @@ test.describe("buying Credits", () => {
   });
 });
 
-test.describe("prices", () => {
-  test("states what every operation costs, before anything is bought", async ({ page }) => {
-    await open(page, "billing-free");
-
-    /*
-     * Scoped to the price list, because the same words now appear in the
-     * history too — which is the point: a charge and a price that name the
-     * same thing differently is what the activity projection exists to end.
-     */
-    const prices = page.getByRole("region", { name: "Credit prices" });
-    await expect(prices.getByText("Business Audit", { exact: true })).toBeVisible();
-    await expect(prices.getByText("35 Credits", { exact: true })).toBeVisible();
-    await expect(prices.getByText("20 Credits", { exact: true })).toBeVisible();
-    await expect(prices.getByText("15 Credits", { exact: true })).toBeVisible();
-  });
-
-  test("shows Product Understanding as Free rather than as 0 Credits (§56)", async ({ page }) => {
-    await open(page, "billing-free");
-
-    // Scoped to the price list: "Free" also names the plan elsewhere on the page.
-    const row = page.getByRole("listitem").filter({ hasText: "Understanding your product" });
-    await expect(row).toContainText("Free");
-    // Exact, and scoped: an unanchored "0 Credits" matches inside
-    // "1000 Credits each month" and would pass for the wrong reason.
-    await expect(row.getByText("0 Credits", { exact: true })).toHaveCount(0);
-  });
-});
-
 test.describe("recent activity", () => {
   /**
    * The history says what the Credits were *for*.
@@ -266,8 +238,10 @@ test.describe("the balance answers more than one number (§50)", () => {
   test("says what is left of the included monthly Credits, and when they renew", async ({ page }) => {
     await open(page, "billing-builder");
 
-    await expect(page.getByText(/1,000 of 1,000 monthly Credits left/)).toBeVisible();
-    await expect(page.getByText(/Your included Credits renew on/)).toBeVisible();
+    // One line since UI-22: the share and the date were two sentences in two
+    // places, and a reader had to hold the first to make sense of the second.
+    // The claim is unchanged — both facts, stated — only the wording is.
+    await expect(page.getByText(/1,000 of 1,000 monthly Credits left . renews \d/)).toBeVisible();
   });
 
   /**
@@ -292,6 +266,58 @@ test.describe("the balance answers more than one number (§50)", () => {
     await open(page, "billing-free");
 
     await expect(page.getByText(/monthly Credits left/)).toHaveCount(0);
+  });
+});
+
+/**
+ * The meter, and what the page stopped saying (UI-22).
+ *
+ * The page was 2,566px — 2.6 screens — and its two tallest blocks were both
+ * reference rather than decision: a 683px price table restating what every
+ * priced button already discloses beside itself, and a 674px ledger. It is
+ * 1,419px now.
+ */
+test.describe("the balance shows a share, not just two numbers", () => {
+  test("draws the meter, and tells a screen reader the same thing the bar shows", async ({
+    page,
+  }) => {
+    await open(page, "billing-builder");
+
+    const meter = page.getByTestId("allowance-meter");
+    await expect(meter).toBeVisible();
+    // The numbers, not a percentage: "72 percent" is not what the sentence
+    // beside it says, and a reader should hear one reading, not two.
+    await expect(meter).toHaveAttribute("aria-valuetext", /monthly Credits left/);
+    await expect(meter).toHaveAttribute("aria-valuemax", "1000");
+  });
+
+  test("draws no meter on a plan with no allowance to be a share of", async ({ page }) => {
+    await open(page, "billing-free");
+
+    // A full bar with no denominator is a claim about a limit that does not
+    // exist.
+    await expect(page.getByTestId("allowance-meter")).toHaveCount(0);
+  });
+
+  test("does not restate the prices every button already discloses", async ({ page }) => {
+    await open(page, "billing-launch-v1");
+
+    // The rate card left the page in UI-22. `ActionBlock` and `CostDisclosure`
+    // state each price beside the control that spends it, and
+    // `retail.test.ts` pins the amounts.
+    await expect(page.getByRole("region", { name: "Credit prices" })).toHaveCount(0);
+    await expect(page.getByText("Know the cost before you start")).toHaveCount(0);
+  });
+
+  test("stays under two screens", async ({ page }) => {
+    await open(page, "billing-launch-v1");
+    await page.evaluate(() => document.fonts.ready);
+
+    // 2,566px before UI-22. The bound is not a design preference: a billing
+    // page a founder cannot see the whole of is one they scroll rather than
+    // read.
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    expect(height).toBeLessThan(2000);
   });
 });
 
@@ -441,59 +467,22 @@ test.describe("accessibility (§93)", () => {
 });
 
 /**
- * The screen under `launch-v1`, in a browser.
+ * The plan rows under `launch-v1`, in a browser.
  *
- * The domain layer's prices were correct and every test was green while this
- * page rendered `retail-v1`'s three rows under a footnote describing agent
- * tiers that were not on it. Three greens and an untested screen is the failure
- * mode [CLAUDE.md](../CLAUDE.md) rule 69 names, and this is it happening.
+ * This block was "the price table under launch-v1" and carried five claims
+ * about a table UI-22 deleted from the page. Four were about prices, and those
+ * are still held where the prices live: `src/modules/credits/retail.test.ts`
+ * pins every launch-v1 amount, including the three agent tiers, and iterates
+ * `RETAIL_OPERATION_KINDS` so an operation the policy sells cannot be missed.
+ * What is gone is a rendering, and a rendering that does not exist cannot be
+ * rendered wrong.
+ *
+ * The fifth claim was never about the table \u2014 it is about the plan rows, which
+ * are still on the page, so it stays here.
  */
-test.describe("the price table under launch-v1 (rule 69)", () => {
+test.describe("the plan rows under launch-v1 (rule 69)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/e2e/billing-launch-v1");
-  });
-
-  test("states every operation the policy sells, and none it does not", async ({ page }) => {
-    const text = await page.locator("body").innerText();
-
-    expect(text).toContain("Business Audit");
-    expect(text).toContain("35 Credits");
-    expect(text).toContain("Next moves");
-    expect(text).toContain("20 Credits");
-    expect(text).toContain("Deep Scan (additional)");
-    expect(text).toContain("25 Credits");
-  });
-
-  test("shows all three agent tiers rather than a range or a 'from'", async ({ page }) => {
-    // A customer budgeting needs the top of the scale. "From 150 Credits" hides
-    // exactly the number they would plan against, and the cheapest of three is
-    // a lie.
-    const text = await page.locator("body").innerText();
-
-    expect(text).toContain("Agent improvement");
-    expect(text).toContain("150 Credits");
-    expect(text).toContain("200 Credits");
-    expect(text).toContain("350 Credits");
-  });
-
-  test("keeps Product Understanding free rather than at 0 Credits", async ({ page }) => {
-    const row = page.getByText("Understanding your product").locator("xpath=ancestor::li[1]");
-    await expect(row).toContainText("Free");
-    await expect(row).not.toContainText("0 Credits");
-  });
-
-  test("qualifies the prices that are not measured, and only those", async ({ page }) => {
-    const text = await page.locator("body").innerText();
-
-    // The footnote is present here because rows on this page need it.
-    expect(text).toContain("Agent prices scale with how broad a change is");
-
-    // And a measured row does not carry the marker.
-    const audit = page
-      .getByRole("region", { name: "Credit prices" })
-      .getByRole("listitem")
-      .filter({ hasText: "Business Audit" });
-    await expect(audit).not.toContainText("*");
   });
 
   test("says what a plan buys, in work rather than in Credits", async ({ page }) => {
@@ -550,7 +539,7 @@ test.describe("where the Credits went", () => {
     await expect(spend).toContainText(/35 Credits/);
 
     // The scope of the number is stated rather than left to be assumed.
-    await expect(page.getByText(/across the activity shown below/i)).toBeVisible();
+    await expect(page.getByText(/across the activity below/i)).toBeVisible();
   });
 
   test("names the product on the movement that belongs to one", async ({ page }) => {
@@ -566,13 +555,3 @@ test.describe("where the Credits went", () => {
  * be returned by the project-scoped read, which filters on exactly the column
  * they have nothing in. They were recorded and shown nowhere.
  */
-test.describe("the account's own record", () => {
-  test("shows the events that belong to no product", async ({ page }) => {
-    await open(page, "billing-free");
-
-    const section = page.getByRole("region", { name: /your account/i });
-    await expect(section).toBeVisible();
-    await expect(section).toContainText(/credits added/i);
-    await expect(section).toContainText(/github installation connected/i);
-  });
-});
