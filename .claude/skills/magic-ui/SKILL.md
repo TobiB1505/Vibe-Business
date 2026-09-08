@@ -37,8 +37,20 @@ Magic UI is where a product accumulates unrelated effects fastest, because every
 component looks good in isolation. `DESIGN.md`: spending a signature technique on
 every card leaves no emphasis to spend.
 
-Practical bar: **one Magic UI effect per surface**, and only on a surface with a
-signature argument. Ordinary panels, tables, forms and settings get none.
+Practical bar: **one Magic UI effect per surface.** On a signature surface that
+is a straightforward yes. Anywhere else the five questions in
+[ui-design-system](../ui-design-system/SKILL.md) decide it, one treatment at a
+time.
+
+That bar used to end *"ordinary panels, tables, forms and settings get none"*,
+which refused by category — the thing `DESIGN.md` retired — and swept up work
+that is not an effect at all, such as a considered hover state on a table row.
+What survives the change is the reason the bar exists: a product that spends a
+signature technique everywhere has no emphasis left to spend.
+
+The skill's own description still says these are never the default interface
+language, and that stays. It is not a category ban; it is the same contrast
+argument `DESIGN.md` explicitly keeps.
 
 ## Porting
 

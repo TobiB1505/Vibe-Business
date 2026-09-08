@@ -1,22 +1,46 @@
-import { FindingCard } from "@/components/system/finding-card";
 import { projectSectionHref, preparedChangeHref } from "@/components/layout/project-shell";
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaHomeEntry, NovaHomeSection } from "@/modules/nova/home-view";
 import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-context";
 
-import { novaPresenceState } from "@/components/system/status-vocabulary";
-import type { NovaPresenceState } from "@/components/nova/nova-presence";
+import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 
-import { AttentionStack } from "./attention-stack";
+import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
+import { formatElapsedShort } from "@/lib/utils/format-datetime";
+import { resolveFounderInputAction } from "../founder-input-action";
+
 import { NovaRise } from "./nova-rise";
-import { FocusCard } from "./focus-card";
-import { HealthScore, HealthScoreAbsent } from "./health-score";
+import { NovaFocusThread } from "./nova-focus-thread";
+import { NovaRail } from "./nova-rail";
+import { ActionBlock } from "@/components/system/action-block";
+import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
+import { NovaClock } from "@/components/nova/nova-clock";
+import { NovaHeaderLive } from "./nova-header-live";
+/*
+ * Through the barrel, by the kind the registry names.
+ *
+ * These used to be mounted a level lower — `ChangeGates` with `chrome={false}`
+ * written out here, `FounderInputCard` with its presentation and context
+ * written out here — while `blocks/` held wrappers that made the same
+ * decisions and nothing imported them. Two answers to "what does a founder see
+ * for this kind", one of them in a directory whose purpose is to hold the
+ * other. The lab drew the wrappers; production drew its own copy.
+ */
+import {
+  AskBlock,
+  AuditBlock,
+  MoveBlock,
+  ProgressBlock,
+  ReviewBlock,
+  ScanBlock,
+  WorkspaceAskBlock,
+} from "@/components/nova/blocks";
+import { NovaAgentLive } from "./nova-agent-live";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
-import { ProductIdentity } from "./product-identity";
-import { WorkingStrip } from "./working-strip";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
+import type { ReactNode } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
@@ -53,6 +77,7 @@ export async function NovaHome({
     projectId: project.id,
     userId,
     projectName: project.name,
+    repositoryFullName: project.repository?.fullName ?? null,
   });
 
   const href = {
@@ -69,110 +94,85 @@ export async function NovaHome({
     "my-product": href.product,
   };
 
-  /**
-   * Where a row in the stack goes.
-   *
-   * The subject, when the candidate names one, so a founder lands on the thing
-   * rather than on the page that lists things. Falling back to the section
-   * keeps every row a real destination.
-   */
-  function entryHref(entry: NovaHomeEntry): string {
-    const candidate = entry.candidate;
-    if ("preparedChangeId" in candidate) {
-      return preparedChangeHref(
-        agentChangeHref(href.agent, candidate.preparedChangeId),
-        candidate.preparedChangeId,
-      );
-    }
-    if ("move" in candidate) return planMoveHref(href.plan, candidate.move.id);
-    if (entry.control.kind === "elsewhere") return sectionHref[entry.control.section];
-    if (entry.kind === "audit_outdated" || entry.kind === "audit_failed") return href.health;
-    if (entry.kind === "scan_failed" || entry.kind === "repository_read_outdated") {
-      return href.product;
-    }
-    return href.agent;
-  }
-
   /*
-   * Which of four things Nova is doing, from what the domain observed. The
-   * mark on the Focus Card and the mark on the working strip are the same
-   * instrument in the same state, because they are reading the same facts —
-   * and neither is a prop a caller picked.
+   * Nova's mark, derived rather than chosen. The tier the ranking produced and
+   * the phase the operations view read — a caller passing `working` by hand
+   * would be asserting activity the product has not observed.
    */
   const presence = novaPresenceState({
     tier: data.view.primary.tier,
     phase: data.view.working?.phase ?? "idle",
   });
 
+  /* A repository, or none. The header says which, and says it as a fact about
+     this project rather than about Vibe. */
+  const connected = project.repository !== null;
+
   return (
-    <div className="flex flex-col gap-8">
-      <NovaRise>
-        <ProductIdentity
-          name={data.identity.name}
-          logoUrl={data.identity.logoUrl}
-          category={data.identity.category}
-          understood={data.identity.understood}
-          productHref={href.product}
-        />
-      </NovaRise>
+    <div className="flex flex-col gap-6">
+      {/*
+        The status row, and the only piece of chrome on this page.
+
+        Deliberately *not* wrapped in `NovaRise`. It is `sticky top-0`, and a
+        sticky element can only stick within its own containing block — a
+        wrapper that hugs the header is a wrapper with no room to stick in, so
+        the header scrolled away with the thread instead of staying above it.
+        An entrance is not worth a status row that leaves.
+      */}
+      <NovaHeaderLive
+        projectId={project.id}
+        working={data.view.working}
+        /*
+         * What the line says when nothing is running. The moment's own word,
+         * from the same table the bubble below it reads, so the header cannot
+         * describe a moment differently from the sentence under it.
+         */
+        resting={statusForCandidate(data.view.primary.kind)}
+        tier={data.view.primary.tier}
+        seed={project.id}
+        subject={data.identity.name}
+        connected={connected}
+        now={<NovaClock />}
+      />
 
       {/*
-        The primary settles first and the rest follows: the ranking drawn in
-        time. Every delay below is the position `deriveNovaFocus` decided.
+        Two halves: the work on the left, the conversation on the right.
+
+        On a phone the rail goes second. A founder who opens this on a phone
+        came for what Nova has to say, and putting the whole plan and the whole
+        log above it means scrolling past everything to reach the one thing
+        that speaks.
       */}
-      <NovaRise delay={0.06}>
-        <FocusSection
-          data={data}
-          projectId={project.id}
-          sectionHref={sectionHref}
-          presence={presence}
-          seed={project.id}
-        />
-      </NovaRise>
-
-      <NovaRise delay={0.18}>
-        <WorkingStrip working={data.view.working} presence={presence} seed={project.id} />
-      </NovaRise>
-
-      <NovaRise delay={0.26}>
-        <AttentionStack entries={data.view.secondary} hrefFor={entryHref} />
-      </NovaRise>
-
-      {data.health ? (
-        /* `HealthScore` is itself a labelled region; wrapping it in a second
-           one would put two landmarks with the same name around one panel. */
-        <NovaRise delay={0.34} className="flex flex-col gap-4">
-          <HealthScore
-            score={data.health.score}
-            stateLabel={data.health.stateLabel}
-            scoredLenses={data.health.scoredLenses}
-            eligibleLenses={data.health.eligibleLenses}
-            insufficientCoverageReason={data.health.insufficientCoverageReason}
-            healthHref={href.health}
+      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-start">
+        <NovaRise className="max-lg:order-2" delay={0.03}>
+          <NovaRail
+            presence={presence}
+            seed={project.id}
+            working={data.view.working}
+            checklist={data.checklist}
+            activity={data.activity}
           />
-          {/*
-            The audit's own first blocker, with the evidence behind it. This is
-            the one place on Home where Vibe states a judgment, so it is the one
-            place the trust ladder applies: the conclusion, why it matters, and
-            a way into the citations that support it.
-          */}
-          {data.health.priority && (
-            <FindingCard
-              variant="priority"
-              rank={1}
-              title={data.health.priority.headline}
-              explanation={data.health.priority.explanation}
-              whyItMatters={data.health.priority.whyItMatters}
-              severity={data.health.priority.severity}
-              citations={data.health.priority.citations}
-            />
-          )}
         </NovaRise>
-      ) : (
-        <NovaRise delay={0.34}>
-          <HealthScoreAbsent healthHref={href.health} />
+
+        {/*
+          The thread, and nothing beside it.
+
+          Everything that used to sit in this column was a second reading of
+          something already said: a product identity card under a header
+          carrying the product's name, a working strip under Nova saying what
+          she was doing, a stack of secondary moments under the one moment the
+          ranking chose, and a business score that has its own rail item. A
+          conversation with four panels stapled under it is not a conversation.
+        */}
+        <NovaRise className="max-lg:order-1" delay={0.1}>
+          <FocusSection
+            data={data}
+            projectId={project.id}
+            sectionHref={sectionHref}
+            running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
+          />
         </NovaRise>
-      )}
+      </div>
     </div>
   );
 }
@@ -181,35 +181,178 @@ export async function NovaHome({
  * The Focus Card and its one control.
  *
  * Split out because choosing the control is the only branching on this page,
- * and it is worth reading on its own: a bound action, a plain link, or — when
- * the decision needs arguments Home does not hold — a link to the surface that
- * does, wearing its own honest label rather than the catalog's verb.
+ * and it is worth reading on its own: a bound action, a plain link, the card
+ * that answers a question, or — when the decision needs arguments Home does
+ * not hold — a link to the surface that does, wearing its own honest label
+ * rather than the catalog's verb.
+ *
+ * ## The one that used to be a link and is not any more
+ *
+ * "Answer in the Agent" and "Answer in the plan" sent a founder out of Home to
+ * answer a question Home had just asked — and, for a runtime question, while
+ * the run that asked it sat paused. `FounderInputCard` takes the request and
+ * its resolution action as props, so it renders here, with the same options,
+ * the same recommendation and the same submit the owning surface shows.
+ *
+ * It is *inside* the Focus Card rather than beside it, unlike every other
+ * control on this page, and that is the difference between a control and an
+ * answer: a button is one press on a card that explains it, while a question
+ * is a thing to read and choose from. Splitting the question from its options
+ * would put the two halves of one decision in two boxes.
  */
 function FocusSection({
   data,
   projectId,
   sectionHref,
-  presence,
-  seed,
+  running,
 }: {
   data: NovaHomeData;
   projectId: string;
   sectionHref: Record<NovaHomeSection, string>;
-  presence: NovaPresenceState;
-  seed: string;
+  /** What is in flight, already resolved to a block. Built once, above. */
+  running?: { kind: BlockKind; node: ReactNode };
 }) {
   const entry = data.view.primary;
   const control = entry.control;
 
+  /*
+   * The other moments, as sentences. `buildNovaHomeView` has ranked and capped
+   * them since this route existed and nothing rendered them — so a founder
+   * with three things pending saw one. The thread says them in the quiet
+   * register with no controls, which is what makes them a second true thing
+   * rather than a second wall of buttons.
+   */
+  const asides = data.view.secondary.map((moment) => moment.message);
+
   if (control.kind === "none") {
-    return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry)}
+      />
+    );
+  }
+
+  if (control.kind === "answer") {
+    /*
+     * The ranking saw an open request; this reads it again to render it. If it
+     * has been answered in between — in the Agent, in the plan, in another tab
+     * — there is nothing to ask, and a form for a settled question would be
+     * worse than a card with none. The sentence above it still stands.
+     */
+    if (!data.question) {
+      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
+    }
+
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={
+          <AskBlock
+            projectId={projectId}
+            request={data.question}
+            /*
+             * Which flow this question came from. A runtime question has a
+             * paused run behind it and the card says so; a planner question
+             * does not. The candidate's kind is what knows, and it is the same
+             * distinction `focus.ts` used to raise two candidates instead of
+             * one.
+             */
+            context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
+            /*
+             * How long a run has been stopped waiting, which is the one thing
+             * this surface could not say. It costs no read — the request has
+             * been in hand since the ranking put it first — and it is computed
+             * on the server, because a relative time read on the client would
+             * disagree with the markup around it.
+             */
+            waitingSince={formatElapsedShort(data.question.createdAt, new Date())}
+            resolveAction={resolveFounderInputAction}
+          />
+        }
+      />
+    );
+  }
+
+  if (control.kind === "gate") {
+    /*
+     * The ranking saw a prepared change; this reads the card for it. If it has
+     * merged, been superseded or stopped being `prepared` in between, the
+     * sentence above still stands and there is nothing to decide — gates for a
+     * change that is not there would be worse than none.
+     */
+    if (!data.change) {
+      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
+    }
+
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={
+          <ReviewBlock
+            projectId={projectId}
+            change={data.change}
+            planHref={sectionHref["action-plan"]}
+            stage={control.stage}
+          />
+        }
+      />
+    );
+  }
+
+  if (control.kind === "choose") {
+    /*
+     * The ranking saw a repository with more than one application; this reads
+     * the list to render it. Empty means the question has been settled since —
+     * answered in the Agent, or the analysis re-read and resolved — and a
+     * choice with nothing to choose from would be worse than none.
+     */
+    if (data.workspaceCandidates.length === 0) {
+      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
+    }
+
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={
+          <WorkspaceAskBlock
+            candidates={data.workspaceCandidates}
+            /*
+             * The panel asks; the control answers. Splitting them is what lets
+             * the same question be posed on two surfaces without either of
+             * them restating the options — and it is why choosing here and
+             * choosing in the Agent cannot come to mean different things.
+             */
+            action={(candidate) => (
+              <AgentWorkspaceChoiceAction
+                projectId={projectId}
+                candidate={candidate}
+                chosen={false}
+              />
+            )}
+          />
+        }
+      />
+    );
   }
 
   if (control.kind === "elsewhere") {
     return (
-      <FocusCard entry={entry} presence={presence} seed={seed}>
-        <NovaLinkControl href={sectionHref[control.section]} label={control.label} />
-      </FocusCard>
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        controlLabel={control.label}
+        control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
+      />
     );
   }
 
@@ -233,16 +376,28 @@ function FocusSection({
             "/app/connect/github";
 
     return (
-      <FocusCard entry={entry} presence={presence} seed={seed}>
-        <NovaLinkControl href={target} label={control.option.label} />
-      </FocusCard>
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry)}
+        controlLabel={control.option.label}
+        control={<NovaLinkControl href={target} label={control.option.label} />}
+      />
     );
   }
 
   // A server action Home can supply arguments for. Anything else was routed to
   // `elsewhere` by the view model and never reaches here.
   if (!isDispatchableNovaAction(control.option.actionId)) {
-    return <FocusCard entry={entry} presence={presence} seed={seed} />;
+    return (
+      <NovaFocusThread
+        entry={entry}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry)}
+      />
+    );
   }
 
   const subject = control.option.subject;
@@ -254,24 +409,175 @@ function FocusSection({
         : null;
 
   return (
-    <FocusCard
+    <NovaFocusThread
       entry={entry}
-      presence={presence}
-      seed={seed}
-      operation={meta.price}
-      balance={data.balance}
-      consequence={control.option.confirmationNote}
+      running={running}
+      asides={asides}
+      block={blockFor(data, entry)}
+      controlLabel={control.option.label}
+      /*
+       * `ActionBlock` for the consequence, and no longer for the price.
+       *
+       * The rule it enforces is that a price is never behind the disclosure,
+       * and the Move satisfies it more strongly than a line above the button
+       * did: the cost is a child of the control, so the two cannot come apart.
+       * Passing `operation` here as well would print the same figure twice for
+       * one commitment.
+       */
       control={
-        <NovaServerActionControl
-          projectId={projectId}
-          actionId={control.option.actionId}
-          subjectId={subjectId}
-          label={control.option.label}
-          consequential={control.option.consequential}
-          requiresConfirmation={control.option.requiresConfirmation}
-          confirmationNote={control.option.confirmationNote}
+        <ActionBlock
+          consequence={control.option.confirmationNote}
+          control={
+            <NovaServerActionControl
+              projectId={projectId}
+              actionId={control.option.actionId}
+              subjectId={subjectId}
+              label={control.option.label}
+              consequential={control.option.consequential}
+              requiresConfirmation={control.option.requiresConfirmation}
+              confirmationNote={control.option.confirmationNote}
+              operation={meta.price}
+              balance={data.balance}
+            />
+          }
         />
       }
     />
   );
+}
+
+/**
+ * The block for the run in flight, when one is.
+ *
+ * ## Why this exists beside `blockFor`
+ *
+ * They answer different questions. `blockFor` draws the *moment* — the thing
+ * that needs deciding — and this draws what is *happening* while it waits. A
+ * project can be in both states at once, which is why the thread has two slots
+ * rather than one that switches.
+ *
+ * ## What it must not do
+ *
+ * Choose. `BLOCK_FOR_OPERATION` is total over every operation type, so a new
+ * one fails the build until somebody decides what a founder watches; this
+ * asks it and supplies the block the data is in hand for. Before, the thread
+ * asked nothing and drew the progress checklist alone — so twelve of the
+ * fifteen types ran behind a blank column, the Product Scan among them.
+ *
+ * ## The two kinds it answers `undefined` for, and why that is not a gap
+ *
+ * `review` and `audit` both name blocks that exist and both draw nothing here,
+ * because in each case the honest content is already on screen or does not
+ * exist yet.
+ *
+ * A **change** operation runs while the moment leading the thread is about
+ * that same change, so `blockFor` has already drawn its gates. A second copy
+ * under it would be the same panel twice, which is the duplication this
+ * surface keeps removing.
+ *
+ * A running **audit** has produced no reading. The only one in hand is the
+ * previous audit's, and putting last month's score under a live progress line
+ * is the same false-freshness the Product Scan block refuses when it passes a
+ * null presentation. When the audit is stale, `audit_outdated` is the moment
+ * and `blockFor` draws that reading with the framing that says so.
+ */
+function runningBlockFor(
+  data: NovaHomeData,
+  context: { projectId: string; canStart: boolean },
+): { kind: BlockKind; node: ReactNode } | undefined {
+  const working = data.view.working;
+  if (!working) return undefined;
+
+  const kind = BLOCK_FOR_OPERATION[working.type];
+
+  switch (kind) {
+    case "progress":
+      /*
+       * The sequence is `progressSequenceFor`'s, derived from the type by the
+       * same record that answered `kind` — the two agree by construction, and
+       * the check is here because a total record cannot prove that to the
+       * compiler.
+       */
+      return working.sequence
+        ? {
+            kind,
+            node: <ProgressBlock sequence={working.sequence} operation={working.operation} />,
+          }
+        : undefined;
+
+    case "scan":
+      return {
+        kind,
+        node: (
+          <ScanBlock
+            projectId={context.projectId}
+            operation={working.operation}
+            events={data.scanEvents}
+            /*
+             * A reading exists only once the run has written a profile, and
+             * this run has not finished. The component's own poll supplies it
+             * the moment it does.
+             */
+            presentation={null}
+            productName={data.identity.name}
+            /*
+             * Whether an earlier scan ever landed — which changes what the
+             * component says it is about to do, not whether it may. A project
+             * that has never been read says so.
+             */
+            hasProfile={data.identity.understood !== "not_read"}
+            canStart={context.canStart}
+          />
+        ),
+      };
+
+    case "agent":
+      return {
+        kind,
+        node: (
+          <NovaAgentLive
+            projectId={context.projectId}
+            operationId={working.operationId}
+            initialEvents={data.agentEvents}
+            /* The one stage the server can honestly supply. `novaWorkingEntry`
+               already resolved it through `OPERATION_STAGE_LABELS`, which is
+               the same table the poll reads. */
+            initialStage={working.stageLabel}
+            /*
+             * The operations view's own answer, never a guess from the status
+             * string. It is already false for a stalled run — a run presumed
+             * lost is not worth pressing the database about every 2.5 seconds.
+             */
+            shouldPoll={working.shouldPoll}
+          />
+        ),
+      };
+
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * The block for a moment, when the read behind it landed.
+ *
+ * `BLOCK_FOR_MOMENT` decides which kind; this supplies the one the data is in
+ * hand for. A kind whose subject was not read draws nothing — a frame around
+ * an absence is worse than no frame, and the sentence above it still stands.
+ *
+ * The two branches with their own control paths — a question's card, a
+ * change's gates, the workspace choice — are built where their arguments are,
+ * beside the control that answers them. These two are pure views.
+ */
+function blockFor(data: NovaHomeData, entry: NovaHomeEntry) {
+  switch (BLOCK_FOR_MOMENT[entry.kind]) {
+    case "audit":
+      return data.audit ? <AuditBlock view={data.audit} /> : undefined;
+    case "move":
+      return data.move ? (
+        <MoveBlock opportunity={data.move.opportunity} execution={data.move.execution} />
+      ) : undefined;
+    default:
+      return undefined;
+  }
 }

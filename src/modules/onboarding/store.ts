@@ -142,6 +142,31 @@ export async function markOnboardingMilestone(
  * timestamp. Returns whether this call was the one that wrote it, so a caller
  * can record the event once rather than once per press.
  */
+/**
+ * Whether Nova has introduced herself for this project, as one column.
+ *
+ * `getProjectOnboarding` also knows this, and reconciles eight other reads to
+ * say so — which is the right shape for the onboarding route and the wrong one
+ * for Home, where the answer decides a single entrance and is asked on every
+ * load of the product's most-visited page.
+ *
+ * A missing row reads as *introduced*. Not because it is true, but because
+ * nothing would record the answer: `markNovaIntroduced` updates a row, and an
+ * opening a founder cannot dismiss is worse than one they never saw.
+ */
+export async function hasNovaIntroduced(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("project_onboarding")
+    .select("nova_introduced_at")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error) throw error;
+  return data === null || data.nova_introduced_at !== null;
+}
+
 export async function markNovaIntroduced(
   supabase: SupabaseClient,
   params: { projectId: string },

@@ -1,0 +1,840 @@
+/*
+ * The three direction studies, as scoped token overrides (S0).
+ *
+ * ## Why this is one stylesheet and not three design systems
+ *
+ * Tailwind v4 emits every `@theme` token as a real custom property on `:root`,
+ * inside `@layer theme`, and every utility compiles to a `var()` reference
+ * resolved at use time. So redefining `--color-surface-3` under a scope
+ * selector re-points every `bg-surface-3` beneath it, in all 162 files that
+ * consume the vocabulary, without touching one of them.
+ *
+ * Two things make that hold rather than merely look plausible:
+ *
+ *   1. `globals.css` uses `@theme`, not `@theme inline`. The inline form bakes
+ *      values into the utilities at build time, which would make a runtime
+ *      override impossible. It also contains no `theme()` calls, which are the
+ *      other build-time escape.
+ *   2. This file is unlayered. Unlayered CSS beats anything in `@layer`
+ *      regardless of specificity, so `[data-vibe-study]` wins over `:root`
+ *      without a specificity fight and without `!important`.
+ *
+ * That is the whole architecture the redesign rests on, verified here at the
+ * smallest scale before S1 commits to it.
+ *
+ * ## Why the studies also carry tokens the product does not have
+ *
+ * Glass, atmosphere and choreography have no vocabulary in `globals.css` today
+ * because the product has never had them. `--glass-*`, `--atmos-*` and the
+ * easing set are proposals: if a study wins, they graduate into `@theme` with
+ * these names. Naming them here is how S1 inherits a decision rather than a
+ * screenshot.
+ */
+
+/* ══════════════════════════════════════════════════════════════════════
+   Study A — Depth & Glass
+   Mint unchanged. The ground stops being near-black, because a blur over
+   #030506 has nothing behind it to carry and reads as flat grey.
+   ══════════════════════════════════════════════════════════════════════ */
+[data-vibe-study="a"] {
+  --color-ground: #04080b;
+  --color-app: #081016;
+
+  --color-mint: #00e5a0;
+  --color-mint-deep: #00a97a;
+  --color-mint-dim: #12a37a;
+  --color-mint-ink: #04150f;
+  --color-mint-hover: #7cf0c8;
+  --color-mint-tint: rgb(0 229 160 / 0.14);
+  --color-mint-tint-soft: rgb(0 229 160 / 0.07);
+  --color-mint-line: rgb(0 229 160 / 0.3);
+
+  --color-amber: #f0be55;
+  --color-amber-deep: #a67c24;
+  --color-amber-tint: rgb(240 190 85 / 0.15);
+  --color-amber-tint-soft: rgb(240 190 85 / 0.07);
+  --color-amber-line: rgb(240 190 85 / 0.28);
+
+  --color-coral: #ff8a6b;
+  --color-coral-tint: rgb(255 138 107 / 0.15);
+  --color-coral-tint-soft: rgb(255 138 107 / 0.07);
+  --color-coral-line: rgb(255 138 107 / 0.3);
+
+  --color-fg: #f4f8fa;
+  --color-fg-body: #e4ecf1;
+  --color-fg-prose: #c2ced6;
+  --color-fg-secondary: #aab8c2;
+  --color-fg-muted: #9aa8b3;
+  --color-fg-meta: #8b99a4;
+  --color-fg-disabled: #5a6670;
+  --color-fg-faint: #3a444c;
+
+  /* Higher alpha than production: glass needs a fill to refract, and these
+     surfaces sit over a tinted field rather than over black. */
+  --color-surface-1: rgb(255 255 255 / 0.032);
+  --color-surface-2: rgb(255 255 255 / 0.046);
+  --color-surface-3: rgb(255 255 255 / 0.062);
+  --color-surface-4: rgb(255 255 255 / 0.078);
+  --color-surface-hover: rgb(255 255 255 / 0.1);
+  --color-field: rgb(255 255 255 / 0.05);
+  --color-well: rgb(2 6 10 / 0.42);
+
+  --color-line-1: rgb(255 255 255 / 0.08);
+  --color-line-2: rgb(255 255 255 / 0.1);
+  --color-line-3: rgb(255 255 255 / 0.12);
+  --color-line-4: rgb(255 255 255 / 0.15);
+  --color-line-strong: rgb(255 255 255 / 0.18);
+  --color-line-track: rgb(255 255 255 / 0.07);
+
+  --font-sans: var(--font-study-geist), ui-sans-serif, system-ui, sans-serif;
+
+  --text-hero: 3.25rem;
+  --text-hero--line-height: 1.02;
+  --text-hero--letter-spacing: -0.042em;
+  --text-display: 2.375rem;
+  --text-display--line-height: 1.06;
+  --text-display--letter-spacing: -0.04em;
+  --text-headline: 1.8125rem;
+  --text-headline--line-height: 1.12;
+  --text-headline--letter-spacing: -0.036em;
+  --text-title: 1.25rem;
+  --text-title--line-height: 1.28;
+  --text-title--letter-spacing: -0.024em;
+
+  --radius-nav: 12px;
+  --radius-well: 16px;
+  --radius-field: 14px;
+  --radius-panel: 18px;
+  --radius-card: 22px;
+
+  /* Atmosphere: two tinted fields and a cool wash. Without these the glass
+     below has nothing to be glass *of*. */
+  --atmos-1: rgb(0 229 160 / 0.28);
+  --atmos-2: rgb(64 140 255 / 0.26);
+  --atmos-3: rgb(0 200 255 / 0.14);
+  --atmos-grain: 0.055;
+
+  --glass-blur: 22px;
+  --glass-sat: 150%;
+  --glass-fill: rgb(255 255 255 / 0.045);
+  --glass-line: rgb(255 255 255 / 0.16);
+  --glass-sheen: rgb(255 255 255 / 0.14);
+
+  --shadow-panel: 0 32px 80px -40px rgb(0 0 0 / 0.9);
+  --shadow-card: 0 24px 60px -34px rgb(0 0 0 / 0.85);
+  --shadow-lift: 0 40px 90px -46px rgb(0 0 0 / 0.95);
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.65, 0, 0.35, 1);
+  --dur-entrance: 640ms;
+  --dur-press: 180ms;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Study B — Precision & Light
+   Signal blue. Brighter lines, tighter corners, opaque panels. Glass is
+   spent on chrome and overlays only, because backdrop-filter on stacked
+   dense content is what makes a product feel slow.
+   ══════════════════════════════════════════════════════════════════════ */
+[data-vibe-study="b"] {
+  --color-ground: #05070a;
+  --color-app: #090c11;
+
+  --color-mint: #5b9dff;
+  --color-mint-deep: #2f6ed6;
+  --color-mint-dim: #4a7fc4;
+  --color-mint-ink: #04101f;
+  --color-mint-hover: #9dc4ff;
+  --color-mint-tint: rgb(91 157 255 / 0.16);
+  --color-mint-tint-soft: rgb(91 157 255 / 0.08);
+  --color-mint-line: rgb(91 157 255 / 0.34);
+
+  --color-amber: #ecb44f;
+  --color-amber-deep: #9a7420;
+  --color-amber-tint: rgb(236 180 79 / 0.14);
+  --color-amber-tint-soft: rgb(236 180 79 / 0.06);
+  --color-amber-line: rgb(236 180 79 / 0.3);
+
+  --color-coral: #ff7a5c;
+  --color-coral-tint: rgb(255 122 92 / 0.14);
+  --color-coral-tint-soft: rgb(255 122 92 / 0.06);
+  --color-coral-line: rgb(255 122 92 / 0.32);
+
+  --color-fg: #f2f5f9;
+  --color-fg-body: #dfe5ed;
+  --color-fg-prose: #b9c3d0;
+  --color-fg-secondary: #a3aebd;
+  --color-fg-muted: #94a0b0;
+  --color-fg-meta: #8794a5;
+  --color-fg-disabled: #56616f;
+  --color-fg-faint: #363f4a;
+
+  --color-surface-1: rgb(255 255 255 / 0.024);
+  --color-surface-2: rgb(255 255 255 / 0.034);
+  --color-surface-3: rgb(255 255 255 / 0.048);
+  --color-surface-4: rgb(255 255 255 / 0.062);
+  --color-surface-hover: rgb(255 255 255 / 0.085);
+  --color-field: rgb(255 255 255 / 0.04);
+  --color-well: rgb(0 0 0 / 0.36);
+
+  /* Edge-driven: the lines carry the structure, so they run brighter than
+     production's and the fills run lower. */
+  --color-line-1: rgb(255 255 255 / 0.1);
+  --color-line-2: rgb(255 255 255 / 0.13);
+  --color-line-3: rgb(255 255 255 / 0.16);
+  --color-line-4: rgb(255 255 255 / 0.2);
+  --color-line-strong: rgb(255 255 255 / 0.24);
+  --color-line-track: rgb(255 255 255 / 0.08);
+
+  --font-sans: var(--font-study-switzer), ui-sans-serif, system-ui, sans-serif;
+
+  --text-hero: 2.875rem;
+  --text-hero--line-height: 1.06;
+  --text-hero--letter-spacing: -0.032em;
+  --text-display: 2.125rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.03em;
+  --text-headline: 1.6875rem;
+  --text-headline--line-height: 1.16;
+  --text-headline--letter-spacing: -0.026em;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.32;
+  --text-title--letter-spacing: -0.016em;
+
+  --radius-nav: 8px;
+  --radius-well: 10px;
+  --radius-field: 9px;
+  --radius-panel: 11px;
+  --radius-card: 12px;
+
+  --atmos-1: rgb(91 157 255 / 0.17);
+  --atmos-2: rgb(120 190 255 / 0.12);
+  --atmos-3: rgb(91 157 255 / 0.06);
+  --atmos-grain: 0.035;
+
+  --glass-blur: 14px;
+  --glass-sat: 130%;
+  --glass-fill: rgb(255 255 255 / 0.04);
+  --glass-line: rgb(255 255 255 / 0.16);
+  --glass-sheen: rgb(255 255 255 / 0.07);
+
+  --shadow-panel: 0 20px 48px -30px rgb(0 0 0 / 0.85);
+  --shadow-card: 0 14px 36px -26px rgb(0 0 0 / 0.8);
+  --shadow-lift: 0 26px 60px -34px rgb(0 0 0 / 0.9);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-inout: cubic-bezier(0.7, 0, 0.3, 1);
+  --dur-entrance: 480ms;
+  --dur-press: 130ms;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Chosen — Precision & Light, in Mint
+   Study B's material exactly, with mint back as the accent and Geist as
+   the face. Written out in full rather than layered on top of B's scope,
+   because a study that inherits from another study stops being a thing
+   anybody can read, and S1 lifts these values into `@theme` verbatim.
+   ══════════════════════════════════════════════════════════════════════ */
+[data-vibe-study="chosen"] {
+  /* B's ground, one step warmer. Signal blue wanted a cold field behind
+     it; mint on the same cold field reads slightly sickly, and neutralising
+     the blue is enough to fix it without turning the product green. */
+  --color-ground: #06080a;
+  --color-app: #0a0c0f;
+
+  --color-mint: #00e5a0;
+  --color-mint-deep: #00a97a;
+  --color-mint-dim: #12a37a;
+  --color-mint-ink: #04150f;
+  --color-mint-hover: #7cf0c8;
+  --color-mint-tint: rgb(0 229 160 / 0.15);
+  --color-mint-tint-soft: rgb(0 229 160 / 0.075);
+  --color-mint-line: rgb(0 229 160 / 0.32);
+
+  --color-amber: #ecb44f;
+  --color-amber-deep: #9a7420;
+  --color-amber-tint: rgb(236 180 79 / 0.14);
+  --color-amber-tint-soft: rgb(236 180 79 / 0.06);
+  --color-amber-line: rgb(236 180 79 / 0.3);
+
+  --color-coral: #ff7a5c;
+  --color-coral-tint: rgb(255 122 92 / 0.14);
+  --color-coral-tint-soft: rgb(255 122 92 / 0.06);
+  --color-coral-line: rgb(255 122 92 / 0.32);
+
+  /* Near-neutral, very slightly warm. B's ramp was cooled to sit with blue. */
+  --color-fg: #f4f6f6;
+  --color-fg-body: #e2e7e6;
+  --color-fg-prose: #bcc4c3;
+  --color-fg-secondary: #a6afae;
+  --color-fg-muted: #97a1a0;
+  --color-fg-meta: #8a9594;
+  --color-fg-disabled: #58615f;
+  --color-fg-faint: #383f3e;
+
+  --color-surface-1: rgb(255 255 255 / 0.024);
+  --color-surface-2: rgb(255 255 255 / 0.034);
+  --color-surface-3: rgb(255 255 255 / 0.048);
+  --color-surface-4: rgb(255 255 255 / 0.062);
+  --color-surface-hover: rgb(255 255 255 / 0.085);
+  --color-field: rgb(255 255 255 / 0.04);
+  --color-well: rgb(0 0 0 / 0.36);
+
+  /* B's brightness. The lines are what "precision" is made of. */
+  --color-line-1: rgb(255 255 255 / 0.1);
+  --color-line-2: rgb(255 255 255 / 0.13);
+  --color-line-3: rgb(255 255 255 / 0.16);
+  --color-line-4: rgb(255 255 255 / 0.2);
+  --color-line-strong: rgb(255 255 255 / 0.24);
+  --color-line-track: rgb(255 255 255 / 0.08);
+
+  --font-sans: var(--font-study-geist), ui-sans-serif, system-ui, sans-serif;
+
+  /* The identifier face, mirroring `theme-v2.css` exactly. The lab scopes on
+     `data-vibe-study` and the product layer on `data-vibe`, so this value has
+     to be repeated rather than inherited — and it was caught by a render that
+     showed JetBrains where DM Mono was supposed to be. A study that quietly
+     disagrees with the palette it claims to preview is worse than none. */
+  --font-mono:
+    var(--font-dm-mono), var(--font-dm-mono-latin-ext), var(--font-jetbrains-mono-cyrillic),
+    var(--font-jetbrains-mono-cyrillic-ext), var(--font-jetbrains-mono-greek),
+    var(--font-jetbrains-mono-vietnamese), ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* B's scale, not A's. The tighter display sizes are part of what makes
+     the direction read as precise, and they are the half being kept. Geist
+     carries them at a slightly larger title size than Switzer needed. */
+  --text-hero: 2.875rem;
+  --text-hero--line-height: 1.06;
+  --text-hero--letter-spacing: -0.034em;
+  --text-display: 2.125rem;
+  --text-display--line-height: 1.1;
+  --text-display--letter-spacing: -0.032em;
+  --text-headline: 1.6875rem;
+  --text-headline--line-height: 1.16;
+  --text-headline--letter-spacing: -0.03em;
+  --text-title: 1.1875rem;
+  --text-title--line-height: 1.32;
+  --text-title--letter-spacing: -0.02em;
+
+  --radius-nav: 8px;
+  --radius-well: 10px;
+  --radius-field: 9px;
+  --radius-panel: 11px;
+  --radius-card: 12px;
+
+  /* Mint leads the field, one cool counterweight behind it so the accent has
+     something to be warm against. Restrained, because this direction spends
+     its contrast on edges rather than on light. */
+  --atmos-1: rgb(0 229 160 / 0.15);
+  --atmos-2: rgb(70 130 200 / 0.1);
+  --atmos-3: rgb(0 229 160 / 0.045);
+  --atmos-grain: 0.035;
+
+  --glass-blur: 14px;
+  --glass-sat: 130%;
+  --glass-fill: rgb(255 255 255 / 0.04);
+  --glass-line: rgb(255 255 255 / 0.16);
+  --glass-sheen: rgb(255 255 255 / 0.07);
+
+  --shadow-panel: 0 20px 48px -30px rgb(0 0 0 / 0.85);
+  --shadow-card: 0 14px 36px -26px rgb(0 0 0 / 0.8);
+  --shadow-lift: 0 26px 60px -34px rgb(0 0 0 / 0.9);
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-inout: cubic-bezier(0.7, 0, 0.3, 1);
+  --dur-entrance: 480ms;
+  --dur-press: 130ms;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Study C — Editorial & Motion
+   Orchid. Warm-dark ground, hairline rules, almost no fill. The type is
+   the material, so the surfaces recede further than either other study.
+   ══════════════════════════════════════════════════════════════════════ */
+[data-vibe-study="c"] {
+  --color-ground: #0a0908;
+  --color-app: #110f0d;
+
+  --color-mint: #a98bff;
+  --color-mint-deep: #7b5ce0;
+  --color-mint-dim: #8f75d6;
+  --color-mint-ink: #140b2b;
+  --color-mint-hover: #c9b4ff;
+  --color-mint-tint: rgb(169 139 255 / 0.16);
+  --color-mint-tint-soft: rgb(169 139 255 / 0.08);
+  --color-mint-line: rgb(169 139 255 / 0.32);
+
+  --color-amber: #e8b96a;
+  --color-amber-deep: #9c7a2c;
+  --color-amber-tint: rgb(232 185 106 / 0.14);
+  --color-amber-tint-soft: rgb(232 185 106 / 0.06);
+  --color-amber-line: rgb(232 185 106 / 0.28);
+
+  --color-coral: #ff8a72;
+  --color-coral-tint: rgb(255 138 114 / 0.14);
+  --color-coral-tint-soft: rgb(255 138 114 / 0.06);
+  --color-coral-line: rgb(255 138 114 / 0.3);
+
+  /* A warm ramp, so text reads as ink on paper rather than as pixels. */
+  --color-fg: #faf6f0;
+  --color-fg-body: #ece5db;
+  --color-fg-prose: #cdc4b8;
+  --color-fg-secondary: #b6ada1;
+  --color-fg-muted: #a69d92;
+  --color-fg-meta: #978e83;
+  --color-fg-disabled: #635b52;
+  --color-fg-faint: #3d3832;
+
+  --color-surface-1: rgb(255 250 240 / 0.02);
+  --color-surface-2: rgb(255 250 240 / 0.028);
+  --color-surface-3: rgb(255 250 240 / 0.04);
+  --color-surface-4: rgb(255 250 240 / 0.052);
+  --color-surface-hover: rgb(255 250 240 / 0.07);
+  --color-field: rgb(255 250 240 / 0.035);
+  --color-well: rgb(0 0 0 / 0.3);
+
+  --color-line-1: rgb(255 250 240 / 0.07);
+  --color-line-2: rgb(255 250 240 / 0.09);
+  --color-line-3: rgb(255 250 240 / 0.11);
+  --color-line-4: rgb(255 250 240 / 0.14);
+  --color-line-strong: rgb(255 250 240 / 0.17);
+  --color-line-track: rgb(255 250 240 / 0.06);
+
+  --font-sans: var(--font-study-instrument-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-study-instrument-serif), ui-serif, Georgia, serif;
+
+  --text-hero: 3.75rem;
+  --text-hero--line-height: 1;
+  --text-hero--letter-spacing: -0.02em;
+  --text-display: 2.75rem;
+  --text-display--line-height: 1.06;
+  --text-display--letter-spacing: -0.016em;
+  --text-headline: 2rem;
+  --text-headline--line-height: 1.14;
+  --text-headline--letter-spacing: -0.012em;
+  --text-title: 1.1875rem;
+  --text-title--line-height: 1.34;
+  --text-title--letter-spacing: -0.008em;
+  --text-lead: 1rem;
+  --text-lead--line-height: 1.72;
+
+  --radius-nav: 6px;
+  --radius-well: 8px;
+  --radius-field: 7px;
+  --radius-panel: 8px;
+  --radius-card: 10px;
+
+  --atmos-1: rgb(169 139 255 / 0.16);
+  --atmos-2: rgb(255 176 120 / 0.11);
+  --atmos-3: rgb(169 139 255 / 0.05);
+  --atmos-grain: 0.05;
+
+  --glass-blur: 10px;
+  --glass-sat: 115%;
+  --glass-fill: rgb(255 250 240 / 0.03);
+  --glass-line: rgb(255 250 240 / 0.1);
+  --glass-sheen: rgb(255 250 240 / 0.05);
+
+  --shadow-panel: 0 18px 44px -32px rgb(0 0 0 / 0.7);
+  --shadow-card: 0 10px 30px -24px rgb(0 0 0 / 0.6);
+  --shadow-lift: 0 24px 56px -36px rgb(0 0 0 / 0.75);
+
+  --ease-out: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-inout: cubic-bezier(0.6, 0, 0.4, 1);
+  --dur-entrance: 780ms;
+  --dur-press: 200ms;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   Material — the classes the studies compose with.
+   These are study-local on purpose. If a direction wins, they graduate
+   into `src/components/ui/` as primitive internals, never as call-site
+   utilities sprayed across 162 files.
+   ══════════════════════════════════════════════════════════════════════ */
+
+.study-root {
+  position: relative;
+  min-height: 100dvh;
+  background: var(--color-app);
+  color: var(--color-fg-body);
+  font-family: var(--font-sans);
+  isolation: isolate;
+}
+
+/* The atmosphere. Fixed, behind everything, and never interactive. */
+.study-atmos {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /*
+    Five fields, three of them *under the reading column* rather than in the
+    corners. The first draft put every gradient at the edges, and the middle of
+    the page — where all the glass sits — had a flat backdrop. Blurring a flat
+    backdrop returns the same flat backdrop, which is why that version read as
+    translucent grey rather than as glass.
+
+    The tight 22rem field is the one that does the work: a pane only looks like
+    a pane where the light behind it *changes* across its width.
+  */
+  background:
+    radial-gradient(38rem 26rem at 26% 18%, var(--atmos-1), transparent 68%),
+    radial-gradient(30rem 22rem at 74% 42%, var(--atmos-2), transparent 66%),
+    radial-gradient(22rem 18rem at 46% 74%, var(--atmos-3), transparent 70%),
+    radial-gradient(64rem 46rem at 8% -10%, var(--atmos-1), transparent 60%),
+    radial-gradient(58rem 44rem at 96% 104%, var(--atmos-2), transparent 62%), var(--color-ground);
+}
+
+/* Grain, so the gradients do not band on a wide dark screen. An SVG mask
+   rather than an image: no request, no byte in the bundle. */
+.study-grain {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: var(--atmos-grain);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Glass. Deliberately not a default: chrome, overlays, the focus card and
+   signature moments only. `backdrop-filter` on stacked dense content is
+   what makes a product judder, and a study that ignored that would be
+   selling a direction the product cannot afford to ship. */
+.study-glass {
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-line);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+  box-shadow: var(--shadow-card);
+}
+
+/* The single specular edge that reads as "this is a pane, not a fill". */
+.study-glass-sheen {
+  position: relative;
+}
+.study-glass-sheen::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Opaque panel — study B's default, and every study's answer for dense data. */
+.study-panel {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-line-2);
+  box-shadow: var(--shadow-panel);
+}
+
+.study-measure {
+  max-width: 68ch;
+}
+
+/* ── Motion ────────────────────────────────────────────────────────────
+   Three obligations, structural rather than remembered:
+     · reduced motion  — the block at the end of this file
+     · hidden-tab pause — `study-breathe` is paused by a class the shell
+       toggles from `visibilitychange`; nothing else runs continuously
+     · reserved geometry — every entrance animates opacity and transform
+       only. No height, no layout property, so nothing below moves while
+       somebody is reading it.
+   ────────────────────────────────────────────────────────────────────── */
+
+@keyframes study-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.study-rise {
+  animation: study-rise var(--dur-entrance) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 70ms);
+}
+
+@keyframes study-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+.study-breathe {
+  animation: study-breathe 3.4s var(--ease-inout) infinite;
+}
+
+/* The shell sets this when the tab is hidden. A paused animation is not a
+   stopped one: it resumes where it left off, so nothing jumps on return. */
+.study-paused .study-breathe {
+  animation-play-state: paused;
+}
+
+/* Nova composing. Fixed period, unrelated to how long the run has taken —
+   a rhythm that accelerated with apparent progress would be a percentage
+   nobody measured. */
+.study-typing {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+.study-paused .study-typing {
+  animation-play-state: paused;
+}
+
+/* The dot beside "Connecting…", which is the one moment a connection state is
+   genuinely unknown rather than merely false. */
+.study-pulse {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+.study-paused .study-pulse {
+  animation-play-state: paused;
+}
+
+.study-press {
+  transition:
+    transform var(--dur-press) var(--ease-out),
+    background-color var(--dur-press) var(--ease-out),
+    border-color var(--dur-press) var(--ease-out),
+    box-shadow var(--dur-press) var(--ease-out);
+}
+.study-press:hover {
+  box-shadow: var(--shadow-lift);
+}
+.study-press:active {
+  transform: translate3d(0, 1px, 0) scale(0.994);
+}
+
+.study-root :focus-visible {
+  outline: 2px solid var(--color-mint);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-rise,
+  .study-breathe,
+  .study-typing,
+  .study-pulse,
+  .study-press {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* Three still dots rather than none: the bubble is what says she is
+     composing, and removing it would take information the motion only
+     decorated. */
+  .study-typing,
+  .study-pulse {
+    opacity: 1;
+  }
+  /* The settled state, immediately — never a hidden element. */
+  .study-rise {
+    opacity: 1;
+    transform: none;
+  }
+  .study-breathe {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ── The Move, three ways (element sheet) ─────────────────────────────────
+   Press belongs to the microinteraction tier: under 120ms, no overshoot, and
+   nothing that changes an element's position — a control that moved its
+   neighbours on press would be reflowing a page somebody is reading.
+
+   `.force-hover` applies each variant's hover state without a pointer, so a
+   still screenshot can compare three treatments on the half of themselves
+   that only appears under a cursor. */
+
+.move-line,
+.move-lit,
+.move-switch {
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) var(--ease-emphasis),
+    border-color var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+}
+
+/* A — the whole row settles, its fill lifts a step. */
+.move-line:hover,
+.force-hover .move-line {
+  background-color: var(--color-mint-tint);
+  border-color: var(--color-mint);
+}
+.move-line:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* B — the band is the control's only light. Resting it is a hairline at
+   partial width; on hover it reaches the full edge and full strength. */
+.move-lit-band {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-mint) 30%,
+    var(--color-mint) 70%,
+    transparent
+  );
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+  transform: scaleX(0.55);
+}
+.move-lit:hover .move-lit-band,
+.force-hover .move-lit-band {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.move-lit:hover,
+.force-hover .move-lit {
+  background-color: var(--color-surface-3);
+  border-color: var(--color-line-strong);
+}
+.move-lit:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* C — the verb half travels, the cost half holds. The division is the
+   mechanic, so only one side may move. */
+.move-switch-verb {
+  transition:
+    background-color var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+}
+.move-switch:hover .move-switch-verb,
+.force-hover .move-switch-verb {
+  background-color: var(--color-mint);
+  color: var(--color-mint-ink);
+}
+.move-switch:active .move-switch-verb {
+  transform: translate3d(0, 1px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-line,
+  .move-lit,
+  .move-switch,
+  .move-lit-band,
+  .move-switch-verb {
+    transition: none !important;
+    transform: none !important;
+  }
+  /* The band stays lit rather than vanishing: it is the control's edge, not
+     an animation, and removing it would take the shape away with the motion. */
+  .move-lit-band {
+    opacity: 1;
+  }
+}
+
+/* ── The Bubble (element sheet) ───────────────────────────────────────────
+   The container the wireframe is made of, and the reason the Line failed.
+   There the register was a rule drawn *inside* the sentence — a document
+   grammar, on a surface that is not a document. Here the register belongs to
+   the bubble, so a sentence is just a sentence again.
+
+   A register is two axes, and they come from `statusForCandidate` rather than
+   from a choice made here:
+
+     · TONE   — what kind of thing this is. Coral wrong, amber your turn,
+                mint available, neutral a plain fact.
+     · OPEN   — whether a loop is still hanging. Drawn as a dashed contour.
+
+   That split is the fix for a real defect. A stalled run used to be drawn
+   amber where a failed one was coral, which reads as *less bad* when the
+   domain was saying *less certain*. Now it is coral **and** dashed: something
+   is wrong, and it is not over.
+
+   Three of the four appearances survive with hue removed — hairline solid,
+   hairline dashed, double solid, double dashed — which is the test
+   `study-bubble` runs. Within "nothing is wrong", hue and the word separate
+   available from waiting-on-you, and the sheet says so rather than claiming
+   an axis it does not have.
+
+   Each register is a set of custom properties rather than utility classes,
+   because the tail is a separate element that has to agree with the body
+   exactly. One source per register is what makes disagreement impossible
+   instead of merely unlikely.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/*
+   What she is doing, in the shape ChatGPT taught everybody: a line of text
+   with light travelling across it.
+
+   Admissible under all three of `DESIGN.md`'s properties for decorative
+   motion. It renders only while an operation the product recorded is running.
+   The sentence is fully legible with it off — it is `OPERATION_STAGE_LABELS`,
+   the stage the executor actually wrote, never a model's account of its own
+   thinking (rule 43). And the sweep carries no timing: a fixed period,
+   unrelated to how long the run has taken or has left.
+*/
+@keyframes study-thinking {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.study-thinking {
+  background: linear-gradient(
+      90deg,
+      var(--color-fg-meta) 0%,
+      var(--color-fg-meta) 30%,
+      var(--color-fg) 45%,
+      var(--color-fg-meta) 60%,
+      var(--color-fg-meta) 100%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: study-thinking 3.2s linear infinite;
+}
+
+.study-paused .study-thinking {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The gradient has to go with the animation, not just the animation: text
+     painted through a clipped background with `color: transparent` is
+     invisible the moment nothing moves. */
+  .study-thinking {
+    animation: none !important;
+    background: none;
+    color: var(--color-fg-body);
+  }
+}
+
+/*
+   The lines a render block forgets.
+
+   Only the fading stack is hidden under reduced motion, never the current
+   stage: what a founder needs is the sentence, and the sentence stays. Lines
+   that appeared and then blinked out with no transition would be a flicker
+   carrying no information, which is worse than not drawing them.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .study-dissolve {
+    display: none;
+  }
+}

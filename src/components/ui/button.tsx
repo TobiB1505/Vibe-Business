@@ -30,6 +30,10 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 };
 
 const BASE_CLASSES =
+  // Inert in v1; `theme-v2.css` gives it the press. Emitted here rather than
+  // on `<Button>` so that `<Link className={buttonClasses()}>` call sites —
+  // which have no component to hang an attribute on — carry it too.
+  "vibe-control " +
   "inline-flex items-center justify-center gap-2 rounded-nav " +
   // Not `transition-colors`: that list includes `outline-color`, which would
   // fade the focus ring in over 150ms, so the indicator arrives after the
@@ -91,6 +95,7 @@ const TEXT_ACTION_TONES: Record<TextActionTone, string> = {
 };
 
 const TEXT_ACTION_BASE =
+  "vibe-control-text " +
   "rounded-sm underline underline-offset-4 " +
   // The same shared utility as the pill, for the reason given there.
   "transition-interactive " +

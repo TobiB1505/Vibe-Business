@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatClockTime,
   formatDate,
+  formatElapsedShort,
   formatNumber,
   formatTime,
   formatTimestamp,
@@ -106,5 +107,28 @@ describe("formatNumber", () => {
   it("does not invent a rendering for a non-finite value", () => {
     expect(formatNumber(Number.NaN)).toBe("NaN");
     expect(formatNumber(Number.POSITIVE_INFINITY)).toBe("Infinity");
+  });
+});
+
+describe("formatElapsedShort", () => {
+  const now = new Date("2026-09-07T12:00:00.000Z");
+
+  it("says minutes under an hour, hours under a day, days beyond", () => {
+    expect(formatElapsedShort("2026-09-07T11:28:00.000Z", now)).toBe("32m");
+    expect(formatElapsedShort("2026-09-07T10:00:00.000Z", now)).toBe("2h");
+    expect(formatElapsedShort("2026-09-04T12:00:00.000Z", now)).toBe("3d");
+  });
+
+  /*
+   * A clock that is behind the row it is describing would otherwise print a
+   * negative minute count. It happens: a server writing a row and a server
+   * rendering it are not always the same machine.
+   */
+  it("never counts backwards", () => {
+    expect(formatElapsedShort("2026-09-07T12:00:30.000Z", now)).toBe("0m");
+  });
+
+  it("says nothing rather than NaN for a timestamp it cannot read", () => {
+    expect(formatElapsedShort("not a date", now)).toBe("");
   });
 });

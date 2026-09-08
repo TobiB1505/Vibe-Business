@@ -5,6 +5,15 @@ import { cn } from "@/lib/utils/cn";
 import type { NovaWorkingEntry } from "@/modules/nova/home-view";
 
 /**
+ * Kept as the picture of what the thread replaced.
+ *
+ * Production does not render this. The panel that said which stage a run was at. The line under Nova's name says it now, where a chat puts it.
+ *
+ * It lives in the lab so the studies that compare before and after can still
+ * draw it, and so the production folder holds only what production renders.
+ */
+
+/**
  * What Vibe is doing right now (UI Sourcing Spec C3).
  *
  * ## One line, and three states it must keep apart
