@@ -217,3 +217,56 @@ export type E2eDeepScanScenario = keyof typeof E2E_DEEP_SCAN_SCENARIOS;
 export function isE2eDeepScanScenario(value: string): value is E2eDeepScanScenario {
   return Object.hasOwn(E2E_DEEP_SCAN_SCENARIOS, value);
 }
+
+/**
+ * The same view models, rendered as My Product's Deep Scan spotlight.
+ *
+ * Separate scenarios rather than a second rendering of the panel ones,
+ * because the spotlight answers a different question: not "what did the scan
+ * find" but "should a founder who has never run one press this". The two
+ * states that matter most here are the ones a unit test cannot see — a free
+ * included scan that must show no price, and a finished scan that must not
+ * offer a priced control from a page that has not authorised one.
+ *
+ * They are `DeepScanViewModel`s and pass through `buildDeepScanSpotlight` in
+ * the route, so the fixture cannot skip the derivation being tested.
+ */
+export const E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS = {
+  /** Never run, included scan intact, and evidence says the product is behind a login. */
+  "deep-scan-spotlight-offered": {
+    ...BASE,
+    state: "recommended",
+    includedScanAvailable: true,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    showRecommendation: true,
+    recommendationReason: "Vibe found a sign-in surface on your website.",
+    nextScan: { kind: "included" },
+  } satisfies DeepScanViewModel,
+
+  /** A finished scan, summarised. The state My Product used to render as one grey line. */
+  "deep-scan-spotlight-read": E2E_DEEP_SCAN_SCENARIOS["deep-scan-completed-with-warnings"],
+
+  /** Nothing to sign in to. A card with no action must still carry a reason. */
+  "deep-scan-spotlight-unavailable": {
+    ...BASE,
+    state: "unavailable",
+    includedScanAvailable: true,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: "production_origin_missing",
+    canStart: false,
+    unavailableReason: "production_url_missing",
+    nextScan: { kind: "unavailable", reason: "production_url_missing" },
+  } satisfies DeepScanViewModel,
+} as const satisfies Record<string, DeepScanViewModel>;
+
+export type E2eDeepScanSpotlightScenario = keyof typeof E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS;
+
+export function isE2eDeepScanSpotlightScenario(
+  value: string,
+): value is E2eDeepScanSpotlightScenario {
+  return Object.hasOwn(E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS, value);
+}
