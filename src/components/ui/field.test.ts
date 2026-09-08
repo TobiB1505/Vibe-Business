@@ -147,15 +147,78 @@ describe("a refusal is announced", () => {
   const code = (source: string) =>
     source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
 
-  it("gives the error an assertive live region", () => {
+  it("gives the error an assertive live region, in both layouts", () => {
+    // Two branches render one, and a test reading `indexOf` would only ever
+    // check the first — which is how a second layout ships announcing nothing.
     const source = code(readFileSync("src/components/ui/field.tsx", "utf8"));
-    const error = source.slice(source.indexOf("{error && ("));
-    expect(error.slice(0, error.indexOf("</p>"))).toContain('role="alert"');
+    const errors = [...source.matchAll(/\{error && \(/g)].map((match) =>
+      source.slice(match.index, source.indexOf("</p>", match.index)),
+    );
+    expect(errors.length, "Field renders no error branch").toBeGreaterThan(0);
+    for (const error of errors) expect(error).toContain('role="alert"');
   });
 
   it("leaves the hint alone, which is not news", () => {
     const source = code(readFileSync("src/components/ui/field.tsx", "utf8"));
-    const hint = source.slice(source.indexOf("{hint && ("), source.indexOf("{error && ("));
-    expect(hint).not.toContain("role=");
+    for (const match of source.matchAll(/\{hint && \(/g)) {
+      const hint = source.slice(match.index, source.indexOf("</p>", match.index));
+      expect(hint).not.toContain("role=");
+    }
+  });
+});
+
+/**
+ * The row layout, and the one thing that must not differ.
+ *
+ * `row` exists because a settings page is a list of things a founder has, not
+ * a form they are filling in — and stacking a label over its control in a list
+ * of one is what put 248px of card around the Profile page's single input.
+ *
+ * What it may change is where the parts sit. What it may not change is the
+ * wiring, because the reason this is a prop rather than a second labelled
+ * control written by hand is that both shapes keep one contract.
+ */
+describe("a settings row is the same field, laid out differently", () => {
+  const code = (source: string) =>
+    source.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
+  const SOURCE_CODE = code(readFileSync("src/components/ui/field.tsx", "utf8"));
+
+  /**
+   * The row branch alone.
+   *
+   * Bounded by the *next* function-body-level `return (`, which is the column
+   * layout's. `lastIndexOf` was the first attempt and it is wrong: `FormError`
+   * is declared after `Field` and has a return of its own, so the slice ran to
+   * the end of the file and every assertion below was satisfied by the column
+   * branch it was supposed to be measuring against. Two of the three passed
+   * under the mutation they exist to catch.
+   */
+  const rowStart = SOURCE_CODE.indexOf('if (layout === "row")');
+  const row = SOURCE_CODE.slice(rowStart, SOURCE_CODE.indexOf("\n  return (", rowStart));
+
+  it("binds its label to the control it sits beside", () => {
+    // Beside rather than above is a layout choice. An unbound label is not.
+    expect(row).toContain("htmlFor={id}");
+  });
+
+  it("gives the hint the id the control points at", () => {
+    // `aria-describedby={`${id}-hint`}` is written by the caller and resolves
+    // to nothing if this branch names its hint differently.
+    expect(row).toContain("id={`${id}-hint`}");
+  });
+
+  it("stacks on a phone rather than shrinking the label past its words", () => {
+    // `flex-wrap` alone does not do it: `sm:flex-1` lets the label column
+    // shrink below its own content, so a 314px control group beside it broke
+    // "What should Nova call you?" to one word per line instead of wrapping
+    // the row. Measured at 390px before this assertion existed.
+    expect(row).toContain("flex-col");
+    expect(row).toContain("sm:flex-row");
+  });
+
+  it("gives the words the width and the control its size", () => {
+    // The pair, and only above `sm` — below it there is no width to share.
+    expect(row).toContain("sm:flex-1");
+    expect(row).toContain("sm:shrink-0");
   });
 });

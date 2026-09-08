@@ -104,6 +104,23 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
   },
 );
 
+/**
+ * Two shapes, one contract.
+ *
+ * `column` is a form: the label sits over the control and the hint under it,
+ * which is right when several fields stack and a reader goes down them.
+ *
+ * `row` is a settings line: the label and its hint on the left, the control on
+ * the right, with a hairline above and below drawn by whatever holds it. A
+ * settings page is a list of things a founder *has*, not a form they are
+ * filling in, and stacking one field's label over its control in a list of one
+ * is what made the Profile page spend 248px on a single input.
+ *
+ * The layout is the only difference. The `htmlFor`, the hint id, the alert
+ * role and the describedby wiring are identical — which is the whole reason
+ * this is a prop rather than a second labelled control written by hand beside
+ * this one.
+ */
 export function Field({
   id,
   label,
@@ -111,6 +128,7 @@ export function Field({
   /** Rejection text. Sits under the field, in coral, and names the reason. */
   error,
   action,
+  layout = "column",
   children,
   className,
 }: {
@@ -120,10 +138,54 @@ export function Field({
   error?: ReactNode;
   /** A control aligned with the label, e.g. a "Forgot it?" link. */
   action?: ReactNode;
+  /** `row` puts the label beside the control, for a settings line. */
+  layout?: "column" | "row";
   /** The input. Must carry `id` and the describedby ids rendered below. */
   children: ReactNode;
   className?: string;
 }) {
+  if (layout === "row") {
+    return (
+      <div className={cn("flex flex-col gap-2", className)}>
+        {/*
+          A row at reading width and a column on a phone, and both halves are
+          load-bearing.
+
+          `sm:flex-1` on the words with `sm:shrink-0` on the control keeps a
+          long hint from taking the whole line and pushing the control onto a
+          second one — which is the stacked form this layout exists to replace.
+
+          Below `sm` it has to stack, and `flex-wrap` alone will not do it:
+          `flex-1` lets the label column shrink past its own words, so a 314px
+          control group beside it left the label one word per line rather than
+          wrapping the row. A phone gets a label over its control, which is
+          what `column` is for and is right when there is no width to share.
+        */}
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-x-6">
+          <div className="flex min-w-0 flex-col gap-1 sm:flex-1">
+            <label htmlFor={id} className="text-fg text-ui font-semibold">
+              {label}
+            </label>
+            {hint && (
+              <p id={`${id}-hint`} className="text-fg-muted max-w-[52ch] text-caption">
+                {hint}
+              </p>
+            )}
+          </div>
+          <div className="flex items-center gap-2 sm:shrink-0">
+            {children}
+            {action}
+          </div>
+        </div>
+        {error && (
+          <p role="alert" id={`${id}-error`} className="text-coral text-caption">
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-baseline justify-between gap-3">

@@ -41,38 +41,59 @@ export function FounderNameForm({ current }: { current: string | null }) {
   return (
     <form action={action} className="flex flex-col gap-3" data-testid="founder-name-form">
       <Field
+        layout="row"
         id="founder-display-name"
         label="What should Nova call you?"
         hint="Used when Vibe writes to you. Leave it empty and Vibe uses your GitHub login or your email address instead."
         error={state?.ok === false ? "That did not save. Try again." : undefined}
+        /*
+          Secondary, not primary.
+
+          This page has one consequential action and it is connecting GitHub.
+          A mint fill on a name field made the smaller decision the louder one,
+          which is the whole of `DESIGN.md`'s one-primary rule read backwards.
+        */
+        action={
+          <button
+            type="submit"
+            className={buttonClasses({ variant: "secondary" })}
+            disabled={pending}
+          >
+            {pending ? "Saving…" : "Save"}
+          </button>
+        }
       >
-        <Input
-          id="founder-display-name"
-          name="displayName"
-          defaultValue={value ?? ""}
-          key={value ?? ""}
-          maxLength={MAX_FOUNDER_NAME_LENGTH}
-          autoComplete="given-name"
-          placeholder="Your first name"
-          disabled={pending}
-        />
+        {/*
+          The width goes on a wrapper rather than on `Input`.
+
+          `inputClassName` already carries `w-full`, and `cn` joins rather than
+          merges — so a `w-56` passed as `className` ships beside `w-full` and
+          the stylesheet's order decides which wins. A box around it has no
+          such argument to lose.
+        */}
+        <div className="w-56 max-sm:flex-1">
+          <Input
+            id="founder-display-name"
+            name="displayName"
+            defaultValue={value ?? ""}
+            key={value ?? ""}
+            maxLength={MAX_FOUNDER_NAME_LENGTH}
+            autoComplete="given-name"
+            placeholder="Your first name"
+            disabled={pending}
+          />
+        </div>
       </Field>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="submit" className={buttonClasses()} disabled={pending}>
-          {pending ? "Saving…" : "Save"}
-        </button>
-
-        {/*
-          Only after a save, and only about what actually happened. A form that
-          says "saved" on every render says it about renders, not about saves.
-        */}
-        {state?.ok === true && (
-          <p role="status" className="text-fg-muted text-caption">
-            {state.name === null ? "Name removed." : `Saved. Nova will call you ${state.name}.`}
-          </p>
-        )}
-      </div>
+      {/*
+        Only after a save, and only about what actually happened. A form that
+        says "saved" on every render says it about renders, not about saves.
+      */}
+      {state?.ok === true && (
+        <p role="status" className="text-fg-muted text-caption">
+          {state.name === null ? "Name removed." : `Saved. Nova will call you ${state.name}.`}
+        </p>
+      )}
     </form>
   );
 }
