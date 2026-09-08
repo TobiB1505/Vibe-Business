@@ -75,7 +75,9 @@ function header(page: Page) {
 }
 
 test.describe("the room Nova assembles", () => {
-  test.use({ reducedMotion: "reduce" });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
 
   test("renders the whole room on the first frame, with no sequence to wait for", async ({
     page,
@@ -179,7 +181,9 @@ test.describe("the room Nova assembles", () => {
 });
 
 test.describe("the first thing Nova says", () => {
-  test.use({ reducedMotion: "reduce" });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
 
   test("asks the one question setup has, and offers both answers", async ({ page }) => {
     await page.goto(FIRST_RUN);
@@ -240,7 +244,9 @@ test.describe("the first thing Nova says", () => {
 });
 
 test.describe("Nova's voice through setup", () => {
-  test.use({ reducedMotion: "reduce" });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
 
   test("says something in every one of the ten states", async ({ page }) => {
     await page.goto(STATES);
@@ -276,7 +282,9 @@ test.describe("Nova's voice through setup", () => {
 });
 
 test.describe("what setup's blocks are allowed to bring", () => {
-  test.use({ reducedMotion: "reduce" });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
 
   test("gives the paused question one frame, not two", async ({ page }) => {
     await page.goto(BLOCKS);
@@ -382,7 +390,10 @@ test.describe("what setup's blocks are allowed to bring", () => {
 });
 
 test.describe("375px", () => {
-  test.use({ viewport: { width: 375, height: 900 }, reducedMotion: "reduce" });
+  test.use({ viewport: { width: 375, height: 900 } });
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
 
   for (const [name, path] of [
     ["the opening", OPENING],

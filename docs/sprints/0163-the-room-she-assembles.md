@@ -176,11 +176,25 @@ typecheck, lint, the domain suite, the browser suite and a production build.
 Rule 69's fourth question is open, and this is the second sprint in a row it is
 open on.
 
-**No browser test touches any of the new fixtures.** The 598 that pass cover the
-rest of the product; `study-opening-shipped`, `study-first-run-shipped`,
-`study-onboarding` and `study-onboarding-blocks` are review surfaces with no
-assertions. Everything this sprint built rests on unit and source tests plus
-screenshots taken by hand.
+**What the browser now checks, and what it does not.**
+`e2e/nova-setup.spec.ts` is twenty tests over the four fixture routes: the room
+whole on the first frame under reduced motion, the availability line absent
+rather than pulsing, the setup steps with exactly one being worked on, the
+opening's geometry identical to the screen that follows it, the question and
+both its answers, the walkthrough showing instead of navigating, the example
+labelled and inert, all ten of Nova's sentences, nothing to type anywhere in
+setup, the six block defects above refusing to come back, and three routes at
+375px. The sentences are read from `NOVA_ONBOARDING_MESSAGE` and
+`ONBOARDING_STATES` rather than retyped, so a copy change moves the assertion
+with it.
+
+What it does not check is the wiring: the fixtures supply the operation views,
+the understanding and the audit, which is the same gap `merge-ui.spec.ts`
+records. And one assertion was written and deliberately removed — "nothing is
+left part-way through an entrance under reduced motion" found four things about
+the browser rather than one about the product, and the version that passed would
+have carried an allowlist of what it was not allowed to notice. The spec's
+docblock names all four.
 
 **Home's thread floor was never seen.** `NovaHome` has no fixture and needs a
 session, so the surface reaches it by composition and by the sweep in
@@ -190,5 +204,5 @@ No migration, no schema change, no new dependency, no widened allowlist.
 
 ## Validation
 
-Domain 9,097 · lint 0/0 · typecheck clean · build green · browser suite 598
+Domain 9,139 · lint 0/0 · typecheck clean · build green · browser suite 635
 passed, none failed, flaky or skipped.
