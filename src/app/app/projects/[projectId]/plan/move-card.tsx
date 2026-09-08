@@ -97,28 +97,33 @@ export function MoveCard({
   opportunity,
   execution,
   questionIsBelow = false,
+  variant = "page",
 }: {
   opportunity: BusinessOpportunity;
   execution: OpportunityActionState | null;
   /** Whether this Move's own open question renders under this card. */
   questionIsBelow?: boolean;
+  /**
+   * Where this is drawn.
+   *
+   * `block` is Nova's thread, where the render block already supplies the
+   * surface — the same variant the Product Scan, the agent's file activity and
+   * the business map now carry. It drops this card's own panel and nothing
+   * else: the rank, the headline pill, the problem, the dependencies and the
+   * responsibility line are what a founder is here to read, and they are the
+   * same ones the plan shows.
+   */
+  variant?: "page" | "block";
 }) {
   const headline = moveHeadline(opportunity);
   const lens = moveLensLabel(opportunity);
   const responsibility = responsibilityOf(execution, opportunity, questionIsBelow);
   const ResponsibilityIcon = RESPONSIBILITY_ICONS[responsibility.icon];
 
-  return (
-    <Surface
-      as="article"
-      level="panel"
-      padding="lg"
-      tone="mint"
-      className="action-plan-move action-plan-move-selected flex flex-col gap-5 overflow-hidden sm:p-7"
-      data-testid="move-card"
-      data-rank={opportunity.rank}
-      data-selected="true"
-    >
+  /* One body, two wrappers. A block variant that repeated the card's
+     contents would be the second UI this whole pattern exists to prevent. */
+  const body = (
+    <>
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-mint font-mono text-base tabular-nums">
@@ -176,6 +181,33 @@ export function MoveCard({
           <p className="text-fg-muted text-caption leading-relaxed">{responsibility.detail}</p>
         </div>
       </div>
+    </>
+  );
+
+  if (variant === "block") {
+    return (
+      <article
+        className="flex flex-col gap-5 overflow-hidden"
+        data-testid="move-card"
+        data-rank={opportunity.rank}
+      >
+        {body}
+      </article>
+    );
+  }
+
+  return (
+    <Surface
+      as="article"
+      level="panel"
+      padding="lg"
+      tone="mint"
+      className="action-plan-move action-plan-move-selected flex flex-col gap-5 overflow-hidden sm:p-7"
+      data-testid="move-card"
+      data-rank={opportunity.rank}
+      data-selected="true"
+    >
+      {body}
     </Surface>
   );
 }

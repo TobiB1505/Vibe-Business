@@ -12,6 +12,7 @@ import type {
   ExecutionResolution,
   ExecutionResolutionReason,
 } from "@/modules/execution-contract/schema";
+import type { HandoffPurpose } from "@/modules/handoff/schema";
 import type { ActionPlanBlockReason } from "./service";
 import type {
   ActionPlanStep,
@@ -83,6 +84,62 @@ export const PLAN_STALENESS_LABELS: Record<PlanStalenessReason, string> = {
   founder_intent_changed: "What you told Vibe about your business has changed since this plan was made.",
   planner_contract_superseded: "Vibe's planning approach has improved since this plan was made.",
 };
+
+/**
+ * What closing a step produced, for the two surfaces that have to say it.
+ *
+ * A plan does not only move; it *learns*. A founder closing a `vibe` step with
+ * no executor writes down what they found, and a founder answering a decision
+ * step leaves a durable statement. Both are recorded against the immutable step
+ * and both are read by the next planning run — and until now neither was ever
+ * shown back to the founder who wrote it.
+ *
+ * One derivation rather than two, because the handoff prompt and the finished
+ * plan want the same list at different filters: the prompt wants every closed
+ * step including the ones that produced nothing quotable, and the summary wants
+ * only what a person would read. Two copies of "which steps are settled and
+ * what did each leave behind" is exactly the shape that drifts.
+ *
+ * Order is plan order, never recency: these are steps, and the step numbers are
+ * how the founder refers to them on the screen beside this.
+ */
+export type SettledStepOutcome = {
+  order: number;
+  stepKey: string;
+  title: string;
+  /** What closing it produced, or null when it was confirmed and nothing more. */
+  outcome: string | null;
+  /** Which authority produced it — never guessed from the text. */
+  source: "finding" | "decision" | null;
+};
+
+export function settledStepOutcomes(
+  steps: readonly Pick<ActionPlanStep, "id" | "order" | "title">[],
+  completedStepOrders: readonly number[],
+  findingByStepKey: Readonly<Record<string, string>>,
+  decisionByStepKey: Readonly<Record<string, string>>,
+): SettledStepOutcome[] {
+  const completed = new Set(completedStepOrders);
+
+  return [...steps]
+    .sort((a, b) => a.order - b.order)
+    .filter((step) => completed.has(step.order))
+    .map((step) => {
+      const finding = findingByStepKey[step.id];
+      if (finding !== undefined) {
+        return { order: step.order, stepKey: step.id, title: step.title, outcome: finding, source: "finding" as const };
+      }
+
+      const decision = decisionByStepKey[step.id];
+      if (decision !== undefined) {
+        return { order: step.order, stepKey: step.id, title: step.title, outcome: decision, source: "decision" as const };
+      }
+
+      /* Closed by confirmation, or by a run. There is nothing to quote, and
+         inventing something would be Vibe writing the founder's note for them. */
+      return { order: step.order, stepKey: step.id, title: step.title, outcome: null, source: null };
+    });
+}
 
 /** A short, plain-language summary of where the plan stands (§40). */
 export const PLAN_PROGRESS_LABELS: Record<PlanProgress, string> = {
@@ -337,12 +394,145 @@ export type AttestationPrompt = {
    * not derive choices from the step's completion criterion: that criterion is
    * model output, and turning model wording into a set of machine options is
    * the mistake this codebase refuses everywhere else. The criterion is shown
-   * beside the field, in its own element, and the founder answers it.
+   * beside the field, in its own element — see `criterion` below for the one
+   * surface that has already said it — and the founder answers it.
    */
   finding: { label: string; help: string } | null;
+  /**
+   * The step's completion criterion, shown beside the field — or null when
+   * this surface has already said it.
+   *
+   * Null is not a style choice. A handed-off step sits under the prompt Vibe
+   * just wrote, and that prompt carries the criterion verbatim as its
+   * `DONE WHEN:` line. Rendering it again a few hundred pixels lower put the
+   * same sentence on screen twice under a heading — "Answer this" — that asked
+   * the founder to do something the prompt had already asked their tool to do.
+   * The founder read it as noise, which is what it was.
+   *
+   * The label is here rather than derived in the component from whether a
+   * finding exists, because it is copy: "Answer this" over a field and
+   * "Confirm when true" over a tick are two different requests, and which one
+   * a step gets is a question about the step, not about the form.
+   */
+  criterion: { label: string } | null;
 };
 
-export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): AttestationPrompt {
+/**
+ * Whether closing this step records a result, and what to ask for.
+ *
+ * Keyed on the change kind and nothing else, because that is what the question
+ * actually depends on. "The sitemap is submitted" is true or it is not and
+ * there is nothing to write down; "a subscription completes end to end" has a
+ * result, and closing it with a bare tick threw away the one thing the next
+ * planning run most needed — whoever was waiting for it, and whether or not a
+ * prompt was issued.
+ *
+ * Shared by every founder-facing branch so the screen cannot disagree with the
+ * database, which enforces the same rule on the same key.
+ */
+function measurementFinding(
+  step: Pick<ActionPlanStep, "changeKind">,
+): Pick<AttestationPrompt, "finding" | "criterion"> {
+  if (step.changeKind !== "measurement") {
+    return { finding: null, criterion: { label: "Confirm when true" } };
+  }
+
+  return {
+    finding: {
+      label: "What happened when you checked?",
+      help: "Whether it worked, and where it stopped if it did not.",
+    },
+    criterion: { label: "Answer this" },
+  };
+}
+
+export function attestationPrompt(
+  step: Pick<ActionPlanStep, "actor" | "changeKind">,
+  /**
+   * Which prompt Vibe issued for this step, if any (ADR 0099).
+   *
+   * Three readings, not two, and each needs its own sentence. The `vibe` copy
+   * below says the step "isn't a change to your product", which is exactly what
+   * a **built** handoff *is* — Vibe declined it, and saying the wrong one over
+   * a prompt Vibe just wrote would read as a contradiction. A **verify** handoff
+   * is a third thing again: nothing was declined and nothing was built, so both
+   * of those sentences would be false.
+   */
+  handoff: HandoffPurpose | null = null,
+): AttestationPrompt {
+  if (handoff === "verify") {
+    /*
+     * A result, not a report of work. The founder ran a check — possibly
+     * through their own tool, possibly by hand — and what the plan needs back
+     * is what happened, which is also what the prompt asked their tool to print.
+     */
+    return {
+      pill: "Only you can check this one",
+      lead: null,
+      footnote:
+        "Recorded against this exact plan step and given to the next planning run. It is your " +
+        "result, not a check Vibe ran.",
+      submitLabel: "Done — next step",
+      finding: {
+        label: "Paste the VIBE SUMMARY here",
+        help: "Your tool prints it when it's finished — a line of your own works too.",
+      },
+      criterion: null,
+    };
+  }
+
+  if (handoff === "build") {
+    /*
+     * A paste, not an essay (ADR 0099).
+     *
+     * The founder has just watched their own tool do the work, and asking them
+     * to summarise it afterwards is homework for something a machine already
+     * wrote down. So the prompt Vibe hands out ends by asking the tool to print
+     * a short block last, and this field asks for that block back.
+     *
+     * Free text either way — a founder who would rather type two sentences is
+     * not blocked, and a tool that ignored the request has not trapped them.
+     */
+    return {
+      pill: "Vibe won't build this one",
+      lead: null,
+      footnote:
+        "Recorded against this exact plan step and given to the next planning run. It does not " +
+        "claim Vibe did the work.",
+      submitLabel: "Done — next step",
+      finding: {
+        label: "Paste the VIBE SUMMARY here",
+        help: "Your tool prints it when it's finished — a line of your own works too.",
+      },
+      // The prompt above carries this step's criterion as its `DONE WHEN:`
+      // line. Saying it twice is the duplicate this field sat under.
+      criterion: null,
+    };
+  }
+
+  if (step.actor === "external_party") {
+    /*
+     * Waiting, and the one thing the founder can do about it.
+     *
+     * Not "your action" — they are not doing this, somebody outside is, and a
+     * product that told them otherwise would be asking for work they cannot
+     * perform. What they can do is say when it has happened, because Vibe has
+     * no integration that watches for it and inventing one would be a
+     * different product.
+     */
+    return {
+      pill: "Waiting on someone else",
+      lead:
+        "Nobody inside your business does this one, and Vibe cannot watch for it. When you " +
+        "see that it has happened, say so here and the plan moves on.",
+      footnote: "This records what you observed against this exact plan step.",
+      submitLabel: "This has happened",
+      /* A measurement has a result whoever ran it, and the database requires
+         one — keyed on the change kind, not on who was waiting. */
+      ...measurementFinding(step),
+    };
+  }
+
   if (step.actor === "vibe") {
     return {
       pill: "Vibe can't run this one",
@@ -357,6 +547,19 @@ export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): Attestat
         label: "What did you find?",
         help: "In your own words. The next plan is written with this in front of it.",
       },
+      criterion: { label: "Answer this" },
+    };
+  }
+
+  if (step.changeKind === "measurement") {
+    return {
+      pill: "Your action",
+      lead: null,
+      footnote:
+        "Recorded against this exact plan step and given to the next planning run. It is your " +
+        "result, not a check Vibe ran.",
+      submitLabel: "Record what happened",
+      ...measurementFinding(step),
     };
   }
 
@@ -366,6 +569,7 @@ export function attestationPrompt(step: Pick<ActionPlanStep, "actor">): Attestat
     footnote: "This records your confirmation against this exact plan step.",
     submitLabel: "Confirm this is complete",
     finding: null,
+    criterion: { label: "Confirm when true" },
   };
 }
 

@@ -13,7 +13,7 @@
 |---|---|---|---|
 | Product scope and approval | `PRODUCT.md` | Product contract | 2026-08-24 |
 | Architecture and provider boundaries | `ARCHITECTURE.md` | Architecture contract | 2026-08-24 |
-| Account/project context swap | `docs/decisions/0046-account-dashboard-and-context-swap.md`, `docs/decisions/0100-the-account-level-is-settings.md` | ADR | 2026-09-07 |
+| Account/project context swap | `docs/decisions/0046-account-dashboard-and-context-swap.md`, `docs/decisions/0104-the-account-level-is-settings.md` | ADR | 2026-09-07 |
 | Project Home and Business Health | `docs/decisions/0047-business-health-is-project-home.md` | ADR | 2026-08-24 |
 | Business Brain interaction and view model | `docs/decisions/0048-signature-business-brain.md` | ADR | 2026-08-24 |
 | GitHub permissions and repository connection | `docs/decisions/0003-github-app-integration.md`, `docs/decisions/0009-github-installation-ownership-verification.md` | ADR | 2026-08-24 |

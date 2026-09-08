@@ -94,7 +94,12 @@ describe("the policy shape", () => {
 
 describe("what an owner may still do", () => {
   it("updates their own row without touching the owner column", () => {
-    db.sql(asUser(owner, `update public.operation_runs set status = 'running' where project_id = '${projectId}';`));
+    db.sql(
+      asUser(
+        owner,
+        `update public.operation_runs set status = 'running' where project_id = '${projectId}';`,
+      ),
+    );
 
     expect(
       db.sql(`select status from public.operation_runs where project_id = '${projectId}';`),
@@ -110,23 +115,29 @@ describe("what it now refuses", () => {
    */
   it("refuses to move a row to another identity", () => {
     const error = db.sqlExpectingError(
-      asUser(owner, `update public.operation_runs set user_id = '${intruder}' where project_id = '${projectId}';`),
+      asUser(
+        owner,
+        `update public.operation_runs set user_id = '${intruder}' where project_id = '${projectId}';`,
+      ),
     );
 
     expect(error).toMatch(/row-level security|violates row-level security policy/i);
-    expect(db.sql(`select user_id from public.operation_runs where project_id = '${projectId}';`)).toBe(
-      owner,
-    );
+    expect(
+      db.sql(`select user_id from public.operation_runs where project_id = '${projectId}';`),
+    ).toBe(owner);
   });
 
   it("refuses to null the owner, which is the erasure tombstone's shape", () => {
     db.sqlExpectingError(
-      asUser(owner, `update public.operation_runs set user_id = null where project_id = '${projectId}';`),
+      asUser(
+        owner,
+        `update public.operation_runs set user_id = null where project_id = '${projectId}';`,
+      ),
     );
 
-    expect(db.sql(`select user_id from public.operation_runs where project_id = '${projectId}';`)).toBe(
-      owner,
-    );
+    expect(
+      db.sql(`select user_id from public.operation_runs where project_id = '${projectId}';`),
+    ).toBe(owner);
   });
 });
 
@@ -170,7 +181,10 @@ describe("execution evidence", () => {
 
   it("refuses the same client rewriting the audit's conclusion", () => {
     const error = db.sqlExpectingError(
-      asUser(owner, `update public.business_readiness_audits set result = '{}'::jsonb where false;`),
+      asUser(
+        owner,
+        `update public.business_readiness_audits set result = '{}'::jsonb where false;`,
+      ),
     );
     expect(error).toMatch(/permission denied/i);
   });
@@ -296,10 +310,13 @@ describe("VB-026 — policies resolve the caller once per statement", () => {
   it("keeps every policy it rewrote", () => {
     // 119 before this batch, minus the two INSERT policies VB-036 drops from
     // the provider ledgers below, plus the one SELECT policy ADR 0086 adds to
-    // `nova_voice_messages`. Stated as the arithmetic rather than as a magic
-    // number, so a future change has to say which of the three it moved.
+    // `nova_voice_messages`, plus the four `founder_profiles` carries — one
+    // per command, because the founder owns every write to their own name —
+    // plus the one SELECT policy ADR 0099 adds to `action_plan_handoffs`.
+    // Stated as the arithmetic rather than as a magic number, so a future
+    // change has to say which of the five it moved.
     expect(Number(db.sql(`select count(*) from pg_policies where schemaname = 'public';`))).toBe(
-      119 - 2 + 1,
+      119 - 2 + 1 + 4 + 1,
     );
   });
 });

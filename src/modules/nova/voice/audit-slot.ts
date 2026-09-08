@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
+import type { NovaSituation } from "@/modules/nova/briefing/situation";
 
 import type { NovaEntry } from "../feed";
 import { computeNovaVoiceIdentity } from "./payload";
@@ -87,7 +88,18 @@ function lowerFirst(headline: string): string {
  * Nothing is derived, ranked, or explained on the way — `whyItMatters` is the
  * audit's own sentence, and the model is not being asked to improve it.
  */
-export function buildNovaAuditVoicePayload(entry: NovaAuditEntry): NovaVoicePayload {
+export function buildNovaAuditVoicePayload(
+  entry: NovaAuditEntry,
+  /**
+   * Where the founder stands, from `buildNovaSituation`.
+   *
+   * Optional so a caller with no briefing is still correct rather than broken,
+   * and part of the identity when present — which is the point: an audit
+   * message written while the website scan was stale must not survive the
+   * re-scan that fixed it.
+   */
+  situation: NovaSituation | null = null,
+): NovaVoicePayload {
   const facts: NovaVoicePayload["facts"] = [
     { label: "state of the business", value: entry.stateLabel },
   ];
@@ -102,6 +114,7 @@ export function buildNovaAuditVoicePayload(entry: NovaAuditEntry): NovaVoicePayl
 
   return {
     slot: "audit_result",
+    situation,
     productName: null,
     founderGoal: null,
     facts,
@@ -124,10 +137,14 @@ export function buildNovaAuditVoicePayload(entry: NovaAuditEntry): NovaVoicePayl
  * and by the render that may only read. They agree because both derive it from
  * the same entry, and the entry derives from one persisted audit.
  */
-export function novaAuditVoiceIdentity(projectId: string, entry: NovaAuditEntry): string {
+export function novaAuditVoiceIdentity(
+  projectId: string,
+  entry: NovaAuditEntry,
+  situation: NovaSituation | null = null,
+): string {
   return computeNovaVoiceIdentity({
     projectId,
-    payload: buildNovaAuditVoicePayload(entry),
+    payload: buildNovaAuditVoicePayload(entry, situation),
     model: NOVA_PRESENTATION_CONFIG.model,
   });
 }
@@ -157,13 +174,13 @@ export function novaAuditVoiceIdentity(projectId: string, entry: NovaAuditEntry)
  */
 export async function readNovaAuditVoice(
   supabase: SupabaseClient,
-  params: { projectId: string; entry: NovaAuditEntry },
+  params: { projectId: string; entry: NovaAuditEntry; situation: NovaSituation | null },
 ): Promise<NovaVoiceRead> {
   const template = buildNovaAuditTemplate(params.entry);
 
   try {
     return await readNovaVoiceMessage(supabase, {
-      identity: novaAuditVoiceIdentity(params.projectId, params.entry),
+      identity: novaAuditVoiceIdentity(params.projectId, params.entry, params.situation),
       template,
     });
   } catch (error) {

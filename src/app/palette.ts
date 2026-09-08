@@ -12,7 +12,7 @@
  *
  * ## Why global rather than route by route
  *
- * [ADR 0096](../../docs/decisions/0096-the-second-design-system-arrives-scoped.md)
+ * [ADR 0097](../../docs/decisions/0097-the-second-design-system-arrives-scoped.md)
  * planned for a route to opt in "by carrying the attribute on a layout
  * wrapper". That does not survive contact with the ground: `.vibe-atmosphere`
  * is `position: fixed`, so it is one luminance ramp behind the whole app. Half
@@ -23,7 +23,7 @@
  *
  * Making it scopeable is real work — the ground would stop being a ground and
  * become a container — and it buys a gradual rollout nobody wants once the
- * flicker is named. See [ADR 0098](../../docs/decisions/0098-the-palette-ships-behind-one-switch.md).
+ * flicker is named. See [ADR 0102](../../docs/decisions/0102-the-palette-ships-behind-one-switch.md).
  *
  * ## Why an environment variable, given rule 78
  *

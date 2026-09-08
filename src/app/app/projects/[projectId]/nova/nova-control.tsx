@@ -1,10 +1,10 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { NovaMoveButton, NovaMoveLink } from "@/components/nova/nova-move";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Notice } from "@/components/ui/states";
+import type { RetailOperationKind } from "@/modules/credits/retail";
 import { runNovaHomeAction, type NovaHomeActionState } from "./nova-home-actions";
 import type { DispatchableNovaActionId } from "./nova-dispatch";
 
@@ -27,6 +27,19 @@ import type { DispatchableNovaActionId } from "./nova-dispatch";
  * makes for not being a modal. `useReturnFocus` puts focus back on the control
  * when the confirmation is dismissed, because the opener unmounts while it is
  * on screen.
+ *
+ * ## Why these are Moves and not buttons
+ *
+ * `study-move` compared three designs for this one control in all four states
+ * the product produces, and B was chosen: a dark surface with one lit edge,
+ * mint as line and label, and **the price inside the control rather than
+ * beside it**. The filled mint block these used to be belongs to a direction
+ * that was not chosen — and the separate price line above it made a spend two
+ * objects for one commitment.
+ *
+ * So `operation` and `balance` come down to here now. `ActionBlock` still owns
+ * the consequence disclosure and is deliberately no longer given a price:
+ * showing it in both places would be the duplication the Move exists to end.
  */
 
 export function NovaServerActionControl({
@@ -37,6 +50,8 @@ export function NovaServerActionControl({
   consequential,
   requiresConfirmation,
   confirmationNote,
+  /** The retail kind this charges under, shown inside the control. */
+  operation = null,
 }: {
   projectId: string;
   actionId: DispatchableNovaActionId;
@@ -45,6 +60,7 @@ export function NovaServerActionControl({
   consequential: boolean;
   requiresConfirmation: boolean;
   confirmationNote: string | null;
+  operation?: RetailOperationKind | null;
 }) {
   const [state, formAction, pending] = useActionState<NovaHomeActionState, FormData>(
     runNovaHomeAction.bind(null, projectId, actionId, subjectId),
@@ -67,13 +83,20 @@ export function NovaServerActionControl({
           <p>{confirmationNote}</p>
         </ConfirmPanel>
       ) : requiresConfirmation ? (
-        <Button ref={openerRef} type="button" variant="primary" onClick={() => setConfirming(true)}>
-          {label}
-        </Button>
+        <NovaMoveButton
+          ref={openerRef}
+          label={label}
+          operation={operation}
+          onClick={() => setConfirming(true)}
+        />
       ) : (
-        <Button type="submit" variant="primary" busy={pending} disabled={pending}>
-          {pending ? "Starting…" : label}
-        </Button>
+        <NovaMoveButton
+          type="submit"
+          label={label}
+          operation={operation}
+          busy={pending}
+          disabled={pending}
+        />
       )}
     </form>
   );
@@ -106,18 +129,16 @@ export function NovaServerActionControl({
   );
 }
 
-export function NovaLinkControl({
-  href,
-  label,
-  variant = "primary",
-}: {
-  href: string;
-  label: string;
-  variant?: "primary" | "secondary";
-}) {
+export function NovaLinkControl({ href, label }: { href: string; label: string }) {
+  /*
+   * No cost and no destination note. Every target here is a Vibe screen — the
+   * plan, the Agent, the reconnect page — so there is no price to state and
+   * nothing about leaving to warn of. `leavesTo` exists on the Move for the
+   * control that genuinely goes outside, and none of these is it.
+   */
   return (
-    <Link href={href} className={buttonClasses({ variant })}>
-      {label}
-    </Link>
+    <div className="w-full max-w-[24rem]">
+      <NovaMoveLink href={href} label={label} />
+    </div>
   );
 }

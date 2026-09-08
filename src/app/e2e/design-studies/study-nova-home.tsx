@@ -1,10 +1,13 @@
 import type { CSSProperties, ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
-import { statusForFocusTier } from "@/components/system/status-vocabulary";
-
+import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { RetailOperationKind } from "@/modules/credits/retail";
-import type { NovaHomeEntry, NovaHomeView } from "@/modules/nova/home-view";
+import {
+  novaControlLabel,
+  type NovaHomeEntry,
+  type NovaHomeView,
+} from "@/modules/nova/home-view";
 import { novaScenarioHealth, novaScenarioView, NOVA_SCENARIO_PRIORITY } from "../nova-scenarios";
 import type { Study } from "./studies";
 
@@ -18,7 +21,7 @@ import type { Study } from "./studies";
  * semantics, props and states survive. What is *not* re-decided here is any
  * claim about the product: the view models come from `buildNovaHomeView` over
  * `deriveNovaFocus`, the same functions production calls, and the status word
- * beside every entry comes from `statusForFocusTier` rather than from a table
+ * beside every entry comes from `statusForCandidate` rather than from a table
  * this file invented. A study that made up its own ranking or its own status
  * words would be a mood board, and it would look good for reasons the product
  * could never reproduce.
@@ -80,22 +83,15 @@ function retailKindOf(entry: NovaHomeEntry): RetailOperationKind | null {
   return NOVA_ACTION_META[entry.control.option.actionId].price ?? null;
 }
 
-/**
- * The fixture balance, built through `creditsToUnits` rather than cast — the
- * same reason the Nova fixture gives. A raw `420` is 420 internal units, which
- * is 0.42 Credits, and would render an affordable price as unaffordable.
- */
 function controlLabel(entry: NovaHomeEntry): string | null {
-  const control = entry.control;
-  if (control.kind === "none") return null;
-  return control.kind === "elsewhere" ? control.label : control.option.label;
+  return novaControlLabel(entry.control);
 }
 
 export function StudyNovaHome({ study }: { study: Study }) {
   const view: NovaHomeView = novaScenarioView(SCENARIO);
   const health = novaScenarioHealth(SCENARIO);
   const primary = view.primary;
-  const status = statusForFocusTier(primary.tier);
+  const status = statusForCandidate(primary.kind);
   const priceKind = retailKindOf(primary);
   const action = controlLabel(primary);
 
@@ -217,7 +213,7 @@ export function StudyNovaHome({ study }: { study: Study }) {
             <Label>Also waiting</Label>
             <ul className={`flex flex-col divide-y divide-line-1 ${sectionSkin}`}>
               {view.secondary.map((entry) => {
-                const entryStatus = statusForFocusTier(entry.tier);
+                const entryStatus = statusForCandidate(entry.kind);
                 const entryKind = retailKindOf(entry);
                 const entryAction = controlLabel(entry);
                 return (

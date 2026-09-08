@@ -76,6 +76,17 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
       "through it, and it refuses to write without VIBE_REFUND_CONFIRM=yes.",
   },
   {
+    file: join("modules", "authenticated-product-intelligence", "service.ts"),
+    why:
+      "ADR 0076. One write: the Deep Scan's browser-provider cost row. " +
+      "`deep_scan_provider_usage` grants the customer's role nothing, deliberately — it is " +
+      "Vibe's cost ledger, not their data — so the cookie-scoped client failed with permission " +
+      "denied, and the store logs rather than throws, so it failed quietly and every scan's " +
+      "seconds went unrecorded. Rule 53 is met by construction rather than by care: the project " +
+      "and session come from the row createSessionRecord persisted after loadOwnedProject " +
+      "verified ownership, and nothing here is taken from a caller's arguments.",
+  },
+  {
     file: join("modules", "internal-console", "store.ts"),
     why:
       "ADR 0088. The operator console is cross-tenant by construction: 'what is failing right " +
@@ -159,10 +170,19 @@ function sourceFiles(dir: string): string[] {
   });
 }
 
-/** Files that legitimately name the module without obtaining a client. */
+/**
+ * Files that legitimately name the module without obtaining a client.
+ *
+ * Both import forms, because only the static one used to be checked and a
+ * `await import("…/service")` inside a function walked straight past this
+ * guard — which is how the Deep Scan's cost ledger was nearly fixed without
+ * anyone reviewing the site. A boundary that one syntax slips through is a
+ * boundary for the syntax rather than for the thing.
+ */
 function isDiscussionOnly(source: string): boolean {
-  // A probe or a comment may mention it; only an import can use it.
-  return !new RegExp(String.raw`^\s*import\s[^;]*${SERVICE_MODULE}`, "m").test(source);
+  const staticImport = new RegExp(String.raw`^\s*import\s[^;]*${SERVICE_MODULE}`, "m");
+  const dynamicImport = new RegExp(String.raw`import\s*\(\s*["'\`][^"'\`]*${SERVICE_MODULE}`);
+  return !staticImport.test(source) && !dynamicImport.test(source);
 }
 
 describe("only durable execution may obtain a service-role client", () => {

@@ -13,6 +13,11 @@ import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
 
 const analyzeMock = vi.fn();
 const connectMock = vi.fn();
+const probeMock = vi.fn();
+const landingMock = vi.fn(
+  async (_connectUrl: string, _origin: string, _options?: { path?: string | null }) =>
+    ({ navigated: true }) as { navigated: boolean; reason?: string },
+);
 const disconnectMock = vi.fn(async () => undefined);
 
 /**
@@ -43,8 +48,30 @@ vi.mock("./analyzer", () => ({
   analyzeAuthenticatedProduct: (input: unknown) => analyzeMock(input),
 }));
 
+/*
+ * `openSessionAtOrigin` was missing from this mock, and nothing noticed.
+ *
+ * The call threw on every run — `undefined is not a function` — straight into
+ * the `catch {}` that used to wrap it, so the landing was never exercised by
+ * any test in this file while appearing to be. That is the same silence the
+ * production white screen came from, one layer up.
+ */
+/*
+ * The cost ledger is written with a service-role client, because
+ * `deep_scan_provider_usage` grants the customer's role nothing — it is Vibe's
+ * cost ledger and not their data. The tests point that client at the same fake
+ * database the rest of the run uses, so a usage row is still observable here
+ * and the boundary is still the one production takes.
+ */
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => serviceClient(),
+}));
+
 vi.mock("./playwright/connector", () => ({
   connectReadOnly: (connectUrl: string, origin: string) => connectMock(connectUrl, origin),
+  openSessionAtOrigin: (connectUrl: string, origin: string, options?: { path?: string | null }) =>
+    landingMock(connectUrl, origin, options),
+  probeSignInState: (connectUrl: string, origin: string) => probeMock(connectUrl, origin),
 }));
 
 const {
@@ -52,6 +79,7 @@ const {
   cancelDeepScan,
   getDeepScanAccessStatus,
   getDeepScanLiveView,
+  probeDeepScanSignIn,
   startDeepScan,
 } = await import("./service");
 
@@ -105,8 +133,21 @@ function fakeSnapshot(pagesInspected = 4): AuthenticatedProductIntelligenceSnaps
   } as AuthenticatedProductIntelligenceSnapshot;
 }
 
+/**
+ * The database the mocked service-role client writes to.
+ *
+ * Set by `setup()`, because the client is obtained inside the code under test
+ * rather than handed to it — which is the point of the boundary.
+ */
+let serviceDb: InstanceType<typeof FakeDatabase> | null = null;
+function serviceClient() {
+  if (!serviceDb) throw new Error("no service-role database: call setup() first");
+  return fakeSupabase(serviceDb);
+}
+
 function setup(options: { productionUrl?: string | null } = {}) {
   const db = new FakeDatabase();
+  serviceDb = db;
   const supabase = fakeSupabase(db);
   const projectId = seedProject(db, { userId: OWNER, productionUrl: options.productionUrl });
   return { db, supabase, projectId };
@@ -115,6 +156,10 @@ function setup(options: { productionUrl?: string | null } = {}) {
 beforeEach(() => {
   analyzeMock.mockReset();
   connectMock.mockReset();
+  probeMock.mockReset();
+  probeMock.mockResolvedValue(null);
+  landingMock.mockReset();
+  landingMock.mockResolvedValue({ navigated: true });
   holdMock.mockReset();
   settleMock.mockReset();
   releaseMock.mockReset();
@@ -740,5 +785,354 @@ describe("an additional Deep Scan is held, then settled or released (launch-v1)"
     expect(settleMock).toHaveBeenCalledWith(
       expect.objectContaining({ sessionId: started.sessionId }),
     );
+  });
+});
+
+/**
+ * A browser that lands nowhere, which is what a person actually saw.
+ *
+ * The first session in Vibe's own browser opened on a white canvas. The landing
+ * was best effort and swallowed twice — the connector discarded the reason and
+ * the service discarded the result — so `about:blank` and "reached the site and
+ * painted nothing" were the same observation from outside.
+ *
+ * It is not best effort any more, because the argument for that died with the
+ * DevTools frontend: the view is a JPEG on a canvas with four message shapes
+ * and no address bar, so a browser that lands nowhere is one the person cannot
+ * rescue.
+ */
+describe("startDeepScan — landing on the product", () => {
+  it("refuses rather than handing over a browser showing about:blank", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "TimeoutError: exceeded 20000ms" });
+
+    const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(result).toEqual({ ok: false, error: "page_unreachable" });
+  });
+
+  it("costs the customer nothing when it refuses", async () => {
+    // The browser ran and billed for its seconds; the customer got nothing
+    // from it. Vibe pays the provider, the customer pays no Credits.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "boom" });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(releaseMock).toHaveBeenCalled();
+    expect(settleMock).not.toHaveBeenCalled();
+  });
+
+  it("does not leave the browser running", async () => {
+    // A VM nobody can use bills for its whole timeout and shows a person a
+    // live view that never paints.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "boom" });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(provider.terminated).toHaveLength(1);
+  });
+
+  it("leaves the included scan available, because nothing was delivered", async () => {
+    // The consumption rule: only a persisted snapshot spends the entitlement.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    landingMock.mockResolvedValue({ navigated: false, reason: "boom" });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    const status = await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER });
+
+    expect(status?.includedScanAvailable).toBe(true);
+  });
+
+  it("still starts normally when the browser does land", async () => {
+    // The guard against a refusal that fires on the happy path too.
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(result.ok).toBe(true);
+  });
+});
+
+/*
+ * The founder asked Vibe to notice the finished login instead of waiting to be
+ * told about it. What makes that safe is not the detection — that is
+ * `login-detection.test.ts` — but that asking the question costs nothing and
+ * changes nothing. A probe runs every few seconds against a live browser; if
+ * it could write, terminate, charge or start, it would be the most dangerous
+ * call in this file.
+ */
+describe("probeDeepScanSignIn — a question, not an action", () => {
+  it("reports a signed-in browser without writing anything", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    probeMock.mockResolvedValue({
+      path: "/app",
+      passwordFieldPresent: false,
+      signOutAffordancePresent: true,
+      accountAffordancePresent: true,
+      hasAppShell: true,
+    });
+
+    const before = JSON.stringify(db.rows("authenticated_browser_sessions"));
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result).toEqual({ ok: true, signedIn: true, reason: "sign_out_offered" });
+    // Not a snapshot, not a usage row, not a status change, not a credit move.
+    expect(JSON.stringify(db.rows("authenticated_browser_sessions"))).toBe(before);
+    expect(db.rows("authenticated_product_intelligence_snapshots")).toHaveLength(0);
+    expect(analyzeMock).not.toHaveBeenCalled();
+    expect(settleMock).not.toHaveBeenCalled();
+    expect(releaseMock).not.toHaveBeenCalled();
+    expect(provider.terminated).toHaveLength(0);
+  });
+
+  it("reports not-signed-in while the founder is still on a login page", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    probeMock.mockResolvedValue({
+      path: "/login",
+      passwordFieldPresent: true,
+      signOutAffordancePresent: false,
+      accountAffordancePresent: false,
+      hasAppShell: true,
+    });
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result).toEqual({ ok: true, signedIn: false, reason: "password_field_present" });
+  });
+
+  it("treats a browser sitting on an identity provider as not signed in", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    // No page on the project's origin at all.
+    probeMock.mockResolvedValue(null);
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result).toEqual({ ok: true, signedIn: false, reason: "off_origin" });
+  });
+
+  it("refuses a session the caller does not own", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: INTRUDER,
+    });
+
+    expect(result).toEqual({ ok: false, error: "project_not_found" });
+    // The intruder never reaches the browser, so no capability URL is minted.
+    expect(probeMock).not.toHaveBeenCalled();
+  });
+
+  it("leaves an expired browser to the paths that own terminating it", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error(started.error);
+
+    db.rows("authenticated_browser_sessions")[0]!.expires_at = new Date(Date.now() - 60_000).toISOString();
+
+    const result = await probeDeepScanSignIn(supabase, provider, {
+      sessionId: started.sessionId,
+      userId: OWNER,
+    });
+
+    expect(result.ok).toBe(false);
+    // Reported, never resolved here: terminating and refunding is a decision
+    // with money attached, and it belongs to `analyzeDeepScan`/`cancelDeepScan`.
+    expect(provider.terminated).toHaveLength(0);
+    expect(releaseMock).not.toHaveBeenCalled();
+  });
+});
+
+/*
+ * The login window follows the founder's device, because a phone driving a
+ * 1920-pixel page is the fiddliest part of this flow. That means a value from
+ * a client decides a window Chromium is launched with — so it is a name from a
+ * closed set, and this is where the set is enforced.
+ */
+describe("startDeepScan — the viewport hint is a name, never a size", () => {
+  it("passes the mobile shape through when the founder is on a phone", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER, viewport: "mobile" });
+
+    expect(provider.createdWith).toEqual({ viewport: "mobile" });
+  });
+
+  it("refuses anything that is not one of the two shapes", async () => {
+    for (const hint of ["", "1920x1200", "--headless", "../../etc", "DESKTOP", "tablet"]) {
+      const { supabase, projectId } = setup();
+      const provider = new FakeBrowserProvider();
+
+      await startDeepScan(supabase, provider, { projectId, userId: OWNER, viewport: hint });
+
+      // Not rejected — normalised. An unrecognised hint is a client Vibe does
+      // not recognise, not an attack to fail the scan over, and desktop is the
+      // shape the analysis uses anyway.
+      expect(provider.createdWith, hint).toEqual({ viewport: "desktop" });
+    }
+  });
+
+  it("defaults to desktop when no hint is given at all", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(provider.createdWith).toEqual({ viewport: "desktop" });
+  });
+});
+
+/*
+ * Progress is a nicety and a scan is not. The write goes to a row that is
+ * being read while it is being written, and it must never be able to take the
+ * crawl down with it.
+ */
+describe("startDeepScan → analyzeDeepScan — progress while it runs", () => {
+  it("writes the count as pages are read, on the running row", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    const counts: number[] = [];
+    analyzeMock.mockImplementation(async (input: { onProgress?: (p: { pagesInspected: number }) => void }) => {
+      // Stand in for the crawl: three pages, reported one at a time.
+      for (const n of [1, 2, 3]) {
+        input.onProgress?.({ pagesInspected: n });
+        // The write is fire-and-forget, so give it a turn to land.
+        await Promise.resolve();
+        const row = db.rows("authenticated_product_intelligence_snapshots").at(-1);
+        counts.push(Number(row?.pages_inspected ?? -1));
+      }
+      return { ok: true, snapshot: fakeSnapshot() };
+    });
+
+    await runFullScan(supabase, provider, projectId);
+
+    expect(counts).toEqual([1, 2, 3]);
+  });
+
+  it("does not fail a scan when the progress write fails", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    analyzeMock.mockImplementation(async (input: { onProgress?: (p: { pagesInspected: number }) => void }) => {
+      // A rejected write, exactly as a dropped connection would produce.
+      input.onProgress?.({ pagesInspected: Number.NaN });
+      return { ok: true, snapshot: fakeSnapshot() };
+    });
+
+    const { analyzed } = await runFullScan(supabase, provider, projectId);
+
+    expect(analyzed.ok).toBe(true);
+  });
+});
+
+
+/**
+ * Where the browser opens (founder report, 2026-09-08).
+ *
+ * It opened at the origin root, which for most products is the marketing
+ * page, and a founder on a phone spent the two-minute sign-in deadline
+ * looking for "Sign in" inside a canvas. The evidence needed to do better was
+ * already in the public snapshot and was being thrown away here.
+ *
+ * These tests are about the wiring: `findSignInTarget` has its own file and
+ * proves what it will and will not choose. What can only be proved here is
+ * that the answer actually reaches the browser — and that a project with no
+ * public scan still gets a working session.
+ */
+describe("startDeepScan — where the browser opens", () => {
+  function seedLiveSnapshot(db: InstanceType<typeof FakeDatabase>, projectId: string, result: unknown) {
+    db.seed("live_product_intelligence_snapshots", {
+      id: "live_1",
+      project_id: projectId,
+      status: "completed",
+      created_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      result,
+    });
+  }
+
+  it("opens the sign-in page the public scan already found", async () => {
+    const { db, supabase, projectId } = setup();
+    seedLiveSnapshot(db, projectId, {
+      pages: [{ path: "/app", status: 200, redirectedTo: "/login" }],
+      productSurfaces: [],
+      conversionSignals: { forms: [] },
+    });
+
+    const started = await startDeepScan(supabase, new FakeBrowserProvider(), {
+      projectId,
+      userId: OWNER,
+    });
+
+    expect(started.ok).toBe(true);
+    expect(landingMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      { path: "/login" },
+    );
+  });
+
+  it("opens the root when no public scan has run", async () => {
+    const { supabase, projectId } = setup();
+
+    const started = await startDeepScan(supabase, new FakeBrowserProvider(), {
+      projectId,
+      userId: OWNER,
+    });
+
+    // Null, not a guessed "/login": a path Vibe has no evidence for is a 404
+    // the founder pays browser seconds for.
+    expect(started.ok).toBe(true);
+    expect(landingMock).toHaveBeenCalledWith(expect.any(String), expect.any(String), { path: null });
+  });
+
+  it("opens the root when a completed scan carries no result", async () => {
+    const { db, supabase, projectId } = setup();
+    // A real row shape: the snapshot completed and stored nothing usable. The
+    // landing is a convenience, and a founder must never lose a session to a
+    // failed optimisation.
+    seedLiveSnapshot(db, projectId, null);
+
+    const started = await startDeepScan(supabase, new FakeBrowserProvider(), {
+      projectId,
+      userId: OWNER,
+    });
+
+    expect(started.ok).toBe(true);
+    expect(landingMock).toHaveBeenCalledWith(expect.any(String), expect.any(String), { path: null });
   });
 });

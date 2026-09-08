@@ -223,13 +223,29 @@ function NodeButton({
   );
 }
 
-function MobileBrain({ view, selected, onSelect }: {
+/**
+ * The map at narrow width — and, since the render block, at any width.
+ *
+ * This was already the product's compact answer for a phone: the score, the
+ * coverage line, and the nine areas as a swipeable row of the same planets the
+ * radial map draws, with the same styling, icons, scores and health labels.
+ *
+ * `always` is what lets Nova's thread use it. Nothing else about it changes,
+ * which is the point: a second compact map would be a second set of decisions
+ * about where the areas sit and what a null score looks like, and the two would
+ * disagree the first time either was touched. One of them already did.
+ */
+function MobileBrain({ view, selected, onSelect, always = false }: {
   view: BusinessBrainView;
   selected: BusinessLens | null;
   onSelect: (id: BusinessLens) => void;
+  always?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-6 md:hidden" data-testid="business-map-list">
+    <div
+      className={cn("flex flex-col gap-6", !always && "md:hidden")}
+      data-testid="business-map-list"
+    >
       <div className="business-brain-mobile-core mx-auto flex size-48 flex-col items-center justify-center rounded-full text-center">
         <span className="text-fg text-5xl leading-none font-semibold tracking-[-0.05em]">{view.overall.score ?? "—"}</span>
         <span className="text-fg mt-2 text-body font-semibold">Business Health</span>
@@ -276,12 +292,28 @@ export function BusinessMap({
   hovered: controlledHovered,
   onSelect,
   onHover,
+  variant = "page",
 }: {
   view: BusinessBrainView;
   selected: BusinessLens | null;
   hovered?: BusinessLens | null;
   onSelect: (id: BusinessLens) => void;
   onHover?: (id: BusinessLens | null) => void;
+  /**
+   * Where this is drawn.
+   *
+   * `block` is Nova's thread. The radial map is a 780×690 canvas built for a
+   * page a founder opened in order to read it; a thread block is a glance. So
+   * the block renders the compact layout this file already has for a phone,
+   * at every width, rather than shrinking the radial one into nine unreadable
+   * planets.
+   *
+   * It is a variant here and not a second component on purpose. A compact map
+   * written elsewhere is a second set of decisions about where the areas sit,
+   * and the two drifted the first time it was tried: the copy laid the lenses
+   * out from the domain's `ring` and `angle`, which this map does not use.
+   */
+  variant?: "page" | "block";
 }) {
   const reducedMotion = Boolean(useReducedMotion());
   const visible = useDocumentVisible();
@@ -305,6 +337,11 @@ export function BusinessMap({
   }
   const activeNode = active ? view.nodes.find((node) => node.id === active) ?? null : null;
   const activeAccent = activeNode ? planetStyle(activeNode)["--planet-accent"] : "var(--color-mint)";
+
+  /* After the hooks, so the two variants never run a different number of them. */
+  if (variant === "block") {
+    return <MobileBrain view={view} selected={selected} onSelect={onSelect} always />;
+  }
 
   return (
     <div className="min-w-0">

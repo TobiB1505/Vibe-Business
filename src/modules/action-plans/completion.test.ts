@@ -283,13 +283,42 @@ describe("Action Plan completion authorities", () => {
     ).toEqual([]);
   });
 
-  it("never lets a founder attestation complete Agent or external-party work", () => {
+  it("never lets a founder attestation complete Agent work", () => {
+    /*
+     * The half of this that must never move. A step an execution produces is
+     * closed by that execution's own evidence or not at all — a founder
+     * confirming it would be confirming away the work Vibe exists to do.
+     *
+     * External-party work used to be asserted here beside it, and no longer is:
+     * see the case below and ADR 0100. The two were never the same argument.
+     */
     const agent = fakePlanStep({
       id: "3-connect-stripe",
       order: 3,
       executionSupport: "vibe_executes_now",
       capability: "nextjs_seo_foundations_v2",
     });
+
+    expect([...completedStepsFromEvidence([agent], [], [], [founderActionEvidence()])]).toEqual(
+      [],
+    );
+  });
+
+  it("lets a founder attestation close what the outside world did (ADR 0100)", () => {
+    /*
+     * The authority ADR 0055 deferred, now defined. Nothing inside Vibe
+     * produces an `external_party` step and nothing observes one either — Vibe
+     * has no integration that watches Google's index — so the person waiting is
+     * the only witness there is.
+     *
+     * It grants nothing the Agent wanted, which is why it is safe: no execution
+     * path has ever produced this actor, so admitting it cannot confirm away
+     * work Vibe would build. The case above still holds that line.
+     *
+     * What it fixes is a dead end that was visible on screen: the plan marked
+     * such a step "Start here" and rendered no control at all, and any step
+     * behind it waited forever.
+     */
     const external = fakePlanStep({
       id: "3-connect-stripe",
       order: 3,
@@ -298,11 +327,9 @@ describe("Action Plan completion authorities", () => {
       capability: null,
     });
 
-    for (const step of [agent, external]) {
-      expect(
-        [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
-      ).toEqual([]);
-    }
+    expect([...completedStepsFromEvidence([external], [], [], [founderActionEvidence()])]).toEqual(
+      [3],
+    );
   });
 });
 
@@ -369,6 +396,40 @@ describe("which steps a founder may confirm", () => {
     });
 
     expect(isFounderAttestable(step)).toBe(false);
+  });
+
+  it("never admits a product change on a handoff for a different step", () => {
+    // The gate is per step, not per plan: handing out step 3 must not make
+    // step 4 confirmable.
+    const step = fakePlanStep({ id: "4-link", actor: "vibe", changeKind: "product_change" });
+
+    expect(isFounderAttestable(step, new Set(["3-checkout"]))).toBe(false);
+    expect(isFounderAttestable(step, new Set(["4-link"]))).toBe(true);
+  });
+
+  it("admits a product change only once Vibe handed it out", () => {
+    /*
+     * The exclusion above is what stops a founder confirming away work the
+     * agent would build, so the exception cannot be a shape — it has to be a
+     * durable fact. A handoff row is written only where Vibe refuses by policy.
+     */
+    const step = fakePlanStep({ id: "3-checkout", actor: "vibe", changeKind: "product_change" });
+
+    expect(isFounderAttestable(step)).toBe(false);
+    expect(isFounderAttestable(step, new Set())).toBe(false);
+    expect(isFounderAttestable(step, new Set(["3-checkout"]))).toBe(true);
+  });
+
+  it("completes a handed-off step from the founder's own attestation", () => {
+    const step = fakePlanStep({ id: "3-checkout", actor: "vibe", changeKind: "product_change" });
+    const evidence = founderActionEvidence({ stepKey: step.id, stepOrder: step.order });
+
+    // The handoff set reaches the projection too: without it the founder
+    // attests, the database accepts, and the plan never counts it.
+    expect([...completedStepsFromEvidence([step], [], [], [evidence])]).toEqual([]);
+    expect(
+      [...completedStepsFromEvidence([step], [], [], [evidence], new Set([step.id]))],
+    ).toEqual([step.order]);
   });
 
   it("completes the Vibe step no execution could reach", () => {
@@ -479,5 +540,77 @@ describe("what a successor may be routed on top of", () => {
         new Set(["change-1"]),
       ),
     ]).toEqual([2]);
+  });
+});
+
+/**
+ * Ticking off a handed-off step has to move the *Agent* on, not just the plan.
+ *
+ * The founder's whole ask: run the prompt in their own tool, come back, tick it
+ * off, carry on. The plan screen advanced the moment the attestation landed —
+ * and the routing set, which decides whether the next step may start, did not
+ * know handoffs existed. So step 4 would have stayed blocked on step 3 forever
+ * while the plan showed step 3 as done. One product, two answers.
+ */
+describe("what a handed-off step unblocks", () => {
+  const handed = fakePlanStep({
+    id: "3-checkout",
+    order: 3,
+    actor: "vibe",
+    changeKind: "product_change",
+  });
+  const next = fakePlanStep({
+    id: "4-link-pricing",
+    order: 4,
+    actor: "vibe",
+    changeKind: "product_change",
+    dependsOn: [3],
+  });
+  const attestation = founderActionEvidence({ stepKey: handed.id, stepOrder: handed.order });
+
+  it("counts for routing once the founder says they built it", () => {
+    const routing = completedStepsForExecutionRouting(
+      [handed, next],
+      [],
+      [],
+      new Set(),
+      [attestation],
+      [],
+      new Set([handed.id]),
+    );
+
+    expect([...routing]).toEqual([3]);
+    expect(firstActionableStep([handed, next], routing)?.order).toBe(4);
+  });
+
+  it("counts for nothing without the handoff", () => {
+    // The exclusion that keeps a founder from ticking off work the agent would
+    // build is unchanged: without a handoff this is exactly that work.
+    expect([
+      ...completedStepsForExecutionRouting([handed, next], [], [], new Set(), [attestation]),
+    ]).toEqual([]);
+  });
+
+  it("does not wait for a merge Vibe could never observe", () => {
+    /*
+     * Merged is the bar for a step *Vibe* built, because a successor is
+     * prepared against the default branch and Vibe's own change must have
+     * reached it. Vibe made no change here — the founder's tool did, in their
+     * repository — so there is no prepared change to merge and no evidence to
+     * wait for. Their word is the authority, exactly as it is for the
+     * real-world work a `founder_action` attestation already carries into this
+     * set. Every run still re-reads HEAD before it prepares anything.
+     */
+    const routing = completedStepsForExecutionRouting(
+      [handed, next],
+      [],
+      [],
+      new Set(), // nothing merged at all
+      [attestation],
+      [],
+      new Set([handed.id]),
+    );
+
+    expect([...routing]).toEqual([3]);
   });
 });

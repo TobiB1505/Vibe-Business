@@ -29,14 +29,25 @@ export function FounderInputCard({
   context,
   resolveAction,
   presentation = "card",
+  /**
+   * How long this has been waiting, already formatted.
+   *
+   * Passed rather than computed: a relative time is a reading of a clock, and
+   * a client component that read one would disagree with the server that
+   * rendered it. `block` is the only presentation that shows it — a paused run
+   * is the one case where how long matters, and it is what the thread could
+   * not say before.
+   */
+  waitingSince,
   openRequestCount = 1,
   onResolved,
 }: {
+  waitingSince?: string;
   projectId: string;
   request: FounderInputRequest;
   context: "action_plan" | "runtime_execution";
   resolveAction: FounderInputResolutionAction;
-  presentation?: "card" | "workspace";
+  presentation?: "card" | "workspace" | "block";
   /** Real open requests on this plan. Used only to orient the current question. */
   openRequestCount?: number;
   /** Refreshes or advances the owning workspace after a confirmed answer. */
@@ -62,6 +73,22 @@ export function FounderInputCard({
   const customInputId = `founder-input-${request.id}`;
   const customHelpId = `${customInputId}-help`;
   const runtime = context === "runtime_execution";
+  /*
+   * Nova's thread, where the render block already supplies the frame and the
+   * word above it.
+   *
+   * The thread drew this inside `NovaRenderBlock` with `tone="waiting"`, and
+   * this card then drew its own amber `Surface` inside that — two amber frames
+   * around one question — under a label saying "Needs your answer" above a
+   * pill saying "Needs your decision". Three statements of one fact and two
+   * borders, which is the duplication this surface exists to remove.
+   *
+   * So in a block the frame goes, and so does the pill the frame already says.
+   * "Execution paused" stays, because that one is not on the frame: it says a
+   * *run* is stopped waiting, which is a different fact from a question being
+   * open, and it is the reason answering here matters.
+   */
+  const block = presentation === "block";
 
   if (presentation === "workspace" && !runtime) {
     const options = [
@@ -84,10 +111,10 @@ export function FounderInputCard({
     ];
     const resolvedAnswer =
       selectedChoice === "recommendation"
-        ? request.recommendation?.label ?? "Vibe's recommendation"
+        ? (request.recommendation?.label ?? "Vibe's recommendation")
         : selectedChoice === "custom"
           ? "Your own answer"
-          : options.find((option) => option.value === selectedChoice)?.label ?? "Your answer";
+          : (options.find((option) => option.value === selectedChoice)?.label ?? "Your answer");
 
     if (state?.ok) {
       return (
@@ -240,21 +267,23 @@ export function FounderInputCard({
     );
   }
 
-  return (
-    <Surface
-      level={runtime ? "section" : "card"}
-      padding={runtime ? "md" : "lg"}
-      tone={runtime ? "amber" : "mint"}
-      className="flex flex-col gap-5"
-    >
+  const body = (
+    <>
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusPill tone={runtime ? "waiting" : "active"} dot>
-            {runtime ? "Execution paused" : "Start here"}
-          </StatusPill>
-          <StatusPill tone="waiting">
-            Needs your {request.kind === "decision" ? "decision" : "input"}
-          </StatusPill>
+          {(runtime || !block) && (
+            <StatusPill tone={runtime ? "waiting" : "active"} dot>
+              {runtime ? "Execution paused" : "Start here"}
+            </StatusPill>
+          )}
+          {!block && (
+            <StatusPill tone="waiting">
+              Needs your {request.kind === "decision" ? "decision" : "input"}
+            </StatusPill>
+          )}
+          {block && waitingSince && (
+            <span className="text-fg-meta text-caption">· waiting {waitingSince}</span>
+          )}
         </div>
         <h3 className="text-fg text-moment font-semibold">{request.question}</h3>
         <p className="text-fg-prose max-w-2xl text-body leading-relaxed">{request.whyNeeded}</p>
@@ -363,6 +392,23 @@ export function FounderInputCard({
           </p>
         ) : null}
       </form>
+    </>
+  );
+
+  /*
+   * In a block the render block is the frame. Everywhere else this is the
+   * primary object on its view and brings its own.
+   */
+  if (block) return <div className="flex flex-col gap-5">{body}</div>;
+
+  return (
+    <Surface
+      level={runtime ? "section" : "card"}
+      padding={runtime ? "md" : "lg"}
+      tone={runtime ? "amber" : "mint"}
+      className="flex flex-col gap-5"
+    >
+      {body}
     </Surface>
   );
 }

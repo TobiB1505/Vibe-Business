@@ -1,20 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
-import type { AuditSynthesis, BusinessLens, BusinessReadinessAudit } from "@/modules/business-audit/schema";
+import type {
+  AuditSynthesis,
+  BusinessLens,
+  BusinessReadinessAudit,
+} from "@/modules/business-audit/schema";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { BusinessMap } from "../../projects/[projectId]/business-brain/business-map";
-import { revealAuditAndFindFirstMoveAction } from "./actions";
 
-export function OnboardingAuditReveal({
-  audit,
-  projectId,
-}: {
-  audit: BusinessReadinessAudit;
-  projectId: string;
-}) {
+/**
+ * What the audit found, as the body of a render block.
+ *
+ * ## Why it carries no control any more
+ *
+ * Because the control is a Move, and a Move belongs outside the thing it acts
+ * on. *Show me where to start* was a `Button` at the foot of this component,
+ * inside Nova's block, which put the one decision on the screen a level deeper
+ * than every other decision in the product. The page renders it in
+ * `NovaOnboardingThread`'s `control` slot now, bound to the same action.
+ */
+export function OnboardingAuditReveal({ audit }: { audit: BusinessReadinessAudit }) {
   const synthesis: AuditSynthesis | null = audit.synthesis ?? null;
   const view = buildBusinessBrainView({
     audit,
@@ -26,23 +33,39 @@ export function OnboardingAuditReveal({
     synthesis?.blockers[0]?.lenses[0] ?? null,
   );
   const [hovered, setHovered] = useState<BusinessLens | null>(null);
-  const reveal = revealAuditAndFindFirstMoveAction.bind(null, projectId);
   const blocker = synthesis?.blockers[0] ?? null;
 
   return (
-    <div className="flex flex-col gap-8">
-      <header className="flex flex-col gap-4">
-        <MonoLabel>What Vibe thinks</MonoLabel>
-        <h1 className="text-fg max-w-[46ch] text-[2rem] leading-[1.16] font-semibold tracking-[-0.04em] text-balance sm:text-[2.75rem]">
+    <div className="flex flex-col gap-6">
+      {/*
+        The audit's own conclusion, as a sentence rather than as a poster.
+
+        It was a display heading at 2.75rem under a `MonoLabel` reading "What
+        Vibe thinks" — inside a render block already labelled *Business audit*,
+        under a bubble where Nova has just said she found something. Three
+        titles for one thing, and the biggest type on the screen given to the
+        one of them nobody wrote for this position.
+
+        The sentence is real and stays. `synthesis.overall` is the audit's
+        reading, not Nova's line about it, so losing it would lose the only
+        specific claim in the block.
+      */}
+      <div className="flex flex-col gap-1.5">
+        <p className="text-fg max-w-[52ch] text-ui leading-relaxed font-semibold">
           {synthesis?.overall ?? "Your Business Audit is ready."}
-        </h1>
+        </p>
         {audit.overall.score !== null && (
           <p className="text-fg-meta font-mono text-caption">{audit.overall.score} / 100 readiness</p>
         )}
-      </header>
+      </div>
 
+      {/*
+        Fill and no line, the thread's own answer to a surface inside a
+        surface: the map needs a ground to sit on and the block already drew
+        the border.
+      */}
       {view && (
-        <section className="border-line-2 bg-surface-1 overflow-hidden rounded-card border p-3 sm:p-5">
+        <section className="bg-surface-1 overflow-hidden rounded-card p-3 sm:p-5">
           <BusinessMap
             view={view}
             selected={selected}
@@ -60,10 +83,6 @@ export function OnboardingAuditReveal({
           <p className="text-fg-prose text-body leading-relaxed">{blocker.explanation}</p>
         </section>
       )}
-
-      <form action={reveal} noValidate>
-        <Button type="submit">Show me where to start</Button>
-      </form>
     </div>
   );
 }

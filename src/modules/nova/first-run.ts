@@ -56,8 +56,6 @@ export type NovaFirstRunFacts = {
 };
 
 export type NovaFirstRunPosition =
-  /** Nova has nothing to say yet: there is no product to talk about. */
-  | "before_source"
   /** Nova has not introduced herself for this project. */
   | "introduce"
   /** Introduced, and the founder has not been offered the walkthrough. */
@@ -73,13 +71,30 @@ export type NovaFirstRunPosition =
  * everything else. The ranking in `focus.ts` is for afterwards, when a project
  * can be several things at once.
  *
- * `before_source` comes first and not last. Introducing Nova over an empty
- * project would be Nova saying hello about nothing — there is no repository,
- * no product and nothing she could describe, and the founder has one thing to
- * do that Nova cannot do for them.
+ * ## `before_source` was here, and it was the wrong way round
+ *
+ * It short-circuited on `connect_source` and returned nothing, on the argument
+ * that "introducing Nova over an empty project would be Nova saying hello
+ * about nothing — there is no repository, no product and nothing she could
+ * describe".
+ *
+ * That reads the introduction as being *about the project*, and it is not.
+ * It is about her: what she does, and that nothing reaches a default branch
+ * without the founder saying yes. Neither sentence needs a repository, and the
+ * first thing the old order did was ask a stranger to connect their code
+ * before telling them who was asking. The walkthrough is the same: *how a
+ * change gets from an idea to your default branch* is precisely what somebody
+ * wants before handing over the repository, not after.
+ *
+ * The opening's choreography settles it. The mark assembles, travels into the
+ * status row and the room is drawn around it — Nova building the environment
+ * the whole of setup then happens in. That can only be first.
+ *
+ * So the cascade is now purely about her own two positions, and
+ * `onboardingState` no longer gates them. It stays on the facts because
+ * `handoff` is still the answer for a project that has met her.
  */
 export function deriveNovaFirstRun(facts: NovaFirstRunFacts): NovaFirstRunPosition {
-  if (facts.onboardingState === "connect_source") return "before_source";
   if (facts.novaIntroducedAt === null) return "introduce";
   if (facts.novaWorkflowStatus === "unseen") return "explain_workflow";
   return "handoff";
@@ -93,46 +108,128 @@ export function deriveNovaFirstRun(facts: NovaFirstRunFacts): NovaFirstRunPositi
  * work nobody has done yet. The introduction in particular is where a product
  * is most tempted to say what it *will* achieve, and Nova describes only what
  * she does.
+ *
+ * `feed.test.ts` sweeps these now. It did not, and the gap was the shape its
+ * own docblock warns about: the rules were a property of a *sweep* rather than
+ * of Nova, so the copy a founder meets first — before any of the twenty-one
+ * moments and before any onboarding state — was the one part of her voice
+ * nothing checked.
  */
-const INTRODUCTION = [
-  "I read your code and your product, work out what is holding the business back, and then I build the changes myself.",
-  "You stay in charge of what ships. Nothing reaches your default branch until you have looked at it and said yes.",
-] as const;
-
-const WORKFLOW_OFFER =
-  "Before we start: I can walk you through how a change gets from an idea to your default branch.";
 
 /**
- * The walkthrough itself.
+ * Hello, by name where there is one.
  *
- * It exists because the control that records `explained` has to explain
- * something. A button that wrote the column and showed nothing would make the
- * column false in the other direction from the name §O.5 rejected — recording
- * an explanation that did not happen rather than one that did.
+ * ## Why the name is a parameter and not a lookup
  *
- * Four sentences, one per thing that actually occurs, in the order it occurs.
- * None of them promises an outcome and none says a change is finished: the
- * last one is the guarantee Vibe genuinely makes, which is that the founder
- * decides.
+ * Because `identity-view.ts` holds the rule this has to obey: **never invent a
+ * name.** Nothing in this codebase stores one. There are exactly two things a
+ * founder may be called — the GitHub login they authenticated with, which is a
+ * name they chose, and their email address, which is an address. An address is
+ * not shortened into a name here: "tobivlog@outlook.de" does not become
+ * "Tobi", because that is a guess about a person presented as a fact.
+ *
+ * So a caller passes a login or it passes null, and the greeting has two
+ * forms. The nameless one is not a degraded version — it is the same warmth
+ * without a claim in it.
+ */
+export function novaGreeting(name: string | null): string {
+  return name
+    ? `Hi ${name} — I'm Nova. I'll be working on your product with you.`
+    : "Hi — I'm Nova. I'll be working on your product with you.";
+}
+
+/**
+ * What she says after hello, and before anything is asked of anybody.
+ *
+ * Two sentences rather than a description of the pipeline. The first says what
+ * she will do next; the second says what she can do, and closes on the only
+ * promise Vibe actually makes.
+ */
+const INTRODUCTION = [
+  "I'll get to know what you built, look at the business around it, and work out what's worth improving first.",
+  "When there's something I can build for you, I can do that too. You'll always see the result before anything reaches your default branch.",
+] as const;
+
+/**
+ * The question, and the only one asked before setup begins.
+ *
+ * Two real answers, and neither is a dismissal: getting on with it is a
+ * choice a person made, which is why `skipped` is a value on the status table
+ * rather than an absence.
+ */
+const WORKFLOW_OFFER =
+  "Before we start — want to get straight to your product, or should I show you how working with me works first?";
+
+/**
+ * How she works, for somebody who asked.
+ *
+ * ## Why this is about the interface and not only about the pipeline
+ *
+ * It used to be four sentences describing what happens to a change: read,
+ * judge, build, review. All true, and all of it answers a question nobody had
+ * yet. The thing a person actually does not know on meeting this screen is
+ * *what kind of thing am I talking to* — and the answer is unusual enough to
+ * be worth saying outright. She is not a chat box. There is nothing to type.
+ * She proposes one thing and a person presses it or does not.
+ *
+ * So the interaction comes first and the pipeline second, and the block that
+ * follows shows the shape rather than describing it again.
  */
 const WORKFLOW_STEPS = [
-  "First I read your code and, if you have one, your live product, and tell you what I understood.",
-  "Then I look at the business around it and say what is holding it back, worst thing first.",
-  "When you pick something, I plan it, build it on a branch of its own, and check that the project still builds.",
-  "Then you look at what I did. Nothing reaches your default branch until you say so.",
+  "One thing before we start.",
+  "You don't need to write prompts or work out what to ask me. I'll guide us through this.",
+  "I'll show you what I'm looking at, tell you what I think matters, and give you one clear next step at a time.",
+  "You decide what we do. And if something costs Credits, you'll see the price before you start it — never afterwards.",
+  "If I build something, you review it before it goes anywhere.",
 ] as const;
+
+/**
+ * The line that hands over to the example, so the block is not unannounced.
+ *
+ * The component finds it by id and puts the block underneath, which is why the
+ * id is exported rather than left as a string two files know about.
+ */
+export const WORKFLOW_EXAMPLE_ID = "first-run:walkthrough:example";
+
+const WORKFLOW_EXAMPLE_LEAD =
+  "Here's a quick example. It's only to show you how working with me feels — it isn't about your product.";
+
+/**
+ * And the line under the example, which is the seam.
+ *
+ * Everything above it is Nova describing herself; everything after it is her
+ * working. Saying so out loud is what stops the example being mistaken for the
+ * beginning of the real thing.
+ */
+const WORKFLOW_HANDOVER = "That's it. From here on, everything you see is about your product.";
 
 /**
  * The feed for a first-run position, or nothing when the screen is not Nova's.
  *
- * `before_source` and `handoff` return an empty feed rather than a sentence,
- * and the route reads that as "render what you rendered before". An entry
- * saying "Nova has nothing to say" would be a screen element made of an
- * absence.
+ * `handoff` returns an empty feed rather than a sentence, and the route reads
+ * that as "render what you rendered before". An entry saying "Nova has nothing
+ * to say" would be a screen element made of an absence.
  */
-export function buildNovaFirstRunFeed(position: NovaFirstRunPosition): NovaEntry[] {
+export function buildNovaFirstRunFeed(
+  position: NovaFirstRunPosition,
+  /**
+   * What to call the founder, or null when nothing here knows.
+   *
+   * Only the introduction uses it, and only in its first sentence. Defaulted
+   * so every caller that has no identity to hand — the lab, the studies, the
+   * tests about ordering — gets the nameless greeting rather than a required
+   * argument they would have to invent a value for.
+   */
+  name: string | null = null,
+): NovaEntry[] {
   if (position === "introduce") {
     return [
+      {
+        kind: "nova.message" as const,
+        id: "first-run:introduce:hello",
+        text: novaGreeting(name),
+        emphasis: "primary" as const,
+      },
       ...INTRODUCTION.map((text, index) => ({
         kind: "nova.message" as const,
         id: `first-run:introduce:${index}`,
@@ -192,15 +289,62 @@ export function buildNovaFirstRunFeed(position: NovaFirstRunPosition): NovaEntry
  * What the founder sees after asking to be shown.
  *
  * Not a position: it is what one of `explain_workflow`'s two controls reveals,
- * and by the time the write behind it lands the derived position is already
- * `handoff`. Deriving it from a column would have meant a third status value
- * for a screen the founder is looking at right now.
+ * on the same screen, without a write. Deriving it from a column would have
+ * meant a third status value for a screen the founder is looking at right now
+ * — and the write it *would* have needed is exactly what used to replace this
+ * thread with the next setup step the instant somebody asked to see it.
+ *
+ * Four sentences about how she works, the line that hands over to the example,
+ * and the press that records having been shown it.
  */
 export function buildNovaWorkflowExplanation(): NovaEntry[] {
-  return WORKFLOW_STEPS.map((text, index) => ({
-    kind: "nova.message" as const,
-    id: `first-run:walkthrough:${index}`,
-    text,
-    emphasis: index === 0 ? ("primary" as const) : ("aside" as const),
-  }));
+  return [
+    ...WORKFLOW_STEPS.map((text, index) => ({
+      kind: "nova.message" as const,
+      id: `first-run:walkthrough:${index}`,
+      text,
+      emphasis: index === 0 ? ("primary" as const) : ("aside" as const),
+    })),
+    /*
+     * The lead, and the block goes under it. `NovaFirstRun` finds this entry
+     * by id and inserts the example there rather than at the end, because the
+     * sentence after it is about what happens *next* — a handover printed
+     * above the thing it hands over from would read as part of the example.
+     */
+    {
+      kind: "nova.message" as const,
+      id: WORKFLOW_EXAMPLE_ID,
+      text: WORKFLOW_EXAMPLE_LEAD,
+      emphasis: "primary" as const,
+    },
+    {
+      kind: "nova.message" as const,
+      id: "first-run:walkthrough:handover",
+      text: WORKFLOW_HANDOVER,
+      emphasis: "primary" as const,
+    },
+    /*
+     * And the press that records `explained`, at the bottom of the thing it
+     * records having shown. The catalog owns the verb, as everywhere else — a
+     * label written here would be a button saying one thing and writing
+     * another.
+     */
+    {
+      kind: "nova.choice" as const,
+      id: "first-run:walkthrough:choice",
+      prompt: "",
+      options: [
+        {
+          actionId: "nova.begin_setup" as const,
+          control: NOVA_ACTION_META["nova.begin_setup"].control,
+          label: NOVA_ACTION_META["nova.begin_setup"].label,
+          price: null,
+          consequential: false,
+          requiresConfirmation: false,
+          confirmationNote: null,
+          subject: { kind: "project" as const },
+        },
+      ],
+    },
+  ];
 }

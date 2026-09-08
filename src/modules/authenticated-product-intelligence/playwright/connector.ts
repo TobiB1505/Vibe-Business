@@ -6,7 +6,14 @@ import "server-only";
 import type { Browser, BrowserContext, Page } from "playwright-core";
 import type { AnalysisBrowserPort, AnalysisPagePort } from "../analyzer";
 import { pageExtractionScript, type RawPageExtraction } from "../extract";
-import { decideRequest } from "../read-only-policy";
+import {
+  probePathFor,
+  sanitizeSignInProbe,
+  signInProbeScript,
+  type SignInProbe,
+} from "../login-detection";
+import { couldHaveRenderedPage, decideRequest } from "../read-only-policy";
+import { BROWSER_SANDBOX } from "../sandbox-browser/runtime";
 
 /**
  * Playwright transport for authenticated analysis (Sprint 5 §16, §17, §18, §19).
@@ -56,6 +63,53 @@ class PlaywrightPagePort implements AnalysisPagePort {
     return { status: response?.status() ?? null };
   }
 
+  /**
+   * Waits until the page stops navigating itself.
+   *
+   * `goto` resolves on `domcontentloaded`, which for a single-page application
+   * is the beginning of its work rather than the end: it then checks the
+   * session, redirects to a canonical path, or replaces the URL once its data
+   * arrives. Reading during that throws "Execution context was destroyed";
+   * navigating during it aborts the next page with "interrupted by another
+   * navigation". One scan inspected one page of sixteen for exactly this.
+   *
+   * Two signals, and both are needed. URL stability is the one that always
+   * terminates — a client-side redirect changes `location`, and polling for it
+   * cannot hang. `networkidle` is the one that catches a shell which fetches
+   * its data without changing the URL, and it is best effort precisely because
+   * a logged-in application often polls and would never reach it.
+   *
+   * It never throws and never reports failure. Reaching the ceiling means the
+   * page is read as it stands, which is the right answer: a page that will not
+   * hold still is still worth describing.
+   */
+  async settle(options: { quietMs: number; timeoutMs: number }): Promise<void> {
+    const deadline = Date.now() + options.timeoutMs;
+    const poll = Math.max(25, Math.min(100, Math.floor(options.quietMs / 4)));
+
+    let lastUrl = this.page.url();
+    let stillSince = Date.now();
+
+    while (Date.now() < deadline) {
+      if (Date.now() - stillSince >= options.quietMs) break;
+      await this.page.waitForTimeout(poll).catch(() => undefined);
+      const url = this.page.url();
+      if (url !== lastUrl) {
+        lastUrl = url;
+        stillSince = Date.now();
+      }
+    }
+
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) return;
+    // Best effort, and the `catch` is the design: an application that polls
+    // never goes quiet, and waiting for something that cannot happen is how
+    // the old `networkidle` note in `goto` describes burning the budget.
+    await this.page
+      .waitForLoadState("networkidle", { timeout: remaining })
+      .catch(() => undefined);
+  }
+
   async extract(): Promise<RawPageExtraction> {
     return this.page.evaluate(pageExtractionScript);
   }
@@ -70,7 +124,7 @@ export async function attachReadOnlyGuards(
   context: BrowserContext,
   origin: string,
 ): Promise<AnalysisBrowserPort["blocked"]> {
-  const blocked = { mutatingRequests: 0, downloads: 0, externalNavigations: 0 };
+  const blocked = { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 };
 
   await context.route("**/*", async (route) => {
     const request = route.request();
@@ -86,8 +140,13 @@ export async function attachReadOnlyGuards(
       return;
     }
 
-    if (decision.reason === "mutating_method") blocked.mutatingRequests += 1;
-    else blocked.externalNavigations += 1;
+    if (decision.reason === "mutating_method") {
+      // Refused either way; only the conclusion differs. A blocked beacon
+      // cannot have changed what the page displays, and a scan that says it
+      // might is telling the founder something untrue about their product.
+      if (couldHaveRenderedPage(request.resourceType())) blocked.mutatingRequests += 1;
+      else blocked.mutatingBeacons += 1;
+    } else blocked.externalNavigations += 1;
 
     await route.abort("blockedbyclient");
   });
@@ -143,29 +202,98 @@ export async function attachReadOnlyGuards(
  * Best effort: a site that is slow or down must not fail session creation,
  * because the user can still drive the browser by hand.
  */
+/**
+ * The landing, and why it now says why it failed.
+ *
+ * This returned a bare `navigated: boolean` and swallowed the reason, and the
+ * one caller discarded even that. The first session in Vibe's own browser
+ * opened on a **white canvas**, and between those two silences there was
+ * nothing anywhere to say whether the browser had failed to reach the
+ * customer's site or had reached it and painted nothing.
+ *
+ * The reason is a short string for the operator, never for the customer:
+ * ADR 0011's rule is that no provider-shaped text escapes this adapter towards
+ * a caller who renders it, and the caller maps this to a typed code.
+ */
+export type SessionLanding = { navigated: true } | { navigated: false; reason: string };
+
+/**
+ * The URL the founder's browser opens at.
+ *
+ * The root unless a same-origin path was supplied. A path that resolves
+ * anywhere else is discarded rather than corrected — there is no version of
+ * "nearly the right origin" worth navigating a browser to.
+ */
+function landingUrl(origin: string, path: string | null): string {
+  const root = new URL(origin).origin;
+  if (!path) return root;
+  try {
+    const target = new URL(path, root);
+    return target.origin === root ? target.toString() : root;
+  } catch {
+    return root;
+  }
+}
+
 export async function openSessionAtOrigin(
   connectUrl: string,
   origin: string,
-  options: { timeoutMs?: number } = {},
-): Promise<{ navigated: boolean }> {
+  options: {
+    timeoutMs?: number;
+    /**
+     * An origin-relative path to open instead of the root — the sign-in page,
+     * when Vibe's public scan already found one.
+     *
+     * Validated by the caller and re-resolved here: this is the last thing
+     * between a path derived from the customer's own site and a real
+     * navigation, and an origin check that only exists at the caller is an
+     * origin check one refactor away from being gone.
+     */
+    path?: string | null;
+  } = {},
+): Promise<SessionLanding> {
   const { chromium } = await import("playwright-core");
 
   let browser: Browser | undefined;
   try {
     browser = await chromium.connectOverCDP(connectUrl, { timeout: options.timeoutMs ?? 20_000 });
     const context = browser.contexts()[0];
-    if (!context) return { navigated: false };
+    if (!context) return { navigated: false, reason: "the browser reported no context" };
 
     // A brand-new session already has one blank page; reuse it rather than
     // leaving a stray tab the analyzer would later have to ignore.
     const page = context.pages()[0] ?? (await context.newPage());
-    await page.goto(new URL(origin).origin, {
-      waitUntil: "domcontentloaded",
-      timeout: options.timeoutMs ?? 20_000,
-    });
+    const root = new URL(origin).origin;
+    const timeout = options.timeoutMs ?? 20_000;
+    const target = landingUrl(origin, options.path ?? null);
+
+    const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout });
+
+    /*
+     * A sign-in path that no longer exists is worse than no sign-in path.
+     *
+     * The path comes from a public scan that may be days old, and a `goto` to
+     * a 404 navigates perfectly well — so "it loaded" is not the question. A
+     * founder who paid for a browser and got their product's error page has a
+     * worse session than one who got the homepage, and they cannot type an
+     * address to fix it (ADR 0076: there is no address bar, and there will
+     * never be one).
+     *
+     * So an error status falls back to the root, which is where this landed
+     * before any of this existed. A response Vibe could not read at all is
+     * left alone: that is normal for a document served from cache, and
+     * throwing away a good landing over it would be the same mistake.
+     */
+    if (target !== root && response && response.status() >= 400) {
+      await page.goto(root, { waitUntil: "domcontentloaded", timeout });
+    }
+
     return { navigated: true };
-  } catch {
-    return { navigated: false };
+  } catch (error) {
+    // Bounded, and a message rather than an object: a Playwright error carries
+    // a stack and sometimes a URL, and neither belongs in a log line.
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : "unknown";
+    return { navigated: false, reason: reason.slice(0, 300) };
   } finally {
     // Closes our CDP connection only. The remote session, and the page we just
     // navigated, stay exactly where they are for the user.
@@ -223,6 +351,25 @@ export async function connectReadOnly(
 
   const blocked = await attachReadOnlyGuards(context, origin);
 
+  /*
+   * The analysis reads the desktop product, whatever the founder signed in on.
+   *
+   * The login window follows their device, because a phone driving a
+   * 1920-pixel page is the fiddliest part of this flow. The analysis must not:
+   * a mobile layout hides its navigation behind a menu, so a phone-started
+   * scan would harvest fewer links and find fewer surfaces, and two scans of
+   * one product would stop being comparable depending on which device happened
+   * to start them.
+   *
+   * `setViewportSize` over CDP is `Emulation.setDeviceMetricsOverride`, which
+   * resizes the page without touching the window. Best effort and never fatal:
+   * a browser that refuses the override still has a signed-in session worth
+   * reading, and the snapshot records the pages it saw either way.
+   */
+  for (const page of context.pages()) {
+    await page.setViewportSize(BROWSER_SANDBOX.viewport).catch(() => undefined);
+  }
+
   const port: AnalysisBrowserPort = {
     pages: async () => context.pages().map((page) => new PlaywrightPagePort(page)),
     blocked,
@@ -236,4 +383,50 @@ export async function connectReadOnly(
       await browser.close().catch(() => undefined);
     },
   };
+}
+
+/**
+ * Reads whether the founder has finished signing in, and nothing else.
+ *
+ * **No read-only guards, and that is the point.** `attachReadOnlyGuards`
+ * aborts every mutating request, and signing in *is* a POST — attaching them
+ * here would break the very login this probe is watching for. The guards exist
+ * to keep the *analysis* read-only, and the analysis connects separately.
+ *
+ * What keeps this safe instead is that it does nothing: it navigates nowhere,
+ * clicks nothing, and its one `evaluate` returns four booleans. The window in
+ * which the founder's own POST must succeed stays exactly as wide as it was.
+ *
+ * Returns `null` when no page is on the project's origin, and throws nothing a
+ * caller has to interpret — a page that is mid-navigation, a context that just
+ * went away, and a browser that never answered are all the same "not yet".
+ */
+export async function probeSignInState(
+  connectUrl: string,
+  origin: string,
+  options: { timeoutMs?: number } = {},
+): Promise<SignInProbe | null> {
+  const { chromium } = await import("playwright-core");
+
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.connectOverCDP(connectUrl, { timeout: options.timeoutMs ?? 15_000 });
+    const context = browser.contexts()[0];
+    if (!context) return null;
+
+    for (const page of context.pages()) {
+      const path = probePathFor(page.url(), origin);
+      if (path === null) continue;
+      const raw = await page.evaluate(signInProbeScript);
+      return sanitizeSignInProbe(raw, path);
+    }
+
+    return null;
+  } catch {
+    // Never surface the transport error: it carries the capability URL (§28),
+    // and a caller can do nothing with it that "not yet" does not already say.
+    return null;
+  } finally {
+    await browser?.close().catch(() => undefined);
+  }
 }

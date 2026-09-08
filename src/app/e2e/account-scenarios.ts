@@ -225,19 +225,42 @@ export function isE2eRepositoriesScenario(value: string): value is E2eRepositori
  * is the common case. The third is reachable — `Session.email` is nullable —
  * and it is the one that would crash a page that derived a name itself.
  */
+type ProfileFixture = {
+  email: string | null;
+  github: { githubUserId: number; githubLogin: string } | null;
+  /** Present only where the founder gave one, so the default stays "no name". */
+  founderName?: string | null;
+};
+
 export const E2E_PROFILE_SCENARIOS = {
   /** GitHub connected: the login is the name, the avatar is GitHub's. */
   "profile-connected": () => ({
     email: "founder@example.com",
     github: { githubUserId: 583231, githubLogin: "ada-lovelace" },
+    founderName: null,
   }),
 
   /** No connection: the address is the name, and the one action is offered. */
-  "profile-no-github": () => ({ email: "founder@example.com", github: null }),
+  "profile-no-github": () => ({ email: "founder@example.com", github: null, founderName: null }),
 
   /** Neither. The page must still render a person-shaped thing. */
-  "profile-no-email": () => ({ email: null, github: null }),
-} as const;
+  "profile-no-email": () => ({ email: null, github: null, founderName: null }),
+
+  /**
+   * A name the founder gave, which outranks a connected GitHub login.
+   *
+   * The fourth branch, and the one the other three could not reach: every
+   * identity above is *derived* from something the founder did elsewhere, and
+   * this is the only one they stated. It is also the case where the "what Vibe
+   * does not keep" panel has to change what it says, because "no name" stops
+   * being true.
+   */
+  "profile-named": () => ({
+    email: "founder@example.com",
+    github: { githubUserId: 583231, githubLogin: "ada-lovelace" },
+    founderName: "Tobi",
+  }),
+} as const satisfies Record<string, () => ProfileFixture>;
 
 export type E2eProfileScenario = keyof typeof E2E_PROFILE_SCENARIOS;
 

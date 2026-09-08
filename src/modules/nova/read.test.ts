@@ -269,7 +269,7 @@ describe("what a render costs", () => {
   async function readWith(changes: number): Promise<QueryRecorder> {
     reset();
     seedChanges(changes);
-    await readNovaFocusFacts(client(), PROJECT);
+    await readNovaFocusFacts(client(), PROJECT, USER);
     return recorder;
   }
 
@@ -294,7 +294,7 @@ describe("what a render costs", () => {
     reset();
     seedProject();
 
-    await readNovaFocusFacts(client(), PROJECT);
+    await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(readsOf(recorder, "prepared_changes")).toBe(1);
     for (const table of LIFECYCLE_TABLES.filter((name) => name !== "prepared_changes")) {
@@ -307,7 +307,7 @@ describe("what a render costs", () => {
     reset();
     seedChanges(3);
 
-    await readNovaFocusFacts(client(), PROJECT);
+    await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(recorder.writes).toEqual([]);
   });
@@ -317,7 +317,7 @@ describe("reading a project's focus", () => {
   it("leads with a failed validation", async () => {
     seedChanges(1, "failed");
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect(focus.primary.kind).toBe("validation_failed");
     expect(focus.nextAction).toBe("nova.validate_again");
@@ -326,7 +326,7 @@ describe("reading a project's focus", () => {
   it("leads with a change to review when the check passed", async () => {
     seedChanges(1, "passed");
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect(focus.primary.kind).toBe("review_change");
   });
@@ -334,7 +334,7 @@ describe("reading a project's focus", () => {
   it("says nothing_to_do for an empty project", async () => {
     seedProject();
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect(focus.primary.kind).toBe("nothing_to_do");
     expect(focus.working).toBeNull();
@@ -345,7 +345,7 @@ describe("reading a project's focus", () => {
     seedChange(1, "failed");
     seedChange(2, "passed");
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect(focus.primary.kind).toBe("validation_failed");
     expect(focus.secondary.map((candidate) => candidate.kind)).toEqual(["review_change"]);
@@ -359,7 +359,7 @@ describe("reading a project's focus", () => {
   it("does not call a never-run audit outdated", async () => {
     seedProject();
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.auditOutdated).toBe(false);
   });
@@ -375,13 +375,29 @@ describe("reading a project's focus", () => {
 describe("what this module may never reach for", () => {
   const raw = readFileSync(new URL("./read.ts", import.meta.url), "utf8");
   /*
-   * Comments stripped first, or the guard fires on the paragraph explaining
-   * why `resolvePlanExecutionRoutes` is *not* called — which would make
-   * documenting a deliberate omission the thing that fails the test.
+   * Comments stripped first, or the guard fires on the paragraphs that explain
+   * which reaches are deliberately absent — which would make documenting an
+   * omission the thing that fails the test.
    */
   const source = raw.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
 
-  it("never reaches for a provider, a sandbox or GitHub", () => {
+  /*
+   * `resolvePlanExecutionRoutes` used to be on this list, and that was a
+   * mistake worth recording rather than quietly deleting.
+   *
+   * It was added on the belief that the routes resolver performs a live
+   * website preflight. It does not: its own docblock says *reads state, never
+   * the network — no live HEAD, no site crawl*, it sets `liveHead: null`, and
+   * it reads five tables. The website preflight in that file is
+   * `runAgentPreflight`, which the *start* path calls.
+   *
+   * So the entry was not guarding this module against the network. It was
+   * guarding `executableStep` against ever being read, and the cost was a
+   * candidate — `execution_offered` — that could not arise on any screen built
+   * on top of it. `runAgentPreflight` and `safeFetch` take its place, because
+   * those are the reaches that would actually be violations.
+   */
+  it("never reaches for a provider, a sandbox, GitHub or the network", () => {
     for (const forbidden of [
       "createVercelSandboxProvider",
       "createGithubMergePort",
@@ -389,10 +405,34 @@ describe("what this module may never reach for", () => {
       "VercelWorkflowExecutor",
       "getPreviewStatus",
       "getReviewImages",
-      "resolvePlanExecutionRoutes",
+      "runAgentPreflight",
+      "safeFetch",
     ]) {
       expect(source, forbidden).not.toContain(forbidden);
     }
+  });
+
+  /*
+   * One trip for two answers. The rail's checklist and the execution offer
+   * read the same plan and the same three evidence tables, and derive
+   * differently on purpose — so the reads are shared and the derivations are
+   * not. A second `readPlanEvidence` in this module would be the duplication
+   * coming back.
+   */
+  it("reads the plan's evidence once, for both answers", () => {
+    expect(source.match(/readPlanEvidence\(/g)?.length ?? 0).toBe(1);
+    expect(source).toContain("checklistFromEvidence");
+  });
+
+  /*
+   * The positive half of the correction above. Three facts were fixed at their
+   * empty values on a premise about the network, and the last of them cost a
+   * candidate that could never arise. A future reader who re-fixes it will
+   * fail here rather than silently removing a moment from the product.
+   */
+  it("reads the execution offer rather than fixing it at null", () => {
+    expect(source).toContain("resolvePlanExecutionRoutes");
+    expect(source).not.toMatch(/executableStep:\s*null/);
   });
 
   /** It bypasses RLS, and every fact here is scoped by a project's owner. */
@@ -428,7 +468,7 @@ describe("what the repository read says", () => {
   it("calls nothing outdated for a project Vibe has never read", async () => {
     seedProject();
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.repositoryReadOutdated).toBe(false);
     expect(facts.workspaceChoiceRequired).toBe(false);
@@ -443,7 +483,7 @@ describe("what the repository read says", () => {
     seedProject();
     seedSnapshot(undefined);
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.repositoryReadOutdated).toBe(true);
     expect(facts.workspaceChoiceRequired).toBe(false);
@@ -453,7 +493,7 @@ describe("what the repository read says", () => {
     seedProject();
     seedSnapshot({ truncated: false, targets: [buildTarget(".")] });
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.repositoryReadOutdated).toBe(false);
     expect(facts.workspaceChoiceRequired).toBe(false);
@@ -471,7 +511,7 @@ describe("what the repository read says", () => {
     seedProject();
     seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.workspaceChoiceRequired).toBe(true);
     expect(facts.repositoryReadOutdated).toBe(false);
@@ -499,7 +539,7 @@ describe("what the repository read says", () => {
     });
     seedSnapshot({ truncated: false, targets: [buildTarget("frontend"), buildTarget("admin")] });
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.workspaceChoiceRequired).toBe(false);
   });
@@ -510,7 +550,7 @@ describe("what the repository read says", () => {
     seedProject();
     seedSnapshot(undefined);
 
-    await readNovaFocusFacts(client(), PROJECT);
+    await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(recorder.writes).toEqual([]);
   });
@@ -537,7 +577,7 @@ describe("the failures Nova reads", () => {
   it("reports a project with no live connection as disconnected", async () => {
     seedProjectWithoutSource();
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.sourceDisconnected).toBe(true);
   });
@@ -545,7 +585,7 @@ describe("the failures Nova reads", () => {
   it("reports a connected project as connected", async () => {
     seedProject();
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.sourceDisconnected).toBe(false);
   });
@@ -561,7 +601,7 @@ describe("the failures Nova reads", () => {
       workspace_root: null,
     });
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.sourceDisconnected).toBe(true);
   });
@@ -570,7 +610,7 @@ describe("the failures Nova reads", () => {
     seedProject();
     seedOperation("business_audit", "failed");
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.failedOperations).toEqual({ agent: false, scan: false, audit: true });
   });
@@ -585,7 +625,7 @@ describe("the failures Nova reads", () => {
     seedOperation("business_audit", "failed");
     seedOperation("business_audit", "succeeded");
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.failedOperations.audit).toBe(false);
   });
@@ -594,7 +634,7 @@ describe("the failures Nova reads", () => {
     seedProject();
     seedOperation("product_scan", "failed");
 
-    const facts = await readNovaFocusFacts(client(), PROJECT);
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
 
     expect(facts.failedOperations).toEqual({ agent: false, scan: true, audit: false });
   });
@@ -631,7 +671,7 @@ describe("a run that stopped answering", () => {
     seedProject();
     seedRunning("product_scan", LONG_AGO);
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect(focus.primary.kind).toBe("scan_stalled");
     expect(focus.nextAction).toBe("nova.rescan_product");
@@ -642,7 +682,7 @@ describe("a run that stopped answering", () => {
     seedProject();
     seedRunning("business_audit", LONG_AGO);
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect(focus.working).toBeNull();
     expect(focus.primary.kind).toBe("audit_stalled");
@@ -658,9 +698,9 @@ describe("a run that stopped answering", () => {
     seedProject();
     seedRunning("change_merge", LONG_AGO);
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
-    expect(focus.working?.stalled).toBe(true);
+    expect(focus.working?.view.stalled).toBe(true);
     expect(focus.primary.kind).toBe("nothing_to_do");
   });
 
@@ -669,9 +709,9 @@ describe("a run that stopped answering", () => {
     seedProject();
     seedRunning("product_scan", new Date().toISOString());
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
-    expect(focus.working?.stalled).toBe(false);
+    expect(focus.working?.view.stalled).toBe(false);
     expect(focus.primary.kind).toBe("nothing_to_do");
   });
 
@@ -698,7 +738,7 @@ describe("a run that stopped answering", () => {
     });
     seedRunning("product_scan", LONG_AGO);
 
-    const focus = await readNovaFocus(client(), PROJECT);
+    const focus = await readNovaFocus(client(), PROJECT, USER);
 
     expect([focus.primary.kind, ...focus.secondary.map((entry) => entry.kind)]).toEqual([
       "agent_failed",

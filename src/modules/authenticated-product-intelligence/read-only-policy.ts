@@ -65,6 +65,33 @@ export function decideRequest(context: RequestContext): RequestDecision {
 }
 
 /**
+ * Request kinds that cannot have rendered the page, whatever their method.
+ *
+ * A scan of 21 pages reported **53 non-GET requests blocked**, and downgraded
+ * itself to `partial` on the strength of it: *parts of this application may
+ * render via non-GET requests*. Most of those 53 were analytics beacons — a
+ * `navigator.sendBeacon` fired on every page view. A blocked beacon cannot
+ * change what a page displays. Saying it might is not caution, it is a false
+ * statement that costs the founder confidence in a scan that worked.
+ *
+ * The blocking itself is unchanged: every non-GET is still refused, because
+ * this analysis runs logged in as the customer and the rule is that nothing
+ * Vibe does can alter their data (Sprint 5 §18). What changes is only what
+ * Vibe *concludes* from having refused it.
+ *
+ * The list is short and one-directional on purpose. `fetch`, `xhr`,
+ * `document`, `eventsource` and the catch-all `other` are all treated as
+ * capable of rendering — a GraphQL POST is a `fetch`, and an unrecognised type
+ * must never be assumed harmless. Only kinds that are definitionally not
+ * page data are listed here.
+ */
+const NON_RENDERING_RESOURCE_TYPES = ["ping", "image", "media", "font", "manifest", "texttrack"];
+
+export function couldHaveRenderedPage(resourceType: string): boolean {
+  return !NON_RENDERING_RESOURCE_TYPES.includes(resourceType.toLowerCase());
+}
+
+/**
  * Browser permissions and capabilities denied for the whole analysis phase
  * (Sprint 5 §19). Passed to the browser context so no page can prompt for or
  * silently obtain any of them.

@@ -76,20 +76,48 @@ const OUTLOOK: Record<RefusalShape, { label: string; link: string; footnote: str
   },
 };
 
+/**
+ * The policy refusal that has somewhere to go after all.
+ *
+ * Same refusal, same sentence about Vibe not doing it — and a different ending,
+ * because there now is one. It replaces "nothing you change here will unlock
+ * it", which stays true of Vibe and stopped being the whole truth for the
+ * founder.
+ */
+const HANDOFF_OUTLOOK = {
+  label: "Vibe will not build this one",
+  link: "Get a prompt for your own tool",
+  footnote:
+    "Vibe won't ship a change it cannot prove is sound. Your own coding tool can build this — Vibe writes the instructions, on your Action Plan.",
+};
+
 export function AgentPlanNextNotice({
   stepOrder,
   stepTitle,
   reasonLabel,
   planHref,
   shape,
+  handoffAvailable = false,
 }: {
   stepOrder: number;
   stepTitle: string;
   reasonLabel: string;
   planHref: string;
   shape: RefusalShape;
+  /**
+   * Whether this step can be handed to the founder's own tool (ADR 0099).
+   *
+   * The Agent workspace is where a founder stands at the moment of refusal, so
+   * it is where they look — and "Choose a different Move" sent them away from
+   * the one thing that was now possible one screen over. The *control* stays on
+   * the Action Plan, beside the step's own completion criterion, because a
+   * confirmation separated from the sentence it attests to is not one. What
+   * belongs here is the pointer.
+   */
+  handoffAvailable?: boolean;
 }) {
-  const outlook = OUTLOOK[shape];
+  const outlook =
+    shape === "policy" && handoffAvailable ? HANDOFF_OUTLOOK : OUTLOOK[shape];
 
   return (
     <div data-testid="agent-plan-next" className="w-full max-w-[27rem]">

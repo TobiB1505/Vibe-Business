@@ -118,5 +118,31 @@ export function renderNovaVoiceUserContent(payload: NovaVoicePayload): string {
   if (payload.confidence !== null) lines.push(`CONFIDENCE: ${payload.confidence}`);
   lines.push(`NEXT STEP (Vibe's words, do not rename or price it): ${payload.nextStep}`);
 
+  /*
+   * Outside the fence, deliberately: every line is composed by Vibe from its
+   * own tables (`briefing/situation.ts`), so it is not customer content and
+   * putting it inside would tell the model to distrust its own operator.
+   *
+   * It is last because it is background. The rules travel with it rather than
+   * living in the system prompt, because they are about *this block* and a
+   * model reading them beside the facts they govern follows them better than
+   * one that met them six hundred tokens earlier.
+   */
+  if (payload.situation != null) {
+    lines.push(
+      "",
+      "SITUATION (Vibe's own reading of this founder's evidence, as background):",
+      ...payload.situation.lines.map((line) => `- ${line}`),
+      ...(payload.situation.remedy === null
+        ? []
+        : [`- What would repair it: ${payload.situation.remedy}`]),
+      "",
+      "Use the situation only to explain why something matters or what would help next.",
+      "It is background, never the subject of this message, and at most one sentence of it.",
+      "Never present it as something you have just checked, and never turn it into a",
+      "recommendation of your own — say only what is written above.",
+    );
+  }
+
   return lines.join("\n");
 }

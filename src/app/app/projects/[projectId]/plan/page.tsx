@@ -13,6 +13,8 @@ import {
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
+import { getAuditReadiness, readAuditEvidence } from "@/modules/business-audit/service";
+import { novaSituationFrom } from "@/modules/nova/briefing/situation";
 import { readNovaMoveVoice, topMove } from "@/modules/nova/voice/move-slot";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import {
@@ -27,6 +29,7 @@ import {
   sanitizeRequestedOpportunityId,
 } from "@/modules/action-plans/source";
 import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-preflight";
+import { REFUSAL_SHAPES } from "@/modules/execution-contract/view";
 import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
 import { NovaMoveVoice } from "../nova-move-voice";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
@@ -88,14 +91,25 @@ export default async function ProjectMovesPage({
    * used to ask for them once for the prioritization gate and then again for
    * every Move it rendered.
    */
+  /*
+   * The six evidence documents, awaited first so everything below shares them
+   * (VB-022). `readActionPlanReadinessInputs` takes them as `prefetched` and
+   * stops re-reading the audit, the profile and the currency's four snapshots,
+   * so this is close to free — and it is what lets Nova's sentence above the
+   * Moves know the state of the evidence they were prioritized from.
+   */
+  const evidence = await readAuditEvidence(supabase, projectId);
+
   const [
     readinessInputs,
+    auditReadiness,
     activeOpportunityOperation,
     executionSummaries,
     actionPlanView,
     activeActionPlanOperation,
   ] = await Promise.all([
-    readActionPlanReadinessInputs(supabase, projectId),
+    readActionPlanReadinessInputs(supabase, projectId, evidence),
+    getAuditReadiness(supabase, projectId, evidence),
     getActiveOpportunityOperation(supabase, projectId),
     getOpportunityExecutionSummaries(supabase, projectId),
     getLatestActionPlan(supabase, projectId),
@@ -160,6 +174,31 @@ export default async function ProjectMovesPage({
         })
       : null;
   const stepResolutions = stepRoutes?.resolutions ?? [];
+
+  /*
+   * The step Vibe refuses permanently, if that is what the plan is waiting on
+   * (ADR 0099).
+   *
+   * Resolved here because this is where the live resolution is, and because the
+   * *shape* of a refusal is the thing a screen must not re-derive from labels.
+   * `policy` only: a repairable refusal has a fix and a sequencing one has an
+   * order, and handing either to the founder would send them to build something
+   * Vibe was about to be able to do.
+   *
+   * A render is never authority — the action re-derives all of this against
+   * live state before it writes anything (rule 55).
+   */
+  const actionableStep = actionPlanView?.firstActionableStep ?? null;
+  const handoffStepKey =
+    actionableStep !== null &&
+    actionableStep.actor === "vibe" &&
+    actionableStep.changeKind === "product_change" &&
+    REFUSAL_SHAPES[
+      stepResolutions.find((resolution) => resolution.stepOrder === actionableStep.order)?.reason ??
+        "dependency_unsatisfied"
+    ] === "policy"
+      ? actionableStep.id
+      : null;
 
   const responsibilityByStepKey: Record<string, StepResponsibility> = Object.fromEntries(
     planSteps.map((step) => [
@@ -267,6 +306,20 @@ export default async function ProjectMovesPage({
         projectId: project.id,
         move: topRankedMove,
         primaryGoal: (await getFounderIntent(supabase, project.id))?.intent.primaryGoal ?? null,
+        /*
+         * Where the founder stands, as context for her sentence — the third
+         * input the durable step used, composed by the same function so the two
+         * identities agree.
+         */
+        situation: novaSituationFrom(
+          {
+            evidence,
+            readiness: auditReadiness,
+            currency: readinessInputs.currency,
+            opportunities,
+          },
+          new Date(),
+        ),
       })
     : null;
 
@@ -318,6 +371,8 @@ export default async function ProjectMovesPage({
         defaultMoveTitle={defaultMove?.title ?? null}
         planReadinessByOpportunity={planReadinessByOpportunity}
         responsibilityByStepKey={responsibilityByStepKey}
+        handoffStepKey={handoffStepKey}
+        repositoryFullName={project.repository?.fullName ?? null}
         planView={actionPlanView}
         // Project-wide, not scoped to `plannedMove` — `action_planning`
         // operations are keyed by input identity (which does include the

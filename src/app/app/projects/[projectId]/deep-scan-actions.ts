@@ -8,6 +8,7 @@ import {
   analyzeDeepScan,
   cancelDeepScan,
   getDeepScanLiveView,
+  probeDeepScanSignIn,
   startDeepScan,
 } from "@/modules/authenticated-product-intelligence/service";
 
@@ -39,6 +40,20 @@ export type LiveViewActionState =
 
 export type SimpleDeepScanActionState = { ok: true } | { ok: false; error: DeepScanActionFailure };
 
+/*
+ * The progress read is deliberately **not** here.
+ *
+ * It was, and it could never have worked: Next.js executes Server Actions from
+ * one client one at a time, and the analysis is itself an action that runs for
+ * ninety seconds — so every poll queued behind it and arrived in a burst after
+ * it finished. It lives at `/api/deep-scan/[sessionId]/progress`, which is an
+ * ordinary request and is not queued behind anything.
+ */
+
+export type SignInProbeActionState =
+  | { ok: true; signedIn: boolean }
+  | { ok: false; error: DeepScanActionFailure };
+
 export type AnalyzeDeepScanActionState =
   | { ok: true; pagesInspected: number }
   | { ok: false; error: DeepScanActionFailure };
@@ -52,13 +67,26 @@ function provider() {
   return getBrowserSessionProvider();
 }
 
-export async function startDeepScanAction(projectId: string): Promise<StartDeepScanActionState> {
+export async function startDeepScanAction(
+  projectId: string,
+  /**
+   * The shape of screen the founder is signing in from.
+   *
+   * A hint, not an instruction: the service re-validates it against a closed
+   * set, and the analysis viewport is fixed regardless of what arrives here.
+   */
+  viewport?: string,
+): Promise<StartDeepScanActionState> {
   const session = await requireSession();
   const supabase = await createClient();
 
   let result;
   try {
-    result = await startDeepScan(supabase, provider(), { projectId, userId: session.userId });
+    result = await startDeepScan(supabase, provider(), {
+      projectId,
+      userId: session.userId,
+      viewport,
+    });
   } catch {
     // Reaching here means the provider could not even be constructed — a
     // configuration problem, not a user-facing failure of their product.
@@ -112,6 +140,39 @@ export async function analyzeDeepScanAction(
   revalidatePath(`/app/projects/${projectId}`);
   if (!result.ok) return { ok: false, error: result.error };
   return { ok: true, pagesInspected: result.pagesInspected };
+}
+
+/**
+ * Asks the live browser whether the founder has finished signing in.
+ *
+ * Polled while the dialog is open, so it is deliberately the cheapest action
+ * here: it reads, it writes nothing, and it can start nothing. The `reason`
+ * the service produces is for Vibe's own reasoning and stays on the server —
+ * the client gets the answer, not the argument, because a reason code rendered
+ * beside someone's half-finished login is noise at best.
+ *
+ * A failure is reported as `signedIn: false` rather than as an error the
+ * dialog has to handle: the browser being briefly unreachable is the normal
+ * shape of a login in progress, and the manual button is still right there.
+ */
+export async function probeDeepScanSignInAction(
+  sessionId: string,
+): Promise<SignInProbeActionState> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  let result;
+  try {
+    result = await probeDeepScanSignIn(supabase, provider(), { sessionId, userId: session.userId });
+  } catch {
+    return { ok: true, signedIn: false };
+  }
+
+  // Deliberately no `revalidatePath`: this changes nothing, and revalidating
+  // the project page every few seconds would re-render the whole workspace
+  // underneath an open dialog.
+  if (!result.ok) return { ok: false, error: result.error };
+  return { ok: true, signedIn: result.signedIn };
 }
 
 export async function cancelDeepScanAction(

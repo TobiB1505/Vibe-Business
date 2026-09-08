@@ -29,6 +29,12 @@ const PANEL = read("src/app/app/projects/[projectId]/plan/move-card.tsx");
 const STEPPER = read("src/app/app/projects/[projectId]/plan/move-stepper.tsx");
 const WORKSPACE = read("src/app/app/projects/[projectId]/plan/action-plan-workspace.tsx");
 const PLAN_DETAIL = read("src/app/app/projects/[projectId]/plan/plan-detail-panel.tsx");
+/*
+ * The step's criterion and the answer that closes it, split out of the panel so
+ * the handoff card can compose them without drawing a second card around a step
+ * the first one already named (ADR 0099).
+ */
+const ATTESTATION_FORM = read("src/app/app/projects/[projectId]/plan/attestation-form.tsx");
 const PRIORITIES = read(
   "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
 );
@@ -264,7 +270,9 @@ describe("the stepper owns selection without owning business state", () => {
    * that is where the mistake lives: an `await` inside the map over Moves.
    */
   it("asks the database once for what every Move shares", () => {
-    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId)");
+    /* Now with the evidence handed in, which stops the currency check inside
+       it re-reading four snapshots the page already holds. */
+    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId, evidence)");
     expect(MOVES_PAGE).not.toContain("await getActionPlanReadiness(");
     expect(MOVES_PAGE).not.toContain("getOpportunityReadiness(supabase");
   });
@@ -284,8 +292,17 @@ describe("planned work is a compact read-only checklist", () => {
   });
 
   it("does not turn durable completion into a local checkbox", () => {
+    /*
+     * The action moved out of the panel and into `AttestationForm`, so that the
+     * handoff card could compose the question and the answer without drawing a
+     * second card around them (ADR 0099). The property is unchanged and is
+     * asserted where it now lives: completion is a durable server action, never
+     * a local toggle.
+     */
     expect(copyOf(PLAN_DETAIL)).not.toContain('type="checkbox"');
-    expect(PLAN_DETAIL).toContain("attestFounderActionStepAction");
+    expect(copyOf(ATTESTATION_FORM)).not.toContain('type="checkbox"');
+    expect(ATTESTATION_FORM).toContain("attestFounderActionStepAction");
+    expect(PLAN_DETAIL).toContain("<AttestationForm");
   });
 });
 
@@ -631,6 +648,8 @@ describe("the plan hands off to the agent, and the agent points back", () => {
    */
   it("opens the Move a card names, not the plan's current first", () => {
     expect(HOME_STATUS).toContain("planMoveHref(planHref, nextMove.id)");
-    expect(NOVA_HOME).toContain("planMoveHref(href.plan, candidate.move.id)");
+    // The subject the moment carries, read off the candidate's own control —
+    // never a lookup that would resolve to whatever is rank 1 at click time.
+    expect(NOVA_HOME).toContain('planMoveHref(sectionHref["action-plan"], subject.opportunityId)');
   });
 });

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { NovaMoveButton } from "@/components/nova/nova-move";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
@@ -96,10 +97,32 @@ export function ProductConfirmation({
   if (!editing) {
     return (
       <div className="flex flex-col items-center gap-4">
-        <div className="flex flex-wrap justify-center gap-3">
-          <Button
-            type="button"
+        {/* A column at the Move's own measure: a Move is a full-width row and
+            two of them side by side would each be half a decision. */}
+        <div className="flex w-full max-w-[24rem] flex-col gap-2.5">
+          {/*
+           * Moves, like every other decision in the thread.
+           *
+           * These were the filled mint block the Move replaced, at the end of
+           * a thread made entirely of Moves. Unlike the paused audit's
+           * question there is no field here — two answers and nothing to
+           * type — so there was nothing holding them back except that nobody
+           * had put them on a screen beside the controls they now sit under.
+           *
+           * The label says where the press leads, so a founder pressing "yes"
+           * is never surprised by an audit starting. Both come from the
+           * catalog rather than being written here, which is what keeps the
+           * words and the action from drifting apart.
+           */}
+          <NovaMoveButton
+            label={
+              bundlesAudit
+                ? NOVA_ACTION_META["nova.confirm_product_and_audit"].label
+                : NOVA_ACTION_META["nova.confirm_product"].label
+            }
+            busy={confirming}
             disabled={confirming}
+            busyLabel="Working…"
             onClick={() =>
               startTransition(async () => {
                 const result = bundlesAudit
@@ -109,19 +132,7 @@ export function ProductConfirmation({
                 router.refresh();
               })
             }
-          >
-            {/*
-             * The label says where the press leads, so a founder pressing
-             * "yes" is never surprised by an audit starting. Both come from
-             * the catalog rather than being written here, which is what keeps
-             * the words and the action from drifting apart.
-             */}
-            {confirming
-              ? "Working…"
-              : bundlesAudit
-                ? NOVA_ACTION_META["nova.confirm_product_and_audit"].label
-                : NOVA_ACTION_META["nova.confirm_product"].label}
-          </Button>
+          />
           <Button type="button" variant="secondary" onClick={() => setEditing(true)}>
             Something&apos;s off
           </Button>

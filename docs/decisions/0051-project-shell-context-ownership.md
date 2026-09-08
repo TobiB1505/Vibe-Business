@@ -1,6 +1,6 @@
 # 0051 - Project shell context ownership and scroll model
 
-Status: Accepted; its **scroll-model clause** — the viewport-high flex frame in which the project document is the only vertical scroll surface — is superseded by [ADR 0101](0101-one-rail-that-unfolds.md) on 2026-09-07. One rail now serves both the workspace and Settings and cannot sit in two scroll models: the document scrolls, the rail is sticky, and the section list inside it is what runs out of room. The `View all products` and `All products` routes named below are also gone, for the reason ADR 0101 gives. Everything else this decided — the rail as sole owner of project identity, the bounded optional switcher read, no sticky content header, no live GitHub probe in shared chrome — stands.
+Status: Accepted; its **scroll-model clause** — the viewport-high flex frame in which the project document is the only vertical scroll surface — is superseded by [ADR 0105](0105-one-rail-that-unfolds.md) on 2026-09-07. One rail now serves both the workspace and Settings and cannot sit in two scroll models: the document scrolls, the rail is sticky, and the section list inside it is what runs out of room. The `View all products` and `All products` routes named below are also gone, for the reason ADR 0101 gives. Everything else this decided — the rail as sole owner of project identity, the bounded optional switcher read, no sticky content header, no live GitHub probe in shared chrome — stands.
 
 Date: 2026-08-24
 

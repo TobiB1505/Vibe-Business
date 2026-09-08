@@ -97,11 +97,14 @@ const FACTS_BY_SCENARIO: Record<E2eNovaScenario, NovaFocusFacts> = {
   "nova-settled": facts({}),
   "nova-waiting": facts({
     changes: [REVIEW_CHANGE],
-    working: operation({ status: "needs_user", stage: "asking_founder" }),
+    working: {
+      type: "business_audit",
+      view: operation({ status: "needs_user", stage: "asking_founder" }),
+    },
   }),
   "nova-stalled": facts({
     changes: [REVIEW_CHANGE],
-    working: operation({ stalled: true }),
+    working: { type: "business_audit", view: operation({ stalled: true }) },
   }),
   "nova-unscored": facts({ auditOutdated: true }),
 };

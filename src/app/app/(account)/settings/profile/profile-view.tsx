@@ -8,6 +8,7 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
 import type { GithubIdentity } from "@/modules/github/types";
+import { FounderNameForm } from "./founder-name-form";
 
 /**
  * Profile (CORE-6).
@@ -43,12 +44,20 @@ import type { GithubIdentity } from "@/modules/github/types";
  * "what Vibe does not keep" panel says where the picture comes from — so a
  * founder is never left thinking Vibe holds one.
  *
- * ## What it deliberately does not offer
+ * ## The name field, and why it is here now
  *
- * A name field. Adding one is a real decision with real consequences — a new
- * column or `user_metadata`, a place it is validated, a place it is displayed
- * instead of the GitHub login — and it belongs in a change that intends it,
- * not smuggled in as page filler.
+ * This docblock used to refuse one: "adding one is a real decision with real
+ * consequences — a new column, a place it is validated, a place it is
+ * displayed instead of the GitHub login — and it belongs in a change that
+ * intends it, not smuggled in as page filler." That was right, and this is
+ * that change. Nova is the reason a name is worth having: an assistant that
+ * writes to a founder needs to know what to call them, and asking is the only
+ * way to know without guessing.
+ *
+ * All three consequences are paid rather than skipped — `founder_profiles`
+ * with its own ownership policy, `normalizeFounderName` plus a database CHECK,
+ * and `buildAccountIdentity` preferring the chosen name over the GitHub login
+ * everywhere at once.
  */
 
 /**
@@ -61,9 +70,11 @@ import type { GithubIdentity } from "@/modules/github/types";
  * what Vibe does *not* hold is the last place that may describe something that
  * is not on screen.
  */
-function notStored(hasGithubAvatar: boolean): string[] {
+function notStored(hasGithubAvatar: boolean, hasChosenName: boolean): string[] {
   return [
-    "No display name — Vibe calls you by your GitHub login, or by your email address",
+    hasChosenName
+      ? "Nothing about you beyond the name you gave — no title, no company, no bio"
+      : "No name yet — Vibe calls you by your GitHub login, or by your email address",
     hasGithubAvatar
       ? "No picture of Vibe's own — the one above is served by GitHub"
       : "No picture of any kind — the circle above is your initials, drawn from the name beside it",
@@ -74,11 +85,14 @@ function notStored(hasGithubAvatar: boolean): string[] {
 export function ProfileView({
   email,
   github,
+  founderName,
 }: {
   email: string | null;
   github: GithubIdentity | null;
+  /** What the founder asked to be called, when they have said. */
+  founderName?: string | null;
 }) {
-  const identity = buildAccountIdentity({ email, github });
+  const identity = buildAccountIdentity({ email, github, founderName });
 
   return (
     <SettingsColumn className="gap-8">
@@ -114,6 +128,21 @@ export function ProfileView({
           )}
         </div>
       </Surface>
+
+      {/*
+        Directly under the person, because it is the one thing on this page
+        that changes what the product calls them. Below the connections it
+        would read as a setting; here it reads as the answer to the heading
+        above it.
+      */}
+      <section aria-labelledby="name-heading" className="flex flex-col gap-3">
+        <MonoLabel as="h2" id="name-heading">
+          Your name
+        </MonoLabel>
+        <Surface level="card" padding="lg">
+          <FounderNameForm current={identity.chosen ? identity.displayName : null} />
+        </Surface>
+      </section>
 
       <section aria-labelledby="connections-heading" className="flex flex-col gap-3">
         <MonoLabel as="h2" id="connections-heading">
@@ -189,7 +218,7 @@ export function ProfileView({
           </MonoLabel>
         </div>
         <ul className="flex flex-col gap-2">
-          {notStored(identity.avatarUrl !== null).map((line) => (
+          {notStored(identity.avatarUrl !== null, identity.chosen).map((line) => (
             <li key={line} className="text-fg-prose flex items-start gap-3 text-body leading-relaxed">
               <span aria-hidden className="bg-fg-faint mt-2 size-1 shrink-0 rounded-full" />
               {line}

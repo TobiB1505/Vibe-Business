@@ -22,7 +22,6 @@ import { AGENTIC_EXECUTION_CONFIG } from "@/modules/ai/operations";
  * ```
  * NEXT_PUBLIC_SUPABASE_URL=… \
  * SUPABASE_SERVICE_ROLE_KEY=… \
- * VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS=<uuid> \
  * VIBE_DOGFOOD_PROJECT_ID=<uuid> \
  * pnpm agent:preflight
  * ```

@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
+import type { NovaSituation } from "@/modules/nova/briefing/situation";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { GOAL_LABELS } from "@/modules/projects/founder-intent";
 import type { PrimaryGoal } from "@/modules/projects/founder-intent";
@@ -149,9 +150,12 @@ function lowerFirst(text: string): string {
 export function buildNovaMoveVoicePayload(params: {
   subject: NovaMoveSubject;
   founderGoal: string | null;
+  /** Where the founder stands, from `buildNovaSituation`. Part of the identity. */
+  situation?: NovaSituation | null;
 }): NovaVoicePayload {
   return {
     slot: "move_recommendation",
+    situation: params.situation ?? null,
     productName: null,
     founderGoal: params.founderGoal,
     facts: [
@@ -184,10 +188,11 @@ export function novaMoveVoiceIdentity(
   projectId: string,
   subject: NovaMoveSubject,
   founderGoal: string | null,
+  situation: NovaSituation | null = null,
 ): string {
   return computeNovaVoiceIdentity({
     projectId,
-    payload: buildNovaMoveVoicePayload({ subject, founderGoal }),
+    payload: buildNovaMoveVoicePayload({ subject, founderGoal, situation }),
     model: NOVA_PRESENTATION_CONFIG.model,
   });
 }
@@ -204,7 +209,12 @@ export function novaMoveVoiceIdentity(
  */
 export async function readNovaMoveVoice(
   supabase: SupabaseClient,
-  params: { projectId: string; move: BusinessOpportunity; primaryGoal: PrimaryGoal | null },
+  params: {
+    projectId: string;
+    move: BusinessOpportunity;
+    primaryGoal: PrimaryGoal | null;
+    situation: NovaSituation | null;
+  },
 ): Promise<NovaVoiceRead> {
   const subject = novaMoveSubject(params.move);
   const founderGoal = novaFounderGoal(params.primaryGoal);
@@ -212,7 +222,7 @@ export async function readNovaMoveVoice(
 
   try {
     return await readNovaVoiceMessage(supabase, {
-      identity: novaMoveVoiceIdentity(params.projectId, subject, founderGoal),
+      identity: novaMoveVoiceIdentity(params.projectId, subject, founderGoal, params.situation),
       template,
     });
   } catch (error) {

@@ -4,7 +4,7 @@
  * ## Why these are not in either icon file
  *
  * `icons.generated.tsx` is Lucide path data in Vibe's frame and
- * `dashboard-icons.tsx` is Vibe's own hand-drawn set ([ADR 0097](../../../docs/decisions/0097-icon-paths-come-from-lucide-the-frame-stays-vibes.md)).
+ * `dashboard-icons.tsx` is Vibe's own hand-drawn set ([ADR 0101](../../../docs/decisions/0101-icon-paths-come-from-lucide-the-frame-stays-vibes.md)).
  * A brand mark is neither: it is not ours to draw and not Lucide's to supply.
  * It belongs to the company it identifies, is reproduced here exactly rather
  * than restyled, and keeps its own colours — which is why it also ignores

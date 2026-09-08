@@ -35,7 +35,7 @@ const FONTS = readFileSync(join(process.cwd(), "src/app/fonts.ts"), "utf8");
 /**
  * The palettes this file measures.
  *
- * Two of them since S1 (ADR 0096). v2 is scoped to `[data-vibe="v2"]` and no
+ * Two of them since S1 (ADR 0097). v2 is scoped to `[data-vibe="v2"]` and no
  * element carries that attribute yet, which is exactly why it needs measuring
  * now: a palette nobody looks at is how `--color-fg-meta` reached production
  * at 3.38:1 and stayed there for the life of the design system. The arithmetic

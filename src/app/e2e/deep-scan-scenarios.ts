@@ -35,6 +35,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: null,
     canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
   } satisfies DeepScanViewModel,
 
   /** Priced, and the balance does not cover it. A refusal the customer can act on. */
@@ -46,6 +47,7 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: "insufficient_credits",
     canStart: false,
+    nextScan: { kind: "insufficient_credits", price: creditUnits(25_000) },
   } satisfies DeepScanViewModel,
 
   /**
@@ -54,6 +56,11 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
    * `completeness: "partial"` used to be the whole account of a scan that had
    * recorded specific warnings, so this is the state the disclosure exists
    * for: the result leads, the caveats are behind a label that says how many.
+   *
+   * The three kinds are all present on purpose. A real scan produced six notes
+   * of which one was a failure, and the disclosure used to head all six with
+   * "things Vibe could not check" — so this fixture is the shape that has to
+   * keep reading correctly: one failure, one deliberate stop, one observation.
    */
   "deep-scan-completed-with-warnings": {
     ...BASE,
@@ -63,17 +70,62 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: creditUnits(25_000),
     blockedReason: null,
     canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
     lastResult: {
       analyzedAt: "2026-08-30T09:12:00.000Z",
       pagesInspected: 7,
-      completeness: "partial",
+      completion: { kind: "within_limits", policyLimited: true, budgetLimited: true },
       surfaces: [
-        { id: "dashboard", name: "Dashboard" },
-        { id: "settings", name: "Settings" },
+        {
+          id: "dashboard",
+          name: "Dashboard",
+          confidence: "high",
+          evidence: [
+            { detail: "Vibe opened this page while signed in.", source: "/app" },
+            { detail: "Its heading reads “Welcome back”.", source: "/app" },
+          ],
+        },
+        {
+          id: "settings",
+          name: "Settings",
+          confidence: "medium",
+          evidence: [{ detail: "Its heading reads “Project Settings”.", source: "/app/settings" }],
+        },
       ],
-      warnings: [
-        "One page took too long to load and was not read.",
-        "Vibe could not tell two settings pages apart, so it read one of them.",
+      screens: [
+        { template: "/app", heading: "Welcome back", pages: [{ path: "/app", heading: "Welcome back" }] },
+        {
+          template: "/app/projects/:id/settings",
+          heading: "Project Settings",
+          pages: [
+            { path: "/app/projects/88d1c463/settings", heading: "Project Settings" },
+            { path: "/app/projects/9b702a96/settings", heading: "Project Settings" },
+          ],
+        },
+      ],
+      shape: {
+        landingPath: "/app",
+        navigation: ["Home", "My Products", "Billing"],
+        pagesWithForms: 4,
+        pagesWithTables: 2,
+        pagesWithEmptyState: 1,
+      },
+      notes: [
+        {
+          kind: "failed",
+          path: "/app/reports",
+          message: "One page took too long to load and was not read.",
+        },
+        {
+          kind: "by_design",
+          path: null,
+          message: "3 screen(s) exist in more copies than Vibe inspected. Each was read up to 2 time(s).",
+        },
+        {
+          kind: "observed",
+          path: "/app/onboarding",
+          message: "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
+        },
       ],
       accessMode: "credits",
     },
@@ -88,6 +140,75 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
     additionalScanPrice: null,
     blockedReason: "credits_required",
     canStart: false,
+    nextScan: { kind: "not_for_sale" },
+  } satisfies DeepScanViewModel,
+
+  /**
+   * A finished result, with another scan buyable — the state the founder was
+   * actually in, and the one nothing rendered.
+   *
+   * It is here rather than only in a unit test because the defect was invisible
+   * to the domain: the view model was right, the entitlement was right, and the
+   * panel drew a summary card with no control on it. Only a browser says
+   * whether a person can start a scan (rule 69).
+   */
+  "deep-scan-completed-rerunnable": {
+    ...BASE,
+    state: "completed",
+    includedScanAvailable: false,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    nextScan: { kind: "priced", price: creditUnits(25_000) },
+    lastResult: {
+      analyzedAt: "2026-08-11T22:30:00.000Z",
+      pagesInspected: 6,
+      completion: { kind: "complete", policyLimited: false, budgetLimited: false },
+      surfaces: [
+        { id: "dashboard", name: "Dashboard", confidence: "high", evidence: [] },
+        { id: "project_workspace", name: "Project workspace", confidence: "high", evidence: [] },
+        { id: "integrations", name: "Integrations", confidence: "medium", evidence: [] },
+      ],
+      screens: [],
+      shape: {
+        landingPath: "/app",
+        navigation: [],
+        pagesWithForms: 0,
+        pagesWithTables: 0,
+        pagesWithEmptyState: 0,
+      },
+      notes: [],
+      accessMode: "included_first_scan",
+    },
+  } satisfies DeepScanViewModel,
+
+  /** A finished result while a cooldown is in force: a reason, never silence. */
+  "deep-scan-completed-blocked": {
+    ...BASE,
+    state: "completed",
+    includedScanAvailable: false,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: "cooldown_active",
+    canStart: false,
+    nextScan: { kind: "blocked", reason: "cooldown_active", retryAvailableAt: null },
+    lastResult: {
+      analyzedAt: "2026-08-11T22:30:00.000Z",
+      pagesInspected: 6,
+      completion: { kind: "complete", policyLimited: false, budgetLimited: false },
+      surfaces: [{ id: "dashboard", name: "Dashboard", confidence: "high", evidence: [] }],
+      screens: [],
+      shape: {
+        landingPath: "/app",
+        navigation: [],
+        pagesWithForms: 0,
+        pagesWithTables: 0,
+        pagesWithEmptyState: 0,
+      },
+      notes: [],
+      accessMode: "included_first_scan",
+    },
   } satisfies DeepScanViewModel,
 } as const satisfies Record<string, DeepScanViewModel>;
 
@@ -95,4 +216,57 @@ export type E2eDeepScanScenario = keyof typeof E2E_DEEP_SCAN_SCENARIOS;
 
 export function isE2eDeepScanScenario(value: string): value is E2eDeepScanScenario {
   return Object.hasOwn(E2E_DEEP_SCAN_SCENARIOS, value);
+}
+
+/**
+ * The same view models, rendered as My Product's Deep Scan spotlight.
+ *
+ * Separate scenarios rather than a second rendering of the panel ones,
+ * because the spotlight answers a different question: not "what did the scan
+ * find" but "should a founder who has never run one press this". The two
+ * states that matter most here are the ones a unit test cannot see — a free
+ * included scan that must show no price, and a finished scan that must not
+ * offer a priced control from a page that has not authorised one.
+ *
+ * They are `DeepScanViewModel`s and pass through `buildDeepScanSpotlight` in
+ * the route, so the fixture cannot skip the derivation being tested.
+ */
+export const E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS = {
+  /** Never run, included scan intact, and evidence says the product is behind a login. */
+  "deep-scan-spotlight-offered": {
+    ...BASE,
+    state: "recommended",
+    includedScanAvailable: true,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    showRecommendation: true,
+    recommendationReason: "Vibe found a sign-in surface on your website.",
+    nextScan: { kind: "included" },
+  } satisfies DeepScanViewModel,
+
+  /** A finished scan, summarised. The state My Product used to render as one grey line. */
+  "deep-scan-spotlight-read": E2E_DEEP_SCAN_SCENARIOS["deep-scan-completed-with-warnings"],
+
+  /** Nothing to sign in to. A card with no action must still carry a reason. */
+  "deep-scan-spotlight-unavailable": {
+    ...BASE,
+    state: "unavailable",
+    includedScanAvailable: true,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: "production_origin_missing",
+    canStart: false,
+    unavailableReason: "production_url_missing",
+    nextScan: { kind: "unavailable", reason: "production_url_missing" },
+  } satisfies DeepScanViewModel,
+} as const satisfies Record<string, DeepScanViewModel>;
+
+export type E2eDeepScanSpotlightScenario = keyof typeof E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS;
+
+export function isE2eDeepScanSpotlightScenario(
+  value: string,
+): value is E2eDeepScanSpotlightScenario {
+  return Object.hasOwn(E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS, value);
 }

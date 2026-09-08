@@ -4,8 +4,10 @@ import { DEFAULT_AUTHENTICATED_BUDGETS } from "./budgets";
 import {
   buildRouteCandidates,
   extendCandidates,
+  isAuthSurfacePath,
   isNeverVisit,
   isSafeAnalysisTarget,
+  routeShape,
   toSameOriginPath,
 } from "./routes";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
@@ -320,7 +322,24 @@ describe("route priority refinement (Sprint 6 §5)", () => {
     expect(protectedFirst.indexOf(insights!)).toBeLessThan(protectedFirst.indexOf(reports!));
   });
 
-  it("demotes a repository route the public crawler already rendered", () => {
+  /*
+   * Sprint 6 §5 demoted a page the public crawl had already rendered, and kept
+   * it on the list: the signed-in view of `/` is often a different page, so a
+   * blanket removal looked like it would throw away real evidence.
+   *
+   * A measured scan reversed that. It spent pages of a 25-page budget on `/`,
+   * `/privacy`, `/terms`, `/forgot-password` and `/reset-password` — pages the
+   * live product scan reads already, statically, for no browser seconds and no
+   * Credits. The demotion did not prevent it, partly because it only ever
+   * applied to repository routes and those paths arrived as links in the
+   * signed-in shell's own footer.
+   *
+   * So a page the public crawl rendered anonymously is now skipped outright.
+   * The landing page keeps its exemption, because it is where the browser
+   * already is, and it is the one page whose signed-in form we are certain to
+   * see either way.
+   */
+  it("skips a repository route the public crawler already rendered", () => {
     const overlapping = candidates({
       repositoryRoutes: [{ path: "/pricing", kind: "page", dynamic: false }],
       publicPages: [{ path: "/pricing", redirectedTo: null }],
@@ -329,16 +348,12 @@ describe("route priority refinement (Sprint 6 §5)", () => {
       repositoryRoutes: [{ path: "/pricing", kind: "page", dynamic: false }],
     });
 
-    const demoted = overlapping.find((candidate) => candidate.path === "/pricing");
-    const undemoted = fresh.find((candidate) => candidate.path === "/pricing");
-
-    expect(demoted!.priority).toBeLessThan(undemoted!.priority);
+    expect(overlapping.map((candidate) => candidate.path)).not.toContain("/pricing");
+    expect(fresh.map((candidate) => candidate.path)).toContain("/pricing");
   });
 
-  it("keeps public-overlap routes as candidates rather than removing them", () => {
-    // The signed-in view of `/` is frequently a different page entirely, so a
-    // blanket removal would throw away real evidence (Sprint 6 §5).
-    const result = candidates({
+  it("skips public-overlap routes whichever source they arrive by", () => {
+    const seeded = candidates({
       landingPath: "/app",
       repositoryRoutes: [
         { path: "/", kind: "page", dynamic: false },
@@ -350,9 +365,31 @@ describe("route priority refinement (Sprint 6 §5)", () => {
       ],
     });
 
-    expect(result.map((candidate) => candidate.path)).toContain("/");
-    expect(result.map((candidate) => candidate.path)).toContain("/pricing");
-    expect(result.every((candidate) => candidate.priority >= 1)).toBe(true);
+    expect(seeded.map((candidate) => candidate.path)).not.toContain("/");
+    expect(seeded.map((candidate) => candidate.path)).not.toContain("/pricing");
+
+    // The footer of the signed-in shell is where `/privacy` and `/terms`
+    // actually came from, so the exclusion has to hold for harvested links too.
+    const linked = extendCandidates([], ["/privacy", "/app/settings"], {
+      origin: ORIGIN,
+      depth: 1,
+      budgets: DEFAULT_AUTHENTICATED_BUDGETS,
+      publiclyRendered: new Set(["/privacy"]),
+    });
+
+    expect(linked.map((candidate) => candidate.path)).toEqual(["/app/settings"]);
+  });
+
+  it("keeps a protected path even when the public crawl fetched something at it", () => {
+    // A page that bounced to a login surface is not a page the public scan
+    // read: `redirectedTo` is what separates the two, and only a genuinely
+    // rendered page is excluded.
+    const result = candidates({
+      landingPath: "/app",
+      publicPages: [{ path: "/reports", redirectedTo: "/login" }],
+    });
+
+    expect(result.map((candidate) => candidate.path)).toContain("/reports");
   });
 
   it("never demotes the landing page the user is already on", () => {
@@ -377,5 +414,115 @@ describe("route priority refinement (Sprint 6 §5)", () => {
     );
 
     expect(link.priority).toBeGreaterThan(seeded!.priority);
+  });
+});
+
+/*
+ * The first run that read pages properly inspected 25 pages and saw 8 screens:
+ * four copies each of a project workspace's seven tabs. It then reported
+ * `integrations` and `onboarding` as absent — it had never reached
+ * `/app/connect/github` or `/app/onboarding`, because seventeen of its pages
+ * went on repetitions.
+ *
+ * A shape that is too greedy is the worse failure of the two: collapsing a
+ * real route hides a surface, where an uncollapsed duplicate merely costs a
+ * page. So these tests spend most of their weight on what must survive.
+ */
+describe("routeShape", () => {
+  it("collapses instances of one screen onto one template", () => {
+    expect(routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b/settings")).toBe(
+      "/app/projects/:id/settings",
+    );
+    expect(routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b/settings")).toBe(
+      routeShape("/app/projects/9b702a96-7863-4c29-8ece-c0055bfac24f/settings"),
+    );
+  });
+
+  it("recognises the identifier shapes a product actually uses", () => {
+    expect(routeShape("/orders/48217")).toBe("/orders/:id");
+    expect(routeShape("/u/a3f9c1d4e5b60718")).toBe("/u/:id");
+    // A Stripe-style key and a nanoid: long, and mixing digits with letters.
+    expect(routeShape("/invoices/in_1P9xQ2eZvKYlo2C")).toBe("/invoices/:id");
+    expect(routeShape("/d/V1StGXR8Z5jdHi6B")).toBe("/d/:id");
+  });
+
+  it("leaves real routes alone", () => {
+    // Collapsing one of these would hide a surface rather than a duplicate,
+    // which is the expensive direction to be wrong in.
+    for (const path of [
+      "/",
+      "/app",
+      "/app/billing",
+      "/app/settings",
+      "/app/onboarding",
+      "/app/connect/github/repositories",
+      "/app/products",
+      "/dashboard/analytics",
+      "/teams/engineering/members",
+      "/blog/how-we-built-our-onboarding",
+    ]) {
+      expect(routeShape(path), path).toBe(path);
+    }
+  });
+
+  it("does not mistake a long hyphenated slug for an id", () => {
+    // Words, no digits — a human chose this, so it names a page.
+    expect(routeShape("/help/getting-started-with-projects")).toBe(
+      "/help/getting-started-with-projects",
+    );
+  });
+
+  it("is stable and idempotent", () => {
+    const shaped = routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b");
+    expect(routeShape(shaped)).toBe(shaped);
+  });
+});
+
+/*
+ * A real scan inspected `/reset-password` while signed in — a page nobody
+ * signed in ever sees, holding no product, costing one of twenty-five pages.
+ *
+ * It got through because this module held two lists of what an auth page is
+ * and they disagreed: `NEVER_VISIT` knew login and signup, and
+ * `login-detection.ts` knew reset, verification and MFA because detecting a
+ * finished login required it. One path, two answers, in one module.
+ */
+describe("auth surfaces are one list", () => {
+  it("refuses the password-recovery pages the scan actually wasted a page on", () => {
+    for (const path of ["/reset-password", "/forgot-password", "/recover", "/auth/reset/token"]) {
+      expect(isNeverVisit(path), path).toBe(true);
+      expect(isAuthSurfacePath(path), path).toBe(true);
+    }
+  });
+
+  it("still refuses what it always refused", () => {
+    for (const path of ["/logout", "/login", "/signup", "/account/sign-out", "/billing/cancel"]) {
+      expect(isNeverVisit(path), path).toBe(true);
+    }
+  });
+
+  it("refuses verification and MFA surfaces", () => {
+    for (const path of ["/verify", "/verify/email", "/mfa", "/2fa", "/otp"]) {
+      expect(isNeverVisit(path), path).toBe(true);
+    }
+  });
+
+  it("does not refuse product paths that merely sound like auth", () => {
+    /*
+     * The reason `confirm` and `callback` are not in the shared list. Refusing
+     * a real surface loses evidence permanently; the sign-in probe's version
+     * of the same mistake costs one poll. The two lists differ on purpose, and
+     * this is the assertion that keeps them differing.
+     */
+    for (const path of [
+      "/orders/confirm",
+      "/app/settings",
+      "/app/billing",
+      "/app/products",
+      "/app/connect/github",
+      "/reports/verify-results",
+    ]) {
+      expect(isNeverVisit(path), path).toBe(false);
+    }
   });
 });

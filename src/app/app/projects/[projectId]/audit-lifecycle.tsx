@@ -51,10 +51,7 @@ function LensConstellation({ active }: { active: boolean }) {
           className="border-mint/20 absolute inset-[39%] rounded-full border"
         />
         {active && (
-          <span
-            aria-hidden="true"
-            className="audit-map-sweep absolute inset-[7%] rounded-full"
-          />
+          <span aria-hidden="true" className="audit-map-sweep absolute inset-[7%] rounded-full" />
         )}
         <span
           aria-hidden="true"
@@ -101,9 +98,7 @@ function LensConstellation({ active }: { active: boolean }) {
               active ? "motion-safe:animate-pulse" : ""
             }`}
             style={
-              active
-                ? { animationDelay: `${index * 140}ms`, animationDuration: "2.6s" }
-                : undefined
+              active ? { animationDelay: `${index * 140}ms`, animationDuration: "2.6s" } : undefined
             }
           >
             {LENS_LABELS[lens]}
@@ -117,38 +112,69 @@ function LensConstellation({ active }: { active: boolean }) {
 function Shell({
   label,
   headline,
+  presentation,
   children,
 }: {
   label: string;
   headline: string;
+  presentation: AuditLifecyclePresentation;
   children?: React.ReactNode;
 }) {
+  /*
+    In a block, this brings none of its own chrome.
+
+    Composed into Nova's thread it drew a bordered, washed panel inside her
+    render block, printed "BUSINESS AUDIT · ANALYZING" under a frame already
+    labelled *Business audit*, and headlined "Vibe is reading the whole
+    business" directly under a bubble where Nova had just said she was going
+    through it. One state, three frames and two headlines.
+
+    What is left is the part nothing else says: the constellation, and the
+    sentence about all nine areas being judged together — which is the honest
+    answer to "why is there no progress bar" and belongs wherever this renders.
+  */
+  const block = presentation === "block";
+
   return (
     <section
       aria-live="polite"
-      className="rounded-panel border-line-2 bg-surface-2 relative overflow-hidden border p-6 sm:p-8"
+      className={
+        block
+          ? "relative flex flex-col gap-5"
+          : "rounded-panel border-line-2 bg-surface-2 relative overflow-hidden border p-6 sm:p-8"
+      }
     >
       {/* A single radial wash, not a glass panel (§58). */}
-      <span
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(circle at 50% 0%, rgb(0 229 160 / 0.06), transparent 62%)",
-        }}
-      />
+      {!block && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background: "radial-gradient(circle at 50% 0%, rgb(0 229 160 / 0.06), transparent 62%)",
+          }}
+        />
+      )}
       <div className="relative flex flex-col gap-5">
-        <MonoLabel as="h2" className="text-fg-secondary">
-          {label}
-        </MonoLabel>
-        <p className="text-fg max-w-[38ch] text-moment font-semibold">
-          {headline}
-        </p>
+        {!block && (
+          <>
+            <MonoLabel as="h2" className="text-fg-secondary">
+              {label}
+            </MonoLabel>
+            <p className="text-fg max-w-[38ch] text-moment font-semibold">
+              {headline}
+            </p>
+          </>
+        )}
+        {/* The label is the section's accessible name either way. */}
+        {block && <h2 className="sr-only">{label}</h2>}
         {children}
       </div>
     </section>
   );
 }
+
+/** How this renders: on a page of its own, or inside a render block. */
+export type AuditLifecyclePresentation = "panel" | "block";
 
 /**
  * Preparing (§31).
@@ -159,9 +185,17 @@ function Shell({
  * judged. Showing a dimmed version of the *previous* audit's verdicts here
  * would be the stale-as-current defect §36 warns about.
  */
-export function AuditPreparing() {
+export function AuditPreparing({
+  presentation = "panel",
+}: {
+  presentation?: AuditLifecyclePresentation;
+}) {
   return (
-    <Shell label="Business audit · preparing" headline="Vibe is checking what it already knows.">
+    <Shell
+      label="Business audit · preparing"
+      headline="Vibe is checking what it already knows."
+      presentation={presentation}
+    >
       <LensConstellation active={false} />
       <p className="text-fg-muted max-w-[58ch] text-body">
         Nothing has been judged yet. Vibe is gathering what it has about your product before it
@@ -178,9 +212,17 @@ export function AuditPreparing() {
  * is true — Vibe is reading the whole business — and the motion carries the
  * energy the mockup gets from its fake progress.
  */
-export function AuditAnalyzing() {
+export function AuditAnalyzing({
+  presentation = "panel",
+}: {
+  presentation?: AuditLifecyclePresentation;
+}) {
   return (
-    <Shell label="Business audit · analyzing" headline="Vibe is reading the whole business.">
+    <Shell
+      label="Business audit · analyzing"
+      headline="Vibe is reading the whole business."
+      presentation={presentation}
+    >
       <LensConstellation active />
       <p className="text-fg-muted max-w-[58ch] text-body">
         All nine areas are judged together, so there is no order to watch. This usually takes a
@@ -207,7 +249,7 @@ export function AuditWaitingHeader() {
       <MonoLabel as="h2" className="text-mint">
         Vibe needs you · Business audit waiting for you
       </MonoLabel>
-      <p className="text-fg max-w-[46ch] text-moment font-semibold">
+      <p className="text-fg max-w-[46ch] text-moment leading-snug font-semibold tracking-[-0.025em]">
         Vibe found the one part of the business only you can clarify.
       </p>
       <p className="text-fg-muted max-w-[58ch] text-body leading-relaxed">

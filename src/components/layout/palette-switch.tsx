@@ -11,7 +11,7 @@ import { PALETTE_STORAGE_KEY, type Palette } from "@/app/palette";
  *
  * Because the environment variable is a *deployment's* answer and it takes
  * effect at build time — the root layout is baked into every statically
- * prerendered page, so changing it means a redeploy ([ADR 0098](../../../docs/decisions/0098-the-palette-ships-behind-one-switch.md)).
+ * prerendered page, so changing it means a redeploy ([ADR 0102](../../../docs/decisions/0102-the-palette-ships-behind-one-switch.md)).
  * That is right for "what do customers see" and useless for "does this screen
  * work in both", which is the question every screen in the redesign now has to
  * answer twice.

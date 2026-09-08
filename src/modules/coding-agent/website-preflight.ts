@@ -39,8 +39,8 @@ import { resolveChainPricingClass } from "@/modules/execution-contract/pricing-c
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { classifyExecutionRisk } from "@/modules/execution-contract/risk";
 import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
-import { listStepExecutionEvidence } from "@/modules/action-plans/completion-store";
-import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
+import { buildHandoffKeys } from "@/modules/action-plans/handoff-store";
+import { readPlanEvidence, type PlanEvidence } from "@/modules/action-plans/service";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
@@ -314,6 +314,7 @@ async function routingCompletedSteps(
     projectId: string;
     actionPlanId: string;
     steps: readonly ActionPlanStep[];
+    evidence?: PlanEvidence;
   },
 ): Promise<{
   completedSteps: ReadonlySet<number>;
@@ -324,11 +325,21 @@ async function routingCompletedSteps(
 }> {
   const { projectId, actionPlanId, steps } = params;
 
-  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
-    listActiveFounderResolutions(supabase, projectId),
-    listStepExecutionEvidence(supabase, { projectId, actionPlanId }),
-    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId }),
-  ]);
+  /*
+   * Read here, or handed in by a caller that already read it. Nova Home is the
+   * caller: it draws the rail's checklist from the same tables, with a
+   * deliberately different derivation, and reading them twice for two answers
+   * neither of which follows from the other is a cost with nothing behind it.
+   *
+   * The parameter is `PlanEvidence`, which only `readPlanEvidence` produces —
+   * so a caller cannot hand this resolver invented rows, only rows the
+   * function it replaces would itself have fetched. Handoffs are part of it for
+   * that same reason: they decide what is finished, and a shape that carried
+   * three of the four authorities would let one caller reach a different answer
+   * than another (ADR 0099).
+   */
+  const { founderResolutions, agentEvidence, founderActionEvidence, handoffs } =
+    params.evidence ?? (await readPlanEvidence(supabase, { projectId, actionPlanId }));
 
   /* The second hop, and only when there is something to ask about. A plan with
      no completed agent step asks the merge table nothing at all. */
@@ -358,6 +369,28 @@ async function routingCompletedSteps(
       mergedPreparedChangeIds,
       founderActionEvidence,
       agentEvidence.absorbed,
+      /*
+       * A step Vibe handed out counts here too, or the plan advances on one
+       * screen and the Agent stays blocked on the next step forever (ADR 0099).
+       *
+       * Merged is not the bar for it, and cannot be. That bar exists because a
+       * successor is prepared against the default branch and Vibe's own change
+       * must have reached it — but Vibe made no change here. The founder's tool
+       * did, in their repository, and Vibe never held evidence of where it
+       * landed. What it holds is their word, which is the same authority a
+       * `founder_action` attestation already carries into this set.
+       *
+       * The safety net is downstream and unchanged: every run re-reads HEAD and
+       * refuses if it moved from the analysed state (rules 55-56). If the
+       * founder never pushed, the run works against the repository as it
+       * actually is rather than as anyone assumed.
+       *
+       * **Build** handoffs only. A verify handoff is a prompt to check the
+       * founder's own measurement, which was already theirs to close — passing
+       * it here would mean a prompt issued to check something admits a product
+       * change the agent exists to write.
+       */
+      buildHandoffKeys(handoffs),
     ),
     founderResolutions,
   };
@@ -384,6 +417,8 @@ export async function resolvePlanExecutionRoutes(
     projectId: string;
     userId: string;
     plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
+    /** Already read by the caller, when it needed the same rows for its own answer. */
+    evidence?: PlanEvidence;
     env?: Record<string, string | undefined>;
   },
 ): Promise<{
@@ -403,6 +438,7 @@ export async function resolvePlanExecutionRoutes(
       projectId,
       actionPlanId: plan.id,
       steps: plan.steps,
+      evidence: params.evidence,
     }),
   ]);
   const completedSteps = routing.completedSteps;

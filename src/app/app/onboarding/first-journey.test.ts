@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { NOVA_ONBOARDING_DETAIL } from "@/modules/nova/onboarding";
+
 /**
  * The first ten minutes, pinned where the browser cannot reach (UI-S1 §28, §29).
  *
@@ -213,7 +215,7 @@ describe("leaving and arriving are coherent", () => {
   });
 
   it("names the final control after where it actually goes", () => {
-    expect(PAGE).toContain("Go to your workspace");
+    expect(PAGE).toContain("Go to my workspace");
     expect(copyOf(PAGE)).not.toContain("Go to dashboard");
   });
 });
@@ -291,13 +293,44 @@ describe("the first journey speaks to a founder", () => {
     }
   });
 
+  /**
+   * The disclosure is a rule, not a paragraph, so it followed the sentence.
+   *
+   * It used to be prose on both connect surfaces and was asserted as a literal
+   * string on each. The project onboarding page is a thread now: Nova says the
+   * sentence and `NOVA_ONBOARDING_DETAIL.connect_source` is where it is
+   * written, once. Asserting the old string against the page would have failed
+   * for the right reason and been fixed the wrong way — by pasting the
+   * sentence back into the markup beside the table that owns it.
+   *
+   * So the guard moved with the sentence. What it protects is unchanged: a
+   * founder is told what GitHub is about to ask *before* they are handed over,
+   * and the page that hands over is the page that says it.
+   */
   it("says what GitHub is about to ask before handing over", () => {
-    for (const [name, source] of [
-      ["onboarding entry", read("src/app/app/onboarding/page.tsx")],
-      ["project onboarding", PAGE],
-    ] as const) {
-      expect(proseOf(source), name).toContain("GitHub will ask which repositories Vibe may access");
-    }
+    expect(proseOf(read("src/app/app/onboarding/page.tsx")), "onboarding entry").toContain(
+      "GitHub will ask which repositories Vibe may access",
+    );
+
+    const disclosure = NOVA_ONBOARDING_DETAIL.connect_source ?? "";
+    expect(disclosure).toMatch(/GitHub will ask which repositories/i);
+    /* The half that matters: the founder chooses, and Vibe is limited to the
+       choice. A disclosure naming the prompt without naming the limit would be
+       a warning rather than the fact.
+
+       Asserted as the two claims rather than one wording of them. This read
+       `/you choose/i` and failed on a rewrite that says the same thing in
+       better English — a test that pins a sentence rather than its meaning
+       makes every improvement to the copy look like a regression. */
+    expect(disclosure).toMatch(
+      /you choose|you stay in control|choice is (entirely )?yours|yours to (make|choose)/i,
+    );
+    expect(disclosure).toMatch(/only .*(the ones you|what you)/i);
+
+    /* And the state that carries it is the one the page renders for the
+       hand-over, rather than a sentence nothing reaches. */
+    expect(PAGE).toMatch(/state="connect_source"/);
+    expect(PAGE).toContain("/app/connect/github");
   });
 });
 
@@ -351,9 +384,22 @@ describe("the last screen offers the Move it just recommended", () => {
   it("offers planning as a priced control, not a sentence", () => {
     expect(PAGE).toContain("<FirstMoveDecision");
     expect(DECISION).toContain("startPlanAction");
-    // The price rides on the control, from the rate card in force.
-    expect(DECISION).toContain("<ActionBlock");
+    /*
+     * The price rides on the control, from the rate card in force — and the
+     * control is the Move, like every other decision in the thread. This read
+     * `<ActionBlock`, the shape the Move replaced everywhere else, which left
+     * setup ending on a different kind of button from the one it had used all
+     * the way down.
+     */
+    expect(DECISION).toContain("<NovaMoveButton");
     expect(DECISION).toContain('operation="action_plan"');
+    expect(DECISION).not.toContain("<ActionBlock");
+  });
+
+  /* And the consequence `ActionBlock` used to carry is still said, before the
+     press rather than after it. */
+  it("says what planning does before it is pressed", () => {
+    expect(DECISION).toMatch(/Nothing is changed in your product by planning/);
   });
 
   it("never defaults a replan on", () => {
@@ -364,7 +410,7 @@ describe("the last screen offers the Move it just recommended", () => {
 
   it("keeps leaving free, and keeps naming where it goes", () => {
     expect(PAGE).toContain("completeOnboardingAction");
-    expect(PAGE).toContain("Go to your workspace");
+    expect(PAGE).toContain("Go to my workspace");
     // Comments quote the phrase they explain, so the check reads the markup.
     expect(copyOf(PAGE)).not.toContain("Go to dashboard");
   });

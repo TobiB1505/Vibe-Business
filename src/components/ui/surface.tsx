@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils/cn";
  *   a shallow one for the panel, because there can be a dozen panels on a
  *   screen. `section` stays a fill on purpose: glass behind glass gives the
  *   inner pane another pane to sample instead of the ground, and neither
- *   reads as glass then. See [ADR 0099](../../../docs/decisions/0099-glass-is-the-material.md).
+ *   reads as glass then. See [ADR 0103](../../../docs/decisions/0103-glass-is-the-material.md).
  *   v1 is unchanged — there, only `card` blurs.
  *
  * ## The `vibe-surface-*` hooks (S2)

@@ -14,6 +14,7 @@ import {
   buildAgentSummary,
   windowStart,
 } from "./shape";
+import { loadConsistencyReport } from "./checks/service";
 import {
   consoleClient,
   readBrowserUsage,
@@ -87,6 +88,13 @@ export async function loadConsoleSnapshot(
       ]),
       funnel: buildFunnel(onboarding),
       agents: buildAgentSummary(agentRuns),
+      /*
+       * Computed from the unfinished rows already read, plus one bounded read
+       * of the ledger's stamps. Two queries becomes eight rather than seven,
+       * and the panel that results is the only one here that can say something
+       * is *wrong* rather than merely how much of it there was.
+       */
+      consistency: await loadConsistencyReport(client, unfinished, now),
       truncated,
     },
   };

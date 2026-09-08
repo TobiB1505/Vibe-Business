@@ -1,11 +1,13 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resetBrowserSandboxEnvCache } from "@/lib/env/browser-sandbox";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { BROWSER_GUARD_PROGRAM, BROWSER_RUNTIME_VERSION } from "./guard-program";
 import { createBrowserRuntimeImage } from "./image";
-import { IMAGE_BUILD_HOSTS, IMAGE_LINK, imageBuildCommands } from "./image-build";
-import { BROWSER_SANDBOX } from "./runtime";
+import { IMAGE_BUILD_CWD, IMAGE_BUILD_HOSTS, IMAGE_LINK, imageBuildCommands } from "./image-build";
+import { BROWSER_SANDBOX, chromiumCommand } from "./runtime";
 
 /**
  * Resolving and building the image a browser session starts from.
@@ -133,8 +135,8 @@ describe("the build window and the session window are separate", () => {
   it("installs dependencies without running their lifecycle scripts", async () => {
     // The window with the network open is the window a postinstall hook would
     // use — the same rule validation installs under, for the same reason.
-    const install = imageBuildCommands().find((command) => command.command === "npm");
-    expect(install?.args).toContain("--ignore-scripts");
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
+    expect(install?.command.args).toContain("--ignore-scripts");
   });
 });
 
@@ -172,11 +174,11 @@ describe("what lands in the image", () => {
 describe("a failed build costs one sandbox and no retry loop", () => {
   /** The fake keys results on the whole rendered command, so build it from the real one. */
   const failingInstall = () => {
-    const install = imageBuildCommands().find((command) => command.command === "npm");
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
     if (!install) throw new Error("the build no longer installs anything");
     return {
       results: {
-        [[install.command, ...install.args].join(" ")]: { exitCode: 1, output: "boom" },
+        [[install.command.command, ...install.command.args].join(" ")]: { exitCode: 1, output: "boom" },
       },
     };
   };
@@ -204,5 +206,193 @@ describe("a failed build costs one sandbox and no retry loop", () => {
     // A build that failed for a reason that persists would otherwise burn
     // minutes per attempt, on a person waiting for a browser.
     expect(sandboxes.createCount()).toBe(1);
+  });
+
+  /**
+   * The first real Deep Scan failed after 3.8 seconds and nothing anywhere
+   * said why — no log line, no Sentry issue, no row, and one sentence covering
+   * six distinct causes. The refusal is the same as it was; what changed is
+   * that the operator can now tell which of them happened.
+   */
+  it("says which step failed, and what the step said", async () => {
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const sandboxes = fakeSandboxProvider(failingInstall());
+    const { resolver } = image(sandboxes);
+
+    await resolver.resolve();
+    // `alertOperator` logs first and unconditionally, then reports to Sentry;
+    // the local line is the one this can observe without a network.
+    await Promise.resolve();
+
+    expect(reported).toHaveBeenCalledWith(
+      "deep scan: the browser session could not start",
+      expect.objectContaining({ step: "image_build_command", exitCode: 1, output: "boom" }),
+    );
+
+    reported.mockRestore();
+  });
+
+  it("keeps both ends of a long output, not just the tail", async () => {
+    /*
+     * The tail alone cost a round trip. A failing `apt-get install` prints one
+     * line per package, so the last 1,500 characters were thirty of those and
+     * the fact that decided the case — whether the index refresh had worked —
+     * was in the first few lines and had been dropped.
+     */
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const install = imageBuildCommands().find((step) => step.command.command === "npm");
+    const sandboxes = fakeSandboxProvider({
+      results: {
+        [[install!.command.command, ...install!.command.args].join(" ")]: {
+          exitCode: 1,
+          output: `THE CAUSE\n${"filler line\n".repeat(600)}THE CONSEQUENCE`,
+        },
+      },
+    });
+    const { resolver } = image(sandboxes);
+
+    await resolver.resolve();
+    await Promise.resolve();
+
+    const context = reported.mock.calls[0]?.[1] as { output: string };
+    expect(context.output).toContain("THE CAUSE");
+    expect(context.output).toContain("THE CONSEQUENCE");
+    // Still bounded: a registry answering with a page of HTML must not turn one
+    // failure into a megabyte of log.
+    expect(context.output.length).toBeLessThan(3000);
+    expect(context.output).toContain("characters omitted");
+
+    reported.mockRestore();
+  });
+
+  it("keeps the provider's account out of what the customer is told", async () => {
+    // §17: no provider message, no exit code, no stack. The operator gets the
+    // detail; the person waiting gets a sentence they can act on.
+    const sandboxes = fakeSandboxProvider(failingInstall());
+    const { resolver } = image(sandboxes);
+
+    const result = await resolver.resolve();
+
+    expect(result).toEqual({ ok: false, error: "browser_provider_unavailable" });
+    expect(JSON.stringify(result)).not.toContain("boom");
+  });
+});
+
+/**
+ * The defect that broke the first real Deep Scan, asserted as the property
+ * rather than as the constant.
+ *
+ * Command 0 is the `mkdir -p` that creates `/vibe-browser`, and it was started
+ * with `/vibe-browser` as its working directory:
+ *
+ *     failed to start process: chdir /vibe-browser: no such file or directory
+ *
+ * A validation or preview sandbox never meets this, which is what hid it: those
+ * are created from a **git source** and the clone makes the working directory
+ * before any command runs. This one has no source at all.
+ *
+ * Asserting `cwd === "/"` would pass over a build that mkdir'd a second
+ * directory and then ran inside that instead. What has to hold is that a
+ * command never runs somewhere the build has not made yet — so the test walks
+ * the transcript keeping the directories that exist, which is what the sandbox
+ * does.
+ */
+describe("a build command never runs in a directory that does not exist yet", () => {
+  function commandRuns(sandboxes: ReturnType<typeof fakeSandboxProvider>) {
+    return sandboxes.events.flatMap((event) =>
+      event.kind === "command" ? [{ command: event.command, cwd: event.cwd }] : [],
+    );
+  }
+
+  it("starts every command somewhere that has been created", async () => {
+    const sandboxes = fakeSandboxProvider({});
+    const { resolver } = image(sandboxes);
+
+    await resolver.resolve();
+
+    // Two directories exist before the build says anything. `/` is the base
+    // image's root, and `.` is wherever the provider started the process —
+    // which is what `writeSandboxTextFile` uses, correctly, because it
+    // redirects to an absolute path and needs no directory of its own.
+    // Everything else has to be made first, and `/vibe-browser` is the one
+    // this build makes.
+    const existing = new Set(["/", "."]);
+
+    for (const run of commandRuns(sandboxes)) {
+      expect(
+        existing.has(run.cwd),
+        `\`${run.command}\` runs in ${run.cwd}, which nothing has created yet`,
+      ).toBe(true);
+
+      // `mkdir -p a b` creates each of its arguments, which is how the root
+      // comes to exist at all.
+      const [command, ...args] = run.command.split(" ");
+      if (command === "mkdir") {
+        for (const argument of args) if (argument.startsWith("/")) existing.add(argument);
+      }
+    }
+  });
+
+  it("makes the root before anything is installed into it", async () => {
+    // The order the property above depends on, stated once so a reordering is
+    // a failure here rather than a 400 from the provider.
+    const [first] = imageBuildCommands();
+
+    expect(first.command.command).toBe("mkdir");
+    expect(first.command.args).toContain(BROWSER_SANDBOX.root);
+    expect(IMAGE_BUILD_CWD).not.toBe(BROWSER_SANDBOX.root);
+  });
+});
+
+/*
+ * The founder signs in through their own device's shape; the analysis reads
+ * the desktop product regardless. Both halves have to hold, and the second is
+ * the one that keeps two scans of one product comparable — a mobile layout
+ * hides its navigation behind a menu, so a phone-started scan would harvest
+ * fewer links and find fewer surfaces.
+ */
+describe("the login window follows the device, the analysis does not", () => {
+  it("launches Chromium at the shape it was asked for", () => {
+    const mobile = chromiumCommand("mobile").args.join(" ");
+    const desktop = chromiumCommand("desktop").args.join(" ");
+
+    expect(mobile).toContain(
+      `--window-size=${BROWSER_SANDBOX.loginViewports.mobile.width},${BROWSER_SANDBOX.loginViewports.mobile.height}`,
+    );
+    expect(desktop).toContain(
+      `--window-size=${BROWSER_SANDBOX.loginViewports.desktop.width},${BROWSER_SANDBOX.loginViewports.desktop.height}`,
+    );
+  });
+
+  it("defaults to desktop", () => {
+    expect(chromiumCommand().args.join(" ")).toBe(chromiumCommand("desktop").args.join(" "));
+  });
+
+  it("never puts a caller's number on the command line", () => {
+    // The two numbers come from this repository's own table, whatever was
+    // passed. A shape name that is not in the table gets desktop.
+    const rogue = chromiumCommand("1920x1200; rm -rf /" as never).args.join(" ");
+    expect(rogue).toBe(chromiumCommand("desktop").args.join(" "));
+  });
+
+  it("keeps every login shape at or under the screencast ceiling", () => {
+    // A window larger than the cast is scaled down, and a scaled frame puts a
+    // person's tap somewhere other than where they aimed.
+    for (const [name, size] of Object.entries(BROWSER_SANDBOX.loginViewports)) {
+      expect(size.width, name).toBeLessThanOrEqual(BROWSER_SANDBOX.viewport.width);
+      expect(size.height, name).toBeLessThanOrEqual(BROWSER_SANDBOX.viewport.height);
+    }
+  });
+
+  it("puts the page back to the analysis viewport before reading it", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/modules/authenticated-product-intelligence/playwright/connector.ts"),
+      "utf8",
+    );
+    const connect = source.slice(source.indexOf("export async function connectReadOnly"));
+
+    expect(connect).toContain("setViewportSize(BROWSER_SANDBOX.viewport)");
+    // Before the port is handed to the analyzer, not after.
+    expect(connect.indexOf("setViewportSize")).toBeLessThan(connect.indexOf("const port"));
   });
 });

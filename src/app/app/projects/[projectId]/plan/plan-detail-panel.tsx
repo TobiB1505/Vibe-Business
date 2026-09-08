@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import Link from "next/link";
+import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
@@ -8,10 +9,8 @@ import { Button } from "@/components/ui/button";
 import { ChevronDownIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { Disclosure } from "@/components/ui/disclosure";
-import { Textarea } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
 import { StatusPill } from "@/components/ui/status-pill";
-import { SeeMore } from "@/components/ui/see-more";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
@@ -42,6 +41,7 @@ import {
   planExpectedChange,
   planFounderDemands,
   planMetaSummary,
+  settledStepOutcomes,
   stepDependencyTitles,
   stepDisplayState,
   stepSequenceStatus,
@@ -49,14 +49,13 @@ import {
 } from "@/modules/action-plans/view";
 import { OperationProgress } from "@/components/system/operation-progress";
 import { resolveFounderInputAction } from "../founder-input-action";
-import {
-  attestFounderActionStepAction,
-  type FounderActionAttestationState,
-} from "../founder-action-attestation";
 import { getOperationStatusAction } from "../run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "../plan-action";
 import { PrepareChangePanel } from "../prepare-change-panel";
-import { StandaloneLink } from "@/components/ui/text-link";
+import { AttestationForm } from "./attestation-form";
+import { HandoffCard } from "./handoff-card";
+import { PlanCompleteCard } from "./plan-complete-card";
+import type { HandoffPurpose } from "@/modules/handoff/schema";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
@@ -92,16 +91,28 @@ const POLL_INTERVAL_MS = 3_000;
 /**
  * A "read more" toggle over text that is never mutated or sliced.
  *
- * This was written here first, and `SeeMore` is its extraction: the clamp, the
- * always-in-the-DOM string and the reasoning about screen readers are the same
- * ones this file worked out. What the shared component adds is the fade that
- * says the sentence continues, and a chevron rather than an underlined word.
+ * The full string is always in the DOM — CSS `line-clamp` hides overflow
+ * visually without removing it, so a screen reader already gets the whole
+ * thing regardless of the toggle's state.
  */
 function ExpandableText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+
   return (
-    <SeeMore lines={2} textClassName="text-fg-prose text-body leading-relaxed">
-      {text}
-    </SeeMore>
+    <div className="flex flex-col gap-1.5">
+      <p className={cn("text-fg-prose text-body leading-relaxed", !expanded && "line-clamp-2")}>
+        {text}
+      </p>
+      <Button
+        variant="ghost"
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="self-start text-caption"
+      >
+        {expanded ? "Show less" : "More context"}
+      </Button>
+    </div>
   );
 }
 
@@ -259,6 +270,9 @@ function PlanBody({
   moveRank,
   moveLens,
   responsibilityByStepKey,
+  handoffStepKey,
+  repositoryFullName,
+  nextMove,
   onFounderResolved,
 }: {
   projectId: string;
@@ -267,6 +281,18 @@ function PlanBody({
   moveRank: number | null;
   moveLens: string | null;
   responsibilityByStepKey: Record<string, StepResponsibility>;
+  /**
+   * The actionable step, when Vibe refuses it permanently (ADR 0099).
+   *
+   * Resolved by the route, never here: it is the *shape* of a live refusal, and
+   * a panel deriving it from labels would be reading Vibe's prose back as a
+   * machine answer. Null whenever the step has any other outcome.
+   */
+  handoffStepKey: string | null;
+  /** `owner/name`, or null when Vibe holds no repository for this project. */
+  repositoryFullName: string | null;
+  /** The Move to hand over to once this plan is finished. */
+  nextMove: { title: string; href: string } | null;
   onFounderResolved: () => void;
 }) {
   const reduceMotion = useReducedMotion();
@@ -275,6 +301,29 @@ function PlanBody({
   const completed = new Set(completedStepOrders);
   /* Serialized as an object across the server boundary; a Map here because the
      display functions ask it questions rather than iterate it. */
+  /*
+   * Whether this step comes with a prompt for the founder's own tool, and why.
+   *
+   * Two different questions, deliberately not merged. `handoffStepKey` is
+   * resolved by the route from a *live* refusal — Vibe declined to build this,
+   * and only the server may say so. A verification is the step's own immutable
+   * shape: `founder_action` + `measurement` is work that was never Vibe's, and
+   * whose check its sandbox structurally cannot run, having no network and no
+   * credential.
+   *
+   * Build wins where both could somehow match, because a refusal is the one
+   * that grants something and must never be shadowed by the one that does not.
+   */
+  const handoffPurpose: HandoffPurpose | null =
+    firstActionableStep === null
+      ? null
+      : handoffStepKey === firstActionableStep.id
+        ? "build"
+        : firstActionableStep.actor === "founder_action" &&
+            firstActionableStep.changeKind === "measurement"
+          ? "verify"
+          : null;
+
   const absorbedBy = new Map(
     Object.entries(planView.absorbedByStepOrder).map(([order, by]) => [Number(order), by]),
   );
@@ -325,7 +374,7 @@ function PlanBody({
             {moveEyebrow && (
               <MonoLabel className="text-amber tracking-[0.14em]">{moveEyebrow}</MonoLabel>
             )}
-            <h3 className="text-fg text-moment font-semibold">Vibe needs your input</h3>
+            <h3 className="text-fg text-moment leading-tight font-semibold">Vibe needs your input</h3>
             <p className="text-fg-muted text-body leading-relaxed">
               Answer the current question so Vibe can finish planning{" "}
               {moveTitle ? `“${moveTitle}”` : "this move"}.
@@ -357,7 +406,7 @@ function PlanBody({
           <Disclosure label={`See the full planned work · ${planMetaSummary(steps)}`}>
             <div className="flex flex-col gap-4">
               {plan.goal && (
-                <h4 className="text-fg text-card-title font-semibold">{plan.goal}</h4>
+                <h4 className="text-fg text-body leading-snug font-semibold">{plan.goal}</h4>
               )}
               {plan.whyNow && <ExpandableText text={plan.whyNow} />}
               {plannedSteps}
@@ -369,22 +418,82 @@ function PlanBody({
           <div className="flex flex-col gap-2">
             <p className="text-fg-muted text-ui">What Vibe plans to do</p>
             {plan.goal && (
-              <h3 className="text-fg text-card-title font-semibold">{plan.goal}</h3>
+              <h3 className="text-fg text-title leading-snug font-semibold">{plan.goal}</h3>
             )}
             <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
           </div>
 
-          {firstActionableStep !== null && isFounderAttestable(firstActionableStep) ? (
+          {/*
+            Three outcomes for the step that could happen next, in the order
+            that keeps each one honest.
+
+            A step with a prompt is *also* attestable — that is the whole point
+            of the handoff — so it has to be recognised first, or it would
+            render as a bare confirmation with no prompt and nothing explaining
+            why (ADR 0099).
+          */}
+          {firstActionableStep !== null && handoffPurpose !== null ? (
+            <HandoffCard
+              projectId={projectId}
+              actionPlanId={plan.id}
+              step={firstActionableStep}
+              repository={repositoryFullName}
+              purpose={handoffPurpose}
+              tool={
+                (handoffPurpose === "verify"
+                  ? planView.verifyHandoffByStepKey[firstActionableStep.id]
+                  : planView.handoffByStepKey[firstActionableStep.id]) ?? null
+              }
+              /* What the plan already settled, in plan order and without the
+                 step being handed over — a note that answers this step is the
+                 step, not context for it (ADR 0099). Findings and decisions
+                 both count: the prompt used to say "the confirmed plan
+                 structure" while carrying neither. */
+              settled={settledStepOutcomes(
+                steps,
+                planView.completedStepOrders,
+                planView.findingByStepKey,
+                planView.decisionByStepKey,
+              ).filter((entry) => entry.stepKey !== firstActionableStep.id)}
+              /* Everything after this step, so the receiving tool is told where
+                 this task stops rather than left to guess an edge. */
+              later={steps
+                .filter((entry) => entry.order > firstActionableStep.order)
+                .map((entry) => ({ order: entry.order, title: entry.title }))}
+              confirmation={
+                <AttestationForm
+                  projectId={projectId}
+                  actionPlanId={plan.id}
+                  step={firstActionableStep}
+                  handoff={handoffPurpose}
+                />
+              }
+            />
+          ) : firstActionableStep !== null &&
+            isFounderAttestable(
+              firstActionableStep,
+              new Set(Object.keys(planView.handoffByStepKey)),
+            ) ? (
             <FounderActionCard
               projectId={projectId}
               actionPlanId={plan.id}
               step={firstActionableStep}
             />
+          ) : firstActionableStep === null && progress === "finished" ? (
+            /* The end of the plan, which used to be one sentence and no way
+               onward. What the steps established is shown back to the founder
+               who wrote it, and the next Move is named — never started here. */
+            <PlanCompleteCard
+              outcomes={settledStepOutcomes(
+                steps,
+                planView.completedStepOrders,
+                planView.findingByStepKey,
+                planView.decisionByStepKey,
+              ).filter((entry) => entry.outcome !== null)}
+              nextMove={nextMove}
+            />
           ) : firstActionableStep === null ? (
-            <Notice
-              tone={progress === "finished" ? "info" : "waiting"}
-              label="Where this plan stands"
-            >
+            <Notice tone="waiting" label="Where this plan stands">
               {PLAN_PROGRESS_LABELS[progress]}
             </Notice>
           ) : null}
@@ -528,11 +637,6 @@ function FounderActionCard({
   step: ActionPlanStep;
 }) {
   const prompt = attestationPrompt(step);
-  const action = attestFounderActionStepAction.bind(null, projectId, actionPlanId, step.id);
-  const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
-    action,
-    null,
-  );
 
   return (
     <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
@@ -544,58 +648,14 @@ function FounderActionCard({
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <h3 className="text-fg text-card-title font-semibold">{step.title}</h3>
+        <h3 className="text-fg text-title leading-snug font-semibold">{step.title}</h3>
         <p className="text-fg-prose text-body leading-relaxed">{step.description}</p>
-        {prompt.lead && (
-          <p className="text-fg-muted text-body leading-relaxed">{prompt.lead}</p>
-        )}
+        {prompt.lead && <p className="text-fg-muted text-body leading-relaxed">{prompt.lead}</p>}
       </div>
 
-      <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
-        <MonoLabel className="text-amber tracking-[0.12em]">
-          {prompt.finding ? "Answer this" : "Confirm when true"}
-        </MonoLabel>
-        {/* The step's own criterion, in its own element. Vibe writes the
-            prompt beside it and never parses it into choices — it is model
-            output, and model wording is not a machine API. */}
-        <p className="text-fg-body mt-1.5 text-body leading-relaxed">{step.completionCriteria}</p>
-      </div>
-
-      <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
-        {prompt.finding && (
-          <div className="flex w-full flex-col gap-1.5">
-            <label
-              htmlFor={`finding-${step.id}`}
-              className="text-fg-secondary text-body font-medium"
-            >
-              {prompt.finding.label}
-            </label>
-            <Textarea
-              id={`finding-${step.id}`}
-              name="finding"
-              required
-              rows={4}
-              maxLength={1200}
-              data-testid="attestation-finding"
-            />
-            <p className="text-fg-muted text-caption">{prompt.finding.help}</p>
-          </div>
-        )}
-        <Button type="submit" disabled={pending || state?.ok === true} busy={pending}>
-          {pending
-            ? "Saving…"
-            : state?.ok
-              ? "Recorded"
-              : prompt.submitLabel}
-        </Button>
-        <p className="text-fg-muted text-caption">{prompt.footnote}</p>
-      </form>
-
-      {state && !state.ok && (
-        <p role="alert" className="text-coral text-body">
-          {state.message}
-        </p>
-      )}
+      {/* The question and the answer, owned by one component so the handoff
+          card can compose it without drawing a second card (ADR 0099). */}
+      <AttestationForm projectId={projectId} actionPlanId={actionPlanId} step={step} />
     </Surface>
   );
 }
@@ -612,6 +672,8 @@ export function PlanDetailPanel({
   defaultMoveTitle,
   readiness,
   responsibilityByStepKey,
+  handoffStepKey,
+  repositoryFullName,
   planView,
   activeOperation,
   execution = null,
@@ -625,6 +687,7 @@ export function PlanDetailPanel({
   },
   auditHref,
   understandingHref,
+  nextMove,
 }: {
   projectId: string;
   opportunityId: string | null;
@@ -638,6 +701,16 @@ export function PlanDetailPanel({
   readiness: ActionPlanReadiness;
   /** What each step's responsibility line says, resolved by the route. */
   responsibilityByStepKey: Record<string, StepResponsibility>;
+  /**
+   * The actionable step, when Vibe refuses it permanently (ADR 0099).
+   *
+   * Resolved by the route, never here: it is the *shape* of a live refusal, and
+   * a panel deriving it from labels would be reading Vibe's prose back as a
+   * machine answer. Null whenever the step has any other outcome.
+   */
+  handoffStepKey: string | null;
+  /** `owner/name`, or null when Vibe holds no repository for this project. */
+  repositoryFullName: string | null;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
   execution?: OpportunityActionState | null;
@@ -646,6 +719,14 @@ export function PlanDetailPanel({
   blockedDestinations?: BlockedActionDestinations;
   auditHref: string;
   understandingHref: string;
+  /**
+   * The Move after this one, for the finished-plan card to hand over to.
+   *
+   * A link, not a start: planning is paid and already has a disclosed offer on
+   * the Move it belongs to. Null when this is the last Move Vibe ranked, or
+   * when the surface rendering this panel has no list to take a next one from.
+   */
+  nextMove?: { title: string; href: string } | null;
 }) {
   const router = useRouter();
   const reduceMotion = useReducedMotion();
@@ -794,13 +875,23 @@ export function PlanDetailPanel({
               moveRank={moveRank}
               moveLens={moveLens}
               responsibilityByStepKey={responsibilityByStepKey}
+              handoffStepKey={handoffStepKey}
+              repositoryFullName={repositoryFullName}
+              nextMove={nextMove ?? null}
               onFounderResolved={() => router.refresh()}
             />
           ) : blockNotice !== null ? (
             <Notice
               tone="waiting"
               label="Why this is blocked"
-              action={<StandaloneLink href={blockHref}>{blockNotice.actionLabel}</StandaloneLink>}
+              action={
+                <a
+                  href={blockHref}
+                  className="text-fg-prose hover:text-fg rounded-inline text-body underline underline-offset-4 transition-interactive"
+                >
+                  {blockNotice.actionLabel}
+                </a>
+              }
             >
               {OPERATION_FAILURE_MESSAGES[blockNotice.reason]}
             </Notice>
@@ -856,9 +947,12 @@ export function PlanDetailPanel({
         capability.
       */}
       {!running && !planView?.founderInputRequest && executionOpportunityId ? (
-        <StandaloneLink href={agentMoveHref(preparedHref, executionOpportunityId)}>
+        <Link
+          href={agentMoveHref(preparedHref, executionOpportunityId)}
+          className="text-fg-muted hover:text-fg-body w-fit rounded-inline text-body underline underline-offset-4 transition-interactive"
+        >
           Open this move in Agent
-        </StandaloneLink>
+        </Link>
       ) : null}
 
       {planView && !running ? (

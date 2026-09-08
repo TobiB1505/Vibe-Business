@@ -585,6 +585,27 @@
   animation-play-state: paused;
 }
 
+/* Nova composing. Fixed period, unrelated to how long the run has taken —
+   a rhythm that accelerated with apparent progress would be a percentage
+   nobody measured. */
+.study-typing {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+.study-paused .study-typing {
+  animation-play-state: paused;
+}
+
+/* The dot beside "Connecting…", which is the one moment a connection state is
+   genuinely unknown rather than merely false. */
+.study-pulse {
+  animation: vibe-soft-pulse var(--duration-pulse) ease-in-out infinite;
+}
+
+.study-paused .study-pulse {
+  animation-play-state: paused;
+}
+
 .study-press {
   transition:
     transform var(--dur-press) var(--ease-out),
@@ -608,9 +629,18 @@
 @media (prefers-reduced-motion: reduce) {
   .study-rise,
   .study-breathe,
+  .study-typing,
+  .study-pulse,
   .study-press {
     animation: none !important;
     transition: none !important;
+  }
+  /* Three still dots rather than none: the bubble is what says she is
+     composing, and removing it would take information the motion only
+     decorated. */
+  .study-typing,
+  .study-pulse {
+    opacity: 1;
   }
   /* The settled state, immediately — never a hidden element. */
   .study-rise {
@@ -620,5 +650,191 @@
   .study-breathe {
     opacity: 1;
     transform: none;
+  }
+}
+
+/* ── The Move, three ways (element sheet) ─────────────────────────────────
+   Press belongs to the microinteraction tier: under 120ms, no overshoot, and
+   nothing that changes an element's position — a control that moved its
+   neighbours on press would be reflowing a page somebody is reading.
+
+   `.force-hover` applies each variant's hover state without a pointer, so a
+   still screenshot can compare three treatments on the half of themselves
+   that only appears under a cursor. */
+
+.move-line,
+.move-lit,
+.move-switch {
+  cursor: pointer;
+  transition:
+    background-color var(--dur-press) var(--ease-emphasis),
+    border-color var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+}
+
+/* A — the whole row settles, its fill lifts a step. */
+.move-line:hover,
+.force-hover .move-line {
+  background-color: var(--color-mint-tint);
+  border-color: var(--color-mint);
+}
+.move-line:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* B — the band is the control's only light. Resting it is a hairline at
+   partial width; on hover it reaches the full edge and full strength. */
+.move-lit-band {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-mint) 30%,
+    var(--color-mint) 70%,
+    transparent
+  );
+  opacity: 0.45;
+  transition:
+    opacity var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+  transform: scaleX(0.55);
+}
+.move-lit:hover .move-lit-band,
+.force-hover .move-lit-band {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.move-lit:hover,
+.force-hover .move-lit {
+  background-color: var(--color-surface-3);
+  border-color: var(--color-line-strong);
+}
+.move-lit:active {
+  transform: translate3d(0, 1px, 0);
+}
+
+/* C — the verb half travels, the cost half holds. The division is the
+   mechanic, so only one side may move. */
+.move-switch-verb {
+  transition:
+    background-color var(--dur-press) var(--ease-emphasis),
+    transform var(--dur-press) var(--ease-emphasis);
+}
+.move-switch:hover .move-switch-verb,
+.force-hover .move-switch-verb {
+  background-color: var(--color-mint);
+  color: var(--color-mint-ink);
+}
+.move-switch:active .move-switch-verb {
+  transform: translate3d(0, 1px, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .move-line,
+  .move-lit,
+  .move-switch,
+  .move-lit-band,
+  .move-switch-verb {
+    transition: none !important;
+    transform: none !important;
+  }
+  /* The band stays lit rather than vanishing: it is the control's edge, not
+     an animation, and removing it would take the shape away with the motion. */
+  .move-lit-band {
+    opacity: 1;
+  }
+}
+
+/* ── The Bubble (element sheet) ───────────────────────────────────────────
+   The container the wireframe is made of, and the reason the Line failed.
+   There the register was a rule drawn *inside* the sentence — a document
+   grammar, on a surface that is not a document. Here the register belongs to
+   the bubble, so a sentence is just a sentence again.
+
+   A register is two axes, and they come from `statusForCandidate` rather than
+   from a choice made here:
+
+     · TONE   — what kind of thing this is. Coral wrong, amber your turn,
+                mint available, neutral a plain fact.
+     · OPEN   — whether a loop is still hanging. Drawn as a dashed contour.
+
+   That split is the fix for a real defect. A stalled run used to be drawn
+   amber where a failed one was coral, which reads as *less bad* when the
+   domain was saying *less certain*. Now it is coral **and** dashed: something
+   is wrong, and it is not over.
+
+   Three of the four appearances survive with hue removed — hairline solid,
+   hairline dashed, double solid, double dashed — which is the test
+   `study-bubble` runs. Within "nothing is wrong", hue and the word separate
+   available from waiting-on-you, and the sheet says so rather than claiming
+   an axis it does not have.
+
+   Each register is a set of custom properties rather than utility classes,
+   because the tail is a separate element that has to agree with the body
+   exactly. One source per register is what makes disagreement impossible
+   instead of merely unlikely.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/*
+   What she is doing, in the shape ChatGPT taught everybody: a line of text
+   with light travelling across it.
+
+   Admissible under all three of `DESIGN.md`'s properties for decorative
+   motion. It renders only while an operation the product recorded is running.
+   The sentence is fully legible with it off — it is `OPERATION_STAGE_LABELS`,
+   the stage the executor actually wrote, never a model's account of its own
+   thinking (rule 43). And the sweep carries no timing: a fixed period,
+   unrelated to how long the run has taken or has left.
+*/
+@keyframes study-thinking {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.study-thinking {
+  background: linear-gradient(
+      90deg,
+      var(--color-fg-meta) 0%,
+      var(--color-fg-meta) 30%,
+      var(--color-fg) 45%,
+      var(--color-fg-meta) 60%,
+      var(--color-fg-meta) 100%
+    )
+    0 0 / 300% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: study-thinking 3.2s linear infinite;
+}
+
+.study-paused .study-thinking {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The gradient has to go with the animation, not just the animation: text
+     painted through a clipped background with `color: transparent` is
+     invisible the moment nothing moves. */
+  .study-thinking {
+    animation: none !important;
+    background: none;
+    color: var(--color-fg-body);
+  }
+}
+
+/*
+   The lines a render block forgets.
+
+   Only the fading stack is hidden under reduced motion, never the current
+   stage: what a founder needs is the sentence, and the sentence stays. Lines
+   that appeared and then blinked out with no transition would be a flicker
+   carrying no information, which is worse than not drawing them.
+*/
+@media (prefers-reduced-motion: reduce) {
+  .study-dissolve {
+    display: none;
   }
 }

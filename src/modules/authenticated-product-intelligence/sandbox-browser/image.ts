@@ -6,6 +6,7 @@ import { writeSandboxTextFile } from "@/modules/validation/sandbox-files";
 import type { AuthenticatedAnalysisFailure } from "../errors";
 import { BROWSER_RUNTIME_VERSION } from "./guard-program";
 import {
+  IMAGE_BUILD_CWD,
   IMAGE_BUILD_HOSTS,
   IMAGE_LINK,
   IMAGE_LINK_PROGRAM,
@@ -13,6 +14,7 @@ import {
   imageBuildEnv,
   imageLinkCommand,
 } from "./image-build";
+import { boundedOutput, describeError, reportBrowserFailure } from "./diagnostics";
 import type { BrowserRuntimeImage } from "./provider";
 import { BROWSER_SANDBOX } from "./runtime";
 
@@ -106,18 +108,50 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         timeoutMs: BUILD_TIMEOUT_MS,
         env: imageBuildEnv(),
       });
-    } catch {
+    } catch (error) {
+      reportBrowserFailure("image_build_create", { error: describeError(error) });
       return { ok: false, error: "browser_provider_unavailable" };
     }
 
     try {
-      for (const command of imageBuildCommands()) {
+      for (const [index, step] of imageBuildCommands().entries()) {
         const result = await handle.run({
-          command,
-          cwd: BROWSER_SANDBOX.root,
+          command: step.command,
+          ...(step.sudo ? { sudo: true } : {}),
+          // Not the root: command 0 is the `mkdir` that creates it. See
+          // `IMAGE_BUILD_CWD`.
+          cwd: IMAGE_BUILD_CWD,
           timeoutMs: BUILD_STEP_TIMEOUT_MS,
         });
         if (result.exitCode !== 0) {
+          /*
+           * The output is Vibe's own build commands talking — a browser
+           * download and a package install, with no customer input anywhere in
+           * the VM. Bounded because a registry that answers with an HTML error
+           * page must not turn one failure into a megabyte of log.
+           *
+           * `os` is asked because two build failures in a row turned on which
+           * machine this is. Vercel documents its *build* image as Amazon
+           * Linux 2023; the sandbox answered `dnf: command not found`, and the
+           * images list names `universal`, `node:24` and `ubuntu` without
+           * saying what `universal` is built on. Rather than guess a third
+           * time, every build failure now carries the answer.
+           */
+          const os = await handle
+            .run({
+              command: { command: "cat", args: ["/etc/os-release"] },
+              cwd: IMAGE_BUILD_CWD,
+              timeoutMs: 10_000,
+            })
+            .catch(() => null);
+
+          reportBrowserFailure("image_build_command", {
+            commandIndex: index,
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            output: boundedOutput(result.output),
+            os: os && os.exitCode === 0 ? os.output.slice(0, 300) : "unknown",
+          });
           await discard(handle);
           return { ok: false, error: "browser_provider_unavailable" };
         }
@@ -131,17 +165,24 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         content: IMAGE_LINK_PROGRAM,
       });
       if (!link.ok) {
+        reportBrowserFailure("image_build_write", { file: "link program" });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };
       }
 
       const linked = await handle.run({
         command: imageLinkCommand(),
-        cwd: BROWSER_SANDBOX.root,
+        cwd: IMAGE_BUILD_CWD,
         timeoutMs: BUILD_STEP_TIMEOUT_MS,
         env: { ...imageBuildEnv(), ...IMAGE_LINK.env },
       });
       if (linked.exitCode !== 0) {
+        reportBrowserFailure("image_build_command", {
+          commandIndex: "link",
+          exitCode: linked.exitCode,
+          timedOut: linked.timedOut,
+          output: boundedOutput(linked.output),
+        });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };
       }
@@ -151,6 +192,7 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
         content: (await import("./guard-program")).BROWSER_GUARD_PROGRAM,
       });
       if (!guard.ok) {
+        reportBrowserFailure("image_build_write", { file: "guard program" });
         await discard(handle);
         return { ok: false, error: "browser_provider_unavailable" };
       }
@@ -167,7 +209,8 @@ export function createBrowserRuntimeImage(deps: BrowserRuntimeImageDeps): Browse
       });
 
       return { ok: true, snapshotId: artifact.snapshotId };
-    } catch {
+    } catch (error) {
+      reportBrowserFailure("image_build_snapshot", { error: describeError(error) });
       await discard(handle);
       return { ok: false, error: "browser_provider_unavailable" };
     }

@@ -104,7 +104,7 @@ Nothing here needed to change:
 | `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/settings/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/settings/billing` |
 | `PAID_OPERATIONS_DISABLED` | unset | unset | **unset** — set to exactly `1` only to stop paid work during an incident (VB-032) |
 | `VIBE_INTERNAL_OPERATOR_USER_IDS` | your own Supabase user id, if you want the console locally | **unset** | the operator user ids, comma-separated ([ADR 0088](../decisions/0088-the-internal-operator-console.md)) |
-| `VIBE_PALETTE` | `v2` while working on the design system | `v2` to look at the second palette on a branch | **unset** — set to exactly `v2` when it ships to customers ([ADR 0098](../decisions/0098-the-palette-ships-behind-one-switch.md)) |
+| `VIBE_PALETTE` | `v2` while working on the design system | `v2` to look at the second palette on a branch | **unset** — set to exactly `v2` when it ships to customers ([ADR 0102](../decisions/0102-the-palette-ships-behind-one-switch.md)) |
 
 `VERCEL_URL`, `VERCEL_ENV` and `VERCEL_GIT_COMMIT_SHA` are injected
 automatically by Vercel on every build — never set them yourself. The last is
@@ -129,7 +129,7 @@ rather than by finding out which variable the build read.
 It is global rather than per route on purpose: `.vibe-atmosphere` is a fixed
 layer behind the whole app, so a half-migrated product would change its own
 background as a founder navigates between screens. See
-[ADR 0098](../decisions/0098-the-palette-ships-behind-one-switch.md).
+[ADR 0102](../decisions/0102-the-palette-ships-behind-one-switch.md).
 
 **It takes effect at build time, so changing it needs a redeploy.** The root
 layout is a server component and Next.js bakes it into every statically
@@ -191,6 +191,7 @@ These six must be scoped to **Production only** in Vercel:
 | Variable | What a Preview holding it can do |
 |---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | Bypass RLS and read or write any tenant's rows |
+| `SUPABASE_ACCESS_TOKEN` | Read the linked project's migration history. Local and CI only — never a deployed environment. Absent means the session-start drift report says so and exits, rather than failing the session ([ADR 0096](../decisions/0096-a-contradiction-is-not-a-measurement.md)) |
 | `ANTHROPIC_API_KEY` | Spend real money on inference |
 | `VIBE_AGENT_GATEWAY_SECRET` | Mint tokens the gateway accepts, against the production budget |
 | `STRIPE_SECRET_KEY` (live) | Move real money |
