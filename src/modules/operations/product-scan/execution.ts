@@ -237,6 +237,7 @@ export async function completeProductScanStep(
     detail: "The Product Profile and every durable discovery are ready.",
     referenceId: profileId,
   });
+
 }
 
 export async function failProductScanStep(

@@ -64,6 +64,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * what else is true, then the business reading. Deliberately a column and not
  * a grid: a dashboard of equal tiles is the shape that made a founder choose
  * between six doors, and the point of the ranking is that they do not have to.
+ *
+ * There is no briefing panel here, and its absence is a decision rather than a
+ * gap. One was built — the whole evidence chain with its dates, and a read
+ * beneath it — screenshotted, and removed: that chain is what Nova reads
+ * *before she speaks*, not a table a founder should have to read themselves.
+ * It travels with her sentences now, as `briefing/situation.ts`.
  */
 export async function NovaHome({
   supabase,
@@ -222,12 +228,31 @@ function FocusSection({
    * register with no controls, which is what makes them a second true thing
    * rather than a second wall of buttons.
    */
-  const asides = data.view.secondary.map((moment) => moment.message);
+  const asides = [
+    /*
+     * Vibe's own line about the evidence under this moment, first, because it
+     * is about the sentence above it rather than about something else pending.
+     *
+     * It rides in `asides` rather than in a prop of its own: it is the same
+     * kind of thing — a quiet line with no control — and two nearly identical
+     * prop names on one component is a defect waiting for somebody to pass the
+     * wrong one. `speechBubbles` groups the run, so a situation line and one
+     * other pending thing read as one remark rather than two grey blocks.
+     */
+    ...(data.situationAside === null ? [] : [data.situationAside]),
+    /*
+     * The other moments, as sentences. `buildNovaHomeView` has ranked and
+     * capped them since this route existed and nothing rendered them — so a
+     * founder with three things pending saw one.
+     */
+    ...data.view.secondary.map((moment) => moment.message),
+  ];
 
   if (control.kind === "none") {
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         block={blockFor(data, entry)}
@@ -243,12 +268,15 @@ function FocusSection({
      * worse than a card with none. The sentence above it still stands.
      */
     if (!data.question) {
-      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
+      return (
+        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
+      );
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         block={
@@ -286,12 +314,15 @@ function FocusSection({
      * change that is not there would be worse than none.
      */
     if (!data.change) {
-      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
+      return (
+        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
+      );
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         block={
@@ -314,12 +345,15 @@ function FocusSection({
      * choice with nothing to choose from would be worse than none.
      */
     if (data.workspaceCandidates.length === 0) {
-      return <NovaFocusThread entry={entry} running={running} asides={asides} />;
+      return (
+        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
+      );
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         block={
@@ -348,6 +382,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         controlLabel={control.label}
@@ -378,6 +413,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         block={blockFor(data, entry)}
@@ -393,6 +429,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        voice={data.momentVoice}
         running={running}
         asides={asides}
         block={blockFor(data, entry)}
@@ -411,6 +448,7 @@ function FocusSection({
   return (
     <NovaFocusThread
       entry={entry}
+      voice={data.momentVoice}
       running={running}
       asides={asides}
       block={blockFor(data, entry)}

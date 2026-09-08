@@ -128,6 +128,12 @@ import { AppErrorPreview } from "../app-error-preview";
 import BillingLoading from "@/app/app/(account)/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
 import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
+import {
+  E2E_NOVA_VOICE_SCENARIOS,
+  isE2eNovaVoiceScenario,
+  novaVoiceEntry,
+} from "../nova-voice-scenarios";
+import { NovaFocusThread } from "@/app/app/projects/[projectId]/nova/nova-focus-thread";
 import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
@@ -1093,6 +1099,7 @@ export default async function E2eScenarioPage({
                     initials: "TB",
                     avatarUrl: null,
                     fromGithub: true,
+                    chosen: false,
                   }}
                   subtitle="Founder"
                   placement="above"
@@ -1665,6 +1672,20 @@ export default async function E2eScenarioPage({
     );
   }
 
+  if (isE2eNovaVoiceScenario(scenario)) {
+    const { voice, aside } = E2E_NOVA_VOICE_SCENARIOS[scenario];
+    return (
+      <main className="mx-auto max-w-2xl p-8">
+        {label}
+        <NovaFocusThread
+          entry={novaVoiceEntry()}
+          voice={voice}
+          asides={aside === null ? [] : [aside]}
+        />
+      </main>
+    );
+  }
+
   if (isE2eAuditCreditScenario(scenario)) {
     const { gate } = E2E_AUDIT_CREDIT_SCENARIOS[scenario];
     return (
@@ -1750,6 +1771,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1781,6 +1803,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1788,7 +1811,11 @@ export default async function E2eScenarioPage({
         }
       >
         <div className="sr-only">{label}</div>
-        <ProfileView email={fixture.email} github={fixture.github} />
+        <ProfileView
+          email={fixture.email}
+          github={fixture.github}
+          founderName={fixture.founderName ?? null}
+        />
       </AccountShell>
     );
   }
@@ -1812,6 +1839,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1837,6 +1865,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -1862,6 +1891,7 @@ export default async function E2eScenarioPage({
                   initials: "TB",
                   avatarUrl: null,
                   fromGithub: true,
+                  chosen: false,
                 }}
               />
             }
@@ -2140,9 +2170,7 @@ export default async function E2eScenarioPage({
           sealing={scenario === "deep-scan-dialog-sealing"}
           expired={scenario.startsWith("deep-scan-dialog-expired")}
           liveViewUrl={
-            scenario === "deep-scan-dialog-expired-over-picture"
-              ? "wss://127.0.0.1:9/live"
-              : null
+            scenario === "deep-scan-dialog-expired-over-picture" ? "wss://127.0.0.1:9/live" : null
           }
         />
       </main>

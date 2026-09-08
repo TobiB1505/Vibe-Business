@@ -104,3 +104,17 @@ Three distinctions the row has to get right, and each is a way the ledger could 
 **`speakAfterOperation` returns `void` and never throws.** Its result cannot be branched on, so a step that calls it behaves identically to one that does not — the standing `meterAiUsage` and `observeAccountSpend` already have as non-authoritative work following a canonical write.
 
 **Still nothing calls it.** Which slot speaks first belongs to the slice that renders it; attaching it to an operation now would spend money generating sentences no screen can display.
+
+## Amendment (2026-09-07): the switch claims nothing
+
+*Attempted once means once* was written about crashes, and it is right about them. It was applied to the kill switch as well, and there it was wrong.
+
+`ensureNovaVoiceMessage` claimed the identity and then called `speakNovaMessage`, which is where `enabled` is read. So an attempt made while `NOVA_VOICE_ENABLED` was off claimed, resolved as `disabled`, and burned the identity — permanently, because a resolved identity is never claimed again. Turning the switch back on could not recover it.
+
+Production carries two of those. Of four rows ever written to `nova_voice_messages`, two are an audit and a Move set from an afternoon the switch was off, and their sentences are gone for good against 24 completed audits and 18 Move runs.
+
+**The switch is now checked before the claim.** The rule the irrevocable claim exists for is *never a second paid attempt*, and `disabled` makes no first one: `providerInvoked` is false, `countInputTokens` is never called, and no ledger row is written — which this record already treats as "no call happened" where it decides what `recordAIUsage` may say. Burning an identity for an attempt that spent nothing buys nothing and costs a sentence. A lever thrown to stop money leaving has to be reversible, or it is not the lever it says it is.
+
+`over_input_budget` still claims, and the difference is the decision rather than an oversight: it is a property of the payload measured against a ceiling, so the same identity overflows the same way every time, and re-attempting it would count tokens forever to reach one answer. `provider_failed`, `invalid_output` and `validation_rejected` are unchanged — each records a call that was made and may have been billed.
+
+Nothing else moves. The five conditions stand, the claim is still irrevocable once taken, and a process that dies between claiming and resolving still leaves that identity on the template for good.

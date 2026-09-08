@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import type { NovaSituation } from "@/modules/nova/briefing/situation";
+
 /**
  * What Nova's voice is given, and what it may return.
  *
@@ -73,6 +75,26 @@ export type NovaVoiceFact = { label: string; value: string };
 
 export type NovaVoicePayload = {
   slot: NovaVoiceSlot;
+  /**
+   * Where the founder stands, whatever this message is about.
+   *
+   * The briefing, as context rather than as a subject — see
+   * `briefing/situation.ts`. It travels with **every** slot, because the thing
+   * that makes a Nova message worth paying for is not a rephrasing of the
+   * document in front of her but the *because* underneath it: "I finished your
+   * audit" is a template's sentence, and "I finished your audit, though I read
+   * your website with a version I have since corrected" is not.
+   *
+   * Vibe's own words throughout, so it sits outside the untrusted fence with
+   * the numeric allowlist.
+   *
+   * Optional on the payload, and **required** at every `readNova*Voice` call
+   * site. That asymmetry is deliberate: a fixture or an eval case that carries
+   * no situation is a legitimate payload, while a render that forgot one would
+   * compute a different identity from the step that generated and resolve to
+   * nothing at all — silently, and for good.
+   */
+  situation?: NovaSituation | null;
   /** Untrusted: derived from the repository or the customer's own words. */
   productName: string | null;
   /**
@@ -147,7 +169,7 @@ export const NOVA_VOICE_PROMPT_VERSION = "nova-voice-prompt-v4";
  * Separate from the prompt version because they move for different reasons and
  * a stored message has to be invalidated by either.
  */
-export const NOVA_VOICE_POLICY_VERSION = "nova-voice-policy-v1";
+export const NOVA_VOICE_POLICY_VERSION = "nova-voice-policy-v2";
 
 /** The domain ceiling. The transport ceiling is `maxOutputTokens`. */
 export const MAX_NOVA_MESSAGE_CHARS = 700;
@@ -185,6 +207,22 @@ export function canonicalPayload(payload: NovaVoicePayload): string {
     [...payload.allowedNumericFacts],
     payload.confidence,
     payload.nextStep,
+    /*
+     * Appended rather than inserted, and it moves the identity of every stored
+     * message — which is why `NOVA_VOICE_POLICY_VERSION` went to v2 in the same
+     * change. Two founders whose audits read alike but whose evidence does not
+     * are in different situations and must not share a sentence, and a message
+     * written while a scan was stale must not survive the re-scan that fixed it.
+     */
+    /*
+     * `subject` is left out on purpose. It decides whether a *surface* shows
+     * the block, not what the model is told or says, so hashing it would
+     * invalidate every stored message for a field no model ever reads — and it
+     * is derivable from the lines, which name the link and are hashed here.
+     */
+    payload.situation == null
+      ? null
+      : [[...payload.situation.lines], payload.situation.remedy],
   ]);
 }
 
