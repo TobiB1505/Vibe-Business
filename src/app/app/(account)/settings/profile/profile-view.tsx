@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { buttonClasses } from "@/components/ui/button";
 import { CodeIcon, LockIcon } from "@/components/ui/dashboard-icons";
 import { StatusPill } from "@/components/ui/status-pill";
+import { SettingsColumn } from "@/components/layout/settings-column";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
@@ -80,7 +81,7 @@ export function ProfileView({
   const identity = buildAccountIdentity({ email, github });
 
   return (
-    <div className="flex flex-col gap-8">
+    <SettingsColumn className="gap-8">
       <SectionHeader
         level={1}
         title="Profile"
@@ -196,6 +197,6 @@ export function ProfileView({
           ))}
         </ul>
       </Surface>
-    </div>
+    </SettingsColumn>
   );
 }

@@ -3,6 +3,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { RepositoriesIcon, SignOutIcon } from "@/components/ui/dashboard-icons";
 import { Metric } from "@/components/ui/metric";
 import { cn } from "@/lib/utils/cn";
+import { SettingsColumn } from "@/components/layout/settings-column";
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
 import { signOut } from "@/modules/auth/actions";
@@ -55,7 +56,7 @@ export default async function SettingsPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-7">
+    <SettingsColumn className="gap-7">
       <SectionHeader
         level={1}
         title="General"
@@ -129,6 +130,6 @@ export default async function SettingsPage() {
         same would be a trap.
       */}
       <DeleteAccountSection state={erasure} />
-    </div>
+    </SettingsColumn>
   );
 }
