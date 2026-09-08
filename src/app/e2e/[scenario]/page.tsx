@@ -51,6 +51,7 @@ import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onbo
 import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
+import { onboardingSteps } from "@/modules/onboarding/state";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -379,6 +380,7 @@ export default async function E2eScenarioPage({
             /* A login, because that is the only kind of name this product
                ever has — never a first name derived from an address. */
             greetingName="ada-lovelace"
+            setup={onboardingSteps("connect_source")}
             activity={[
               {
                 id: "e1",
@@ -434,6 +436,7 @@ export default async function E2eScenarioPage({
                 seed="fixture-project"
                 working={null}
                 checklist={null}
+                setup={onboardingSteps("connect_source")}
                 /* What the opening's rail had just shown, plus the row the
                    introduction itself wrote. The room does not empty out
                    between the two screens, and this fixture reviews that. */

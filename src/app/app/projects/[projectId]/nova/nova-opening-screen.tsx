@@ -23,6 +23,7 @@ import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import type { ActivityEntry } from "@/modules/audit-log/view";
+import type { OnboardingStep } from "@/modules/onboarding/state";
 import { markNovaIntroducedAction } from "@/app/app/onboarding/[projectId]/actions";
 
 /**
@@ -105,6 +106,14 @@ export function NovaOpeningScreen({
    * outline — and `NovaHappened` draws nothing when there is nothing.
    */
   activity = [],
+  /**
+   * Setup's four steps, when this screen is setup's first one.
+   *
+   * The onboarding route passes them; the project route does not, because a
+   * project reaching that path has finished setup and a list of it would be
+   * four filled squares about something already behind them.
+   */
+  setup,
   /** Replaying for review, so nothing is recorded when it ends. */
   replay = false,
 }: {
@@ -113,6 +122,7 @@ export function NovaOpeningScreen({
   connected: boolean;
   greetingName?: string | null;
   activity?: readonly ActivityEntry[];
+  setup?: readonly OnboardingStep[];
   replay?: boolean;
 }) {
   const { beat, staged } = useOpening();
@@ -182,6 +192,7 @@ export function NovaOpeningScreen({
                  */
                 checklist={null}
                 activity={atLeast(beat, "rail_content") ? activity : []}
+                setup={atLeast(beat, "rail_content") ? setup : undefined}
                 mark={<OpeningMark place="rail" />}
                 /* The stroke is the frame until it finishes drawing it. */
                 frame={atLeast(beat, "rail_content")}

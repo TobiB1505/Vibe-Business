@@ -5,6 +5,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import { stepDisplayState, stepSequenceStatus } from "@/modules/action-plans/view";
 import type { ActionPlanChecklist } from "@/modules/action-plans/service";
 import type { ActivityEntry } from "@/modules/audit-log/view";
+import type { OnboardingStep, OnboardingStepState } from "@/modules/onboarding/state";
 import { formatElapsedShort } from "@/lib/utils/format-datetime";
 import type { NovaWorkingEntry } from "@/modules/nova/home-view";
 
@@ -38,6 +39,7 @@ export function NovaRail({
   working,
   checklist,
   activity,
+  setup,
   mark,
   frame = true,
   contents = (node) => node,
@@ -49,6 +51,14 @@ export function NovaRail({
   working: NovaWorkingEntry | null;
   checklist: ActionPlanChecklist | null;
   activity: readonly ActivityEntry[];
+  /**
+   * Setup, as an ordered list, while there is setup left.
+   *
+   * The onboarding routes pass it and nothing else does — Home has a plan
+   * instead, and the two never coexist, because a project still in setup has
+   * no Action Plan and a project with one is past setup.
+   */
+  setup?: readonly OnboardingStep[];
   /**
    * The mark, when the caller owns it.
    *
@@ -88,6 +98,7 @@ export function NovaRail({
   /* Built as a list so an empty one adds no flex child, and therefore no gap:
      a wrapper around nothing would be 20px of dead column under the mark. */
   const below = [
+    setup && setup.length > 0 ? <Setup key="setup" steps={setup} /> : null,
     checklist ? <Plan key="plan" checklist={checklist} /> : null,
     activity.length > 0 ? <Earlier key="earlier" past={activity} now={now} /> : null,
   ].filter(Boolean);
@@ -163,44 +174,115 @@ function Plan({ checklist }: { checklist: ActionPlanChecklist }) {
           const done = display === "done" || display === "covered";
 
           return (
-            <li key={step.id} className="flex items-start gap-2.5">
-              <span
-                aria-hidden
-                className={`mt-1 size-2.5 shrink-0 rounded-[3px] border ${
-                  done
-                    ? "border-mint bg-mint"
-                    : here
-                      ? "border-mint bg-mint-tint"
-                      : "border-line-strong"
-                }`}
-              />
-              <div className="min-w-0 flex-1">
-                <p
-                  className={`text-caption ${
-                    here ? "text-fg font-semibold" : done ? "text-fg-meta" : "text-fg-secondary"
-                  }`}
-                >
-                  {step.title}
-                  <span className="sr-only">
-                    {" — "}
-                    {here ? "working on this" : done ? "done" : "waiting"}
-                  </span>
-                </p>
-                {/*
+            <li key={step.id}>
+              <StepRow
+                label={step.title}
+                state={here ? "here" : done ? "done" : "waiting"}
+                /*
                   Only where it says something the title does not. "Ready now"
                   under every waiting row would be noise; "Waiting for step 2"
                   is the sequencing a founder came here to read.
-                */}
-                {(here || sequence.state === "waiting" || done) && (
-                  <p className="text-fg-meta text-caption">
-                    {here ? "Working on this" : sequence.label}
-                  </p>
-                )}
-              </div>
+                */
+                note={
+                  here
+                    ? "Working on this"
+                    : sequence.state === "waiting" || done
+                      ? sequence.label
+                      : undefined
+                }
+              />
             </li>
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/**
+ * Setup, in the same column and the same three marks as the plan.
+ *
+ * ## Why this is not the Action Plan's component
+ *
+ * Because `ActionPlanChecklist` is a domain object about opportunities — steps
+ * with dependencies, absorption, a first actionable order — and setup has none
+ * of that. Building a fake one to reuse `Plan` would have put four phases
+ * through a shape that means something else, and the first person to read
+ * `absorbedByStepOrder: {}` would have had to work out that it was scaffolding.
+ *
+ * What the two genuinely share is the *row*, and that is shared: `StepRow`.
+ * The marks cannot drift, which is the thing worth protecting — a founder
+ * crossing from setup into a plan should not have to learn a second alphabet.
+ *
+ * ## Why there is no sub-label under the current step
+ *
+ * The status row above already says what is happening, from the same tables.
+ * "Reading your product" under a ringed *Understand* would be the one fact on
+ * this screen written twice, six inches apart, by two components that can
+ * disagree.
+ */
+function Setup({ steps }: { steps: readonly OnboardingStep[] }) {
+  return (
+    <div className="flex flex-col gap-2.5">
+      <MonoLabel>Setup</MonoLabel>
+      <ol className="flex flex-col gap-2">
+        {steps.map((step) => (
+          <li key={step.id}>
+            <StepRow label={step.label} state={step.state} />
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * One step of an ordered list: a mark, a title, and sometimes a reason.
+ *
+ * A filled square is carried out. A ring is the step to work on now. A hollow
+ * outline is waiting. The mark is `aria-hidden` and the state is said in words
+ * beside it, because `DESIGN.md` is explicit that colour is never the only
+ * signal — and a shape is not one either.
+ */
+function StepRow({
+  label,
+  state,
+  note,
+}: {
+  label: string;
+  state: OnboardingStepState;
+  note?: string;
+}) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span
+        aria-hidden
+        className={`mt-1 size-2.5 shrink-0 rounded-[3px] border ${
+          state === "done"
+            ? "border-mint bg-mint"
+            : state === "here"
+              ? "border-mint bg-mint-tint"
+              : "border-line-strong"
+        }`}
+      />
+      <div className="min-w-0 flex-1">
+        <p
+          className={`text-caption ${
+            state === "here"
+              ? "text-fg font-semibold"
+              : state === "done"
+                ? "text-fg-meta"
+                : "text-fg-secondary"
+          }`}
+        >
+          {label}
+          <span className="sr-only">
+            {" — "}
+            {state === "here" ? "working on this" : state === "done" ? "done" : "waiting"}
+          </span>
+        </p>
+        {note && <p className="text-fg-meta text-caption">{note}</p>}
+      </div>
     </div>
   );
 }

@@ -37,6 +37,7 @@ import { NovaOnboardingHeader } from "./nova-onboarding-header";
 import { NovaOpeningScreen } from "../../projects/[projectId]/nova/nova-opening-screen";
 import { NovaRail } from "../../projects/[projectId]/nova/nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
+import { onboardingSteps } from "@/modules/onboarding/state";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { novaWorkingEntry } from "@/modules/nova/home-view";
 import { operationPollPhase } from "@/modules/operations/view";
@@ -157,6 +158,7 @@ export default async function ProjectOnboardingPage({
           productName={onboarding.projectName}
           connected={onboarding.repository !== null}
           greetingName={identity?.githubLogin ?? null}
+          setup={onboardingSteps(onboarding.state)}
           activity={buildActivityFeed(introActivity.events).reverse()}
         />
       </OnboardingShell>
@@ -219,9 +221,10 @@ export default async function ProjectOnboardingPage({
               presence="listening"
               seed={projectId}
               working={null}
-              /* No plan during setup: there is none, and a column headed "To
-                 do" over nothing promises work nobody has decided on. */
+              /* No Action Plan during setup — there is none yet. What the
+                 column holds instead is setup's own four steps. */
               checklist={null}
+              setup={onboardingSteps(onboarding.state)}
               activity={buildActivityFeed(handoverActivity.events).reverse()}
             />
           }
@@ -470,10 +473,16 @@ export default async function ProjectOnboardingPage({
         }
         rail={
           /*
-            Her side of the room. No plan: there is none during setup, and a
-            checklist of the product's own phases is what this column used to
-            hold — a to-do list about Vibe's process rather than anything a
-            founder decides.
+            Her side of the room. No Action Plan — there is none until the
+            audit has run — and in its place setup's own four steps, in the
+            same marks the plan uses.
+
+            That list was removed once, from a nav above the thread, on the
+            argument that it was "a to-do list about Vibe's process rather
+            than anything a founder decides". It is not a decision, and it was
+            never meant to be: Nova's sentence says where we are, and this is
+            the only thing on the screen that says how much of it there is.
+            The mistake was the position, not the list.
           */
           <NovaRail
             presence={novaPresenceState({
@@ -493,6 +502,7 @@ export default async function ProjectOnboardingPage({
                 : null,
             )}
             checklist={null}
+            setup={onboardingSteps(onboarding.state)}
             activity={buildActivityFeed(auditEvents.events).reverse()}
           />
         }

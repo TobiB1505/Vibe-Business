@@ -16,11 +16,13 @@ export function OnboardingShell({
   /**
    * Accepted and unread, deliberately.
    *
-   * The progress list this positioned is gone: it was a to-do list about the
-   * product's process, and Nova says where we are in a sentence now. The prop
-   * stays because `loading.tsx` and the page both mount this shell and both
-   * pass it — dropping it would make the wait render a different frame from
-   * the page it is waiting for, which is how the two come apart.
+   * The progress list this positioned is gone from *here*. It came back as
+   * `onboardingSteps` in the rail, beside the Action Plan's list and in the
+   * same marks — the mistake was a strip of chrome above the thread, not the
+   * list itself. The prop stays because `loading.tsx` and the page both mount
+   * this shell and both pass it; dropping it would make the wait render a
+   * different frame from the page it is waiting for, which is how the two
+   * come apart.
    */
   state?: OnboardingState | null;
   projectName?: string;
@@ -67,11 +69,11 @@ export function OnboardingShell({
         One column, because the left one is Nova's now.
 
         It held a four-step progress list — Connect, Understand, Audit, First
-        move, with ticks — and that is a to-do list about the *product's*
-        process rather than anything a founder decides. It also said the one
-        thing Nova now says herself, in a sentence, at the top of the thread:
-        where we are. The rail that replaced it carries her mark and what has
-        already happened, which is what makes this a place rather than a form.
+        move, with ticks — as a strip of chrome across the top. Those four
+        steps are back, in the rail, in the same marks the Action Plan uses:
+        the position was the mistake, not the list. What the rail adds is that
+        they sit beside her mark and what has already happened, which is what
+        makes it a place rather than a form.
       */}
       <div className="mx-auto w-full max-w-[76rem] px-5 py-7 sm:px-8 sm:py-10">
         <main className="min-w-0">{children}</main>

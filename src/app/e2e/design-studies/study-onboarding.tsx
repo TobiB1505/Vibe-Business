@@ -1,4 +1,8 @@
-import { ONBOARDING_STATES, type OnboardingState } from "@/modules/onboarding/state";
+import {
+  ONBOARDING_STATES,
+  onboardingSteps,
+  type OnboardingState,
+} from "@/modules/onboarding/state";
 import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
 import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
@@ -76,13 +80,13 @@ const CONTROL_FOR_STATE: Record<OnboardingState, string | null> = {
  *
  * It is the same header and the same rail Home mounts, not copies.
  *
- * ## The rail without its plan
+ * ## The rail, and what it holds during setup
  *
- * There is no action plan during setup, and the column used to hold the
- * product's own four phases with ticks — a to-do list about Vibe's process
- * rather than anything a founder decides, saying the one thing Nova now says
- * in a sentence. What is left is her mark and what has already happened, which
- * is what makes a column a place rather than a form.
+ * There is no Action Plan yet — the audit has not run — so the column holds
+ * setup's own four steps instead, in the same three marks the plan uses. Her
+ * sentence says *where we are*; the list is the only thing on the screen that
+ * says *how much is left*, which is what makes a column a place rather than a
+ * form. Under it: her mark, and what has already happened.
  */
 function TheRoom({ panel }: { panel: string }) {
   return (
@@ -116,6 +120,7 @@ function TheRoom({ panel }: { panel: string }) {
               /* No plan during setup. The prop stays because the rail is Home's
                  and Home has one; passing null is the decision, not an absence. */
               checklist={null}
+              setup={onboardingSteps("product_scanning")}
               activity={ROOM_ACTIVITY}
             />
           }
