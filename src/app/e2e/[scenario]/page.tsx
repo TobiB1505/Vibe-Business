@@ -44,6 +44,7 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
@@ -64,6 +65,7 @@ import {
   OPENING_SCENARIO,
   OPENING_WALKTHROUGH_SCENARIO,
   SHIPPED_OPENING_SCENARIO,
+  ONBOARDING_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
   CHAT_ANSWERED_SCENARIO,
@@ -325,6 +327,15 @@ export default async function E2eScenarioPage({
     return (
       <StudyShell study={chosen}>
         <StudyOpening study={chosen} />
+      </StudyShell>
+    );
+  }
+
+  if (scenario === ONBOARDING_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyOnboarding study={chosen} />
       </StudyShell>
     );
   }

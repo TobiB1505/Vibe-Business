@@ -9,7 +9,7 @@ import { buildNovaAuditEntry, buildNovaExecutionOffer, buildNovaFeed } from "./f
 import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
 import { ONBOARDING_STATES } from "../onboarding/state";
-import { NOVA_ONBOARDING_MESSAGE } from "./onboarding";
+import { NOVA_ONBOARDING_DETAIL, NOVA_ONBOARDING_MESSAGE } from "./onboarding";
 import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
 
 /**
@@ -265,10 +265,21 @@ describe("what Nova's sentences may say", () => {
       kind: `onboarding:${state}`,
       text: NOVA_ONBOARDING_MESSAGE[state],
     })),
+    /* The asides are her voice too. A rule that applied to what she leads with
+       and not to what she adds underneath would be half a rule. */
+    ...ONBOARDING_STATES.filter((state) => NOVA_ONBOARDING_DETAIL[state] !== null).map((state) => ({
+      kind: `onboarding-detail:${state}`,
+      text: NOVA_ONBOARDING_DETAIL[state] as string,
+    })),
   ];
 
   it("has a sentence for every candidate and every onboarding state", () => {
-    expect(everyMessage).toHaveLength(FOCUS_CANDIDATE_KINDS.length + ONBOARDING_STATES.length);
+    const details = ONBOARDING_STATES.filter(
+      (state) => NOVA_ONBOARDING_DETAIL[state] !== null,
+    ).length;
+    expect(everyMessage).toHaveLength(
+      FOCUS_CANDIDATE_KINDS.length + ONBOARDING_STATES.length + details,
+    );
     for (const { kind, text } of everyMessage) {
       expect(text.length, kind).toBeGreaterThan(10);
     }

@@ -297,6 +297,17 @@ export const OPENING_WALKTHROUGH_SCENARIO = "study-opening-walkthrough";
  * the two were never on screen in the same place.
  */
 export const SHIPPED_OPENING_SCENARIO = "study-opening-shipped";
+
+/**
+ * Setup, all ten states at once.
+ *
+ * Same argument as `RAIL_SCENARIO` and the shipped opening: a state of
+ * `deriveOnboardingState` is reachable only by a project that happens to be in
+ * it, and three of them only by one that is stuck. The ten sentences were
+ * never on screen together, which is why they were written as eight separate
+ * posters.
+ */
+export const ONBOARDING_SCENARIO = "study-onboarding";
 export const WIREFRAME_OFFLINE_SCENARIO = "study-wireframe-offline";
 
 export function isWireframeScenario(scenario: string): boolean {

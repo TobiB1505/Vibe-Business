@@ -111,6 +111,52 @@ export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
   complete: "That is the setup behind us. From here I tell you what matters as it changes.",
 };
 
+/**
+ * The second true thing, where there is one.
+ *
+ * ## Why most of these are null
+ *
+ * Because the block below usually says it better. A scan narrates its own
+ * stages, the reveal asks its own question, the audit's reading is the reading
+ * — and Nova adding a line about any of them would be the caption problem this
+ * surface keeps removing.
+ *
+ * The two that are not null are the two where something is true that no
+ * component on screen can state: what GitHub is about to ask for, and what a
+ * live product buys that the code alone cannot. Both were already written on
+ * the page, in its own prose, above the control. They move here rather than
+ * being rewritten, because the sentence was reviewed once and the point of
+ * this table is that there is one copy of it.
+ *
+ * Held to the same five rules as the messages, and swept with them.
+ */
+export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
+  connect_source:
+    "GitHub will ask which repositories I may see. You choose, and I only get the ones you pick.",
+  add_live_product: "It lets me compare what the code says against what a visitor can reach.",
+
+  /* The scan reports its own stages, from rows it writes as it goes. */
+  product_scanning: null,
+  /* The reveal states what was understood and asks its own question. */
+  product_reveal: null,
+  /* Nothing is owed while Vibe works, and nothing is known yet. */
+  audit_preparing: null,
+  audit_running: null,
+  /* The panel carries the question and its options. */
+  audit_needs_user: null,
+  /* The reading is the second thing, and it is a block rather than a line. */
+  audit_reveal: null,
+  /*
+   * The reassurance the page carried at the foot of this state, in its own
+   * words: setup is done whether or not the founder starts the Move. It is the
+   * one line that has to survive the chrome being removed, because it is what
+   * makes the control below a choice rather than the last gate of setup.
+   */
+  first_move: "Your setup is behind us either way. The workspace is where everything lives now.",
+  /* The handover says itself. */
+  complete: null,
+};
+
 const SCANNING_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_scanning;
 
 const REVEAL_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_reveal;

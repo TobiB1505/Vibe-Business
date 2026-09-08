@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { NOVA_ONBOARDING_DETAIL } from "@/modules/nova/onboarding";
+
 /**
  * The first ten minutes, pinned where the browser cannot reach (UI-S1 §28, §29).
  *
@@ -291,13 +293,36 @@ describe("the first journey speaks to a founder", () => {
     }
   });
 
+  /**
+   * The disclosure is a rule, not a paragraph, so it followed the sentence.
+   *
+   * It used to be prose on both connect surfaces and was asserted as a literal
+   * string on each. The project onboarding page is a thread now: Nova says the
+   * sentence and `NOVA_ONBOARDING_DETAIL.connect_source` is where it is
+   * written, once. Asserting the old string against the page would have failed
+   * for the right reason and been fixed the wrong way — by pasting the
+   * sentence back into the markup beside the table that owns it.
+   *
+   * So the guard moved with the sentence. What it protects is unchanged: a
+   * founder is told what GitHub is about to ask *before* they are handed over,
+   * and the page that hands over is the page that says it.
+   */
   it("says what GitHub is about to ask before handing over", () => {
-    for (const [name, source] of [
-      ["onboarding entry", read("src/app/app/onboarding/page.tsx")],
-      ["project onboarding", PAGE],
-    ] as const) {
-      expect(proseOf(source), name).toContain("GitHub will ask which repositories Vibe may access");
-    }
+    expect(proseOf(read("src/app/app/onboarding/page.tsx")), "onboarding entry").toContain(
+      "GitHub will ask which repositories Vibe may access",
+    );
+
+    const disclosure = NOVA_ONBOARDING_DETAIL.connect_source ?? "";
+    expect(disclosure).toMatch(/GitHub will ask which repositories/i);
+    /* The half that matters: the founder chooses, and Vibe is limited to the
+       choice. A disclosure naming the prompt without naming the limit would be
+       a warning rather than the fact. */
+    expect(disclosure).toMatch(/you choose/i);
+
+    /* And the state that carries it is the one the page renders for the
+       hand-over, rather than a sentence nothing reaches. */
+    expect(PAGE).toMatch(/state="connect_source"/);
+    expect(PAGE).toContain("/app/connect/github");
   });
 });
 
