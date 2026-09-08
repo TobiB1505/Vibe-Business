@@ -6,7 +6,7 @@ const ROOT = process.cwd();
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 /**
- * Every completion set has to know about handoffs (ADR 0097).
+ * Every completion set has to know about handoffs (ADR 0099).
  *
  * ## Why this is a source test
  *
@@ -48,13 +48,14 @@ describe("callers that decide what is finished", () => {
   it.each(SITES)("$file passes the handoffs it read", ({ file }) => {
     const source = read(file);
 
-    // It reads them...
-    expect(source).toMatch(/listHandoffsForPlan|handoffByStepKey/);
+    // It reads them — directly, or through the shared `PlanEvidence` that
+    // carries all four completion authorities together for exactly this reason.
+    expect(source).toMatch(/listHandoffsForPlan|handoffByStepKey|evidence\.handoffs|handoffs\b/);
     /*
      * ...and hands on the **build** ones, rather than every issued prompt.
      *
      * The set became narrower than "a prompt was issued" when verification
-     * handoffs arrived (ADR 0097 follow-on). A build handoff is what admits a
+     * handoffs arrived (ADR 0099 follow-on). A build handoff is what admits a
      * `vibe` + `product_change` step to being closed by the founder's word; a
      * verify handoff is issued for the founder's own measurement and grants
      * nothing. A caller that kept passing every key would let a prompt issued
@@ -65,7 +66,7 @@ describe("callers that decide what is finished", () => {
      * reading the view satisfies this by naming that field.
      */
     expect(source).toMatch(
-      /buildHandoffKeys\(\s*handoffs\s*\)|new Set\(\s*Object\.keys\(current\.handoffByStepKey\)\s*,?\s*\)/,
+      /buildHandoffKeys\(\s*(evidence\.)?handoffs\s*,?\s*\)|new Set\(\s*Object\.keys\(current\.handoffByStepKey\)\s*,?\s*\)/,
     );
   });
 

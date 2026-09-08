@@ -21,7 +21,7 @@ const ERROR_COPY = {
 } as const;
 
 /**
- * Hand one step to the founder's own coding tool (ADR 0097).
+ * Hand one step to the founder's own coding tool (ADR 0099).
  *
  * ## The check that makes the attestation gate mean anything
  *
@@ -65,7 +65,7 @@ export async function recordHandoffAction(
   const tool = submitted as HandoffTool;
 
   /*
-   * Staleness is deliberately *not* a gate here (ADR 0097).
+   * Staleness is deliberately *not* a gate here (ADR 0099).
    *
    * `planStaleness` says the diagnosis behind the plan moved — a new product
    * profile, a newer audit. It does not say this step is wrong, and the plan

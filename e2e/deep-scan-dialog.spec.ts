@@ -94,3 +94,66 @@ test.describe("sign-in ran out of time", () => {
     await expect(page.getByRole("button", { name: /logged in/i })).toBeDisabled();
   });
 });
+
+/*
+ * The founder's report, on a phone, over LTE.
+ *
+ * The notice arrived after two minutes and was drawn *transparently* over the
+ * live picture: two paragraphs of white text on top of a green button and a
+ * headline, unreadable. Underneath it the browser kept going — it scrolled,
+ * and it reached the signed-in home — while the sentence said Vibe had closed
+ * it. Both are one defect with two faces: an overlay that covers nothing, over
+ * a socket that stops for nothing.
+ *
+ * `bg-surface-2` is 3% white. It is a *layer* colour, meant to stack on the
+ * app ground, and it was doing exactly what it is for. Nothing about it was
+ * broken; it was the wrong token for a thing that has to cover a picture.
+ */
+test.describe("the ending, over a live picture", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/e2e/deep-scan-dialog-expired-over-picture");
+  });
+
+  test("covers the picture rather than tinting it", async ({ page }) => {
+    const notice = page.getByRole("dialog").getByRole("alert");
+    await expect(notice).toBeVisible();
+
+    const alpha = await notice.evaluate((node) => {
+      const colour = getComputedStyle(node).backgroundColor;
+      const parts = colour.match(/[\d.]+/g) ?? [];
+      // `rgb(r g b)` is fully opaque; `rgba(r g b / a)` carries the alpha.
+      return parts.length < 4 ? 1 : Number.parseFloat(parts[3]!);
+    });
+
+    // 0.03 is what shipped. Anything below opaque puts a live browser behind
+    // a sentence about that browser being closed.
+    expect(alpha).toBe(1);
+  });
+
+  test("takes the picture down, so it cannot contradict the sentence", async ({ page }) => {
+    // The socket outlives the session. The only thing that makes "Vibe is
+    // closing the temporary browser" true on screen is that there is no
+    // longer a picture to keep painting.
+    await expect(page.getByRole("dialog").locator("canvas")).toHaveCount(0);
+  });
+
+  test("does not claim a close that has not happened yet", async ({ page }) => {
+    const notice = page.getByRole("dialog").getByRole("alert");
+    // Rendered before `cancelDeepScanAction` returns, so the past tense was a
+    // statement about a request still in flight.
+    await expect(notice).toContainText("is closing the temporary browser");
+  });
+
+  test("stays readable on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+
+    const notice = page.getByRole("dialog").getByRole("alert");
+    await expect(notice).toBeVisible();
+    await expect(notice).toContainText("Nothing was charged");
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+});

@@ -119,7 +119,40 @@ describe("every output-relevant input moves the identity", () => {
   });
 
   it("moves for a different policy version", () => {
-    expect(identity({ policyVersion: "nova-voice-policy-v2" })).not.toBe(BASELINE);
+    /* Derived from the current one, so a bump does not turn this into an
+       assertion that the live version differs from itself. */
+    expect(identity({ policyVersion: `${NOVA_VOICE_POLICY_VERSION}-next` })).not.toBe(BASELINE);
+  });
+
+  /**
+   * The situation block, which is why the policy version moved to v2.
+   *
+   * It is what makes a message *informed*, so it is what must invalidate one:
+   * a sentence written while a scan was stale must not survive the re-scan
+   * that fixed it, and two founders whose audits read alike but whose evidence
+   * does not must not share a sentence.
+   */
+  it("moves for a different situation", () => {
+    const current = identity({
+      payload: {
+        ...PAYLOAD,
+        situation: { lines: ["Everything Vibe reads from is current."], remedy: null, subject: null },
+      },
+    });
+    const stale = identity({
+      payload: {
+        ...PAYLOAD,
+        situation: {
+          lines: ["Your website is the thing to repair first."],
+          remedy: "Run a fresh Product Scan",
+          subject: "live_scan",
+        },
+      },
+    });
+
+    expect(current).not.toBe(BASELINE);
+    expect(stale).not.toBe(BASELINE);
+    expect(stale).not.toBe(current);
   });
 
   /**

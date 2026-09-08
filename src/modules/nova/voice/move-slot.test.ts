@@ -290,6 +290,7 @@ describe("what a component reads", () => {
       projectId: PROJECT,
       move: move(),
       primaryGoal: null,
+      situation: null,
     });
   }
 
@@ -361,6 +362,7 @@ describe("what a component reads", () => {
       projectId: PROJECT,
       move: moved,
       primaryGoal: null,
+      situation: null,
     });
 
     expect(result.message).toBe(buildNovaMoveTemplate(novaMoveSubject(moved), null));

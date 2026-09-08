@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNovaHomeView, NOVA_SECONDARY_LIMIT } from "./home-view";
+import { buildNovaHomeView, novaControlLabel, NOVA_SECONDARY_LIMIT } from "./home-view";
 import { deriveNovaFocus, FOCUS_CANDIDATE_KINDS, type NovaFocusFacts } from "./focus";
 import { novaCandidateMessage } from "./feed";
 import type { OperationView } from "../operations/view";
@@ -118,45 +118,118 @@ describe("Nova Home view", () => {
 
   describe("waiting is never working", () => {
     it("reports a paused operation as waiting on the founder", () => {
-      const view = viewOf({ working: operation({ status: "needs_user" }) });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation({ status: "needs_user" }) },
+      });
       expect(view.working?.phase).toBe("waiting_user");
     });
 
     it("reports a running operation as working", () => {
-      const view = viewOf({ working: operation({ status: "running" }) });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation({ status: "running" }) },
+      });
       expect(view.working?.phase).toBe("working");
     });
 
     it("reports a stalled run as stalled rather than as either", () => {
-      const view = viewOf({ working: operation({ stalled: true }) });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation({ stalled: true }) },
+      });
       expect(view.working?.phase).toBe("stalled");
     });
 
+    /*
+     * The type travels with the reading because a stage list is keyed by it.
+     * Without it a surface drawing the named stages would have to guess which
+     * sequence it was looking at, and two of the fifteen operation types have
+     * one — so the wrong guess is a checklist that ticks the wrong rows.
+     */
+    it("carries the kind of run, and the stages that kind has", () => {
+      const planning = viewOf({
+        working: { type: "action_planning", view: operation() },
+      });
+
+      expect(planning.working?.type).toBe("action_planning");
+      expect(planning.working?.sequence).toBe("action_planning");
+    });
+
+    /*
+     * And says so honestly when a run has none. A merge reports a stage and no
+     * sequence; an empty checklist under it would be a picture of four steps
+     * nobody defined.
+     */
+    it("reports no stages for a run that has none", () => {
+      const merging = viewOf({ working: { type: "change_merge", view: operation() } });
+
+      expect(merging.working?.stageLabel).toBeTruthy();
+      expect(merging.working?.sequence).toBeNull();
+    });
+
     it("names a stage rather than a percentage", () => {
-      const view = viewOf({ working: operation() });
+      const view = viewOf({
+        working: { type: "business_audit", view: operation() },
+      });
       expect(view.working?.stageLabel).toBeTruthy();
       expect(view.working?.stageLabel).not.toMatch(/\d+\s*%/);
     });
   });
 
   describe("controls are only offered where Home holds the arguments", () => {
-    it("sends a merge to the surface that has the approval id", () => {
+    /*
+     * This used to assert `elsewhere`, on the reasoning that a merge needs an
+     * approval id no candidate carries. The id was the wrong thing to look
+     * for. A merge control lifted out of its sequence is exactly the failure
+     * rules 67-71 describe — a yes to commit A applied to commit B — but the
+     * *sequence* travelling is not: `ChangeGates` brings validation, preview,
+     * review, approval, merge and outcome in that order, each reachable only
+     * through the one above it, and names its own approval.
+     *
+     * So the control carries the change's identity and which gate to open, and
+     * still has no label of its own: there is no button here to press out of
+     * order.
+     */
+    it("decides a merge through the change's own gates", () => {
       const view = viewOf({
-        changes: [
-          { preparedChangeId: "change-1", stage: "ready_to_merge", headline: "Approved" },
-        ],
+        changes: [{ preparedChangeId: "change-1", stage: "ready_to_merge", headline: "Approved" }],
       });
 
       expect(view.primary.kind).toBe("merge_ready");
-      expect(view.primary.control.kind).toBe("elsewhere");
-      // And it must not wear the catalog's verb while doing something else.
-      if (view.primary.control.kind === "elsewhere") {
-        expect(view.primary.control.label.toLowerCase()).not.toContain("merge it");
-        expect(view.primary.control.section).toBe("agent");
+      expect(view.primary.control.kind).toBe("gate");
+      if (view.primary.control.kind === "gate") {
+        expect(view.primary.control.preparedChangeId).toBe("change-1");
+        expect(view.primary.control.stage).toBe("review");
       }
+      // No verb of its own. The gates carry every control this moment has.
+      expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
-    it("sends a question to the card that owns answering it", () => {
+    /*
+     * A failed validation is the one change moment decided at a different
+     * gate, and getting it wrong would show a founder the approval and merge
+     * panels for a change that has not passed its checks.
+     */
+    it("opens the validation gate for a change that failed its checks", () => {
+      const view = viewOf({
+        changes: [
+          { preparedChangeId: "change-2", stage: "validation_failed", headline: "Checks failed" },
+        ],
+      });
+
+      expect(view.primary.kind).toBe("validation_failed");
+      if (view.primary.control.kind !== "gate") throw new Error("expected a gate");
+      expect(view.primary.control.stage).toBe("validate");
+    });
+
+    /*
+     * This used to assert `elsewhere`, and the change is the point rather than
+     * a relaxation. A question was sent away because Home could not supply the
+     * arguments — and a question is the one case where it can: the candidate
+     * carries the request id, and the card that answers one takes the request
+     * and its resolution action as props. So the control names what to answer,
+     * and the surface renders the card instead of a link out of the
+     * conversation that asked.
+     */
+    it("answers a question where it was asked, and names what to answer", () => {
       const view = viewOf({
         questions: [
           {
@@ -169,8 +242,70 @@ describe("Nova Home view", () => {
       });
 
       expect(view.primary.kind).toBe("founder_input_required");
-      expect(view.primary.control.kind).toBe("elsewhere");
+      expect(view.primary.control.kind).toBe("answer");
+      if (view.primary.control.kind === "answer") {
+        expect(view.primary.control.founderInputRequestId).toBe("req-1");
+      }
       expect(view.primary.detail).toBe("Which plan tier?");
+    });
+
+    /*
+     * The other half, and the reason `elsewhere` still exists. A merge needs
+     * an approval id that no candidate carries; a build needs a plan step key.
+     * Answering needs neither, which is why exactly one of these moved.
+     */
+    /*
+     * This used to assert `elsewhere`, on the reasoning that the candidate
+     * names no application. It does not — but the list was never an argument
+     * the ranking was withholding, it is a read, and the surface can make it.
+     * The control carries nothing, which is the honest shape.
+     */
+    it("chooses between applications here, from a list the surface reads", () => {
+      const view = viewOf({ workspaceChoiceRequired: true });
+
+      expect(view.primary.kind).toBe("workspace_choice_required");
+      expect(view.primary.control.kind).toBe("choose");
+      // The panel is the control, so a verb beside it would be a second one.
+      expect(novaControlLabel(view.primary.control)).toBeNull();
+    });
+
+    /*
+     * The one that is still genuinely missing an argument, and the only entry
+     * left in ELSEWHERE. `read.ts` fixes `executableStep` at null until the
+     * execution resolver is wired, so this state cannot presently arise at all
+     * — the routing is asserted here so it stays honest the day it can.
+     */
+    it("still sends a build to the plan, which holds the step", () => {
+      const view = viewOf({ executableStep: { order: 2, title: "Add the pricing page" } });
+
+      expect(view.primary.kind).toBe("execution_offered");
+      expect(view.primary.control.kind).toBe("elsewhere");
+      if (view.primary.control.kind === "elsewhere") {
+        expect(view.primary.control.section).toBe("action-plan");
+      }
+    });
+
+    it("gives a label to every control that has one, and none to a card", () => {
+      const asked = viewOf({
+        questions: [
+          {
+            founderInputRequestId: "req-1",
+            question: "Which plan tier?",
+            origin: "planner",
+            stepOrder: 1,
+          },
+        ],
+      });
+      const settled = viewOf({});
+
+      // The card is the control, so a second verb beside it would be one act
+      // with two names.
+      expect(novaControlLabel(asked.primary.control)).toBeNull();
+      // And `nothing_to_do` has no control at all.
+      expect(novaControlLabel(settled.primary.control)).toBeNull();
+      expect(novaControlLabel(viewOf({ auditOutdated: true }).primary.control)).toBe(
+        "Run the audit again",
+      );
     });
 
     it("dispatches a re-audit itself, because it needs only the project", () => {
@@ -182,13 +317,16 @@ describe("Nova Home view", () => {
       }
     });
 
+    /*
+     * Reconnecting is the GitHub App install flow. It leaves the product
+     * entirely, so a Server Action could not finish what it starts — which is
+     * why one navigation is still a navigation after four of them became
+     * gates.
+     */
     it("keeps a navigation control a link rather than a button", () => {
-      const view = viewOf({
-        changes: [
-          { preparedChangeId: "change-1", stage: "review_required", headline: "Look at this" },
-        ],
-      });
+      const view = viewOf({ sourceDisconnected: true });
 
+      expect(view.primary.kind).toBe("source_disconnected");
       expect(view.primary.control.kind).toBe("navigation");
     });
   });

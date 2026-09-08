@@ -100,6 +100,23 @@ export type ProvenanceCurrency = "analyzer_version" | "input_identity";
 /** The free work that replaces a link, for the caller to price and to offer. */
 export type ProvenanceRemedy = "product_scan" | "business_audit" | "opportunity_generation";
 
+/**
+ * What produces each link — one table, and the only one.
+ *
+ * The chain reads it below, so a caller that needs the remedy for a link that
+ * is *not* broken (an old but perfectly current audit, say) can ask the same
+ * table rather than keeping a second copy that drifts from this one. Three
+ * links map to `product_scan` because one run refreshes the sources and
+ * rebuilds the understanding together (ADR 0052).
+ */
+export const LINK_REMEDY: Record<ProvenanceLinkKind, ProvenanceRemedy> = {
+  repository_scan: "product_scan",
+  live_scan: "product_scan",
+  product_profile: "product_scan",
+  business_audit: "business_audit",
+  opportunity_set: "opportunity_generation",
+};
+
 export type ProvenanceLink = {
   kind: ProvenanceLinkKind;
   state: ProvenanceState;
@@ -160,11 +177,11 @@ function scanLink(
   };
 
   if (!scan) {
-    return { ...base, state: "missing", reason: "never_produced", remedy: "product_scan" };
+    return { ...base, state: "missing", reason: "never_produced", remedy: LINK_REMEDY[kind] };
   }
 
   if (scan.analyzerVersion !== runningNow) {
-    return { ...base, state: "outdated", reason: "analyzer_corrected", remedy: "product_scan" };
+    return { ...base, state: "outdated", reason: "analyzer_corrected", remedy: LINK_REMEDY[kind] };
   }
 
   return { ...base, state: "current", reason: null, remedy: null };
@@ -180,9 +197,10 @@ function scanLink(
 function derivedLink(
   kind: "product_profile" | "business_audit" | "opportunity_set",
   held: { producedAt: string | null; ownCurrency: boolean } | null,
-  remedy: ProvenanceRemedy,
   restsOnGap: boolean,
 ): ProvenanceLink {
+  const remedy = LINK_REMEDY[kind];
+
   const base = {
     kind,
     judgedBy: "input_identity" as const,
@@ -223,18 +241,17 @@ export function buildProvenanceChain(inputs: ProvenanceInputs): ProvenanceChain 
 
   const scansGood = repository.state === "current" && live.state === "current";
 
+  /*
+   * Its remedy is a Product Scan, not a separate understanding run: one
+   * customer-visible run refreshes the connected sources *and* assembles the
+   * profile (ADR 0052), which is why a founder whose whole chain lags is only
+   * ever asked to press once. `LINK_REMEDY` holds that.
+   */
   const profile = derivedLink(
     "product_profile",
     inputs.productProfile
       ? { producedAt: inputs.productProfile.producedAt, ownCurrency: inputs.productProfile.current }
       : null,
-    /*
-     * A Product Scan, not a separate understanding run. It refreshes the
-     * connected sources *and* assembles the profile as one customer-visible
-     * run (ADR 0052), so it is the one remedy that repairs all three of the
-     * links above — which is why a founder is only ever asked to press once.
-     */
-    "product_scan",
     !scansGood,
   );
 
@@ -243,7 +260,6 @@ export function buildProvenanceChain(inputs: ProvenanceInputs): ProvenanceChain 
     inputs.businessAudit
       ? { producedAt: inputs.businessAudit.producedAt, ownCurrency: inputs.businessAudit.upToDate }
       : null,
-    "business_audit",
     profile.state !== "current",
   );
 
@@ -252,7 +268,6 @@ export function buildProvenanceChain(inputs: ProvenanceInputs): ProvenanceChain 
     inputs.opportunitySet
       ? { producedAt: inputs.opportunitySet.producedAt, ownCurrency: !inputs.opportunitySet.stale }
       : null,
-    "opportunity_generation",
     audit.state !== "current",
   );
 

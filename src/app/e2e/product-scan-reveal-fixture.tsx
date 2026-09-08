@@ -10,10 +10,17 @@ export function ProductScanRevealFixture({
   operation,
   events,
   presentation,
+  /**
+   * Where it is being drawn. `block` is Nova's thread, and the reveal is the
+   * whole reason it is worth showing there: the scan plays and then settles
+   * into its own finished state, which is what a founder watching a run sees.
+   */
+  variant = "workspace",
 }: {
   operation: OperationView;
   events: readonly ProductScanEvent[];
   presentation: ProductScanPresentation;
+  variant?: "workspace" | "block";
 }) {
   const [visibleCount, setVisibleCount] = useState(1);
 
@@ -41,7 +48,7 @@ export function ProductScanRevealFixture({
     <ProductScanExperience
       projectId="project_e2e"
       productName={presentation.name}
-      variant="workspace"
+      variant={variant}
       initialOperation={operation}
       initialEvents={events.slice(0, visibleCount)}
       initialPresentation={presentation}

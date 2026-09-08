@@ -7,7 +7,7 @@ async function openFullPlannedWork(page: Page) {
 }
 
 /**
- * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0097).
+ * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0099).
  *
  * ## Why this is a browser suite
  *
@@ -70,7 +70,7 @@ test.describe("a step Vibe will not build", () => {
      * The confirmation used to be the whole `FounderActionCard`, nested inside
      * this one — so the same step drew two bordered panels, each with its own
      * status pill and its own copy of the title and description, saying two
-     * different things about itself (ADR 0097).
+     * different things about itself (ADR 0099).
      */
     await page.goto("/e2e/action_plan_handoff_prompt");
 
@@ -235,7 +235,7 @@ test.describe("a step Vibe will not build", () => {
 });
 
 /**
- * The end of a plan (ADR 0097 follow-on).
+ * The end of a plan (ADR 0099 follow-on).
  *
  * Until now the last step closing rendered one sentence — "Every step is done."
  * — and nothing else. No account of what the plan produced and no way onward,
@@ -283,7 +283,7 @@ test.describe("a plan with every step done", () => {
 });
 
 /**
- * A check Vibe cannot reach (ADR 0097 follow-on).
+ * A check Vibe cannot reach (ADR 0099 follow-on).
  *
  * The same mechanism as a refusal, pointed at the opposite reason. Vibe's
  * validation sandbox runs with no network and no credential, by design, so it
@@ -341,7 +341,7 @@ test.describe("a step only the founder's environment can check", () => {
 });
 
 /**
- * The plan waiting on somebody outside it (ADR 0098).
+ * The plan waiting on somebody outside it (ADR 0100).
  *
  * The last step shape with no way to close it, and the screen said so: the plan
  * marked it **Start here** and rendered no control at all, while the panel two

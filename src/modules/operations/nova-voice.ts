@@ -53,11 +53,24 @@ import type { NovaVoiceOutcome } from "@/modules/nova/voice/service";
  * have — non-authoritative work that follows a canonical write and must not
  * fail the operation that earned it.
  *
- * ## Nothing calls it yet
+ * ## Which slot speaks, and why it is one per operation
  *
- * Which slot speaks first is a product decision belonging to the slice that
- * renders it. Attaching this to an operation now would spend money generating
- * sentences no screen can display.
+ * `audit_result` at the tail of a business audit, `move_recommendation` at the
+ * tail of a Move generation. Both carry the **situation** — Vibe's own reading
+ * of the evidence chain, from `nova-situation.ts` — which is what makes either
+ * worth paying for: without it a model is rephrasing a sentence a model already
+ * wrote, and with it the message can say why the document in front of the
+ * founder rests on what it rests on.
+ *
+ * One slot per operation is a constraint rather than a preference.
+ * `ai_usage_events_job_idx` is unique on `job_id`, and this records usage under
+ * the operation run's id — so a second voice call on the same line writes a
+ * paid attempt the ledger silently drops, and an unrecorded provider cost is
+ * the one failure this tier is not allowed to have (rule 47).
+ *
+ * A Product Scan speaks on no line at all. `product_reveal` exists in the slot
+ * vocabulary and has no reader, so generating there would buy a sentence no
+ * screen can show.
  */
 
 /**

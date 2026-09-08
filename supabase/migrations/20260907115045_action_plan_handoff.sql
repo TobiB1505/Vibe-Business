@@ -1,4 +1,4 @@
--- ADR 0097: work Vibe will not do becomes a prompt the founder runs themselves.
+-- ADR 0099: work Vibe will not do becomes a prompt the founder runs themselves.
 --
 -- Vibe refuses payment architecture and authentication rewrites permanently,
 -- and the refusal is right: Vibe's validation runs the project's own typecheck,

@@ -8,6 +8,9 @@ import { creditsToUnits } from "../credits/units";
 import { buildNovaAuditEntry, buildNovaExecutionOffer, buildNovaFeed } from "./feed";
 import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
+import { ONBOARDING_STATES } from "../onboarding/state";
+import { NOVA_ONBOARDING_DETAIL, NOVA_ONBOARDING_MESSAGE } from "./onboarding";
+import { buildNovaFirstRunFeed, buildNovaWorkflowExplanation, novaGreeting } from "./first-run";
 import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
 
 /**
@@ -123,7 +126,9 @@ describe("what a feed is made of", () => {
   });
 
   it("shows what is running as progress, not as something to decide", () => {
-    const entries = buildNovaFeed(focusWith({ working: RUNNING }));
+    const entries = buildNovaFeed(
+      focusWith({ working: { type: "business_audit", view: RUNNING } }),
+    );
     const progress = entries.filter((entry) => entry.kind === "nova.progress");
 
     expect(progress).toHaveLength(1);
@@ -161,7 +166,7 @@ describe("what a feed is made of", () => {
           { preparedChangeId: "change-b", stage: "awaiting_approval", headline: "h" },
         ],
         auditOutdated: true,
-        working: RUNNING,
+        working: { type: "business_audit", view: RUNNING },
       }),
     );
     const ids = entries.map((entry) => entry.id);
@@ -237,17 +242,114 @@ describe("what a control may be offered for", () => {
 });
 
 describe("what Nova's sentences may say", () => {
-  const everyMessage = EVERY_CANDIDATE.flatMap((candidate) =>
-    feedFor(candidate)
-      .filter((entry) => entry.kind === "nova.message")
-      .map((entry) => ({ kind: candidate.kind, text: entry.text })),
-  );
+  /**
+   * Every sentence she has, not every sentence one surface has.
+   *
+   * The five rules below were written for the twenty-one moments and swept
+   * only those, while the onboarding lane wrote its own copy a module away and
+   * was held to none of them. That is the shape a rule takes when it is a
+   * property of a *sweep* rather than of Nova: the moment somebody adds a
+   * second table, half her voice leaves the check without anybody deciding to
+   * let it.
+   *
+   * So the onboarding states join it. `NOVA_ONBOARDING_MESSAGE` is total over
+   * `OnboardingState`, so an eleventh state arrives here as well as at the
+   * build — a new sentence cannot be added anywhere without passing this.
+   */
+  /*
+   * The first thing she ever says, and it was outside every rule below.
+   *
+   * The introduction, the question before setup and the walkthrough are copy
+   * a founder meets *before* any candidate and any onboarding state, and the
+   * sweep did not reach them — the same failure this block's own docblock
+   * describes one table earlier. So they join it.
+   *
+   * The greeting is swept in its nameless form. The named one interpolates a
+   * GitHub login, and a login may contain digits; sweeping it would put the
+   * "no figures" rule on somebody's account name rather than on Nova's copy.
+   * What the name does to the sentence is asserted on its own, below.
+   */
+  const firstRunMessages = [
+    ...buildNovaFirstRunFeed("introduce"),
+    ...buildNovaFirstRunFeed("explain_workflow"),
+    ...buildNovaWorkflowExplanation(),
+  ]
+    .filter((entry) => entry.kind === "nova.message")
+    .map((entry) => ({ kind: `first-run:${entry.id}`, text: entry.text }));
 
-  it("has a sentence for every candidate", () => {
-    expect(everyMessage).toHaveLength(FOCUS_CANDIDATE_KINDS.length);
+  const everyMessage = [
+    ...EVERY_CANDIDATE.flatMap((candidate) =>
+      feedFor(candidate)
+        .filter((entry) => entry.kind === "nova.message")
+        .map((entry) => ({ kind: candidate.kind, text: entry.text })),
+    ),
+    ...ONBOARDING_STATES.map((state) => ({
+      kind: `onboarding:${state}`,
+      text: NOVA_ONBOARDING_MESSAGE[state],
+    })),
+    /* The asides are her voice too. A rule that applied to what she leads with
+       and not to what she adds underneath would be half a rule. */
+    ...ONBOARDING_STATES.filter((state) => NOVA_ONBOARDING_DETAIL[state] !== null).map((state) => ({
+      kind: `onboarding-detail:${state}`,
+      text: NOVA_ONBOARDING_DETAIL[state] as string,
+    })),
+    ...firstRunMessages,
+  ];
+
+  it("has a sentence for every candidate and every onboarding state", () => {
+    const details = ONBOARDING_STATES.filter(
+      (state) => NOVA_ONBOARDING_DETAIL[state] !== null,
+    ).length;
+    expect(everyMessage).toHaveLength(
+      FOCUS_CANDIDATE_KINDS.length + ONBOARDING_STATES.length + details + firstRunMessages.length,
+    );
     for (const { kind, text } of everyMessage) {
       expect(text.length, kind).toBeGreaterThan(10);
     }
+  });
+
+  /**
+   * Hello, and the one rule the greeting has to obey.
+   *
+   * `identity-view.ts`: never invent a name. A caller passes the GitHub login
+   * a founder authenticated with, or it passes nothing — an email address is
+   * never shortened into a first name, because that is a guess about a person
+   * rendered as a fact about them.
+   */
+  it("greets by name only when it was given one", () => {
+    expect(novaGreeting("ada-lovelace")).toContain("ada-lovelace");
+    expect(novaGreeting(null)).not.toContain("ada-lovelace");
+    /* And the nameless form is a greeting rather than a gap where one was. */
+    expect(novaGreeting(null)).toMatch(/^Hi\b/);
+    expect(novaGreeting(null)).toContain("I'm Nova");
+  });
+
+  /**
+   * What a founder is told about the thing they are looking at.
+   *
+   * The walkthrough exists to answer *what kind of thing am I talking to*, and
+   * the answer is unusual enough that leaving it implied is how a person ends
+   * up hunting for a text box. Asserted because it is the claim, not decoration
+   * — §M is why there is no input to find.
+   */
+  it("tells a founder they do not have to work out what to ask", () => {
+    const walkthrough = buildNovaWorkflowExplanation()
+      .filter((entry) => entry.kind === "nova.message")
+      .map((entry) => entry.text)
+      .join(" ");
+
+    /*
+     * The thing a person genuinely does not know on meeting this screen is
+     * what kind of thing they are talking to — and the useful answer is what
+     * it means *for them*, not what Nova is not. So: they write nothing, she
+     * leads, and one step arrives at a time.
+     */
+    expect(walkthrough).toMatch(/don['’]t need to write prompts/i);
+    expect(walkthrough).toMatch(/I['’]ll guide us/i);
+    expect(walkthrough).toMatch(/one clear next step/i);
+    /* The price is before the press, and the review is before the branch. */
+    expect(walkthrough).toMatch(/before you start it/i);
+    expect(walkthrough).toMatch(/you review it before/i);
   });
 
   /**
@@ -295,6 +397,62 @@ describe("what Nova's sentences may say", () => {
   it("carries no figures", () => {
     for (const { kind, text } of everyMessage) {
       expect(text, kind).not.toMatch(/\d/);
+    }
+  });
+
+  /**
+   * One voice, and what it is a voice *of*.
+   *
+   * ## The rule
+   *
+   * **Nova speaks like a trusted operator sitting beside the founder — not
+   * like an AI assistant explaining its capabilities.** She is competent,
+   * calm, opinionated and not a know-all: *I've seen enough to know where I'd
+   * start*, *I wouldn't spend time on that yet*, *this part is good, I'd leave
+   * it alone*.
+   *
+   * ## What this replaced, and why
+   *
+   * A test asserting she never uses a contraction. It was a real observation —
+   * every sentence said *I am*, *you will*, *we start* — and it was mistaken
+   * for a register. Read aloud, contraction-free English is a briefing, not
+   * somebody sitting next to you, and the copy it was protecting proved it:
+   * the walkthrough opened *"I am not a chat box"*, which is an assistant
+   * describing what it is not.
+   *
+   * So the register is contractions, and what is guarded is the failure the
+   * old rule was reaching for: sentences about the assistant rather than about
+   * the founder's product.
+   */
+  const ASSISTANT_SPEAK =
+    /\b(as an ai|an ai (assistant|model)|language model|my capabilities|i am (an|a) (ai|assistant|bot|chatbot)|chat ?box|chatbot|prompt(s)? (to|for) me|i cannot help with)\b/i;
+
+  it("never explains itself as an assistant", () => {
+    /* Proved live first: a sweep asserting nothing matches passes just as
+       cleanly when the detector is broken. */
+    expect("I am not a chat box.").toMatch(ASSISTANT_SPEAK);
+    expect("As an AI, I cannot do that.").toMatch(ASSISTANT_SPEAK);
+    expect("I would start with the pricing page.").not.toMatch(ASSISTANT_SPEAK);
+
+    for (const { kind, text } of everyMessage) {
+      expect(text, `${kind}: ${text}`).not.toMatch(ASSISTANT_SPEAK);
+    }
+  });
+
+  /**
+   * And the verbs on her controls, which are the *founder's* voice, not hers.
+   *
+   * A button is a person deciding, so it says what they are choosing —
+   * *Set up my product*, *Show me how you work*, *Yes, that's my product*.
+   * "Straight to it, then" shipped for one commit and was Nova answering her
+   * own question on the founder's behalf, which is the tell: a label in the
+   * first person is a label that has taken the wrong side of the conversation.
+   */
+  it("puts every control in the founder's voice, never Nova's", () => {
+    for (const [actionId, meta] of Object.entries(NOVA_ACTION_META)) {
+      expect(meta.label, actionId).not.toMatch(/\bI(['’]| )?(m|ll|ve|d)?\b/);
+      expect(meta.label, actionId).not.toMatch(ASSISTANT_SPEAK);
+      expect(meta.label.length, actionId).toBeGreaterThan(2);
     }
   });
 

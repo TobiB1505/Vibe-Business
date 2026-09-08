@@ -53,7 +53,7 @@ type ClosingAuthority =
   | "founder_resolution"
   /** The founder's word, against the immutable step (ADR 0055, 0090, 0098). */
   | "founder_attestation"
-  /** Vibe refuses, hands out a prompt, and the founder's word closes it (ADR 0097). */
+  /** Vibe refuses, hands out a prompt, and the founder's word closes it (ADR 0099). */
   | "handoff_then_attestation";
 
 /**
@@ -109,7 +109,7 @@ const CLOSES: Record<StepActor, Record<ExecutionSupport, ClosingAuthority | type
     not_yet_supported: IMPOSSIBLE,
   },
   external_party: {
-    // The authority ADR 0055 deferred and ADR 0098 defined: the founder's own
+    // The authority ADR 0055 deferred and ADR 0100 defined: the founder's own
     // eyes, because Vibe has no integration that watches an index or a queue.
     external_dependency: "founder_attestation",
     vibe_executes_now: IMPOSSIBLE,
@@ -137,7 +137,7 @@ describe("every step the planner can emit has a way to be finished", () => {
     /*
      * The assertion the `external_party` hole failed, in the form it failed.
      *
-     * Before ADR 0098 that actor had exactly one reachable pairing and nothing
+     * Before ADR 0100 that actor had exactly one reachable pairing and nothing
      * closed it, so the actor as a whole was a wall: any plan the planner gave
      * one to stopped there, permanently, whatever else was in it. An actor
      * every one of whose pairings is `IMPOSSIBLE` is either that wall or a

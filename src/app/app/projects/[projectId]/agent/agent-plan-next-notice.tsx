@@ -105,7 +105,7 @@ export function AgentPlanNextNotice({
   planHref: string;
   shape: RefusalShape;
   /**
-   * Whether this step can be handed to the founder's own tool (ADR 0097).
+   * Whether this step can be handed to the founder's own tool (ADR 0099).
    *
    * The Agent workspace is where a founder stands at the moment of refusal, so
    * it is where they look — and "Choose a different Move" sent them away from

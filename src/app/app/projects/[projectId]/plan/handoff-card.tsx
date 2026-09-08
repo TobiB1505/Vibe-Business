@@ -13,7 +13,7 @@ import type { HandoffPurpose, HandoffTool } from "@/modules/handoff/schema";
 import { recordHandoffAction, type HandoffActionState } from "../handoff-action";
 
 /**
- * "Vibe won't build this one — your own tool can" (ADR 0097).
+ * "Vibe won't build this one — your own tool can" (ADR 0099).
  *
  * ## Why a screen and not a sentence
  *
@@ -94,7 +94,7 @@ export function HandoffCard({
   repository: string | null;
   /** The tool already chosen, or null when no handoff has been recorded yet. */
   tool: HandoffTool | null;
-  /** Closed steps of this plan, and what closing each one produced (ADR 0097). */
+  /** Closed steps of this plan, and what closing each one produced (ADR 0099). */
   settled: readonly SettledStep[];
   /** Steps after this one — named so they are not built by accident. */
   later: readonly LaterStep[];

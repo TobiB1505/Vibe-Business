@@ -40,6 +40,7 @@ import {
   topMove,
 } from "@/modules/nova/voice/move-slot";
 import type { ExecutionDeps, StepOutcome } from "../business-audit/execution";
+import { readSituation } from "../nova-situation";
 import { speakAfterOperation } from "../nova-voice";
 import type { OperationFailureCode } from "../failures";
 import {
@@ -391,7 +392,8 @@ export async function completeOpportunityOperationStep(
 }
 
 /**
- * Nova says one sentence about the Move she would start with.
+ * Nova says one sentence about the Move she would start with — knowing what
+ * that Move was prioritized from.
  *
  * Placed exactly where `speakAboutTheAudit` is, and for the same reasons: past
  * the `transitioned` guard, so a workflow replay cannot reach it twice and
@@ -400,13 +402,17 @@ export async function completeOpportunityOperationStep(
  * past the settle, so nothing the founder paid for depends on what happens
  * next. `speakAfterOperation` returns void and never throws.
  *
- * Two reads, both cheap and both of already-persisted state: the set this
- * operation just wrote, and the founder's stored goal. The goal is the reason
- * this slot is worth a model at all — connecting it to a priority Vibe set is
- * the one thing the deterministic template cannot do — and it is also the one
- * mutable input in the identity: a founder who changes their goal gets a new
- * identity and therefore one new generation, which is correct rather than
- * wasteful, and bounded by the store either way.
+ * Three reads, all of already-persisted state: the set this operation just
+ * wrote, the founder's stored goal, and the situation. The goal is why this
+ * slot is worth a model at all — connecting it to a priority Vibe set is the
+ * one thing the deterministic template cannot do — and the situation is why
+ * the sentence can go further than the Move itself: a set prioritized from an
+ * audit that rests on a corrected scan is worth saying so about, and only Nova
+ * is in a position to say it here.
+ *
+ * The goal is also the one mutable input in the identity: a founder who
+ * changes their goal gets a new identity and therefore one new generation,
+ * which is correct rather than wasteful, and bounded by the store either way.
  */
 async function speakAboutTheTopMove(
   deps: ExecutionDeps,
@@ -420,12 +426,13 @@ async function speakAboutTheTopMove(
   const storedIntent = await getFounderIntent(deps.supabase, operation.projectId);
   const subject = novaMoveSubject(move);
   const founderGoal = novaFounderGoal(storedIntent?.intent.primaryGoal ?? null);
+  const situation = (await readSituation(deps.supabase, operation.projectId))?.situation ?? null;
 
   await speakAfterOperation({
     supabase: deps.supabase,
     provider: deps.provider,
     operation,
-    payload: buildNovaMoveVoicePayload({ subject, founderGoal }),
+    payload: buildNovaMoveVoicePayload({ subject, founderGoal, situation }),
     template: buildNovaMoveTemplate(subject, founderGoal),
   });
 }

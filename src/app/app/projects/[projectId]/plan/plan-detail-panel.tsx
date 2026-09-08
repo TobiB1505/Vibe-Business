@@ -281,7 +281,7 @@ function PlanBody({
   moveLens: string | null;
   responsibilityByStepKey: Record<string, StepResponsibility>;
   /**
-   * The actionable step, when Vibe refuses it permanently (ADR 0097).
+   * The actionable step, when Vibe refuses it permanently (ADR 0099).
    *
    * Resolved by the route, never here: it is the *shape* of a live refusal, and
    * a panel deriving it from labels would be reading Vibe's prose back as a
@@ -429,7 +429,7 @@ function PlanBody({
             A step with a prompt is *also* attestable — that is the whole point
             of the handoff — so it has to be recognised first, or it would
             render as a bare confirmation with no prompt and nothing explaining
-            why (ADR 0097).
+            why (ADR 0099).
           */}
           {firstActionableStep !== null && handoffPurpose !== null ? (
             <HandoffCard
@@ -445,7 +445,7 @@ function PlanBody({
               }
               /* What the plan already settled, in plan order and without the
                  step being handed over — a note that answers this step is the
-                 step, not context for it (ADR 0097). Findings and decisions
+                 step, not context for it (ADR 0099). Findings and decisions
                  both count: the prompt used to say "the confirmed plan
                  structure" while carrying neither. */
               settled={settledStepOutcomes(
@@ -653,7 +653,7 @@ function FounderActionCard({
       </div>
 
       {/* The question and the answer, owned by one component so the handoff
-          card can compose it without drawing a second card (ADR 0097). */}
+          card can compose it without drawing a second card (ADR 0099). */}
       <AttestationForm projectId={projectId} actionPlanId={actionPlanId} step={step} />
     </Surface>
   );
@@ -701,7 +701,7 @@ export function PlanDetailPanel({
   /** What each step's responsibility line says, resolved by the route. */
   responsibilityByStepKey: Record<string, StepResponsibility>;
   /**
-   * The actionable step, when Vibe refuses it permanently (ADR 0097).
+   * The actionable step, when Vibe refuses it permanently (ADR 0099).
    *
    * Resolved by the route, never here: it is the *shape* of a live refusal, and
    * a panel deriving it from labels would be reading Vibe's prose back as a

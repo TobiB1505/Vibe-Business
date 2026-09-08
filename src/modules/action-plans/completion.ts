@@ -133,7 +133,7 @@ function completedByAgentExecution(
 export function isFounderAttestable(
   step: Pick<ActionPlanStep, "id" | "actor" | "changeKind" | "executionSupport">,
   /**
-   * Steps Vibe handed to the founder to build with their own tool (ADR 0097).
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0099).
    *
    * The third admitted case, and the only one keyed on a fact rather than on
    * the step's own shape. `vibe` + `product_change` stays excluded in general
@@ -202,7 +202,7 @@ export function completedStepsFromEvidence(
   founderResolutions: readonly FounderCompletionEvidence[],
   agentEvidence: readonly AgentStepCompletionEvidence[],
   founderActionEvidence: readonly FounderActionCompletionEvidence[] = [],
-  /** Steps Vibe handed to the founder to build themselves (ADR 0097). */
+  /** Steps Vibe handed to the founder to build themselves (ADR 0099). */
   handedOffStepKeys: ReadonlySet<string> = new Set(),
 ): ReadonlySet<number> {
   const completed = new Set(completedStepsFromFounderResolutions(steps, founderResolutions));

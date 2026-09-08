@@ -1,4 +1,4 @@
-# 0097 - The refusal becomes a handoff
+# 0099 - The refusal becomes a handoff
 
 Status: Accepted
 Date: 2026-09-05

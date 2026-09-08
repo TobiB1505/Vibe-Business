@@ -13,6 +13,8 @@ import {
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
+import { getAuditReadiness, readAuditEvidence } from "@/modules/business-audit/service";
+import { novaSituationFrom } from "@/modules/nova/briefing/situation";
 import { readNovaMoveVoice, topMove } from "@/modules/nova/voice/move-slot";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import {
@@ -89,14 +91,25 @@ export default async function ProjectMovesPage({
    * used to ask for them once for the prioritization gate and then again for
    * every Move it rendered.
    */
+  /*
+   * The six evidence documents, awaited first so everything below shares them
+   * (VB-022). `readActionPlanReadinessInputs` takes them as `prefetched` and
+   * stops re-reading the audit, the profile and the currency's four snapshots,
+   * so this is close to free — and it is what lets Nova's sentence above the
+   * Moves know the state of the evidence they were prioritized from.
+   */
+  const evidence = await readAuditEvidence(supabase, projectId);
+
   const [
     readinessInputs,
+    auditReadiness,
     activeOpportunityOperation,
     executionSummaries,
     actionPlanView,
     activeActionPlanOperation,
   ] = await Promise.all([
-    readActionPlanReadinessInputs(supabase, projectId),
+    readActionPlanReadinessInputs(supabase, projectId, evidence),
+    getAuditReadiness(supabase, projectId, evidence),
     getActiveOpportunityOperation(supabase, projectId),
     getOpportunityExecutionSummaries(supabase, projectId),
     getLatestActionPlan(supabase, projectId),
@@ -164,7 +177,7 @@ export default async function ProjectMovesPage({
 
   /*
    * The step Vibe refuses permanently, if that is what the plan is waiting on
-   * (ADR 0097).
+   * (ADR 0099).
    *
    * Resolved here because this is where the live resolution is, and because the
    * *shape* of a refusal is the thing a screen must not re-derive from labels.
@@ -293,6 +306,20 @@ export default async function ProjectMovesPage({
         projectId: project.id,
         move: topRankedMove,
         primaryGoal: (await getFounderIntent(supabase, project.id))?.intent.primaryGoal ?? null,
+        /*
+         * Where the founder stands, as context for her sentence — the third
+         * input the durable step used, composed by the same function so the two
+         * identities agree.
+         */
+        situation: novaSituationFrom(
+          {
+            evidence,
+            readiness: auditReadiness,
+            currency: readinessInputs.currency,
+            opportunities,
+          },
+          new Date(),
+        ),
       })
     : null;
 

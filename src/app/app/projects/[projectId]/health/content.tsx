@@ -27,6 +27,7 @@ import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { buildNovaAuditEntry } from "@/modules/nova/feed";
 import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
+import { buildNovaSituation } from "@/modules/nova/briefing/situation";
 import { provenanceForAction } from "@/modules/provenance/actions";
 import { buildProvenanceChain } from "@/modules/provenance/chain";
 import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
@@ -187,6 +188,28 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
       })
     : null;
 
+  const evidenceChain = buildProvenanceChain(
+    provenanceInputsFrom({
+      evidence,
+      readiness: auditReadiness,
+      currency: auditCurrency,
+      opportunities,
+    }),
+  );
+
+  const auditProvenance = provenanceForAction(evidenceChain, "business_audit");
+
+  /*
+   * The same chain, as context for what Nova says above the audit.
+   *
+   * Not a second read and not a second judgement: the panel below and her
+   * sentence are looking at one chain, which is what stops her explaining an
+   * evidence gap the panel says is not there. It is also part of her message's
+   * reuse identity, so a message written while a scan was stale does not
+   * survive the re-scan that fixed it.
+   */
+  const situation = buildNovaSituation(evidenceChain, new Date());
+
   /*
    * What Nova says above the audit, if she has said anything about *this* one.
    *
@@ -207,6 +230,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
       ? await readNovaAuditVoice(supabase, {
           projectId,
           entry: buildNovaAuditEntry(businessBrainView, latestAudit.result.synthesis),
+          situation,
         })
       : null;
 
@@ -321,17 +345,6 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
    * chain and is not this button's business, and a wall built out of an
    * unrelated fact is how a surface like this stops being read.
    */
-  const auditProvenance = provenanceForAction(
-    buildProvenanceChain(
-      provenanceInputsFrom({
-        evidence,
-        readiness: auditReadiness,
-        currency: auditCurrency,
-        opportunities,
-      }),
-    ),
-    "business_audit",
-  );
 
   /*
    * A spent entitlement is a price, not a wall (BILLING CORE-2 §39).

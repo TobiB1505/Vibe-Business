@@ -1,4 +1,4 @@
--- A handoff is not always a refusal (ADR 0097 follow-on).
+-- A handoff is not always a refusal (ADR 0099 follow-on).
 --
 -- The first handoff had exactly one meaning: "Vibe will not build this, here is
 -- the prompt for the tool you already use". That is a refusal, and the table's

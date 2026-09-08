@@ -29,25 +29,59 @@ export function AgentQuestionPanel({
   interrupt,
   waitingSince,
   children,
+  variant = "panel",
+  questionInChildren = false,
 }: {
   interrupt: StoredExecutionInterrupt;
   /** Rendered beside the label when the caller can say how long. */
   waitingSince?: string;
   /** The answer control, owned by the route that can submit it. */
   children?: React.ReactNode;
+  /**
+   * Where this is drawn.
+   *
+   * `block` is Nova's thread, and this component could travel there at all
+   * only because it already separates *what is asked* from *how it is
+   * answered*: the question comes from the interrupt, the control comes from
+   * whoever can submit it. The panel moves; the action stays behind.
+   *
+   * The variant drops the frame, the page-scale glow and the page-scale
+   * heading. The render block supplies the frame and carries the amber that
+   * says whose turn it is — a panel that kept its own would be a second border
+   * and a second claim inside the first.
+   */
+  variant?: "panel" | "block";
+  /**
+   * The control below already states the question, so this does not.
+   *
+   * On the workspace page the heading and the control sit in two columns and
+   * read as a title and a form. Stacked in a thread block they are the same
+   * sentence twice, one above the other. The caller decides because only the
+   * caller knows what it put in `children` — `FounderInputCard` states the
+   * question, the legacy `Notice` fallback does not.
+   */
+  questionInChildren?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
   const animate = !reduceMotion && visible;
+  const block = variant === "block";
 
   return (
     <motion.section
-      className="rounded-card border-amber-line bg-amber-tint-soft shadow-card relative overflow-hidden border p-8"
+      className={
+        block
+          ? "relative"
+          : "rounded-card border-amber-line bg-amber-tint-soft shadow-card relative overflow-hidden border p-8"
+      }
       initial={reduceMotion ? false : { opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, ease: [0.2, 0.7, 0.2, 1] }}
       data-testid="agent-question"
     >
+      {/* A 560-pixel glow is a page effect. In a thread it would be the
+          brightest thing on the screen for the smallest object on it. */}
+      {!block && (
       <span
         aria-hidden="true"
         className="pointer-events-none absolute -top-40 right-28 h-[460px] w-[560px] rounded-full blur-3xl"
@@ -59,8 +93,15 @@ export function AgentQuestionPanel({
             : {}),
         }}
       />
+      )}
 
-      <div className="relative grid items-start gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]">
+      <div
+        className={
+          block
+            ? "relative flex min-w-0 flex-col gap-4"
+            : "relative grid items-start gap-10 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)]"
+        }
+      >
         <div className="flex min-w-0 flex-col gap-4">
           <MonoLabel as="h2" className="text-amber flex items-center gap-3">
             Vibe has a question
@@ -81,9 +122,17 @@ export function AgentQuestionPanel({
             )}
           </MonoLabel>
 
-          <h3 className="text-fg max-w-[34ch] text-[1.625rem] leading-tight font-bold tracking-[-0.03em] text-pretty">
-            {interrupt.question}
-          </h3>
+          {!questionInChildren && (
+            <h3
+              className={
+                block
+                  ? "text-fg max-w-[34ch] text-title leading-snug font-semibold text-pretty"
+                  : "text-fg max-w-[34ch] text-[1.625rem] leading-tight font-bold tracking-[-0.03em] text-pretty"
+              }
+            >
+              {interrupt.question}
+            </h3>
+          )}
 
           {/*
             No explanatory paragraph is invented here. The interrupt carries a

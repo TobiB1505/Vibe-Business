@@ -3,6 +3,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   novaPresenceState,
+  statusForCandidate,
   statusForFocusTier,
   statusForOperationPhase,
   statusForScoreTone,
@@ -29,6 +30,13 @@ const ALL_KEYS: StatusKey[] = [
   "could_not_check",
   "never_reached",
   "not_applicable",
+  "disconnected",
+  "overdue",
+  "needs_answer",
+  "needs_choice",
+  "out_of_date",
+  "did_not_pass",
+  "not_settled",
 ];
 
 describe("the shared status vocabulary", () => {
@@ -93,6 +101,47 @@ describe("the shared status vocabulary", () => {
       const presentation = statusForFocusTier(novaCandidateTier(kind));
       expect(presentation.word.trim().length, kind).toBeGreaterThan(0);
     }
+  });
+
+  /*
+   * The tier said "Blocked" for ten different situations. These four assertions
+   * are what stops it coming back — not by naming the twenty-one words, which
+   * would be the table written twice, but by naming what the words must not do.
+   */
+  it("gives every one of Nova's moments its own reading", () => {
+    for (const kind of FOCUS_CANDIDATE_KINDS) {
+      expect(statusForCandidate(kind).word.trim().length, kind).toBeGreaterThan(0);
+    }
+  });
+
+  it("says 'Blocked' only where something is actually blocked", () => {
+    const blocked = FOCUS_CANDIDATE_KINDS.filter(
+      (kind) => statusForCandidate(kind).word === "Blocked",
+    );
+    // A branch rule refused the merge. Everything else in that tier errored,
+    // went unaccounted for, disconnected, or simply did not pass.
+    expect(blocked).toEqual(["merge_blocked"]);
+  });
+
+  /*
+   * The invariant the amber-instead-of-coral treatment was protecting, kept
+   * without the miscolouring. A stall may still be alive, so it must never be
+   * presented as a settled failure — but `open` is what carries that now, and
+   * the tone is free to say the true thing: something is wrong.
+   */
+  it("never dresses an unaccounted-for run as a failure that concluded", () => {
+    for (const kind of ["agent_stalled", "scan_stalled", "audit_stalled"] as const) {
+      const presentation = statusForCandidate(kind);
+      expect(presentation.open, kind).toBe(true);
+      expect(presentation.word, kind).not.toBe(statusPresentation("failed").word);
+    }
+  });
+
+  it("separates a run waiting on a person from a finished thing waiting to be seen", () => {
+    // Both are the founder's turn. Only one has a live run suspended behind it,
+    // and the contour a caller draws from `open` is what shows the difference.
+    expect(statusForCandidate("founder_input_required").open).toBe(true);
+    expect(statusForCandidate("review_change").open).toBe(false);
   });
 
   it("says nothing rather than congratulating an empty queue", () => {

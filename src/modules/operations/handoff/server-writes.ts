@@ -9,7 +9,7 @@ export type RecordHandoffResult =
   | { ok: false; error: "project_not_found" | "step_not_handoffable" | "handoff_failed" };
 
 /**
- * The only service-role write for a handoff (ADR 0097).
+ * The only service-role write for a handoff (ADR 0099).
  *
  * Ownership is re-established before the RPC, and the database then admits only
  * a `vibe` + `product_change` step — the one shape Vibe declines to run and the
@@ -26,7 +26,7 @@ export async function recordActionPlanHandoff(params: {
   actionPlanId: string;
   stepKey: string;
   tool: HandoffTool;
-  /** Whether Vibe declined the work, or cannot reach the check (ADR 0097). */
+  /** Whether Vibe declined the work, or cannot reach the check (ADR 0099). */
   purpose: HandoffPurpose;
 }): Promise<RecordHandoffResult> {
   const supabase = createServiceClient();

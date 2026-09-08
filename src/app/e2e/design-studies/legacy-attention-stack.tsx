@@ -1,9 +1,18 @@
 import Link from "next/link";
 import { ChevronRightIcon } from "@/components/ui/dashboard-icons";
 import { StatusPill } from "@/components/ui/status-pill";
-import { statusForFocusTier } from "@/components/system/status-vocabulary";
+import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { MonoLabel } from "@/components/ui/typography";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
+
+/**
+ * Kept as the picture of what the thread replaced.
+ *
+ * Production does not render this. The secondary moments. Home shows the one moment the ranking chose; a stack under it was the ranking's output re-listed as a set.
+ *
+ * It lives in the lab so the studies that compare before and after can still
+ * draw it, and so the production folder holds only what production renders.
+ */
 
 /**
  * Everything else that is true (UI Sourcing Spec C2; audit E13).
@@ -47,7 +56,7 @@ export function AttentionStack({
 
       <ul className="border-line-2 divide-line-1 divide-y overflow-hidden rounded-panel border">
         {entries.map((entry) => {
-          const status = statusForFocusTier(entry.tier);
+          const status = statusForCandidate(entry.kind);
           return (
             <li key={entry.id}>
               <Link

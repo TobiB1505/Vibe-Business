@@ -28,11 +28,31 @@ import { describe, expect, it } from "vitest";
  */
 
 const CSS = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+const V2 = readFileSync(join(process.cwd(), "src/app/theme-v2.css"), "utf8");
 const FONTS = readFileSync(join(process.cwd(), "src/app/fonts.ts"), "utf8");
 
-function token(name: string): string {
-  const match = CSS.match(new RegExp(`--color-${name}:\\s*([^;]+);`));
-  if (!match) throw new Error(`--color-${name} is not defined in globals.css`);
+/**
+ * The palettes this file measures.
+ *
+ * Two of them since S1 (ADR 0097). v2 is scoped to `[data-vibe="v2"]` and no
+ * element carries that attribute yet, which is exactly why it needs measuring
+ * now: a palette nobody looks at is how `--color-fg-meta` reached production
+ * at 3.38:1 and stayed there for the life of the design system. The arithmetic
+ * does not care whether a token is switched on.
+ *
+ * They are separate *files* rather than two blocks in one, because `token`
+ * resolves a name by first match. Two blocks would have left every assertion
+ * below still measuring v1 while reporting nothing about v2 — a green test
+ * that had stopped testing the thing being shipped.
+ */
+const PALETTES = [
+  { name: "v1", css: CSS },
+  { name: "v2", css: V2 },
+] as const;
+
+function tokenIn(css: string, name: string, where: string): string {
+  const match = css.match(new RegExp(`--color-${name}:\\s*([^;]+);`));
+  if (!match) throw new Error(`--color-${name} is not defined in ${where}`);
   return match[1].trim();
 }
 
@@ -73,16 +93,21 @@ function contrast(a: Rgb, b: Rgb): number {
   return (high + 0.05) / (low + 0.05);
 }
 
-const APP = parseHex(token("app"));
-/** The deepest surface a card uses — the hardest background real text sits on. */
-const PANEL = composite(parseWhiteAlpha(token("surface-4")), APP);
-
 /** The ramp steps that carry text, and are therefore held to AA. */
 const TEXT_STEPS = ["fg", "fg-body", "fg-prose", "fg-secondary", "fg-muted", "fg-meta"] as const;
 
-describe("the foreground ramp is legible on a panel", () => {
-  it.each(TEXT_STEPS)("%s clears 4.5:1 on surface-4", (step) => {
-    expect(contrast(parseHex(token(step)), PANEL)).toBeGreaterThanOrEqual(4.5);
+/** The deepest surface a card uses — the hardest background real text sits on. */
+function panelOf(css: string, where: string): Rgb {
+  const app = parseHex(tokenIn(css, "app", where));
+  return composite(parseWhiteAlpha(tokenIn(css, "surface-4", where)), app);
+}
+
+describe.each(PALETTES)("the $name foreground ramp is legible on a panel", ({ name, css }) => {
+  const PANEL = panelOf(css, name);
+  const step = (n: string) => parseHex(tokenIn(css, n, name));
+
+  it.each(TEXT_STEPS)("%s clears 4.5:1 on surface-4", (name_) => {
+    expect(contrast(step(name_), PANEL)).toBeGreaterThanOrEqual(4.5);
   });
 
   it("keeps the two exempt steps out of the text budget", () => {
@@ -90,8 +115,8 @@ describe("the foreground ramp is legible on a panel", () => {
     // control that exists and is not available — WCAG exempts it, and the
     // button primitive pairs it with a border so it never reads as a gap.
     // `fg-faint` is hairlines and dividers, never text.
-    for (const step of ["fg-disabled", "fg-faint"] as const) {
-      expect(contrast(parseHex(token(step)), PANEL)).toBeLessThan(4.5);
+    for (const exempt of ["fg-disabled", "fg-faint"] as const) {
+      expect(contrast(step(exempt), PANEL)).toBeLessThan(4.5);
     }
   });
 
@@ -111,13 +136,56 @@ describe("the foreground ramp is legible on a panel", () => {
      * What this catches is a step collapsing to nothing, which is how a ramp
      * quietly becomes seven names for six colours.
      */
-    const lightness = TEXT_STEPS.map((step) => perceptualLightness(parseHex(token(step))));
+    const lightness = TEXT_STEPS.map((name_) => perceptualLightness(step(name_)));
 
     for (let i = 1; i < lightness.length; i += 1) {
       expect(
         lightness[i - 1] - lightness[i],
         `${TEXT_STEPS[i - 1]} and ${TEXT_STEPS[i]} are the same colour to a reader`,
       ).toBeGreaterThan(3);
+    }
+  });
+});
+
+describe("v2 redefines the whole colour vocabulary", () => {
+  /**
+   * A token v1 declares and v2 does not is not a compile error and not a
+   * runtime error. It is a colour that quietly keeps its v1 value under a
+   * scope meant to replace it — so a v2 screen would render one v1 line
+   * colour among thirty-nine v2 ones, and nothing would say so.
+   *
+   * Parity is the cheap guard: 40 names in, 40 names out. When v1 gains a
+   * token, this fails until v2 answers for it.
+   */
+  const THEME = CSS.slice(CSS.indexOf("@theme {"));
+  const names = (css: string) =>
+    new Set([...css.matchAll(/--color-([a-z0-9-]+):/g)].map((m) => m[1]));
+
+  it("declares every colour token the base theme declares", () => {
+    const missing = [...names(THEME)].filter((name) => !names(V2).has(name));
+    expect(missing, `v2 would inherit v1's value for: ${missing.join(", ")}`).toEqual([]);
+  });
+
+  it("invents no colour token the base theme has no name for", () => {
+    // The other direction, so a v2-only name cannot become a dependency that
+    // breaks the moment v2 is lifted into `@theme` and the scope deleted.
+    const extra = [...names(V2)].filter((name) => !names(THEME).has(name));
+    expect(extra, `v2-only colour tokens: ${extra.join(", ")}`).toEqual([]);
+  });
+
+  it("changes nothing until something opts in", () => {
+    /*
+     * Every v2 declaration is scoped to `[data-vibe="v2"]`. Nothing in the
+     * product sets that attribute yet, which is what makes S1 a foundation
+     * rather than a redesign — and what makes it reversible by deleting one
+     * attribute rather than by reverting 162 files.
+     */
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      expect(
+        withoutComments(readFileSync(file, "utf8")),
+        `${file.slice(process.cwd().length + 1)} opts into v2; S1 ships the tokens unswitched`,
+      ).not.toContain('data-vibe="v2"');
     }
   });
 });
@@ -143,13 +211,11 @@ describe("every colour a class name asks for exists", () => {
    * so a name with no token is not a compile error and not a runtime error:
    * it is a silent no-op on exactly the text that most needed to be seen.
    */
-  const COLOUR_UTILITIES = /\b(?:text|bg|border)-((?:fg|mint|amber|coral|surface|line|danger|success|warning|error)(?:-[a-z0-9]+)*)\b/g;
+  const COLOUR_UTILITIES =
+    /\b(?:text|bg|border)-((?:fg|mint|amber|coral|surface|line|danger|success|warning|error)(?:-[a-z0-9]+)*)\b/g;
 
   it("resolves every colour utility used in the app to a token", () => {
-    const sources = readFileSync(
-      join(process.cwd(), "src/app/globals.css"),
-      "utf8",
-    );
+    const sources = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
     const declared = new Set(
       [...sources.matchAll(/--color-([a-z0-9-]+):/g)].map((match) => match[1]),
     );
@@ -234,7 +300,9 @@ describe("a button that is working says so", () => {
       if (!file.endsWith(".tsx")) continue;
       const src = withoutComments(readFileSync(file, "utf8"));
 
-      for (const match of src.matchAll(/<Button\b((?:[^<>]|\{[^{}]*\})*?)>\s*\{(\w+) \? "[^"]*…"/g)) {
+      for (const match of src.matchAll(
+        /<Button\b((?:[^<>]|\{[^{}]*\})*?)>\s*\{(\w+) \? "[^"]*…"/g,
+      )) {
         if (!/\bbusy=\{/.test(match[1])) {
           offenders.push(`${file.slice(process.cwd().length + 1)} (${match[2]})`);
         }

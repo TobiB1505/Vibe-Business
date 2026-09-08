@@ -1,4 +1,4 @@
-# 0098 - The founder is the outside witness
+# 0100 - The founder is the outside witness
 
 Status: Accepted
 Date: 2026-09-08
@@ -22,7 +22,7 @@ Nothing right now
 
 Worse than the contradiction: the step is unblocked, so it becomes the plan's entry point, and any step that depends on it waits behind it permanently. A plan containing one could never reach `finished`, so the completed-plan summary and its handover to the next Move — the thing that closes the loop — were unreachable for that plan forever.
 
-This was the last step shape in the plan with no way to close it. Every other one has an authority: a founder decision resolves, an agent run completes, a `vibe` step with no executor is attested with a finding, a refused product change becomes a handoff ([ADR 0097](0097-the-refusal-becomes-a-handoff.md)), a founder action is confirmed.
+This was the last step shape in the plan with no way to close it. Every other one has an authority: a founder decision resolves, an agent run completes, a `vibe` step with no executor is attested with a finding, a refused product change becomes a handoff ([ADR 0099](0099-the-refusal-becomes-a-handoff.md)), a founder action is confirmed.
 
 ## Decision
 

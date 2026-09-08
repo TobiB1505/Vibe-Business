@@ -58,6 +58,12 @@ src/app/.well-known/workflow/
 /blob-report/
 /playwright/.cache/
 
+# The screenshot scripts' default output (`uis1`, `uis2`, `design-studies`).
+# Same reason as the traces above, plus a practical one: one direction-study
+# run is roughly 15 MB of PNG that `pnpm screenshots:studies` reproduces in
+# seconds. The images are for looking at, not for keeping.
+/screenshots/
+
 # Claude Code. The directory is NOT ignored wholesale: `.claude/skills/` is
 # repo-native design tooling and has to travel with a clone (ADR 0095). What is
 # ignored is the machine-specific half.

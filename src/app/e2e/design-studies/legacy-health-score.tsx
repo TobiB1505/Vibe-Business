@@ -6,6 +6,15 @@ import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 
 /**
+ * Kept as the picture of what the thread replaced.
+ *
+ * Production does not render this. The business score and its absent state. Business Health owns the reading now; Home shows the audit's own map when the audit is the moment.
+ *
+ * It lives in the lab so the studies that compare before and after can still
+ * draw it, and so the production folder holds only what production renders.
+ */
+
+/**
  * The business reading, small (UI Sourcing Spec C6).
  *
  * ## What Home shows of it, and what it does not

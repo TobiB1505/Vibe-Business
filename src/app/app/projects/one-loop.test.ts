@@ -32,7 +32,7 @@ const PLAN_DETAIL = read("src/app/app/projects/[projectId]/plan/plan-detail-pane
 /*
  * The step's criterion and the answer that closes it, split out of the panel so
  * the handoff card can compose them without drawing a second card around a step
- * the first one already named (ADR 0097).
+ * the first one already named (ADR 0099).
  */
 const ATTESTATION_FORM = read("src/app/app/projects/[projectId]/plan/attestation-form.tsx");
 const PRIORITIES = read(
@@ -269,7 +269,9 @@ describe("the stepper owns selection without owning business state", () => {
    * that is where the mistake lives: an `await` inside the map over Moves.
    */
   it("asks the database once for what every Move shares", () => {
-    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId)");
+    /* Now with the evidence handed in, which stops the currency check inside
+       it re-reading four snapshots the page already holds. */
+    expect(MOVES_PAGE).toContain("readActionPlanReadinessInputs(supabase, projectId, evidence)");
     expect(MOVES_PAGE).not.toContain("await getActionPlanReadiness(");
     expect(MOVES_PAGE).not.toContain("getOpportunityReadiness(supabase");
   });
@@ -292,7 +294,7 @@ describe("planned work is a compact read-only checklist", () => {
     /*
      * The action moved out of the panel and into `AttestationForm`, so that the
      * handoff card could compose the question and the answer without drawing a
-     * second card around them (ADR 0097). The property is unchanged and is
+     * second card around them (ADR 0099). The property is unchanged and is
      * asserted where it now lives: completion is a durable server action, never
      * a local toggle.
      */

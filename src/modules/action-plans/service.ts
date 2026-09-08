@@ -413,7 +413,7 @@ export type ActionPlanView = {
    */
   absorbedByStepOrder: Record<number, number>;
   /**
-   * Steps Vibe handed to the founder to build with their own tool (ADR 0097).
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0099).
    *
    * The value is the tool they picked, because the prompt's opening sentence
    * differs for an agent working in a checked-out repository and a hosted
@@ -421,7 +421,7 @@ export type ActionPlanView = {
    */
   handoffByStepKey: Record<string, HandoffTool>;
   /**
-   * Steps Vibe handed out to be **checked**, not built (ADR 0097 follow-on).
+   * Steps Vibe handed out to be **checked**, not built (ADR 0099 follow-on).
    *
    * Its own field rather than a `purpose` beside the tool above, because the
    * two answer different questions and only one of them grants anything. A
@@ -441,7 +441,7 @@ export type ActionPlanView = {
    */
   findingByStepKey: Record<string, string>;
   /**
-   * What the founder decided on the decision steps they closed (ADR 0097).
+   * What the founder decided on the decision steps they closed (ADR 0099).
    *
    * The same argument as `findingByStepKey` and the same cost — nothing new is
    * read, because deciding what is finished already needs these resolutions.
@@ -462,6 +462,116 @@ export type ActionPlanView = {
    */
   openFounderInputCount: number;
 };
+
+/**
+ * The plan as a checklist, and nothing else.
+ *
+ * ## Why this exists beside `getLatestActionPlan`
+ *
+ * That one answers everything the Action Plan page asks — staleness against
+ * four other artefacts, the open question for the current step, how many
+ * questions the plan has outstanding — and costs nine reads to do it. Nova's
+ * rail asks one question: *what is the sequence, and where in it are we.*
+ *
+ * So this reads the plan and the three pieces of completion evidence, and
+ * derives the rest with the same functions the page uses — `completedStepsFromEvidence`,
+ * `satisfiedStepsFromEvidence`, `absorptionByStepOrder`, `firstActionableStep`.
+ * Four reads rather than nine, and no second opinion about what "done" means:
+ * a rail that computed completion its own way is a rail that would eventually
+ * disagree with the page it summarises.
+ *
+ * Null when no plan has completed. Not an empty checklist — a project with no
+ * plan has no sequence, and a list of nothing would read as a plan with every
+ * step finished.
+ */
+export type ActionPlanChecklist = {
+  steps: ActionPlanStep[];
+  /** What could genuinely happen next, or null when nothing can. */
+  firstActionableOrder: number | null;
+  /** Carried out. The narrow set, exactly as the page means it. */
+  completedStepOrders: number[];
+  /** Covered step order → the order of the step whose run absorbed it. */
+  absorbedByStepOrder: Record<number, number>;
+};
+
+/**
+ * What a plan's steps have to show for themselves, read once.
+ *
+ * ## Why this is a shape rather than an answer
+ *
+ * Two callers ask different questions of the same three tables. The rail asks
+ * *where is the founder in the sequence*; the execution resolver asks *which
+ * step could Vibe build next*, and its answer is deliberately stricter — a
+ * step absorbed by a change counts as satisfied for routing only once that
+ * change is on the default branch, which the rail does not require to draw a
+ * ticked box.
+ *
+ * So the derivations stay separate and the *reads* are shared. Before this,
+ * one load of Nova Home read these three tables twice and the plan itself
+ * twice, for two answers neither of which could be computed from the other.
+ */
+export type PlanEvidence = {
+  founderResolutions: Awaited<ReturnType<typeof listActiveFounderResolutions>>;
+  agentEvidence: Awaited<ReturnType<typeof listStepExecutionEvidence>>;
+  founderActionEvidence: Awaited<ReturnType<typeof listFounderActionCompletionEvidence>>;
+  /**
+   * Steps Vibe handed to the founder, and why (ADR 0099).
+   *
+   * Part of the shared evidence rather than read beside it, because it is a
+   * completion authority like the other three: a `build` handoff is the only
+   * reason a `vibe` + `product_change` step may be closed by a person's word.
+   * A shape carrying three of the four would let one caller answer "is this
+   * finished" differently from another — which is the disagreement this type
+   * was extracted to prevent.
+   */
+  handoffs: Awaited<ReturnType<typeof listHandoffsForPlan>>;
+};
+
+export async function readPlanEvidence(
+  supabase: SupabaseClient,
+  params: { projectId: string; actionPlanId: string },
+): Promise<PlanEvidence> {
+  const [founderResolutions, agentEvidence, founderActionEvidence, handoffs] = await Promise.all([
+    listActiveFounderResolutions(supabase, params.projectId),
+    listStepExecutionEvidence(supabase, params),
+    listFounderActionCompletionEvidence(supabase, params),
+    listHandoffsForPlan(supabase, params),
+  ]);
+
+  return { founderResolutions, agentEvidence, founderActionEvidence, handoffs };
+}
+
+/**
+ * The rail's checklist, from evidence somebody already read.
+ *
+ * Pure, so the projection can be tested without a database and so a caller
+ * that has the evidence in hand pays nothing to ask this second question.
+ */
+export function checklistFromEvidence(
+  steps: ActionPlanStep[],
+  evidence: PlanEvidence,
+): ActionPlanChecklist {
+  const completed = completedStepsFromEvidence(
+    steps,
+    evidence.founderResolutions,
+    evidence.agentEvidence.completion,
+    evidence.founderActionEvidence,
+    /* Build handoffs only, and the rail must agree with the plan screen about
+       them: a step closed there and still open here would be one product
+       disagreeing with itself (ADR 0099). */
+    buildHandoffKeys(evidence.handoffs),
+  );
+  const satisfied = satisfiedStepsFromEvidence(completed, evidence.agentEvidence.absorbed);
+
+  return {
+    steps,
+    firstActionableOrder: firstActionableStep(steps, satisfied)?.order ?? null,
+    completedStepOrders: [...completed],
+    absorbedByStepOrder: Object.fromEntries(
+      absorptionByStepOrder(completed, evidence.agentEvidence.absorbed),
+    ),
+  };
+}
 
 export async function getLatestActionPlan(
   supabase: SupabaseClient,
@@ -592,7 +702,7 @@ export async function getOnboardingFirstMove(
     listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
     // Onboarding shows the same plan, so it has to agree with it about which
     // steps are done — a handed-off step closed on the plan screen and still
-    // open here would be one product disagreeing with itself (ADR 0097).
+    // open here would be one product disagreeing with itself (ADR 0099).
     listHandoffsForPlan(supabase, { projectId, actionPlanId: plan.id }),
   ]);
   const completed = completedStepsFromEvidence(

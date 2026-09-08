@@ -29,6 +29,7 @@ import {
   shouldStartUnprompted,
 } from "@/modules/authenticated-product-intelligence/login-detection";
 import { Disclosure } from "@/components/ui/disclosure";
+import { CitationCount } from "@/components/system/evidence-drawer";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
 
@@ -381,7 +382,7 @@ export function LiveViewDialog({
            */
           className="relative w-full overflow-hidden rounded-card border border-line-2 bg-surface-2"
         >
-          {liveViewUrl && !error && (
+          {liveViewUrl && !error && !expired && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
             // page; this is a JPEG on a canvas, which executes nothing
@@ -391,6 +392,15 @@ export function LiveViewDialog({
             // panel rather than after it: the socket cannot open until this
             // exists, so a panel that waits for the canvas before mounting it
             // would be waiting for itself.
+            //
+            // Unmounted the moment the session ends, which is not a detail of
+            // rendering. A founder was shown "Vibe closed the temporary
+            // browser" over a picture that went on scrolling and then
+            // *finished signing in* underneath the sentence. The socket
+            // outlives the session it belongs to, so the only way the message
+            // and the picture cannot contradict each other is for the picture
+            // to be gone — closing the socket is what makes the sentence true
+            // rather than merely written.
             <LiveBrowserCanvas
               viewUrl={liveViewUrl}
               onConnected={onConnected}
@@ -399,7 +409,7 @@ export function LiveViewDialog({
             />
           )}
           {error && (
-            <p role="alert" className="absolute inset-0 bg-surface-2 p-4 text-sm text-amber">
+            <p role="alert" className="absolute inset-0 bg-app p-4 text-sm text-amber">
               {error}
             </p>
           )}
@@ -418,7 +428,7 @@ export function LiveViewDialog({
              */
             <div
               role="status"
-              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-sm font-medium text-fg-body">
@@ -468,16 +478,16 @@ export function LiveViewDialog({
              */
             <div
               role="alert"
-              className="bg-surface-2 absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
+              className="bg-app absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-fg-body text-sm font-medium">
                   Sign-in took longer than two minutes
                 </p>
                 <p className="max-w-[54ch] text-xs text-fg-muted">
-                  Vibe closed the temporary browser rather than leave it running. Nothing was
-                  charged. You can start again — Vibe waits two minutes between attempts, and
-                  closing this shows when.
+                  Vibe is closing the temporary browser rather than leaving it running.
+                  Nothing was charged. You can start again — Vibe waits two minutes between
+                  attempts, and closing this shows when.
                 </p>
               </div>
               <div>
@@ -491,7 +501,7 @@ export function LiveViewDialog({
           {!error && !expired && !unreachable && stage !== "ready" && (
             <div
               role="status"
-              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-sm font-medium text-fg-body">Opening a temporary browser</p>
@@ -1162,15 +1172,31 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             "Recognised" rather than "found", because that is the claim. These
             are the surfaces Vibe has a name for; a product can contain
             something Vibe does not recognise, and this list would not say so.
+
+            Each one now carries the pages that are the reason Vibe says it.
+            They were flat chips: a claim with no way to check it, over
+            evidence the snapshot had been storing all along.
           */}
           <p className="text-fg-meta font-mono text-meta uppercase">Surfaces Vibe recognised</p>
-          <ul className="flex flex-wrap gap-2">
+          <ul className="flex flex-col gap-2">
             {result.surfaces.map((surface) => (
               <li
                 key={surface.id}
-                className="border-line-2 bg-surface-2 text-fg-body rounded-nav border px-3 py-1.5 text-sm"
+                className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border px-3 py-2"
               >
-                {surface.name}
+                <span className="text-fg-body text-sm">{surface.name}</span>
+                <CitationCount
+                  citations={surface.evidence}
+                  title={surface.name}
+                  conclusion="Vibe recognised this in your signed-in product."
+                  /*
+                   * `judgment`, not `coverage`. Coverage is a fraction of
+                   * things scored; this is Vibe's own reading of what a page
+                   * is, and the snapshot's `Confidence` is exactly the
+                   * high/medium/low vocabulary that kind takes.
+                   */
+                  confidence={{ kind: "judgment", level: surface.confidence }}
+                />
               </li>
             ))}
           </ul>
@@ -1229,6 +1255,96 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             <>It also stops at a set number of pages, so one scan stays quick and cheap.</>
           )}
         </p>
+      )}
+
+      {result.screens.length > 0 && (
+        <div className="space-y-2">
+          {/*
+            What Vibe actually read, as screens rather than as paths.
+
+            Twenty-one paths is a list nobody reads; eight screens is the shape
+            of a product. The instances stay behind the template because "which
+            three projects did it open" is a real question — it is just not the
+            first one, and putting it first is how a summary becomes a log.
+          */}
+          <p className="text-fg-meta font-mono text-meta uppercase">
+            {result.screens.length === 1 ? "1 screen Vibe read" : `${result.screens.length} screens Vibe read`}
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {result.screens.map((screen) => (
+              <li
+                key={screen.template}
+                className="flex flex-wrap items-baseline justify-between gap-x-4"
+              >
+                <span className="text-fg-prose text-sm">
+                  {screen.heading ?? screen.template}
+                </span>
+                <span className="text-fg-meta font-mono text-meta">
+                  {screen.template}
+                  {screen.pages.length > 1 ? ` · ${screen.pages.length} of them` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(result.shape.navigation.length > 0 ||
+        result.shape.pagesWithForms > 0 ||
+        result.shape.pagesWithTables > 0) && (
+        <Disclosure label="What was on those pages">
+          {/*
+            The answer to "what did you see", in the product's own words.
+
+            The scan reads navigation, forms, tables and empty states on every
+            page and none of it reached the screen — a founder spent 25 Credits
+            and ninety seconds and got back a page count. Behind a disclosure
+            because it is the second question, not the first.
+          */}
+          <div className="space-y-3">
+            <dl className="space-y-1 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Signed in on</dt>
+                <dd className="text-fg-prose font-mono text-meta">{result.shape.landingPath}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Pages with a form</dt>
+                <dd className="text-fg-prose">{result.shape.pagesWithForms}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Pages with a table</dt>
+                <dd className="text-fg-prose">{result.shape.pagesWithTables}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Pages showing an empty state</dt>
+                <dd className="text-fg-prose">{result.shape.pagesWithEmptyState}</dd>
+              </div>
+            </dl>
+
+            {result.shape.navigation.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-fg-meta font-mono text-meta uppercase">
+                  Navigation Vibe saw
+                </p>
+                {/*
+                  The customer's own labels, and untrusted page content by
+                  rule 36 — rendered as text, never interpreted. React escapes
+                  them, and they were already length-capped on extraction.
+                */}
+                <ul className="flex flex-wrap gap-1.5">
+                  {result.shape.navigation.map((label) => (
+                    <li
+                      key={label}
+                      className="border-line-2 text-fg-muted rounded-nav border px-2 py-0.5 text-xs"
+                    >
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Disclosure>
       )}
 
       {/*

@@ -255,6 +255,55 @@ describe("one identity, one generation", () => {
   });
 });
 
+/**
+ * The one outcome that is *not* final, and why the difference matters.
+ *
+ * Every other fallback records something that happened — a provider that was
+ * called, a payload that did not fit — and the irrevocable claim exists so
+ * none of them is attempted twice. The switch records nothing: no count, no
+ * call, no ledger row. Claiming for it used to resolve the identity as
+ * `disabled` and put it beyond reach of the switch ever being turned back on,
+ * and production carries two audits whose sentences went that way.
+ *
+ * So: off means not now. The founder still reads the template — that is the
+ * product — and the identity stays open.
+ */
+describe("the switch is off", () => {
+  it("shows the template, as every other path does", async () => {
+    const read = await ensure({ enabled: false });
+
+    expect(read).toMatchObject({ message: TEMPLATE, source: "template" });
+  });
+
+  it("calls nothing and counts nothing", async () => {
+    await ensure({ enabled: false });
+
+    expect(generated).toBe(0);
+  });
+
+  /** The row is what would burn the identity, so there must not be one. */
+  it("claims nothing, so the identity stays open", async () => {
+    await ensure({ enabled: false });
+
+    expect(storedRow()).toBeUndefined();
+  });
+
+  /**
+   * The property the fix exists for: an incident switch has to be reversible.
+   * Three attempts while off, then on, and the sentence is written.
+   */
+  it("speaks once the switch comes back on", async () => {
+    await ensure({ enabled: false });
+    await ensure({ enabled: false });
+    await ensure({ enabled: false });
+
+    const read = await ensure({ enabled: true });
+
+    expect(read).toMatchObject({ message: GOOD, source: "voice", resolved: true });
+    expect(generated).toBe(1);
+  });
+});
+
 describe("a fallback is as final as an accepted sentence", () => {
   /**
    * The refresh loop this closes: a provider failure, a render that retries
@@ -271,14 +320,6 @@ describe("a fallback is as final as an accepted sentence", () => {
     forbiddenSubstrings?: readonly string[];
     generations: number;
   }[] = [
-    {
-      label: "the switch is off",
-      reason: "disabled",
-      provider: {},
-      enabled: false,
-      /* Nothing is counted and nothing is called while the tier is off. */
-      generations: 0,
-    },
     {
       label: "the payload does not fit the budget",
       reason: "over_input_budget",
@@ -390,7 +431,9 @@ describe("a fallback is as final as an accepted sentence", () => {
    * otherwise outlive itself in a row nobody thinks to look at (rule 83).
    */
   it("follows the template when it is reworded", async () => {
-    await ensure({ enabled: false });
+    await ensure({
+      provider: provider({ countInputTokens: async () => ({ ok: true, inputTokens: 1_000_000 }) }),
+    });
 
     const read = await readNovaVoiceMessage(client(), {
       identity: IDENTITY,
@@ -398,7 +441,7 @@ describe("a fallback is as final as an accepted sentence", () => {
     });
 
     expect(read.message).toBe("A completely different sentence, written later.");
-    expect(read.fallbackReason).toBe("disabled");
+    expect(read.fallbackReason).toBe("over_input_budget");
   });
 });
 

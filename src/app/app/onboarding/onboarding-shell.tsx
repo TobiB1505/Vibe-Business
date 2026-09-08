@@ -3,32 +3,28 @@ import type { ReactNode } from "react";
 import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { signOut } from "@/modules/auth/actions";
-import {
-  ONBOARDING_PHASES,
-  onboardingPhase,
-  phasePosition,
-  type OnboardingState,
-} from "@/modules/onboarding/state";
+import type { OnboardingState } from "@/modules/onboarding/state";
 
 export function OnboardingShell({
   children,
   email,
-  state,
   projectName,
   canLeave = false,
 }: {
   children: ReactNode;
   email: string | null;
   /**
-   * Null while the page that would know is still being read.
+   * Accepted and unread, deliberately.
    *
-   * A `loading.tsx` runs before any of this route's reads, so it has neither
-   * the address nor the state — and the progress rail is the one part of this
-   * chrome that makes a claim. Null draws every phase as not-yet-reached
-   * rather than guessing a position, which is the honest frame to hold open:
-   * the wait is the only thing being reported.
+   * The progress list this positioned is gone from *here*. It came back as
+   * `onboardingSteps` in the rail, beside the Action Plan's list and in the
+   * same marks — the mistake was a strip of chrome above the thread, not the
+   * list itself. The prop stays because `loading.tsx` and the page both mount
+   * this shell and both pass it; dropping it would make the wait render a
+   * different frame from the page it is waiting for, which is how the two
+   * come apart.
    */
-  state: OnboardingState | null;
+  state?: OnboardingState | null;
   projectName?: string;
   /**
    * Whether leaving actually leads somewhere.
@@ -40,9 +36,6 @@ export function OnboardingShell({
    */
   canLeave?: boolean;
 }) {
-  const active = state === null ? null : onboardingPhase(state);
-  const position = active === null ? -1 : phasePosition(active);
-
   return (
     <div className="bg-app text-fg-body min-h-dvh">
       <header className="border-line-1 border-b">
@@ -72,39 +65,17 @@ export function OnboardingShell({
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-[76rem] gap-8 px-5 py-7 sm:px-8 sm:py-10 lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-12">
-        <nav aria-label="Onboarding progress" className="lg:pt-2">
-          <ol className="grid grid-cols-4 gap-2 lg:flex lg:flex-col lg:gap-5">
-            {ONBOARDING_PHASES.map((phase, index) => {
-              const current = phase.id === active;
-              const complete = index < position || state === "complete";
-              return (
-                <li key={phase.id} className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    aria-hidden="true"
-                    className={`flex size-5 shrink-0 items-center justify-center rounded-full border font-mono text-[0.5625rem] ${
-                      complete
-                        ? "border-mint bg-mint text-mint-ink"
-                        : current
-                          ? "border-mint text-mint shadow-mint"
-                          : "border-line-3 text-fg-meta"
-                    }`}
-                  >
-                    {complete ? "✓" : index + 1}
-                  </span>
-                  <span
-                    className={`truncate text-meta font-medium tracking-[0.08em] uppercase ${
-                      current ? "text-fg-body" : complete ? "text-fg-secondary" : "text-fg-meta"
-                    }`}
-                  >
-                    {phase.label}
-                  </span>
-                </li>
-              );
-            })}
-          </ol>
-        </nav>
+      {/*
+        One column, because the left one is Nova's now.
 
+        It held a four-step progress list — Connect, Understand, Audit, First
+        move, with ticks — as a strip of chrome across the top. Those four
+        steps are back, in the rail, in the same marks the Action Plan uses:
+        the position was the mistake, not the list. What the rail adds is that
+        they sit beside her mark and what has already happened, which is what
+        makes it a place rather than a form.
+      */}
+      <div className="mx-auto w-full max-w-[76rem] px-5 py-7 sm:px-8 sm:py-10">
         <main className="min-w-0">{children}</main>
       </div>
     </div>

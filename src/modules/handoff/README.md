@@ -1,6 +1,6 @@
 # handoff
 
-The prompt Vibe hands a founder for work Vibe will not do itself ([ADR 0097](../../../docs/decisions/0097-the-refusal-becomes-a-handoff.md)).
+The prompt Vibe hands a founder for work Vibe will not do itself ([ADR 0099](../../../docs/decisions/0099-the-refusal-becomes-a-handoff.md)).
 
 ## Why this module exists
 

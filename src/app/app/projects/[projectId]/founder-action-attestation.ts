@@ -31,7 +31,7 @@ export async function attestFounderActionStepAction(
 ): Promise<FounderActionAttestationState> {
   void _previous;
   /*
-   * Staleness is deliberately *not* a gate here (ADR 0097).
+   * Staleness is deliberately *not* a gate here (ADR 0099).
    *
    * `planStaleness` says the diagnosis behind the plan moved — a new product
    * profile, a newer audit. It does not say this step is wrong, and the plan
@@ -63,7 +63,7 @@ export async function attestFounderActionStepAction(
      * The handoffs, not just the step. Widening the predicate and the database
      * without widening this call left a handed-off step admitted by both and
      * refused here — the founder got the prompt, did the work, and could not
-     * record it (ADR 0097).
+     * record it (ADR 0099).
      */
     !isFounderAttestable(
       current.firstActionableStep,

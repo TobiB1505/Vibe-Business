@@ -419,7 +419,7 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
-   * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0097).
+   * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0099).
    *
    * "Build a dedicated pricing page" stands in for the founder's real step —
    * `vibe` + `product_change`, which Vibe declines when it touches payments,
@@ -602,7 +602,7 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
-   * The handed-off step, ticked off — and the plan on the next one (ADR 0097).
+   * The handed-off step, ticked off — and the plan on the next one (ADR 0099).
    *
    * The founder's whole ask ends here: run the prompt in your own tool, come
    * back, say what it built, carry on. Everything before this scene is setup;

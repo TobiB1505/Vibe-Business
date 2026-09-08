@@ -9,7 +9,7 @@ function read(file: string): string {
 }
 
 /**
- * The screen must not offer what the server will refuse (ADR 0097).
+ * The screen must not offer what the server will refuse (ADR 0099).
  *
  * A founder reached a step Vibe declines by policy, the plan drew the handoff,
  * they clicked, and the action answered *"this step is no longer the one

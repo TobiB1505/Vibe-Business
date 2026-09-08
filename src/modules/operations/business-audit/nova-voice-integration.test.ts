@@ -19,6 +19,7 @@ import {
 } from "@/modules/business-audit/test-support";
 import { buildNovaAuditEntry } from "@/modules/nova/feed";
 import { buildNovaAuditTemplate, readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
+import { readSituation } from "@/modules/operations/nova-situation";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
@@ -218,8 +219,24 @@ function renderedEntry() {
   return buildNovaAuditEntry(view, synthesis);
 }
 
-function readVoice() {
-  return readNovaAuditVoice(fakeSupabase(db), { projectId: PROJECT, entry: renderedEntry() });
+/**
+ * What the render resolves — including the situation, which is the half a
+ * component could silently get wrong.
+ *
+ * The situation is hashed into the identity, so a page that composed it
+ * differently from the step that generated would resolve to nothing at all,
+ * permanently, and look exactly like never having spoken. Reading it through
+ * the same function the step used is what makes that agreement a property
+ * under test rather than a comment.
+ */
+async function readVoice() {
+  const situation = (await readSituation(fakeSupabase(db), PROJECT))?.situation ?? null;
+
+  return readNovaAuditVoice(fakeSupabase(db), {
+    projectId: PROJECT,
+    entry: renderedEntry(),
+    situation,
+  });
 }
 
 beforeEach(() => {

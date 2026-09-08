@@ -290,7 +290,7 @@ describe("Action Plan completion authorities", () => {
      * confirming it would be confirming away the work Vibe exists to do.
      *
      * External-party work used to be asserted here beside it, and no longer is:
-     * see the case below and ADR 0098. The two were never the same argument.
+     * see the case below and ADR 0100. The two were never the same argument.
      */
     const agent = fakePlanStep({
       id: "3-connect-stripe",
@@ -304,7 +304,7 @@ describe("Action Plan completion authorities", () => {
     );
   });
 
-  it("lets a founder attestation close what the outside world did (ADR 0098)", () => {
+  it("lets a founder attestation close what the outside world did (ADR 0100)", () => {
     /*
      * The authority ADR 0055 deferred, now defined. Nothing inside Vibe
      * produces an `external_party` step and nothing observes one either — Vibe

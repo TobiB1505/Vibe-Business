@@ -4,11 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
-import {
-  GOAL_LABELS,
-  MONETIZATION_LABELS,
-  STAGE_LABELS,
-} from "@/modules/projects/founder-intent";
+import { GOAL_LABELS, MONETIZATION_LABELS, STAGE_LABELS } from "@/modules/projects/founder-intent";
 import type { PendingQuestion } from "@/modules/business-audit/needs-user";
 import { INTENT_ANSWER_VALUES, routeAnswer } from "@/modules/business-audit/answer-routing";
 import { submitFounderAnswerAction, type AnswerActionState } from "./needs-user-action";
@@ -58,9 +54,23 @@ const initialState: AnswerActionState = null;
 export function NeedsUserPanel({
   projectId,
   question,
+  /**
+   * `block` drops this panel's own surface, glow and eyebrow.
+   *
+   * Nova's thread frames it now — an amber render block labelled *Needs your
+   * answer*, with her sentence above it — and everything this component used
+   * to bring for itself became a second copy of that: a mint-bordered panel
+   * inside an amber one, a mint glow arguing with the amber register, and a
+   * "VIBE NEEDS YOU" eyebrow under a frame already saying so.
+   *
+   * The default is unchanged, because `health/content.tsx` still renders this
+   * on a surface that frames nothing.
+   */
+  presentation = "panel",
 }: {
   projectId: string;
   question: PendingQuestion;
+  presentation?: "panel" | "block";
 }) {
   const router = useRouter();
   const action = submitFounderAnswerAction.bind(null, projectId);
@@ -79,14 +89,25 @@ export function NeedsUserPanel({
     destination?.store === "founder_intent" ? INTENT_ANSWER_VALUES[destination.field] : null;
   const labels = destination?.store === "founder_intent" ? OPTION_LABELS[destination.field] : null;
 
+  const block = presentation === "block";
+
   return (
     <section
       aria-labelledby="needs-user-heading"
-      className="rounded-panel border-mint/40 bg-surface-3 relative flex flex-col gap-6 overflow-hidden border p-6 sm:p-8"
+      className={
+        block
+          ? "relative flex flex-col gap-5"
+          : "rounded-panel border-mint/40 bg-surface-3 relative flex flex-col gap-6 overflow-hidden border p-6 sm:p-8"
+      }
     >
-      <span aria-hidden="true" className="audit-intelligence-glow pointer-events-none absolute inset-0" />
+      {!block && (
+        <span
+          aria-hidden="true"
+          className="audit-intelligence-glow pointer-events-none absolute inset-0"
+        />
+      )}
       <div className="relative flex flex-col gap-3">
-        <MonoLabel className="text-mint">Vibe needs you</MonoLabel>
+        {!block && <MonoLabel className="text-mint">Vibe needs you</MonoLabel>}
 
         {/*
           What Vibe worked out on its own. Absent rather than invented when the
@@ -101,7 +122,18 @@ export function NeedsUserPanel({
 
         <h3
           id="needs-user-heading"
-          className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em] sm:text-2xl"
+          /*
+            The question, at the thread's own scale in a block.
+            
+            Standing alone on a workspace page it is the largest thing there
+            and should be. Inside a render block, under a bubble where Nova has
+            just said she needs something, twenty-four point semibold made the
+            question shout over the sentence introducing it — the same poster
+            problem the audit reveal had one block down.
+          */
+          className={`text-fg max-w-[46ch] leading-snug font-semibold tracking-[-0.025em] ${
+            block ? "text-title" : "text-xl sm:text-2xl"
+          }`}
         >
           {question.prompt}
         </h3>

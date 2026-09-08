@@ -181,7 +181,7 @@ describe("a founder may never confirm away work Vibe would build", () => {
    * through their own resolution path — a tick would record that something
    * happened while losing what was decided. `external_party` used to be listed
    * here beside them and no longer is: it is confirmed, not answered, and the
-   * describe block above holds that case (ADR 0098).
+   * describe block above holds that case (ADR 0100).
    */
   it.each([
     ["founder_decision", "decision", "founder_decides"],
@@ -288,7 +288,7 @@ describe("the finding a Vibe step is closed with", () => {
 });
 
 /**
- * A step Vibe declined and handed out (ADR 0097).
+ * A step Vibe declined and handed out (ADR 0099).
  *
  * `vibe` + `product_change` is excluded from attestation on purpose: it is the
  * work the agent exists to build, and letting a founder tick it off would be
@@ -379,7 +379,7 @@ describe("a step Vibe handed to the founder", () => {
 });
 
 /**
- * The outside world, and the only witness Vibe has (ADR 0098).
+ * The outside world, and the only witness Vibe has (ADR 0100).
  *
  * `external_party` was the last step shape with no way to close it — the
  * authority ADR 0055 deferred. Nothing inside Vibe produces one and nothing

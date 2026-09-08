@@ -449,7 +449,7 @@ function measurementFinding(
 export function attestationPrompt(
   step: Pick<ActionPlanStep, "actor" | "changeKind">,
   /**
-   * Which prompt Vibe issued for this step, if any (ADR 0097).
+   * Which prompt Vibe issued for this step, if any (ADR 0099).
    *
    * Three readings, not two, and each needs its own sentence. The `vibe` copy
    * below says the step "isn't a change to your product", which is exactly what
@@ -483,7 +483,7 @@ export function attestationPrompt(
 
   if (handoff === "build") {
     /*
-     * A paste, not an essay (ADR 0097).
+     * A paste, not an essay (ADR 0099).
      *
      * The founder has just watched their own tool do the work, and asking them
      * to summarise it afterwards is homework for something a machine already

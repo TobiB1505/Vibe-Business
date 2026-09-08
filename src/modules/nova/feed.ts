@@ -412,6 +412,24 @@ export function buildNovaExecutionOffer(params: {
  * they exist so that a second true thing is not silently unreachable — which
  * is the entire reason the focus is a ranking — and giving each one a button
  * would recreate the wall of choices Nova exists to replace.
+ *
+ * ## Who reads this, and who does not
+ *
+ * The design lab, and only the lab. Nova Home projects the same `NovaFocus`
+ * through `buildNovaHomeView` instead, because it needs facts this shape does
+ * not carry — which tier a candidate sits in, and whether its control can
+ * honestly be bound on that surface.
+ *
+ * That is a division of shapes, not of *copy*: both go through
+ * `MESSAGE_FOR_CANDIDATE`, so a sentence rewritten here is rewritten on both.
+ * Stated because "no production caller" reads like dead code, and this is a
+ * second projection of the same facts that the lab uses to explore the linear
+ * form.
+ *
+ * The one thing it had that Home did not was the asides. Home computed them,
+ * capped them and discarded them, so a founder with three things pending saw
+ * one — the thread renders them now, in the same register and with the same
+ * argument this docblock makes.
  */
 export function buildNovaFeed(focus: NovaFocus): NovaEntry[] {
   const entries: NovaEntry[] = [...leadEntries(focus.primary)];
@@ -419,8 +437,8 @@ export function buildNovaFeed(focus: NovaFocus): NovaEntry[] {
   if (focus.working !== null) {
     entries.push({
       kind: "nova.progress",
-      id: `progress:${focus.working.operationId}`,
-      operation: focus.working,
+      id: `progress:${focus.working.view.operationId}`,
+      operation: focus.working.view,
     });
   }
 

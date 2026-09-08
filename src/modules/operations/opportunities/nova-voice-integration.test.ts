@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NOVA_PRESENTATION_CONFIG } from "@/modules/ai/operations";
 import type { AIProvider, StructuredRequest, StructuredResult } from "@/modules/ai/provider";
 import { readNovaMoveVoice } from "@/modules/nova/voice/move-slot";
+import { readSituation } from "@/modules/operations/nova-situation";
 
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import type { ExecutionDeps } from "../business-audit/execution";
@@ -21,6 +22,11 @@ import { completeOpportunityOperationStep } from "./execution";
  * somebody had already built. Nothing exercised the read. So this drives the
  * real completion step against a real store read, and the seam it covers is
  * exactly the one a fixture cannot: whether the data actually arrives.
+ *
+ * The seam is longer now than when that bug was found. The message carries the
+ * *situation* as well as the Move — six evidence documents and two currency
+ * judgements — and every one of those is a place the data can fail to arrive,
+ * or arrive differently on the render side than on the generating side.
  */
 
 const USER = "44444444-4444-4444-8444-444444444444";
@@ -134,6 +140,10 @@ beforeEach(() => {
   seedSetWithMoves();
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("the Moves actually reach Nova", () => {
   /** The regression. It failed against the un-joined read. */
   it("generates a message about the top-ranked Move", async () => {
@@ -151,8 +161,23 @@ describe("the Moves actually reach Nova", () => {
     expect(novaUsage()[0].job_id).toBe(OPERATION);
   });
 
-  /** A component reading the same set resolves the stored sentence. */
+  /**
+   * The half a unit test cannot reach: the render recomputes the identity from
+   * persisted state and has to land on the row the step wrote. A field
+   * assembled differently on the two sides is not a wrong answer — it is a
+   * permanent miss that looks exactly like never having generated.
+   *
+   * The clock is pinned on both sides for the same reason it is an argument at
+   * all: the briefing ages, so a test straddling midnight would otherwise be
+   * the one flake this suite is not allowed to have.
+   */
   it("is readable afterwards through the render path", async () => {
+    /* Only `Date` is faked, so nothing about the async paths below changes —
+       and the situation carries an age, so a run straddling midnight would
+       otherwise be the one flake this suite is not allowed to have. */
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-04T02:05:00.000Z"));
+
     await completeOpportunityOperationStep(deps(), OPERATION, SET);
 
     const { getOpportunitySetWithMoves } = await import("@/modules/opportunities/store");
@@ -164,6 +189,9 @@ describe("the Moves actually reach Nova", () => {
       projectId: PROJECT,
       move,
       primaryGoal: null,
+      /* The half a render could silently get wrong: composed by the same
+         function the step used, so the two identities agree. */
+      situation: (await readSituation(fakeSupabase(db), PROJECT))?.situation ?? null,
     });
 
     expect(read).toMatchObject({ message: SPOKEN, source: "voice", resolved: true });

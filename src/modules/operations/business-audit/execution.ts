@@ -18,13 +18,14 @@ import {
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
+
 import { buildNovaAuditEntry } from "@/modules/nova/feed";
 import {
   buildNovaAuditTemplate,
   buildNovaAuditVoicePayload,
 } from "@/modules/nova/voice/audit-slot";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
-
+import { readSituation } from "../nova-situation";
 import { speakAfterOperation } from "../nova-voice";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
@@ -771,7 +772,8 @@ export async function completeOperationStep(
 }
 
 /**
- * Nova says one sentence about an audit that is already finished.
+ * Nova says one sentence about an audit that is already finished — knowing
+ * what the audit rests on.
  *
  * ## Why this line and no other
  *
@@ -789,6 +791,20 @@ export async function completeOperationStep(
  * is settled, the completion event is written. Nothing below this line can
  * change any of it, which is the whole reason the tier is allowed to exist.
  *
+ * ## Why the situation travels with it
+ *
+ * Because "I finished your audit; here is the first blocker" is a sentence the
+ * template already writes, and paying a model for a synonym is what made this
+ * slot look not worth having. What a model can do that a template cannot is
+ * connect the audit to the state of the evidence it was built on — *"…though
+ * I read your website with a version I have since corrected, so a fresh scan
+ * first would be worth it"*. That connection is the briefing, and it reaches
+ * the model as background rather than as a subject (`briefing/situation.ts`).
+ *
+ * The chain is composed by `novaSituationFrom`, the same function the Business
+ * Health page uses to recompute this message's identity when it renders. Two
+ * compositions would be a permanent miss that looks exactly like silence.
+ *
  * ## Why the view is built from so little
  *
  * `buildBusinessBrainView` takes history, moves and a scan timestamp, and none
@@ -797,9 +813,6 @@ export async function completeOperationStep(
  * empty ones is not a shortcut around a read; it is declining to perform four
  * reads whose results are discarded on the next line. `audit-slot.test.ts`
  * pins that by asserting the entry is identical with them supplied.
- *
- * Moves do not exist yet at this moment anyway: the opportunity engine runs
- * after the audit it reads.
  */
 async function speakAboutTheAudit(
   deps: ExecutionDeps,
@@ -820,11 +833,18 @@ async function speakAboutTheAudit(
 
   const entry = buildNovaAuditEntry(view, audit.synthesis);
 
+  /*
+   * A briefing that cannot be assembled is a sentence with less context, never
+   * a failed operation — so this degrades to no situation rather than throwing
+   * past the completion that already happened.
+   */
+  const situation = (await readSituation(deps.supabase, operation.projectId))?.situation ?? null;
+
   await speakAfterOperation({
     supabase: deps.supabase,
     provider: deps.provider,
     operation,
-    payload: buildNovaAuditVoicePayload(entry),
+    payload: buildNovaAuditVoicePayload(entry, situation),
     template: buildNovaAuditTemplate(entry),
   });
 }

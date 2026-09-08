@@ -3,6 +3,7 @@ import type { OnboardingState } from "../onboarding/state";
 import { NOVA_ACTION_META } from "./actions";
 import type { NovaActionId } from "./actions";
 import type { NovaChoiceOption, NovaEntry } from "./feed";
+import type { NovaFocusTier } from "./focus";
 
 /**
  * The onboarding lane, once Nova's own two screens are behind us.
@@ -63,9 +64,157 @@ export function novaRevealBundlesAudit(gate: AuditCreditGate): boolean {
   return gate.kind === "not_applicable";
 }
 
-const SCANNING_MESSAGE = "I am reading your product now.";
+/**
+ * What Nova says at each point of the setup, in her own voice.
+ *
+ * ## Why this is total over `OnboardingState`
+ *
+ * Because onboarding already has a ranking and nobody was reading it as one.
+ * `deriveOnboardingState` is the same shape as `deriveNovaFocus` — pure, facts
+ * in, one state out, reconciled from canonical records so a run finishing while
+ * the founder is away cannot strand them on an obsolete screen. Ten states, in
+ * priority order. What it never had was a sentence per state, so the page
+ * rendered ten sections of its own chrome and Nova appeared beside two of them.
+ *
+ * A total record means an eleventh state fails the build here until somebody
+ * decides what Nova says about it — the same guarantee `BLOCK_FOR_MOMENT` gives
+ * the twenty-one moments, which is what stopped a new moment rendering nothing
+ * at all.
+ *
+ * ## The rules these are held to
+ *
+ * The five `feed.test.ts` runs over every candidate sentence, and it runs them
+ * over these now too: no claimed cause, no promise to deploy or ship or
+ * publish, nothing called safe or correct or finished, no figure — a number in
+ * a sentence is a second copy of something the interface renders from state —
+ * and long enough to say something.
+ *
+ * ## `complete`, which is the handover
+ *
+ * It is the one state whose sentence is not about setup. The page redirects to
+ * the project the moment it is reached, so this is the last thing Nova says
+ * before Home's own ranking takes over the same thread. Written here rather
+ * than left blank because a total record with a hole in it is a record that
+ * stopped being total, and because the sentence is the seam: onboarding ends
+ * by saying what happens next, and Home continues.
+ */
+export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
+  connect_source:
+    "Let's start with the product itself. Connect the repository and I'll begin learning how it's put together.",
+  add_live_product:
+    "Now I want to see the product the way a customer does. Give me the live address and I'll hold what's there against what I find in the code.",
+  product_scanning:
+    "I'm getting to know your product now. I'll read through the code and the live experience — you don't need to stay here while I do it.",
+  product_reveal:
+    "I've got a good picture of what you built. Here's how I understand it — take a look, and if I've misunderstood anything important, tell me before I go further.",
+  audit_preparing:
+    "Good. Now I'm going to look at the business around the product — what's working for it, what's in its way, and what deserves attention first.",
+  audit_needs_user:
+    "I need one thing from you before I can keep going. It's something I can't reliably learn from the product itself.",
+  audit_running:
+    "That's enough for me to work with. I'm going through the business now, and I'll come back when I know what I'd start with.",
+  audit_reveal:
+    "I found a few things worth your attention. One of them stands out — if this were my product, that's where I'd start.",
+  first_move:
+    "This is the first move I'd make. It won't settle everything, and it doesn't need to — it's the best place to start from where the product is today.",
+  complete:
+    "We're set up. From here I keep track of the product with you — what matters, what changed, and what I think is worth doing next. Whenever you come back, I'll pick up where we left off.",
+};
 
-const REVEAL_MESSAGE = "Here is what I understood about your product. Tell me if I have it wrong.";
+/**
+ * The second true thing, where there is one.
+ *
+ * ## Why most of these are null
+ *
+ * Because the block below usually says it better. A scan narrates its own
+ * stages, the reveal asks its own question, the audit's reading is the reading
+ * — and Nova adding a line about any of them would be the caption problem this
+ * surface keeps removing.
+ *
+ * The two that are not null are the two where something is true that no
+ * component on screen can state: what GitHub is about to ask for, and what a
+ * live product buys that the code alone cannot. Both were already written on
+ * the page, in its own prose, above the control. They move here rather than
+ * being rewritten, because the sentence was reviewed once and the point of
+ * this table is that there is one copy of it.
+ *
+ * Held to the same five rules as the messages, and swept with them.
+ */
+export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
+  connect_source:
+    "GitHub will ask which repositories I can access. You stay in control of that — I only ever get the ones you pick.",
+  add_live_product:
+    "It tells me not just how the product is built, but what people actually run into.",
+
+  /* The scan reports its own stages, from rows it writes as it goes. */
+  product_scanning: null,
+  /* The reveal states what was understood and asks its own question. */
+  product_reveal: null,
+  /* Nothing is owed while Vibe works, and nothing is known yet. */
+  audit_preparing: null,
+  audit_running: null,
+  /* The panel carries the question and its options. */
+  audit_needs_user: null,
+  /* The reading is the second thing, and it is a block rather than a line. */
+  audit_reveal: null,
+  /*
+   * The reassurance the page carried at the foot of this state, in its own
+   * words: setup is done whether or not the founder starts the Move. It is the
+   * one line that has to survive the chrome being removed, because it is what
+   * makes the control below a choice rather than the last gate of setup.
+   */
+  first_move:
+    "Your setup is behind us either way — this is a choice, not the last gate. And you'll see anything I build before it goes anywhere.",
+  /* The handover says itself. */
+  complete: null,
+};
+
+/**
+ * Which register each setup state is in.
+ *
+ * ## Why the environment needs this at all
+ *
+ * Because Nova's mark, her status word and the contour of her bubble are all
+ * derived from a tier, and setup had none — it had a four-step progress rail
+ * instead, which says how far along you are and nothing about whose turn it
+ * is. Those are different facts, and only the second one changes what she
+ * looks like.
+ *
+ * So the same vocabulary the twenty-one moments use: `blocked` is nothing Vibe
+ * can do without a person, `decision` is the founder's turn, `ready` is Vibe
+ * working, `setup` is the state before there is anything to work on.
+ *
+ * ## Why `product_reveal` is a decision and `audit_running` is not
+ *
+ * The reveal asks a question and waits — the mark listens. A run in flight is
+ * Vibe working and the mark turns, which is honest because an operation row
+ * says so. Nothing here asserts activity: `novaPresenceState` still takes the
+ * live operation's phase, and this only says what the state is *about* when
+ * nothing is running.
+ */
+export const NOVA_ONBOARDING_TIER: Record<OnboardingState, NovaFocusTier> = {
+  /* Vibe cannot look at anything until somebody connects something. */
+  connect_source: "setup",
+  add_live_product: "decision",
+
+  /* Vibe's turn. The mark turns only while the operation row says it runs. */
+  product_scanning: "ready",
+  audit_preparing: "ready",
+  audit_running: "ready",
+
+  /* The founder's turn, and the mark listens. */
+  product_reveal: "decision",
+  audit_needs_user: "decision",
+  audit_reveal: "decision",
+  first_move: "decision",
+
+  /* Setup is behind us; the next screen has its own ranking. */
+  complete: "settled",
+};
+
+const SCANNING_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_scanning;
+
+const REVEAL_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_reveal;
 
 function option(actionId: NovaActionId): NovaChoiceOption {
   const meta = NOVA_ACTION_META[actionId];

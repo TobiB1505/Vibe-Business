@@ -92,7 +92,7 @@ export function ActionPlanWorkspace({
    * the execution contract keeps those out of a component.
    */
   responsibilityByStepKey: Record<string, StepResponsibility>;
-  /** The actionable step, when Vibe refuses it permanently (ADR 0097). */
+  /** The actionable step, when Vibe refuses it permanently (ADR 0099). */
   handoffStepKey: string | null;
   /** `owner/name`, or null when Vibe holds no repository for this project. */
   repositoryFullName: string | null;
@@ -153,7 +153,7 @@ export function ActionPlanWorkspace({
   const activeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
   const activeOpportunity = opportunities[activeIndex] ?? null;
   /*
-   * Where a finished plan hands over to (ADR 0097 follow-on).
+   * Where a finished plan hands over to (ADR 0099 follow-on).
    *
    * The Move ranked after this one, as a link rather than a control that
    * spends: the offer to plan it already exists on that Move, with its price

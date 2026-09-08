@@ -18,8 +18,8 @@ const modelCases = NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "mode
 const offlineCases = NOVA_VOICE_CASES.filter((novaCase) => novaCase.mode === "offline");
 
 describe("the case set as a whole", () => {
-  it("has fifty cases", () => {
-    expect(NOVA_VOICE_CASES).toHaveLength(50);
+  it("has fifty-four cases", () => {
+    expect(NOVA_VOICE_CASES).toHaveLength(54);
   });
 
   it("gives every case a unique id", () => {

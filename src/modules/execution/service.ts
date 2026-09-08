@@ -17,9 +17,11 @@ import {
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
 import { resolveAppRoot } from "./app-root";
-import { resolveExecutionCapability } from "./capabilities";
+import { resolveExecutionCapability, type CapabilityResolutionInput } from "./capabilities";
 import { branchNameFor, computeExecutionIdentity } from "./identity";
 import { capabilityVersionFor, type ExecutionCapability } from "./schema";
+import { buildOpportunityActionState, type OpportunityActionState } from "./view";
+import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { findReusablePreparedChange, getPreparedChange, type StoredPreparedChange } from "./store";
 
 /**
@@ -91,7 +93,9 @@ async function resolveContext(
 
   // The opportunity must belong to *this* project's current set. A caller
   // naming another project's opportunity finds nothing here.
-  const opportunity = opportunities.set.opportunities.find((entry) => entry.id === params.opportunityId);
+  const opportunity = opportunities.set.opportunities.find(
+    (entry) => entry.id === params.opportunityId,
+  );
   if (!opportunity) return { ok: false, error: "stale_opportunity" };
 
   const { data: project } = await supabase
@@ -100,7 +104,8 @@ async function resolveContext(
     .eq("id", params.projectId)
     .maybeSingle();
 
-  const productionUrl = (project as { production_url: string | null } | null)?.production_url ?? null;
+  const productionUrl =
+    (project as { production_url: string | null } | null)?.production_url ?? null;
 
   const capability = resolveExecutionCapability({
     opportunity,
@@ -110,7 +115,10 @@ async function resolveContext(
   if (!capability.supported) {
     return {
       ok: false,
-      error: capability.reason === "unsupported_framework" ? "unsupported_framework" : "unsupported_opportunity",
+      error:
+        capability.reason === "unsupported_framework"
+          ? "unsupported_framework"
+          : "unsupported_opportunity",
     };
   }
 
@@ -335,6 +343,108 @@ export type OpportunityExecutionSummary = {
   branchName: string | null;
 };
 
+/**
+ * One Move, with the execution answer its card needs.
+ *
+ * ## Why this exists beside the plan page's own assembly
+ *
+ * The Action Plan resolves every Move's execution state because it draws every
+ * Move. Nova's thread draws *one* — the Move the ranking put first — and the
+ * page's loop over `getOpportunityExecutionSummaries` plus two operation reads
+ * per opportunity is the wrong shape for that.
+ *
+ * ## Why it does not simply pass `null`
+ *
+ * Because `null` is an answer, not an absence. `MoveCard` reads it as "no
+ * executor summary exists" and says *Not automated yet — Vibe can still guide
+ * the work step by step*, which is a sentence about Vibe's capability. Handing
+ * it null without having looked would make that sentence a guess, and the only
+ * thing underneath it would be `executionReadiness` — a model opinion, which
+ * rule 54 says is never authority.
+ *
+ * So the answer is read, with the same builder the page uses, and a Move with
+ * genuinely no summary still resolves to `null` — the honest one.
+ *
+ * ## The shape it argued against, and then had
+ *
+ * The paragraph above was true and the code under it was not: this asked
+ * `getOpportunityExecutionSummaries` for *every* Move and threw all but one
+ * away. That is a reuse lookup per supported opportunity — capped at five by
+ * `MAX_OPPORTUNITIES`, so eleven to thirteen queries rather than the twenty-six
+ * an uncapped set would cost, on the product's most-visited route, to answer
+ * about one card. It also read the opportunity set twice, because the plural
+ * function reads it again for itself.
+ *
+ * `executionSummaryFor` is that function's own per-opportunity body, lifted
+ * out. The plural one maps it over the set, where the fan-out is what the page
+ * is for; this calls it once. Same computation by construction rather than by
+ * two implementations agreeing — which is what a second, hand-rolled
+ * single-Move path would have been.
+ *
+ * The cost is now constant rather than linear in the set: the set and its
+ * Moves, the audit behind them, the snapshot, the project's origin, one reuse
+ * lookup, and the two operation reads. Eight issued, of which the audit and
+ * the snapshot are `cache()`d and already warm on Nova Home — so six are paid,
+ * whatever the set holds. `move-read-cost.test.ts` counts them.
+ */
+export async function getMoveWithExecution(
+  supabase: SupabaseClient,
+  params: { projectId: string; opportunityId: string },
+): Promise<{ opportunity: BusinessOpportunity; execution: OpportunityActionState | null } | null> {
+  const [opportunities, snapshot, project] = await Promise.all([
+    getLatestOpportunities(supabase, params.projectId),
+    getLatestSuccessfulSnapshot(supabase, params.projectId),
+    supabase.from("projects").select("production_url").eq("id", params.projectId).maybeSingle(),
+  ]);
+
+  const opportunity = opportunities?.set.opportunities.find(
+    (entry) => entry.id === params.opportunityId,
+  );
+  if (!opportunity) return null;
+
+  /*
+   * No snapshot is the same answer the plural function gives — it returns an
+   * empty list, so every Move resolves to a null summary. Said here as the one
+   * condition rather than inherited from a `find` that missed.
+   */
+  if (!snapshot?.result || !opportunities) return { opportunity, execution: null };
+
+  const summary = await executionSummaryFor(supabase, {
+    projectId: params.projectId,
+    opportunity,
+    opportunitySetId: opportunities.set.id,
+    snapshotId: snapshot.id,
+    repository: snapshot.result,
+    hasProductionOrigin:
+      (project.data as { production_url: string | null } | null)?.production_url != null,
+  });
+
+  const [activeOperation, failedOperation] = await Promise.all([
+    getActivePreparationFor(supabase, {
+      projectId: params.projectId,
+      opportunityId: params.opportunityId,
+    }),
+    // Without this a failed preparation silently re-offers the start control
+    // instead of saying what went wrong.
+    getLatestFailedPreparationFor(supabase, {
+      projectId: params.projectId,
+      opportunityId: params.opportunityId,
+    }),
+  ]);
+
+  return {
+    opportunity,
+    execution: buildOpportunityActionState({
+      opportunity,
+      capability: summary.capability,
+      preparedChangeId: summary.preparedChangeId,
+      activeOperation,
+      failedOperation,
+      blockedReason: null,
+    }),
+  };
+}
+
 export async function getOpportunityExecutionSummaries(
   supabase: SupabaseClient,
   projectId: string,
@@ -358,50 +468,87 @@ export async function getOpportunityExecutionSummaries(
    * depends on another's, so they go together (UI-4 §4). `map` preserves
    * order, so the summaries are the same summaries in the same sequence.
    *
-   * Capability resolution and identity computation stay synchronous and
-   * deterministic; an unsupported opportunity still resolves to a summary
-   * without touching the database at all.
+   * The fan-out is what this function is for — the Action Plan and the Agent
+   * draw every Move. A caller that draws one asks `executionSummaryFor`
+   * directly; `getMoveWithExecution` is the one that does.
    */
   return await Promise.all(
-    opportunities.set.opportunities.map(async (opportunity) => {
-      const capability = resolveExecutionCapability({
+    opportunities.set.opportunities.map((opportunity) =>
+      executionSummaryFor(supabase, {
+        projectId,
         opportunity,
+        opportunitySetId: opportunities.set.id,
+        snapshotId: snapshot.id,
         repository,
         hasProductionOrigin,
-      });
-
-      if (!capability.supported) {
-        return {
-          opportunityId: opportunity.id,
-          capability: null,
-          preparedChangeId: null,
-          branchName: null,
-        };
-      }
-
-      const identity = computeExecutionIdentity({
-        projectId,
-        opportunitySetId: opportunities.set.id,
-        opportunityId: opportunity.id,
-        capability: capability.capability,
-        capabilityVersion: capabilityVersionFor(capability.capability),
-        repositorySnapshotId: snapshot.id,
-        baseSha: repository.source.commitSha,
-      });
-
-      const prepared = await findReusablePreparedChange(supabase, {
-        projectId,
-        executionIdentity: identity,
-      });
-
-      return {
-        opportunityId: opportunity.id,
-        capability: capability.capability,
-        preparedChangeId: prepared?.id ?? null,
-        branchName: prepared?.branchName ?? null,
-      };
-    }),
+      }),
+    ),
   );
+}
+
+/**
+ * The execution answer for exactly one Move.
+ *
+ * Lifted out of `getOpportunityExecutionSummaries` so that a surface drawing
+ * one Move can resolve one Move. It is the same body, not a second copy of the
+ * reasoning — capability, identity, reuse — which is the only way the plural
+ * and singular answers cannot come to differ.
+ *
+ * Capability resolution and identity computation stay synchronous and
+ * deterministic; an unsupported opportunity resolves without touching the
+ * database at all.
+ *
+ * Everything it cannot derive is passed in: the caller has already read the
+ * set, the snapshot and the project's origin, and reading them again per Move
+ * is the cost this split exists to remove.
+ */
+async function executionSummaryFor(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    opportunity: BusinessOpportunity;
+    opportunitySetId: string;
+    snapshotId: string;
+    repository: CapabilityResolutionInput["repository"];
+    hasProductionOrigin: boolean;
+  },
+): Promise<OpportunityExecutionSummary> {
+  const capability = resolveExecutionCapability({
+    opportunity: params.opportunity,
+    repository: params.repository,
+    hasProductionOrigin: params.hasProductionOrigin,
+  });
+
+  if (!capability.supported) {
+    return {
+      opportunityId: params.opportunity.id,
+      capability: null,
+      preparedChangeId: null,
+      branchName: null,
+    };
+  }
+
+  const identity = computeExecutionIdentity({
+    projectId: params.projectId,
+    opportunitySetId: params.opportunitySetId,
+    opportunityId: params.opportunity.id,
+    capability: capability.capability,
+    capabilityVersion: capabilityVersionFor(capability.capability),
+    repositorySnapshotId: params.snapshotId,
+    baseSha: params.repository.source.commitSha,
+  });
+
+  const prepared = await findReusablePreparedChange(supabase, {
+    projectId: params.projectId,
+    executionIdentity: identity,
+  });
+
+  return {
+    opportunityId: params.opportunity.id,
+    capability: capability.capability,
+    preparedChangeId: prepared?.id ?? null,
+    branchName: prepared?.branchName ?? null,
+  };
 }
 
 /**
