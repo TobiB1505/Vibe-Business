@@ -9,6 +9,7 @@ import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intellig
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { analyzeAuthenticatedProduct } from "./analyzer";
 import { isBrowserProviderConfigured } from "./sandbox-browser/client";
+import { findSignInTarget } from "./sign-in-target";
 import { detectAuthenticatedSurfaces } from "./surface-detection";
 import {
   holdDeepScanCredits,
@@ -345,10 +346,28 @@ export async function startDeepScan(
    * `analyzeDeepScan`: this pulls in the browser stack, and rendering the
    * project page must never do that.
    */
+  /*
+   * The sign-in page, when the public scan already found one.
+   *
+   * The browser used to open at the root, which for most products is the
+   * marketing page — so a two-minute deadline was partly spent finding "Sign
+   * in" inside a canvas on a phone. `findSignInTarget` reads evidence the
+   * public scan has been storing all along, and returns null whenever it is
+   * not sure, which lands the browser exactly where it landed before.
+   *
+   * Failing to read the snapshot must never fail the scan: this is a
+   * convenience, and a browser at the root is a working browser.
+   */
+  const signInTarget = await getLatestSuccessfulLiveSnapshot(supabase, params.projectId)
+    .then((snapshot) => findSignInTarget({ publicProduct: snapshot?.result ?? null, origin }))
+    .catch(() => null);
+
   let landing: { navigated: boolean; reason?: string };
   try {
     const { openSessionAtOrigin } = await import("./playwright/connector");
-    landing = await openSessionAtOrigin(handle.connectUrl, origin);
+    landing = await openSessionAtOrigin(handle.connectUrl, origin, {
+      path: signInTarget?.path ?? null,
+    });
   } catch (error) {
     landing = {
       navigated: false,

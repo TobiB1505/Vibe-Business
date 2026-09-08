@@ -170,6 +170,18 @@ Auth surfaces are named **once**, in `routes.ts`, and both the crawl and the sig
 
 A candidate that redirects onto a page already inspected is **recorded**, not dropped. `/app/onboarding` exists, was navigated to, and redirected to the dashboard because the founder is past onboarding — and the snapshot's only account of it was `onboarding: detected false, evidence: []`. "This path sent Vibe somewhere it had already been" and "Vibe found no onboarding" are different sentences.
 
+## The browser opens where the sign-in is
+
+It opened at `new URL(origin).origin` — the root, which for most products is the marketing page. A founder then had two minutes to find "Sign in" inside a canvas, on a phone, over a mobile connection, before typing anything. Reported from LTE: the deadline ran out before the password did.
+
+Vibe usually knows where the sign-in page is already. `sign-in-target.ts` reads it back out of the public scan, in the order the evidence deserves: a path the product's own server redirected to a login, then a page carrying a `login_like` form, then a recognised login surface. Null whenever it is not sure, which lands the browser exactly where it landed before.
+
+It is not `detectAuthenticatedSurfaces`. That answers "is there a login here at all", its evidence paths are the *protected* pages rather than the login page, and it counts a signup surface as evidence — right for its question, wrong for this one. Landing a founder on a registration form is worse than landing them on the homepage.
+
+Three refusals travel with it, and they are the half worth reading. The path comes from the customer's own site, so it is data and never text (rule 36): `toSameOriginPath` requires https, refuses another origin, strips query and fragment — a login redirect routinely carries `?next=` and `?token=` — and bounds the length. Then it must look like sign-in and not like signup, reset or verification. Then it must not look like anything that ends a session or changes state. No model is anywhere near it, which is what keeps rule 57 intact.
+
+And a 404 is not a landing. The snapshot may be days old, `goto` navigates to an error page perfectly well, and there is no address bar to recover with and never will be (ADR 0076) — so an error status falls back to the root. A response that cannot be read is left alone: that is normal for a cached document, and discarding a good landing over it is the same mistake in reverse.
+
 ## Noticing the login instead of asking about it
 
 The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.
@@ -200,6 +212,7 @@ Two consecutive positive readings start the scan, after a grace window the found
 | `extract.ts`                       | The in-page extraction script, and sanitizing what it returns.                           |
 | `login-detection.ts`               | Whether the founder has finished signing in, and whether to start unasked.               |
 | `surface-detection.ts`             | Turning extracted signals into detected application surfaces.                            |
+| `sign-in-target.ts`                | Where the founder's browser opens, and every path it refuses to open at.                 |
 | `read-only-policy.ts`              | The pure decision layer: which requests and events are allowed.                          |
 | `budgets.ts`                       | Pages, bytes, time and concurrency. Tighter than the public crawl.                       |
 | `errors.ts`                        | The typed failure and warning codes. Nothing else escapes.                               |
