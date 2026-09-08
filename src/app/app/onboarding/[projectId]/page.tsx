@@ -89,6 +89,11 @@ export default async function ProjectOnboardingPage({
    * It returns before the reads underneath because none of them is needed to
    * say hello: an introduction describes what Vibe does, not what it has
    * found, so a founder seeing it should not wait on an audit stamp.
+   *
+   * The introduction branch makes exactly one read of its own now — the event
+   * log, for the rail the choreography fills. That is a beat of the sequence
+   * rather than a fact about the product, and it is why it is worth a query
+   * here and nothing else is.
    */
   const firstRun = deriveNovaFirstRun({
     onboardingState: onboarding.state,
@@ -111,6 +116,25 @@ export default async function ProjectOnboardingPage({
    * setup without ever meeting her. One choreography, two entry points.
    */
   if (firstRun === "introduce") {
+    /*
+     * One read, for the one beat that would otherwise show nothing.
+     *
+     * The choreography strokes the rail and then fills it — and a project that
+     * has reached onboarding has already connected an installation and been
+     * created, so there is genuinely something to arrive. With an empty list
+     * that beat draws an empty box, which is a moment of the sequence spent on
+     * nothing.
+     *
+     * It is the one read this branch makes. The rest of the page's wave stays
+     * below it, because an introduction still has no reason to wait on an
+     * audit stamp.
+     */
+    const introActivity = await listAuditEventsForProject(supabase, {
+      projectId,
+      userId: session.userId,
+      limit: 4,
+    });
+
     return (
       <OnboardingShell
         email={session.email}
@@ -122,6 +146,7 @@ export default async function ProjectOnboardingPage({
           projectId={projectId}
           productName={onboarding.projectName}
           connected={onboarding.repository !== null}
+          activity={buildActivityFeed(introActivity.events).reverse()}
         />
       </OnboardingShell>
     );

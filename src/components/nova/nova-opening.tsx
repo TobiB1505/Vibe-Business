@@ -88,7 +88,7 @@ const MARK = "nova-opening-mark";
  * `introduce` is passed only at the hero, and only that once: the assembly is
  * the first thing that happens on this screen and it never happens again.
  */
-export function OpeningMark({ place }: { place: "hero" | "header" }) {
+export function OpeningMark({ place }: { place: "hero" | "rail" }) {
   return (
     <motion.div
       layoutId={MARK}
@@ -96,11 +96,99 @@ export function OpeningMark({ place }: { place: "hero" | "header" }) {
       initial={false}
       transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
     >
-      <NovaPresence
-        state="idle"
-        size={place === "hero" ? "hero" : "md"}
-        introduce={place === "hero"}
+      <NovaPresence state="idle" size="hero" introduce={place === "hero"} />
+    </motion.div>
+  );
+}
+
+/**
+ * The rail's frame, drawn rather than faded in.
+ *
+ * ## Why a stroke and not an appearance
+ *
+ * Because a fade is a thing that was already there becoming visible, and a
+ * stroke is a thing being made. This is the one screen where Nova assembles
+ * the environment she then works in — she lands in an empty corner and the
+ * room is built around her — and the difference between those two readings is
+ * the whole reason the opening exists.
+ *
+ * ## Why an SVG rather than an animated border
+ *
+ * `border-width` and `clip-path` both animate on the layout or paint path. A
+ * single stroked path animates `stroke-dashoffset`, which is one property on
+ * one element and costs nothing near a layout. The rect is drawn at the box's
+ * own radius so the finished stroke sits exactly on the border it replaces —
+ * the real border fades in underneath as the stroke completes, so there is no
+ * frame where the corner has two lines or none.
+ *
+ * `aria-hidden`, and vector-effect keeps the hairline a hairline at any size.
+ */
+export function OpeningStroke({ drawn }: { drawn: boolean }) {
+  return (
+    <svg
+      aria-hidden
+      className="pointer-events-none absolute inset-0 h-full w-full"
+      preserveAspectRatio="none"
+    >
+      <motion.rect
+        x="0.5"
+        y="0.5"
+        width="99%"
+        height="99%"
+        rx="12"
+        fill="none"
+        stroke="var(--color-mint)"
+        strokeWidth="1"
+        vectorEffect="non-scaling-stroke"
+        initial={drawn ? { pathLength: 0, opacity: 0.9 } : false}
+        animate={{ pathLength: 1, opacity: drawn ? 0 : 0 }}
+        /* Both inside the beat that holds for them: the stroke completes at
+           380ms and hands over to the real border at 420ms, which is exactly
+           when `rail_content` begins. A stroke still running when the next
+           beat starts would be two frames on one box. */
+        transition={{
+          pathLength: { duration: 0.38, ease: [0.22, 1, 0.36, 1] },
+          opacity: { duration: 0.24, delay: 0.36 },
+        }}
       />
+    </svg>
+  );
+}
+
+/**
+ * Something arriving forward out of nothing.
+ *
+ * Opacity and a small scale from behind, never a slide: nothing on this screen
+ * has an off-screen edge it could have come from yet, so anything travelling
+ * sideways would imply a space that does not exist. Used for the rail's
+ * contents and for the status row.
+ *
+ * `arrive` false is the reduced-motion answer and the server's: the element is
+ * simply present, with no initial state to be stuck in.
+ */
+export function OpeningFade({
+  arrive,
+  delay = 0,
+  className,
+  children,
+}: {
+  arrive: boolean;
+  delay?: number;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <motion.div
+      className={className}
+      initial={arrive ? { opacity: 0, scale: 0.94 } : false}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{
+        duration: arrive ? 0.36 : 0,
+        delay: arrive ? delay : 0,
+        ease: [0.22, 1, 0.36, 1],
+      }}
+    >
+      {children}
     </motion.div>
   );
 }
@@ -140,11 +228,13 @@ export function OpeningStage({ show, children }: { show: boolean; children: Reac
 }
 
 /**
- * The panel, drawing itself around her.
+ * The thread's panel, arriving under the row.
  *
- * Scale rather than a slide, and a small one: the panel arrives *around* the
- * mark that is already travelling into it, so anything moving sideways would
- * read as a second object pushing the first out of the way.
+ * It used to close *around* the mark, which is why it scaled rather than
+ * slid — anything moving sideways would have read as a second object pushing
+ * the first out of the way. The mark lands in the rail now and the panel is
+ * beside it rather than around it, so it comes from below: a short rise, which
+ * is the only direction on this screen that implies a space that exists.
  *
  * It never leaves, so there is no `AnimatePresence` — the same reasoning as the
  * stage, and the same bug avoided. Nothing that holds the mark may linger past
@@ -167,8 +257,8 @@ export function OpeningPanel({
   return (
     <motion.div
       className={className}
-      initial={arrive ? { opacity: 0, scale: 0.97 } : false}
-      animate={{ opacity: 1, scale: 1 }}
+      initial={arrive ? { opacity: 0, y: 14 } : false}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: arrive ? 0.42 : 0, ease: [0.22, 1, 0.36, 1] }}
     >
       {children}

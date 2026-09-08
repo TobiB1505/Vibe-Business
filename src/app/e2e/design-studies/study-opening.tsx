@@ -12,6 +12,7 @@ import {
   OpeningStage,
   useOpening,
 } from "@/components/nova/nova-opening";
+import { NovaPresence } from "@/components/nova/nova-presence";
 import { atLeast } from "@/components/nova/nova-opening-beats";
 import { speechBubbles } from "@/components/nova/nova-speech";
 import type { Study } from "./studies";
@@ -94,9 +95,9 @@ export function StudyOpening({ study }: { study: Study }) {
         <Header
           availability={{ state: "online" }}
           subject="Vibe Business"
-          connected={atLeast(beat, "speaking")}
-          connecting={!atLeast(beat, "speaking")}
-          mark={atLeast(beat, "settling") ? <OpeningMark place="header" /> : null}
+          connected={false}
+          availabilityPending={!atLeast(beat, "online")}
+          mark={atLeast(beat, "header") ? <NovaPresence state="idle" size="md" /> : null}
           now={<Clock />}
         />
 

@@ -5,69 +5,70 @@ import { NovaArriving } from "@/components/nova/nova-arriving";
 import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaClock } from "@/components/nova/nova-clock";
 import { NovaMoveButton } from "@/components/nova/nova-move";
+import { NovaPresence } from "@/components/nova/nova-presence";
 import {
+  OpeningFade,
   OpeningMark,
   OpeningPanel,
   OpeningStage,
-  useOpening,
+  OpeningStroke,
 } from "@/components/nova/nova-opening";
 import { atLeast } from "@/components/nova/nova-opening-beats";
+import { useOpening } from "@/components/nova/nova-opening";
 import { speechBubbles } from "@/components/nova/nova-speech";
-import { NovaAside, NovaLine, NovaThreadHeader } from "@/components/nova/nova-thread";
+import { NovaAside, NovaHappened, NovaLine, NovaThreadHeader } from "@/components/nova/nova-thread";
+import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
+import type { ActivityEntry } from "@/modules/audit-log/view";
+import { formatElapsedShort } from "@/lib/utils/format-datetime";
+import { MonoLabel } from "@/components/ui/typography";
 import { markNovaIntroducedAction } from "@/app/app/onboarding/[projectId]/actions";
 
 /**
- * The first time a founder opens this project.
+ * The first time a founder opens this project, and the room being built.
  *
- * ## What it is
+ * ## What the sequence is, and why it is not decoration
  *
- * The opening, in the product rather than in the lab. The mark assembles alone
- * at full size, travels into the row it occupies from then on while the panel
- * closes around it, and only then does Nova speak. `/e2e/study-opening` draws
- * the same components — there is one choreography, not a demo and a build.
+ * The mark assembles alone at full size. It travels to a corner — an empty
+ * one — and the rail's frame is *drawn* around it. What has already happened
+ * arrives inside, forward out of nothing. The status row fades in above,
+ * carrying her name before it carries her presence. The panel rises under it.
+ * Her line lights, she composes, and she speaks.
  *
- * "The same components" was a claim rather than a fact for a while. This
- * screen wrote its own `<header>` with a hardcoded "Online" beside a mark,
- * mapped every sentence to a bubble of its own, and put all of them on screen
- * at once. Three divergences from the study it was supposed to be, each small
- * and each the kind that makes a lab stop being an answer to anything.
+ * Every beat is a thing appearing that was not there, in the order it comes to
+ * exist. That is the claim: Nova is not being introduced *over* an environment,
+ * she is assembling the one the rest of setup happens in — which is why this
+ * comes before the first setup step, and why the room it builds has to be the
+ * room that is still there on the next render.
  *
- * ## The three that were fixed
+ * ## The two states, and the one that is never animated
  *
- * **The header.** `NovaThreadHeader` is the one Home mounts, and its
- * `connecting` prop exists for exactly this screen — the only place in the
- * product where the answer is genuinely not known yet, and where coral
- * "Disconnected" for that second would alarm a founder about nothing. A second
- * header meant that prop had a docblock about a screen that did not use it.
+ * **Hers.** The status row arrives before her availability line does, and the
+ * line arrives blank — no dot, no word — until the beat that lights it. That
+ * is the whole of "she comes online": a true sentence appearing where there
+ * was nothing, rather than a false one resolving into a true one.
  *
- * **The grouping.** `speechBubbles` decides when a run of sentences is several
- * bubbles and when it is one. The introduction is four paragraphs, so it is
- * one bubble with line breaks — the way a long message actually arrives —
- * rather than four heavy blocks stacked with gutters claiming to be four
- * separate utterances.
+ * This is the correction to what this screen did first. It animated the
+ * *project* from "Connecting…" to "Disconnected" on the same beat, through a
+ * `connecting` prop written for the second before a repository read returns.
+ * There is no such second here — `connected` is read on the server and arrives
+ * with the first frame — so the pulse was a connection attempt that never
+ * happened. Motion may never say something the product has not observed, and
+ * that is the form the rule takes when it is broken: not a lie in a sentence,
+ * a lie in a transition.
  *
- * **The arrival.** `NovaArriving` stages them, with the composing beat before
- * the turn. This is the one screen in the product where staging is
- * unambiguously right: the messages are genuinely arriving, for the first and
- * only time, and there is nothing on screen for a founder to have already
- * read. Under `prefers-reduced-motion` none of it happens and the complete
- * thread is what renders — which is also what the server emits.
+ * **The project's.** During setup it has no repository, so "Disconnected" is
+ * true from the moment the row exists and it is written that way — a fact
+ * rather than a placeholder, and one that becomes "Connected" on its own the
+ * moment a repository is.
  *
- * ## Where the words come from
+ * ## Under `prefers-reduced-motion`
  *
- * `buildNovaFirstRunFeed("introduce")`, which is the same table the onboarding
- * route renders and is held to the rules every sentence of hers is held to: no
- * promise, no figure, nothing called safe or live. Nothing is written here.
- *
- * ## Why it can only happen once
- *
- * `nova_introduced_at`. Home reads it, this writes it through the action the
- * catalog already binds to `nova.continue_introduction`, and a founder who has
- * met Nova never meets her again. The column is the onboarding row's, which is
- * the right place for it: it records a fact about a person's first contact
- * with a project, not a state the project is in.
+ * None of it happens. `useOpening` returns the last beat on the first frame
+ * and every element renders in its finished state — which is also what the
+ * server emits, so the markup a reader without JavaScript keeps is the whole
+ * room rather than an empty stage.
  */
 const INTRODUCE = buildNovaFirstRunFeed("introduce");
 
@@ -83,99 +84,167 @@ export function NovaOpeningScreen({
   productName,
   /** Whether the repository behind the product is reachable. */
   connected,
+  /**
+   * What has already happened, for the rail she lands in.
+   *
+   * Usually empty on this screen: a project that has not met Nova has barely a
+   * log. Passing it anyway is what lets the rail be a place rather than an
+   * outline — and `NovaHappened` draws nothing when there is nothing.
+   */
+  activity = [],
   /** Replaying for review, so nothing is recorded when it ends. */
   replay = false,
 }: {
   projectId: string;
   productName: string;
   connected: boolean;
+  activity?: readonly ActivityEntry[];
   replay?: boolean;
 }) {
   const { beat, staged } = useOpening();
   const [pending, startTransition] = useTransition();
+
+  /*
+   * Derived, not typed. Nothing is running while she introduces herself — no
+   * project, no operation, no ranking — and `novaPresenceState` is the only
+   * function allowed to turn that into a state. A literal here would be the
+   * one element on the screen that can look like activity asserting its own.
+   */
+  const mark = novaPresenceState({ tier: "setup", phase: "idle" });
+
+  const settled = atLeast(beat, "settling");
+  const online = atLeast(beat, "online");
   const speaking = atLeast(beat, "speaking");
+
+  /* One instant for every relative time in the column, so two rows written a
+     minute apart cannot read out of order. */
+  const now = new Date();
 
   return (
     <div className="flex min-h-[70vh] flex-col justify-center gap-6">
       {/*
         Siblings rather than one replacing the other, so the mark's two homes
         are both in the same layout tree and Motion can carry it between them.
-        The stage closes as the panel opens, which is what lifts the panel up
-        the page rather than leaving it below an empty screen.
+        The stage closes as the room opens, which is what lifts the room up the
+        page rather than leaving it below an empty screen.
       */}
-      <OpeningStage show={!atLeast(beat, "settling")}>
+      <OpeningStage show={!settled}>
         <OpeningMark place="hero" />
       </OpeningStage>
 
-      <OpeningPanel
-        show={atLeast(beat, "settling")}
-        arrive={staged}
-        className="border-line-2 bg-surface-1 rounded-panel flex flex-col"
-      >
-        <NovaThreadHeader
-          availability={{ state: "online" }}
-          subject={productName}
-          connected={connected}
-          connecting={!speaking}
-          /*
-            Null until the mark has somewhere to land. `OpeningMark` carries a
-            `layoutId`, and exactly one element with an id may be mounted at a
-            time — the header's copy appears in the same commit the stage's
-            unmounts, which is what makes it travel rather than duplicate.
-          */
-          mark={atLeast(beat, "settling") ? <OpeningMark place="header" /> : null}
-          now={<NovaClock />}
-        />
-
-        <div className="flex flex-col gap-2.5 p-5 max-sm:p-4">
-          {speaking && (
-            <NovaArriving
-              items={BUBBLES.map((bubble, position) => ({
-                key: bubble.key,
-                /* One beat for the turn, not one per line — she is introducing
-                   herself, not sending four separate messages. */
-                beat: position === 0,
-                node: (
-                  <NovaBubble aside={bubble.aside} tail={bubble.tail}>
-                    {bubble.paragraphs.map((text) =>
-                      bubble.aside ? (
-                        <NovaAside key={text}>{text}</NovaAside>
-                      ) : (
-                        <NovaLine key={text}>{text}</NovaLine>
-                      ),
-                    )}
-                  </NovaBubble>
-                ),
-              }))}
-            >
-              {/*
-                Outside the bubble, as every control is, and after the last
-                word — `NovaArriving` holds it until the thread settles, the
-                way a person finishes speaking before asking.
-              */}
-              <div className="flex max-w-[22rem] flex-col gap-2.5 pt-2">
-                <NovaMoveButton
-                  label={NOVA_ACTION_META["nova.continue_introduction"].label}
-                  busy={pending}
-                  disabled={pending}
-                  onClick={() => {
-                    if (replay) return;
-                    startTransition(async () => {
-                      await markNovaIntroducedAction(projectId);
-                    });
-                  }}
-                />
-                {replay && (
-                  <p className="text-fg-meta text-caption">
-                    Replaying the opening. Nothing is recorded, and reloading without{" "}
-                    <code>?opening</code> returns to your project.
-                  </p>
-                )}
-              </div>
-            </NovaArriving>
+      {settled && (
+        <div className="flex flex-col gap-6">
+          {atLeast(beat, "header") && (
+            <OpeningFade arrive={staged}>
+              <NovaThreadHeader
+                availability={{ state: "online" }}
+                subject={productName}
+                connected={connected}
+                /* Her line arrives a beat after the row it sits in. */
+                availabilityPending={!online}
+                mark={<NovaPresence state={mark} size="md" seed={projectId} />}
+                now={<NovaClock />}
+              />
+            </OpeningFade>
           )}
+
+          <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+            {/*
+              The corner she lands in, before it is a rail.
+
+              The border is the real one and arrives with the stroke that draws
+              it, so there is never a frame with two lines or none. Until the
+              stroke runs there is no frame at all — which is the point: she
+              lands in an empty corner.
+            */}
+            <div
+              className={`rounded-panel transition-interactive relative flex flex-col items-center gap-4 p-5 max-lg:order-2 ${
+                atLeast(beat, "rail_content")
+                  ? "border-line-2 bg-surface-1 border"
+                  : "border border-transparent"
+              }`}
+            >
+              {atLeast(beat, "rail_drawing") && <OpeningStroke drawn={staged} />}
+
+              <OpeningMark place="rail" />
+
+              {atLeast(beat, "rail_content") && activity.length > 0 && (
+                <OpeningFade arrive={staged} className="w-full">
+                  <div className="border-line-1 flex flex-col gap-1.5 border-t pt-4">
+                    <MonoLabel>Earlier</MonoLabel>
+                    <div className="flex flex-col">
+                      {activity.map((entry) => (
+                        <NovaHappened
+                          key={entry.id}
+                          title={entry.title}
+                          at={formatElapsedShort(entry.at, now)}
+                          tone={entry.tone}
+                          facts={entry.facts}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </OpeningFade>
+              )}
+            </div>
+
+            {atLeast(beat, "panel") && (
+              <OpeningPanel
+                show
+                arrive={staged}
+                className="border-line-2 bg-surface-1 rounded-panel flex min-w-0 flex-col p-5 max-lg:order-1 max-sm:p-4"
+              >
+                {speaking && (
+                  <NovaArriving
+                    items={BUBBLES.map((bubble, position) => ({
+                      key: bubble.key,
+                      /* One beat for the turn, not one per line — she is
+                         introducing herself, not sending four messages. */
+                      beat: position === 0,
+                      node: (
+                        <NovaBubble aside={bubble.aside} tail={bubble.tail}>
+                          {bubble.paragraphs.map((text) =>
+                            bubble.aside ? (
+                              <NovaAside key={text}>{text}</NovaAside>
+                            ) : (
+                              <NovaLine key={text}>{text}</NovaLine>
+                            ),
+                          )}
+                        </NovaBubble>
+                      ),
+                    }))}
+                  >
+                    {/*
+                      Outside the bubble, as every control is, and after the
+                      last word — `NovaArriving` holds it until the thread
+                      settles, the way a person finishes speaking before asking.
+                    */}
+                    <div className="flex max-w-[22rem] flex-col gap-2.5 pt-2">
+                      <NovaMoveButton
+                        label={NOVA_ACTION_META["nova.continue_introduction"].label}
+                        busy={pending}
+                        disabled={pending}
+                        onClick={() => {
+                          if (replay) return;
+                          startTransition(async () => {
+                            await markNovaIntroducedAction(projectId);
+                          });
+                        }}
+                      />
+                      {replay && (
+                        <p className="text-fg-meta text-caption">
+                          Replaying the opening. Nothing is recorded, and reloading without{" "}
+                          <code>?opening</code> returns to your project.
+                        </p>
+                      )}
+                    </div>
+                  </NovaArriving>
+                )}
+              </OpeningPanel>
+            )}
+          </div>
         </div>
-      </OpeningPanel>
+      )}
     </div>
   );
 }

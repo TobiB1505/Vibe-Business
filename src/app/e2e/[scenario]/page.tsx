@@ -348,13 +348,37 @@ export default async function E2eScenarioPage({
           {/*
             The product's own component, in replay — so the button records
             nothing and the fixture needs no session. `projectId` is never used
-            on that path, and `connected` is the state worth reviewing: the
-            header's `connecting` word resolving to a repository that is there.
+            on that path.
+          */}
+          {/*
+            `connected={false}`, because that is what the screen this fixture
+            reviews actually shows: the introduction runs before anything is
+            connected, so the header's "Disconnected" is a fact rather than a
+            placeholder. Reviewing it as connected would review a state no
+            founder meets here.
           */}
           <NovaOpeningScreen
             projectId="fixture-project"
             productName="Vibe Business"
-            connected
+            connected={false}
+            activity={[
+              {
+                id: "e1",
+                eventType: "github.installation.connected",
+                at: "2026-09-07T21:40:00.000Z",
+                title: "GitHub installation connected",
+                tone: "neutral",
+                facts: [],
+              },
+              {
+                id: "e2",
+                eventType: "project.created",
+                at: "2026-09-07T21:41:00.000Z",
+                title: "Project created",
+                tone: "neutral",
+                facts: [],
+              },
+            ]}
             replay
           />
         </div>
