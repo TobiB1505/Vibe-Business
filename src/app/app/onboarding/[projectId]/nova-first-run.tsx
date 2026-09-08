@@ -24,7 +24,7 @@ import { markNovaIntroducedAction, setNovaWorkflowStatusAction } from "./actions
  * ## Why it is not the opening screen
  *
  * Because the room is already built. `NovaOpeningScreen` runs the choreography
- * — the mark assembles, travels into the status row, the panel closes around
+ * — the mark assembles, travels into the rail, the room is drawn around
  * it — and that happens once, at the introduction. By the time this renders,
  * the header and the rail are on screen and Nova is simply speaking in them.
  * Running the assembly twice would say the environment was built twice.

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { NovaHappened, NovaThinking } from "@/components/nova/nova-thread";
 import { MonoLabel } from "@/components/ui/typography";
@@ -37,6 +38,9 @@ export function NovaRail({
   working,
   checklist,
   activity,
+  mark,
+  frame = true,
+  contents = (node) => node,
 }: {
   /** Derived by `novaPresenceState`, never chosen here. */
   presence: NovaPresenceState;
@@ -44,7 +48,35 @@ export function NovaRail({
   seed: string;
   working: NovaWorkingEntry | null;
   checklist: ActionPlanChecklist | null;
-  activity: ActivityEntry[];
+  activity: readonly ActivityEntry[];
+  /**
+   * The mark, when the caller owns it.
+   *
+   * Only the opening passes one, and only because its mark is a single
+   * element that travels from the centre of the screen into this column —
+   * `layoutId` needs it mounted by the choreography rather than created here.
+   * The picture is the same one `presence` draws.
+   */
+  mark?: ReactNode;
+  /**
+   * Whether this column draws its own border.
+   *
+   * False for the beat where the opening is *drawing* it: the frame arrives
+   * as a stroke and hands over to this border as it completes, so for those
+   * 380ms the box must not already have one. Nothing else passes it.
+   */
+  frame?: boolean;
+  /**
+   * Wraps everything under the mark, for a caller running a choreography.
+   *
+   * The opening's `rail_content` beat brings what has already happened
+   * forward out of nothing, a beat after the frame around it is drawn. This
+   * is how it does that without owning a second copy of this column — which
+   * is what it did until the copy's padding, gap and mark drifted from these
+   * ones and the room the opening built stopped being the room it handed
+   * over. Everywhere else this is the identity.
+   */
+  contents?: (node: ReactNode) => ReactNode;
 }) {
   /*
    * Read once, here, and passed down. Every row's label is relative to the
@@ -53,10 +85,21 @@ export function NovaRail({
    */
   const now = new Date();
 
+  /* Built as a list so an empty one adds no flex child, and therefore no gap:
+     a wrapper around nothing would be 20px of dead column under the mark. */
+  const below = [
+    checklist ? <Plan key="plan" checklist={checklist} /> : null,
+    activity.length > 0 ? <Earlier key="earlier" past={activity} now={now} /> : null,
+  ].filter(Boolean);
+
   return (
-    <aside className="border-line-2 bg-surface-1 rounded-panel flex flex-col gap-5 border p-5">
+    <aside
+      className={`rounded-panel flex flex-col gap-5 border p-5 ${
+        frame ? "border-line-2 bg-surface-1" : "border-transparent"
+      }`}
+    >
       <div className="flex flex-col items-center gap-4 text-center">
-        <NovaPresence state={presence} seed={seed} size="hero" />
+        {mark ?? <NovaPresence state={presence} seed={seed} size="hero" />}
         {/*
           No name and no state word under the mark. "NOVA / Working" was the
           mark's own two facts written out again underneath it in case it did
@@ -69,9 +112,7 @@ export function NovaRail({
         {working && <NovaThinking>{working.stageLabel}</NovaThinking>}
       </div>
 
-      {checklist && <Plan checklist={checklist} />}
-
-      {activity.length > 0 && <Earlier past={activity} now={now} />}
+      {below.length > 0 && contents(<>{below}</>)}
     </aside>
   );
 }
@@ -177,7 +218,7 @@ function Plan({ checklist }: { checklist: ActionPlanChecklist }) {
  * would mark the boundary of a set that is either empty or already said at
  * the top of the thread.
  */
-function Earlier({ past, now }: { past: ActivityEntry[]; now: Date }) {
+function Earlier({ past, now }: { past: readonly ActivityEntry[]; now: Date }) {
   return (
     <div className="border-line-1 flex flex-col gap-1.5 border-t pt-4">
       <MonoLabel>Earlier</MonoLabel>

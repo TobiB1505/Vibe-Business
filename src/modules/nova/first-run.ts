@@ -87,7 +87,7 @@ export type NovaFirstRunPosition =
  * wants before handing over the repository, not after.
  *
  * The opening's choreography settles it. The mark assembles, travels into the
- * status row and the panel closes around it — Nova building the environment
+ * status row and the room is drawn around it — Nova building the environment
  * the whole of setup then happens in. That can only be first.
  *
  * So the cascade is now purely about her own two positions, and

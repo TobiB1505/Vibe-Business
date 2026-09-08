@@ -13,7 +13,7 @@ import type { OperationView } from "@/modules/operations/view";
  * ## Why setup gets the same header as Home
  *
  * Because the opening builds it. The mark assembles alone, travels into this
- * row, and the panel closes around it — that choreography is Nova assembling
+ * row, and the room is drawn around it — that choreography is Nova assembling
  * the environment she then works in, and it only means anything if the
  * environment is still there afterwards. A founder who watched the mark settle
  * into a status row and then met a page with a logo and a four-step progress

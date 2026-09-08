@@ -9,20 +9,20 @@ import { NovaPresence } from "@/components/nova/nova-presence";
 import {
   OpeningFade,
   OpeningMark,
-  OpeningPanel,
+  OpeningColumn,
   OpeningStage,
   OpeningStroke,
 } from "@/components/nova/nova-opening";
 import { atLeast } from "@/components/nova/nova-opening-beats";
 import { useOpening } from "@/components/nova/nova-opening";
 import { speechBubbles } from "@/components/nova/nova-speech";
-import { NovaAside, NovaHappened, NovaLine, NovaThreadHeader } from "@/components/nova/nova-thread";
+import { NovaAside, NovaLine, NovaThreadHeader } from "@/components/nova/nova-thread";
+import { NovaRail } from "./nova-rail";
+import { NovaRoom } from "@/components/nova/nova-room";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import type { ActivityEntry } from "@/modules/audit-log/view";
-import { formatElapsedShort } from "@/lib/utils/format-datetime";
-import { MonoLabel } from "@/components/ui/typography";
 import { markNovaIntroducedAction } from "@/app/app/onboarding/[projectId]/actions";
 
 /**
@@ -116,84 +116,83 @@ export function NovaOpeningScreen({
   const online = atLeast(beat, "online");
   const speaking = atLeast(beat, "speaking");
 
-  /* One instant for every relative time in the column, so two rows written a
-     minute apart cannot read out of order. */
-  const now = new Date();
-
   return (
-    <div className="flex min-h-[70vh] flex-col justify-center gap-6">
+    <div className="flex flex-col gap-6">
       {/*
         Siblings rather than one replacing the other, so the mark's two homes
         are both in the same layout tree and Motion can carry it between them.
         The stage closes as the room opens, which is what lifts the room up the
         page rather than leaving it below an empty screen.
       */}
-      <OpeningStage show={!settled}>
+      <OpeningStage show={!settled} height={440}>
         <OpeningMark place="hero" />
       </OpeningStage>
 
       {settled && (
-        <div className="flex flex-col gap-6">
-          {atLeast(beat, "header") && (
-            <OpeningFade arrive={staged}>
-              <NovaThreadHeader
-                availability={{ state: "online" }}
-                subject={productName}
-                connected={connected}
-                /* Her line arrives a beat after the row it sits in. */
-                availabilityPending={!online}
-                mark={<NovaPresence state={mark} size="md" seed={projectId} />}
-                now={<NovaClock />}
-              />
-            </OpeningFade>
-          )}
-
-          <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-            {/*
-              The corner she lands in, before it is a rail.
-
-              The border is the real one and arrives with the stroke that draws
-              it, so there is never a frame with two lines or none. Until the
-              stroke runs there is no frame at all — which is the point: she
-              lands in an empty corner.
-            */}
-            <div
-              className={`rounded-panel transition-interactive relative flex flex-col items-center gap-4 p-5 max-lg:order-2 ${
-                atLeast(beat, "rail_content")
-                  ? "border-line-2 bg-surface-1 border"
-                  : "border border-transparent"
-              }`}
-            >
+        <NovaRoom
+          header={
+            atLeast(beat, "header") && (
+              <OpeningFade arrive={staged}>
+                <NovaThreadHeader
+                  availability={{ state: "online" }}
+                  subject={productName}
+                  connected={connected}
+                  /* Her line arrives a beat after the row it sits in. */
+                  availabilityPending={!online}
+                  mark={<NovaPresence state={mark} size="md" seed={projectId} />}
+                  now={<NovaClock />}
+                />
+              </OpeningFade>
+            )
+          }
+          rail={
+            /*
+             * The corner she lands in — and it is the shipped rail, not a
+             * drawing of one. The choreography owns three things about it and
+             * nothing else: which mark is in it, whether its border is drawn
+             * yet, and when its contents arrive.
+             */
+            <div className="relative">
               {atLeast(beat, "rail_drawing") && <OpeningStroke drawn={staged} />}
 
-              <OpeningMark place="rail" />
-
-              {atLeast(beat, "rail_content") && activity.length > 0 && (
-                <OpeningFade arrive={staged} className="w-full">
-                  <div className="border-line-1 flex flex-col gap-1.5 border-t pt-4">
-                    <MonoLabel>Earlier</MonoLabel>
-                    <div className="flex flex-col">
-                      {activity.map((entry) => (
-                        <NovaHappened
-                          key={entry.id}
-                          title={entry.title}
-                          at={formatElapsedShort(entry.at, now)}
-                          tone={entry.tone}
-                          facts={entry.facts}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </OpeningFade>
-              )}
+              <NovaRail
+                presence={mark}
+                seed={projectId}
+                working={null}
+                /*
+                 * No to-do list during setup. There is no plan yet, and a
+                 * column headed "To do" over nothing is a promise about work
+                 * nobody has decided on.
+                 */
+                checklist={null}
+                activity={atLeast(beat, "rail_content") ? activity : []}
+                mark={<OpeningMark place="rail" />}
+                /* The stroke is the frame until it finishes drawing it. */
+                frame={atLeast(beat, "rail_content")}
+                contents={(node) => (
+                  <OpeningFade arrive={staged} className="w-full">
+                    {node}
+                  </OpeningFade>
+                )}
+              />
             </div>
+          }
+        >
+          {atLeast(beat, "panel") && (
+            <OpeningColumn show arrive={staged}>
+              {/*
+                  The column the next render draws, to the class — the same
+                  `section` at the same width, with the same gap, holding the
+                  same `NovaArriving`. `NovaFirstRun` is what replaces this the
+                  moment she stops speaking, and a founder pressing Continue
+                  should see the thread stay exactly where it was rather than
+                  a second thread of a different size take its place.
 
-            {atLeast(beat, "panel") && (
-              <OpeningPanel
-                show
-                arrive={staged}
-                className="border-line-2 bg-surface-1 rounded-panel flex min-w-0 flex-col p-5 max-lg:order-1 max-sm:p-4"
-              >
+                  So there is no panel around it. The onboarding thread has no
+                  box, and a box here would be the one piece of this room that
+                  does not survive the handover.
+                */}
+              <section className="flex max-w-[44rem] flex-col gap-2.5" aria-label="Meeting Nova">
                 {speaking && (
                   <NovaArriving
                     items={BUBBLES.map((bubble, position) => ({
@@ -219,7 +218,7 @@ export function NovaOpeningScreen({
                       last word — `NovaArriving` holds it until the thread
                       settles, the way a person finishes speaking before asking.
                     */}
-                    <div className="flex max-w-[22rem] flex-col gap-2.5 pt-2">
+                    <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">
                       <NovaMoveButton
                         label={NOVA_ACTION_META["nova.continue_introduction"].label}
                         busy={pending}
@@ -240,10 +239,10 @@ export function NovaOpeningScreen({
                     </div>
                   </NovaArriving>
                 )}
-              </OpeningPanel>
-            )}
-          </div>
-        </div>
+              </section>
+            </OpeningColumn>
+          )}
+        </NovaRoom>
       )}
     </div>
   );

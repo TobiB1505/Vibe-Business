@@ -16,8 +16,8 @@ import { useMotionAllowed } from "./nova-motion";
  * and it has known since it was lifted from the high-fidelity prototype.
  * `Header` knows how to be a status row. `Arriving` knows how a turn lands.
  * What did not exist is the *order*, and the order is the whole idea: the mark
- * builds, travels into its corner as the panel closes around it, the
- * connection resolves, and only then does she speak.
+ * builds, travels into its corner, the rail is drawn around it and the room
+ * assembles above and beside it, and only then does she speak.
  *
  * So this file holds beats and timings and nothing else. It draws no shape of
  * its own, and every visual it stages is a component that ships.
@@ -214,12 +214,33 @@ export function OpeningFade({
  * header. Exactly one exists at any moment, which is what makes the movement a
  * movement.
  */
-export function OpeningStage({ show, children }: { show: boolean; children: ReactNode }) {
+export function OpeningStage({
+  show,
+  /**
+   * How tall the stage is while it is open, in pixels.
+   *
+   * This is the only thing holding the mark near the middle of the screen
+   * while it assembles, and it is here rather than on the page for one
+   * reason: the room underneath must render at the *top* of its column,
+   * where the next screen's thread renders. Centring the page instead
+   * centred the finished room too, and then pressing Continue moved
+   * everything on it — the one thing the choreography exists to avoid.
+   *
+   * So the stage is tall and the room is not, and the stage collapsing to
+   * zero is what carries the room up into place.
+   */
+  height = 320,
+  children,
+}: {
+  show: boolean;
+  height?: number;
+  children: ReactNode;
+}) {
   return (
     <motion.div
       className="flex shrink-0 flex-col items-center justify-center overflow-hidden"
       initial={false}
-      animate={{ height: show ? 320 : 0, opacity: show ? 1 : 0 }}
+      animate={{ height: show ? height : 0, opacity: show ? 1 : 0 }}
       transition={{ duration: 0.62, ease: [0.22, 1, 0.36, 1] }}
     >
       {show && children}
@@ -228,19 +249,26 @@ export function OpeningStage({ show, children }: { show: boolean; children: Reac
 }
 
 /**
- * The thread's panel, arriving under the row.
+ * The conversation column, arriving under the row.
  *
- * It used to close *around* the mark, which is why it scaled rather than
- * slid — anything moving sideways would have read as a second object pushing
- * the first out of the way. The mark lands in the rail now and the panel is
- * beside it rather than around it, so it comes from below: a short rise, which
- * is the only direction on this screen that implies a space that exists.
+ * ## Why it is not called a panel any more
+ *
+ * Because it drew one. It closed *around* the mark, which is why it scaled
+ * rather than slid, and when the mark moved to the rail the box stayed —
+ * leaving the opening finishing inside a bordered panel that the screen
+ * replacing it does not have. A founder pressing *Continue* watched the room
+ * she had just been given lose its frame.
+ *
+ * So it carries no surface at all now. What arrives is the thread's own
+ * `section`, at the width the next screen renders it, and this wrapper does
+ * one thing: brings it up from below. That is the only direction on this
+ * screen implying a space that exists.
  *
  * It never leaves, so there is no `AnimatePresence` — the same reasoning as the
  * stage, and the same bug avoided. Nothing that holds the mark may linger past
  * the frame it is replaced in.
  */
-export function OpeningPanel({
+export function OpeningColumn({
   show,
   /** False when there was no sequence, and the panel is simply already here. */
   arrive,

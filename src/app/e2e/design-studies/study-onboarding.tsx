@@ -2,6 +2,7 @@ import { ONBOARDING_STATES, type OnboardingState } from "@/modules/onboarding/st
 import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
 import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NovaRoom } from "@/components/nova/nova-room";
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import { Moves } from "./elements";
@@ -68,7 +69,7 @@ const CONTROL_FOR_STATE: Record<OnboardingState, string | null> = {
  * ## Why this is the part worth looking at
  *
  * Because the opening's choreography only means something if this exists. The
- * mark assembles alone, travels into a status row, and a panel closes around
+ * mark assembles alone, travels into the rail, and the room is drawn around
  * it — Nova assembling the environment she then works in. Setup used to hand
  * her a logo bar and a four-step progress list instead, so a founder watched
  * something be built and then met a different room.
@@ -96,30 +97,35 @@ function TheRoom({ panel }: { panel: string }) {
         </p>
       </div>
 
-      <div className={`flex flex-col gap-6 p-5 max-sm:p-4 ${panel}`}>
-        <NovaOnboardingHeader
-          state="product_scanning"
-          projectId="project_e2e"
-          projectName="Vibe Business"
-          connected
-          operation={null}
-        />
-        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
-          <NovaRail
-            presence="working"
-            seed="project_e2e"
-            working={null}
-            /* No plan during setup. The prop stays because the rail is Home's
-               and Home has one; passing null is the decision, not an absence. */
-            checklist={null}
-            activity={ROOM_ACTIVITY}
-          />
+      <div className={`p-5 max-sm:p-4 ${panel}`}>
+        <NovaRoom
+          header={
+            <NovaOnboardingHeader
+              state="product_scanning"
+              projectId="project_e2e"
+              projectName="Vibe Business"
+              connected
+              operation={null}
+            />
+          }
+          rail={
+            <NovaRail
+              presence="working"
+              seed="project_e2e"
+              working={null}
+              /* No plan during setup. The prop stays because the rail is Home's
+                 and Home has one; passing null is the decision, not an absence. */
+              checklist={null}
+              activity={ROOM_ACTIVITY}
+            />
+          }
+        >
           <NovaOnboardingThread
             state="product_scanning"
             blockLabel="In the product"
             block={<p className="text-caption text-fg-meta font-mono">ProductScanExperience</p>}
           />
-        </div>
+        </NovaRoom>
       </div>
     </section>
   );

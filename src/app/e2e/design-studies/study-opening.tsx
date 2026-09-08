@@ -8,7 +8,7 @@ import { Bubble, Context, Header, Line, Move, Moves } from "./elements";
 import { NovaClock as Clock } from "@/components/nova/nova-clock";
 import {
   OpeningMark,
-  OpeningPanel,
+  OpeningColumn,
   OpeningStage,
   useOpening,
 } from "@/components/nova/nova-opening";
@@ -37,10 +37,17 @@ import type { Study } from "./studies";
  *
  * The mark assembles, alone and at full size. It travels into the status row
  * it will occupy for the rest of the founder's life with the product, and the
- * panel closes around it as it arrives. The connection resolves — the one
- * moment where "Connecting…" is honest rather than a decoration, because it is
- * the only moment the answer is genuinely not known yet. Then she speaks,
- * through the same `Arriving` the thread uses everywhere else.
+ * panel closes around it as it arrives. Her availability line lights — it is
+ * *blank* until then, never "Connecting…", because nothing is connecting and
+ * a false state animated into a true one is the line the motion rules draw.
+ * Then she speaks, through the same `Arriving` the thread uses everywhere
+ * else.
+ *
+ * The shipped screen has moved past this study in one respect worth writing
+ * down rather than quietly diverging on: it lands the mark in the *rail* and
+ * carries no panel at all, because the onboarding thread it hands over to has
+ * none. This file keeps the panel it was drawn with — a study is a record of
+ * what was compared, and `NovaOpeningScreen` is what ships.
  *
  * Under `prefers-reduced-motion` none of it happens: `useOpening` returns the
  * last beat on the first frame, and the finished screen is what renders.
@@ -87,7 +94,7 @@ export function StudyOpening({ study }: { study: Study }) {
         <OpeningMark place="hero" />
       </OpeningStage>
 
-      <OpeningPanel
+      <OpeningColumn
         show={atLeast(beat, "settling")}
         arrive={staged}
         className={`flex flex-col ${panel}`}
@@ -133,7 +140,7 @@ export function StudyOpening({ study }: { study: Study }) {
             </Arriving>
           )}
         </div>
-      </OpeningPanel>
+      </OpeningColumn>
     </div>
   );
 }

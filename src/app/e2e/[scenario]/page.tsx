@@ -344,7 +344,16 @@ export default async function E2eScenarioPage({
     const chosen = chosenStudy();
     return (
       <StudyShell study={chosen}>
-        <div className="mx-auto w-full max-w-2xl px-6 py-10 max-sm:px-4">
+        {/*
+          `OnboardingShell`'s own container, to the class.
+
+          It was `max-w-2xl` — 672px — and that is the defect this fixture
+          existed to prevent: a reviewer looking at a 300px rail beside a
+          370px thread and calling the layout finished, while the screen a
+          founder meets is 1216px wide. A fixture at the wrong width reviews
+          a screen nobody has.
+        */}
+        <div className="mx-auto w-full max-w-[76rem] px-5 py-7 sm:px-8 sm:py-10">
           {/*
             The product's own component, in replay — so the button records
             nothing and the fixture needs no session. `projectId` is never used
