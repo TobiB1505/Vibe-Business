@@ -61,11 +61,24 @@ describe("the account card", () => {
     const card = code(CARD);
     const wallet = code(readFileSync("src/components/system/wallet.tsx", "utf8"));
 
-    for (const shape of ["rounded-full", "border-line-2", "bg-surface-2", "h-10"]) {
-      expect(card, `the identity does not wear ${shape}`).toContain(shape);
-      expect(wallet, `the wallet does not wear ${shape}`).toContain(shape);
+    /*
+     * Both take the surface from `buttonClasses` since UI-29, rather than
+     * writing it out. This used to pin four literal classes — `rounded-full`,
+     * `border-line-2`, `bg-surface-2`, `h-10` — and it fired correctly the
+     * moment the wallet moved onto the system, which is the third time these
+     * two hand-written copies of one pill have had to be re-synchronised.
+     * Asserting the source rather than the spelling is what ends that.
+     */
+    for (const [name, source] of [
+      ["the identity", card],
+      ["the wallet", wallet],
+    ] as const) {
+      expect(source, `${name} does not take the system surface`).toContain(
+        'buttonClasses({ variant: "ghost" })',
+      );
+      expect(source, `${name} is not the wallet's height`).toContain("h-10");
+      expect(source, `${name} is not round`).toContain("rounded-full");
     }
-    expect(card).toContain("hover:border-line-strong");
   });
 
   /**
@@ -85,10 +98,18 @@ describe("the account card", () => {
   });
 
   it("answers a finger, which never hovers", () => {
-    // `Button` makes this argument at length: touch gets rest and pressed
-    // and nothing in between, so a press has to be a visible step past hover
-    // rather than the same fill.
-    expect(code(CARD)).toContain("active:bg-surface-3");
+    /*
+     * Touch gets rest and pressed and nothing in between, so a press has to be
+     * a visible step past hover rather than the same fill.
+     *
+     * This used to pin `active:bg-surface-3`, written here by hand. Since
+     * UI-29 the press comes from the ghost variant — a bigger step than the
+     * one this file wrote (`surface-pressed` at 11% against `surface-3` at 4%)
+     * — so what this asserts is that the card takes it from there. That the
+     * variant actually has a press step is `button.test.ts`'s to hold, and it
+     * does: *gives every variant a press a finger can feel*.
+     */
+    expect(code(CARD)).toContain('buttonClasses({ variant: "ghost" })');
   });
 
   it("shows the avatar and the name, and nothing else to decide about", () => {

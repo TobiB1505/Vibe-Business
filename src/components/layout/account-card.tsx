@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui/avatar";
+import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import { PaletteSwitch } from "@/components/layout/palette-switch";
@@ -61,15 +62,13 @@ export function AccountCard({ identity }: { identity: AccountIdentity }) {
             identity; `max-w-full` so a long name stops at the rail's edge
             instead of overflowing it, which the truncation below makes safe.
           */
-          // `h-10` is the wallet's height, said the same way, so the two
-          // controls at the foot of the rail are one pair rather than two
-          // sizes that happen to be near each other.
-          "border-line-2 bg-surface-2 flex h-10 w-fit max-w-full items-center gap-2.5 rounded-full border",
-          "pr-4 pl-1.5",
-          "transition-interactive hover:border-line-strong hover:bg-surface-hover",
-          // The step past hover, which is the only feedback a finger gets.
-          "active:bg-surface-3",
-          "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+          // The wallet's surface, taken from the same place the wallet takes
+          // it since UI-29, so the two controls at the foot of the rail cannot
+          // drift apart again — they were two hand-written copies of one pill
+          // and this is the third time they have had to be re-synchronised.
+          // `h-10` is the wallet's height, said the same way.
+          buttonClasses({ variant: "ghost" }),
+          "flex h-10 w-fit max-w-full items-center gap-2.5 rounded-full pr-4 pl-1.5",
         )}
       >
         {/*

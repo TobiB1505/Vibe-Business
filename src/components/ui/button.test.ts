@@ -209,6 +209,30 @@ describe("the two arguments a phone made", () => {
     expect(SOURCE).toContain("disabled:bg-none");
   });
 
+  it("gives every variant a press a finger can feel", () => {
+    /*
+     * The third state, and the one that only touch depends on: a pointer gets
+     * rest, hover and pressed, and a finger gets rest and pressed. Hover is
+     * the step it never sees, so a variant whose press is only its hover is a
+     * control that answers a phone with nothing.
+     *
+     * `.vibe-control` moves every control 1px on press, which is real and is
+     * not this: it is a transform, and it is off under reduced motion. The
+     * colour step has to be there too.
+     */
+    for (const [variant, classes] of Object.entries(variantClasses())) {
+      const hovers: string[] = classes.match(/hover:(bg|from)-[\w-]+/g) ?? [];
+      const presses: string[] = classes.match(/active:(bg|from)-[\w-]+/g) ?? [];
+      expect(presses.length, `${variant} has no press step`).toBeGreaterThan(0);
+      for (const press of presses) {
+        expect(
+          hovers.includes(press.replace("active:", "hover:")),
+          `${variant} presses to the same value it hovers to`,
+        ).toBe(false);
+      }
+    }
+  });
+
   it("makes the destructive one warn before it is touched", () => {
     const resting = variantClasses()
       .danger.split(/\s+/)

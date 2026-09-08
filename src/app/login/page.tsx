@@ -6,6 +6,7 @@ import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { getSession } from "@/modules/auth/session";
 import { LoginForm } from "./login-form";
 import type { Metadata } from "next";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Sign in",
@@ -50,7 +51,7 @@ export default async function LoginPage({
     <AuthShell>
       <AuthHeading title="Sign in">
         No account yet?{" "}
-        <Link href="/signup" className="text-mint hover:text-mint-hover rounded-inline">
+        <Link href="/signup" className={proseLinkClasses()}>
           Create one
         </Link>
       </AuthHeading>

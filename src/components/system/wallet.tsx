@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PlusIcon } from "@/components/ui/icons.generated";
 import { CreditAmount } from "@/components/ui/credit-amount";
+import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { CreditUnits } from "@/modules/credits/units";
 
@@ -108,11 +109,14 @@ export function Wallet({
       <Link
         href={href}
         data-testid="wallet-balance"
-        className={cn(
-          "border-line-2 bg-surface-2 flex h-10 min-w-0 flex-1 items-center rounded-full border px-4",
-          "transition-interactive hover:border-line-strong hover:bg-surface-hover",
-          "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
-        )}
+        /*
+          The system's own surface since UI-29, rather than the hand-written
+          border and fill this shipped with. It predates `Button` and was the
+          last place in the chrome drawing its own control — the focus ring
+          included, which `globals.css` has answered for every control since
+          UI-0.
+        */
+        className={cn(buttonClasses({ variant: "ghost" }), "h-10 min-w-0 flex-1 rounded-full px-4")}
       >
         <CreditAmount credits={credits} tone={low ? "low" : "default"} />
       </Link>
@@ -121,18 +125,17 @@ export function Wallet({
         href={topUpHref}
         aria-label="Top up Credits"
         className={cn(
-          "border-line-2 bg-surface-2 text-fg-muted grid size-10 shrink-0 place-items-center",
-          "rounded-full border",
+          buttonClasses({ variant: "ghost", iconOnly: true }),
+          "size-10",
           /*
             Quiet at rest, mint on the way in: adding Credits is Vibe's own
             action rather than a neutral one — the colour every priced control
             in the product already uses to mean "this is the thing you do
             here". The container exists at rest because a bare mark is not a
-            control on a phone.
+            control on a phone; the surface under it is the system's now, and
+            only the mint arrival is this control's own.
           */
-          "transition-interactive hover:border-mint-line hover:bg-mint-tint hover:text-mint",
-          "active:bg-mint-tint",
-          "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+          "hover:border-mint-line hover:bg-mint-tint hover:text-mint active:bg-mint-tint",
         )}
       >
         <PlusIcon size={16} />

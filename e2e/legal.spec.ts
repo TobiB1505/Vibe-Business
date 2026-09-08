@@ -132,3 +132,74 @@ for (const path of PAGES) {
     });
   });
 }
+
+/**
+ * A link inside a sentence is a box now (UI-29, treatment B), and a box in
+ * running text has exactly one way to fail: it cannot break across lines.
+ *
+ * `inline-flex` would push the paragraph sideways at 390px instead of
+ * wrapping; `inline` with `box-decoration-clone` wraps and gives each fragment
+ * its own rounded ends. That difference is invisible in the source and
+ * invisible on a laptop, which is why it is measured here and at a phone
+ * width, on the longest prose link the product actually has.
+ */
+test.describe("a link in a sentence wraps like a word", () => {
+  for (const [name, width] of [
+    ["a phone", 390],
+    ["a laptop", 1280],
+  ] as const) {
+    test(`stays inside its paragraph on ${name}`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/terms");
+      await page.evaluate(() => document.fonts.ready);
+
+      /*
+       * The mechanism, not a symptom. The first version of this measured
+       * whether any prose link on the page overflowed its paragraph — and
+       * passed with `inline-flex` put back, because no link on `/terms`
+       * happens to be long enough to reach the edge. A guard that only fires
+       * on a page whose copy is long enough is a guard that depends on the
+       * copy.
+       *
+       * `display` and `box-decoration-break` are what actually decide whether
+       * a box in a sentence can break across lines, so they are what is
+       * asserted. The overflow check stays underneath as the real-world half.
+       */
+      const shape = await page.evaluate(() => {
+        const link = document.querySelector("main p a") as HTMLElement;
+        const style = getComputedStyle(link);
+        return {
+          display: style.display,
+          // Chromium implements only the prefixed property, and reports the
+          // unprefixed one as its initial `slice` however the element is
+          // styled — so reading that one first says "slice" forever.
+          decoration: [
+            style.getPropertyValue("-webkit-box-decoration-break"),
+            style.getPropertyValue("box-decoration-break"),
+          ],
+        };
+      });
+
+      expect(shape.display, "a prose link cannot wrap: it is a flex box").toBe("inline");
+      expect(
+        shape.decoration.includes("clone"),
+        `a wrapped fragment loses its padding and its corners (${shape.decoration.join("/")})`,
+      ).toBe(true);
+
+      const overflow = await page.evaluate(() => {
+        const links = [...document.querySelectorAll("main p a")];
+        return links
+          .map((link) => {
+            const paragraph = link.closest("p")!;
+            return Math.round(
+              link.getBoundingClientRect().right - paragraph.getBoundingClientRect().right,
+            );
+          })
+          .filter((over) => over > 1);
+      });
+
+      expect(overflow, "a prose link runs past its own paragraph").toEqual([]);
+      await expectNoHorizontalOverflow(page);
+    });
+  }
+});

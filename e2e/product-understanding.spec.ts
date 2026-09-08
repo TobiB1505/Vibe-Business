@@ -121,7 +121,14 @@ test.describe("the project shell owns project context", () => {
       locator.evaluate((node) => {
         const style = getComputedStyle(node);
         return {
-          fill: style.backgroundColor,
+          /*
+           * Colour *and* image. Since UI-29 the pill's ground is a colour with
+           * a wash over it, and hover moves the wash rather than the colour —
+           * so a check that read `backgroundColor` alone reported "the hover
+           * does nothing" about a hover that plainly does something. What is
+           * being asserted is that the paint changes; the paint is both.
+           */
+          fill: `${style.backgroundColor} ${style.backgroundImage}`,
           edge: style.borderTopColor,
           radius: style.borderTopLeftRadius,
           height: Math.round(node.getBoundingClientRect().height),

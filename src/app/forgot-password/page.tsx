@@ -3,6 +3,7 @@ import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
 import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { ForgotPasswordForm } from "./forgot-password-form";
 import type { Metadata } from "next";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Reset your password",
@@ -28,7 +29,7 @@ export default async function ForgotPasswordPage({
     <AuthShell>
       <AuthHeading title="Reset your password">
         Remembered it?{" "}
-        <Link href="/login" className="text-mint hover:text-mint-hover rounded-inline">
+        <Link href="/login" className={proseLinkClasses()}>
           Back to sign in
         </Link>
       </AuthHeading>

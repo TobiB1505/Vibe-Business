@@ -76,9 +76,12 @@ export function BuyCreditPackForm({
           <p className="text-fg font-semibold tabular-nums">
             {credits} Credits
           </p>
-          <p className="text-fg-muted mt-1 text-body">
-            <span>{price}</span> one time
-          </p>
+          {/*
+            The price moved into the button (UI-29, treatment B). It was here
+            *and* two hundred pixels to the right; a price printed twice is a
+            price somebody reads once and presses the other one.
+          */}
+          <p className="text-fg-muted mt-1 text-body">one time</p>
         </div>
         {disabled ? (
           <button
@@ -90,7 +93,7 @@ export function BuyCreditPackForm({
           </button>
         ) : (
           <SubmitButton variant="secondary" pendingLabel="Opening…">
-            Buy
+            Buy · <span className="tabular-nums">{price}</span>
             <ArrowRightIcon size={14} />
           </SubmitButton>
         )}

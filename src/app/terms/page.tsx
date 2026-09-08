@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Terms",
@@ -132,7 +133,7 @@ export default function TermsPage() {
         <p>
           These terms will change as the product does. The date at the top is when they last
           changed. See also the{" "}
-          <Link href="/privacy" className="text-mint hover:text-mint-hover">
+          <Link href="/privacy" className={proseLinkClasses()}>
             privacy notice
           </Link>
           .

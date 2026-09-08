@@ -7,6 +7,7 @@ import { LandingNova } from "@/components/marketing/landing-nova";
 import { LandingTrust } from "@/components/marketing/landing-trust";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { buttonClasses } from "@/components/ui/button";
+import { MarketingCta } from "@/components/marketing/marketing-cta";
 import {
   AgentIcon,
   ArrowRightIcon,
@@ -90,20 +91,17 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href="/signup" className={buttonClasses({ size: "marketing" })}>
+            <MarketingCta href="/signup" assurance="No credit card to start">
               <GithubIcon />
               Start with your GitHub repo
               <ArrowRightIcon size={17} />
-            </Link>
+            </MarketingCta>
             <Link href="#how" className={buttonClasses({ variant: "secondary", size: "marketing" })}>
               See how it works
             </Link>
           </div>
 
           <ul className="text-fg-muted flex flex-wrap justify-center gap-x-6 gap-y-3 text-caption">
-            <li className="flex items-center gap-2">
-              <CheckIcon size={15} /> No credit card to start
-            </li>
             <li className="flex items-center gap-2">
               <BranchIcon size={15} /> Your approval before merge
             </li>
@@ -388,9 +386,9 @@ export default function HomePage() {
               Bring the product you already built. Vibe will show you what matters next.
             </p>
           </div>
-          <Link href="/signup" className={buttonClasses({ size: "marketing" })}>
+          <MarketingCta href="/signup" assurance="No credit card to start">
             Start for free <ArrowRightIcon size={17} />
-          </Link>
+          </MarketingCta>
         </div>
       </section>
     </MarketingShell>

@@ -4,6 +4,7 @@ import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
 import { getSession } from "@/modules/auth/session";
 import { ResetPasswordForm } from "./reset-password-form";
 import type { Metadata } from "next";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Choose a new password",
@@ -31,7 +32,7 @@ export default async function ResetPasswordPage() {
     <AuthShell>
       <AuthHeading title="Set a new password">
         Changed your mind?{" "}
-        <Link href="/app" className="text-mint hover:text-mint-hover rounded-inline">
+        <Link href="/app" className={proseLinkClasses()}>
           Back to Vibe
         </Link>
       </AuthHeading>

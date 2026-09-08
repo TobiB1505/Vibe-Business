@@ -112,13 +112,21 @@ export type ButtonSize = "normal" | "marketing";
  * warning is not washed grey.
  */
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
+  // `active:from-sheen-sink` — the light does not merely stop rising, it goes
+  // *under*: the top of the face darkens by the amount the bottom already is.
+  // Found by a guard, not by looking: `primary` and `secondary` had no colour
+  // press at all, so a finger on "Buy Credits" was answered by the 1px
+  // transform alone — which `prefers-reduced-motion` switches off, leaving
+  // nothing.
   primary:
     "bg-mint bg-gradient-to-b from-sheen-lift to-sheen-sink text-mint-ink font-bold " +
-    "shadow-mint-sheen hover:from-sheen-lift-strong hover:shadow-mint-sheen-strong",
+    "shadow-mint-sheen hover:from-sheen-lift-strong hover:shadow-mint-sheen-strong " +
+    "active:from-sheen-sink active:shadow-mint-sheen",
   secondary:
     "bg-surface-hover bg-gradient-to-b from-sheen-soft to-transparent text-fg-body " +
     "border border-line-strong shadow-sheen " +
-    "hover:from-sheen-soft-strong hover:text-fg hover:shadow-sheen-strong",
+    "hover:from-sheen-soft-strong hover:text-fg hover:shadow-sheen-strong " +
+    "active:bg-surface-pressed",
   // A resting container, then hover, then a press that is a visible step past
   // it. A pointer gets three states and a finger gets two, and the last one is
   // the only feedback touch ever receives.

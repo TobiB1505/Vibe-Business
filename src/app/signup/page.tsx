@@ -28,7 +28,7 @@ export default async function SignupPage({
     <AuthShell>
       <AuthHeading title="Create account">
         Already have an account?{" "}
-        <Link href="/login" className="text-mint hover:text-mint-hover rounded-inline">
+        <Link href="/login" className={proseLinkClasses()}>
           Sign in
         </Link>
       </AuthHeading>

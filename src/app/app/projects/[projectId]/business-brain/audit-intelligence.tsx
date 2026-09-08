@@ -20,6 +20,7 @@ import type {
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 import { ArrowRightIcon } from "@/components/ui/icons.generated";
 import { Button } from "@/components/ui/button";
+import { StandaloneLink } from "@/components/ui/text-link";
 import { figureClasses } from "@/components/ui/figure";
 import { RatingChip } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/states";
@@ -284,13 +285,12 @@ function DefaultPanel({
                         source: item.source,
                       }))}
                       action={
-                        <Link
-                          href={actionHref(priority, movesHref)}
-                          className="text-mint hover:text-mint-hover flex w-fit items-center gap-2 rounded-inline text-body transition-interactive"
-                        >
+                        // A link on its own line with its own mark — which is
+                        // what `StandaloneLink` is, hand-written here since
+                        // before it existed (UI-29).
+                        <StandaloneLink href={actionHref(priority, movesHref)}>
                           {actionLabel(priority.moveCount, hasMoves)}
-                          <ArrowIcon />
-                        </Link>
+                        </StandaloneLink>
                       }
                     />
                   </li>
