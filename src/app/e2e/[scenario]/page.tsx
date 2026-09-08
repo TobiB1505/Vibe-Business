@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
@@ -49,9 +50,13 @@ import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-open
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
 import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
-import { NovaRoom } from "@/components/nova/nova-room";
+import { NOVA_THREAD_SURFACE, NovaRoom } from "@/components/nova/nova-room";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import { onboardingSteps } from "@/modules/onboarding/state";
+import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
+import { OnboardingAuditReveal } from "@/app/app/onboarding/[projectId]/audit-reveal";
+import { FirstMoveDecision } from "@/app/app/onboarding/[projectId]/first-move-decision";
+import { NovaMoveButton } from "@/components/nova/nova-move";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -72,6 +77,7 @@ import {
   OPENING_WALKTHROUGH_SCENARIO,
   SHIPPED_OPENING_SCENARIO,
   SHIPPED_FIRST_RUN_SCENARIO,
+  ONBOARDING_BLOCKS_SCENARIO,
   ONBOARDING_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
@@ -401,6 +407,80 @@ export default async function E2eScenarioPage({
             ]}
             replay
           />
+        </div>
+      </StudyShell>
+    );
+  }
+
+  if (scenario === ONBOARDING_BLOCKS_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <div className="mx-auto flex w-full max-w-[76rem] flex-col gap-8 px-5 py-7 sm:px-8 sm:py-10">
+          {/*
+            Setup's blocks with the shipped components inside them, at the
+            thread's own width, so what is reviewed is the block *and* its
+            body — which is where every one of these went wrong: a panel
+            inside a panel, a poster heading under a frame that already had
+            one, a control a level deeper than every other control.
+
+            The bodies bind real Server Actions. Pressing does nothing useful
+            in a fixture and is not the point; the point is that nobody had
+            ever seen these three on a screen.
+          */}
+          <BlockCase title="audit_needs_user">
+            <NovaOnboardingThread
+              state="audit_needs_user"
+              tone="waiting"
+              blockLabel="Needs your answer"
+              block={
+                <NeedsUserPanel
+                  projectId="project_e2e"
+                  question={E2E_NEEDS_USER_SCENARIOS.needs_user_first_customer()}
+                  presentation="block"
+                />
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_reveal">
+            <NovaOnboardingThread
+              state="audit_reveal"
+              blockLabel="Business audit"
+              block={<OnboardingAuditReveal audit={E2E_AUDIT_SCENARIOS["audit-synthesis"]()} />}
+              control={<NovaMoveButton label="Show me where to start" />}
+            />
+          </BlockCase>
+
+          <BlockCase title="first_move">
+            <NovaOnboardingThread
+              state="first_move"
+              blockLabel="Where I would start"
+              block={
+                <div className="flex flex-col gap-4">
+                  <h2 className="text-fg text-title font-semibold">Give people a way to pay</h2>
+                  <p className="text-fg-prose leading-relaxed">
+                    There is no pricing page and no checkout anywhere on the live product.
+                  </p>
+                </div>
+              }
+              control={
+                <FirstMoveDecision
+                  projectId="project_e2e"
+                  opportunityId="opportunity_e2e"
+                  balance={null}
+                  skip={
+                    <button
+                      type="button"
+                      className="text-fg-secondary hover:text-fg transition-interactive rounded-sm text-sm underline underline-offset-4"
+                    >
+                      Go to my workspace
+                    </button>
+                  }
+                />
+              }
+            />
+          </BlockCase>
         </div>
       </StudyShell>
     );
@@ -2062,5 +2142,23 @@ async function SlowPreparedChanges() {
       change={E2E_SCENARIOS.change_awaiting_approval()}
       planHref="/app/projects/project_e2e/plan"
     />
+  );
+}
+
+/**
+ * One block, with the state it belongs to written above it.
+ *
+ * The label is the `OnboardingState`, not a title — a reviewer looking at
+ * three blocks needs to know which branch of the page drew each one, and a
+ * friendly name would be one more piece of copy nobody wrote for a founder.
+ */
+function BlockCase({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <p className="text-label text-fg-meta font-mono tracking-[0.16em] uppercase">{title}</p>
+      {/* The thread's own floor, from the room rather than retyped — the
+          block sits on the ground it will sit on in the product. */}
+      <div className={NOVA_THREAD_SURFACE}>{children}</div>
+    </section>
   );
 }

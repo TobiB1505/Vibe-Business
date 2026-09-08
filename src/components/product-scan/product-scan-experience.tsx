@@ -1039,10 +1039,21 @@ export function ProductScanExperience({
       layout={!reduceMotion}
       transition={{ layout: { duration: 0.42, ease: [0.22, 1, 0.36, 1] } }}
       aria-labelledby="product-scan-title"
+      /*
+        Only the workspace draws a frame of its own.
+        
+        `block` never did. `onboarding` did, and had stopped being true: setup
+        renders this inside `NovaRenderBlock` now, so the panel sat inside a
+        panel — a border, a fill and a shadow four pixels in from another
+        border and fill. The variant still means what it always meant about
+        *behaviour* (the pause before this route refreshes on a completed run,
+        and the submit the flow ends on); it just no longer decides framing for
+        a caller that has already framed it.
+      */
       className={
-        variant === "block"
-          ? "relative overflow-hidden"
-          : "relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
+        variant === "workspace"
+          ? "relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
+          : "relative overflow-hidden"
       }
     >
       <p className="sr-only" aria-live="polite" aria-atomic="true">

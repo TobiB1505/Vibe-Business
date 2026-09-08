@@ -31,7 +31,7 @@ import { buildProductScanPresentation } from "@/modules/product-scan/presentatio
 import { AuditAnalyzing, AuditPreparing } from "../../projects/[projectId]/audit-lifecycle";
 import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
-import { completeOnboardingAction } from "./actions";
+import { completeOnboardingAction, revealAuditAndFindFirstMoveAction } from "./actions";
 import { NovaFirstRun } from "./nova-first-run";
 import { NovaOnboardingHeader } from "./nova-onboarding-header";
 import { NovaOpeningScreen } from "../../projects/[projectId]/nova/nova-opening-screen";
@@ -720,7 +720,11 @@ export default async function ProjectOnboardingPage({
               tone="waiting"
               blockLabel="Needs your answer"
               block={
-                <NeedsUserPanel projectId={projectId} question={onboarding.pausedAudit.question} />
+                <NeedsUserPanel
+                  projectId={projectId}
+                  question={onboarding.pausedAudit.question}
+                  presentation="block"
+                />
               }
             />
           )}
@@ -731,7 +735,14 @@ export default async function ProjectOnboardingPage({
               /* The reveal writes its own heading and its own reading. */
               blockNamesItself
               blockLabel="Business audit"
-              block={<OnboardingAuditReveal audit={revealedAudit.result} projectId={projectId} />}
+              block={<OnboardingAuditReveal audit={revealedAudit.result} />}
+              /* The Move, outside the block it acts on, like every other
+                 decision in the product. */
+              control={
+                <form action={revealAuditAndFindFirstMoveAction.bind(null, projectId)} noValidate>
+                  <NovaMoveButton type="submit" label="Show me where to start" />
+                </form>
+              }
             />
           )}
 

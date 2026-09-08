@@ -384,9 +384,22 @@ describe("the last screen offers the Move it just recommended", () => {
   it("offers planning as a priced control, not a sentence", () => {
     expect(PAGE).toContain("<FirstMoveDecision");
     expect(DECISION).toContain("startPlanAction");
-    // The price rides on the control, from the rate card in force.
-    expect(DECISION).toContain("<ActionBlock");
+    /*
+     * The price rides on the control, from the rate card in force — and the
+     * control is the Move, like every other decision in the thread. This read
+     * `<ActionBlock`, the shape the Move replaced everywhere else, which left
+     * setup ending on a different kind of button from the one it had used all
+     * the way down.
+     */
+    expect(DECISION).toContain("<NovaMoveButton");
     expect(DECISION).toContain('operation="action_plan"');
+    expect(DECISION).not.toContain("<ActionBlock");
+  });
+
+  /* And the consequence `ActionBlock` used to carry is still said, before the
+     press rather than after it. */
+  it("says what planning does before it is pressed", () => {
+    expect(DECISION).toMatch(/Nothing is changed in your product by planning/);
   });
 
   it("never defaults a replan on", () => {

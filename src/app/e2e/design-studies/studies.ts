@@ -316,6 +316,22 @@ export const SHIPPED_OPENING_SCENARIO = "study-opening-shipped";
 export const SHIPPED_FIRST_RUN_SCENARIO = "study-first-run-shipped";
 
 /**
+ * Setup's render blocks, with the real components inside them.
+ *
+ * `study-onboarding` reviews the ten sentences and *names* the component that
+ * fills each block, on the argument that every one of them needs a live
+ * project. That is true of some of them and was never true of all: a paused
+ * question, a finished audit and the first Move take props a fixture can build,
+ * and those three are exactly where a component brought its own frame into
+ * Nova's.
+ *
+ * So this mounts them. It is the same move that caught the hydration failure
+ * and the dissolving stages — put the shipped component on a page rather than
+ * a picture of it — applied to the half of setup nobody had looked at.
+ */
+export const ONBOARDING_BLOCKS_SCENARIO = "study-onboarding-blocks";
+
+/**
  * Setup, all ten states at once.
  *
  * Same argument as `RAIL_SCENARIO` and the shipped opening: a state of
