@@ -2,6 +2,8 @@ import { ONBOARDING_STATES, type OnboardingState } from "@/modules/onboarding/st
 import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
 import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
+import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import { Moves } from "./elements";
 import type { Study } from "./studies";
 
@@ -175,6 +177,31 @@ export function StudyOnboarding({ study }: { study: Study }) {
       </div>
 
       <TheRoom panel={panel} />
+
+      {/*
+        The one thing she asks before setup, in the room the opening just
+        built. `replay` so pressing records nothing — this screen exists once
+        per project and only for a founder who has just met her, so the lab is
+        the only place it can be looked at.
+      */}
+      <section className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-label text-fg-meta font-mono tracking-[0.16em] uppercase">
+            Before the first step
+          </p>
+          <p className="study-measure text-ui text-fg-body">
+            She has said who she is. This offers to walk through how a change reaches a default
+            branch — which is what somebody wants before handing over a repository, not after.
+          </p>
+        </div>
+        <div className={`p-5 max-sm:p-4 ${panel}`}>
+          <NovaFirstRun
+            projectId="project_e2e"
+            entries={buildNovaFirstRunFeed("explain_workflow")}
+            replay
+          />
+        </div>
+      </section>
 
       <div className={`flex flex-col divide-y divide-line-1 ${panel}`}>
         {ONBOARDING_STATES.map((state) => (

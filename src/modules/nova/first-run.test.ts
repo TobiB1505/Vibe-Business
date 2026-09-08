@@ -4,7 +4,7 @@ import { checkedValues } from "@/modules/operations/migration-test-support";
 
 import { findCausalClaims } from "../business-measurement/causality";
 import { ONBOARDING_STATES } from "../onboarding/state";
-import type { OnboardingState } from "../onboarding/state";
+
 import { NOVA_ACTION_META } from "./actions";
 import {
   NOVA_WORKFLOW_STATUSES,
@@ -53,17 +53,30 @@ describe("the status vocabulary", () => {
 });
 
 describe("where the first run has got to", () => {
-  it("says nothing at all before there is a source", () => {
-    expect(deriveNovaFirstRun(facts({ onboardingState: "connect_source" }))).toBe("before_source");
+  /**
+   * Before the first setup step, not after it.
+   *
+   * This asserted the opposite: `connect_source` short-circuited to
+   * `before_source` and Nova said nothing, on the argument that an
+   * introduction over an empty project is hello about nothing.
+   *
+   * It reads the introduction as being about the project. It is about her —
+   * what she does, and that nothing reaches a default branch without the
+   * founder saying yes — and neither sentence needs a repository. The old
+   * order asked a stranger to connect their code before telling them who was
+   * asking.
+   */
+  it("introduces Nova before anything is connected", () => {
+    expect(deriveNovaFirstRun(facts({ onboardingState: "connect_source" }))).toBe("introduce");
   });
 
   /**
-   * Even for a project that somehow reached a later state without an
-   * introduction — the columns are new, so every existing project is exactly
-   * that. They get the introduction wherever they are rather than never.
+   * And wherever else a project happens to be — the columns are new, so an
+   * existing project can be at any state without an introduction. They get it
+   * where they are rather than never.
    */
-  it("introduces Nova once a source exists, whatever else has happened", () => {
-    for (const onboardingState of ONBOARDING_STATES.filter((s) => s !== "connect_source")) {
+  it("introduces Nova whatever else has happened", () => {
+    for (const onboardingState of ONBOARDING_STATES) {
       expect(deriveNovaFirstRun(facts({ onboardingState })), onboardingState).toBe("introduce");
     }
   });
@@ -94,33 +107,44 @@ describe("where the first run has got to", () => {
     expect(after).not.toBe("explain_workflow");
   });
 
-  it("never leaves the connect screen for an unconnected project", () => {
-    const everyCombination: NovaFirstRunFacts[] = NOVA_WORKFLOW_STATUSES.flatMap((status) =>
-      [null, INTRODUCED].map((introducedAt) =>
-        facts({
-          onboardingState: "connect_source" as OnboardingState,
-          novaIntroducedAt: introducedAt,
-          novaWorkflowStatus: status,
-        }),
+  /**
+   * The onboarding state no longer gates her own two positions at all.
+   *
+   * It stays on the facts because `handoff` is still the answer for a project
+   * that has met her, and because a caller passing it is a caller that has
+   * already derived it — but no value of it can now silence the introduction.
+   */
+  it("lets no onboarding state suppress the first run", () => {
+    const everyCombination: NovaFirstRunFacts[] = ONBOARDING_STATES.flatMap((onboardingState) =>
+      NOVA_WORKFLOW_STATUSES.flatMap((status) =>
+        [null, INTRODUCED].map((introducedAt) =>
+          facts({
+            onboardingState,
+            novaIntroducedAt: introducedAt,
+            novaWorkflowStatus: status,
+          }),
+        ),
       ),
     );
 
     for (const combination of everyCombination) {
-      expect(deriveNovaFirstRun(combination)).toBe("before_source");
+      const position = deriveNovaFirstRun(combination);
+      const expected =
+        combination.novaIntroducedAt === null
+          ? "introduce"
+          : combination.novaWorkflowStatus === "unseen"
+            ? "explain_workflow"
+            : "handoff";
+
+      expect(position, combination.onboardingState).toBe(expected);
     }
   });
 });
 
 describe("what Nova says on her own two screens", () => {
-  const POSITIONS: NovaFirstRunPosition[] = [
-    "before_source",
-    "introduce",
-    "explain_workflow",
-    "handoff",
-  ];
+  const POSITIONS: NovaFirstRunPosition[] = ["introduce", "explain_workflow", "handoff"];
 
   it("says nothing where the screen is not hers", () => {
-    expect(buildNovaFirstRunFeed("before_source")).toEqual([]);
     expect(buildNovaFirstRunFeed("handoff")).toEqual([]);
   });
 

@@ -56,8 +56,6 @@ export type NovaFirstRunFacts = {
 };
 
 export type NovaFirstRunPosition =
-  /** Nova has nothing to say yet: there is no product to talk about. */
-  | "before_source"
   /** Nova has not introduced herself for this project. */
   | "introduce"
   /** Introduced, and the founder has not been offered the walkthrough. */
@@ -73,13 +71,30 @@ export type NovaFirstRunPosition =
  * everything else. The ranking in `focus.ts` is for afterwards, when a project
  * can be several things at once.
  *
- * `before_source` comes first and not last. Introducing Nova over an empty
- * project would be Nova saying hello about nothing — there is no repository,
- * no product and nothing she could describe, and the founder has one thing to
- * do that Nova cannot do for them.
+ * ## `before_source` was here, and it was the wrong way round
+ *
+ * It short-circuited on `connect_source` and returned nothing, on the argument
+ * that "introducing Nova over an empty project would be Nova saying hello
+ * about nothing — there is no repository, no product and nothing she could
+ * describe".
+ *
+ * That reads the introduction as being *about the project*, and it is not.
+ * It is about her: what she does, and that nothing reaches a default branch
+ * without the founder saying yes. Neither sentence needs a repository, and the
+ * first thing the old order did was ask a stranger to connect their code
+ * before telling them who was asking. The walkthrough is the same: *how a
+ * change gets from an idea to your default branch* is precisely what somebody
+ * wants before handing over the repository, not after.
+ *
+ * The opening's choreography settles it. The mark assembles, travels into the
+ * status row and the panel closes around it — Nova building the environment
+ * the whole of setup then happens in. That can only be first.
+ *
+ * So the cascade is now purely about her own two positions, and
+ * `onboardingState` no longer gates them. It stays on the facts because
+ * `handoff` is still the answer for a project that has met her.
  */
 export function deriveNovaFirstRun(facts: NovaFirstRunFacts): NovaFirstRunPosition {
-  if (facts.onboardingState === "connect_source") return "before_source";
   if (facts.novaIntroducedAt === null) return "introduce";
   if (facts.novaWorkflowStatus === "unseen") return "explain_workflow";
   return "handoff";
@@ -125,10 +140,9 @@ const WORKFLOW_STEPS = [
 /**
  * The feed for a first-run position, or nothing when the screen is not Nova's.
  *
- * `before_source` and `handoff` return an empty feed rather than a sentence,
- * and the route reads that as "render what you rendered before". An entry
- * saying "Nova has nothing to say" would be a screen element made of an
- * absence.
+ * `handoff` returns an empty feed rather than a sentence, and the route reads
+ * that as "render what you rendered before". An entry saying "Nova has nothing
+ * to say" would be a screen element made of an absence.
  */
 export function buildNovaFirstRunFeed(position: NovaFirstRunPosition): NovaEntry[] {
   if (position === "introduce") {

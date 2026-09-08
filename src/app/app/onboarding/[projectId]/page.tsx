@@ -34,6 +34,7 @@ import { OnboardingShell } from "../onboarding-shell";
 import { completeOnboardingAction } from "./actions";
 import { NovaFirstRun } from "./nova-first-run";
 import { NovaOnboardingHeader } from "./nova-onboarding-header";
+import { NovaOpeningScreen } from "../../projects/[projectId]/nova/nova-opening-screen";
 import { NovaRail } from "../../projects/[projectId]/nova/nova-rail";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { novaWorkingEntry } from "@/modules/nova/home-view";
@@ -96,6 +97,36 @@ export default async function ProjectOnboardingPage({
   });
   const firstRunEntries = buildNovaFirstRunFeed(firstRun);
 
+  /*
+   * The introduction is the choreography, not a screen with the same words on
+   * it (§O.6).
+   *
+   * `NovaOpeningScreen` is the one that assembles: the mark alone at full
+   * size, travelling into the status row while the panel closes around it.
+   * That is Nova building the environment the rest of setup happens in, which
+   * is why it comes before the first step rather than after it — and why the
+   * room it builds has to be the room that is still there on the next render.
+   *
+   * The same component the project route mounts for a project that finished
+   * setup without ever meeting her. One choreography, two entry points.
+   */
+  if (firstRun === "introduce") {
+    return (
+      <OnboardingShell
+        email={session.email}
+        state={onboarding.state}
+        projectName={onboarding.projectName}
+        canLeave
+      >
+        <NovaOpeningScreen
+          projectId={projectId}
+          productName={onboarding.projectName}
+          connected={onboarding.repository !== null}
+        />
+      </OnboardingShell>
+    );
+  }
+
   if (firstRunEntries.length > 0) {
     return (
       <OnboardingShell
@@ -104,7 +135,43 @@ export default async function ProjectOnboardingPage({
         projectName={onboarding.projectName}
         canLeave
       >
-        <NovaFirstRun projectId={projectId} entries={firstRunEntries} />
+        <div className="flex flex-col gap-6">
+          {/*
+            The room the opening just built, rather than a bare page under it.
+            The mark settled into this row a moment ago; a screen without it
+            would take back the thing the choreography was for.
+          */}
+          <NovaOnboardingHeader
+            state={onboarding.state}
+            projectId={projectId}
+            projectName={onboarding.projectName}
+            connected={onboarding.repository !== null}
+            operation={null}
+          />
+
+          <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+            <div className="max-lg:order-2">
+              <NovaRail
+                presence="listening"
+                seed={projectId}
+                working={null}
+                checklist={null}
+                /*
+                 * Empty, and not read for. This branch returns before the
+                 * page's read wave precisely so an introduction does not wait
+                 * on an audit stamp — and a project that has not been
+                 * introduced to Nova has nothing in its log worth a query.
+                 * `Earlier` renders nothing rather than a heading over a gap.
+                 */
+                activity={[]}
+              />
+            </div>
+
+            <div className="min-w-0 max-lg:order-1">
+              <NovaFirstRun projectId={projectId} entries={firstRunEntries} />
+            </div>
+          </div>
+        </div>
       </OnboardingShell>
     );
   }
