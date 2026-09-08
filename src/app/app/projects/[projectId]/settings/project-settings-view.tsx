@@ -78,13 +78,20 @@ export function ProjectSettingsView({
           id="founder-intent"
           level="section"
           padding="lg"
-          className="scroll-mt-32 flex flex-col gap-3"
+          /* `gap-5`: the intro sat two lines above the first question with
+             nothing between them, so the paragraph read as part of it. */
+          className="scroll-mt-32 flex flex-col gap-5"
         >
           <div className="flex flex-col gap-2">
             <h2 className="text-fg text-title font-semibold">What you told Vibe</h2>
+            {/*
+              One line. It was three clauses saying what the three questions
+              below now ask in their own words, which is how a section with
+              eighteen visible options became a wall of text.
+            */}
             <p className="text-fg-muted max-w-[65ch] text-body">
-              Vibe works out what your product is on its own. This is the part only you know — it
-              changes which problems Vibe puts first, and every field is optional.
+              Three things evidence cannot see. All optional, and they change which problems Vibe
+              puts first.
             </p>
           </div>
           <FounderIntentForm projectId={projectId} intent={founderIntent} />

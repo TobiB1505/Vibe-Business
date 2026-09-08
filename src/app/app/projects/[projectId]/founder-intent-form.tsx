@@ -128,7 +128,7 @@ export function FounderIntentForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-col gap-6">
+    <form action={formAction} className="flex flex-col gap-5">
       <ChoicePills
         name="stage"
         question="Where is the product right now?"
@@ -150,14 +150,13 @@ export function FounderIntentForm({
       <ChoicePills
         name="primaryGoal"
         question="What are you working toward next?"
-        hint="This is the one that changes which problems Vibe puts first."
         options={GOAL_OPTIONS}
         value={goal}
         onChange={setGoal}
         disabled={pending}
       />
 
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 pt-1">
         <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Saving…" : "Save"}
         </Button>

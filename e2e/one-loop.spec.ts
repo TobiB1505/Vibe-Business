@@ -486,6 +486,13 @@ test.describe("the loop survives a phone", () => {
       page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
     ).toBeVisible();
     await expect(page.getByText("A decision nobody can see", { exact: false })).toBeVisible();
+
+    // The carousel is still travelling when the new heading appears, and a
+    // sliding track is momentarily wider than its viewport. Measured: 7px
+    // under a full parallel run, 0 in isolation three times. `settledBox`
+    // exists in this file for exactly this — waiting for the movement to stop
+    // rather than for the assertion to be lucky.
+    await settledBox(page.getByTestId("active-move"));
     await expectNoHorizontalOverflow(page);
   });
 

@@ -64,17 +64,52 @@ test.describe("project settings", () => {
     }
   });
 
+  /**
+   * The defect was two paragraphs opening with the same sentence, in two
+   * files, so neither reader saw it. Written as a property rather than as one
+   * string: UI-25 cut the intro that duplicated the questions, and a guard
+   * pinned to a sentence that no longer exists asserts nothing about the next
+   * duplicate.
+   */
   test("says each thing once", async ({ page }) => {
     await open(page, CONNECTED);
 
-    const opener = "Vibe works out what your product is on its own";
-    const count = await page.evaluate(
-      (text: string) =>
-        [...document.querySelectorAll("main p")].filter((n) => (n.textContent ?? "").includes(text))
-          .length,
-      opener,
+    const paragraphs = await page.evaluate(() =>
+      [...document.querySelectorAll("main p")]
+        .map((n) => (n.textContent ?? "").trim())
+        .filter((text) => text.length > 40),
     );
-    expect(count, "the same sentence is printed twice").toBe(1);
+
+    expect(paragraphs.length, "nothing to compare").toBeGreaterThan(2);
+    expect(new Set(paragraphs).size, "a paragraph is printed twice").toBe(paragraphs.length);
+  });
+
+  /**
+   * The founder's report on the first attempt: *"die Fragen sind viel zu klein
+   * … unübersichtlicher als davor"*. The questions were `text-body`, the same
+   * size as the eighteen answers under them, and the first fix reached for
+   * `text-ui` — which is 0.8125rem against body's 0.875rem, so it made them
+   * smaller.
+   */
+  test("asks its questions louder than it answers them", async ({ page }) => {
+    await open(page, CONNECTED);
+
+    const sizes = await page.evaluate(() => {
+      const legend = [...document.querySelectorAll("legend")].find((n) =>
+        (n.textContent ?? "").includes("Where is the product"),
+      ) as HTMLElement;
+      const pill = legend
+        .closest("fieldset")!
+        .querySelector("[role='radiogroup'] label") as HTMLElement;
+      return {
+        question: parseFloat(getComputedStyle(legend).fontSize),
+        answer: parseFloat(getComputedStyle(pill).fontSize),
+      };
+    });
+
+    expect(sizes.question, "the question is not larger than its answers").toBeGreaterThan(
+      sizes.answer,
+    );
   });
 
   test("puts both sharp controls in the danger zone, and neither in a card", async ({ page }) => {

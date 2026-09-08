@@ -64,7 +64,16 @@ export function ChoicePills<Value extends string>({
   const labelId = useId();
 
   return (
-    <fieldset className="flex min-w-0 flex-col gap-2.5" disabled={disabled}>
+    <fieldset
+      className={cn(
+        "flex min-w-0 flex-col gap-2.5",
+        // A rule between the groups, so three questions read as three blocks
+        // rather than as one column of text with pills in it. The first is
+        // flush with the paragraph above it and needs no line of its own.
+        "border-line-1 [&:not(:first-of-type)]:border-t [&:not(:first-of-type)]:pt-5",
+      )}
+      disabled={disabled}
+    >
       {/*
         Beside the question, not at the far edge of the card.
 
@@ -74,7 +83,18 @@ export function ChoicePills<Value extends string>({
         zone.
       */}
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <legend id={labelId} className="text-fg-body text-body font-medium">
+        {/*
+          A step above the answers, not level with them — and measured, not
+          guessed.
+
+          It was `text-body font-medium`: the same size as the eighteen pill
+          labels under it, so the questions read as three more lines in a wall
+          rather than as the structure of the section. The first attempt at
+          fixing that used `text-ui`, which is **0.8125rem against body's
+          0.875rem** — smaller. `text-lead` (0.9375rem) is the next step up and
+          the one that leaves `text-title` to the section heading above.
+        */}
+        <legend id={labelId} className="text-fg text-lead font-semibold">
           {question}
         </legend>
         {value !== null && (
