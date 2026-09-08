@@ -166,7 +166,7 @@ export function HomeStatus({
                 clicked (UI-S3 §6). */}
             <Link
               href={nextMove.kind === "move" ? planMoveHref(planHref, nextMove.id) : planHref}
-              className={buttonClasses({ variant: "primary", size: "sm" })}
+              className={buttonClasses({ variant: "primary" })}
             >
               {nextMove.kind === "move" ? "Review this move" : "Open Action Plan"}
             </Link>
@@ -176,7 +176,7 @@ export function HomeStatus({
               prepared" is already said by the count in the navigation.
             */}
             {view.preparedCount > 0 && (
-              <Link href={agentHref} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+              <Link href={agentHref} className={buttonClasses({ variant: "secondary" })}>
                 See what Vibe prepared
               </Link>
             )}

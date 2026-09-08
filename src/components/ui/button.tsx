@@ -60,7 +60,24 @@ import { cn } from "@/lib/utils/cn";
  * has been bitten by exactly that before — see `lg` below.
  */
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
-export type ButtonSize = "lg" | "md" | "sm" | "xs" | "icon";
+
+/**
+ * Contained variants take a size. The inline ones do not — see `SHAPE`.
+ */
+export type ContainedVariant = "primary" | "secondary";
+export type InlineVariant = "ghost" | "danger";
+
+/**
+ * Two, and they are the two the founder asked for: normal, and the one for
+ * marketing.
+ *
+ * The scale was `lg | md | sm` and the counting is why it is not any more:
+ * **md 80, sm 47, lg 3.** Three names for what is really "the button" and "the
+ * big one on the landing page", with a third that 47 call sites reached for
+ * because it was there. `sm` is gone and those call sites simply do not answer
+ * a size question now.
+ */
+export type ButtonSize = "normal" | "marketing";
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-mint text-mint-ink font-bold shadow-mint hover:bg-mint-hover",
@@ -81,7 +98,41 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
     "hover:bg-coral-tint active:bg-coral-pressed",
 };
 
+/**
+ * The shape follows the job, and only one of the three has a size question.
+ *
+ * A contained button is furniture and gets a size; the inline control is the
+ * thing inside a sentence, a header or a table row, and has the one height
+ * that fits there — 28px, a pill, holding a mark and a word. It was asked for
+ * 22 times before it was anything, which is how a second button system appears
+ * without anyone deciding to build one. An icon-only control is a circle.
+ *
+ * That is why `size` is not a prop on a ghost: not because it is ignored
+ * there, but because there is nothing for it to answer.
+ */
+const SHAPE = {
+  /** Inside a sentence, a header, a row. `ghost` and `danger`. */
+  inline: "min-h-7 gap-1.5 rounded-full px-3 text-ui",
+  /**
+   * A mark and no word. `shrink-0` because these sit in flex headers beside
+   * text that will happily squeeze them.
+   */
+  icon: "size-8 shrink-0 rounded-full",
+} as const;
+
 const SIZE_CLASSES: Record<ButtonSize, string> = {
+  /*
+   * Measured, not picked. Both candidates were built and screenshotted:
+   * `normal` at the old `md` (44px) grew 47 dense controls and broke the
+   * chrome they sit in — "Manage connection" and the wallet pill each wrapped
+   * to two lines. At the old `sm` (40px) every one of those 47 stays pixel
+   * identical and the 77 defaults — mostly form submits — come in by 4px,
+   * which "Save" survives while still reading as the action of its card.
+   *
+   * So the 47 explicit `size="sm"` call sites were not cargo cult. They were
+   * the product telling us which of the two was normal.
+   */
+  normal: "rounded-nav gap-2 px-4 py-2.5 text-ui",
   /*
    * The marketing call to action, and it exists because three call sites were
    * already writing it: `` `${buttonClasses()} px-6 py-4 text-base` ``.
@@ -95,25 +146,11 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
    * generated, shipped, and invisible".
    *
    * `text-lead` rather than either: the intent was type a step larger than a
-   * medium button's, `text-base` names no Vibe step, and 15px is the step the
+   * normal button's, `text-base` names no Vibe step, and 15px is the step the
    * scale actually has there. So the CTA grows by one pixel and the class
    * that never applied is gone.
    */
-  lg: "rounded-nav gap-2 px-6 py-4 text-lead",
-  md: "rounded-nav gap-2 px-5 py-3 text-body",
-  sm: "rounded-nav gap-2 px-4 py-2.5 text-ui",
-  /**
-   * The control inside a sentence, a header or a table row: 28px tall, a pill,
-   * holding a mark and a word. Asked for 21 times before it was a size — which
-   * is how a whole second button system appears without anyone deciding to
-   * build one.
-   */
-  xs: "min-h-7 gap-1.5 rounded-full px-3 text-ui",
-  /**
-   * A mark and no word. `shrink-0` because these sit in flex headers beside
-   * text that will happily squeeze them.
-   */
-  icon: "size-8 shrink-0 rounded-full",
+  marketing: "rounded-nav gap-2 px-6 py-4 text-lead",
 };
 
 const BASE_CLASSES =
@@ -139,11 +176,25 @@ const BASE_CLASSES =
   "disabled:pointer-events-none disabled:border disabled:border-line-2 disabled:bg-surface-3 " +
   "disabled:text-fg-disabled disabled:shadow-none disabled:font-normal";
 
+/**
+ * The classes, separately from the component, for the 28 `<Link>` and `<span>`
+ * call sites that have no component to hang a prop on.
+ *
+ * `iconOnly` rather than a third size name: an icon-only control is not a
+ * smaller button, it is a button with no words — which is also why it is the
+ * one shape that has to carry an accessible name.
+ */
 export function buttonClasses({
   variant = "primary",
-  size = "md",
-}: { variant?: ButtonVariant; size?: ButtonSize } = {}): string {
-  return cn(BASE_CLASSES, VARIANT_CLASSES[variant], SIZE_CLASSES[size]);
+  size = "normal",
+  iconOnly = false,
+}: { variant?: ButtonVariant; size?: ButtonSize; iconOnly?: boolean } = {}): string {
+  const geometry = iconOnly
+    ? SHAPE.icon
+    : variant === "ghost" || variant === "danger"
+      ? SHAPE.inline
+      : SIZE_CLASSES[size];
+  return cn(BASE_CLASSES, VARIANT_CLASSES[variant], geometry);
 }
 
 /**
@@ -185,23 +236,38 @@ type CommonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
 };
 
 /**
- * `label` is required exactly where the control has no words, and impossible
- * everywhere else.
+ * Three branches, and each one is a shape rather than a preference.
  *
- * That requirement is the whole reason `IconButton` was a separate component,
- * and folding it into a size would have quietly dropped it: an icon-only
- * control with no accessible name is announced as "button", and the entire
- * category is icon-only. Expressed as a union so the compiler asks, rather than
- * as an optional prop with a fallback nobody reads.
+ * **A contained button** answers the size question, because it is furniture and
+ * the only question left is whether this is the marketing one.
+ *
+ * **An inline control** does not: `ghost` and `danger` are the thing inside a
+ * sentence, and `size` there would have nothing to answer. Expressed as
+ * `size?: never` rather than by ignoring it — a prop that is quietly dropped is
+ * how a system stops meaning what it says.
+ *
+ * **An icon-only control** must carry a name. That requirement is the whole
+ * reason `IconButton` was a separate component, and folding it in would have
+ * dropped it quietly: a control with no words and no `aria-label` is announced
+ * as "button", and the entire category is icon-only. The compiler asks for it
+ * here, keyed on the thing that is actually true — there are no children.
  */
 export type ButtonProps =
   | (CommonProps & {
-      size?: Exclude<ButtonSize, "icon">;
+      variant?: ContainedVariant;
+      size?: ButtonSize;
       label?: never;
       children: ReactNode;
     })
   | (CommonProps & {
-      size: "icon";
+      variant: InlineVariant;
+      size?: never;
+      label?: never;
+      children: ReactNode;
+    })
+  | (CommonProps & {
+      variant?: ButtonVariant;
+      size?: never;
       icon: ReactNode;
       /** What the control does, as a sentence a screen reader can read. */
       label: string;
@@ -212,7 +278,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
   const {
     className,
     variant = "primary",
-    size = "md",
+    size = "normal",
     busy,
     icon,
     label,
@@ -237,7 +303,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       type={type}
       aria-busy={busy || undefined}
       aria-label={label}
-      className={cn(buttonClasses({ variant, size }), className)}
+      className={cn(buttonClasses({ variant, size, iconOnly: children === undefined }), className)}
       {...rest}
     >
       {busy ? (

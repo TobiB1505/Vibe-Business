@@ -117,7 +117,7 @@ export default async function SettingsPage() {
             href="https://github.com/settings/installations"
             target="_blank"
             rel="noreferrer noopener"
-            className={buttonClasses({ variant: "secondary", size: "sm" })}
+            className={buttonClasses({ variant: "secondary" })}
           >
             Manage on GitHub
           </Link>
@@ -140,7 +140,7 @@ export default async function SettingsPage() {
             <button
               type="submit"
               className={cn(
-                buttonClasses({ variant: "secondary", size: "sm" }),
+                buttonClasses({ variant: "secondary" }),
                 "vibe-control shrink-0",
               )}
             >

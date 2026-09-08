@@ -259,7 +259,6 @@ export function ApprovalPanel({
               ref={openerRef}
               type="button"
               variant="secondary"
-              size="sm"
               onClick={() => setConfirming("revoke")}
               disabled={busy}
             >
@@ -291,7 +290,6 @@ export function ApprovalPanel({
               ref={openerRef}
               type="button"
               variant="primary"
-              size="sm"
               onClick={() => setConfirming("approve")}
               disabled={busy}
             >
@@ -312,7 +310,6 @@ export function ApprovalPanel({
               ref={openerRef}
               type="button"
               variant="primary"
-              size="sm"
               onClick={() => setConfirming("approve")}
               disabled={busy}
             >
@@ -330,7 +327,6 @@ export function ApprovalPanel({
             ref={openerRef}
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => setConfirming("approve")}
             disabled={busy}
           >

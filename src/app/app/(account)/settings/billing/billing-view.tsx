@@ -296,14 +296,14 @@ export function BillingView({
         )}
 
         <div className="border-line-2 flex flex-col gap-3 border-t pt-5 sm:flex-row sm:items-center">
-          <a href="#credit-packs" className={buttonClasses({ variant: "primary", size: "sm" })}>
+          <a href="#credit-packs" className={buttonClasses({ variant: "primary" })}>
             Buy Credits
             <PlusIcon size={16} />
           </a>
           {overview.plan.key !== "free" && stripeReady ? (
             <ManageBillingForm />
           ) : overview.plan.key === "free" ? (
-            <Link href="#plans" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+            <Link href="#plans" className={buttonClasses({ variant: "secondary" })}>
               View plans
               <ArrowRightIcon size={15} />
             </Link>
@@ -311,7 +311,7 @@ export function BillingView({
             <button
               type="button"
               disabled
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
+              className={buttonClasses({ variant: "secondary" })}
             >
               Management unavailable
             </button>

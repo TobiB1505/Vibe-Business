@@ -127,7 +127,6 @@ export function ChangeDiffSection({
       {!isCodeReview && (
         <Button
           variant="ghost"
-          size="xs"
           icon={
             <ChevronDownIcon
               size={14}

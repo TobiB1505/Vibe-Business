@@ -528,7 +528,7 @@ describe("the body and caption steps name what they replaced", () => {
  * and `--text-figure-*` names them now. The marketing CTAs were a third
  * button size written by hand — and half of it never applied, because `cn`
  * joins rather than merges and `text-body` won over the appended
- * `text-base`. `buttonClasses({ size: "lg" })` owns it.
+ * `text-base`. `buttonClasses({ size: "marketing" })` owns it.
  *
  * So they are named by file *with a count*. A file may keep exactly what it
  * has; one more makes this fail. That is what stops the allowlist from

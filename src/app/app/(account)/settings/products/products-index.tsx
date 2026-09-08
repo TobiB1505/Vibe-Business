@@ -158,7 +158,6 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
           action={
             <Button
               variant="ghost"
-              size="xs"
               onClick={() => {
                 setQuery("");
                 setFilter("all");

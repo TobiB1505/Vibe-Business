@@ -213,7 +213,7 @@ export function RepositoriesIndex({
         title="Repositories"
         description="Connect, review and manage the code behind your products."
         actions={
-          <Link href="/app/connect/github" className={buttonClasses({ size: "sm" })}>
+          <Link href="/app/connect/github" className={buttonClasses()}>
             <PlusIcon size={16} />
             Connect repository
           </Link>
@@ -255,7 +255,7 @@ export function RepositoriesIndex({
                 href="https://github.com/settings/installations"
                 target="_blank"
                 rel="noreferrer noopener"
-                className={buttonClasses({ variant: "secondary", size: "sm" })}
+                className={buttonClasses({ variant: "secondary" })}
               >
                 <SettingsIcon size={15} />
                 Manage connection
@@ -272,7 +272,7 @@ export function RepositoriesIndex({
           title="No repositories connected"
           description="Connect a GitHub repository to create a product and give Vibe the bounded context it needs."
           action={
-            <Link href="/app/connect/github" className={buttonClasses({ size: "sm" })}>
+            <Link href="/app/connect/github" className={buttonClasses()}>
               Connect GitHub
             </Link>
           }
@@ -531,7 +531,7 @@ export function RepositoriesIndex({
               title="No matching repositories"
               description="Try another repository, product or branch name, or reset the visibility filter."
               action={
-                <Button variant="ghost" size="xs" onClick={clearSearchAndFilters}>
+                <Button variant="ghost" onClick={clearSearchAndFilters}>
                   Clear search and filters
                 </Button>
               }

@@ -124,7 +124,7 @@ export function FocusCard({
             <div className="flex items-center gap-3">
               {/* Below the large mark's breakpoint the small one keeps the
                   identity present rather than dropping Nova on a phone. */}
-              <NovaPresence state={presence} seed={seed} size="sm" className="sm:hidden" />
+              <NovaPresence state={presence} seed={seed} className="sm:hidden" />
               <StatusPill tone={status.tone}>{status.word}</StatusPill>
             </div>
 

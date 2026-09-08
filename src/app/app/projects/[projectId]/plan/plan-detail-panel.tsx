@@ -873,7 +873,7 @@ export function PlanDetailPanel({
         <Disclosure label="Plan options" defaultOpen={planIsStale}>
           <form action={formAction} className="flex flex-wrap items-center gap-3">
             <input type="hidden" name="force" value="true" />
-            <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
+            <Button type="submit" variant="secondary" disabled={pending} busy={pending}>
               {pending ? "Starting…" : "Replan this move"}
             </Button>
             <CreditPrice operation="action_plan" />

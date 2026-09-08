@@ -101,7 +101,6 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
     <div className="flex flex-col items-start gap-2">
       <Button
         variant="danger"
-        size="xs"
         ref={openerRef}
         type="button"
         icon={<DeleteIcon size={14} />}

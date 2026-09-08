@@ -71,7 +71,6 @@ export function AgentStartAction({
       <Button
         type="submit"
         variant={variant}
-        size="md"
         disabled={pending}
         busy={pending}
         className="w-full justify-center"

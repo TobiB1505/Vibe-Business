@@ -107,11 +107,10 @@ export function ConsentBanner() {
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {choosing ? (
             <>
-              <Button size="sm" onClick={() => save(draft)} data-testid="consent-save">
+              <Button onClick={() => save(draft)} data-testid="consent-save">
                 Save choices
               </Button>
               <Button
-                size="sm"
                 variant="secondary"
                 onClick={() => setChoosing(false)}
                 data-testid="consent-back"
@@ -127,7 +126,6 @@ export function ConsentBanner() {
                 the button that changes nothing should not be the loud one.
               */}
               <Button
-                size="sm"
                 variant="secondary"
                 onClick={() => save(REJECT_ALL)}
                 data-testid="consent-reject"
@@ -135,7 +133,6 @@ export function ConsentBanner() {
                 Reject all
               </Button>
               <Button
-                size="sm"
                 variant="secondary"
                 onClick={() => save(ACCEPT_ALL)}
                 data-testid="consent-accept"
@@ -149,7 +146,6 @@ export function ConsentBanner() {
               */}
               <Button
                 variant="ghost"
-                size="xs"
                 onClick={() => setChoosing(true)}
                 data-testid="consent-choose"
                 className="sm:ml-auto"

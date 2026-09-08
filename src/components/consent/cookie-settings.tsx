@@ -44,17 +44,16 @@ export function CookieSettings() {
 
       <div className="border-line-2 flex flex-wrap items-center gap-3 border-t pt-5">
         <Button
-          size="sm"
           disabled={!dirty}
           onClick={() => apply(draft)}
           data-testid="cookie-save"
         >
           Save choices
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => apply(REJECT_ALL)}>
+        <Button variant="secondary" onClick={() => apply(REJECT_ALL)}>
           Reject all
         </Button>
-        <Button size="sm" variant="secondary" onClick={() => apply(ACCEPT_ALL)}>
+        <Button variant="secondary" onClick={() => apply(ACCEPT_ALL)}>
           Accept all
         </Button>
 

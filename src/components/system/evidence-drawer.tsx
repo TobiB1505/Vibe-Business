@@ -90,7 +90,6 @@ export function EvidenceDrawer({
           */}
           <Button
             variant="ghost"
-            size="icon"
             icon={<DismissIcon size={16} />}
             label="Close"
             onClick={onClose}
@@ -184,7 +183,6 @@ export function CitationCount({
       */}
       <Button
         variant="ghost"
-        size="xs"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}

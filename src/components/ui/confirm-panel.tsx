@@ -204,13 +204,12 @@ export function ConfirmPanel({
       )}
 
       <div className="flex gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
           {cancelLabel}
         </Button>
         <Button
           type={confirmType}
           variant="primary"
-          size="sm"
           onClick={onConfirm}
           disabled={pending || !phraseSatisfied}
           busy={pending}

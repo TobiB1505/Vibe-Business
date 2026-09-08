@@ -148,7 +148,7 @@ export function ProjectSwitcher({
             const selected = item.id === current.id;
             const row = (
               <>
-                <ProjectTile name={item.name} size="md" />
+                <ProjectTile name={item.name} />
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate text-body font-semibold">{item.name}</span>
                   {item.repositoryFullName !== undefined && (

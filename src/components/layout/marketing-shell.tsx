@@ -67,7 +67,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             >
               Sign in
             </Link>
-            <Link href="/signup" className={buttonClasses({ size: "sm" })}>
+            <Link href="/signup" className={buttonClasses()}>
               Get started
             </Link>
           </div>

@@ -275,7 +275,6 @@ function LiveViewDialog({
           </Button>
           <Button
             variant="ghost"
-            size="xs"
             icon={<DismissIcon size={14} />}
             onClick={onCancel}
             disabled={busy}

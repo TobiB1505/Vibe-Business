@@ -137,7 +137,6 @@ export function DeleteAccountSection({ state }: { state: ErasureViewState }) {
           <div>
             <Button
               variant="danger"
-              size="xs"
               ref={openerRef}
               icon={<DeleteIcon size={14} />}
               onClick={() => setConfirming(true)}

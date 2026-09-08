@@ -53,7 +53,7 @@ export default async function ProductsPage() {
         title="No products yet"
         description="Connect a repository you have already built. Vibe reads the product, scores the business around it, and shows you what to do next."
         action={
-          <Link href="/app/connect/github" className={buttonClasses({ size: "sm" })}>
+          <Link href="/app/connect/github" className={buttonClasses()}>
             Connect GitHub
           </Link>
         }
@@ -69,7 +69,7 @@ export default async function ProductsPage() {
           action={
             <Link
               href={`/app/onboarding/${unfinishedSetupProjectId}`}
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
+              className={buttonClasses({ variant: "secondary" })}
             >
               Continue setup
             </Link>

@@ -112,7 +112,6 @@ export function FounderIntentForm({
         />
         <Button
           variant="ghost"
-          size="xs"
           icon={<EditIcon size={14} />}
           onClick={() => {
             // Back to what is saved, so a cancelled edit leaves nothing behind.
@@ -164,7 +163,6 @@ export function FounderIntentForm({
         {!empty && (
           <Button
             variant="ghost"
-            size="xs"
             icon={<DismissIcon size={14} />}
             onClick={() => setEditing(false)}
           >

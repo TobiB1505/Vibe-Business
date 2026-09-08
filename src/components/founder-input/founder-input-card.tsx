@@ -211,7 +211,6 @@ export function FounderInputCard({
           {request.recommendation && (
             <Button
               variant="ghost"
-              size="xs"
               onClick={() => {
                 setSelectedChoice("recommendation");
                 setCustomOpen(false);
@@ -320,7 +319,6 @@ export function FounderInputCard({
           <Button
             type="button"
             variant="secondary"
-            size="sm"
             disabled={pending}
             onClick={() => setCustomOpen(true)}
             className="self-start"

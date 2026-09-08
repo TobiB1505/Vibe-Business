@@ -48,7 +48,6 @@ export function ProductionUrlForm({
         </StandaloneLink>
         <Button
           variant="ghost"
-          size="xs"
           icon={<EditIcon size={14} />}
           onClick={() => setEditing(true)}
         >
@@ -75,7 +74,6 @@ export function ProductionUrlForm({
         {currentUrl !== null && (
           <Button
             variant="ghost"
-            size="xs"
             icon={<DismissIcon size={14} />}
             onClick={() => setEditing(false)}
           >

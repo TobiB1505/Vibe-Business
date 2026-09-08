@@ -616,7 +616,6 @@ export default async function ProjectOnboardingPage({
                   skip={
                     <Button
                       variant="ghost"
-                      size="xs"
                       type="submit"
                       formAction={completeOnboardingAction.bind(null, projectId)}
                       icon={<ArrowRightIcon size={14} />}

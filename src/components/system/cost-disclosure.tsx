@@ -71,7 +71,7 @@ export function CostDisclosure({
   // `md` because this is the price *at* a control — the size the composition
   // was decided at. `CreditPrice` stays `sm`: it renders in dense rows where
   // the price is one column among several rather than the thing being weighed.
-  return <CreditAmount credits={display.credits} size="md" className={className} />;
+  return <CreditAmount credits={display.credits} className={className} />;
 }
 
 /**

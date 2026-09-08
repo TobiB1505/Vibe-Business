@@ -162,7 +162,7 @@ export function ProfileView({
           {!github && (
             <Link
               href="/app/connect/github"
-              className={buttonClasses({ variant: "primary", size: "sm" })}
+              className={buttonClasses({ variant: "primary" })}
             >
               Connect GitHub
             </Link>

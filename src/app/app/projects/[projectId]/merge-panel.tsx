@@ -285,7 +285,6 @@ export function MergePanel({
             ref={openerRef}
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => setConfirming(true)}
             disabled={pending || !card.canMerge}
           >

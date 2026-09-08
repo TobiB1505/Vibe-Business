@@ -112,7 +112,7 @@ export function AgentReadyStage({
               {startAction ?? (
                 <Link
                   href={planHref}
-                  className={`${buttonClasses({ variant: "primary", size: "md" })} w-full justify-center`}
+                  className={`${buttonClasses({ variant: "primary" })} w-full justify-center`}
                 >
                   Choose a Move
                   <svg

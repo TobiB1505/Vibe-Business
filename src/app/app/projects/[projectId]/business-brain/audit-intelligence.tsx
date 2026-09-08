@@ -162,7 +162,6 @@ function PriorityCard({
         {lens && (
           <Button
             variant="ghost"
-            size="xs"
             onClick={() => onExplore(lens)}
             icon={<ArrowRightIcon size={14} />}
             className="w-fit"

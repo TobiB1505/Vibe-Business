@@ -209,7 +209,6 @@ export function BusinessImpactPanel({
           <Button
             type="button"
             variant="secondary"
-            size="sm"
             onClick={() => run(planMeasurementAction)}
             disabled={pending}
           >
@@ -243,7 +242,6 @@ export function BusinessImpactPanel({
             <Button
               type="button"
               variant="primary"
-              size="sm"
               onClick={() => run(startMeasurementAction)}
               disabled={pending}
             >

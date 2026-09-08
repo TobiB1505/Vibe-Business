@@ -68,7 +68,7 @@ export function WorkingStrip({
         nothing here depends on the mark being seen.
       */}
       <span className="flex items-center gap-2.5">
-        <NovaPresence state={presence} seed={seed} size="sm" />
+        <NovaPresence state={presence} seed={seed} />
         <span className={cn("text-ui font-semibold", statusToneText(status.tone))}>
           {status.word}
         </span>

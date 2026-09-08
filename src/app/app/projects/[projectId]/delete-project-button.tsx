@@ -119,7 +119,6 @@ export function DeleteProjectButton({
     <div className="flex flex-col items-start gap-2">
       <Button
         variant="danger"
-        size="xs"
         ref={openerRef}
         icon={<DeleteIcon size={14} />}
         onClick={() => setConfirming(true)}

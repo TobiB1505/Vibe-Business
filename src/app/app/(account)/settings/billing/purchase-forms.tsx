@@ -32,7 +32,7 @@ function SubmitButton({
       type="submit"
       disabled={pending}
       aria-busy={pending || undefined}
-      className={`${buttonClasses({ variant, size: "sm" })} ${className ?? ""}`}
+      className={`${buttonClasses({ variant })} ${className ?? ""}`}
     >
       {pending && (
         <span
@@ -84,7 +84,7 @@ export function BuyCreditPackForm({
           <button
             type="button"
             disabled
-            className={buttonClasses({ variant: "secondary", size: "sm" })}
+            className={buttonClasses({ variant: "secondary" })}
           >
             Unavailable
           </button>
@@ -151,7 +151,7 @@ export function StartPlanForm({
           <button
             type="button"
             disabled
-            className={buttonClasses({ variant: "secondary", size: "sm" })}
+            className={buttonClasses({ variant: "secondary" })}
           >
             Unavailable
           </button>

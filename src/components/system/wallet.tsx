@@ -114,7 +114,7 @@ export function Wallet({
           "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
         )}
       >
-        <CreditAmount credits={credits} size="sm" tone={low ? "low" : "default"} />
+        <CreditAmount credits={credits} tone={low ? "low" : "default"} />
       </Link>
 
       <Link

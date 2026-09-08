@@ -263,7 +263,7 @@ export function ReviewPanel({
                 href={branchUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className={buttonClasses({ variant: "secondary", size: "sm" })}
+                className={buttonClasses({ variant: "secondary" })}
               >
                 View code diff
               </a>

@@ -64,7 +64,7 @@ function AsControl({ open }: { open: boolean }) {
           screen reader, and a button inside one is two controls sharing a
           hit area.
         */}
-        <span className={buttonClasses({ variant: "ghost", size: "xs" })}>
+        <span className={buttonClasses({ variant: "ghost" })}>
           <ChevronDownIcon
             size={14}
             className="transition-transform duration-150 group-open:rotate-180"

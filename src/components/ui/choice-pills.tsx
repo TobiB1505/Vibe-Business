@@ -100,7 +100,6 @@ export function ChoicePills<Value extends string>({
         {value !== null && (
           <Button
             variant="ghost"
-            size="xs"
             icon={<DismissIcon size={13} />}
             onClick={() => onChange(null)}
             data-testid={`clear-${name}`}

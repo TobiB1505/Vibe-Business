@@ -452,7 +452,6 @@ export function PreviewPanel({
             <Button
               type="button"
               variant="secondary"
-              size="sm"
               onClick={stop}
               disabled={intent !== null}
             >
@@ -592,7 +591,6 @@ export function PreviewPanel({
             ref={openerRef}
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => setConfirming(true)}
             disabled={intent !== null}
           >

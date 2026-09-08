@@ -344,7 +344,7 @@ export function AgentMergeStage({
               target="_blank"
               rel="noreferrer"
               className={cn(
-                buttonClasses({ variant: "secondary", size: "sm" }),
+                buttonClasses({ variant: "secondary" }),
                 "justify-center",
               )}
             >

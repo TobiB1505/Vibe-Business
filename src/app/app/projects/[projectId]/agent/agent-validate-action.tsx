@@ -80,7 +80,6 @@ export function AgentValidateAction({
         <Button
           type="button"
           variant="primary"
-          size="md"
           disabled={running}
           busy={running}
           className="min-w-[11.5rem]"

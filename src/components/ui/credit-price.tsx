@@ -92,5 +92,5 @@ export function CreditPrice({
 
   // The coin, from here on. A price is the one line on a screen that means
   // money is about to move, and set in the interface face it said nothing.
-  return <CreditAmount credits={display.credits} size="sm" className={className} />;
+  return <CreditAmount credits={display.credits} className={className} />;
 }

@@ -61,7 +61,7 @@ export function Disclosure({
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <span className={buttonClasses({ variant: "ghost", size: "xs" })}>
+        <span className={buttonClasses({ variant: "ghost" })}>
           <ChevronDownIcon
             size={14}
             className="transition-transform duration-150 group-open:rotate-180"

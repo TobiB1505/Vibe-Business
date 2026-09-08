@@ -249,10 +249,47 @@ describe("a button says what it is", () => {
    * the entire category is icon-only.
    */
   it("cannot render a mark with no name", () => {
-    expect(SOURCE).toMatch(/size: "icon";[\s\S]*?label: string;/);
+    // Keyed on the thing that is actually true — no children — rather than on
+    // a size name, so the requirement cannot be sidestepped by picking a
+    // different size.
+    expect(SOURCE).toMatch(/icon: ReactNode;[\s\S]*?label: string;[\s\S]*?children\?: never;/);
+  });
+});
+
+describe("two sizes, and only where a size is a question", () => {
+  /**
+   * The scale was `lg | md | sm` — **md 80, sm 47, lg 3.** Three names for what
+   * is really "the button" and "the big one on the landing page", plus a third
+   * that 47 call sites reached for because it existed. The founder's answer was
+   * two: normal, and the marketing one.
+   */
+  it("offers exactly normal and marketing", () => {
+    const declared = [...block("SIZE_CLASSES").matchAll(/^ {2}(\w+):/gm)].map((m) => m[1]);
+    expect(declared).toEqual(["normal", "marketing"]);
+  });
+
+  it("leaves no call site asking for a size that is gone", () => {
     const offenders = PRODUCT.filter(({ text }) =>
-      buttonTags(text).some((tag) => tag.includes('size="icon"') && !/label=/.test(tag)),
+      buttonTags(text).some((tag) => /size="(sm|md|lg|xs|icon)"/.test(tag)),
     ).map(({ path }) => path);
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * A `ghost` has no size question to answer: it is the control inside a
+   * sentence and has the one height that fits there. Written as `size?: never`
+   * rather than by ignoring the prop — a prop that is quietly dropped is how a
+   * system stops meaning what it says.
+   */
+  it("does not offer a size to an inline control", () => {
+    expect(SOURCE).toMatch(/variant: InlineVariant;\s*\n\s*size\?: never;/);
+  });
+
+  it("keeps the inline shape out of the size scale", () => {
+    // The 28px pill and the 32px circle are shapes, not sizes. If either ends
+    // up in SIZE_CLASSES it becomes a third and a fourth answer to a question
+    // the founder answered with two.
+    const sizes = block("SIZE_CLASSES");
+    expect(sizes).not.toContain("rounded-full");
   });
 });

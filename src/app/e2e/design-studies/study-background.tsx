@@ -134,7 +134,7 @@ function GlassCard({ note }: { note: string }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className={buttonClasses({ variant: "ghost", size: "xs" })}>
+          <span className={buttonClasses({ variant: "ghost" })}>
             <ChevronDownIcon size={14} />2 sources
           </span>
           <span className="font-mono text-meta text-fg-meta">{note}</span>

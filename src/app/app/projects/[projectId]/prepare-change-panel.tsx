@@ -83,7 +83,7 @@ function ConfirmDialog({
             {pending ? "Starting…" : "Prepare change"}
           </Button>
         </form>
-        <Button variant="ghost" size="xs" icon={<DismissIcon size={14} />} onClick={onCancel}>
+        <Button variant="ghost" icon={<DismissIcon size={14} />} onClick={onCancel}>
           Cancel
         </Button>
       </div>
@@ -208,7 +208,7 @@ export function PrepareChangePanel({
           Vibe has not written anything to your repository. You can start again.
         </p>
         <form action={formAction}>
-          <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
+          <Button type="submit" variant="secondary" disabled={pending} busy={pending}>
             {pending ? "Starting…" : "Try again"}
           </Button>
         </form>
@@ -257,7 +257,6 @@ export function PrepareChangePanel({
           </Link>
           <Button
             variant="ghost"
-            size="xs"
             icon={<ChevronDownIcon size={14} />}
             onClick={() => loadDiff(preparedChangeId)}
           >

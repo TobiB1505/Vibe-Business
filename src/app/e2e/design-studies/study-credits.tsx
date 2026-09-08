@@ -180,7 +180,7 @@ const COMPOSITIONS: readonly Composition[] = [
             <span className="text-caption text-amber">
               Your monthly Credits are used up. Vibe didn&rsquo;t charge you.
             </span>
-            <button type="button" className={buttonClasses({ variant: "ghost", size: "xs" })}>
+            <button type="button" className={buttonClasses({ variant: "ghost" })}>
               <CreditCoin size={14} />
               Top up
             </button>

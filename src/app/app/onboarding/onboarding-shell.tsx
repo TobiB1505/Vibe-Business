@@ -61,7 +61,7 @@ export function OnboardingShell({
             {canLeave && <StandaloneLink href="/app">Back to your projects</StandaloneLink>}
             {email && <span className="text-fg-meta hidden text-caption sm:inline">{email}</span>}
             <form action={signOut}>
-              <Button variant="ghost" size="xs" type="submit" icon={<SignOutIcon size={14} />}>
+              <Button variant="ghost" type="submit" icon={<SignOutIcon size={14} />}>
                 Sign out
               </Button>
             </form>

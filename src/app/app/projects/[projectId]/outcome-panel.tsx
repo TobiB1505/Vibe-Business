@@ -228,7 +228,6 @@ function WindowClosed({
         <Button
           type="button"
           variant="secondary"
-          size="sm"
           onClick={onCheckAgain}
           disabled={pending}
           busy={pending}
@@ -328,7 +327,6 @@ export function OutcomePanel({
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={check}
             disabled={pending || !current.canVerify}
           >

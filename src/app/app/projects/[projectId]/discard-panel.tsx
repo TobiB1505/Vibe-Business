@@ -85,7 +85,7 @@ export function DiscardPanel({
         type="button"
         onClick={() => setConfirming(true)}
         disabled={pending}
-        className={`${buttonClasses({ variant: "secondary", size: "sm" })} self-start`}
+        className={`${buttonClasses({ variant: "secondary" })} self-start`}
       >
         {approved ? "Discard (withdraw approval first)" : "Discard this change"}
       </button>

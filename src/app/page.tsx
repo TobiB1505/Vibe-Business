@@ -76,7 +76,7 @@ export default function HomePage() {
             and never named the co-founder. Her own mark, and her name.
           */}
           <span className="text-fg-prose inline-flex items-center gap-2.5 rounded-full border border-line-strong bg-surface-2 py-1.5 pr-3.5 pl-2 font-mono text-[0.65rem] font-semibold tracking-[0.16em] uppercase">
-            <NovaPresence state="listening" seed="vibe" size="sm" />
+            <NovaPresence state="listening" seed="vibe" />
             Nova · your AI business co-founder
           </span>
 
@@ -90,12 +90,12 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <Link href="/signup" className={buttonClasses({ size: "lg" })}>
+            <Link href="/signup" className={buttonClasses({ size: "marketing" })}>
               <GithubIcon />
               Start with your GitHub repo
               <ArrowRightIcon size={17} />
             </Link>
-            <Link href="#how" className={buttonClasses({ variant: "secondary", size: "lg" })}>
+            <Link href="#how" className={buttonClasses({ variant: "secondary", size: "marketing" })}>
               See how it works
             </Link>
           </div>
@@ -388,7 +388,7 @@ export default function HomePage() {
               Bring the product you already built. Vibe will show you what matters next.
             </p>
           </div>
-          <Link href="/signup" className={buttonClasses({ size: "lg" })}>
+          <Link href="/signup" className={buttonClasses({ size: "marketing" })}>
             Start for free <ArrowRightIcon size={17} />
           </Link>
         </div>

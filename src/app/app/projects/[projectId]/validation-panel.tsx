@@ -329,7 +329,6 @@ export function ValidationPanel({
           <Button
             type="button"
             variant="secondary"
-            size="sm"
             onClick={() => validate(true)}
             disabled={pending}
           >
@@ -354,7 +353,6 @@ export function ValidationPanel({
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => validate(true)}
             disabled={pending}
           >
@@ -371,7 +369,6 @@ export function ValidationPanel({
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => validate(false)}
             disabled={pending}
           >
