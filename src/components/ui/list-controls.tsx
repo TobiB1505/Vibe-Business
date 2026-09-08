@@ -126,7 +126,20 @@ export function SortSelect<T extends string>({
     <label
       className={cn(
         "border-line-2 bg-field rounded-nav flex items-center gap-2 border px-3 py-2.5",
-        "focus-within:border-mint-line",
+        /*
+         * The ring, drawn on the label (UI-31).
+         *
+         * The `<select>` sets `outline-none` — it has to, or the native
+         * control paints its own box inside ours — and what replaced the
+         * global mint ring was `focus-within:border-mint-line`: a 1px border
+         * going from 8% white to **26% mint**. Measured with a real Tab press,
+         * that is the whole of the focus indicator, next to a
+         * `SegmentedControl` that draws a proper ring three pixels away.
+         *
+         * Same mechanism as that control, for the same reason: the element
+         * that takes focus is not the element a sighted user is looking at.
+         */
+        "has-[:focus-visible]:ring-mint has-[:focus-visible]:ring-2",
         className,
       )}
     >

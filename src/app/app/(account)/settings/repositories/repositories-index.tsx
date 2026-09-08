@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import {
-  ArrowRightIcon,
   BranchIcon,
   CodeIcon,
   LockIcon,
@@ -14,11 +13,14 @@ import {
   SearchIcon,
   SettingsIcon,
 } from "@/components/ui/dashboard-icons";
+import { DismissIcon, ExternalLinkIcon } from "@/components/ui/icons.generated";
+import { GithubMark } from "@/components/brand/provider-marks";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
+import { cn } from "@/lib/utils/cn";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import type { ConnectedRepository } from "@/modules/projects/account-repositories";
 import {
@@ -35,13 +37,6 @@ import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { Figure } from "@/components/ui/figure";
 import { EmptyState } from "@/components/ui/states";
 
-function GithubMark({ className }: { className?: string }) {
-  return (
-    <svg aria-hidden viewBox="0 0 24 24" className={className} fill="currentColor">
-      <path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.88c-2.78.6-3.37-1.18-3.37-1.18-.45-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.61.07-.61 1 .07 1.53 1.03 1.53 1.03.9 1.53 2.35 1.09 2.92.83.09-.65.35-1.09.64-1.34-2.22-.25-4.56-1.11-4.56-4.94 0-1.09.39-1.98 1.03-2.68-.1-.25-.45-1.27.1-2.64 0 0 .84-.27 2.75 1.02A9.55 9.55 0 0 1 12 6.8c.85 0 1.71.12 2.51.34 1.91-1.29 2.75-1.02 2.75-1.02.55 1.37.2 2.39.1 2.64.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85V21c0 .27.18.58.69.48A10 10 0 0 0 12 2Z" />
-    </svg>
-  );
-}
 
 function Metric({ value, label }: { value: number; label: string }) {
   return (
@@ -170,7 +165,6 @@ export function RepositoriesIndex({
   }, [pagination.page, requestedPage]);
 
   const privateCount = repositories.filter((repository) => repository.private).length;
-  const publicCount = repositories.length - privateCount;
   const isConnected = Boolean(githubLogin || repositories.length);
 
   function setFilter(value: RepositoryFilter) {
@@ -224,14 +218,19 @@ export function RepositoriesIndex({
         <div className="flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
           <div className="flex min-w-0 items-center gap-4">
             <span className="bg-fg text-app rounded-card flex size-14 shrink-0 items-center justify-center">
-              <GithubMark className="size-8" />
+              <GithubMark size={32} />
             </span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2.5">
+                {/*
+                  No "Connected" pill beside a heading that already says
+                  "GitHub connected" (UI-31). A status mark that repeats the
+                  words next to it is decoration, and this page has a real
+                  status vocabulary two inches below it.
+                */}
                 <h2 className="text-fg text-title font-semibold">
                   {isConnected ? "GitHub connected" : "Connect GitHub"}
                 </h2>
-                {isConnected && <StatusPill tone="success">Connected</StatusPill>}
               </div>
               <p className="text-fg-muted mt-1 text-body">
                 {githubLogin
@@ -244,18 +243,31 @@ export function RepositoriesIndex({
           </div>
 
           <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:flex sm:items-center">
+            {/*
+              Two numbers, and both are facts this page can compute.
+
+              It printed four. **Products** was `repositories.length` under a
+              second label — and the two part company the moment somebody
+              presses Disconnect, which this product's own project settings
+              offer and render ("No repository connected"). A project without a
+              repository produces no row here, so the count was never the
+              number of products; it was the number of repositories, said twice.
+
+              **Public** went for a duller reason: repositories minus private.
+              Three of the four numbers were one fact.
+            */}
+            <div className="flex items-center gap-6">
               <Metric value={repositories.length} label="Repositories" />
-              <Metric value={repositories.length} label="Products" />
               <Metric value={privateCount} label="Private" />
-              <Metric value={publicCount} label="Public" />
             </div>
             {isConnected && (
               <a
                 href="https://github.com/settings/installations"
                 target="_blank"
                 rel="noreferrer noopener"
-                className={buttonClasses({ variant: "secondary" })}
+                // `whitespace-nowrap`: it wrapped to two lines at 1440 and
+                // rendered 61px tall beside 40px controls.
+                className={cn(buttonClasses({ variant: "secondary" }), "whitespace-nowrap")}
               >
                 <SettingsIcon size={15} />
                 Manage connection
@@ -287,7 +299,10 @@ export function RepositoriesIndex({
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <label className="border-line-2 bg-field focus-within:border-mint-line rounded-nav flex min-w-0 items-center gap-2.5 border px-3.5 py-2.5 sm:w-64">
+              {/* The ring goes on the label, for the reason `SortSelect`
+                  records: the input carries `outline-none` and the border
+                  colour it swapped in is 26% alpha. */}
+              <label className="border-line-2 bg-field focus-within:border-mint-line has-[:focus-visible]:ring-mint has-[:focus-visible]:ring-2 rounded-nav flex min-w-0 items-center gap-2.5 border px-3.5 py-2.5 sm:w-64">
                 <SearchIcon size={16} className="text-fg-meta shrink-0" />
                 <span className="sr-only">Search repositories</span>
                 <input
@@ -316,9 +331,14 @@ export function RepositoriesIndex({
                       searchRef.current?.focus();
                     }}
                     aria-label="Clear repository search"
-                    className="text-fg-meta hover:text-fg rounded-inline px-1 text-base transition-interactive"
+                    // `DismissIcon`, not `×`. A text character takes the
+                    // font's weight instead of the icon frame's 1.5px and
+                    // sits on the baseline rather than the optical centre —
+                    // the defect the disclosure caret and `ArrowIcon` both
+                    // record, in a third file.
+                    className="text-fg-meta hover:text-fg rounded-inline transition-interactive shrink-0"
                   >
-                    ×
+                    <DismissIcon size={14} />
                   </button>
                 )}
               </label>
@@ -355,138 +375,77 @@ export function RepositoriesIndex({
 
           {pagination.items.length > 0 ? (
             <>
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[760px] border-collapse text-left">
-                  <thead>
-                    <tr className="text-fg-meta text-caption">
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Repository
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Product
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Connection
-                      </th>
-                      <th scope="col" className="px-5 py-3 font-medium">
-                        Connected
-                      </th>
-                      <th scope="col" className="w-16 px-5 py-3">
-                        <span className="sr-only">Open product</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagination.items.map((repository) => (
-                      <tr
-                        key={repository.projectId}
-                        className="border-line-2 hover:bg-surface-hover border-t transition-interactive"
-                      >
-                        <td className="px-5 py-4">
-                          <div className="flex min-w-0 items-center gap-3">
-                            <RepositoryTile repository={repository} />
-                            <div className="min-w-0">
-                              <a
-                                href={repository.htmlUrl}
-                                target="_blank"
-                                rel="noreferrer noopener"
-                                className="text-fg-body hover:text-mint block truncate text-body font-semibold transition-interactive"
-                              >
-                                {repository.name}
-                              </a>
-                              <span className="text-fg-meta block truncate font-mono text-meta">
-                                {repository.owner}/{repository.name}
-                              </span>
-                              {repository.accessRevokedAt && <AccessRevokedNotice />}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-5 py-4">
-                          <Link
-                            href={`/app/projects/${repository.projectId}`}
-                            className="text-fg-body hover:text-mint text-body font-medium transition-interactive"
-                          >
-                            {repository.projectName}
-                          </Link>
-                        </td>
-                        <td className="px-5 py-4">
-                          <div className="flex flex-col gap-1.5">
-                            <StatusPill tone={repository.accessRevokedAt ? "problem" : "neutral"}>
-                              {repository.accessRevokedAt
-                                ? "No access"
-                                : repository.private
-                                  ? "Private"
-                                  : "Public"}
-                            </StatusPill>
-                            <span className="text-fg-meta flex items-center gap-1.5 font-mono text-meta">
-                              <BranchIcon size={13} />
-                              {repository.defaultBranch}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="text-fg-muted px-5 py-4 text-body">
-                          {formatTimestamp(repository.connectedAt)}
-                        </td>
-                        <td className="px-5 py-4 text-right">
-                          <Link
-                            href={`/app/projects/${repository.projectId}`}
-                            aria-label={`Open ${repository.projectName}`}
-                            className="border-line-2 text-fg-muted hover:border-mint-line hover:text-mint rounded-nav inline-flex size-9 items-center justify-center border transition-interactive"
-                          >
-                            <ArrowRightIcon size={15} />
-                          </Link>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              {/*
+                One renderer (UI-31, treatment B).
 
-              <ul className="divide-line-2 divide-y md:hidden">
+                This was a `<table>` above `md` and a `<ul>` below — roughly a
+                hundred lines each, hidden from one another by breakpoint, and
+                already disagreeing about what a row contains: the table showed
+                the name and `owner/name` and carried its own open-arrow, the
+                list showed `fullName` and had neither.
+
+                A grid earns its columns when a reader compares values down
+                one, and nobody compares connection dates. What is left is a
+                sequence — mark, repository, product, branch, state, when — and
+                a sequence wraps, which is why the same row serves 390px and
+                1440px with no second implementation to keep in step.
+              */}
+              <ul className="divide-line-2 divide-y">
                 {pagination.items.map((repository) => (
-                  <li key={repository.projectId} className="p-5">
-                    <div className="flex items-start gap-3">
-                      <RepositoryTile repository={repository} />
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <a
-                              href={repository.htmlUrl}
-                              target="_blank"
-                              rel="noreferrer noopener"
-                              className="text-fg-body hover:text-mint block truncate text-body font-semibold"
-                            >
-                              {repository.fullName}
-                            </a>
-                            <Link
-                              href={`/app/projects/${repository.projectId}`}
-                              className="text-fg-muted hover:text-mint mt-1 block text-caption"
-                            >
-                              {repository.projectName}
-                            </Link>
-                          </div>
-                          <StatusPill tone={repository.accessRevokedAt ? "problem" : "neutral"}>
-                            {repository.accessRevokedAt
-                              ? "No access"
-                              : repository.private
-                                ? "Private"
-                                : "Public"}
-                          </StatusPill>
-                        </div>
-                        {repository.accessRevokedAt && (
-                          <div className="mt-2">
-                            <AccessRevokedNotice />
-                          </div>
-                        )}
-                        <div className="text-fg-meta mt-4 flex flex-wrap items-center justify-between gap-2 text-caption">
-                          <span className="flex items-center gap-1.5 font-mono">
-                            <BranchIcon size={13} />
-                            {repository.defaultBranch}
-                          </span>
-                          <span>{formatTimestamp(repository.connectedAt)}</span>
-                        </div>
-                      </div>
+                  <li
+                    key={repository.projectId}
+                    className="hover:bg-surface-hover transition-interactive flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5"
+                  >
+                    <RepositoryTile repository={repository} />
+
+                    <div className="flex min-w-0 flex-[1_1_16rem] flex-wrap items-baseline gap-x-2.5 gap-y-1">
+                      {/*
+                        The repository leaves the product, so it carries the
+                        turned arrow every other external link in Vibe does
+                        (UI-30). The name leads and the owner follows: at 390px
+                        the old title was `owner/name` truncated, which cut the
+                        identifying half and kept the half that is identical on
+                        every row.
+                      */}
+                      <a
+                        href={repository.htmlUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="text-fg-body hover:text-fg rounded-inline transition-interactive inline-flex min-w-0 items-center gap-1.5 text-body font-semibold"
+                      >
+                        <span className="truncate">{repository.name}</span>
+                        <ExternalLinkIcon size={13} className="text-fg-meta shrink-0" />
+                      </a>
+                      <Link
+                        href={`/app/projects/${repository.projectId}`}
+                        className="text-fg-muted hover:text-fg-body rounded-inline transition-interactive truncate text-caption"
+                      >
+                        {repository.projectName}
+                      </Link>
                     </div>
+
+                    <span className="text-fg-meta flex shrink-0 items-center gap-1.5 font-mono text-meta">
+                      <BranchIcon size={13} />
+                      {repository.defaultBranch}
+                    </span>
+
+                    <StatusPill tone={repository.accessRevokedAt ? "problem" : "neutral"}>
+                      {repository.accessRevokedAt
+                        ? "No access"
+                        : repository.private
+                          ? "Private"
+                          : "Public"}
+                    </StatusPill>
+
+                    <span className="text-fg-meta shrink-0 text-caption whitespace-nowrap">
+                      {formatTimestamp(repository.connectedAt)}
+                    </span>
+
+                    {repository.accessRevokedAt && (
+                      <div className="basis-full">
+                        <AccessRevokedNotice />
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -503,7 +462,7 @@ export function RepositoriesIndex({
                       onClick={() =>
                         replaceParams((params) => params.set("page", String(pagination.page - 1)))
                       }
-                      className="border-line-2 text-fg-body hover:border-mint-line rounded-nav border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+                      className={buttonClasses({ variant: "secondary" })}
                     >
                       Previous
                     </button>
@@ -516,7 +475,7 @@ export function RepositoriesIndex({
                       onClick={() =>
                         replaceParams((params) => params.set("page", String(pagination.page + 1)))
                       }
-                      className="border-line-2 text-fg-body hover:border-mint-line rounded-nav border px-3 py-2 disabled:cursor-not-allowed disabled:opacity-40"
+                      className={buttonClasses({ variant: "secondary" })}
                     >
                       Next
                     </button>

@@ -563,7 +563,6 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
    */
   const NOT_TYPE: [string, number][] = [
     ["src/app/app/(account)/settings/products/product-list-card.tsx", 2], // glyph — an avatar initial
-    ["src/app/app/(account)/settings/repositories/repositories-index.tsx", 1], // glyph — a × that clears
     ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 3], // glyph ×3
     ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // a mono rank, "01"
     ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
