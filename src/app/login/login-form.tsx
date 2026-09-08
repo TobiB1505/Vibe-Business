@@ -40,14 +40,11 @@ import { ProviderRow } from "./provider-row";
 export function LoginForm({
   next,
   initialError,
-  github,
 }: {
   /** Already sanitized server-side; carried so a redirect survives sign-in. */
   next: string;
   /** A failure from a previous attempt, e.g. a Google callback that bounced. */
   initialError?: string | null;
-  /** Whether this deployment has GitHub sign-in configured. */
-  github: boolean;
 }) {
   const [passwordState, passwordAction, passwordPending] = useActionState<
     SignInResult | null,
@@ -84,11 +81,7 @@ export function LoginForm({
         busy={busy}
         verb="Continue"
         google={{ action: googleAction, pending: googlePending, testId: "google-signin" }}
-        github={
-          github
-            ? { action: githubAction, pending: githubPending, testId: "github-signin" }
-            : null
-        }
+        github={{ action: githubAction, pending: githubPending, testId: "github-signin" }}
       />
 
       <form action={passwordAction} className="flex flex-col gap-4">

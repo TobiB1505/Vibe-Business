@@ -223,14 +223,11 @@ export async function signInWithGoogle(
  * with separate permissions. This is only "who are you", and it grants Vibe
  * nothing it does not already ask for at connection time.
  *
- * Whether it works depends on a provider being enabled in the Supabase
- * project, which is a dashboard setting this code cannot read. A button that
- * fails because a setting elsewhere is off is worse than no button — so the
- * screen renders it only when `githubAuthEnabled()` says the deployment is
- * configured, and that flag is documented in `docs/deployment/environment.md`
- * (CLAUDE.md rule 78 permits an environment variable exactly on those two
- * conditions: it gates no capability the product otherwise has, and it is
- * written down).
+ * Whether it works depends on the provider being enabled in the Supabase
+ * project, which is a dashboard setting this code cannot read. UI-19 put the
+ * button behind a flag for that reason; the provider is enabled now, and Vibe
+ * runs on one Supabase project (VB-011), so there is no deployment where the
+ * offer would be false. The flag is gone rather than left at one value.
  */
 export async function signInWithGithub(
   _prevState: OAuthStartResult | null,

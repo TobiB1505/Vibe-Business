@@ -1,9 +1,10 @@
 "use client";
 
+import { GithubMark, GoogleMark } from "@/components/brand/provider-marks";
 import { Button } from "@/components/ui/button";
 
 /**
- * The identity providers, and the rule below them (UI-19).
+ * The identity providers, and the rule below them (UI-19, UI-20).
  *
  * ## Why one component for four screens
  *
@@ -20,6 +21,22 @@ import { Button } from "@/components/ui/button";
  * nobody would guess from the code. `busy` is passed in from the parent so any
  * submission disables all of them: a second click during a redirect must not
  * start a second OAuth flow.
+ *
+ * ## Why GitHub is no longer conditional
+ *
+ * UI-19 put it behind `VIBE_GITHUB_AUTH` because the provider was not enabled
+ * in the Supabase project, and a button that fails on the provider's own error
+ * page is worse than no button. It is enabled now, and Vibe runs on **one**
+ * Supabase project (VB-011), so there is no deployment where the offer is true
+ * and another where it is not. A flag with one possible value is a second thing
+ * to keep in step for no remaining reason.
+ *
+ * ## Why the buttons stack rather than sit side by side
+ *
+ * Two half-width buttons put the mark and four words into 178px at 390px wide,
+ * where the label wraps. Stacked, each provider is one line at every width, and
+ * the pair still reads as one group because the credentials form is separated
+ * from it by the rule.
  */
 type Provider = {
   action: (formData: FormData) => void;
@@ -39,17 +56,11 @@ export function ProviderRow({
   /** "Continue" on sign-in, "Sign up" on account creation. */
   verb: string;
   google: Provider;
-  /** Null where the deployment has not configured GitHub — see `providers.ts`. */
-  github: Provider | null;
+  github: Provider;
 }) {
   return (
     <div className="flex flex-col gap-4">
-      {/*
-        Side by side when there are two, full width when there is one. A lone
-        provider stretched across a column reads as the primary action of the
-        screen, which it is not — the credentials form below it is.
-      */}
-      <div className={github ? "grid grid-cols-2 gap-3" : "grid"}>
+      <div className="grid gap-3">
         <form action={google.action}>
           <input type="hidden" name="next" value={next} />
           <Button
@@ -60,25 +71,37 @@ export function ProviderRow({
             data-testid={google.testId}
             busy={google.pending}
           >
-            {google.pending ? "Opening Google…" : `${verb} with Google`}
+            {google.pending ? (
+              "Opening Google…"
+            ) : (
+              <>
+                <GoogleMark />
+                {`${verb} with Google`}
+              </>
+            )}
           </Button>
         </form>
 
-        {github && (
-          <form action={github.action}>
-            <input type="hidden" name="next" value={next} />
-            <Button
-              type="submit"
-              variant="secondary"
-              disabled={busy}
-              className="w-full"
-              data-testid={github.testId}
-              busy={github.pending}
-            >
-              {github.pending ? "Opening GitHub…" : `${verb} with GitHub`}
-            </Button>
-          </form>
-        )}
+        <form action={github.action}>
+          <input type="hidden" name="next" value={next} />
+          <Button
+            type="submit"
+            variant="secondary"
+            disabled={busy}
+            className="w-full"
+            data-testid={github.testId}
+            busy={github.pending}
+          >
+            {github.pending ? (
+              "Opening GitHub…"
+            ) : (
+              <>
+                <GithubMark />
+                {`${verb} with GitHub`}
+              </>
+            )}
+          </Button>
+        </form>
       </div>
 
       <div className="flex items-center gap-3" aria-hidden>

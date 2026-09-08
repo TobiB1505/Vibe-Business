@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
-import { githubAuthEnabled } from "@/modules/auth/providers";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { SignupForm } from "./signup-form";
 import type { Metadata } from "next";
@@ -36,7 +35,7 @@ export default async function SignupPage({
         </Link>
       </AuthHeading>
 
-      <SignupForm next={next} github={githubAuthEnabled()} />
+      <SignupForm next={next} />
 
       {/* The one place a legal link genuinely has to be: this is the moment
           someone agrees to something (UI-S1 §7, §8). */}

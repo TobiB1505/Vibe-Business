@@ -30,10 +30,9 @@ import { ProviderRow } from "@/app/login/provider-row";
  *
  * GitHub is the newer one and the more obvious in hindsight: this is a
  * GitHub-native product and every founder connects a repository, so the one
- * provider every user certainly has was the one not offered. It appears only
- * where the deployment has configured it — see `modules/auth/providers.ts`.
+ * provider every user certainly has was the one not offered.
  */
-export function SignupForm({ next, github }: { next: string; github: boolean }) {
+export function SignupForm({ next }: { next: string }) {
   const [state, formAction, pending] = useActionState<SignUpResult | null, FormData>(signUp, null);
   const [googleState, googleAction, googlePending] = useActionState<
     OAuthStartResult | null,
@@ -89,11 +88,7 @@ export function SignupForm({ next, github }: { next: string; github: boolean }) 
         busy={busy}
         verb="Sign up"
         google={{ action: googleAction, pending: googlePending, testId: "google-signup" }}
-        github={
-          github
-            ? { action: githubAction, pending: githubPending, testId: "github-signup" }
-            : null
-        }
+        github={{ action: githubAction, pending: githubPending, testId: "github-signup" }}
       />
 
       <form action={formAction} className="flex flex-col gap-4">

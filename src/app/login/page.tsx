@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
-import { githubAuthEnabled } from "@/modules/auth/providers";
 import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { getSession } from "@/modules/auth/session";
@@ -71,7 +70,7 @@ export default async function LoginPage({
         </Link>
       </AuthHeading>
 
-      <LoginForm next={next} initialError={error} github={githubAuthEnabled()} />
+      <LoginForm next={next} initialError={error} />
     </AuthShell>
   );
 }

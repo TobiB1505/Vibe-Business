@@ -529,17 +529,53 @@ test.describe("the screen a stranger meets", () => {
   });
 
   /**
-   * GitHub sign-in exists and is not offered until it is configured.
+   * Both providers, each carrying its own mark (UI-20).
    *
-   * Enabling the provider is a Supabase dashboard setting this code cannot
-   * read, so a button rendered unconditionally would fail for a reason nobody
-   * on the screen can see. The Playwright server sets no flag, so this is the
-   * unconfigured case.
+   * GitHub was behind `VIBE_GITHUB_AUTH` while the Supabase provider was not
+   * enabled. It is enabled, and Vibe runs on one Supabase project, so there is
+   * no deployment where the offer differs — and the flag is gone rather than
+   * pinned to one value.
    */
-  test("offers no provider the deployment has not configured", async ({ page }) => {
+  test("offers both providers, each with its own mark", async ({ page }) => {
     await page.goto("/login");
 
-    await expect(page.getByTestId("google-signin")).toBeVisible();
-    await expect(page.getByTestId("github-signin")).toHaveCount(0);
+    for (const id of ["google-signin", "github-signin"]) {
+      const button = page.getByTestId(id);
+      await expect(button).toBeVisible();
+      await expect(button).toBeEnabled();
+      // The mark is drawn, not described: the button already names the
+      // provider, so a second accessible name would say it twice.
+      expect(await button.locator("svg").count(), `${id} has no mark`).toBe(1);
+    }
+
+    // Google's is the published four-colour "G". A monochrome stand-in is a
+    // different mark, and its own branding guidance forbids one.
+    const fills = await page
+      .getByTestId("google-signin")
+      .locator("svg path")
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("fill")));
+    expect(new Set(fills).size).toBe(4);
+  });
+
+  /**
+   * One centred column, not a form beside an empty half (UI-20).
+   *
+   * The split screen carried two short lines at the foot of a panel that was
+   * otherwise empty — about 700px of nothing at 1440, which reads as a hole
+   * rather than as material.
+   */
+  test("centres one column instead of leaving half the screen empty", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/login");
+
+    const main = (await page.locator("main").boundingBox())!;
+    const form = (await page.getByTestId("email-signin").boundingBox())!;
+
+    // The column sits on the page's centre line, within a few pixels.
+    const formCentre = form.x + form.width / 2;
+    expect(Math.abs(formCentre - 720)).toBeLessThan(8);
+
+    // And it is a column, not a half: `main` spans the page.
+    expect(main.width).toBeGreaterThan(1400);
   });
 });
