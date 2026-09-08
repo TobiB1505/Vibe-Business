@@ -83,11 +83,17 @@ describe("the room", () => {
 
     /*
      * Home, the onboarding page's two renders that have a rail, the opening,
-     * and the lab study that reviews the room. Written out rather than
-     * counted, because the point is *which* screens — a screen dropping out of
-     * this list is a screen that went back to drawing its own.
+     * the frame a founder waits in before any of them, and the lab study that
+     * reviews the room. Written out rather than counted, because the point is
+     * *which* screens — a screen dropping out of this list is a screen that
+     * went back to drawing its own.
+     *
+     * `loading.tsx` is the one worth naming: it painted a fifty-two-rem column
+     * with a poster heading, so the first frame of setup was a layout that
+     * then vanished.
      */
     expect(composes.sort()).toEqual([
+      "app/app/onboarding/[projectId]/loading.tsx",
       "app/app/onboarding/[projectId]/page.tsx",
       "app/app/projects/[projectId]/nova/nova-home.tsx",
       "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
