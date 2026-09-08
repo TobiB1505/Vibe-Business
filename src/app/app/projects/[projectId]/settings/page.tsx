@@ -1,15 +1,8 @@
-import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
-import { StatusPill } from "@/components/ui/status-pill";
-import { Surface } from "@/components/ui/surface";
-import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { findReconnectInstallationId } from "@/modules/projects/attach";
-import { DisconnectButton } from "../disconnect-button";
-import { DeleteProjectButton } from "../delete-project-button";
-import { FounderIntentForm } from "../founder-intent-form";
-import { ProductionUrlForm } from "../production-url-form";
+import { ProjectSettingsView } from "./project-settings-view";
 import type { Metadata } from "next";
-import { proseLinkClasses, StandaloneLink } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Project settings",
@@ -40,6 +33,13 @@ export const metadata: Metadata = {
  * an account has one balance and one installation across every project — so
  * putting either behind a project's Settings would imply a per-project setting
  * that does not exist.
+ *
+ * ## Why the markup is not here
+ *
+ * `ProjectSettingsView` holds it, so the browser suite can render this screen
+ * without a session and a Supabase project. Until UI-21 it could not, and this
+ * page — which carries disconnecting a repository and deleting a product — had
+ * no browser coverage at all.
  *
  * ## Cost
  *
@@ -76,116 +76,12 @@ export default async function ProjectSettingsPage({
     : "/app/connect/github";
 
   return (
-    <WorkspaceSection id="settings">
-      <div className="flex flex-col gap-5">
-        {/*
-          CORE-2a.3 §32, §33: this influences every audit, so it cannot be
-          invisible. The split in the heading is the one that matters — the
-          Product Profile is what Vibe *worked out*, and this is what only the
-          founder can say. Keeping them apart in the UI is what stops the two
-          collapsing back into one "business context" blob.
-        */}
-        <Surface id="founder-intent" level="section" padding="lg" className="scroll-mt-32 flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-title font-semibold">What you told Vibe</h3>
-            <p className="text-fg-muted max-w-[65ch] text-body">
-              Vibe works out what your product is on its own. This is the part only you know — and
-              it changes which problems Vibe puts first.
-            </p>
-          </div>
-          <FounderIntentForm projectId={project.id} intent={founderIntent.intent} />
-        </Surface>
-
-        <Surface level="section" padding="lg" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-title font-semibold">Production website</h3>
-            <p className="text-fg-muted max-w-[65ch] text-body">
-              The address a visitor reaches. Vibe checks what is actually served there, which is
-              the only way to confirm what your code suggests.
-            </p>
-            {project.productionUrl === null && (
-              <p className="text-fg-muted text-body">Not configured</p>
-            )}
-          </div>
-          <ProductionUrlForm projectId={project.id} currentUrl={project.productionUrl} />
-        </Surface>
-
-        <Surface level="section" padding="lg" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-title font-semibold">Repository</h3>
-            {project.repository ? (
-              <p className="text-fg-muted max-w-[65ch] text-body">
-                Vibe reads{" "}
-                <a
-                  href={project.repository.htmlUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={proseLinkClasses()}
-                >
-                  {project.repository.fullName}
-                </a>{" "}
-                and writes prepared changes to isolated branches off{" "}
-                <span className="font-mono text-caption">{project.repository.defaultBranch}</span>.
-              </p>
-            ) : (
-              <div className="flex flex-col items-start gap-3">
-                <StatusPill tone="neutral">No repository connected</StatusPill>
-                <p className="text-fg-muted text-body">
-                  Vibe is not reading any repository for this project. Connect one to resume
-                  analysis and execution — everything the project already knows is kept.
-                </p>
-                <StandaloneLink href={reconnectHref}>Connect a repository</StandaloneLink>
-              </div>
-            )}
-          </div>
-          {project.repository && (
-            <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-              <p className="text-fg-muted text-caption">
-                Disconnecting stops Vibe reading this repository. The project and everything it has
-                learned stay.
-              </p>
-              <DisconnectButton projectId={project.id} />
-            </div>
-          )}
-
-          {/*
-            Two controls, because they are two things (ADR 0056 §1). Deleting is
-            offered whether or not a repository is connected: a project that was
-            disconnected is exactly the one somebody is most likely to want gone.
-          */}
-          <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-            <p className="text-fg-muted text-caption">
-              Deleting removes the project and everything Vibe has learned about it. This cannot be
-              undone.
-            </p>
-            <DeleteProjectButton projectId={project.id} />
-          </div>
-        </Surface>
-
-        {/*
-          Two places this page points at rather than owns, for the reason in the
-          docblock: neither is scoped to a single project.
-        */}
-        <Surface level="section" padding="lg" className="flex flex-col gap-3">
-          <h3 className="text-fg text-title font-semibold">Elsewhere</h3>
-          <ul className="flex flex-col gap-2">
-            <li className="flex flex-wrap items-baseline justify-between gap-3">
-              <span className="text-fg-secondary text-body">
-                Credits, your plan and what things cost
-              </span>
-              <StandaloneLink href="/app/settings/billing">Credits and billing</StandaloneLink>
-            </li>
-            <li className="flex flex-wrap items-baseline justify-between gap-3">
-              <span className="text-fg-secondary text-body">
-                Everything Vibe has done on this project
-              </span>
-              <StandaloneLink href={projectSectionHref(project.id, "activity")}>
-                Activity
-              </StandaloneLink>
-            </li>
-          </ul>
-        </Surface>
-      </div>
-    </WorkspaceSection>
+    <ProjectSettingsView
+      projectId={project.id}
+      repository={project.repository}
+      productionUrl={project.productionUrl}
+      founderIntent={founderIntent.intent}
+      reconnectHref={reconnectHref}
+    />
   );
 }

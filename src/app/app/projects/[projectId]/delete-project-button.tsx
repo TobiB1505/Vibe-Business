@@ -90,10 +90,18 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
   }
 
   return (
-    // Not `w-full`: this sits in a `justify-between` flex line, and a
-    // full-width child would wrap the control onto its own line. The column
-    // keeps the failure directly under the control that caused it.
-    <div className="flex flex-col items-end gap-2">
+    /*
+      `items-start`, not `items-end`, since UI-21: this used to sit at the right
+      of a `justify-between` line inside the Repository card, beside a caption.
+      It has its own section now, under the paragraph that explains it, and a
+      control that drifts to the far edge of a card is a control separated from
+      its own sentence.
+
+      Still not `w-full`: the column keeps the failure directly under the
+      control that caused it, and a stretched child would put a one-line
+      refusal across the whole card.
+    */
+    <div className="flex flex-col items-start gap-2">
       <InlineAction
         ref={openerRef}
         tone="danger"

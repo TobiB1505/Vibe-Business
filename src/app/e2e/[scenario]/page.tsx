@@ -133,6 +133,7 @@ import { ProductsIndex } from "@/app/app/(account)/settings/products/products-in
 import { RepositoriesIndex } from "@/app/app/(account)/settings/repositories/repositories-index";
 import { AccountShell, SettingsRail } from "@/components/layout/account-shell";
 import { AppFrame, RailBrand, RailFooter } from "@/components/layout/app-frame";
+import { ProjectSettingsView } from "@/app/app/projects/[projectId]/settings/project-settings-view";
 import {
   PROJECT_SECTIONS,
   ProjectBreadcrumb,
@@ -1351,6 +1352,75 @@ export default async function E2eScenarioPage({
           <div className="sr-only">{label}</div>
           <h1 className="text-fg text-display font-bold">A focused flow</h1>
         </main>
+      </AppFrame>
+    );
+  }
+
+  /*
+   * Project settings (UI-21).
+   *
+   * The route needs a session and a project in Supabase, which the browser
+   * suite deliberately does not have — so the one screen carrying "disconnect
+   * this repository" and "delete this product" had no browser coverage at all.
+   * Both states are rendered here, because the page is a different page
+   * without a repository: the disconnect row is gone and a connect link takes
+   * its place.
+   */
+  if (scenario === "project-settings" || scenario === "project-settings-disconnected") {
+    const connected = scenario === "project-settings";
+    const settingsHref = projectSectionHref("project_e2e", "settings");
+
+    return (
+      <AppFrame
+        rail={
+          <FixtureRail credits={35}>
+            <ProjectRail
+              projectId="project_e2e"
+              projectName="Acme"
+              connected={connected}
+              planName="Free"
+              switcherItems={[
+                {
+                  id: "project_e2e",
+                  name: "Acme",
+                  href: settingsHref,
+                  repositoryFullName: connected ? "acme/acme" : null,
+                },
+              ]}
+              items={PROJECT_SECTIONS.map((section) => ({
+                id: section.id,
+                label: section.label,
+                icon: section.icon,
+                href:
+                  section.id === "settings"
+                    ? settingsHref
+                    : projectSectionHref("project_e2e", section.id),
+                count: null,
+                countTone: "neutral" as const,
+              }))}
+            />
+          </FixtureRail>
+        }
+      >
+        <ProjectShell>
+          <div className="sr-only">{label}</div>
+          <ProjectBreadcrumb projectName="Acme" />
+          <ProjectSettingsView
+            projectId="project_e2e"
+            repository={
+              connected
+                ? {
+                    fullName: "acme/acme",
+                    htmlUrl: "https://github.com/acme/acme",
+                    defaultBranch: "main",
+                  }
+                : null
+            }
+            productionUrl={connected ? "https://acme.example" : null}
+            founderIntent={{ stage: null, monetizationModel: null, primaryGoal: null }}
+            reconnectHref="/app/connect/github"
+          />
+        </ProjectShell>
       </AppFrame>
     );
   }

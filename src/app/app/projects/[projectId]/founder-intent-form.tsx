@@ -83,12 +83,7 @@ export function FounderIntentForm({
   }
 
   return (
-    <form action={formAction} className="max-w-xl space-y-3">
-      <p className="text-body text-fg-muted">
-        Vibe works out what your product is on its own. These are the things it can&rsquo;t see from
-        your code or your site — all optional.
-      </p>
-
+    <form action={formAction} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-3">
         <Field id="stage" label="Stage">
           <Select id="stage" name="stage" defaultValue={intent.stage ?? ""}>
