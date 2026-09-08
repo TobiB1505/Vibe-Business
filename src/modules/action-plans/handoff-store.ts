@@ -7,7 +7,7 @@ import type { HandoffPurpose, HandoffTool } from "@/modules/handoff/schema";
 export type PlanHandoff = { tool: HandoffTool; purpose: HandoffPurpose };
 
 /**
- * Which steps of one plan Vibe handed to the founder (ADR 0096).
+ * Which steps of one plan Vibe handed to the founder (ADR 0097).
  *
  * Keyed by step, valued by tool *and purpose*, because three things are asked.
  * The screen needs to know which tool the founder picked — the prompt's opening

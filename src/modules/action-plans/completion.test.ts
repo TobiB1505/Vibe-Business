@@ -283,13 +283,42 @@ describe("Action Plan completion authorities", () => {
     ).toEqual([]);
   });
 
-  it("never lets a founder attestation complete Agent or external-party work", () => {
+  it("never lets a founder attestation complete Agent work", () => {
+    /*
+     * The half of this that must never move. A step an execution produces is
+     * closed by that execution's own evidence or not at all — a founder
+     * confirming it would be confirming away the work Vibe exists to do.
+     *
+     * External-party work used to be asserted here beside it, and no longer is:
+     * see the case below and ADR 0098. The two were never the same argument.
+     */
     const agent = fakePlanStep({
       id: "3-connect-stripe",
       order: 3,
       executionSupport: "vibe_executes_now",
       capability: "nextjs_seo_foundations_v2",
     });
+
+    expect([...completedStepsFromEvidence([agent], [], [], [founderActionEvidence()])]).toEqual(
+      [],
+    );
+  });
+
+  it("lets a founder attestation close what the outside world did (ADR 0098)", () => {
+    /*
+     * The authority ADR 0055 deferred, now defined. Nothing inside Vibe
+     * produces an `external_party` step and nothing observes one either — Vibe
+     * has no integration that watches Google's index — so the person waiting is
+     * the only witness there is.
+     *
+     * It grants nothing the Agent wanted, which is why it is safe: no execution
+     * path has ever produced this actor, so admitting it cannot confirm away
+     * work Vibe would build. The case above still holds that line.
+     *
+     * What it fixes is a dead end that was visible on screen: the plan marked
+     * such a step "Start here" and rendered no control at all, and any step
+     * behind it waited forever.
+     */
     const external = fakePlanStep({
       id: "3-connect-stripe",
       order: 3,
@@ -298,11 +327,9 @@ describe("Action Plan completion authorities", () => {
       capability: null,
     });
 
-    for (const step of [agent, external]) {
-      expect(
-        [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
-      ).toEqual([]);
-    }
+    expect([...completedStepsFromEvidence([external], [], [], [founderActionEvidence()])]).toEqual(
+      [3],
+    );
   });
 });
 

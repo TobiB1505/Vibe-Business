@@ -164,7 +164,7 @@ export default async function ProjectMovesPage({
 
   /*
    * The step Vibe refuses permanently, if that is what the plan is waiting on
-   * (ADR 0096).
+   * (ADR 0097).
    *
    * Resolved here because this is where the live resolution is, and because the
    * *shape* of a refusal is the thing a screen must not re-derive from labels.

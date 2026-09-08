@@ -665,7 +665,7 @@ async function AgentWorkspaceBody({
                       }
                       /* A policy refusal on Vibe's own product change is the
                          one the founder can take to their own tool, and the
-                         Action Plan is where that control lives (ADR 0096). */
+                         Action Plan is where that control lives (ADR 0097). */
                       handoffAvailable={
                         planNextStep.actor === "vibe" &&
                         planNextStep.changeKind === "product_change"

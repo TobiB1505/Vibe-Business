@@ -73,7 +73,7 @@ test.describe("a Move whose next step Vibe cannot run", () => {
      * The founder stood exactly here and asked where the new function was. The
      * Agent workspace is where they land at the moment of refusal, and it was
      * sending them away — "Choose a different Move" — while a prompt for their
-     * own tool had just become possible one screen over (ADR 0096).
+     * own tool had just become possible one screen over (ADR 0097).
      *
      * The control stays on the Action Plan, beside the step's own completion
      * criterion. What belongs here is the pointer.

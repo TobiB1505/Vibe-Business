@@ -174,11 +174,19 @@ describe("a founder may never confirm away work Vibe would build", () => {
     },
   );
 
+  /*
+   * Founder-owned *questions*, which are answered rather than confirmed.
+   *
+   * A decision and an input both write a durable statement later plans read,
+   * through their own resolution path — a tick would record that something
+   * happened while losing what was decided. `external_party` used to be listed
+   * here beside them and no longer is: it is confirmed, not answered, and the
+   * describe block above holds that case (ADR 0098).
+   */
   it.each([
     ["founder_decision", "decision", "founder_decides"],
     ["founder_input", "input", "founder_provides_input"],
-    ["external_party", "external_setup", "external_dependency"],
-  ] as const)("refuses %s work, which belongs to somebody else", (actor, changeKind, support) => {
+  ] as const)("refuses %s work, which is answered rather than confirmed", (actor, changeKind, support) => {
     const key = addStep({
       key: `attest-other-${actor}`,
       order: 8,
@@ -280,7 +288,7 @@ describe("the finding a Vibe step is closed with", () => {
 });
 
 /**
- * A step Vibe declined and handed out (ADR 0096).
+ * A step Vibe declined and handed out (ADR 0097).
  *
  * `vibe` + `product_change` is excluded from attestation on purpose: it is the
  * work the agent exists to build, and letting a founder tick it off would be
@@ -367,6 +375,62 @@ describe("a step Vibe handed to the founder", () => {
          where action_plan_id = '${planId}' and action_plan_step_key = '${key}';`,
       ),
     ).toBe("1");
+  });
+});
+
+/**
+ * The outside world, and the only witness Vibe has (ADR 0098).
+ *
+ * `external_party` was the last step shape with no way to close it — the
+ * authority ADR 0055 deferred. Nothing inside Vibe produces one and nothing
+ * observes one: there is no integration that watches Google's index, and
+ * inferring it would be a guess presented as a fact.
+ *
+ * Safe because no execution path has ever produced this actor, so admitting it
+ * cannot confirm away work the Agent would build. That line is held by the
+ * `product_change` cases above and is unchanged.
+ */
+describe("a step the outside world has to do", () => {
+  it("admits the founder's confirmation", () => {
+    const key = addStep({
+      key: "outside-dependency",
+      order: 8,
+      actor: "external_party",
+      changeKind: "external_setup",
+      executionSupport: "external_dependency",
+    });
+
+    expect(answerOf(attest(key))).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
+  it("refuses one Vibe never agreed was outside", () => {
+    // The actor says who acts; the support says Vibe agreed nothing of its own
+    // runs. Both, or neither — an actor alone would admit a step the resolver
+    // still believes it can execute.
+    const key = addStep({
+      key: "outside-mislabelled",
+      order: 9,
+      actor: "external_party",
+      changeKind: "product_change",
+      executionSupport: "vibe_executes_now",
+    });
+
+    expect(() => attest(key)).toThrow(/founder_action_step_not_attestable/);
+  });
+
+  it("asks a waiting measurement for its result", () => {
+    // The finding rule keys on the change kind now, not the actor: a
+    // measurement has a result whoever was waiting for it.
+    const key = addStep({
+      key: "outside-measurement",
+      order: 8,
+      actor: "external_party",
+      changeKind: "measurement",
+      executionSupport: "external_dependency",
+    });
+
+    expect(() => attest(key)).toThrow(/founder_step_finding_required/);
+    expect(answerOf(attest(key, "Indexed, 14 pages showing."))).toMatch(/^[0-9a-f-]{36}$/);
   });
 });
 

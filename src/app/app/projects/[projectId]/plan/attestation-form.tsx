@@ -35,7 +35,7 @@ export function AttestationForm({
   projectId: string;
   actionPlanId: string;
   step: ActionPlanStep;
-  /** Which prompt Vibe issued for this step, if any (ADR 0096). */
+  /** Which prompt Vibe issued for this step, if any (ADR 0097). */
   handoff?: HandoffPurpose | null;
 }) {
   const prompt = attestationPrompt(step, handoff ?? null);

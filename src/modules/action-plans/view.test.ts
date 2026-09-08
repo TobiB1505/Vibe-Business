@@ -639,6 +639,32 @@ describe("attestationPrompt", () => {
     expect(verify.footnote).toContain("not a check Vibe ran");
   });
 
+  it("lets the founder close what the outside world did", () => {
+    /*
+     * The last step shape with no way to close it. The plan marked it "Start
+     * here" and rendered no control at all, while the panel below said nothing
+     * was needed. Vibe has no integration that watches for it; the founder's
+     * eyes are the only authority there is.
+     */
+    const outside = attestationPrompt({ actor: "external_party", changeKind: "external_setup" });
+
+    expect(outside.pill).toBe("Waiting on someone else");
+    // Never "your action": they are not doing this, and saying so would ask
+    // them for work they cannot perform.
+    expect(outside.pill).not.toContain("Your");
+    expect(outside.submitLabel).toBe("This has happened");
+    expect(outside.finding).toBeNull();
+  });
+
+  it("asks a waiting measurement for its result, like every other measurement", () => {
+    // The database keys the requirement on the change kind, so the screen must
+    // too — an external_party measurement with no field would offer a button
+    // the server refuses.
+    const measured = attestationPrompt({ actor: "external_party", changeKind: "measurement" });
+
+    expect(measured.finding).not.toBeNull();
+  });
+
   it("drops the criterion where the prompt above already carries it", () => {
     /*
      * A handed-off step sits under the prompt Vibe just wrote, and that prompt

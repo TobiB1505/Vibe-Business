@@ -419,7 +419,7 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
-   * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0096).
+   * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0097).
    *
    * "Build a dedicated pricing page" stands in for the founder's real step —
    * `vibe` + `product_change`, which Vibe declines when it touches payments,
@@ -462,6 +462,30 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         handoffByStepKey: { "step-add-pricing-page": "claude_code" },
         // What the founder worked out on step 1, which the prompt carries in.
         findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * The plan waiting on somebody outside it.
+   *
+   * `external_party` is a real actor the planner assigns — "wait for Google to
+   * index the new pages" is step 5 of this fixture's plan. It is unblocked, so
+   * it becomes the plan's entry point, and every step behind it waits on it.
+   */
+  action_plan_outside_dependency: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
         founderInputRequest: null,
       }),
       activeOperation: null,
@@ -578,7 +602,7 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
   },
 
   /**
-   * The handed-off step, ticked off — and the plan on the next one (ADR 0096).
+   * The handed-off step, ticked off — and the plan on the next one (ADR 0097).
    *
    * The founder's whole ask ends here: run the prompt in your own tool, come
    * back, say what it built, carry on. Everything before this scene is setup;

@@ -417,10 +417,39 @@ export type AttestationPrompt = {
   criterion: { label: string } | null;
 };
 
+/**
+ * Whether closing this step records a result, and what to ask for.
+ *
+ * Keyed on the change kind and nothing else, because that is what the question
+ * actually depends on. "The sitemap is submitted" is true or it is not and
+ * there is nothing to write down; "a subscription completes end to end" has a
+ * result, and closing it with a bare tick threw away the one thing the next
+ * planning run most needed — whoever was waiting for it, and whether or not a
+ * prompt was issued.
+ *
+ * Shared by every founder-facing branch so the screen cannot disagree with the
+ * database, which enforces the same rule on the same key.
+ */
+function measurementFinding(
+  step: Pick<ActionPlanStep, "changeKind">,
+): Pick<AttestationPrompt, "finding" | "criterion"> {
+  if (step.changeKind !== "measurement") {
+    return { finding: null, criterion: { label: "Confirm when true" } };
+  }
+
+  return {
+    finding: {
+      label: "What happened when you checked?",
+      help: "Whether it worked, and where it stopped if it did not.",
+    },
+    criterion: { label: "Answer this" },
+  };
+}
+
 export function attestationPrompt(
   step: Pick<ActionPlanStep, "actor" | "changeKind">,
   /**
-   * Which prompt Vibe issued for this step, if any (ADR 0096).
+   * Which prompt Vibe issued for this step, if any (ADR 0097).
    *
    * Three readings, not two, and each needs its own sentence. The `vibe` copy
    * below says the step "isn't a change to your product", which is exactly what
@@ -454,7 +483,7 @@ export function attestationPrompt(
 
   if (handoff === "build") {
     /*
-     * A paste, not an essay (ADR 0096).
+     * A paste, not an essay (ADR 0097).
      *
      * The founder has just watched their own tool do the work, and asking them
      * to summarise it afterwards is homework for something a machine already
@@ -481,6 +510,29 @@ export function attestationPrompt(
     };
   }
 
+  if (step.actor === "external_party") {
+    /*
+     * Waiting, and the one thing the founder can do about it.
+     *
+     * Not "your action" — they are not doing this, somebody outside is, and a
+     * product that told them otherwise would be asking for work they cannot
+     * perform. What they can do is say when it has happened, because Vibe has
+     * no integration that watches for it and inventing one would be a
+     * different product.
+     */
+    return {
+      pill: "Waiting on someone else",
+      lead:
+        "Nobody inside your business does this one, and Vibe cannot watch for it. When you " +
+        "see that it has happened, say so here and the plan moves on.",
+      footnote: "This records what you observed against this exact plan step.",
+      submitLabel: "This has happened",
+      /* A measurement has a result whoever ran it, and the database requires
+         one — keyed on the change kind, not on who was waiting. */
+      ...measurementFinding(step),
+    };
+  }
+
   if (step.actor === "vibe") {
     return {
       pill: "Vibe can't run this one",
@@ -500,16 +552,6 @@ export function attestationPrompt(
   }
 
   if (step.changeKind === "measurement") {
-    /*
-     * A measurement records what it found, whether or not a prompt was issued.
-     *
-     * The distinction is not the tool, it is the change kind. "The sitemap is
-     * submitted" is true or it is not and there is nothing to write down; "a
-     * subscription completes end to end" has a result, and closing it with a
-     * bare tick threw away the one thing the next planning run most needed. The
-     * database now requires it too, so this is the screen agreeing with the
-     * rule rather than restating it.
-     */
     return {
       pill: "Your action",
       lead: null,
@@ -517,11 +559,7 @@ export function attestationPrompt(
         "Recorded against this exact plan step and given to the next planning run. It is your " +
         "result, not a check Vibe ran.",
       submitLabel: "Record what happened",
-      finding: {
-        label: "What happened when you checked?",
-        help: "Whether it worked, and where it stopped if it did not.",
-      },
-      criterion: { label: "Answer this" },
+      ...measurementFinding(step),
     };
   }
 

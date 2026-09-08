@@ -413,7 +413,7 @@ export type ActionPlanView = {
    */
   absorbedByStepOrder: Record<number, number>;
   /**
-   * Steps Vibe handed to the founder to build with their own tool (ADR 0096).
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0097).
    *
    * The value is the tool they picked, because the prompt's opening sentence
    * differs for an agent working in a checked-out repository and a hosted
@@ -421,7 +421,7 @@ export type ActionPlanView = {
    */
   handoffByStepKey: Record<string, HandoffTool>;
   /**
-   * Steps Vibe handed out to be **checked**, not built (ADR 0096 follow-on).
+   * Steps Vibe handed out to be **checked**, not built (ADR 0097 follow-on).
    *
    * Its own field rather than a `purpose` beside the tool above, because the
    * two answer different questions and only one of them grants anything. A
@@ -441,7 +441,7 @@ export type ActionPlanView = {
    */
   findingByStepKey: Record<string, string>;
   /**
-   * What the founder decided on the decision steps they closed (ADR 0096).
+   * What the founder decided on the decision steps they closed (ADR 0097).
    *
    * The same argument as `findingByStepKey` and the same cost — nothing new is
    * read, because deciding what is finished already needs these resolutions.
@@ -592,7 +592,7 @@ export async function getOnboardingFirstMove(
     listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
     // Onboarding shows the same plan, so it has to agree with it about which
     // steps are done — a handed-off step closed on the plan screen and still
-    // open here would be one product disagreeing with itself (ADR 0096).
+    // open here would be one product disagreeing with itself (ADR 0097).
     listHandoffsForPlan(supabase, { projectId, actionPlanId: plan.id }),
   ]);
   const completed = completedStepsFromEvidence(

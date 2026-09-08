@@ -6,7 +6,7 @@ const ROOT = process.cwd();
 const read = (path: string) => readFileSync(join(ROOT, path), "utf8");
 
 /**
- * Every completion set has to know about handoffs (ADR 0096).
+ * Every completion set has to know about handoffs (ADR 0097).
  *
  * ## Why this is a source test
  *
@@ -54,7 +54,7 @@ describe("callers that decide what is finished", () => {
      * ...and hands on the **build** ones, rather than every issued prompt.
      *
      * The set became narrower than "a prompt was issued" when verification
-     * handoffs arrived (ADR 0096 follow-on). A build handoff is what admits a
+     * handoffs arrived (ADR 0097 follow-on). A build handoff is what admits a
      * `vibe` + `product_change` step to being closed by the founder's word; a
      * verify handoff is issued for the founder's own measurement and grants
      * nothing. A caller that kept passing every key would let a prompt issued

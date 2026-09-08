@@ -1,7 +1,7 @@
 # 0162 — The refusal that hands over
 
 **Date:** 2026-09-05
-**Decision:** [ADR 0096](../decisions/0096-the-refusal-becomes-a-handoff.md)
+**Decision:** [ADR 0097](../decisions/0097-the-refusal-becomes-a-handoff.md)
 
 ## The founder's idea
 

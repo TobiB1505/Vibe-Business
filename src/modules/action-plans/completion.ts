@@ -133,7 +133,7 @@ function completedByAgentExecution(
 export function isFounderAttestable(
   step: Pick<ActionPlanStep, "id" | "actor" | "changeKind" | "executionSupport">,
   /**
-   * Steps Vibe handed to the founder to build with their own tool (ADR 0096).
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0097).
    *
    * The third admitted case, and the only one keyed on a fact rather than on
    * the step's own shape. `vibe` + `product_change` stays excluded in general
@@ -149,6 +149,21 @@ export function isFounderAttestable(
   handedOffStepKeys: ReadonlySet<string> = new Set(),
 ): boolean {
   if (step.actor === "founder_action") return step.executionSupport === "founder_acts";
+  /*
+   * The outside world, confirmed by the only witness there is.
+   *
+   * `external_party` was the last step shape with no way to close it, and the
+   * screen showed exactly that: **Start here** over a step that rendered no
+   * control at all. Nothing inside Vibe produces one, and nothing observes one
+   * either — only the founder can see that Google indexed the pages.
+   *
+   * It grants nothing the agent wanted: no execution path has ever produced an
+   * `external_party` step, so admitting it cannot confirm away work Vibe would
+   * build. The paired execution support is asserted for the same reason the
+   * `founder_action` line above asserts one — the actor says who acts, the
+   * support says Vibe agreed nothing of its own runs.
+   */
+  if (step.actor === "external_party") return step.executionSupport === "external_dependency";
   if (step.actor !== "vibe") return false;
   if (step.changeKind !== "product_change") return true;
   return handedOffStepKeys.has(step.id);
@@ -187,7 +202,7 @@ export function completedStepsFromEvidence(
   founderResolutions: readonly FounderCompletionEvidence[],
   agentEvidence: readonly AgentStepCompletionEvidence[],
   founderActionEvidence: readonly FounderActionCompletionEvidence[] = [],
-  /** Steps Vibe handed to the founder to build themselves (ADR 0096). */
+  /** Steps Vibe handed to the founder to build themselves (ADR 0097). */
   handedOffStepKeys: ReadonlySet<string> = new Set(),
 ): ReadonlySet<number> {
   const completed = new Set(completedStepsFromFounderResolutions(steps, founderResolutions));

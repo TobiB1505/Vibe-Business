@@ -362,7 +362,7 @@ async function routingCompletedSteps(
       agentEvidence.absorbed,
       /*
        * A step Vibe handed out counts here too, or the plan advances on one
-       * screen and the Agent stays blocked on the next step forever (ADR 0096).
+       * screen and the Agent stays blocked on the next step forever (ADR 0097).
        *
        * Merged is not the bar for it, and cannot be. That bar exists because a
        * successor is prepared against the default branch and Vibe's own change

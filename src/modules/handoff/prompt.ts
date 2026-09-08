@@ -6,7 +6,7 @@ import {
 } from "./schema";
 
 /**
- * The prompt a founder pastes into the tool they already build with (ADR 0096).
+ * The prompt a founder pastes into the tool they already build with (ADR 0097).
  *
  * ## Why this exists
  *
