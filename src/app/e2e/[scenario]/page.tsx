@@ -323,7 +323,13 @@ function FixtureRail({ credits, children }: { credits: number; children: ReactNo
       */}
       <RailFooter
         credits={creditsToUnits(credits)}
-        identity={{ displayName: "Tobi", initials: "TB", avatarUrl: null, fromGithub: true, chosen: false }}
+        identity={{
+          displayName: "Tobi",
+          initials: "TB",
+          avatarUrl: null,
+          fromGithub: true,
+          chosen: false,
+        }}
       />
     </>
   );
@@ -1141,7 +1147,10 @@ export default async function E2eScenarioPage({
     }));
 
     return (
-      <AppFrame rail=<FixtureRail credits={35}><ProjectRail
+      <AppFrame
+        rail={
+          <FixtureRail credits={35}>
+            <ProjectRail
               projectId="project_e2e"
               projectName="Acme"
               connected
@@ -1160,7 +1169,10 @@ export default async function E2eScenarioPage({
                 },
               ]}
               items={navItems}
-            /></FixtureRail>>
+            />
+          </FixtureRail>
+        }
+      >
         <ProjectShell>
           <div className="sr-only">{label}</div>
           <ProjectBreadcrumb projectName="Acme" />
@@ -1286,7 +1298,7 @@ export default async function E2eScenarioPage({
               }
             />
           </WorkspaceSection>
-              </ProjectShell>
+        </ProjectShell>
       </AppFrame>
     );
   }
@@ -1841,7 +1853,7 @@ export default async function E2eScenarioPage({
             github={fixture.github}
             founderName={fixture.founderName ?? null}
           />
-              </AccountShell>
+        </AccountShell>
       </AppFrame>
     );
   }
@@ -1978,7 +1990,7 @@ export default async function E2eScenarioPage({
         <AccountShell>
           <div className="sr-only">{label}</div>
           <ProductsIndex products={E2E_PRODUCTS_SCENARIOS[scenario]()} />
-              </AccountShell>
+        </AccountShell>
       </AppFrame>
     );
   }
@@ -1992,7 +2004,7 @@ export default async function E2eScenarioPage({
             repositories={E2E_REPOSITORIES_SCENARIOS[scenario]()}
             githubLogin={scenario === "account-repositories-empty" ? null : "TobiB1505"}
           />
-              </AccountShell>
+        </AccountShell>
       </AppFrame>
     );
   }
