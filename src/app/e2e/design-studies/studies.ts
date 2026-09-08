@@ -163,6 +163,9 @@ export const LINKS_SCENARIO = "study-links";
 /** Which button, and how many of it — four systems against the six real jobs. */
 export const BUTTON_SCENARIO = "study-button";
 
+/** How the button looks, once how many of it is settled. */
+export const BUTTON_LOOK_SCENARIO = "study-button-look";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 
