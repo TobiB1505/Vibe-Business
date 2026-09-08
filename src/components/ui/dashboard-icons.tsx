@@ -27,6 +27,8 @@ export {
   /* The selector glyph on the product switcher: a single chevron says
      "expand", two say "pick". The control changes what the row names. */
   ChevronsUpDownIcon,
+  EyeIcon,
+  EyeOffIcon,
   InfoIcon,
   PlusIcon,
   RefreshIcon,

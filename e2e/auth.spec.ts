@@ -109,8 +109,8 @@ test.describe("the login screen at rest", () => {
     await expect(email).toBeEnabled();
 
     await expect(page.getByLabel("Email address")).toBeEnabled();
-    await expect(page.getByLabel("Password")).toBeEnabled();
-    await expect(page.getByRole("link", { name: "Forgot password?" })).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toBeEnabled();
+    await expect(page.getByRole("link", { name: "Forgot it?" })).toBeVisible();
   });
 
   test("shows no error before anything has been attempted", async ({ page }) => {
@@ -128,7 +128,7 @@ test.describe("submitting the email form", () => {
     await holdSubmission(page);
 
     await page.getByLabel("Email address").fill("user@example.com");
-    await page.getByLabel("Password").fill("hunter22");
+    await page.getByLabel("Password", { exact: true }).fill("hunter22");
     await waitForHydration(page, "email-signin");
     await page.getByTestId("email-signin").click();
 
@@ -142,7 +142,7 @@ test.describe("submitting the email form", () => {
     await page.goto("/login");
 
     await page.getByLabel("Email address").fill("user@example.com");
-    await page.getByLabel("Password").fill("hunter22");
+    await page.getByLabel("Password", { exact: true }).fill("hunter22");
     await page.getByTestId("email-signin").click();
 
     await expect(page.getByText("We couldn't reach the server. Please try again.")).toBeVisible({
@@ -157,7 +157,7 @@ test.describe("submitting the email form", () => {
     await page.goto("/login");
 
     await page.getByLabel("Email address").fill("user@example.com");
-    await page.getByLabel("Password").fill("hunter22");
+    await page.getByLabel("Password", { exact: true }).fill("hunter22");
     await page.getByTestId("email-signin").click();
 
     await expect(page.getByText("We couldn't reach the server. Please try again.")).toBeVisible({
@@ -311,7 +311,7 @@ test.describe("the guard on /app", () => {
 test.describe("password recovery", () => {
   test("offers a way to ask for a link", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("link", { name: "Forgot password?" }).click();
+    await page.getByRole("link", { name: "Forgot it?" }).click();
 
     await expect(page).toHaveURL("/forgot-password");
     await expect(page.getByTestId("send-reset-link")).toBeEnabled();
@@ -452,5 +452,94 @@ test.describe("the four screens are pages", () => {
     expect(state.valid).toBe(false);
     // And the page did not navigate or report anything of its own.
     await expect(page).toHaveURL(/\/signup$/);
+  });
+});
+
+test.describe("the screen a stranger meets", () => {
+  /**
+   * The form is not in a card (UI-19).
+   *
+   * It sat in a raised `VibeCard`, in a column that is already the only thing
+   * on its half of the screen. A card says "this part, not the rest"; where
+   * there is no rest it is a box drawn around the only content.
+   */
+  test("puts the form on the ground rather than in a box", async ({ page }) => {
+    await page.goto("/login");
+
+    const raised = await page
+      .getByTestId("email-signin")
+      .evaluate((node) => !!node.closest(".vibe-surface-card"));
+    expect(raised, "the form is back inside a card").toBe(false);
+  });
+
+  /**
+   * "Am I on the right screen" is asked before the first field, not after the
+   * last. This link used to sit below the submit button, so somebody who meant
+   * to create an account filled in an email and a password first.
+   */
+  test("offers the other screen above the first field", async ({ page }) => {
+    await page.goto("/login");
+
+    const other = (await page.getByRole("link", { name: "Create one" }).boundingBox())!;
+    const email = (await page.getByLabel("Email address").boundingBox())!;
+    expect(other.y).toBeLessThan(email.y);
+  });
+
+  /**
+   * Somebody who cannot remember their password knows it while looking at the
+   * field, not after failing. It used to be the last thing under the form.
+   */
+  test("puts the recovery link beside the password label", async ({ page }) => {
+    await page.goto("/login");
+
+    const forgot = (await page.getByRole("link", { name: "Forgot it?" }).boundingBox())!;
+    const field = (await page.getByLabel("Password", { exact: true }).boundingBox())!;
+
+    // Above the input, on the label's own line rather than below the form.
+    expect(forgot.y).toBeLessThan(field.y);
+    expect(field.y - forgot.y).toBeLessThan(40);
+  });
+
+  /**
+   * A password you can check (UI-19).
+   *
+   * Eight characters minimum and no way to see what was typed is a real
+   * failure rate on a phone, and on sign-in a typo is indistinguishable from
+   * the wrong password. It must never start revealed: a password on screen at
+   * first paint is a password in a screenshot and in a screen share.
+   */
+  test("reveals the password only when asked", async ({ page }) => {
+    await page.goto("/signup");
+
+    const password = page.getByLabel("Password", { exact: true });
+    await password.fill("correcthorse");
+    await expect(password).toHaveAttribute("type", "password");
+
+    const toggle = page.getByTestId("password-reveal");
+    await expect(toggle).toHaveAttribute("aria-label", "Show password");
+
+    await toggle.click();
+    await expect(password).toHaveAttribute("type", "text");
+    await expect(toggle).toHaveAttribute("aria-label", "Hide password");
+    // The value survives the switch, or the reveal is a reset.
+    await expect(password).toHaveValue("correcthorse");
+
+    await toggle.click();
+    await expect(password).toHaveAttribute("type", "password");
+  });
+
+  /**
+   * GitHub sign-in exists and is not offered until it is configured.
+   *
+   * Enabling the provider is a Supabase dashboard setting this code cannot
+   * read, so a button rendered unconditionally would fail for a reason nobody
+   * on the screen can see. The Playwright server sets no flag, so this is the
+   * unconfigured case.
+   */
+  test("offers no provider the deployment has not configured", async ({ page }) => {
+    await page.goto("/login");
+
+    await expect(page.getByTestId("google-signin")).toBeVisible();
+    await expect(page.getByTestId("github-signin")).toHaveCount(0);
   });
 });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AuthShell } from "@/components/layout/auth-shell";
+import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
 import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { ForgotPasswordForm } from "./forgot-password-form";
 import type { Metadata } from "next";
@@ -25,29 +25,25 @@ export default async function ForgotPasswordPage({
     : null;
 
   return (
-    <AuthShell
-      headline={
-        <>
-          Locked out?
-          <br />
-          <span className="text-mint">Let&apos;s fix that.</span>
-        </>
-      }
-      intro="We'll email you a link to set a new password."
-    >
-      <div className="flex flex-col gap-2">
-        <h1 className="text-fg text-headline font-bold">Reset your password</h1>
-        <p className="text-fg-muted text-body">Enter the email address you signed up with.</p>
-      </div>
-
-      <ForgotPasswordForm initialError={error} />
-
-      <p className="text-fg-muted text-body">
+    /*
+      No assurances here. They are about what Vibe does to a repository, and
+      this screen is about getting back into an account — a promise about
+      branches beside a password reset is furniture.
+    */
+    <AuthShell>
+      <AuthHeading title="Reset your password">
         Remembered it?{" "}
         <Link href="/login" className="text-mint hover:text-mint-hover rounded-inline">
           Back to sign in
         </Link>
+      </AuthHeading>
+
+      <p className="text-fg-prose text-body">
+        Enter the email address you signed up with and we&apos;ll send you a link to set a new
+        password.
       </p>
+
+      <ForgotPasswordForm initialError={error} />
     </AuthShell>
   );
 }

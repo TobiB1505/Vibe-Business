@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthShell } from "@/components/layout/auth-shell";
+import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
 import { getSession } from "@/modules/auth/session";
 import { ResetPasswordForm } from "./reset-password-form";
 import type { Metadata } from "next";
@@ -28,31 +28,19 @@ export default async function ResetPasswordPage() {
   }
 
   return (
-    <AuthShell
-      headline={
-        <>
-          Almost there.
-          <br />
-          <span className="text-mint">Pick a new password.</span>
-        </>
-      }
-      intro="Then you're back in."
-    >
-      <div className="flex flex-col gap-2">
-        <h1 className="text-fg text-headline font-bold">Set a new password</h1>
-        <p className="text-fg-muted text-body">
-          You&apos;ll stay signed in on this device once it&apos;s saved.
-        </p>
-      </div>
-
-      <ResetPasswordForm />
-
-      <p className="text-fg-muted text-body">
+    <AuthShell>
+      <AuthHeading title="Set a new password">
         Changed your mind?{" "}
         <Link href="/app" className="text-mint hover:text-mint-hover rounded-inline">
           Back to Vibe
         </Link>
+      </AuthHeading>
+
+      <p className="text-fg-prose text-body">
+        You&apos;ll stay signed in on this device once it&apos;s saved.
       </p>
+
+      <ResetPasswordForm />
     </AuthShell>
   );
 }

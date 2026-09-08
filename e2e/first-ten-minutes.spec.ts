@@ -162,7 +162,11 @@ test.describe("sign-up", () => {
 
     const google = page.getByTestId("google-signup");
     await expect(google).toBeVisible();
-    await expect(google).toHaveText("Continue with Google");
+    // "Continue with Google" until UI-19. The provider button now names what
+    // the screen it is on does: the same OAuth call creates an account here
+    // and signs in on `/login`, and a person who came to create one should
+    // read a button that says so.
+    await expect(google).toHaveText("Sign up with Google");
     await expect(google).toBeEnabled();
 
     await expect(page.getByTestId("email-signup")).toBeEnabled();

@@ -209,6 +209,53 @@ export async function signInWithGoogle(
   redirect(data.url);
 }
 
+/**
+ * Starts GitHub sign-in (UI-19).
+ *
+ * ## Why this exists, and why the button is off by default
+ *
+ * Vibe is a GitHub-native product: every founder connects a repository, so the
+ * one provider every user of this product certainly has was the one not
+ * offered. This is the action that offers it.
+ *
+ * It is **not** the GitHub App ([ADR 0003](../../../docs/decisions/0003-github-app-integration.md)),
+ * which is how Vibe reads and writes repositories and is a separate identity
+ * with separate permissions. This is only "who are you", and it grants Vibe
+ * nothing it does not already ask for at connection time.
+ *
+ * Whether it works depends on a provider being enabled in the Supabase
+ * project, which is a dashboard setting this code cannot read. A button that
+ * fails because a setting elsewhere is off is worse than no button — so the
+ * screen renders it only when `githubAuthEnabled()` says the deployment is
+ * configured, and that flag is documented in `docs/deployment/environment.md`
+ * (CLAUDE.md rule 78 permits an environment variable exactly on those two
+ * conditions: it gates no capability the product otherwise has, and it is
+ * written down).
+ */
+export async function signInWithGithub(
+  _prevState: OAuthStartResult | null,
+  formData: FormData,
+): Promise<OAuthStartResult> {
+  const destination = requestedDestination(formData);
+  const origin = await requestOrigin();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(destination)}`,
+      skipBrowserRedirect: true,
+    },
+  });
+
+  if (error || !data?.url) {
+    logAuthFailure("oauth_start_github", error);
+    return { ok: false, error: authFailureMessage("oauth_failed", "sign_in") };
+  }
+
+  redirect(data.url);
+}
+
 export type PasswordResetRequestResult =
   /**
    * `email` is what the person typed, echoed back. It says nothing about

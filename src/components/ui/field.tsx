@@ -6,7 +6,7 @@ import {
   type ReactNode,
 } from "react";
 import { cn } from "@/lib/utils/cn";
-import { ChevronDownIcon } from "./icons.generated";
+import { AlertIcon, ChevronDownIcon } from "./icons.generated";
 
 /**
  * Text fields (UI-0).
@@ -157,5 +157,38 @@ export function Field({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * A refusal that belongs to the form rather than to one field (UI-19).
+ *
+ * ## Why this is not a `Field` error
+ *
+ * `Field`'s error binds to one input, which is right when the input is what
+ * was wrong. It is not right for "Enter your email and password", "Invalid
+ * email or password" or a provider outage — and all three were rendered under
+ * the *password* field, because that was the `Field` they happened to be wired
+ * to. A message about two fields sitting under one of them tells a reader the
+ * other one is fine.
+ *
+ * ## Why it is still bound to the inputs
+ *
+ * `aria-describedby` on both, pointing here, so arriving at either field
+ * carries the reason with it. `role="alert"` on top of that, because the text
+ * appears while focus is elsewhere — usually on the submit button that was
+ * just pressed.
+ */
+export function FormError({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <p
+      id={id}
+      role="alert"
+      data-testid="form-error"
+      className="text-coral flex items-start gap-2 text-caption"
+    >
+      <AlertIcon size={15} aria-hidden className="mt-px shrink-0" />
+      {children}
+    </p>
   );
 }

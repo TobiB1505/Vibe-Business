@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AuthShell } from "@/components/layout/auth-shell";
+import { AuthHeading, AuthShell } from "@/components/layout/auth-shell";
+import { githubAuthEnabled } from "@/modules/auth/providers";
 import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { getSession } from "@/modules/auth/session";
@@ -48,42 +49,29 @@ export default async function LoginPage({
 
   return (
     <AuthShell
-      headline={
-        <>
-          You vibe-coded the product.
-          <br />
-          <span className="text-mint">Now vibe the business.</span>
-        </>
-      }
-      intro="Sign in to see what Vibe found in your product and what it wants to do about it."
-      // Both of these are properties of the system as built: a prepared change
-      // is written to its own branch, and the branch you ship from moves only
-      // on an explicit approval of one specific commit. Neither is a marketing
-      // claim.
-      //
-      // Neither characterises the *grant*, deliberately. The App holds
-      // `Contents: read and write` — execution creates a branch and a commit,
-      // and an approved merge fast-forwards the default branch. Saying
-      // "read-only" here was true until Sprint 11 and false afterwards, which
-      // is exactly the failure a claim about a permission invites: the
-      // permission changed and the sentence did not.
+      /*
+       * Both are properties of the system as built: a prepared change is
+       * written to its own branch, and the branch you ship from moves only on
+       * an explicit approval of one specific commit. Neither is a marketing
+       * claim.
+       *
+       * Neither characterises the *grant*, deliberately. The App holds
+       * `Contents: read and write` — execution creates a branch and a commit,
+       * and an approved merge fast-forwards the default branch. Saying
+       * "read-only" here was true until Sprint 11 and false afterwards, which
+       * is exactly the failure a claim about a permission invites: the
+       * permission changed and the sentence did not.
+       */
       assurances={["Changes land on their own branch", "Nothing merged without your approval"]}
     >
-      <div className="flex flex-col gap-2">
-        <h1 className="text-fg text-headline font-bold">Sign in</h1>
-        <p className="text-fg-muted text-body">
-          With Google, or the email and password you signed up with.
-        </p>
-      </div>
-
-      <LoginForm next={next} initialError={error} />
-
-      <p className="text-fg-muted text-body">
+      <AuthHeading title="Sign in">
         No account yet?{" "}
         <Link href="/signup" className="text-mint hover:text-mint-hover rounded-inline">
           Create one
         </Link>
-      </p>
+      </AuthHeading>
+
+      <LoginForm next={next} initialError={error} github={githubAuthEnabled()} />
     </AuthShell>
   );
 }

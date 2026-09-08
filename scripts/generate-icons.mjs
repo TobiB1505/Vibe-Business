@@ -59,6 +59,12 @@ const MANIFEST = {
    * site changed.
    */
   ChevronDownIcon: "chevron-down",
+  /* The password reveal, and the state it is in. Two marks rather than one
+     rotated: an eye and a struck-through eye are different things, and a
+     control that says which state it is *in* rather than which it will
+     produce is the one people misread. */
+  EyeIcon: "eye",
+  EyeOffIcon: "eye-off",
   /* The selector glyph: this control does not open downward, it *changes*
      what the row names. A single chevron says "expand"; two say "pick". */
   ChevronsUpDownIcon: "chevrons-up-down",

@@ -105,6 +105,7 @@ Nothing here needed to change:
 | `PAID_OPERATIONS_DISABLED` | unset | unset | **unset** — set to exactly `1` only to stop paid work during an incident (VB-032) |
 | `VIBE_INTERNAL_OPERATOR_USER_IDS` | your own Supabase user id, if you want the console locally | **unset** | the operator user ids, comma-separated ([ADR 0088](../decisions/0088-the-internal-operator-console.md)) |
 | `VIBE_PALETTE` | `v2` while working on the design system | `v2` to look at the second palette on a branch | **unset** — set to exactly `v2` when it ships to customers ([ADR 0098](../decisions/0098-the-palette-ships-behind-one-switch.md)) |
+| `VIBE_GITHUB_AUTH` | `1` once the GitHub provider is enabled in Supabase | `1` on a branch where the provider is configured | **unset** until the provider is enabled in Supabase — then exactly `1` (see below) |
 
 `VERCEL_URL`, `VERCEL_ENV` and `VERCEL_GIT_COMMIT_SHA` are injected
 automatically by Vercel on every build — never set them yourself. The last is
@@ -146,6 +147,34 @@ foot of the rail under the profile card. It writes the choice to
 override" so a screenshot says whether it shows the deployment or your browser.
 It is a tool for the redesign and never renders in production — see
 `src/app/palette.ts` and `src/components/layout/palette-switch.tsx`.
+
+### Which sign-in providers are offered
+
+`VIBE_GITHUB_AUTH=1` adds "Continue with GitHub" to `/login` and "Sign up with
+GitHub" to `/signup`. Anything else, including unset, offers Google and a
+password — which is what a deployment without the provider configured can
+actually deliver.
+
+**Turn it on in this order**, because the reverse offers a button that cannot
+work:
+
+1. Enable the GitHub provider in the Supabase project, with
+   `<origin>/auth/callback` as the callback URL — the same callback the Google
+   provider already uses.
+2. Set `VIBE_GITHUB_AUTH=1` on that environment and redeploy.
+
+Whether a provider is enabled is a setting in the Supabase project, and no code
+in this repository can read it. So the flag is not a feature toggle; it is this
+deployment telling the UI what step 1 already did. A "Continue with GitHub"
+button rendered without it fails on the provider's own error page, for a reason
+nobody standing on the sign-in screen can see or fix.
+
+It gates no capability — every account, project and operation is reachable
+through the providers already offered, and GitHub sign-in is a second door into
+the same room. That is what keeps it clear of CLAUDE.md rule 78, which forbids
+gating a *customer capability* on an environment variable nothing documents.
+Only the exact string `1` enables it, for the same reason as the kill switch
+below. See `src/modules/auth/providers.ts`.
 
 ### The paid-operations kill switch
 
