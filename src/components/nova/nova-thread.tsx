@@ -119,14 +119,22 @@ export function NovaThreadHeader({
   /** Whether the repository behind that name is still reachable. */
   connected,
   /**
-   * The moment before that is known, on the one screen that has one.
+   * Her availability line has not arrived on the screen yet.
    *
-   * Everywhere else this state does not exist: a page renders with the answer
-   * already read. The opening is the exception, and it needs its own word —
-   * "Disconnected" in coral for the second before the first read returns would
-   * be the product alarming a founder about nothing.
+   * Only the opening passes this, and only while the room is still being
+   * assembled: the row exists a beat before her presence does. It renders her
+   * name with nothing beside it — *absence*, not a word, because there is no
+   * true word to write there. She is not offline, and "Connecting…" about a
+   * session that is not connecting is the animated form of a lie.
+   *
+   * The line keeps its box either way, so nothing moves when it arrives.
+   *
+   * This replaced a `connecting` prop that said the same thing about the
+   * *repository* — and whose only two callers were this screen, where the
+   * repository answer is read on the server before the first frame. It was a
+   * fabricated connection attempt every time it rendered.
    */
-  connecting = false,
+  availabilityPending = false,
   /** The mark, passed in so this element never decides which state it is in. */
   mark,
   /** The viewer's clock. Passed in, because only a client component has one. */
@@ -136,7 +144,7 @@ export function NovaThreadHeader({
   status?: { word: string; tone: StatusTone };
   subject: string;
   connected: boolean;
-  connecting?: boolean;
+  availabilityPending?: boolean;
   mark: ReactNode;
   now?: ReactNode;
 }) {
@@ -147,7 +155,12 @@ export function NovaThreadHeader({
       {mark}
       <div className="min-w-0 flex-1">
         <p className="truncate text-ui font-semibold text-fg">Nova</p>
-        <p className="flex items-center gap-1.5 truncate text-caption text-fg-meta">
+        <p
+          aria-hidden={availabilityPending || undefined}
+          className={`flex items-center gap-1.5 truncate text-caption text-fg-meta transition-opacity duration-200 ${
+            availabilityPending ? "opacity-0" : "opacity-100"
+          }`}
+        >
           <span
             aria-hidden
             className={`size-1.5 shrink-0 rounded-full ${
@@ -175,10 +188,10 @@ export function NovaThreadHeader({
           <span
             aria-hidden
             className={`size-1.5 shrink-0 rounded-full ${
-              connecting ? "nova-pulse bg-fg-muted" : connected ? "bg-mint" : "bg-coral"
+              connected ? "bg-mint" : "bg-coral"
             }`}
           />
-          {connecting ? "Connecting…" : connected ? "Connected" : "Disconnected"}
+          {connected ? "Connected" : "Disconnected"}
         </span>
       </div>
       {now}

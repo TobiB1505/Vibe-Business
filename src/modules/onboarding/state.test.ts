@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { deriveOnboardingState, onboardingPhase, type OnboardingFacts } from "./state";
+import {
+  ONBOARDING_STATES,
+  deriveOnboardingState,
+  onboardingPhase,
+  onboardingSteps,
+  type OnboardingFacts,
+} from "./state";
 
 const ready: OnboardingFacts = {
   hasProductSource: true,
@@ -26,14 +32,8 @@ describe("project onboarding reconciliation", () => {
     [{ ...ready, hasProductProfile: false }, "product_scanning"],
     [{ ...ready, productConfirmed: false }, "product_reveal"],
     [{ ...ready, auditNeedsUser: true, hasAudit: false }, "audit_needs_user"],
-    [
-      { ...ready, auditRunning: true, auditAnalyzing: false, hasAudit: false },
-      "audit_preparing",
-    ],
-    [
-      { ...ready, auditRunning: true, auditAnalyzing: true, hasAudit: false },
-      "audit_running",
-    ],
+    [{ ...ready, auditRunning: true, auditAnalyzing: false, hasAudit: false }, "audit_preparing"],
+    [{ ...ready, auditRunning: true, auditAnalyzing: true, hasAudit: false }, "audit_running"],
     [{ ...ready, hasAudit: false }, "audit_preparing"],
     [{ ...ready, auditRevealed: false }, "audit_reveal"],
     [ready, "first_move"],
@@ -84,5 +84,78 @@ describe("project onboarding reconciliation", () => {
     ["complete", "first_move"],
   ] as const)("maps %s to the public %s phase", (state, phase) => {
     expect(onboardingPhase(state)).toBe(phase);
+  });
+});
+
+/**
+ * Setup as the rail draws it.
+ *
+ * The list is four rows and its whole claim is *where we are and how much is
+ * left*, so what is worth testing is the shape of that claim rather than the
+ * words: one step is current, everything before it is carried out, everything
+ * after is waiting, and a finished setup has nothing still ringed.
+ */
+describe("setup, as an ordered list", () => {
+  it("marks exactly one step as the one being worked on", () => {
+    for (const state of ONBOARDING_STATES) {
+      const here = onboardingSteps(state).filter((step) => step.state === "here");
+      /* `complete` is the exception, and the only one: nothing is current
+         because nothing is left. */
+      expect(here, state).toHaveLength(state === "complete" ? 0 : 1);
+    }
+  });
+
+  it("never leaves a carried-out step after a waiting one", () => {
+    for (const state of ONBOARDING_STATES) {
+      const marks = onboardingSteps(state).map((step) => step.state);
+      const lastDone = marks.lastIndexOf("done");
+      const firstWaiting = marks.indexOf("waiting");
+
+      /*
+       * The order is the claim. A filled square below a hollow one would say
+       * setup ran out of sequence, which `deriveOnboardingState` cannot
+       * produce — it is a cascade, and being at a state is what makes every
+       * earlier one true.
+       */
+      if (lastDone !== -1 && firstWaiting !== -1) {
+        expect(lastDone, state).toBeLessThan(firstWaiting);
+      }
+    }
+  });
+
+  it("finishes the list when setup is finished", () => {
+    expect(onboardingSteps("complete").map((step) => step.state)).toEqual([
+      "done",
+      "done",
+      "done",
+      "done",
+    ]);
+  });
+
+  it("starts with nothing behind it", () => {
+    expect(onboardingSteps("connect_source").map((step) => step.state)).toEqual([
+      "here",
+      "waiting",
+      "waiting",
+      "waiting",
+    ]);
+  });
+
+  /* The row a founder is on is the phase the rest of the product agrees they
+     are in, rather than a second reading of the same state. */
+  it("rings the phase `onboardingPhase` names", () => {
+    for (const state of ONBOARDING_STATES) {
+      if (state === "complete") continue;
+      const here = onboardingSteps(state).find((step) => step.state === "here");
+      expect(here?.id, state).toBe(onboardingPhase(state));
+    }
+  });
+
+  it("carries no fraction of any kind", () => {
+    for (const state of ONBOARDING_STATES) {
+      for (const step of onboardingSteps(state)) {
+        expect(step.label, state).not.toMatch(/\d/);
+      }
+    }
   });
 });

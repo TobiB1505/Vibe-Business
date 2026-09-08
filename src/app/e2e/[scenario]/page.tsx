@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
@@ -44,7 +45,21 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
+import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
+import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
+import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NOVA_THREAD_SURFACE, NovaRoom } from "@/components/nova/nova-room";
+import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
+import { onboardingSteps } from "@/modules/onboarding/state";
+import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
+import { OnboardingAuditReveal } from "@/app/app/onboarding/[projectId]/audit-reveal";
+import { FirstMoveDecision } from "@/app/app/onboarding/[projectId]/first-move-decision";
+import { NovaMoveButton } from "@/components/nova/nova-move";
+import { LiveSiteStep } from "@/app/app/onboarding/[projectId]/live-site-step";
+import { ProductConfirmation } from "@/app/app/onboarding/[projectId]/product-confirmation";
+import { VibeMark } from "@/components/brand/vibe-mark";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -64,6 +79,9 @@ import {
   OPENING_SCENARIO,
   OPENING_WALKTHROUGH_SCENARIO,
   SHIPPED_OPENING_SCENARIO,
+  SHIPPED_FIRST_RUN_SCENARIO,
+  ONBOARDING_BLOCKS_SCENARIO,
+  ONBOARDING_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
   CHAT_ANSWERED_SCENARIO,
@@ -336,23 +354,269 @@ export default async function E2eScenarioPage({
     );
   }
 
+  if (scenario === ONBOARDING_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <StudyOnboarding study={chosen} />
+      </StudyShell>
+    );
+  }
+
   if (scenario === SHIPPED_OPENING_SCENARIO) {
     const chosen = chosenStudy();
     return (
       <StudyShell study={chosen}>
-        <div className="mx-auto w-full max-w-2xl px-6 py-10 max-sm:px-4">
+        {/*
+          `OnboardingShell`'s own container, to the class.
+
+          It was `max-w-2xl` — 672px — and that is the defect this fixture
+          existed to prevent: a reviewer looking at a 300px rail beside a
+          370px thread and calling the layout finished, while the screen a
+          founder meets is 1216px wide. A fixture at the wrong width reviews
+          a screen nobody has.
+        */}
+        <div className="mx-auto w-full max-w-[76rem] px-5 py-7 sm:px-8 sm:py-10">
           {/*
             The product's own component, in replay — so the button records
             nothing and the fixture needs no session. `projectId` is never used
-            on that path, and `connected` is the state worth reviewing: the
-            header's `connecting` word resolving to a repository that is there.
+            on that path.
+          */}
+          {/*
+            `connected={false}`, because that is what the screen this fixture
+            reviews actually shows: the introduction runs before anything is
+            connected, so the header's "Disconnected" is a fact rather than a
+            placeholder. Reviewing it as connected would review a state no
+            founder meets here.
           */}
           <NovaOpeningScreen
             projectId="fixture-project"
             productName="Vibe Business"
-            connected
+            connected={false}
+            /* A login, because that is the only kind of name this product
+               ever has — never a first name derived from an address. */
+            greetingName="ada-lovelace"
+            setup={onboardingSteps("connect_source")}
+            activity={[
+              {
+                id: "e1",
+                eventType: "github.installation.connected",
+                at: "2026-09-07T21:40:00.000Z",
+                title: "GitHub installation connected",
+                tone: "neutral",
+                facts: [],
+              },
+              {
+                id: "e2",
+                eventType: "project.created",
+                at: "2026-09-07T21:41:00.000Z",
+                title: "Project created",
+                tone: "neutral",
+                facts: [],
+              },
+            ]}
             replay
           />
+        </div>
+      </StudyShell>
+    );
+  }
+
+  if (scenario === ONBOARDING_BLOCKS_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <div className="mx-auto flex w-full max-w-[76rem] flex-col gap-8 px-5 py-7 sm:px-8 sm:py-10">
+          {/*
+            Setup's blocks with the shipped components inside them, at the
+            thread's own width, so what is reviewed is the block *and* its
+            body — which is where every one of these went wrong: a panel
+            inside a panel, a poster heading under a frame that already had
+            one, a control a level deeper than every other control.
+
+            The bodies bind real Server Actions. Pressing does nothing useful
+            in a fixture and is not the point; the point is that nobody had
+            ever seen any of these on a screen.
+          */}
+          <BlockCase title="add_live_product">
+            <NovaOnboardingThread
+              state="add_live_product"
+              blockLabel="Where your product runs"
+              block={
+                <div className="flex flex-col gap-5">
+                  <div className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-3 border px-3 py-2">
+                    <span className="text-fg-body text-sm font-medium">acme/acme-app</span>
+                    <span className="text-fg-meta font-mono text-xs">main · connected</span>
+                  </div>
+                  <LiveSiteStep projectId="project_e2e" currentUrl={null} liveScanFailed={false} />
+                </div>
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="product_scanning">
+            <NovaOnboardingThread
+              state="product_scanning"
+              blockNamesItself
+              blockLabel="Product scan"
+              block={
+                <ProductScanExperience
+                  projectId="project_e2e"
+                  variant="onboarding"
+                  initialOperation={E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete.operation}
+                  initialEvents={[...E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete.events]}
+                  initialPresentation={
+                    E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete.presentation
+                  }
+                  productName="Acme"
+                />
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="product_reveal">
+            <NovaOnboardingThread
+              state="product_reveal"
+              blockLabel="What I understood"
+              block={<RevealBlockFixture />}
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_preparing">
+            <NovaOnboardingThread
+              state="audit_preparing"
+              blockLabel="Business audit"
+              block={<AuditPreparing presentation="block" />}
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_running">
+            <NovaOnboardingThread
+              state="audit_running"
+              blockLabel="Business audit"
+              block={<AuditAnalyzing presentation="block" />}
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_needs_user">
+            <NovaOnboardingThread
+              state="audit_needs_user"
+              tone="waiting"
+              blockLabel="Needs your answer"
+              block={
+                <NeedsUserPanel
+                  projectId="project_e2e"
+                  question={E2E_NEEDS_USER_SCENARIOS.needs_user_first_customer()}
+                  presentation="block"
+                />
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_reveal">
+            <NovaOnboardingThread
+              state="audit_reveal"
+              blockLabel="Business audit"
+              block={<OnboardingAuditReveal audit={E2E_AUDIT_SCENARIOS["audit-synthesis"]()} />}
+              control={<NovaMoveButton label="Show me where to start" />}
+            />
+          </BlockCase>
+
+          <BlockCase title="first_move">
+            <NovaOnboardingThread
+              state="first_move"
+              blockLabel="Where I would start"
+              block={
+                <div className="flex flex-col gap-4">
+                  <h2 className="text-fg text-title font-semibold">Give people a way to pay</h2>
+                  <p className="text-fg-prose leading-relaxed">
+                    There is no pricing page and no checkout anywhere on the live product.
+                  </p>
+                </div>
+              }
+              control={
+                <FirstMoveDecision
+                  projectId="project_e2e"
+                  opportunityId="opportunity_e2e"
+                  balance={null}
+                  skip={
+                    <button
+                      type="button"
+                      className="text-fg-secondary hover:text-fg transition-interactive rounded-sm text-sm underline underline-offset-4"
+                    >
+                      Go to my workspace
+                    </button>
+                  }
+                />
+              }
+            />
+          </BlockCase>
+        </div>
+      </StudyShell>
+    );
+  }
+
+  if (scenario === SHIPPED_FIRST_RUN_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <div className="mx-auto w-full max-w-[76rem] px-5 py-7 sm:px-8 sm:py-10">
+          {/*
+            `OnboardingShell`'s container and `NovaRoom`, so this is the screen
+            the page renders rather than an arrangement that resembles it —
+            the same header, the same rail, the same thread column.
+
+            In replay: pressing records nothing. The walkthrough itself never
+            wrote anything anyway, which is the point of the fixture — it is
+            reachable here as many times as a reviewer needs.
+          */}
+          <NovaRoom
+            header={
+              <NovaOnboardingHeader
+                state="connect_source"
+                projectId="fixture-project"
+                projectName="Vibe Business"
+                connected={false}
+                operation={null}
+              />
+            }
+            rail={
+              <NovaRail
+                presence="listening"
+                seed="fixture-project"
+                working={null}
+                checklist={null}
+                setup={onboardingSteps("connect_source")}
+                /* What the opening's rail had just shown, plus the row the
+                   introduction itself wrote. The room does not empty out
+                   between the two screens, and this fixture reviews that. */
+                activity={[
+                  {
+                    id: "e1",
+                    eventType: "github.installation.connected",
+                    at: "2026-09-07T21:40:00.000Z",
+                    title: "GitHub installation connected",
+                    tone: "neutral",
+                    facts: [],
+                  },
+                  {
+                    id: "e2",
+                    eventType: "project.created",
+                    at: "2026-09-07T21:41:00.000Z",
+                    title: "Project created",
+                    tone: "neutral",
+                    facts: [],
+                  },
+                ]}
+              />
+            }
+          >
+            <NovaFirstRun
+              projectId="fixture-project"
+              entries={buildNovaFirstRunFeed("explain_workflow")}
+              replay
+            />
+          </NovaRoom>
         </div>
       </StudyShell>
     );
@@ -1971,5 +2235,73 @@ async function SlowPreparedChanges() {
       change={E2E_SCENARIOS.change_awaiting_approval()}
       planHref="/app/projects/project_e2e/plan"
     />
+  );
+}
+
+/**
+ * One block, with the state it belongs to written above it.
+ *
+ * The label is the `OnboardingState`, not a title — a reviewer looking at
+ * three blocks needs to know which branch of the page drew each one, and a
+ * friendly name would be one more piece of copy nobody wrote for a founder.
+ */
+function BlockCase({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2.5">
+      <p className="text-label text-fg-meta font-mono tracking-[0.16em] uppercase">{title}</p>
+      {/* The thread's own floor, from the room rather than retyped — the
+          block sits on the ground it will sit on in the product. */}
+      <div className={NOVA_THREAD_SURFACE}>{children}</div>
+    </section>
+  );
+}
+
+/**
+ * The reveal's block body, on the understanding the real pipeline produced.
+ *
+ * A copy of the page's markup, and the one case in this fixture that is. The
+ * page builds it inline from four different reads — the profile, the view, the
+ * audit gate, the stored id — and there is no component to mount instead. What
+ * the copy is for is the *frames*: whether a logo, a headline, two facts and a
+ * confirmation form read as one block or as four things in a box.
+ *
+ * If it drifts from the page, this is the file that is wrong.
+ */
+function RevealBlockFixture() {
+  const view = E2E_UNDERSTANDING_SCENARIOS.understanding_ready().view;
+
+  return (
+    <div className="flex flex-col items-center gap-7 text-center">
+      <VibeMark size={44} />
+      <div className="flex flex-col gap-3">
+        {view.headline.productName && (
+          <p className="text-fg-body text-xl font-semibold">{view.headline.productName}</p>
+        )}
+        {view.headline.understanding && (
+          <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">
+            {view.headline.understanding}
+          </p>
+        )}
+      </div>
+      <ProductRevealFacts facts={view.audience.slice(0, 2)} />
+
+      <div className="border-line-2 w-full border-t pt-6">
+        <h3 className="text-fg-body mb-4 font-semibold">Did Vibe get this right?</h3>
+        <ProductConfirmation
+          projectId="project_e2e"
+          profileId="profile_e2e"
+          bundlesAudit
+          values={{
+            name: "Acme",
+            shortDescription: "A web application for small product teams.",
+            understanding: "Visitors can create an account and reach a signed-in workspace.",
+            mainPurpose: "Give small teams one place to run their product work.",
+            mainPromise: "Less time spent keeping track of what is happening.",
+            primaryAudience: "Software founders and builders",
+            problemSolved: "Work scattered across tools nobody keeps up to date.",
+          }}
+        />
+      </div>
+    </div>
   );
 }

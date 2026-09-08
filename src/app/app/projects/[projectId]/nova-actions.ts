@@ -106,6 +106,13 @@ export const NOVA_ACTIONS: Record<NovaActionId, NovaActionBinding> = {
    */
   "nova.explain_workflow": { control: "server_action", action: setNovaWorkflowStatusAction },
   "nova.skip_workflow": { control: "server_action", action: setNovaWorkflowStatusAction },
+  /*
+   * The third answer, and the one that actually writes `explained`: the press
+   * at the bottom of the walkthrough. Same action, same two arguments —
+   * asking to see something and having seen it are the same fact recorded at
+   * two different moments, and only the second one is true.
+   */
+  "nova.begin_setup": { control: "server_action", action: setNovaWorkflowStatusAction },
   "nova.confirm_product": { control: "server_action", action: confirmProductAction },
   /*
    * The coupled action, bound deliberately. `novaRevealControls` offers this id

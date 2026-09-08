@@ -2,6 +2,7 @@ import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { hasNovaIntroduced } from "@/modules/onboarding/store";
 import { NovaHome } from "./nova/nova-home";
 import { NovaOpeningScreen } from "./nova/nova-opening-screen";
+import { getGithubIdentity } from "@/modules/github/identity";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -44,11 +45,20 @@ export default async function ProjectHomePage({
   const introduced = replay ? false : await hasNovaIntroduced(supabase, projectId);
 
   if (!introduced) {
+    /*
+     * Who to say hello to. Read only on this branch — Home has its own header
+     * and asks nobody's name — and null is an ordinary answer: `novaGreeting`
+     * has a nameless form, because `identity-view.ts` forbids turning an email
+     * address into a first name.
+     */
+    const identity = await getGithubIdentity(supabase, userId);
+
     return (
       <NovaOpeningScreen
         projectId={project.id}
         productName={project.name}
         connected={project.repository !== null}
+        greetingName={identity?.githubLogin ?? null}
         replay={replay}
       />
     );

@@ -13,6 +13,7 @@ import { resolveFounderInputAction } from "../founder-input-action";
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
 import { NovaRail } from "./nova-rail";
+import { NovaRoom } from "@/components/nova/nova-room";
 import { ActionBlock } from "@/components/system/action-block";
 import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
 import { NovaClock } from "@/components/nova/nova-clock";
@@ -109,8 +110,8 @@ export async function NovaHome({
   const connected = project.repository !== null;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/*
+    <NovaRoom
+      /*
         The status row, and the only piece of chrome on this page.
 
         Deliberately *not* wrapped in `NovaRise`. It is `sticky top-0`, and a
@@ -118,33 +119,32 @@ export async function NovaHome({
         wrapper that hugs the header is a wrapper with no room to stick in, so
         the header scrolled away with the thread instead of staying above it.
         An entrance is not worth a status row that leaves.
-      */}
-      <NovaHeaderLive
-        projectId={project.id}
-        working={data.view.working}
-        /*
-         * What the line says when nothing is running. The moment's own word,
-         * from the same table the bubble below it reads, so the header cannot
-         * describe a moment differently from the sentence under it.
-         */
-        resting={statusForCandidate(data.view.primary.kind)}
-        tier={data.view.primary.tier}
-        seed={project.id}
-        subject={data.identity.name}
-        connected={connected}
-        now={<NovaClock />}
-      />
-
-      {/*
-        Two halves: the work on the left, the conversation on the right.
-
-        On a phone the rail goes second. A founder who opens this on a phone
-        came for what Nova has to say, and putting the whole plan and the whole
-        log above it means scrolling past everything to reach the one thing
-        that speaks.
-      */}
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-start">
-        <NovaRise className="max-lg:order-2" delay={0.03}>
+      */
+      header={
+        <NovaHeaderLive
+          projectId={project.id}
+          working={data.view.working}
+          /*
+           * What the line says when nothing is running. The moment's own word,
+           * from the same table the bubble below it reads, so the header cannot
+           * describe a moment differently from the sentence under it.
+           */
+          resting={statusForCandidate(data.view.primary.kind)}
+          tier={data.view.primary.tier}
+          seed={project.id}
+          subject={data.identity.name}
+          connected={connected}
+          now={<NovaClock />}
+        />
+      }
+      /*
+        The work column — the same one setup builds. `NovaRoom` owns the grid
+        so a founder crossing the seam out of onboarding lands in the room she
+        was already in, rather than one whose track happened to be written
+        `[300px_1fr]` here and `[300px_minmax(0,1fr)]` there.
+      */
+      rail={
+        <NovaRise delay={0.03}>
           <NovaRail
             presence={presence}
             seed={project.id}
@@ -153,8 +153,9 @@ export async function NovaHome({
             activity={data.activity}
           />
         </NovaRise>
-
-        {/*
+      }
+    >
+      {/*
           The thread, and nothing beside it.
 
           Everything that used to sit in this column was a second reading of
@@ -164,16 +165,15 @@ export async function NovaHome({
           ranking chose, and a business score that has its own rail item. A
           conversation with four panels stapled under it is not a conversation.
         */}
-        <NovaRise className="max-lg:order-1" delay={0.1}>
-          <FocusSection
-            data={data}
-            projectId={project.id}
-            sectionHref={sectionHref}
-            running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
-          />
-        </NovaRise>
-      </div>
-    </div>
+      <NovaRise delay={0.1}>
+        <FocusSection
+          data={data}
+          projectId={project.id}
+          sectionHref={sectionHref}
+          running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
+        />
+      </NovaRise>
+    </NovaRoom>
   );
 }
 

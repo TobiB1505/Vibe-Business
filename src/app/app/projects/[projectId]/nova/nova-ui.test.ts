@@ -260,7 +260,13 @@ describe("Nova Home", () => {
      */
     it("is a rail and a thread, never a grid of equal tiles", () => {
       const home = component("nova-home.tsx");
-      expect(home).toContain("lg:grid-cols-[300px_1fr]");
+      /*
+       * The two columns are `NovaRoom`'s now. Home composes the room rather
+       * than drawing its own — the track was `[300px_1fr]` here and
+       * `[300px_minmax(0,1fr)]` in setup, which is a seam a founder crosses.
+       * `nova-room.test.ts` sweeps for a screen that goes back to drawing it.
+       */
+      expect(home).toContain("<NovaRoom");
       expect(home).not.toMatch(/grid-cols-[2-9]\b/);
       expect(home).not.toMatch(/grid-cols-(?:repeat|\[repeat)/);
     });
@@ -279,14 +285,10 @@ describe("Nova Home", () => {
     });
 
     /*
-     * And the rail goes second on a phone. A founder who opens this on a phone
-     * came for what Nova says; the plan and the log above it means scrolling
-     * past everything to reach the one thing that speaks.
+     * And the rail goes second on a phone — asserted in `nova-room.test.ts`,
+     * because the order moved into the room along with the grid and every
+     * screen inherits it rather than repeating it.
      */
-    it("puts the conversation first on a narrow screen", () => {
-      expect(component("nova-home.tsx")).toContain("max-lg:order-2");
-      expect(component("nova-home.tsx")).toContain("max-lg:order-1");
-    });
 
     it("has no chat input anywhere", () => {
       for (const { name, body } of FILES) {

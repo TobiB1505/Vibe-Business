@@ -88,3 +88,58 @@ export const ONBOARDING_PHASES: { id: OnboardingPhase; label: string }[] = [
 export function phasePosition(phase: OnboardingPhase): number {
   return ONBOARDING_PHASES.findIndex((entry) => entry.id === phase);
 }
+
+/** Carried out, being worked on, or still ahead. The Action Plan's vocabulary. */
+export type OnboardingStepState = "done" | "here" | "waiting";
+
+export type OnboardingStep = {
+  id: OnboardingPhase;
+  label: string;
+  state: OnboardingStepState;
+};
+
+/**
+ * Setup as a short ordered list, for the rail.
+ *
+ * ## Why this exists again
+ *
+ * A four-phase progress rail used to sit in `OnboardingShell` and was removed
+ * on the argument that it is "a to-do list about the *product's* process rather
+ * than anything a founder decides". Half of that is right and it is the wrong
+ * half to act on: it is indeed not a decision, and a founder in the middle of
+ * setup still wants to know how much of it there is. Nova's sentence says
+ * *where we are*; it cannot say *what is left* without repeating the whole plan
+ * every load, which is exactly the thing the rail exists to hold.
+ *
+ * So it comes back where the other ordered list already lives — beside the
+ * Action Plan's, in the same column, with the same three marks — rather than as
+ * a second piece of chrome above the thread.
+ *
+ * ## Why "everything before here is done" is a fact and not an assumption
+ *
+ * Because `deriveOnboardingState` is a cascade over facts in priority order. A
+ * project sitting at `audit_reveal` has a source, a decided live-site answer, a
+ * snapshot and a confirmed profile — the earlier phases did not merely appear
+ * to pass, they are the conditions of being here at all. That is what lets a
+ * filled square mean carried out rather than skipped past.
+ *
+ * `complete` is the one state that is not its own phase: `onboardingPhase` maps
+ * it to `first_move`, which would leave the last row ringed forever on a
+ * project whose setup is behind it.
+ *
+ * ## What it deliberately never carries
+ *
+ * A fraction. No "two of four", no bar. `planMetaSummary` refuses one for the
+ * same reason and this is the same shape of list — four steps of entirely
+ * different sizes, where "half done" would be a number nobody measured.
+ */
+export function onboardingSteps(state: OnboardingState): OnboardingStep[] {
+  const here = phasePosition(onboardingPhase(state));
+
+  return ONBOARDING_PHASES.map((phase, index) => ({
+    id: phase.id,
+    label: phase.label,
+    state:
+      state === "complete" || index < here ? "done" : index === here ? "here" : ("waiting" as const),
+  }));
+}
