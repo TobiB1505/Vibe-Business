@@ -54,11 +54,30 @@ const STUDIES = "src/app/e2e/design-studies/";
  * is worth one named line here rather than a second hand-rolled keyboard
  * implementation.
  */
-const NOT_CHOICES = ["src/components/ui/list-controls.tsx"];
+/**
+ * The pill group is choices too, and is the second sanctioned one (UI-25).
+ *
+ * `ChoicePills` answers the same kind of question — commit to one of a few
+ * authored alternatives — in the shape `ChoiceCard` is wrong for: four, eight
+ * and six options whose labels are the whole answer, where a bordered card per
+ * option is a page and the detail slot would be empty on every one. It uses
+ * real radios for the same reason `ChoiceCard` does: grouping, arrow keys and
+ * the announcement come from the browser.
+ *
+ * Two primitives, one decision, written down in both — which is the point of
+ * naming it here rather than letting a third convention appear quietly. Both
+ * live in `src/components/ui/`; feature code still writes no radio of its own.
+ */
+const NOT_CHOICES = ["src/components/ui/list-controls.tsx", "src/components/ui/choice-pills.tsx"];
+
+/** Code, not the prose about it — the same reason `field.test.ts` strips them. */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
 
 const TSX = sourceFiles("src")
   .filter((path) => path !== CARD && !path.startsWith(STUDIES))
-  .map((path) => ({ path, text: readFileSync(path, "utf8") }));
+  .map((path) => ({ path, text: withoutComments(readFileSync(path, "utf8")) }));
 
 const SOURCE = readFileSync(CARD, "utf8");
 

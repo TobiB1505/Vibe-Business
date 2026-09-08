@@ -47,9 +47,22 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  */
 const STUDIES = "src/app/e2e/design-studies/";
 
+/**
+ * The code, without the prose about it.
+ *
+ * `choice-pills.tsx` explains at length why three native `<select>` elements
+ * were the wrong control and are gone — and that sentence tripped the guard
+ * that says they must be gone. Sprint 0154 recorded the same trap from the
+ * other direction, where a docblock containing `role="alert"` made an
+ * assertion pass with the attribute deleted. A guard about code reads code.
+ */
+function withoutComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/\/\/.*$/gm, "");
+}
+
 const TSX = sourceFiles("src")
   .filter((path) => path !== FIELD && !path.startsWith(STUDIES))
-  .map((path) => ({ path, text: readFileSync(path, "utf8") }));
+  .map((path) => ({ path, text: withoutComments(readFileSync(path, "utf8")) }));
 
 const SOURCE = readFileSync(FIELD, "utf8");
 

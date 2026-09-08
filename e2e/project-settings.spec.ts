@@ -170,6 +170,74 @@ test.describe("project settings", () => {
     expect(Math.abs(control.x - prose.x)).toBeLessThan(24);
   });
 
+  /**
+   * "What you told Vibe" (UI-25).
+   *
+   * It was three native `<select>`s under labels that read like a schema —
+   * *Stage*, *Monetization you're planning*, *Primary goal* — with eighteen
+   * possible answers hidden behind three clicks. Seeing the options is most of
+   * what makes these questions answerable.
+   */
+  test.describe("what you told Vibe", () => {
+    test("asks questions, and shows every answer without a click", async ({ page }) => {
+      await open(page, CONNECTED);
+
+      // No dropdown left on the page.
+      await expect(page.locator("main select")).toHaveCount(0);
+
+      await expect(page.getByText("Where is the product right now?")).toBeVisible();
+      await expect(page.getByText("How does it make money, or how will it?")).toBeVisible();
+      await expect(page.getByText("What are you working toward next?")).toBeVisible();
+
+      // All eighteen, on screen, before anything is opened.
+      const radios = page.locator("main [role='radiogroup'] input[type='radio']");
+      await expect(radios).toHaveCount(18);
+    });
+
+    test("marks the chosen answer absolutely, not only by tint", async ({ page }) => {
+      await open(page, CONNECTED);
+
+      const chosen = page.getByRole("radio", { name: "Has active users" });
+      await expect(chosen).not.toBeChecked();
+      await page.getByText("Has active users", { exact: true }).click();
+      await expect(chosen).toBeChecked();
+
+      // A tick inside the pill, not just a border colour: a tinted border is
+      // readable only against the unselected ones beside it.
+      const tick = await page.evaluate(() => {
+        const input = [...document.querySelectorAll("input[type='radio']")].find(
+          (n) => (n as HTMLInputElement).value === "active_users",
+        );
+        return !!input?.closest("label")?.querySelector("svg");
+      });
+      expect(tick, "the selected pill carries no mark of its own").toBe(true);
+    });
+
+    test("clears an answer back to nothing chosen", async ({ page }) => {
+      await open(page, CONNECTED);
+
+      // Nothing to undo before anything is answered.
+      await expect(page.getByTestId("clear-stage")).toHaveCount(0);
+
+      await page.getByText("Prototype", { exact: true }).click();
+      await page.getByTestId("clear-stage").click();
+
+      await expect(page.getByRole("radio", { name: "Prototype" })).not.toBeChecked();
+      await expect(page.getByTestId("clear-stage")).toHaveCount(0);
+    });
+
+    test("keeps the clear control beside the question it undoes", async ({ page }) => {
+      await open(page, CONNECTED);
+      await page.getByText("Prototype", { exact: true }).click();
+
+      const question = (await page.getByText("Where is the product right now?").boundingBox())!;
+      const clear = (await page.getByTestId("clear-stage").boundingBox())!;
+
+      // It was pushed to the far border of the card, ~700px from its own words.
+      expect(clear.x - (question.x + question.width)).toBeLessThan(80);
+    });
+  });
+
   test("names both consequences before either runs", async ({ page }) => {
     await open(page, CONNECTED);
 
