@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { ChevronDownIcon } from "@/components/ui/icons.generated";
-import { inlineActionClasses } from "@/components/ui/inline-action";
+import { buttonClasses } from "@/components/ui/button";
 import type { Study } from "./studies";
 
 /**
@@ -64,7 +64,7 @@ function AsControl({ open }: { open: boolean }) {
           screen reader, and a button inside one is two controls sharing a
           hit area.
         */}
-        <span className={inlineActionClasses()}>
+        <span className={buttonClasses({ variant: "ghost", size: "xs" })}>
           <ChevronDownIcon
             size={14}
             className="transition-transform duration-150 group-open:rotate-180"

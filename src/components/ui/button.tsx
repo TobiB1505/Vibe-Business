@@ -1,27 +1,84 @@
-import { type ButtonHTMLAttributes, forwardRef } from "react";
+import { type ButtonHTMLAttributes, forwardRef, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * The button system (UI-0).
+ * The button (UI-26). Singular, now.
  *
- * Interactive controls use the same restrained radius as navigation. Pills
- * remain reserved for statuses and filters; using them for every action made
- * the product feel softer and less precise than the work it performs.
+ * ## What was here before, counted
  *
- * `primary` is mint, and mint means Vibe. One primary per screen area. A
- * destructive control never borrows the accent, which is why `danger` is coral
- * and not "a red primary".
+ * Five families made something pressable, and the counting is what settled it:
+ *
+ *   `Button`            94 renders — primary 63, secondary 28, accent 3, danger 0
+ *   `InlineAction`      21 call sites across 18 files, 3 of them destructive
+ *   `IconButton`         1
+ *   `TextAction`         1
+ *   `buttonClasses()`   pasted onto a `Link` or a raw `button` in 28 files
+ *
+ * The `danger` *variant* had never once been used while the product does have
+ * destructive actions — every one of them was an `InlineAction` with a `danger`
+ * tone. So the destructive button was dead code and the destructive action was
+ * alive, which is one vocabulary pretending to be two. `accent` was the other
+ * end of the same problem: three uses of a middle rung between "the action" and
+ * "a control", asked for by no rule anyone could state.
+ *
+ * The founder chose system C from the four in `study-button.tsx`: **one
+ * component, four variants, and icon-only as a size.**
+ *
+ * ## Nothing here looks different, deliberately
+ *
+ * The consolidation is the change. Every colour step below is the one that was
+ * already reviewed and shipped — `ghost` is `InlineAction`'s neutral tone
+ * verbatim and `danger` is its danger tone verbatim, down to the pressed
+ * values. Twenty-three call sites move to a different import and render the
+ * same pixels, which is the only honest way to do a migration this size: no
+ * visual regressions hiding inside a refactor.
+ *
+ * ## Two arguments that came with those tones, and are load-bearing
+ *
+ * **A container exists at rest.** Touch has no hover, so a control whose
+ * container only arrives under a pointer is not a control on a phone. `ghost`
+ * is therefore not transparent-until-hover; it has a resting fill. This was
+ * learned from a phone, on a real screen, and it is why `ghost` is not what the
+ * word usually means elsewhere.
+ *
+ * **Destruction warns at rest.** For the same reason: a danger tone that only
+ * appears on hover never appears on a phone, and "Delete account" and "Change"
+ * become the same grey object. So `danger` carries a coral fill, line and text
+ * from the first frame — it still reads as destructive with the hue removed.
+ *
+ * ## Radius
+ *
+ * `rounded-nav` for the contained sizes; a pill for `xs` and `icon`. That is
+ * not an inconsistency — `xs` is the control that sits inside a sentence or a
+ * table row, where the pill is the shape that says "this belongs to the text",
+ * and a dismissal is round by convention (ADR 0097). Both were already those
+ * shapes; the size scale is where that now lives.
+ *
+ * Radius, padding and gap all live in `SIZE_CLASSES` rather than in the base,
+ * because `cn` is a filtered join and not `tailwind-merge`: a base `gap-2` and
+ * a size `gap-1.5` would both ship and stylesheet order would decide. This file
+ * has been bitten by exactly that before — see `lg` below.
  */
-export type ButtonVariant = "primary" | "secondary" | "accent" | "danger";
-export type ButtonSize = "lg" | "md" | "sm";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger";
+export type ButtonSize = "lg" | "md" | "sm" | "xs" | "icon";
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   primary: "bg-mint text-mint-ink font-bold shadow-mint hover:bg-mint-hover",
   secondary:
     "bg-surface-hover text-fg-body border border-line-strong hover:bg-white/10 hover:text-fg",
-  accent:
-    "bg-mint-tint text-mint border border-mint-line font-semibold hover:bg-mint-tint/60 hover:text-mint-hover",
-  danger: "bg-coral-tint text-coral border border-coral-line hover:bg-coral-tint/70",
+  // A resting container, then hover, then a press that is a visible step past
+  // it. A pointer gets three states and a finger gets two, and the last one is
+  // the only feedback touch ever receives.
+  ghost:
+    "bg-surface-3 text-fg-secondary hover:bg-surface-hover hover:text-fg " +
+    "active:bg-surface-pressed active:text-fg",
+  // Coral at rest, deepening on hover and again on press. `--color-coral-pressed`
+  // exists for that third step; without it hover and press were the same value,
+  // which is a control that stops responding exactly where a finger presses
+  // hardest.
+  danger:
+    "border border-coral-line bg-coral-tint-soft text-coral " +
+    "hover:bg-coral-tint active:bg-coral-pressed",
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -42,9 +99,21 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
    * scale actually has there. So the CTA grows by one pixel and the class
    * that never applied is gone.
    */
-  lg: "px-6 py-4 text-lead",
-  md: "px-5 py-3 text-body",
-  sm: "px-4 py-2.5 text-ui",
+  lg: "rounded-nav gap-2 px-6 py-4 text-lead",
+  md: "rounded-nav gap-2 px-5 py-3 text-body",
+  sm: "rounded-nav gap-2 px-4 py-2.5 text-ui",
+  /**
+   * The control inside a sentence, a header or a table row: 28px tall, a pill,
+   * holding a mark and a word. Asked for 21 times before it was a size — which
+   * is how a whole second button system appears without anyone deciding to
+   * build one.
+   */
+  xs: "min-h-7 gap-1.5 rounded-full px-3 text-ui",
+  /**
+   * A mark and no word. `shrink-0` because these sit in flex headers beside
+   * text that will happily squeeze them.
+   */
+  icon: "size-8 shrink-0 rounded-full",
 };
 
 const BASE_CLASSES =
@@ -52,7 +121,7 @@ const BASE_CLASSES =
   // on `<Button>` so that `<Link className={buttonClasses()}>` call sites —
   // which have no component to hang an attribute on — carry it too.
   "vibe-control " +
-  "inline-flex items-center justify-center gap-2 rounded-nav " +
+  "inline-flex items-center justify-center select-none " +
   // Not `transition-colors`: that list includes `outline-color`, which would
   // fade the focus ring in over 150ms, so the indicator arrives after the
   // keyboard user has already started deciding where they are. This file
@@ -62,8 +131,11 @@ const BASE_CLASSES =
   "transition-interactive " +
   // A disabled control drops to the bottom of the ramp and keeps a border, so
   // it still reads as a control that exists but is not available — never as an
-  // invisible gap. Per the writing rules it should also be accompanied by a
-  // reason somewhere on screen; the button itself cannot enforce that.
+  // invisible gap. The border matters most to `danger`: a control that cannot
+  // be pressed must not still be warning about what pressing it would do, so
+  // the coral line is replaced rather than merely faded. Per the writing rules
+  // it should also be accompanied by a reason somewhere on screen; the button
+  // itself cannot enforce that.
   "disabled:pointer-events-none disabled:border disabled:border-line-2 disabled:bg-surface-3 " +
   "disabled:text-fg-disabled disabled:shadow-none disabled:font-normal";
 
@@ -81,62 +153,14 @@ export function buttonClasses({
  */
 export const buttonClassName = buttonClasses();
 
-/**
- * The one control that is visually inline rather than contained (UI-6 §1).
- *
- * ## Why this exists rather than a fifth `Button` variant
- *
- * Nine controls in this product are genuinely not buttons in the visual
- * sense — "Sign out" in the header, "Change" beside a value, "More context"
- * under a paragraph, "Cancel" beside a form's real action. Rendering those as
- * contained buttons would give a header two competing controls and turn every
- * inline affordance into furniture. They were written nine separate times instead,
- * each with its own size, colour and hover, which is how a third button system
- * appears without anyone deciding to build one.
- *
- * So the category is named once, here, next to the one it is not.
- *
- * ## What it fixes for free
- *
- * All nine used `transition-colors`, which includes `outline-color` — so the
- * focus ring faded in over 150ms on every one of them. Same bug the pill
- * documents avoiding two comments above, in the controls that never inherited
- * the knowledge.
- */
-export type TextActionTone = "muted" | "danger";
-
-const TEXT_ACTION_TONES: Record<TextActionTone, string> = {
-  muted: "text-fg-muted hover:text-fg-body",
-  // Coral, and it darkens rather than lightens on hover, so a destructive
-  // control never reads as the most inviting thing on the screen.
-  danger: "text-coral hover:text-coral/80",
-};
-
-const TEXT_ACTION_BASE =
-  "vibe-control-text " +
-  "rounded-inline underline underline-offset-4 " +
-  // The same shared utility as the pill, for the reason given there.
-  "transition-interactive " +
-  "disabled:pointer-events-none disabled:text-fg-disabled disabled:no-underline";
-
-function textActionClasses(tone: TextActionTone = "muted"): string {
-  return cn(TEXT_ACTION_BASE, TEXT_ACTION_TONES[tone]);
-}
-
-export type TextActionProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  tone?: TextActionTone;
-};
-
-export const TextAction = forwardRef<HTMLButtonElement, TextActionProps>(function TextAction(
-  { className, tone = "muted", ...props },
-  ref,
-) {
-  return <button ref={ref} className={cn(textActionClasses(tone), className)} {...props} />;
-});
-
-export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+type CommonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
   variant?: ButtonVariant;
-  size?: ButtonSize;
+  /**
+   * A mark before the label. Sized by the caller, because 14px against a 13px
+   * word is a ratio — a mark that matches its word's size reads as a second
+   * letter rather than as a sign.
+   */
+  icon?: ReactNode;
   /**
    * The action this button started is still running (UI-6 §3).
    *
@@ -160,22 +184,71 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   busy?: boolean;
 };
 
-export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = "primary", size = "md", busy, children, ...props },
-  ref,
-) {
+/**
+ * `label` is required exactly where the control has no words, and impossible
+ * everywhere else.
+ *
+ * That requirement is the whole reason `IconButton` was a separate component,
+ * and folding it into a size would have quietly dropped it: an icon-only
+ * control with no accessible name is announced as "button", and the entire
+ * category is icon-only. Expressed as a union so the compiler asks, rather than
+ * as an optional prop with a fallback nobody reads.
+ */
+export type ButtonProps =
+  | (CommonProps & {
+      size?: Exclude<ButtonSize, "icon">;
+      label?: never;
+      children: ReactNode;
+    })
+  | (CommonProps & {
+      size: "icon";
+      icon: ReactNode;
+      /** What the control does, as a sentence a screen reader can read. */
+      label: string;
+      children?: never;
+    });
+
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(props, ref) {
+  const {
+    className,
+    variant = "primary",
+    size = "md",
+    busy,
+    icon,
+    label,
+    children,
+    // A button says what it is. The browser's implicit `submit` inside a form
+    // turned "Cancel" and "Clear" into form submissions the moment those
+    // controls stopped being their own component, so the default is the safe
+    // one and a submit declares itself — including a `formAction` button,
+    // which is a submit button whether or not it says so.
+    type = "button",
+    ...rest
+  } = props as CommonProps & {
+    size?: ButtonSize;
+    label?: string;
+    children?: ReactNode;
+    type?: "button" | "submit" | "reset";
+  };
+
   return (
     <button
       ref={ref}
+      type={type}
       aria-busy={busy || undefined}
+      aria-label={label}
       className={cn(buttonClasses({ variant, size }), className)}
-      {...props}
+      {...rest}
     >
-      {busy && (
+      {busy ? (
         <span
           aria-hidden="true"
           className="size-3.5 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent motion-safe:animate-spin"
         />
+      ) : (
+        // The spinner replaces the mark rather than joining it: two symbols in
+        // one control is a control saying two things.
+        icon
       )}
       {children}
     </button>

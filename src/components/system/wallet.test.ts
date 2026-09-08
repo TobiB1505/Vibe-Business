@@ -19,7 +19,7 @@ const AMOUNT = readFileSync("src/components/ui/credit-amount.tsx", "utf8");
  * Code only.
  *
  * Every comment goes, block and JSX alike: the docblocks here explain the
- * traps by name — `IconButton`, `tailwind-merge`, "top up" — and a test that
+ * traps by name — `Button`, `tailwind-merge`, "top up" — and a test that
  * counted prose would pass on an explanation and fail on an edit to one.
  */
 function code(source: string): string {
@@ -116,9 +116,11 @@ describe("adding Credits", () => {
 
   it("is a link, because it navigates", () => {
     // A `<button>` that navigates is announced wrong and cannot be opened in a
-    // new tab. `IconButton` is a button, so it is deliberately not used here.
+    // new tab. Since UI-26 there is one pressable component, and `size="icon"`
+    // is the shape this mark would reach for, so the ban is on that component
+    // rather than on the name `IconButton` it used to carry.
     expect(code(WALLET)).toContain('aria-label="Top up Credits"');
-    expect(code(WALLET)).not.toContain("IconButton");
+    expect(code(WALLET)).not.toContain("<Button");
   });
 
   it("says nothing about buying in the reading itself", () => {

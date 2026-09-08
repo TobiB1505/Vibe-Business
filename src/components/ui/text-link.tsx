@@ -10,8 +10,8 @@ import { ArrowRightIcon, ExternalLinkIcon } from "./icons.generated";
  *
  * Forty-nine elements wrote a bare `underline` by hand. Counted by element,
  * they are navigation and not actions — thirty-eight `Link`, ten `a`, one
- * `button` — so the by-role split that replaced `TextAction`'s underline never
- * reached them. Counted by *context*, which is what decides this, they are two
+ * `button` — so the by-role split that replaced the underlined text action
+ * never reached them. Counted by *context*, which decides this, they are two
  * groups and not one:
  *
  *   38  standalone   a card header, a row, a notice's next step
@@ -46,7 +46,7 @@ const SHARED = "rounded-inline transition-interactive";
  * Classes rather than a component, because these sit inside `<p>` elements
  * beside text, sometimes as `next/link` and sometimes as a bare anchor, and a
  * wrapper would have to re-expose everything an anchor already does. The same
- * reason `inlineActionClasses` exists beside `InlineAction`.
+ * reason `buttonClasses` exists beside `Button`.
  *
  * Brighter than the prose around it *and* underlined — the colour is not doing
  * the work alone, it is making the link comfortable to find once you know it
@@ -88,7 +88,7 @@ export function StandaloneLink({
     className,
   );
   // 14px against a 13–14px label: a mark that matches its word's size reads as
-  // a second letter rather than as a sign. The same figure `InlineAction` uses.
+  // a second letter rather than as a sign. The same figure `Button`'s `icon` uses.
   const mark = external ? <ExternalLinkIcon size={14} /> : <ArrowRightIcon size={14} />;
 
   if (external) {

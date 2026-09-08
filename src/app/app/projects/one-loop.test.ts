@@ -399,7 +399,10 @@ describe("a refused run says which gate stopped it", () => {
     // The half that actually enforces rule 60 — no control here starts the
     // re-read, so a button or a form action in this file is the regression.
     expect(notice).not.toContain("<button");
-    expect(notice).not.toContain("InlineAction");
+    // `<Button` since UI-26: one component makes everything pressable, so this
+    // is the whole of "no control here starts the re-read" rather than one
+    // family of it.
+    expect(notice).not.toContain("<Button");
     expect(notice).not.toContain("startUnderstandingAction");
     expect(notice).not.toContain("useActionState");
   });

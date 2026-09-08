@@ -2,8 +2,7 @@
 
 import { useId, useState } from "react";
 import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
-import { IconButton } from "@/components/ui/icon-button";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
 import { RatingChip } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
@@ -89,7 +88,9 @@ export function EvidenceDrawer({
             only ever read as a control because of a line under it — which on a
             phone, where there is no hover to explain it, is all a founder gets.
           */}
-          <IconButton
+          <Button
+            variant="ghost"
+            size="icon"
             icon={<DismissIcon size={16} />}
             label="Close"
             onClick={onClose}
@@ -181,7 +182,9 @@ export function CitationCount({
         role: nothing around it says what it opens, so the word stays inside
         the control and the chevron says the direction.
       */}
-      <InlineAction
+      <Button
+        variant="ghost"
+        size="xs"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
@@ -189,7 +192,7 @@ export function CitationCount({
         className={className}
       >
         {total === 1 ? "1 source" : `${total} sources`}
-      </InlineAction>
+      </Button>
       <EvidenceDrawer
         open={open}
         onClose={() => setOpen(false)}

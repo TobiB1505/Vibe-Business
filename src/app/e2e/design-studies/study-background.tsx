@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { ChevronDownIcon } from "@/components/ui/icons.generated";
-import { inlineActionClasses } from "@/components/ui/inline-action";
+import { buttonClasses } from "@/components/ui/button";
 import type { Study } from "./studies";
 
 /**
@@ -134,7 +134,7 @@ function GlassCard({ note }: { note: string }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className={inlineActionClasses()}>
+          <span className={buttonClasses({ variant: "ghost", size: "xs" })}>
             <ChevronDownIcon size={14} />2 sources
           </span>
           <span className="font-mono text-meta text-fg-meta">{note}</span>

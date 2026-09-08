@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import type { SetProductionUrlFailure } from "@/modules/projects/production-url";
 import { setProductionUrlAction, type ProductionUrlActionState } from "./production-url-action";
 import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
 import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
@@ -47,9 +46,14 @@ export function ProductionUrlForm({
         <StandaloneLink href={currentUrl} external>
           {currentUrl}
         </StandaloneLink>
-        <InlineAction icon={<EditIcon size={14} />} onClick={() => setEditing(true)}>
+        <Button
+          variant="ghost"
+          size="xs"
+          icon={<EditIcon size={14} />}
+          onClick={() => setEditing(true)}
+        >
           Change
-        </InlineAction>
+        </Button>
       </div>
     );
   }
@@ -69,9 +73,14 @@ export function ProductionUrlForm({
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
         </Button>
         {currentUrl !== null && (
-          <InlineAction icon={<DismissIcon size={14} />} onClick={() => setEditing(false)}>
+          <Button
+            variant="ghost"
+            size="xs"
+            icon={<DismissIcon size={14} />}
+            onClick={() => setEditing(false)}
+          >
             Cancel
-          </InlineAction>
+          </Button>
         )}
       </form>
 

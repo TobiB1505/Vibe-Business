@@ -9,7 +9,7 @@ import type {
 } from "@/modules/operations/account-erasure/view";
 import { deleteAccountAction, type DeleteAccountActionState } from "./delete-account-actions";
 import { DeleteIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 
 /**
  * Erasing an account (ADR 0056 §4, §9).
@@ -135,14 +135,15 @@ export function DeleteAccountSection({ state }: { state: ErasureViewState }) {
           </form>
         ) : (
           <div>
-            <InlineAction
+            <Button
+              variant="danger"
+              size="xs"
               ref={openerRef}
-              tone="danger"
               icon={<DeleteIcon size={14} />}
               onClick={() => setConfirming(true)}
             >
               Delete account
-            </InlineAction>
+            </Button>
           </div>
         )}
 

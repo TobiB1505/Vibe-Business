@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { InlineAction } from "@/components/ui/inline-action";
 import { Surface } from "@/components/ui/surface";
 import { ACCEPT_ALL, REJECT_ALL } from "@/modules/consent/categories";
 import { proseLinkClasses } from "@/components/ui/text-link";
@@ -148,13 +147,15 @@ export function ConsentBanner() {
                 longer path, not the way to say no. Refusing is the button
                 beside "Accept all", in the same weight.
               */}
-              <InlineAction
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setChoosing(true)}
                 data-testid="consent-choose"
                 className="sm:ml-auto"
               >
                 Choose
-              </InlineAction>
+              </Button>
             </>
           )}
         </div>

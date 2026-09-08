@@ -19,7 +19,7 @@ import type {
 } from "@/modules/projects/business-brain-view";
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 import { ArrowRightIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 import { figureClasses } from "@/components/ui/figure";
 import { RatingChip } from "@/components/ui/status-pill";
 import { EmptyState } from "@/components/ui/states";
@@ -160,13 +160,15 @@ function PriorityCard({
           </div>
         )}
         {lens && (
-          <InlineAction
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => onExplore(lens)}
             icon={<ArrowRightIcon size={14} />}
             className="w-fit"
           >
             Explore this area
-          </InlineAction>
+          </Button>
         )}
       </div>
       <Link

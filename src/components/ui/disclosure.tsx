@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 import { ChevronDownIcon } from "./icons.generated";
-import { inlineActionClasses } from "./inline-action";
+import { buttonClasses } from "./button";
 import { MonoLabel } from "./typography";
 
 /**
@@ -38,7 +38,7 @@ export function Disclosure({
   return (
     <details open={defaultOpen} className={cn("group", className)}>
       {/*
-        The trigger wears `inlineActionClasses` on a span rather than being a
+        The trigger wears the ghost button's classes on a span rather than being a
         nested button: a `<summary>` is already the control the browser hands
         to the keyboard and to a screen reader, and a button inside one is two
         controls sharing a hit area.
@@ -61,7 +61,7 @@ export function Disclosure({
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <span className={inlineActionClasses()}>
+        <span className={buttonClasses({ variant: "ghost", size: "xs" })}>
           <ChevronDownIcon
             size={14}
             className="transition-transform duration-150 group-open:rotate-180"

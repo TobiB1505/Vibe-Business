@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
-import { buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
@@ -58,7 +58,6 @@ import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
 import { ArrowRightIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
 
 export const metadata: Metadata = {
   title: "Setting up your product",
@@ -615,13 +614,15 @@ export default async function ProjectOnboardingPage({
                   projectId={projectId}
                   opportunityId={firstOpportunity.id}
                   skip={
-                    <InlineAction
+                    <Button
+                      variant="ghost"
+                      size="xs"
                       type="submit"
                       formAction={completeOnboardingAction.bind(null, projectId)}
                       icon={<ArrowRightIcon size={14} />}
                     >
                       Go to your workspace
-                    </InlineAction>
+                    </Button>
                   }
                 />
               ) : (

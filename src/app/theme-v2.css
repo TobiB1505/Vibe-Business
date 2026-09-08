@@ -550,10 +550,6 @@
   transform: translate3d(0, 1px, 0) scale(0.994);
 }
 
-[data-vibe="v2"] .vibe-control-text:active:not(:disabled) {
-  transform: translate3d(0, 1px, 0);
-}
-
 /*
  * Obligation 1 again, for the material rather than for the keyframes.
  *
@@ -563,12 +559,10 @@
  * it reads as though the question was already answered.
  */
 @media (prefers-reduced-motion: reduce) {
-  [data-vibe="v2"] .vibe-control,
-  [data-vibe="v2"] .vibe-control-text {
+  [data-vibe="v2"] .vibe-control {
     transition: none;
   }
-  [data-vibe="v2"] .vibe-control:active:not(:disabled),
-  [data-vibe="v2"] .vibe-control-text:active:not(:disabled) {
+  [data-vibe="v2"] .vibe-control:active:not(:disabled) {
     transform: none;
   }
 }

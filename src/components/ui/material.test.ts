@@ -42,7 +42,6 @@ const HOOKS = [
   "vibe-surface-section",
   "vibe-well",
   "vibe-control",
-  "vibe-control-text",
   "vibe-overlay",
   "vibe-chrome",
 ] as const;

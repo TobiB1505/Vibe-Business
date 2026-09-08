@@ -8,7 +8,7 @@ import {
   type DeleteProjectFailure,
 } from "./actions";
 import { DeleteIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 
 /**
  * Deleting a project (ADR 0056 §1).
@@ -117,14 +117,15 @@ export function DeleteProjectButton({
       refusal across the whole card.
     */
     <div className="flex flex-col items-start gap-2">
-      <InlineAction
+      <Button
+        variant="danger"
+        size="xs"
         ref={openerRef}
-        tone="danger"
         icon={<DeleteIcon size={14} />}
         onClick={() => setConfirming(true)}
       >
         Delete project
-      </InlineAction>
+      </Button>
       {failure && (
         <p role="alert" className="text-body text-amber">
           {FAILURE_MESSAGES[failure]}

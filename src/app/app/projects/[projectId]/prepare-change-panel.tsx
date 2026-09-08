@@ -32,7 +32,6 @@ import {
   type PrepareChangeActionState,
 } from "./prepare-change-action";
 import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
 import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
@@ -84,9 +83,9 @@ function ConfirmDialog({
             {pending ? "Starting…" : "Prepare change"}
           </Button>
         </form>
-        <InlineAction icon={<DismissIcon size={14} />} onClick={onCancel}>
+        <Button variant="ghost" size="xs" icon={<DismissIcon size={14} />} onClick={onCancel}>
           Cancel
-        </InlineAction>
+        </Button>
       </div>
     </div>
   );
@@ -256,12 +255,14 @@ export function PrepareChangePanel({
           >
             Review prepared change
           </Link>
-          <InlineAction
+          <Button
+            variant="ghost"
+            size="xs"
             icon={<ChevronDownIcon size={14} />}
             onClick={() => loadDiff(preparedChangeId)}
           >
             Preview the diff here
-          </InlineAction>
+          </Button>
           {branchUrl && (
             <StandaloneLink href={branchUrl} external>
               Open branch on GitHub

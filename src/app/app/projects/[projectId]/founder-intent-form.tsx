@@ -19,7 +19,6 @@ import {
 import type { SaveFounderIntentFailure } from "@/modules/projects/founder-intent-store";
 import { saveFounderIntentAction, type FounderIntentActionState } from "./founder-intent-action";
 import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
 
 /**
  * Founder intent (CORE-2 §4; rebuilt UI-25).
@@ -111,7 +110,9 @@ export function FounderIntentForm({
               : []),
           ]}
         />
-        <InlineAction
+        <Button
+          variant="ghost"
+          size="xs"
           icon={<EditIcon size={14} />}
           onClick={() => {
             // Back to what is saved, so a cancelled edit leaves nothing behind.
@@ -122,7 +123,7 @@ export function FounderIntentForm({
           }}
         >
           Change your answers
-        </InlineAction>
+        </Button>
       </div>
     );
   }
@@ -161,9 +162,14 @@ export function FounderIntentForm({
           {pending ? "Saving…" : "Save"}
         </Button>
         {!empty && (
-          <InlineAction icon={<DismissIcon size={14} />} onClick={() => setEditing(false)}>
+          <Button
+            variant="ghost"
+            size="xs"
+            icon={<DismissIcon size={14} />}
+            onClick={() => setEditing(false)}
+          >
             Cancel
-          </InlineAction>
+          </Button>
         )}
       </div>
 

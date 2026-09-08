@@ -14,7 +14,7 @@ import { SectionHeader } from "@/components/ui/typography";
 import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { Figure } from "@/components/ui/figure";
 import { EmptyState } from "@/components/ui/states";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { ProductListCard } from "./product-list-card";
@@ -156,14 +156,16 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
           title="No matching products"
           description="Try another search or reset the filter to see every connected product."
           action={
-            <InlineAction
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={() => {
                 setQuery("");
                 setFilter("all");
               }}
             >
               Clear search and filters
-            </InlineAction>
+            </Button>
           }
         />
       )}

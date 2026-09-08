@@ -2,7 +2,7 @@
 
 import { useId, type ReactNode } from "react";
 import { CheckIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "./button";
 import { DismissIcon } from "@/components/ui/icons.generated";
 import { cn } from "@/lib/utils/cn";
 
@@ -98,13 +98,15 @@ export function ChoicePills<Value extends string>({
           {question}
         </legend>
         {value !== null && (
-          <InlineAction
+          <Button
+            variant="ghost"
+            size="xs"
             icon={<DismissIcon size={13} />}
             onClick={() => onChange(null)}
             data-testid={`clear-${name}`}
           >
             Clear
-          </InlineAction>
+          </Button>
         )}
       </div>
       {hint && <p className="text-fg-muted max-w-[62ch] text-caption">{hint}</p>}

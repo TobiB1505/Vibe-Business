@@ -115,6 +115,11 @@ export function LiveSiteStep({
           </Button>
           {(liveScanFailed || error?.step === "live") && (
             <Button
+              // A `formAction` button is a submit button; it worked on the
+              // browser's implicit default until `Button` stopped relying on
+              // one (UI-26), and "Continue without live product" would have
+              // gone quiet.
+              type="submit"
               formAction={withoutLiveAction}
               variant="secondary"
               disabled={pending || continuing}

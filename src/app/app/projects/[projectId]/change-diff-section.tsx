@@ -11,7 +11,7 @@ import {
 } from "@/modules/review/classification";
 import { getPreparedDiffAction } from "./prepare-change-action";
 import { ChevronDownIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -125,7 +125,9 @@ export function ChangeDiffSection({
       )}
 
       {!isCodeReview && (
-        <InlineAction
+        <Button
+          variant="ghost"
+          size="xs"
           icon={
             <ChevronDownIcon
               size={14}
@@ -138,7 +140,7 @@ export function ChangeDiffSection({
           {open
             ? "Hide the diff"
             : `Show the diff — ${filesChanged} file${filesChanged === 1 ? "" : "s"}`}
-        </InlineAction>
+        </Button>
       )}
 
       {loading && <p className="text-body text-fg-secondary">Reading the change…</p>}

@@ -9,7 +9,7 @@ import {
   type OnboardingState,
 } from "@/modules/onboarding/state";
 import { SignOutIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 import { StandaloneLink } from "@/components/ui/text-link";
 
 export function OnboardingShell({
@@ -61,9 +61,9 @@ export function OnboardingShell({
             {canLeave && <StandaloneLink href="/app">Back to your projects</StandaloneLink>}
             {email && <span className="text-fg-meta hidden text-caption sm:inline">{email}</span>}
             <form action={signOut}>
-              <InlineAction type="submit" icon={<SignOutIcon size={14} />}>
+              <Button variant="ghost" size="xs" type="submit" icon={<SignOutIcon size={14} />}>
                 Sign out
-              </InlineAction>
+              </Button>
             </form>
           </div>
         </div>

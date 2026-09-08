@@ -21,7 +21,7 @@ function SubmitButton({
   className,
 }: {
   children: React.ReactNode;
-  variant?: "primary" | "secondary" | "accent";
+  variant?: "primary" | "secondary";
   pendingLabel: string;
   className?: string;
 }) {
@@ -89,7 +89,7 @@ export function BuyCreditPackForm({
             Unavailable
           </button>
         ) : (
-          <SubmitButton variant="accent" pendingLabel="Opening…">
+          <SubmitButton variant="secondary" pendingLabel="Opening…">
             Buy
             <ArrowRightIcon size={14} />
           </SubmitButton>
@@ -160,7 +160,7 @@ export function StartPlanForm({
           // narrow plans column, giving each plan a two-line button beside a
           // one-line price.
           <SubmitButton
-            variant="accent"
+            variant="secondary"
             pendingLabel="Opening…"
             className="whitespace-nowrap"
           >

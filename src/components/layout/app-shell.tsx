@@ -4,7 +4,7 @@ import { VibeLockup } from "@/components/brand/vibe-mark";
 import { signOut } from "@/modules/auth/actions";
 import { cn } from "@/lib/utils/cn";
 import { SignOutIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 
 /**
  * The signed-in application shell (UI-0).
@@ -92,9 +92,9 @@ export function AppShell({
               </span>
             )}
             <form action={signOut}>
-              <InlineAction type="submit" icon={<SignOutIcon size={14} />}>
+              <Button variant="ghost" size="xs" type="submit" icon={<SignOutIcon size={14} />}>
                 Sign out
-              </InlineAction>
+              </Button>
             </form>
           </div>
         </div>

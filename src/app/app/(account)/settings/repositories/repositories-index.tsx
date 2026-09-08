@@ -14,7 +14,7 @@ import {
   SearchIcon,
   SettingsIcon,
 } from "@/components/ui/dashboard-icons";
-import { buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
@@ -34,7 +34,6 @@ import { proseLinkClasses } from "@/components/ui/text-link";
 import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { Figure } from "@/components/ui/figure";
 import { EmptyState } from "@/components/ui/states";
-import { InlineAction } from "@/components/ui/inline-action";
 
 function GithubMark({ className }: { className?: string }) {
   return (
@@ -532,9 +531,9 @@ export function RepositoriesIndex({
               title="No matching repositories"
               description="Try another repository, product or branch name, or reset the visibility filter."
               action={
-                <InlineAction onClick={clearSearchAndFilters}>
+                <Button variant="ghost" size="xs" onClick={clearSearchAndFilters}>
                   Clear search and filters
-                </InlineAction>
+                </Button>
               }
             />
           )}

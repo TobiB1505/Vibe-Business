@@ -85,7 +85,7 @@ describe("the account card", () => {
   });
 
   it("answers a finger, which never hovers", () => {
-    // `IconButton` makes this argument at length: touch gets rest and pressed
+    // `Button` makes this argument at length: touch gets rest and pressed
     // and nothing in between, so a press has to be a visible step past hover
     // rather than the same fill.
     expect(code(CARD)).toContain("active:bg-surface-3");

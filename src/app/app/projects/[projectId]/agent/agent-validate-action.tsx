@@ -79,7 +79,7 @@ export function AgentValidateAction({
       <div>
         <Button
           type="button"
-          variant="accent"
+          variant="primary"
           size="md"
           disabled={running}
           busy={running}

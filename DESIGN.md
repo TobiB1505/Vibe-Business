@@ -22,6 +22,7 @@ rounded:
 components:
   button:
     radius: "nav"
+    inlineRadius: "9999px"
   panel:
     radius: "panel"
   status:

@@ -31,7 +31,7 @@ import { ProductionUrlForm } from "../production-url-form";
  * They were three rows in one `Surface` headed *Repository* — what Vibe reads,
  * then disconnect, then delete — two about a repository and the third
  * destroying the project and everything Vibe learned about it, all the same
- * `InlineAction` with the same icon one border-top apart.
+ * quiet inline control with the same icon, one border-top apart.
  *
  * UI-21 pulled deleting out to a plain section at the foot. That fixed the
  * flattening and left a different gap: position was the only signal, so a

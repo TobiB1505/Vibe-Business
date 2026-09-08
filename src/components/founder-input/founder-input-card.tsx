@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
-import { Button, TextAction } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { CheckIcon } from "@/components/ui/dashboard-icons";
 import { ChoiceCard } from "@/components/ui/choice-card";
 import { Disclosure } from "@/components/ui/disclosure";
@@ -209,16 +209,17 @@ export function FounderInputCard({
           )}
 
           {request.recommendation && (
-            <TextAction
-              type="button"
+            <Button
+              variant="ghost"
+              size="xs"
               onClick={() => {
                 setSelectedChoice("recommendation");
                 setCustomOpen(false);
               }}
-              className="mt-1 self-start text-caption"
+              className="mt-1 self-start"
             >
               I&apos;m not sure — use Vibe&apos;s recommendation
-            </TextAction>
+            </Button>
           )}
 
           <div className="border-line-2 mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-4">

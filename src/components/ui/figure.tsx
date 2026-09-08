@@ -55,8 +55,8 @@ const TIER: Record<FigureTier, string> = {
 /**
  * The class list, for a figure inside a composition this component cannot
  * own — a `cn()` that also carries a tone, a motion wrapper, a truncating
- * flex row. The same split `buttonClasses` and `inlineActionClasses` make, and
- * for the same reason: not every call site has a slot shaped like a component.
+ * flex row. The same split `buttonClasses` makes beside `Button`, and for the
+ * same reason: not every call site has a slot shaped like a component.
  */
 export function figureClasses(tier: FigureTier = "md", className?: string): string {
   return cn(TIER[tier], "font-semibold tabular-nums", className);

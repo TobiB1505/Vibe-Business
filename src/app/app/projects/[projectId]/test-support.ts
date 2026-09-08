@@ -46,12 +46,12 @@ const CONTROL_TAGS = [
   "a",
   "Button",
   "Link",
-  // The named controls the underline work replaced these with. `InlineAction`
-  // renders a `<button>` and `StandaloneLink` a `Link` or an `<a>`, so to a
-  // reader and to `getByRole` nothing changed — but a source scanner sees only
-  // the tag it was told about, which is why the extractor throws on an empty
-  // result rather than reporting that a panel offers no controls.
-  "InlineAction",
+  // `StandaloneLink` renders a `Link` or an `<a>`, so to a reader and to
+  // `getByRole` nothing changed — but a source scanner sees only the tag it was
+  // told about, which is why the extractor throws on an empty result rather
+  // than reporting that a panel offers no controls. `InlineAction` was here for
+  // the same reason until UI-26 folded it into `Button`, which was already on
+  // this list.
   "StandaloneLink",
 ] as const;
 

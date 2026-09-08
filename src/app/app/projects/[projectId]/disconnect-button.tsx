@@ -8,7 +8,7 @@ import {
   type DisconnectProjectFailure,
 } from "./actions";
 import { DeleteIcon } from "@/components/ui/icons.generated";
-import { InlineAction } from "@/components/ui/inline-action";
+import { Button } from "@/components/ui/button";
 
 /**
  * Disconnecting a repository (UI-6 §3, ADR 0056 §1).
@@ -99,15 +99,16 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
       a control separated from its own sentence.
     */
     <div className="flex flex-col items-start gap-2">
-      <InlineAction
+      <Button
+        variant="danger"
+        size="xs"
         ref={openerRef}
         type="button"
-        tone="danger"
         icon={<DeleteIcon size={14} />}
         onClick={() => setConfirming(true)}
       >
         Disconnect repository
-      </InlineAction>
+      </Button>
       {failure && (
         <p role="alert" className="text-body text-amber">
           {FAILURE_MESSAGES[failure]}
