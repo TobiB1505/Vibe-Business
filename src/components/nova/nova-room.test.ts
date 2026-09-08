@@ -91,6 +91,7 @@ describe("the room", () => {
       "app/app/onboarding/[projectId]/page.tsx",
       "app/app/projects/[projectId]/nova/nova-home.tsx",
       "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
+      "app/e2e/[scenario]/page.tsx",
       "app/e2e/design-studies/study-onboarding.tsx",
     ]);
   });

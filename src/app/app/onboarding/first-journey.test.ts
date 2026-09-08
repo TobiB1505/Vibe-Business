@@ -316,8 +316,14 @@ describe("the first journey speaks to a founder", () => {
     expect(disclosure).toMatch(/GitHub will ask which repositories/i);
     /* The half that matters: the founder chooses, and Vibe is limited to the
        choice. A disclosure naming the prompt without naming the limit would be
-       a warning rather than the fact. */
-    expect(disclosure).toMatch(/you choose/i);
+       a warning rather than the fact.
+
+       Asserted as the two claims rather than one wording of them. This read
+       `/you choose/i` and failed on a rewrite that says the same thing in
+       better English — a test that pins a sentence rather than its meaning
+       makes every improvement to the copy look like a regression. */
+    expect(disclosure).toMatch(/you choose|choice is (entirely )?yours|yours to (make|choose)/i);
+    expect(disclosure).toMatch(/only .*(the ones you|what you)/i);
 
     /* And the state that carries it is the one the page renders for the
        hand-over, rather than a sentence nothing reaches. */

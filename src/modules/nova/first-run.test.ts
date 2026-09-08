@@ -209,8 +209,26 @@ describe("what Nova says on her own two screens", () => {
   it("actually explains the loop when asked to", () => {
     const entries = buildNovaWorkflowExplanation();
 
-    expect(entries.length).toBeGreaterThanOrEqual(3);
-    expect(entries.every((entry) => entry.kind === "nova.message")).toBe(true);
+    expect(entries.filter((entry) => entry.kind === "nova.message").length).toBeGreaterThanOrEqual(
+      3,
+    );
+  });
+
+  /**
+   * And it ends with the press that records having been shown it.
+   *
+   * The walkthrough used to end in nothing: the write fired when it opened, so
+   * by the time the sentences were on screen the position had already moved on
+   * and there was no control under them. One action id, at the bottom, is what
+   * makes the record true at the moment it is written.
+   */
+  it("ends with the control that records it, and only that one", () => {
+    const choices = buildNovaWorkflowExplanation().filter((entry) => entry.kind === "nova.choice");
+
+    expect(choices).toHaveLength(1);
+    expect(choices[0]?.options.map((option) => option.actionId)).toEqual(["nova.begin_setup"]);
+    /* Last, so it cannot be pressed before the thing it records was shown. */
+    expect(buildNovaWorkflowExplanation().at(-1)?.kind).toBe("nova.choice");
   });
 });
 

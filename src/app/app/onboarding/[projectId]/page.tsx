@@ -42,6 +42,7 @@ import { novaWorkingEntry } from "@/modules/nova/home-view";
 import { operationPollPhase } from "@/modules/operations/view";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed } from "@/modules/audit-log/view";
+import { getGithubIdentity } from "@/modules/github/identity";
 import { NOVA_ONBOARDING_TIER } from "@/modules/nova/onboarding";
 import { NovaOnboardingThread } from "./nova-onboarding-thread";
 import { OnboardingAuditReveal } from "./audit-reveal";
@@ -91,17 +92,17 @@ export default async function ProjectOnboardingPage({
    * say hello: an introduction describes what Vibe does, not what it has
    * found, so a founder seeing it should not wait on an audit stamp.
    *
-   * The introduction branch makes exactly one read of its own now — the event
-   * log, for the rail the choreography fills. That is a beat of the sequence
-   * rather than a fact about the product, and it is why it is worth a query
-   * here and nothing else is.
+   * The introduction branch makes two reads of its own — the event log, for
+   * the rail the choreography fills, and who the founder is, so she can say
+   * hello to somebody. Both are beats of the sequence rather than facts about
+   * the product, and they are why those two are worth a query here and nothing
+   * else is.
    */
   const firstRun = deriveNovaFirstRun({
     onboardingState: onboarding.state,
     novaIntroducedAt: onboarding.novaIntroducedAt,
     novaWorkflowStatus: onboarding.novaWorkflowStatus,
   });
-  const firstRunEntries = buildNovaFirstRunFeed(firstRun);
 
   /*
    * The introduction is the choreography, not a screen with the same words on
@@ -130,11 +131,19 @@ export default async function ProjectOnboardingPage({
      * below it, because an introduction still has no reason to wait on an
      * audit stamp.
      */
-    const introActivity = await listAuditEventsForProject(supabase, {
-      projectId,
-      userId: session.userId,
-      limit: 4,
-    });
+    /*
+     * And who to say hello to.
+     *
+     * `identity-view.ts` holds the rule: never invent a name. The GitHub login
+     * is a name a person chose and authenticated with, so it is one; an email
+     * address is an address and is not shortened into a first name here.
+     * `null` is an ordinary answer — `novaGreeting` has a nameless form that
+     * is a greeting rather than a gap.
+     */
+    const [introActivity, identity] = await Promise.all([
+      listAuditEventsForProject(supabase, { projectId, userId: session.userId, limit: 4 }),
+      getGithubIdentity(supabase, session.userId),
+    ]);
 
     return (
       <OnboardingShell
@@ -147,13 +156,41 @@ export default async function ProjectOnboardingPage({
           projectId={projectId}
           productName={onboarding.projectName}
           connected={onboarding.repository !== null}
+          greetingName={identity?.githubLogin ?? null}
           activity={buildActivityFeed(introActivity.events).reverse()}
         />
       </OnboardingShell>
     );
   }
 
+  /*
+   * Everything else she says at her own positions. Built after the branch
+   * above returns, because the introduction's greeting needs a read this does
+   * not — and a feed built for a branch that already returned is a query
+   * nobody looks at.
+   */
+  const firstRunEntries = buildNovaFirstRunFeed(firstRun);
+
   if (firstRunEntries.length > 0) {
+    /*
+     * The same read the introduction makes, and for the same reason.
+     *
+     * This branch passed `[]` on the argument that "a project that has not
+     * been introduced to Nova has nothing in its log worth a query" — and the
+     * project has been introduced by the time this renders. `nova.introduced`
+     * is in the log, and so is everything the opening's rail had just shown.
+     *
+     * So the empty list was not a saved query, it was the room losing its
+     * contents on the handover: two rows of *Earlier* during the choreography,
+     * an empty box the moment she stopped speaking. The whole argument for the
+     * opening is that the room it builds is still there afterwards.
+     */
+    const handoverActivity = await listAuditEventsForProject(supabase, {
+      projectId,
+      userId: session.userId,
+      limit: 4,
+    });
+
     return (
       <OnboardingShell
         email={session.email}
@@ -182,15 +219,10 @@ export default async function ProjectOnboardingPage({
               presence="listening"
               seed={projectId}
               working={null}
+              /* No plan during setup: there is none, and a column headed "To
+                 do" over nothing promises work nobody has decided on. */
               checklist={null}
-              /*
-               * Empty, and not read for. This branch returns before the
-               * page's read wave precisely so an introduction does not wait
-               * on an audit stamp — and a project that has not been
-               * introduced to Nova has nothing in its log worth a query.
-               * `Earlier` renders nothing rather than a heading over a gap.
-               */
-              activity={[]}
+              activity={buildActivityFeed(handoverActivity.events).reverse()}
             />
           }
         >

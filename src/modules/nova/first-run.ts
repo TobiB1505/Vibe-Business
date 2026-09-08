@@ -108,34 +108,76 @@ export function deriveNovaFirstRun(facts: NovaFirstRunFacts): NovaFirstRunPositi
  * work nobody has done yet. The introduction in particular is where a product
  * is most tempted to say what it *will* achieve, and Nova describes only what
  * she does.
+ *
+ * `feed.test.ts` sweeps these now. It did not, and the gap was the shape its
+ * own docblock warns about: the rules were a property of a *sweep* rather than
+ * of Nova, so the copy a founder meets first — before any of the twenty-one
+ * moments and before any onboarding state — was the one part of her voice
+ * nothing checked.
  */
+
+/**
+ * Hello, by name where there is one.
+ *
+ * ## Why the name is a parameter and not a lookup
+ *
+ * Because `identity-view.ts` holds the rule this has to obey: **never invent a
+ * name.** Nothing in this codebase stores one. There are exactly two things a
+ * founder may be called — the GitHub login they authenticated with, which is a
+ * name they chose, and their email address, which is an address. An address is
+ * not shortened into a name here: "tobivlog@outlook.de" does not become
+ * "Tobi", because that is a guess about a person presented as a fact.
+ *
+ * So a caller passes a login or it passes null, and the greeting has two
+ * forms. The nameless one is not a degraded version — it is the same warmth
+ * without a claim in it.
+ */
+export function novaGreeting(name: string | null): string {
+  return name
+    ? `Hi ${name} — I am Nova. I will be the one working on your product with you, and I will walk you through the setup now.`
+    : "Hi — I am Nova. I will be the one working on your product with you, and I will walk you through the setup now.";
+}
+
+/** What she says after hello, and before anything is asked of anybody. */
 const INTRODUCTION = [
-  "I read your code and your product, work out what is holding the business back, and then I build the changes myself.",
+  "After that: I read your code and your live product, work out what is holding the business back, and then I build the changes myself.",
   "You stay in charge of what ships. Nothing reaches your default branch until you have looked at it and said yes.",
 ] as const;
 
+/**
+ * The question, and the only one asked before setup begins.
+ *
+ * Two real answers, and neither is a dismissal: getting on with it is a
+ * choice a person made, which is why `skipped` is a value on the status table
+ * rather than an absence.
+ */
 const WORKFLOW_OFFER =
-  "Before we start: I can walk you through how a change gets from an idea to your default branch.";
+  "Before we start — shall we get straight to it, or would you like me to show you how I work first?";
 
 /**
- * The walkthrough itself.
+ * How she works, for somebody who asked.
  *
- * It exists because the control that records `explained` has to explain
- * something. A button that wrote the column and showed nothing would make the
- * column false in the other direction from the name §O.5 rejected — recording
- * an explanation that did not happen rather than one that did.
+ * ## Why this is about the interface and not only about the pipeline
  *
- * Four sentences, one per thing that actually occurs, in the order it occurs.
- * None of them promises an outcome and none says a change is finished: the
- * last one is the guarantee Vibe genuinely makes, which is that the founder
- * decides.
+ * It used to be four sentences describing what happens to a change: read,
+ * judge, build, review. All true, and all of it answers a question nobody had
+ * yet. The thing a person actually does not know on meeting this screen is
+ * *what kind of thing am I talking to* — and the answer is unusual enough to
+ * be worth saying outright. She is not a chat box. There is nothing to type.
+ * She proposes one thing and a person presses it or does not.
+ *
+ * So the interaction comes first and the pipeline second, and the block that
+ * follows shows the shape rather than describing it again.
  */
 const WORKFLOW_STEPS = [
-  "First I read your code and, if you have one, your live product, and tell you what I understood.",
-  "Then I look at the business around it and say what is holding it back, worst thing first.",
-  "When you pick something, I plan it, build it on a branch of its own, and check that the project still builds.",
-  "Then you look at what I did. Nothing reaches your default branch until you say so.",
+  "I am not a chat box. There is nothing here to type, and I will never ask you to write out what you want.",
+  "I say one thing at a time, and under it I put the one thing I think is worth doing next. You press it, or you do not — that is the whole of it.",
+  "Anything that costs money carries its price inside the button, before you press. Reading, looking and changing your mind are free.",
+  "And when I have built something, you see it before it goes anywhere. Nothing reaches your default branch until you say so.",
 ] as const;
+
+/** The line that hands over to the example, so the block is not unannounced. */
+const WORKFLOW_EXAMPLE_LEAD = "Here is what that looks like.";
 
 /**
  * The feed for a first-run position, or nothing when the screen is not Nova's.
@@ -144,9 +186,26 @@ const WORKFLOW_STEPS = [
  * that as "render what you rendered before". An entry saying "Nova has nothing
  * to say" would be a screen element made of an absence.
  */
-export function buildNovaFirstRunFeed(position: NovaFirstRunPosition): NovaEntry[] {
+export function buildNovaFirstRunFeed(
+  position: NovaFirstRunPosition,
+  /**
+   * What to call the founder, or null when nothing here knows.
+   *
+   * Only the introduction uses it, and only in its first sentence. Defaulted
+   * so every caller that has no identity to hand — the lab, the studies, the
+   * tests about ordering — gets the nameless greeting rather than a required
+   * argument they would have to invent a value for.
+   */
+  name: string | null = null,
+): NovaEntry[] {
   if (position === "introduce") {
     return [
+      {
+        kind: "nova.message" as const,
+        id: "first-run:introduce:hello",
+        text: novaGreeting(name),
+        emphasis: "primary" as const,
+      },
       ...INTRODUCTION.map((text, index) => ({
         kind: "nova.message" as const,
         id: `first-run:introduce:${index}`,
@@ -206,15 +265,54 @@ export function buildNovaFirstRunFeed(position: NovaFirstRunPosition): NovaEntry
  * What the founder sees after asking to be shown.
  *
  * Not a position: it is what one of `explain_workflow`'s two controls reveals,
- * and by the time the write behind it lands the derived position is already
- * `handoff`. Deriving it from a column would have meant a third status value
- * for a screen the founder is looking at right now.
+ * on the same screen, without a write. Deriving it from a column would have
+ * meant a third status value for a screen the founder is looking at right now
+ * — and the write it *would* have needed is exactly what used to replace this
+ * thread with the next setup step the instant somebody asked to see it.
+ *
+ * Four sentences about how she works, the line that hands over to the example,
+ * and the press that records having been shown it.
  */
 export function buildNovaWorkflowExplanation(): NovaEntry[] {
-  return WORKFLOW_STEPS.map((text, index) => ({
-    kind: "nova.message" as const,
-    id: `first-run:walkthrough:${index}`,
-    text,
-    emphasis: index === 0 ? ("primary" as const) : ("aside" as const),
-  }));
+  return [
+    ...WORKFLOW_STEPS.map((text, index) => ({
+      kind: "nova.message" as const,
+      id: `first-run:walkthrough:${index}`,
+      text,
+      emphasis: index === 0 ? ("primary" as const) : ("aside" as const),
+    })),
+    /*
+     * Last, because the block it announces is rendered under the sentences and
+     * a lead that arrived anywhere else would be pointing at nothing.
+     */
+    {
+      kind: "nova.message" as const,
+      id: "first-run:walkthrough:example",
+      text: WORKFLOW_EXAMPLE_LEAD,
+      emphasis: "primary" as const,
+    },
+    /*
+     * And the press that records `explained`, at the bottom of the thing it
+     * records having shown. The catalog owns the verb, as everywhere else — a
+     * label written here would be a button saying one thing and writing
+     * another.
+     */
+    {
+      kind: "nova.choice" as const,
+      id: "first-run:walkthrough:choice",
+      prompt: "",
+      options: [
+        {
+          actionId: "nova.begin_setup" as const,
+          control: NOVA_ACTION_META["nova.begin_setup"].control,
+          label: NOVA_ACTION_META["nova.begin_setup"].label,
+          price: null,
+          consequential: false,
+          requiresConfirmation: false,
+          confirmationNote: null,
+          subject: { kind: "project" as const },
+        },
+      ],
+    },
+  ];
 }

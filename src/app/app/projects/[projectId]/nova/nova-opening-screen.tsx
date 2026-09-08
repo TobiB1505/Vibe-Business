@@ -70,20 +70,33 @@ import { markNovaIntroducedAction } from "@/app/app/onboarding/[projectId]/actio
  * server emits, so the markup a reader without JavaScript keeps is the whole
  * room rather than an empty stage.
  */
-const INTRODUCE = buildNovaFirstRunFeed("introduce");
-
-const BUBBLES = speechBubbles(
-  INTRODUCE.filter(
-    (entry): entry is Extract<typeof entry, { kind: "nova.message" }> =>
-      entry.kind === "nova.message",
-  ),
-);
+/**
+ * Her opening turn, built per render because the first sentence has a name in
+ * it. A module-level constant would have greeted every founder as the first
+ * one this process happened to serve.
+ */
+function introductionBubbles(name: string | null) {
+  return speechBubbles(
+    buildNovaFirstRunFeed("introduce", name).filter(
+      (entry): entry is Extract<typeof entry, { kind: "nova.message" }> =>
+        entry.kind === "nova.message",
+    ),
+  );
+}
 
 export function NovaOpeningScreen({
   projectId,
   productName,
   /** Whether the repository behind the product is reachable. */
   connected,
+  /**
+   * What to call the founder, or null.
+   *
+   * The GitHub login they authenticated with, passed down rather than looked
+   * up — `identity-view.ts`'s rule is that a name is never invented, and null
+   * is an ordinary answer here rather than a missing one.
+   */
+  greetingName = null,
   /**
    * What has already happened, for the rail she lands in.
    *
@@ -98,6 +111,7 @@ export function NovaOpeningScreen({
   projectId: string;
   productName: string;
   connected: boolean;
+  greetingName?: string | null;
   activity?: readonly ActivityEntry[];
   replay?: boolean;
 }) {
@@ -111,6 +125,8 @@ export function NovaOpeningScreen({
    * one element on the screen that can look like activity asserting its own.
    */
   const mark = novaPresenceState({ tier: "setup", phase: "idle" });
+
+  const bubbles = introductionBubbles(greetingName);
 
   const settled = atLeast(beat, "settling");
   const online = atLeast(beat, "online");
@@ -195,7 +211,7 @@ export function NovaOpeningScreen({
               <section className="flex max-w-[44rem] flex-col gap-2.5" aria-label="Meeting Nova">
                 {speaking && (
                   <NovaArriving
-                    items={BUBBLES.map((bubble, position) => ({
+                    items={bubbles.map((bubble, position) => ({
                       key: bubble.key,
                       /* One beat for the turn, not one per line — she is
                          introducing herself, not sending four messages. */

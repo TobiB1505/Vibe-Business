@@ -99,17 +99,24 @@ export function novaRevealBundlesAudit(gate: AuditCreditGate): boolean {
  * by saying what happens next, and Home continues.
  */
 export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
-  connect_source: "I cannot read anything yet. Point me at the repository your product lives in.",
+  connect_source:
+    "We start with your code. Show me the repository your product lives in and I can begin reading it.",
   add_live_product:
-    "Tell me where a visitor finds your product, and I will read what they actually see.",
-  product_scanning: "I am reading your product now.",
-  product_reveal: "Here is what I understood about your product. Tell me if I have it wrong.",
-  audit_preparing: "I am getting ready to look at your business.",
-  audit_needs_user: "I stopped part-way through, and I need something from you before I go on.",
-  audit_running: "I am working through your business now.",
-  audit_reveal: "Here is what I found, and where I would start.",
-  first_move: "This is the first thing I would do about it.",
-  complete: "That is the setup behind us. From here I tell you what matters as it changes.",
+    "Now — where does somebody actually find your product? Give me the address and I will look at what a visitor sees.",
+  product_scanning:
+    "I am reading through your product now. You do not have to wait here; I will still be at it when you come back.",
+  product_reveal:
+    "Here is what I understood about your product. Have a look — if I have any of it wrong, tell me and I will put it right.",
+  audit_preparing: "Right. I am getting ready to look at the business around your product.",
+  audit_needs_user:
+    "I have stopped part-way through. There is something only you can tell me before I carry on.",
+  audit_running:
+    "I am working through your business now, area by area. Nothing here needs you until I am done.",
+  audit_reveal:
+    "Here is what I found. I have put the thing I would deal with first at the top of it.",
+  first_move: "So this is the first thing I would actually do about it, if you want me to.",
+  complete:
+    "That is your setup behind us. From here I tell you what matters as it changes, and you will find me here whenever you come back.",
 };
 
 /**
@@ -133,8 +140,9 @@ export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
  */
 export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
   connect_source:
-    "GitHub will ask which repositories I may see. You choose, and I only get the ones you pick.",
-  add_live_product: "It lets me compare what the code says against what a visitor can reach.",
+    "GitHub will ask which repositories I may see. That choice is entirely yours, and I only ever get the ones you pick.",
+  add_live_product:
+    "It lets me hold what the code says against what somebody out there can actually reach.",
 
   /* The scan reports its own stages, from rows it writes as it goes. */
   product_scanning: null,
@@ -153,7 +161,8 @@ export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
    * one line that has to survive the chrome being removed, because it is what
    * makes the control below a choice rather than the last gate of setup.
    */
-  first_move: "Your setup is behind us either way. The workspace is where everything lives now.",
+  first_move:
+    "Your setup is behind us either way — this is a choice, not the last gate. Your workspace is where everything lives from here.",
   /* The handover says itself. */
   complete: null,
 };

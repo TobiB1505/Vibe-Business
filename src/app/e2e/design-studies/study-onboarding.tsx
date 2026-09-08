@@ -196,8 +196,11 @@ export function StudyOnboarding({ study }: { study: Study }) {
             Before the first step
           </p>
           <p className="study-measure text-ui text-fg-body">
-            She has said who she is. This offers to walk through how a change reaches a default
-            branch — which is what somebody wants before handing over a repository, not after.
+            She has said who she is, and this is the only question asked before setup begins. Behind
+            the left-hand answer: four sentences on what kind of thing she is — not a chat box,
+            nothing to type, one suggestion at a time — and a worked example of one message and the
+            control under it. It is at <code>study-first-run-shipped</code>, which is the only place
+            it can be looked at twice.
           </p>
         </div>
         <div className={`p-5 max-sm:p-4 ${panel}`}>

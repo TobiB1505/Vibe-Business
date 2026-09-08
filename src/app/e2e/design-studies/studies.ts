@@ -299,6 +299,23 @@ export const OPENING_WALKTHROUGH_SCENARIO = "study-opening-walkthrough";
 export const SHIPPED_OPENING_SCENARIO = "study-opening-shipped";
 
 /**
+ * The screen straight after it: the question, and the walkthrough behind it.
+ *
+ * Reachable in the product exactly once per project, by a founder who has just
+ * met Nova and has not yet been asked whether they want to be shown how she
+ * works. So it is the same problem as the opening, with one addition — half of
+ * this screen is behind a press. *Show me how you work* swaps the thread for
+ * four sentences and a worked example, and nothing but this fixture can put
+ * that in front of a reviewer twice.
+ *
+ * It is also the fixture that would have caught the defect it now guards: the
+ * press used to write `explained`, which revalidates the route, which changes
+ * the derived position to `handoff` — so asking to be shown how Vibe works
+ * replaced the walkthrough with the connect-your-repository step.
+ */
+export const SHIPPED_FIRST_RUN_SCENARIO = "study-first-run-shipped";
+
+/**
  * Setup, all ten states at once.
  *
  * Same argument as `RAIL_SCENARIO` and the shipped opening: a state of

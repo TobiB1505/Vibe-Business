@@ -46,6 +46,11 @@ import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
 import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
+import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
+import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
+import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NovaRoom } from "@/components/nova/nova-room";
+import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -65,6 +70,7 @@ import {
   OPENING_SCENARIO,
   OPENING_WALKTHROUGH_SCENARIO,
   SHIPPED_OPENING_SCENARIO,
+  SHIPPED_FIRST_RUN_SCENARIO,
   ONBOARDING_SCENARIO,
   WIREFRAME_OFFLINE_SCENARIO,
   isWireframeScenario,
@@ -370,6 +376,9 @@ export default async function E2eScenarioPage({
             projectId="fixture-project"
             productName="Vibe Business"
             connected={false}
+            /* A login, because that is the only kind of name this product
+               ever has — never a first name derived from an address. */
+            greetingName="ada-lovelace"
             activity={[
               {
                 id: "e1",
@@ -390,6 +399,71 @@ export default async function E2eScenarioPage({
             ]}
             replay
           />
+        </div>
+      </StudyShell>
+    );
+  }
+
+  if (scenario === SHIPPED_FIRST_RUN_SCENARIO) {
+    const chosen = chosenStudy();
+    return (
+      <StudyShell study={chosen}>
+        <div className="mx-auto w-full max-w-[76rem] px-5 py-7 sm:px-8 sm:py-10">
+          {/*
+            `OnboardingShell`'s container and `NovaRoom`, so this is the screen
+            the page renders rather than an arrangement that resembles it —
+            the same header, the same rail, the same thread column.
+
+            In replay: pressing records nothing. The walkthrough itself never
+            wrote anything anyway, which is the point of the fixture — it is
+            reachable here as many times as a reviewer needs.
+          */}
+          <NovaRoom
+            header={
+              <NovaOnboardingHeader
+                state="connect_source"
+                projectId="fixture-project"
+                projectName="Vibe Business"
+                connected={false}
+                operation={null}
+              />
+            }
+            rail={
+              <NovaRail
+                presence="listening"
+                seed="fixture-project"
+                working={null}
+                checklist={null}
+                /* What the opening's rail had just shown, plus the row the
+                   introduction itself wrote. The room does not empty out
+                   between the two screens, and this fixture reviews that. */
+                activity={[
+                  {
+                    id: "e1",
+                    eventType: "github.installation.connected",
+                    at: "2026-09-07T21:40:00.000Z",
+                    title: "GitHub installation connected",
+                    tone: "neutral",
+                    facts: [],
+                  },
+                  {
+                    id: "e2",
+                    eventType: "project.created",
+                    at: "2026-09-07T21:41:00.000Z",
+                    title: "Project created",
+                    tone: "neutral",
+                    facts: [],
+                  },
+                ]}
+              />
+            }
+          >
+            <NovaFirstRun
+              projectId="fixture-project"
+              entries={buildNovaFirstRunFeed("explain_workflow")}
+              replay
+            />
+          </NovaRoom>
         </div>
       </StudyShell>
     );

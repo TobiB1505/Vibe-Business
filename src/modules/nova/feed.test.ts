@@ -10,6 +10,7 @@ import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
 import { ONBOARDING_STATES } from "../onboarding/state";
 import { NOVA_ONBOARDING_DETAIL, NOVA_ONBOARDING_MESSAGE } from "./onboarding";
+import { buildNovaFirstRunFeed, buildNovaWorkflowExplanation, novaGreeting } from "./first-run";
 import type { FocusCandidate, NovaFocus, NovaFocusFacts } from "./focus";
 
 /**
@@ -255,6 +256,27 @@ describe("what Nova's sentences may say", () => {
    * `OnboardingState`, so an eleventh state arrives here as well as at the
    * build — a new sentence cannot be added anywhere without passing this.
    */
+  /*
+   * The first thing she ever says, and it was outside every rule below.
+   *
+   * The introduction, the question before setup and the walkthrough are copy
+   * a founder meets *before* any candidate and any onboarding state, and the
+   * sweep did not reach them — the same failure this block's own docblock
+   * describes one table earlier. So they join it.
+   *
+   * The greeting is swept in its nameless form. The named one interpolates a
+   * GitHub login, and a login may contain digits; sweeping it would put the
+   * "no figures" rule on somebody's account name rather than on Nova's copy.
+   * What the name does to the sentence is asserted on its own, below.
+   */
+  const firstRunMessages = [
+    ...buildNovaFirstRunFeed("introduce"),
+    ...buildNovaFirstRunFeed("explain_workflow"),
+    ...buildNovaWorkflowExplanation(),
+  ]
+    .filter((entry) => entry.kind === "nova.message")
+    .map((entry) => ({ kind: `first-run:${entry.id}`, text: entry.text }));
+
   const everyMessage = [
     ...EVERY_CANDIDATE.flatMap((candidate) =>
       feedFor(candidate)
@@ -271,6 +293,7 @@ describe("what Nova's sentences may say", () => {
       kind: `onboarding-detail:${state}`,
       text: NOVA_ONBOARDING_DETAIL[state] as string,
     })),
+    ...firstRunMessages,
   ];
 
   it("has a sentence for every candidate and every onboarding state", () => {
@@ -278,11 +301,47 @@ describe("what Nova's sentences may say", () => {
       (state) => NOVA_ONBOARDING_DETAIL[state] !== null,
     ).length;
     expect(everyMessage).toHaveLength(
-      FOCUS_CANDIDATE_KINDS.length + ONBOARDING_STATES.length + details,
+      FOCUS_CANDIDATE_KINDS.length + ONBOARDING_STATES.length + details + firstRunMessages.length,
     );
     for (const { kind, text } of everyMessage) {
       expect(text.length, kind).toBeGreaterThan(10);
     }
+  });
+
+  /**
+   * Hello, and the one rule the greeting has to obey.
+   *
+   * `identity-view.ts`: never invent a name. A caller passes the GitHub login
+   * a founder authenticated with, or it passes nothing — an email address is
+   * never shortened into a first name, because that is a guess about a person
+   * rendered as a fact about them.
+   */
+  it("greets by name only when it was given one", () => {
+    expect(novaGreeting("ada-lovelace")).toContain("ada-lovelace");
+    expect(novaGreeting(null)).not.toContain("ada-lovelace");
+    /* And the nameless form is a greeting rather than a gap where one was. */
+    expect(novaGreeting(null)).toMatch(/^Hi\b/);
+    expect(novaGreeting(null)).toContain("I am Nova");
+  });
+
+  /**
+   * What a founder is told about the thing they are looking at.
+   *
+   * The walkthrough exists to answer *what kind of thing am I talking to*, and
+   * the answer is unusual enough that leaving it implied is how a person ends
+   * up hunting for a text box. Asserted because it is the claim, not decoration
+   * — §M is why there is no input to find.
+   */
+  it("says outright that there is nothing to type", () => {
+    const walkthrough = buildNovaWorkflowExplanation()
+      .filter((entry) => entry.kind === "nova.message")
+      .map((entry) => entry.text)
+      .join(" ");
+
+    expect(walkthrough).toMatch(/not a chat box/i);
+    expect(walkthrough).toMatch(/nothing here to type/i);
+    /* And that pressing is the whole interaction. */
+    expect(walkthrough).toMatch(/you press it/i);
   });
 
   /**
@@ -330,6 +389,45 @@ describe("what Nova's sentences may say", () => {
   it("carries no figures", () => {
     for (const { kind, text } of everyMessage) {
       expect(text, kind).not.toMatch(/\d/);
+    }
+  });
+
+  /**
+   * One voice, and the convention it already kept without anybody writing it
+   * down.
+   *
+   * Nova has never used a verbal contraction. Not "I'm", not "you'll", not
+   * "let's" — every sentence in the product says *I am*, *you will*, *we
+   * start*. That is a real register and it reads as considered rather than
+   * chatty, which is the difference between an assistant and a mascot.
+   *
+   * It had no test, and a warmer pass at the copy put "Let's get started" and
+   * "Right, let's set up my project" on two buttons before anybody noticed the
+   * other nineteen labels did not talk that way. Warmth comes from rhythm and
+   * from saying the true thing plainly; it does not need an apostrophe.
+   *
+   * Possessives are untouched — "your product's name" is not a contraction.
+   */
+  const CONTRACTION =
+    /\b\w+n['’]t\b|\b\w+['’](re|ll|ve|d|m)\b|\b(let|it|that|here|there|what|who|he|she|we|you|they)['’]s\b/i;
+
+  it("speaks in one register, with no contractions", () => {
+    /* Proved live first: a sweep asserting nothing matches passes just as
+       cleanly when the detector is broken. */
+    expect("Let's get started").toMatch(CONTRACTION);
+    expect("I'm reading it").toMatch(CONTRACTION);
+    expect("your product's name").not.toMatch(CONTRACTION);
+
+    for (const { kind, text } of everyMessage) {
+      expect(text, `${kind}: ${text}`).not.toMatch(CONTRACTION);
+    }
+  });
+
+  /** And the verbs on her controls, which are her voice as much as the lines. */
+  it("keeps the same register on every control it offers", () => {
+    for (const [actionId, meta] of Object.entries(NOVA_ACTION_META)) {
+      expect(meta.label, actionId).not.toMatch(CONTRACTION);
+      expect(meta.label.length, actionId).toBeGreaterThan(2);
     }
   });
 

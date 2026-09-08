@@ -5,7 +5,8 @@ import { NovaArriving } from "@/components/nova/nova-arriving";
 import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaMoveButton } from "@/components/nova/nova-move";
 import { speechBubbles } from "@/components/nova/nova-speech";
-import { NovaLine } from "@/components/nova/nova-thread";
+import { NovaLine, NovaRenderBlock } from "@/components/nova/nova-thread";
+import { NovaHowItWorks } from "./nova-how-it-works";
 import { buildNovaWorkflowExplanation } from "@/modules/nova/first-run";
 import type { NovaEntry } from "@/modules/nova/feed";
 import { markNovaIntroducedAction, setNovaWorkflowStatusAction } from "./actions";
@@ -29,16 +30,23 @@ import { markNovaIntroducedAction, setNovaWorkflowStatusAction } from "./actions
  * the header and the rail are on screen and Nova is simply speaking in them.
  * Running the assembly twice would say the environment was built twice.
  *
- * ## Why the walkthrough is local state
+ * ## Why the walkthrough is local state, and why it no longer writes on open
  *
- * Pressing "Show me how this works" writes `explained` and shows four
- * sentences. The write is durable and immediate; the sentences are the same
- * four the domain holds, and they arrive in the thread rather than replacing
- * the screen — a founder who asked to be shown something should not lose what
- * they were reading.
+ * Pressing *Show me how you work* swaps the thread for the walkthrough and
+ * writes nothing. The sentences arrive in place rather than replacing the
+ * screen — a founder who asked to be shown something should not lose what they
+ * were reading — and the press at the *bottom* of it records `explained`.
  *
- * The write still happens once, and a founder who closes the tab mid-sentence
- * leaves a column saying `explained`, which is true: they were shown it.
+ * The write used to fire on open, and that was wrong twice over. It recorded
+ * somebody as having been shown a thing at the moment they asked to see it;
+ * and `setNovaWorkflowStatusAction` revalidates this route, so the position
+ * `deriveNovaFirstRun` returns became `handoff` and this component was
+ * replaced by the next setup step. Asking to be shown how Vibe works took you
+ * straight to the connect-your-repository screen.
+ *
+ * Now the fact is written where it becomes true, by the person it is about. A
+ * founder who closes the tab mid-walkthrough leaves the column `unseen`, and
+ * is offered it again — which is what happened.
  */
 export function NovaFirstRun({
   projectId,
@@ -77,7 +85,11 @@ export function NovaFirstRun({
   const options = shown.flatMap((entry) => (entry.kind === "nova.choice" ? entry.options : []));
 
   function choose(actionId: string) {
-    if (actionId === "nova.explain_workflow") setWalkthrough(buildNovaWorkflowExplanation());
+    /* Shown, not recorded. The press at the end of it is what records. */
+    if (actionId === "nova.explain_workflow") {
+      setWalkthrough(buildNovaWorkflowExplanation());
+      return;
+    }
     if (replay) return;
 
     startTransition(async () => {
@@ -85,7 +97,7 @@ export function NovaFirstRun({
         await markNovaIntroducedAction(projectId);
         return;
       }
-      if (actionId === "nova.explain_workflow") {
+      if (actionId === "nova.begin_setup") {
         await setNovaWorkflowStatusAction(projectId, "explained");
         return;
       }
@@ -98,19 +110,42 @@ export function NovaFirstRun({
   return (
     <section className="flex max-w-[44rem] flex-col gap-2.5" aria-label="Before we start">
       <NovaArriving
-        items={bubbles.map((bubble, position) => ({
-          key: bubble.key,
-          /* One beat for the turn, not one per line. She is explaining one
-             thing, not sending four separate messages. */
-          beat: position === 0,
-          node: (
-            <NovaBubble tail={bubble.tail}>
-              {bubble.paragraphs.map((text) => (
-                <NovaLine key={text}>{text}</NovaLine>
-              ))}
-            </NovaBubble>
-          ),
-        }))}
+        items={[
+          ...bubbles.map((bubble, position) => ({
+            key: bubble.key,
+            /* One beat for the turn, not one per line. She is explaining one
+               thing, not sending four separate messages. */
+            beat: position === 0,
+            node: (
+              <NovaBubble tail={bubble.tail}>
+                {bubble.paragraphs.map((text) => (
+                  <NovaLine key={text}>{text}</NovaLine>
+                ))}
+              </NovaBubble>
+            ),
+          })),
+          /*
+            The example, and it opens a beat of its own — a thing she *made* is
+            a different kind of arrival from a thing she said, which is the
+            distinction `NovaArriving` was built around.
+
+            Only in the walkthrough. The offer above it is one question and
+            needs no demonstration of anything.
+          */
+          ...(walkthrough
+            ? [
+                {
+                  key: "walkthrough:example",
+                  beat: true,
+                  node: (
+                    <NovaRenderBlock label="An example" index={0}>
+                      <NovaHowItWorks />
+                    </NovaRenderBlock>
+                  ),
+                },
+              ]
+            : []),
+        ]}
       >
         {options.length > 0 && (
           <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">
