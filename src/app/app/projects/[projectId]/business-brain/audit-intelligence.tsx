@@ -44,7 +44,16 @@ const LENS_TAB_LABELS: Record<DetailTab, string> = {
   history: "History",
 };
 
-function ArrowIcon({ direction = "right" }: { direction?: "right" | "up" | "down" }) {
+/**
+ * A *trend* mark: which way a score moved.
+ *
+ * Not navigation, which is why it survived UI-30 while the two arrows beside
+ * "View action plan" did not. Those were this same glyph pointing right — a
+ * literal `→` in a link, where every other navigation arrow in the product is
+ * the drawn mark from the icon set (ADR 0097). Two arrows meaning one thing,
+ * drawn two ways, is what made the meaning hard to see in the first place.
+ */
+function ArrowIcon({ direction }: { direction: "up" | "down" | "right" }) {
   const glyph = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
   return <span aria-hidden="true">{glyph}</span>;
 }
@@ -161,12 +170,7 @@ function PriorityCard({
           </div>
         )}
         {lens && (
-          <Button
-            variant="ghost"
-            onClick={() => onExplore(lens)}
-            icon={<ArrowRightIcon size={14} />}
-            className="w-fit"
-          >
+          <Button variant="ghost" onClick={() => onExplore(lens)} className="w-fit">
             Explore this area
           </Button>
         )}
@@ -176,7 +180,7 @@ function PriorityCard({
         className="bg-surface-4 border-line-strong text-fg hover:border-mint/45 mt-5 flex min-h-11 items-center justify-between rounded-field border px-4 text-body font-semibold transition-interactive"
       >
         {actionLabel(priority.moveCount, hasMoves)}
-        <ArrowIcon />
+        <ArrowRightIcon size={15} />
       </Link>
     </div>
   );
@@ -522,7 +526,7 @@ function SelectedPanel({
                 </div>
                 <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-field px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
                   {node.problem ? actionLabel(node.problem.moveCount, hasMoves) : "View action plan"}
-                  <ArrowIcon />
+                  <ArrowRightIcon size={15} />
                 </Link>
               </div>
 

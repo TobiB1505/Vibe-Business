@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { BusinessMap } from "@/app/app/projects/[projectId]/business-brain/business-map";
-import { BusinessHealthIcon, ArrowRightIcon } from "@/components/ui/dashboard-icons";
+import { BusinessHealthIcon } from "@/components/ui/dashboard-icons";
 import { BUSINESS_LENSES, type BusinessLens } from "@/modules/business-audit/schema";
 import { LENS_LABELS } from "@/modules/business-audit/map-view";
 import type { BusinessBrainView } from "@/modules/projects/business-brain-view";
@@ -94,9 +94,8 @@ export function LandingBusinessBrain() {
             <p className="text-fg font-semibold">{activeLabel}</p>
             <p className="text-fg-secondary text-body leading-relaxed">{activePrompt}</p>
           </div>
-          <p className="text-fg-muted flex items-center gap-2 text-caption sm:max-w-40">
+          <p className="text-fg-muted text-caption sm:max-w-40">
             {active ? "Select again to return to the overview" : "Explore the nine business areas"}
-            <ArrowRightIcon size={14} />
           </p>
         </aside>
       </div>

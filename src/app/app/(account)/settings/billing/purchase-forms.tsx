@@ -3,7 +3,6 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import { buttonClasses } from "@/components/ui/button";
-import { ArrowRightIcon } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
@@ -94,7 +93,6 @@ export function BuyCreditPackForm({
         ) : (
           <SubmitButton variant="secondary" pendingLabel="Opening…">
             Buy · <span className="tabular-nums">{price}</span>
-            <ArrowRightIcon size={14} />
           </SubmitButton>
         )}
       </div>
@@ -181,9 +179,8 @@ export function ManageBillingForm() {
 
   return (
     <form action={action} noValidate className="flex flex-col gap-3">
-      <SubmitButton pendingLabel="Opening…" className="w-full justify-between">
+      <SubmitButton pendingLabel="Opening…" className="w-full justify-center">
         Manage or cancel plan
-        <ArrowRightIcon size={15} />
       </SubmitButton>
       <ActionError state={state} />
     </form>

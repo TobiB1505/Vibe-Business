@@ -78,6 +78,13 @@ const PRODUCT = sourceFiles("src")
  * Written as a scan rather than as `/<Button[\s\S]*?>/`, because the first
  * `>` in a real call site is usually inside `icon={<DismissIcon size={16} />}`
  * — a lazy regex stops there and reports every prop after the mark as missing.
+ *
+ * The scan counts **braces only**. A first version counted `<` and `>` as well,
+ * to survive that nested mark, and an arrow function then ended the tag early:
+ * `onClick={() => x}` has a `>` in it. JSX inside a prop is always inside
+ * braces, so braces alone answer both. Found by UI-30, in a copy of this
+ * walker, on a control that did carry the `aria-label` it was reported for
+ * lacking.
  */
 function buttonTags(text: string): string[] {
   const tags: string[] = [];
@@ -86,12 +93,9 @@ function buttonTags(text: string): string[] {
     let index = match.index! + match[0].length;
     while (index < text.length) {
       const char = text[index]!;
-      if (char === "{" || char === "<") depth += 1;
+      if (char === "{") depth += 1;
       else if (char === "}") depth -= 1;
-      else if (char === ">") {
-        if (depth === 0) break;
-        depth -= 1;
-      }
+      else if (char === ">" && depth === 0) break;
       index += 1;
     }
     tags.push(text.slice(match.index!, index + 1));

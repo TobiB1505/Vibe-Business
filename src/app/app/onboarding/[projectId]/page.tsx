@@ -57,7 +57,6 @@ import { FirstMoveDecision } from "./first-move-decision";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
-import { ArrowRightIcon } from "@/components/ui/icons.generated";
 
 export const metadata: Metadata = {
   title: "Setting up your product",
@@ -618,7 +617,6 @@ export default async function ProjectOnboardingPage({
                       variant="ghost"
                       type="submit"
                       formAction={completeOnboardingAction.bind(null, projectId)}
-                      icon={<ArrowRightIcon size={14} />}
                     >
                       Go to your workspace
                     </Button>
