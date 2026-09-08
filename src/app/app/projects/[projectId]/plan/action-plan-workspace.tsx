@@ -60,6 +60,8 @@ export function ActionPlanWorkspace({
   defaultMoveTitle,
   planReadinessByOpportunity,
   responsibilityByStepKey,
+  handoffStepKey,
+  repositoryFullName,
   planView,
   planOperation,
   planOperationOpportunityId,
@@ -90,6 +92,10 @@ export function ActionPlanWorkspace({
    * the execution contract keeps those out of a component.
    */
   responsibilityByStepKey: Record<string, StepResponsibility>;
+  /** The actionable step, when Vibe refuses it permanently (ADR 0099). */
+  handoffStepKey: string | null;
+  /** `owner/name`, or null when Vibe holds no repository for this project. */
+  repositoryFullName: string | null;
   /** The project-wide latest plan. It is shown only for its own Move. */
   planView: ActionPlanView | null;
   planOperation: OperationView | null;
@@ -146,6 +152,23 @@ export function ActionPlanWorkspace({
   );
   const activeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
   const activeOpportunity = opportunities[activeIndex] ?? null;
+  /*
+   * Where a finished plan hands over to (ADR 0099 follow-on).
+   *
+   * The Move ranked after this one, as a link rather than a control that
+   * spends: the offer to plan it already exists on that Move, with its price
+   * and its balance check, and a second paid entry point is a second place to
+   * get those wrong. The href is the same search param this workspace already
+   * restores on popstate, so the handover is an ordinary navigation.
+   */
+  const nextOpportunity = opportunities[activeIndex + 1] ?? null;
+  const nextMove =
+    nextOpportunity === null
+      ? null
+      : {
+          title: nextOpportunity.title,
+          href: `?${PLAN_OPPORTUNITY_PARAM}=${encodeURIComponent(nextOpportunity.id)}`,
+        };
   const movesBlockNotice = buildOpportunityBlockNotice(movesBlockedReason);
 
   function selectMove(index: number, history: "push" | "none" = "push") {
@@ -323,6 +346,9 @@ export function ActionPlanWorkspace({
                     defaultMoveTitle={defaultMoveTitle}
                     readiness={planReadinessByOpportunity[activeOpportunity.id]}
                     responsibilityByStepKey={responsibilityByStepKey}
+                    handoffStepKey={handoffStepKey}
+                    repositoryFullName={repositoryFullName}
+                    nextMove={nextMove}
                     planView={
                       planView?.plan.opportunityId === activeOpportunity.id ? planView : null
                     }

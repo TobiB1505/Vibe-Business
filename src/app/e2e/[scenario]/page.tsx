@@ -981,6 +981,8 @@ export default async function E2eScenarioPage({
           selectedOpportunityId={fixture.opportunities[0]?.id ?? null}
           defaultMoveTitle={fixture.opportunities[0]?.title ?? null}
           planReadinessByOpportunity={planReadinessByOpportunity}
+          handoffStepKey={null}
+          repositoryFullName="TobiB1505/Vibe-Business"
           responsibilityByStepKey={{}}
           planView={null}
           planOperation={null}
@@ -1350,7 +1352,8 @@ export default async function E2eScenarioPage({
   if (
     scenario === "agent-plan-next-confirm" ||
     scenario === "agent-plan-next-waiting" ||
-    scenario === "agent-plan-next-refused"
+    scenario === "agent-plan-next-refused" ||
+    scenario === "agent-plan-next-handoff"
   ) {
     /*
      * Three outlooks, because the third one is what a founder actually hit and
@@ -1365,18 +1368,28 @@ export default async function E2eScenarioPage({
         stepOrder: 1,
         stepTitle: "Establish what the existing billing route actually does",
         reason: EXECUTION_REASON_LABELS.change_kind_not_executable,
+        handoff: false,
       },
       "agent-plan-next-waiting": {
         shape: "not_vibes" as const,
         stepOrder: 2,
         stepTitle: "Confirm the plan structure checkout should charge",
         reason: EXECUTION_REASON_LABELS.founder_decision_required,
+        handoff: false,
       },
       "agent-plan-next-refused": {
         shape: "policy" as const,
         stepOrder: 3,
         stepTitle: "Build or complete the checkout and subscription flow",
         reason: EXECUTION_REASON_LABELS.risk_class_prohibited,
+        handoff: false,
+      },
+      "agent-plan-next-handoff": {
+        shape: "policy" as const,
+        stepOrder: 3,
+        stepTitle: "Build or complete the checkout and subscription flow",
+        reason: EXECUTION_REASON_LABELS.risk_class_prohibited,
+        handoff: true,
       },
     }[scenario];
 
@@ -1389,6 +1402,7 @@ export default async function E2eScenarioPage({
           reasonLabel={scene.reason}
           planHref={projectSectionHref("project_e2e", "action-plan")}
           shape={scene.shape}
+          handoffAvailable={"handoff" in scene ? scene.handoff : false}
         />
       </main>
     );
@@ -2121,6 +2135,9 @@ export default async function E2eScenarioPage({
           moveRank={fixture.opportunityId ? 1 : null}
           moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
+          handoffStepKey={fixture.handoffStepKey ?? null}
+          repositoryFullName="TobiB1505/Vibe-Business"
+          nextMove={fixture.nextMove ?? null}
           responsibilityByStepKey={fixture.responsibilityByStepKey ?? {}}
           readiness={fixture.readiness}
           planView={fixture.planView}

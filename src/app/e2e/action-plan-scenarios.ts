@@ -166,6 +166,31 @@ const STEPS: ActionPlanStep[] = [
   }),
 ];
 
+/**
+ * The same plan, ending in a check only the founder's environment can run.
+ *
+ * A seventh step rather than a changed one, so every existing scene keeps the
+ * plan it was written against. `founder_action` + `measurement` is the shape
+ * that earns a verification prompt: work that was never Vibe's, and whose check
+ * its sandbox structurally cannot run — no network, no credentials, so it can
+ * never complete a real signup or payment.
+ */
+const VERIFY_STEPS: ActionPlanStep[] = [
+  ...STEPS,
+  planStep({
+    id: "step-verify-subscription",
+    order: 7,
+    title: "Verify a real subscription completes end to end",
+    description: "Sign up, pay, and confirm the subscription shows as active.",
+    purpose: "Nothing about the pricing work is proven until one real payment goes through.",
+    actor: "founder_action",
+    changeKind: "measurement",
+    completionCriteria: "A signed-in account completes checkout and the subscription is active.",
+    dependsOn: [6],
+    executionSupport: "founder_acts",
+  }),
+];
+
 function plan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan {
   return {
     id: "plan_e2e",
@@ -246,6 +271,10 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     ...overrides,
     completedStepOrders: overrides.completedStepOrders ?? [],
     absorbedByStepOrder: overrides.absorbedByStepOrder ?? {},
+    handoffByStepKey: overrides.handoffByStepKey ?? {},
+    verifyHandoffByStepKey: overrides.verifyHandoffByStepKey ?? {},
+    findingByStepKey: overrides.findingByStepKey ?? {},
+    decisionByStepKey: overrides.decisionByStepKey ?? {},
     founderInputRequest,
     // Derived from the request the fixture just built, so a scenario can never
     // claim open questions it does not carry.
@@ -279,6 +308,8 @@ export type ActionPlanFixture = {
   readiness: ActionPlanReadiness;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
+  /** The Move a finished plan hands over to, as the workspace derives it. */
+  nextMove?: { title: string; href: string } | null;
   /**
    * What each step's responsibility line says, as the route resolves it.
    *
@@ -286,6 +317,8 @@ export type ActionPlanFixture = {
    * state and renders the stored classification exactly as it always did.
    */
   responsibilityByStepKey?: Record<string, StepResponsibility>;
+  /** The actionable step, when the scene is one Vibe refuses permanently. */
+  handoffStepKey?: string | null;
 };
 
 export const E2E_ACTION_PLAN_SCENARIOS = {
@@ -379,6 +412,214 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
         firstActionableStep: firstActionableStep(STEPS, completed),
         progress: planProgress(STEPS, completed),
         completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * Work Vibe refuses permanently, handed to the founder's own tool (ADR 0099).
+   *
+   * "Build a dedicated pricing page" stands in for the founder's real step —
+   * `vibe` + `product_change`, which Vibe declines when it touches payments,
+   * and which no attestation admitted either. The plan simply stopped there.
+   *
+   * Two scenes because the card has two states, and the second is the one that
+   * has to be seen: before the choice it asks which tool, after it the prompt
+   * is on screen and the confirmation sits under it.
+   */
+  action_plan_handoff_offer: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      handoffStepKey: "step-add-pricing-page",
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  action_plan_handoff_prompt: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      handoffStepKey: "step-add-pricing-page",
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        handoffByStepKey: { "step-add-pricing-page": "claude_code" },
+        // What the founder worked out on step 1, which the prompt carries in.
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * The plan waiting on somebody outside it.
+   *
+   * `external_party` is a real actor the planner assigns — "wait for Google to
+   * index the new pages" is step 5 of this fixture's plan. It is unblocked, so
+   * it becomes the plan's entry point, and every step behind it waits on it.
+   */
+  action_plan_outside_dependency: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * A check Vibe cannot reach, before the founder has asked for help.
+   *
+   * Both paths are on screen at once, and that is the point: the offer of a
+   * prompt, and the field to record the result. A founder who already ran the
+   * check must not have to pick a tool before the product will listen.
+   */
+  action_plan_verify_offer: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    const storedPlan = plan({ steps: VERIFY_STEPS, stepCount: VERIFY_STEPS.length });
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        plan: storedPlan,
+        firstActionableStep: firstActionableStep(VERIFY_STEPS, completed),
+        progress: planProgress(VERIFY_STEPS, completed),
+        completedStepOrders: [...completed],
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /** The same step once a tool was chosen: the prompt, and the result field. */
+  action_plan_verify_prompt: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    const storedPlan = plan({ steps: VERIFY_STEPS, stepCount: VERIFY_STEPS.length });
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        plan: storedPlan,
+        firstActionableStep: firstActionableStep(VERIFY_STEPS, completed),
+        progress: planProgress(VERIFY_STEPS, completed),
+        completedStepOrders: [...completed],
+        verifyHandoffByStepKey: { "step-verify-subscription": "claude_code" },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * The end of a plan, which used to be one sentence and no way onward.
+   *
+   * Every step closed, so `firstActionableStep` is null and the progress is
+   * `finished`. Two of the steps left something behind — a written finding and
+   * a founder decision — which is the material the next planning run reads and
+   * which the founder had never been shown back.
+   */
+  action_plan_finished: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      nextMove: { title: "Turn the pricing page into a signup path", href: "?move=move_two" },
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        decisionByStepKey: { "step-decide-segment": "Prioritize small product teams." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * A handoff in the middle of a plan, where the prompt has an edge to state.
+   *
+   * The scene above hands off the plan's last step, so nothing comes after it
+   * and the prompt has no later work to rule out. This one hands off step 3 of
+   * six — which is also the shape the founder hit in production — so the prompt
+   * has to carry both halves of what Vibe knows: what the earlier steps settled
+   * (a recorded finding and a founder decision) and where this task stops.
+   */
+  action_plan_handoff_midplan: (): ActionPlanFixture => {
+    const completed = new Set([1, 2]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      handoffStepKey: "step-seo-foundations",
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        handoffByStepKey: { "step-seo-foundations": "claude_code" },
+        findingByStepKey: { "step-draft-copy": "Stripe is wired but the route 404s." },
+        // The half that was missing entirely: a decision lives only in Vibe's
+        // database, so a prompt that referred to one without carrying it sent
+        // the founder's tool after something it could not reach.
+        decisionByStepKey: { "step-decide-segment": "Prioritize small product teams." },
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
+
+  /**
+   * The handed-off step, ticked off — and the plan on the next one (ADR 0099).
+   *
+   * The founder's whole ask ends here: run the prompt in your own tool, come
+   * back, say what it built, carry on. Everything before this scene is setup;
+   * this is the one that says the loop closes.
+   */
+  action_plan_handoff_done: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3, 4, 5, 6]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        handoffByStepKey: { "step-add-pricing-page": "claude_code" },
         founderInputRequest: null,
       }),
       activeOperation: null,

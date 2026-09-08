@@ -37,11 +37,14 @@ import {
 } from "./completion";
 import { listAgentStepCompletionEvidence, listStepExecutionEvidence } from "./completion-store";
 import { listFounderActionCompletionEvidence, listProjectFindings } from "./founder-action-store";
+import { buildHandoffKeys, listHandoffsForPlan } from "./handoff-store";
+import type { HandoffTool } from "@/modules/handoff/schema";
 import {
   listActiveFounderResolutions,
   listFounderInputRequestsForPlan,
 } from "@/modules/founder-input/store";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
+import { matchingFounderResolution } from "@/modules/founder-input/completion";
 
 /**
  * Action Plan readiness, staleness and read models (CORE-2b §42, §59).
@@ -409,6 +412,44 @@ export type ActionPlanView = {
    * either number becoming a claim that the covered step ran.
    */
   absorbedByStepOrder: Record<number, number>;
+  /**
+   * Steps Vibe handed to the founder to build with their own tool (ADR 0099).
+   *
+   * The value is the tool they picked, because the prompt's opening sentence
+   * differs for an agent working in a checked-out repository and a hosted
+   * builder that has no branch. Serialized as an object across the boundary.
+   */
+  handoffByStepKey: Record<string, HandoffTool>;
+  /**
+   * Steps Vibe handed out to be **checked**, not built (ADR 0099 follow-on).
+   *
+   * Its own field rather than a `purpose` beside the tool above, because the
+   * two answer different questions and only one of them grants anything. A
+   * build handoff is what admits a `vibe` + `product_change` step to founder
+   * attestation; a verify handoff admits nothing — its step is the founder's
+   * own measurement and was already theirs to close. Keeping them apart means
+   * a caller cannot reach for "was a prompt issued" and get the permission by
+   * accident.
+   */
+  verifyHandoffByStepKey: Record<string, HandoffTool>;
+  /**
+   * What the founder established on the steps they closed (ADR 0093).
+   *
+   * Free — it comes off the attestation evidence this view already reads. It is
+   * here so a handoff can carry it into the founder's own tool, rather than
+   * sending them to rediscover something they had already worked out.
+   */
+  findingByStepKey: Record<string, string>;
+  /**
+   * What the founder decided on the decision steps they closed (ADR 0099).
+   *
+   * The same argument as `findingByStepKey` and the same cost — nothing new is
+   * read, because deciding what is finished already needs these resolutions.
+   * It is here because a handoff prompt that says "using the confirmed plan
+   * structure" and does not carry the confirmed plan structure has sent the
+   * founder's own tool after something only Vibe's database holds.
+   */
+  decisionByStepKey: Record<string, string>;
   /** The request for the current actionable founder-owned step, if one is open. */
   founderInputRequest: FounderInputRequest | null;
   /**
@@ -473,19 +514,31 @@ export type PlanEvidence = {
   founderResolutions: Awaited<ReturnType<typeof listActiveFounderResolutions>>;
   agentEvidence: Awaited<ReturnType<typeof listStepExecutionEvidence>>;
   founderActionEvidence: Awaited<ReturnType<typeof listFounderActionCompletionEvidence>>;
+  /**
+   * Steps Vibe handed to the founder, and why (ADR 0099).
+   *
+   * Part of the shared evidence rather than read beside it, because it is a
+   * completion authority like the other three: a `build` handoff is the only
+   * reason a `vibe` + `product_change` step may be closed by a person's word.
+   * A shape carrying three of the four would let one caller answer "is this
+   * finished" differently from another — which is the disagreement this type
+   * was extracted to prevent.
+   */
+  handoffs: Awaited<ReturnType<typeof listHandoffsForPlan>>;
 };
 
 export async function readPlanEvidence(
   supabase: SupabaseClient,
   params: { projectId: string; actionPlanId: string },
 ): Promise<PlanEvidence> {
-  const [founderResolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+  const [founderResolutions, agentEvidence, founderActionEvidence, handoffs] = await Promise.all([
     listActiveFounderResolutions(supabase, params.projectId),
     listStepExecutionEvidence(supabase, params),
     listFounderActionCompletionEvidence(supabase, params),
+    listHandoffsForPlan(supabase, params),
   ]);
 
-  return { founderResolutions, agentEvidence, founderActionEvidence };
+  return { founderResolutions, agentEvidence, founderActionEvidence, handoffs };
 }
 
 /**
@@ -503,6 +556,10 @@ export function checklistFromEvidence(
     evidence.founderResolutions,
     evidence.agentEvidence.completion,
     evidence.founderActionEvidence,
+    /* Build handoffs only, and the rail must agree with the plan screen about
+       them: a step closed there and still open here would be one product
+       disagreeing with itself (ADR 0099). */
+    buildHandoffKeys(evidence.handoffs),
   );
   const satisfied = satisfiedStepsFromEvidence(completed, evidence.agentEvidence.absorbed);
 
@@ -532,6 +589,7 @@ export async function getLatestActionPlan(
     requests,
     agentEvidence,
     founderActionEvidence,
+    handoffs,
   ] =
     await Promise.all([
       getLatestSuccessfulAudit(supabase, projectId),
@@ -542,6 +600,7 @@ export async function getLatestActionPlan(
       listFounderInputRequestsForPlan(supabase, plan.id),
       listStepExecutionEvidence(supabase, { projectId, actionPlanId: plan.id }),
       listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+      listHandoffsForPlan(supabase, { projectId, actionPlanId: plan.id }),
     ]);
 
   const completed = completedStepsFromEvidence(
@@ -549,6 +608,10 @@ export async function getLatestActionPlan(
     resolutions,
     agentEvidence.completion,
     founderActionEvidence,
+    // A step handed out **to build** is attestable; every other product change
+    // is not. A verify handoff is deliberately not in this set — see
+    // `buildHandoffKeys`.
+    buildHandoffKeys(handoffs),
   );
   /* What is finished, plus what nothing needs to do. Sequencing asks the wider
      question; `completedStepOrders` below still answers the narrow one. */
@@ -569,6 +632,27 @@ export async function getLatestActionPlan(
     progress: planProgress(plan.steps, satisfied),
     completedStepOrders: [...completed],
     absorbedByStepOrder: Object.fromEntries(absorption),
+    handoffByStepKey: Object.fromEntries(
+      [...handoffs]
+        .filter(([, handoff]) => handoff.purpose === "build")
+        .map(([stepKey, handoff]) => [stepKey, handoff.tool]),
+    ),
+    verifyHandoffByStepKey: Object.fromEntries(
+      [...handoffs]
+        .filter(([, handoff]) => handoff.purpose === "verify")
+        .map(([stepKey, handoff]) => [stepKey, handoff.tool]),
+    ),
+    findingByStepKey: Object.fromEntries(
+      founderActionEvidence
+        .filter((item): item is typeof item & { finding: string } => item.finding !== null)
+        .map((item) => [item.stepKey, item.finding]),
+    ),
+    decisionByStepKey: Object.fromEntries(
+      plan.steps.flatMap((step) => {
+        const resolution = matchingFounderResolution(step, resolutions);
+        return resolution ? [[step.id, resolution.resolvedStatement] as const] : [];
+      }),
+    ),
     openFounderInputCount: requests.filter((request) => request.status === "open").length,
     founderInputRequest:
       actionable === null
@@ -612,16 +696,21 @@ export async function getOnboardingFirstMove(
     return { plan: null, firstActionableStep: null, progress: null, completedStepOrders: [] };
   }
 
-  const [resolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+  const [resolutions, agentEvidence, founderActionEvidence, handoffs] = await Promise.all([
     listActiveFounderResolutions(supabase, projectId),
     listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
     listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    // Onboarding shows the same plan, so it has to agree with it about which
+    // steps are done — a handed-off step closed on the plan screen and still
+    // open here would be one product disagreeing with itself (ADR 0099).
+    listHandoffsForPlan(supabase, { projectId, actionPlanId: plan.id }),
   ]);
   const completed = completedStepsFromEvidence(
     plan.steps,
     resolutions,
     agentEvidence,
     founderActionEvidence,
+    buildHandoffKeys(handoffs),
   );
 
   return {
