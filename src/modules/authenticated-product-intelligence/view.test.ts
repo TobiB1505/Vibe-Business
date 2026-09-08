@@ -174,7 +174,15 @@ describe("buildDeepScanViewModel — completed", () => {
       analyzedAt: "2026-08-11T10:00:00.000Z",
       pagesInspected: 7,
       completion: { kind: "complete", policyLimited: false, budgetLimited: false },
-      surfaces: [{ id: "dashboard", name: "Dashboard" }],
+      surfaces: [{ id: "dashboard", name: "Dashboard", confidence: "high", evidence: [] }],
+      screens: [],
+      shape: {
+        landingPath: "/app",
+        navigation: [],
+        pagesWithForms: 0,
+        pagesWithTables: 0,
+        pagesWithEmptyState: 0,
+      },
       notes: [],
       accessMode: "included_first_scan",
     });
@@ -705,5 +713,129 @@ describe("describeCompletion", () => {
       policyLimited: false,
       budgetLimited: false,
     });
+  });
+});
+
+/*
+ * A founder spends 25 Credits and ninety seconds letting Vibe into their
+ * signed-in product. What came back was a timestamp, a page count and a row of
+ * grey chips — while the snapshot held, for every one of those chips, the
+ * pages and headings that were the reason Vibe said it.
+ */
+describe("the overview after a scan", () => {
+  function withResult(overrides: Record<string, unknown>) {
+    return build({
+      latestSnapshot: {
+        result: { ...snapshotResult(), ...overrides },
+        accessMode: "included_first_scan" as const,
+        completedAt: "2026-08-11T10:00:00.000Z",
+        createdAt: "2026-08-11T09:00:00.000Z",
+        pagesInspected: 7,
+      },
+      accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: "credits_required" }),
+    } as Parameters<typeof build>[0]).lastResult!;
+  }
+
+  it("turns stored evidence into sentences with a page to check", () => {
+    const result = withResult({
+      productSurfaces: [
+        {
+          id: "settings",
+          name: "Settings",
+          detected: true,
+          confidence: "high",
+          evidence: [
+            { kind: "url_path", path: "/app/settings" },
+            { kind: "heading", path: "/app/settings", detail: "Project Settings" },
+          ],
+        },
+      ],
+    });
+
+    expect(result.surfaces[0]!.evidence).toEqual([
+      { detail: "Vibe opened this page while signed in.", source: "/app/settings" },
+      { detail: "Its heading reads “Project Settings”.", source: "/app/settings" },
+    ]);
+  });
+
+  it("drops a citation it cannot make readable rather than showing a bare kind", () => {
+    // An unreadable citation is worse than one fewer (rule 45).
+    const result = withResult({
+      productSurfaces: [
+        {
+          id: "settings",
+          name: "Settings",
+          detected: true,
+          confidence: "low",
+          evidence: [
+            { kind: "heading", path: "/app/settings", detail: null },
+            { kind: "something_new", path: "/app/settings" },
+            { kind: "url_path", path: "/app/settings" },
+          ],
+        },
+      ],
+    });
+
+    expect(result.surfaces[0]!.evidence).toHaveLength(1);
+    expect(JSON.stringify(result.surfaces[0]!.evidence)).not.toContain("something_new");
+  });
+
+  it("collapses pages onto their templates, keeping the order they were read", () => {
+    /*
+     * The fixture is deliberately in an order that alphabetical sorting would
+     * change. A first version used pages that happened to sort into the order
+     * they were read, so a planted `.sort()` passed it — a test that cannot
+     * tell two orderings apart is not testing ordering.
+     */
+    const result = withResult({
+      pages: [
+        { path: "/app/workspace", mainHeading: "Workspace", formCount: 1, tableCount: 0, emptyStatePresent: false, surfaces: [] },
+        { path: "/app", mainHeading: "Welcome back", formCount: 1, tableCount: 0, emptyStatePresent: false, surfaces: [] },
+        { path: "/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b/settings", mainHeading: "Project Settings", formCount: 1, tableCount: 0, emptyStatePresent: false, surfaces: [] },
+        { path: "/app/projects/9b702a96-7863-4c29-8ece-c0055bfac24f/settings", mainHeading: "Project Settings", formCount: 1, tableCount: 0, emptyStatePresent: false, surfaces: [] },
+      ],
+    });
+
+    // Read order, not alphabetical: `/app` would come first if it were sorted.
+    expect(result.screens.map((screen) => screen.template)).toEqual([
+      "/app/workspace",
+      "/app",
+      "/app/projects/:id/settings",
+    ]);
+    expect(result.screens[2]!.pages).toHaveLength(2);
+    expect(result.screens[2]!.heading).toBe("Project Settings");
+  });
+
+  it("counts what was on the pages rather than describing it", () => {
+    const result = withResult({
+      pages: [
+        { path: "/app", mainHeading: null, formCount: 1, tableCount: 0, emptyStatePresent: false, surfaces: [] },
+        { path: "/app/repos", mainHeading: null, formCount: 0, tableCount: 2, emptyStatePresent: true, surfaces: [] },
+        { path: "/app/billing", mainHeading: null, formCount: 7, tableCount: 0, emptyStatePresent: false, surfaces: [] },
+      ],
+      navigation: { labels: ["Home", "Billing"], paths: [] },
+      session: { sessionId: "s", landingPath: "/app", ignoredTabCount: 0 },
+    });
+
+    expect(result.shape).toEqual({
+      landingPath: "/app",
+      navigation: ["Home", "Billing"],
+      // Pages that have one, not how many there were: three forms on one page
+      // is one page with a form.
+      pagesWithForms: 2,
+      pagesWithTables: 1,
+      pagesWithEmptyState: 1,
+    });
+  });
+
+  it("still lists only detected surfaces", () => {
+    const result = withResult({
+      productSurfaces: [
+        { id: "dashboard", name: "Dashboard", detected: true, confidence: "high", evidence: [] },
+        { id: "analytics", name: "Analytics", detected: false, confidence: "low", evidence: [] },
+      ],
+    });
+
+    expect(result.surfaces.map((surface) => surface.id)).toEqual(["dashboard"]);
   });
 });

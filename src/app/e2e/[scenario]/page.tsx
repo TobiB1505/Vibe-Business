@@ -187,7 +187,14 @@ import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenario
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
 import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
 import { DeepScanDialogFixture } from "./deep-scan-dialog-fixture";
-import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
+import {
+  E2E_DEEP_SCAN_SCENARIOS,
+  E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS,
+  isE2eDeepScanScenario,
+  isE2eDeepScanSpotlightScenario,
+} from "../deep-scan-scenarios";
+import { DeepScanSpotlight } from "@/app/app/projects/[projectId]/product/deep-scan-spotlight";
+import { buildDeepScanSpotlight } from "@/modules/authenticated-product-intelligence/spotlight";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import { agentReadyForecastNotes } from "../agent-stage-scenarios";
 import {
@@ -1859,14 +1866,20 @@ export default async function E2eScenarioPage({
   if (
     scenario === "deep-scan-dialog-awaiting-login" ||
     scenario === "deep-scan-dialog-sealing" ||
-    scenario === "deep-scan-dialog-expired"
+    scenario === "deep-scan-dialog-expired" ||
+    scenario === "deep-scan-dialog-expired-over-picture"
   ) {
     return (
       <main className="mx-auto max-w-3xl p-8">
         {label}
         <DeepScanDialogFixture
           sealing={scenario === "deep-scan-dialog-sealing"}
-          expired={scenario === "deep-scan-dialog-expired"}
+          expired={scenario.startsWith("deep-scan-dialog-expired")}
+          liveViewUrl={
+            scenario === "deep-scan-dialog-expired-over-picture"
+              ? "wss://127.0.0.1:9/live"
+              : null
+          }
         />
       </main>
     );
@@ -1897,6 +1910,23 @@ export default async function E2eScenarioPage({
         >
           <ScanHandoff running progress={{ pagesInspected: 7, maxPages: 25 }} />
         </div>
+      </main>
+    );
+  }
+
+  if (isE2eDeepScanSpotlightScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        {/*
+          Through the real derivation, never around it: a fixture that handed
+          the component a hand-written spotlight would prove the card renders
+          and nothing about what it is allowed to say.
+        */}
+        <DeepScanSpotlight
+          spotlight={buildDeepScanSpotlight(E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS[scenario])}
+          href="/app/projects/project_e2e/product/deep-scan"
+        />
       </main>
     );
   }

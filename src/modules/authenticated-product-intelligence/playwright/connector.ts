@@ -217,10 +217,40 @@ export async function attachReadOnlyGuards(
  */
 export type SessionLanding = { navigated: true } | { navigated: false; reason: string };
 
+/**
+ * The URL the founder's browser opens at.
+ *
+ * The root unless a same-origin path was supplied. A path that resolves
+ * anywhere else is discarded rather than corrected — there is no version of
+ * "nearly the right origin" worth navigating a browser to.
+ */
+function landingUrl(origin: string, path: string | null): string {
+  const root = new URL(origin).origin;
+  if (!path) return root;
+  try {
+    const target = new URL(path, root);
+    return target.origin === root ? target.toString() : root;
+  } catch {
+    return root;
+  }
+}
+
 export async function openSessionAtOrigin(
   connectUrl: string,
   origin: string,
-  options: { timeoutMs?: number } = {},
+  options: {
+    timeoutMs?: number;
+    /**
+     * An origin-relative path to open instead of the root — the sign-in page,
+     * when Vibe's public scan already found one.
+     *
+     * Validated by the caller and re-resolved here: this is the last thing
+     * between a path derived from the customer's own site and a real
+     * navigation, and an origin check that only exists at the caller is an
+     * origin check one refactor away from being gone.
+     */
+    path?: string | null;
+  } = {},
 ): Promise<SessionLanding> {
   const { chromium } = await import("playwright-core");
 
@@ -233,10 +263,31 @@ export async function openSessionAtOrigin(
     // A brand-new session already has one blank page; reuse it rather than
     // leaving a stray tab the analyzer would later have to ignore.
     const page = context.pages()[0] ?? (await context.newPage());
-    await page.goto(new URL(origin).origin, {
-      waitUntil: "domcontentloaded",
-      timeout: options.timeoutMs ?? 20_000,
-    });
+    const root = new URL(origin).origin;
+    const timeout = options.timeoutMs ?? 20_000;
+    const target = landingUrl(origin, options.path ?? null);
+
+    const response = await page.goto(target, { waitUntil: "domcontentloaded", timeout });
+
+    /*
+     * A sign-in path that no longer exists is worse than no sign-in path.
+     *
+     * The path comes from a public scan that may be days old, and a `goto` to
+     * a 404 navigates perfectly well — so "it loaded" is not the question. A
+     * founder who paid for a browser and got their product's error page has a
+     * worse session than one who got the homepage, and they cannot type an
+     * address to fix it (ADR 0076: there is no address bar, and there will
+     * never be one).
+     *
+     * So an error status falls back to the root, which is where this landed
+     * before any of this existed. A response Vibe could not read at all is
+     * left alone: that is normal for a document served from cache, and
+     * throwing away a good landing over it would be the same mistake.
+     */
+    if (target !== root && response && response.status() >= 400) {
+      await page.goto(root, { waitUntil: "domcontentloaded", timeout });
+    }
+
     return { navigated: true };
   } catch (error) {
     // Bounded, and a message rather than an object: a Playwright error carries
