@@ -238,6 +238,9 @@ import { BillingView } from "@/app/app/(account)/settings/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
 import { AtmosphereField } from "@/components/layout/atmosphere";
+import { CookieSettings } from "@/components/consent/cookie-settings";
+import { Surface } from "@/components/ui/surface";
+import { ProjectSettingsView } from "@/app/app/projects/[projectId]/settings/project-settings-view";
 import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
 import { DeepScanDialogFixture } from "./deep-scan-dialog-fixture";
 import {
@@ -1855,8 +1858,117 @@ export default async function E2eScenarioPage({
         <AccountShell>
           <div className="sr-only">{label}</div>
           <DeleteAccountSection state={E2E_ERASURE_SCENARIOS[scenario]()} />
-              </AccountShell>
+        </AccountShell>
       </AppFrame>
+    );
+  }
+
+  /**
+   * The frame on a route that has no navigation.
+   *
+   * Onboarding and the GitHub connect flow render nothing into the `@rail`
+   * slot, and the `<aside>` is hidden by `empty:hidden` rather than by a
+   * conditional the layout would have to reason its way to. That rule is one
+   * CSS declaration between a founder's first screen and 256px of empty
+   * chrome beside it, and the only place it can be checked is a browser.
+   */
+  if (scenario === "shell-without-a-rail") {
+    return (
+      <AppFrame rail={null}>
+        <main className="mx-auto w-full max-w-[40rem] p-8">
+          <div className="sr-only">{label}</div>
+          <h1 className="text-fg text-display font-bold">A focused flow</h1>
+        </main>
+      </AppFrame>
+    );
+  }
+
+  /*
+   * Project settings (UI-21).
+   *
+   * The route needs a session and a project in Supabase, which the browser
+   * suite deliberately does not have — so the one screen carrying "disconnect
+   * this repository" and "delete this product" had no browser coverage at all.
+   * Both states are rendered here, because the page is a different page
+   * without a repository: the disconnect row is gone and a connect link takes
+   * its place.
+   */
+  if (scenario === "project-settings" || scenario === "project-settings-disconnected") {
+    const connected = scenario === "project-settings";
+    const settingsHref = projectSectionHref("project_e2e", "settings");
+
+    return (
+      <AppFrame
+        rail={
+          <FixtureRail credits={35}>
+            <ProjectRail
+              projectId="project_e2e"
+              projectName="Acme"
+              connected={connected}
+              planName="Free"
+              switcherItems={[
+                {
+                  id: "project_e2e",
+                  name: "Acme",
+                  href: settingsHref,
+                  repositoryFullName: connected ? "acme/acme" : null,
+                },
+              ]}
+              items={PROJECT_SECTIONS.map((section) => ({
+                id: section.id,
+                label: section.label,
+                icon: section.icon,
+                href:
+                  section.id === "settings"
+                    ? settingsHref
+                    : projectSectionHref("project_e2e", section.id),
+                count: null,
+                countTone: "neutral" as const,
+              }))}
+            />
+          </FixtureRail>
+        }
+      >
+        <ProjectShell>
+          <div className="sr-only">{label}</div>
+          <ProjectBreadcrumb projectName="Acme" />
+          <ProjectSettingsView
+            projectId="project_e2e"
+            projectName="Acme"
+            repository={
+              connected
+                ? {
+                    fullName: "acme/acme",
+                    htmlUrl: "https://github.com/acme/acme",
+                    defaultBranch: "main",
+                  }
+                : null
+            }
+            productionUrl={connected ? "https://acme.example" : null}
+            founderIntent={{ stage: null, monetizationModel: null, primaryGoal: null }}
+            reconnectHref="/app/connect/github"
+          />
+        </ProjectShell>
+      </AppFrame>
+    );
+  }
+
+  /*
+   * The cookie panel from Settings → General (UI-23).
+   *
+   * The settings route needs a session, and consent is the one screen where
+   * "the switches match the cookie" has to be true in a browser rather than in
+   * a unit test — the whole feature is a browser fact.
+   */
+  if (scenario === "cookie-settings") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <h1 className="text-fg mb-6 text-display font-bold">General</h1>
+        <Surface level="panel" padding="md">
+          <CookieSettings />
+        </Surface>
+      </main>
     );
   }
 

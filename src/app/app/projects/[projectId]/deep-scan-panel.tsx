@@ -1114,7 +1114,7 @@ function NextScan({
             Another Deep Scan costs {formatCreditsForDisplay(next.price)} Credits, and your
             balance doesn&apos;t cover it yet.
           </p>
-          <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+          <Link href="/app/settings/billing" className={buttonClasses({ variant: "secondary" })}>
             Top up Credits
           </Link>
         </div>
@@ -1670,7 +1670,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               Another Deep Scan costs {formatCreditsForDisplay(model.additionalScanPrice)}{" "}
               Credits, and your balance doesn&apos;t cover it yet.
             </p>
-            <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+            <Link href="/app/settings/billing" className={buttonClasses({ variant: "secondary" })}>
               Top up Credits
             </Link>
           </>
