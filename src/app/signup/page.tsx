@@ -25,9 +25,7 @@ export default async function SignupPage({
   const next = sanitizeNextPath(params.next);
 
   return (
-    <AuthShell
-      assurances={["Changes land on their own branch", "Nothing merged without your approval"]}
-    >
+    <AuthShell>
       <AuthHeading title="Create account">
         Already have an account?{" "}
         <Link href="/login" className="text-mint hover:text-mint-hover rounded-inline">

@@ -47,22 +47,7 @@ export default async function LoginPage({
     : null;
 
   return (
-    <AuthShell
-      /*
-       * Both are properties of the system as built: a prepared change is
-       * written to its own branch, and the branch you ship from moves only on
-       * an explicit approval of one specific commit. Neither is a marketing
-       * claim.
-       *
-       * Neither characterises the *grant*, deliberately. The App holds
-       * `Contents: read and write` — execution creates a branch and a commit,
-       * and an approved merge fast-forwards the default branch. Saying
-       * "read-only" here was true until Sprint 11 and false afterwards, which
-       * is exactly the failure a claim about a permission invites: the
-       * permission changed and the sentence did not.
-       */
-      assurances={["Changes land on their own branch", "Nothing merged without your approval"]}
-    >
+    <AuthShell>
       <AuthHeading title="Sign in">
         No account yet?{" "}
         <Link href="/signup" className="text-mint hover:text-mint-hover rounded-inline">

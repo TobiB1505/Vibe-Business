@@ -25,11 +25,6 @@ export default async function ForgotPasswordPage({
     : null;
 
   return (
-    /*
-      No assurances here. They are about what Vibe does to a repository, and
-      this screen is about getting back into an account — a promise about
-      branches beside a password reset is furniture.
-    */
     <AuthShell>
       <AuthHeading title="Reset your password">
         Remembered it?{" "}

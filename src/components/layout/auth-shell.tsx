@@ -17,12 +17,15 @@ import { VibeLockup } from "@/components/brand/vibe-mark";
  * implementation of this screen converges on, and the shape this content
  * actually has.
  *
- * ## Where the assurances went
+ * ## Why there are no assurances on it either
  *
- * Under the form, above a hairline, rather than onto a panel of their own.
- * They are the argument for handing over a repository, so they belong beside
- * the decision rather than in the furniture next to it. Both are properties of
- * the system as built — rules 58, 67 and 71 — not claims about it.
+ * Two of them survived the panel — *changes land on their own branch*,
+ * *nothing merged without your approval* — and moved under the form. Both are
+ * true, and neither is what this screen is for: a person at `/login` is
+ * getting in, and a person at `/signup` has already decided. The argument for
+ * trusting Vibe with a repository belongs where that decision is actually
+ * made — the landing page, and the connect screen that asks for the grant.
+ * Restating it here made the column longer without making it more convincing.
  *
  * ## Why there is still no card
  *
@@ -31,23 +34,7 @@ import { VibeLockup } from "@/components/brand/vibe-mark";
  * page says "this part, not the rest" where there is no rest. The column is
  * held by its width and by the material behind it, not by a frame.
  */
-export function AuthShell({
-  assurances,
-  children,
-}: {
-  /**
-   * Short factual guarantees, under the form.
-   *
-   * Each must be something the system actually does — this is the screen where
-   * a stranger decides whether to trust Vibe with a repository, and a sentence
-   * here that the implementation does not enforce is the worst possible place
-   * for one. Omitted on recovery screens, where the subject is the account
-   * rather than the product.
-   */
-  assurances?: string[];
-  /** The heading and the form. */
-  children: ReactNode;
-}) {
+export function AuthShell({ children }: { /** The heading and the form. */ children: ReactNode }) {
   return (
     <div className="text-fg-body relative flex min-h-dvh flex-col overflow-clip">
       {/*
@@ -85,22 +72,6 @@ export function AuthShell({
           <VibeLockup />
 
           <div className="flex flex-col gap-7">{children}</div>
-
-          {assurances && assurances.length > 0 && (
-            <ul className="border-line-1 text-fg-muted flex flex-col gap-2.5 border-t pt-6 text-caption">
-              {assurances.map((assurance) => (
-                <li key={assurance} className="flex items-center gap-2.5">
-                  <span
-                    aria-hidden
-                    className="bg-mint-tint border-mint-line text-mint flex size-4 shrink-0 items-center justify-center rounded-full border text-[0.5rem]"
-                  >
-                    ✓
-                  </span>
-                  {assurance}
-                </li>
-              ))}
-            </ul>
-          )}
         </div>
       </main>
 
