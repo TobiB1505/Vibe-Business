@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { Analytics } from "@vercel/analytics/next";
-import { SpeedInsights } from "@vercel/speed-insights/next";
-import { MetaPixel } from "@/components/analytics/meta-pixel";
+import { ConsentBanner } from "@/components/consent/consent-banner";
+import { ConsentGate } from "@/components/consent/consent-gate";
 import { Atmosphere } from "@/components/layout/atmosphere";
 import { MotionProvider } from "@/components/ui/motion-provider";
 import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
@@ -92,16 +91,22 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           boundary to the tree — this leaf is the only client component here.
         */}
         <MotionProvider />
-        <Analytics />
-        <SpeedInsights />
         {/*
-          Advertising attribution, and the only third-party tag here that is
-          conditional. It is evaluated on the server, so a deployment that is
-          not Production ships no Meta script at all rather than shipping one
-          that decides at runtime not to fire. The component itself excludes
-          the authenticated surface — see src/lib/analytics/meta-pixel.ts.
+          Every third-party tag, behind the decision (UI-23).
+
+          All three used to be mounted here unconditionally. The Meta Pixel is
+          an advertising tag — it sets `_fbp` and reports the address of each
+          public page a visitor opens — and under TTDSG §25 that needs prior
+          opt-in in Germany, where this is operated from. `/privacy` listed the
+          gap itself.
+
+          `isMetaPixelEnabled()` stays a server fact and is passed down rather
+          than replaced by consent: whether this deployment may run the pixel
+          at all, and whether this visitor agreed to it, are two different
+          kinds of true and both have to hold.
         */}
-        {isMetaPixelEnabled() && <MetaPixel />}
+        <ConsentGate metaPixelAllowed={isMetaPixelEnabled()} />
+        <ConsentBanner />
       </body>
     </html>
   );

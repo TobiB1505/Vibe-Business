@@ -133,6 +133,8 @@ import { ProductsIndex } from "@/app/app/(account)/settings/products/products-in
 import { RepositoriesIndex } from "@/app/app/(account)/settings/repositories/repositories-index";
 import { AccountShell, SettingsRail } from "@/components/layout/account-shell";
 import { AppFrame, RailBrand, RailFooter } from "@/components/layout/app-frame";
+import { CookieSettings } from "@/components/consent/cookie-settings";
+import { Surface } from "@/components/ui/surface";
 import { ProjectSettingsView } from "@/app/app/projects/[projectId]/settings/project-settings-view";
 import {
   PROJECT_SECTIONS,
@@ -1399,6 +1401,25 @@ export default async function E2eScenarioPage({
           />
         </ProjectShell>
       </AppFrame>
+    );
+  }
+
+  /*
+   * The cookie panel from Settings → General (UI-23).
+   *
+   * The settings route needs a session, and consent is the one screen where
+   * "the switches match the cookie" has to be true in a browser rather than in
+   * a unit test — the whole feature is a browser fact.
+   */
+  if (scenario === "cookie-settings") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <h1 className="text-fg mb-6 text-display font-bold">General</h1>
+        <Surface level="panel" padding="md">
+          <CookieSettings />
+        </Surface>
+      </main>
     );
   }
 
