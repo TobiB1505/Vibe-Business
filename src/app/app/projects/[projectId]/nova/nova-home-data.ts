@@ -22,6 +22,9 @@ import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { BLOCK_FOR_OPERATION } from "@/modules/nova/blocks";
 import { getProductScanEvents } from "@/modules/product-scan/store";
 import type { ProductScanEvent } from "@/modules/product-scan/schema";
+import { findAgentRunByOperation } from "@/modules/coding-agent/store";
+import { listExecutionEvents } from "@/modules/coding-agent/observability/store";
+import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { buildActivityFeed, type ActivityEntry } from "@/modules/audit-log/view";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
@@ -57,10 +60,24 @@ import type { ProductProfile } from "@/modules/product-understanding/schema";
  * mutually exclusive by construction: one primary candidate is one moment, and
  * each of the four belongs to a different set of kinds.
  *
- * The fifth answers *what is running*, which is a different question and can
- * be true at the same time as any of the four — a scan can be in flight while
- * the moment that leads is a change to review. It is `scanEvents`, and it is
- * why the count above says two rather than one.
+ * The fifth and sixth answer *what is running*, which is a different question
+ * and can be true at the same time as any of the four — a scan can be in
+ * flight while the moment that leads is a change to review. They are
+ * `scanEvents` and `agentEvents`, they are mutually exclusive by construction
+ * because one operation has one type, and they are why the count above says
+ * two rather than one.
+ *
+ * ## What "a read" means here, and what it hid
+ *
+ * A call, not a query. That distinction is not free: `getMoveWithExecution`
+ * counted as one conditional read and issued up to thirteen queries, because
+ * it asked for every Move's execution state in order to answer about one. The
+ * word "one" in this file was true and told nobody anything.
+ *
+ * It is constant now — `move-read-cost.test.ts` counts it, and counts that it
+ * does not grow with the size of the opportunity set. The lesson is the one
+ * this docblock keeps having to relearn: a count of calls is a claim about
+ * this file, and the cost is behind them.
  *
  * One of the five arrived with the rail and was weighed rather than assumed:
  * the event log, one query for six rows. The rail's checklist is not a sixth —
@@ -208,6 +225,24 @@ export type NovaHomeData = {
    * would be showing a founder last week's reading under a live progress line.
    */
   scanEvents: ProductScanEvent[];
+  /**
+   * The running agent's own record: the files it has touched so far.
+   *
+   * Empty unless an agent execution is in flight, and empty is also the answer
+   * before the harness starts — an operation can be queued with no run behind
+   * it yet. Two reads when it is: which run the operation started, and that
+   * run's events.
+   *
+   * The first frame only. `NovaAgentLive` polls from there, asking for the
+   * tail after the sequence it already holds, because the alternative is a
+   * file list that stops moving while the agent keeps working.
+   *
+   * Deliberately not the Agent workspace's reading. That one also resolves the
+   * run view, the open interrupt, the credit reservation and the prepared
+   * change — which signs review images and preflights a merge against GitHub —
+   * because the Agent route draws all of it. This block draws one list.
+   */
+  agentEvents: StoredExecutionEvent[];
   /**
    * The plan as a sequence, for the rail. Null when no plan has completed.
    *
@@ -429,6 +464,31 @@ async function readMomentVoice(
   return null;
 }
 
+/**
+ * What the agent has touched, for the block that watches it.
+ *
+ * Two reads, sequential because the second needs the first: the events are
+ * keyed by the agent run, and only the operation is in hand. A queued run has
+ * no row yet, which is an empty list rather than a failure — the block draws
+ * its own empty state and the poll keeps asking.
+ *
+ * No audience filter, matching the Agent workspace: the split calls the
+ * per-file detail `internal`, and this is the surface where a founder watches
+ * it happen. Every summary is Vibe-authored from a closed vocabulary and the
+ * redaction layer strips secrets on write, so there is no model narration in
+ * here to leak (rules 25, 43).
+ */
+async function readAgentEvents(
+  supabase: SupabaseClient,
+  projectId: string,
+  operationId: string,
+): Promise<StoredExecutionEvent[]> {
+  const run = await findAgentRunByOperation(supabase, operationId);
+  if (!run || run.projectId !== projectId) return [];
+
+  return listExecutionEvents(supabase, { runId: run.id, projectId });
+}
+
 export async function readNovaHomeData(
   supabase: SupabaseClient,
   params: {
@@ -483,7 +543,7 @@ export async function readNovaHomeData(
    */
   const running = view.working;
 
-  const [question, change, workspaceCandidates, move, scanEvents] = await Promise.all([
+  const [question, change, workspaceCandidates, move, scanEvents, agentEvents] = await Promise.all([
     control.kind === "answer"
       ? getFounderInputRequest(supabase, control.founderInputRequestId)
       : Promise.resolve(null),
@@ -516,6 +576,9 @@ export async function readNovaHomeData(
           operationId: running.operationId,
         })
       : Promise.resolve<ProductScanEvent[]>([]),
+    running && BLOCK_FOR_OPERATION[running.type] === "agent"
+      ? readAgentEvents(supabase, params.projectId, running.operationId)
+      : Promise.resolve<StoredExecutionEvent[]>([]),
   ]);
 
   /*
@@ -551,6 +614,7 @@ export async function readNovaHomeData(
     workspaceCandidates,
     move,
     scanEvents,
+    agentEvents,
     checklist: reading.checklist,
     /* Oldest last: a thread reads downward and the log arrives newest first. */
     activity: buildActivityFeed(events.events).reverse(),

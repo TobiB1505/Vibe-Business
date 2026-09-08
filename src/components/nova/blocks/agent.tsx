@@ -37,7 +37,21 @@ import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/
  * already is a panel, and two frames around one object is the tell that
  * something was pasted rather than composed.
  */
-export function AgentWorking({ events }: { events: readonly StoredExecutionEvent[] }) {
+export function AgentWorking({
+  events,
+  /**
+   * Whether more may still arrive.
+   *
+   * A prop rather than a constant, and that is not tidiness: `live` draws a
+   * pulse, and a pulse on a list that has stopped growing is the component
+   * asserting activity nobody is doing. The lab draws this settled; the thread
+   * passes its own timer's answer.
+   */
+  live = false,
+}: {
+  events: readonly StoredExecutionEvent[];
+  live?: boolean;
+}) {
   return (
     <AgentFileActivity
       events={events}
@@ -46,7 +60,7 @@ export function AgentWorking({ events }: { events: readonly StoredExecutionEvent
          more there are. */
       limit={4}
       title="Files touched"
-      live
+      live={live}
       variant="block"
     />
   );

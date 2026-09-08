@@ -40,6 +40,16 @@ export type LiveViewActionState =
 
 export type SimpleDeepScanActionState = { ok: true } | { ok: false; error: DeepScanActionFailure };
 
+/*
+ * The progress read is deliberately **not** here.
+ *
+ * It was, and it could never have worked: Next.js executes Server Actions from
+ * one client one at a time, and the analysis is itself an action that runs for
+ * ninety seconds — so every poll queued behind it and arrived in a burst after
+ * it finished. It lives at `/api/deep-scan/[sessionId]/progress`, which is an
+ * ordinary request and is not queued behind anything.
+ */
+
 export type SignInProbeActionState =
   | { ok: true; signedIn: boolean }
   | { ok: false; error: DeepScanActionFailure };

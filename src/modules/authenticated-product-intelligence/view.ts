@@ -1,6 +1,12 @@
 import type { DeepScanAccessMode, DeepScanAccessStatus, DeepScanDenialReason } from "./entitlement";
 import type { AuthenticatedSurfaceDetection } from "./surface-detection";
-import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
+import type {
+  AuthenticatedEvidence,
+  AuthenticatedPageSummary,
+  AuthenticatedProductIntelligenceSnapshot,
+  Confidence,
+} from "./schema";
+import { routeShape } from "./routes";
 import type { DeepScanSessionStatus } from "./store";
 import type { AuthenticatedWarning } from "./schema";
 import type { AuthenticatedWarningCode } from "./errors";
@@ -83,7 +89,46 @@ export type DeepScanNextScan =
   /** Nothing to sign in to, or no browser provider on this deployment. */
   | { kind: "unavailable"; reason: DeepScanUnavailableReason };
 
-export type DeepScanSurface = { id: string; name: string };
+/** One page Vibe read, as a founder would name it. */
+export type DeepScanPage = {
+  /** Origin-relative, query already stripped upstream. */
+  path: string;
+  /** The page's own `h1`, when it had one. */
+  heading: string | null;
+};
+
+/** A route template and the pages Vibe read against it. */
+export type DeepScanScreen = {
+  /** `/app/projects/:id/settings` — identifiers collapsed. */
+  template: string;
+  /** The page that best represents it: the first one read. */
+  heading: string | null;
+  pages: DeepScanPage[];
+};
+
+export type DeepScanShape = {
+  /** Where the browser was when the founder handed it over. */
+  landingPath: string;
+  /** Navigation labels the signed-in product showed. */
+  navigation: string[];
+  pagesWithForms: number;
+  pagesWithTables: number;
+  pagesWithEmptyState: number;
+};
+
+/** One recognised surface, and the pages that are the reason Vibe says so. */
+export type DeepScanSurface = {
+  id: string;
+  name: string;
+  confidence: Confidence;
+  /**
+   * Already resolved to sentences. The panel renders these through Vibe's
+   * `EvidenceDrawer`, which takes `{ detail, source }` and never an id — so
+   * the mapping from a stored evidence record to a readable line happens here,
+   * where the snapshot's vocabulary is known.
+   */
+  evidence: { detail: string; source: string }[];
+};
 
 export type DeepScanResultSummary = {
   analyzedAt: string;
@@ -104,8 +149,25 @@ export type DeepScanResultSummary = {
    * could be raised.
    */
   completion: DeepScanCompletion;
-  /** Detected surfaces only, as id + label. No evidence internals. */
+  /** Detected surfaces only, each with the pages that prove it. */
   surfaces: DeepScanSurface[];
+  /**
+   * The pages Vibe read, collapsed onto their route templates.
+   *
+   * Twenty-one paths is a list nobody reads; eight screens is the shape of a
+   * product. The instances stay, behind the template, because "which three
+   * projects did it look at" is a real question — it is just not the first one.
+   */
+  screens: DeepScanScreen[];
+  /**
+   * What was actually on those pages.
+   *
+   * The scan reads navigation, forms, tables and empty states on every page,
+   * and none of it reached the screen: a founder spent 25 Credits and ninety
+   * seconds and got back a page count. This is the answer to "what did you
+   * see", in the product's own words.
+   */
+  shape: DeepScanShape;
   /**
    * What the scan noticed, grouped by what kind of statement it is.
    *
@@ -127,6 +189,74 @@ export type DeepScanResultSummary = {
   notes: DeepScanNote[];
   accessMode: DeepScanAccessMode;
 };
+
+/**
+ * One stored evidence record as a sentence a founder can read.
+ *
+ * `EvidenceDrawer` takes `{ detail, source }` and never an id — a component
+ * that took ids would have to resolve them, and a client component cannot
+ * reach a resolver. So the mapping lives here, where the snapshot's own
+ * vocabulary is known.
+ *
+ * The page's path is the *source*, because that is where a person would go to
+ * check. A record whose kind Vibe no longer produces is dropped rather than
+ * rendered as a bare kind name: an unreadable citation is worse than one
+ * fewer (rule 45).
+ */
+function describeEvidence(item: AuthenticatedEvidence): { detail: string; source: string } | null {
+  switch (item.kind) {
+    case "url_path":
+      return { detail: "Vibe opened this page while signed in.", source: item.path };
+    case "heading":
+      return item.detail === undefined || item.detail === null
+        ? null
+        : { detail: `Its heading reads “${item.detail}”.`, source: item.path };
+    case "nav_label":
+      return item.detail === undefined || item.detail === null
+        ? null
+        : { detail: `The navigation offers “${item.detail}”.`, source: item.path };
+    case "page_title":
+      return item.detail ? { detail: `Its title reads “${item.detail}”.`, source: item.path } : null;
+    case "action_label":
+      return item.detail ? { detail: `It offers “${item.detail}”.`, source: item.path } : null;
+    case "form_structure":
+      return { detail: "The page carries a form.", source: item.path };
+    case "table_structure":
+      return { detail: "The page carries a table of records.", source: item.path };
+    case "empty_state_label":
+      return item.detail ? { detail: `It reads “${item.detail}”.`, source: item.path } : null;
+    default:
+      return null;
+  }
+}
+
+/**
+ * The pages Vibe read, collapsed onto their route templates.
+ *
+ * `/app/projects/<a>/settings` and `/app/projects/<b>/settings` are one screen
+ * holding different rows, and the crawl already knows it — `routeShape` is what
+ * stops the budget being spent four times on the same template. Presenting the
+ * result the same way is the difference between a list of twenty-one paths,
+ * which nobody reads, and eight screens, which is the shape of a product.
+ *
+ * Insertion order is kept: the first page read comes first, and it is the one
+ * whose heading names the group. Sorting alphabetically would put `/app` — the
+ * page the founder actually landed on — somewhere in the middle.
+ */
+function groupIntoScreens(pages: AuthenticatedPageSummary[]): DeepScanScreen[] {
+  const screens = new Map<string, DeepScanScreen>();
+
+  for (const page of pages) {
+    const template = routeShape(page.path);
+    const entry = screens.get(template);
+    const item = { path: page.path, heading: page.mainHeading };
+
+    if (entry) entry.pages.push(item);
+    else screens.set(template, { template, heading: page.mainHeading, pages: [item] });
+  }
+
+  return [...screens.values()];
+}
 
 /**
  * Reasons Vibe will always have, whatever else changes.
@@ -247,6 +377,17 @@ export function describeWarning(warning: AuthenticatedWarning): DeepScanNote {
     message: warning.message,
   };
 }
+
+/**
+ * How far a running analysis has got.
+ *
+ * Declared here rather than in `service.ts` because the panel needs it and
+ * `service.ts` is `server-only`. A type import is erased, so it would compile
+ * either way — but a client file importing from a server module is a trap the
+ * next person has to re-derive, and this module already exists to be the shape
+ * both sides agree on.
+ */
+export type DeepScanProgress = { pagesInspected: number; maxPages: number };
 
 /** Why the last attempt ended, in typed form. The UI maps it to copy. */
 export type DeepScanLastFailure = {
@@ -403,7 +544,23 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
           completion: describeCompletion(latestSnapshot.result.completeness),
           surfaces: latestSnapshot.result.productSurfaces
             .filter((surface) => surface.detected)
-            .map((surface) => ({ id: surface.id, name: surface.name })),
+            .map((surface) => ({
+              id: surface.id,
+              name: surface.name,
+              confidence: surface.confidence,
+              evidence: surface.evidence
+                .map(describeEvidence)
+                .filter((item): item is { detail: string; source: string } => item !== null),
+            })),
+          screens: groupIntoScreens(latestSnapshot.result.pages),
+          shape: {
+            landingPath: latestSnapshot.result.session.landingPath,
+            navigation: latestSnapshot.result.navigation.labels,
+            pagesWithForms: latestSnapshot.result.pages.filter((page) => page.formCount > 0).length,
+            pagesWithTables: latestSnapshot.result.pages.filter((page) => page.tableCount > 0).length,
+            pagesWithEmptyState: latestSnapshot.result.pages.filter((page) => page.emptyStatePresent)
+              .length,
+          },
           notes: latestSnapshot.result.warnings.map(describeWarning),
           accessMode: latestSnapshot.accessMode,
         }

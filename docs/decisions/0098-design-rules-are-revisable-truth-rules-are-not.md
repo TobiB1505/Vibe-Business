@@ -1,4 +1,4 @@
-# 0097 - Design rules are revisable; truth rules are not
+# 0098 - Design rules are revisable; truth rules are not
 
 Status: Accepted
 Date: 2026-09-06

@@ -15,7 +15,7 @@ const analyzeMock = vi.fn();
 const connectMock = vi.fn();
 const probeMock = vi.fn();
 const landingMock = vi.fn(
-  async (_connectUrl: string, _origin: string) =>
+  async (_connectUrl: string, _origin: string, _options?: { path?: string | null }) =>
     ({ navigated: true }) as { navigated: boolean; reason?: string },
 );
 const disconnectMock = vi.fn(async () => undefined);
@@ -69,7 +69,8 @@ vi.mock("@/lib/supabase/service", () => ({
 
 vi.mock("./playwright/connector", () => ({
   connectReadOnly: (connectUrl: string, origin: string) => connectMock(connectUrl, origin),
-  openSessionAtOrigin: (connectUrl: string, origin: string) => landingMock(connectUrl, origin),
+  openSessionAtOrigin: (connectUrl: string, origin: string, options?: { path?: string | null }) =>
+    landingMock(connectUrl, origin, options),
   probeSignInState: (connectUrl: string, origin: string) => probeMock(connectUrl, origin),
 }));
 
@@ -1011,5 +1012,127 @@ describe("startDeepScan — the viewport hint is a name, never a size", () => {
     await startDeepScan(supabase, provider, { projectId, userId: OWNER });
 
     expect(provider.createdWith).toEqual({ viewport: "desktop" });
+  });
+});
+
+/*
+ * Progress is a nicety and a scan is not. The write goes to a row that is
+ * being read while it is being written, and it must never be able to take the
+ * crawl down with it.
+ */
+describe("startDeepScan → analyzeDeepScan — progress while it runs", () => {
+  it("writes the count as pages are read, on the running row", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    const counts: number[] = [];
+    analyzeMock.mockImplementation(async (input: { onProgress?: (p: { pagesInspected: number }) => void }) => {
+      // Stand in for the crawl: three pages, reported one at a time.
+      for (const n of [1, 2, 3]) {
+        input.onProgress?.({ pagesInspected: n });
+        // The write is fire-and-forget, so give it a turn to land.
+        await Promise.resolve();
+        const row = db.rows("authenticated_product_intelligence_snapshots").at(-1);
+        counts.push(Number(row?.pages_inspected ?? -1));
+      }
+      return { ok: true, snapshot: fakeSnapshot() };
+    });
+
+    await runFullScan(supabase, provider, projectId);
+
+    expect(counts).toEqual([1, 2, 3]);
+  });
+
+  it("does not fail a scan when the progress write fails", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    analyzeMock.mockImplementation(async (input: { onProgress?: (p: { pagesInspected: number }) => void }) => {
+      // A rejected write, exactly as a dropped connection would produce.
+      input.onProgress?.({ pagesInspected: Number.NaN });
+      return { ok: true, snapshot: fakeSnapshot() };
+    });
+
+    const { analyzed } = await runFullScan(supabase, provider, projectId);
+
+    expect(analyzed.ok).toBe(true);
+  });
+});
+
+
+/**
+ * Where the browser opens (founder report, 2026-09-08).
+ *
+ * It opened at the origin root, which for most products is the marketing
+ * page, and a founder on a phone spent the two-minute sign-in deadline
+ * looking for "Sign in" inside a canvas. The evidence needed to do better was
+ * already in the public snapshot and was being thrown away here.
+ *
+ * These tests are about the wiring: `findSignInTarget` has its own file and
+ * proves what it will and will not choose. What can only be proved here is
+ * that the answer actually reaches the browser — and that a project with no
+ * public scan still gets a working session.
+ */
+describe("startDeepScan — where the browser opens", () => {
+  function seedLiveSnapshot(db: InstanceType<typeof FakeDatabase>, projectId: string, result: unknown) {
+    db.seed("live_product_intelligence_snapshots", {
+      id: "live_1",
+      project_id: projectId,
+      status: "completed",
+      created_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
+      result,
+    });
+  }
+
+  it("opens the sign-in page the public scan already found", async () => {
+    const { db, supabase, projectId } = setup();
+    seedLiveSnapshot(db, projectId, {
+      pages: [{ path: "/app", status: 200, redirectedTo: "/login" }],
+      productSurfaces: [],
+      conversionSignals: { forms: [] },
+    });
+
+    const started = await startDeepScan(supabase, new FakeBrowserProvider(), {
+      projectId,
+      userId: OWNER,
+    });
+
+    expect(started.ok).toBe(true);
+    expect(landingMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(String),
+      { path: "/login" },
+    );
+  });
+
+  it("opens the root when no public scan has run", async () => {
+    const { supabase, projectId } = setup();
+
+    const started = await startDeepScan(supabase, new FakeBrowserProvider(), {
+      projectId,
+      userId: OWNER,
+    });
+
+    // Null, not a guessed "/login": a path Vibe has no evidence for is a 404
+    // the founder pays browser seconds for.
+    expect(started.ok).toBe(true);
+    expect(landingMock).toHaveBeenCalledWith(expect.any(String), expect.any(String), { path: null });
+  });
+
+  it("opens the root when a completed scan carries no result", async () => {
+    const { db, supabase, projectId } = setup();
+    // A real row shape: the snapshot completed and stored nothing usable. The
+    // landing is a convenience, and a founder must never lose a session to a
+    // failed optimisation.
+    seedLiveSnapshot(db, projectId, null);
+
+    const started = await startDeepScan(supabase, new FakeBrowserProvider(), {
+      projectId,
+      userId: OWNER,
+    });
+
+    expect(started.ok).toBe(true);
+    expect(landingMock).toHaveBeenCalledWith(expect.any(String), expect.any(String), { path: null });
   });
 });

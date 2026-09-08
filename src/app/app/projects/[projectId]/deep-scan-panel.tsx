@@ -11,6 +11,7 @@ import { ProgressSteps } from "@/components/system/operation-progress";
 import type { OperationProgressStep } from "@/modules/operations/view";
 import type {
   DeepScanCompletion,
+  DeepScanProgress,
   DeepScanNextScan,
   DeepScanNote,
   DeepScanNoteKind,
@@ -28,6 +29,7 @@ import {
   shouldStartUnprompted,
 } from "@/modules/authenticated-product-intelligence/login-detection";
 import { Disclosure } from "@/components/ui/disclosure";
+import { CitationCount } from "@/components/system/evidence-drawer";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
 
@@ -172,7 +174,17 @@ function Heading({ title, status }: { title: string; status?: string }) {
 const FOCUSABLE =
   'a[href], button, input, select, textarea, canvas, [tabindex]:not([tabindex="-1"])';
 
-function LiveViewDialog({
+/**
+ * The sign-in dialog.
+ *
+ * Exported for the browser fixtures, and that is not a convenience. Three
+ * defects have now reached the founder inside this component — an animation
+ * bound to the wrong state, a countdown, a closing check — and every one of
+ * them passed unit tests and lint. The dialog only opens on interaction and
+ * only reaches its interesting states through Server Actions the fixtures
+ * never call, so *nothing* could see it. Rule 69's untested screen, exactly.
+ */
+export function LiveViewDialog({
   liveViewUrl,
   stage,
   error,
@@ -188,6 +200,8 @@ function LiveViewDialog({
   onUnavailable,
   sealing,
   analysing,
+  progress,
+  expired,
   onSealed,
   onLoginExpired,
 }: {
@@ -210,6 +224,10 @@ function LiveViewDialog({
   sealing: boolean;
   /** Vibe has the browser and is reading it. Not the same as busy. */
   analysing: boolean;
+  /** Pages read so far, once the running scan has answered. */
+  progress: DeepScanProgress | null;
+  /** Sign-in ran past the deadline and the browser has been given back. */
+  expired: boolean;
   onSealed: () => void;
   /** The founder ran out of time to sign in. */
   onLoginExpired: () => void;
@@ -234,7 +252,7 @@ function LiveViewDialog({
    * while the browser is still opening, because that wait is Vibe's.
    */
   const loginSecondsLeft = useLoginCountdown(
-    stage === "ready" && !busy && !sealing && !unreachable && error === null,
+    stage === "ready" && !busy && !sealing && !expired && !unreachable && error === null,
     onLoginExpired,
   );
 
@@ -364,7 +382,7 @@ function LiveViewDialog({
            */
           className="relative w-full overflow-hidden rounded-card border border-line-2 bg-surface-2"
         >
-          {liveViewUrl && !error && (
+          {liveViewUrl && !error && !expired && (
             // Pixels, not a document. What used to sit here was an iframe
             // running the customer's own signed-in application inside this
             // page; this is a JPEG on a canvas, which executes nothing
@@ -374,6 +392,15 @@ function LiveViewDialog({
             // panel rather than after it: the socket cannot open until this
             // exists, so a panel that waits for the canvas before mounting it
             // would be waiting for itself.
+            //
+            // Unmounted the moment the session ends, which is not a detail of
+            // rendering. A founder was shown "Vibe closed the temporary
+            // browser" over a picture that went on scrolling and then
+            // *finished signing in* underneath the sentence. The socket
+            // outlives the session it belongs to, so the only way the message
+            // and the picture cannot contradict each other is for the picture
+            // to be gone — closing the socket is what makes the sentence true
+            // rather than merely written.
             <LiveBrowserCanvas
               viewUrl={liveViewUrl}
               onConnected={onConnected}
@@ -382,7 +409,7 @@ function LiveViewDialog({
             />
           )}
           {error && (
-            <p role="alert" className="absolute inset-0 bg-surface-2 p-4 text-sm text-amber">
+            <p role="alert" className="absolute inset-0 bg-app p-4 text-sm text-amber">
               {error}
             </p>
           )}
@@ -401,7 +428,7 @@ function LiveViewDialog({
              */
             <div
               role="status"
-              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-sm font-medium text-fg-body">
@@ -435,13 +462,46 @@ function LiveViewDialog({
           <ScanHandoff
             running={handoffRunning({ analysing, sealing, error })}
             succeeded={sealing}
+            progress={progress}
             onSealed={onSealed}
           />
 
-          {!error && !unreachable && stage !== "ready" && (
+          {!error && expired && (
+            /*
+             * An ending the founder did not ask for, said where they were
+             * looking. The browser is already given back — a sandbox exists to
+             * hold a login form, and one nobody is signing into is an empty
+             * room being billed for.
+             *
+             * "Nothing was charged" is first, because that is the question a
+             * person has when something they started ends by itself.
+             */
+            <div
+              role="alert"
+              className="bg-app absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
+            >
+              <div className="space-y-1">
+                <p className="text-fg-body text-sm font-medium">
+                  Sign-in took longer than two minutes
+                </p>
+                <p className="max-w-[54ch] text-xs text-fg-muted">
+                  Vibe is closing the temporary browser rather than leaving it running.
+                  Nothing was charged. You can start again — Vibe waits two minutes between
+                  attempts, and closing this shows when.
+                </p>
+              </div>
+              <div>
+                <TextAction type="button" onClick={onCancel} className="text-sm">
+                  Close
+                </TextAction>
+              </div>
+            </div>
+          )}
+
+          {!error && !expired && !unreachable && stage !== "ready" && (
             <div
               role="status"
-              className="absolute inset-0 flex flex-col justify-center gap-4 bg-surface-2 p-5 sm:p-8"
+              className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
                 <p className="text-sm font-medium text-fg-body">Opening a temporary browser</p>
@@ -468,22 +528,33 @@ function LiveViewDialog({
           session they could not finish. A phone can drive this now; a larger
           screen is genuinely easier, and that is all this says.
         */}
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <p className="text-xs text-fg-muted">
             Tap or click to interact. A larger screen makes signing in easier.
           </p>
           {loginSecondsLeft !== null && (
             /*
-             * A visible deadline, because the alternative is being cut off
-             * without warning. `role="timer"` with a polite live region: a
-             * screen reader should be able to ask for it, not have every
-             * second announced.
+             * A deadline has to be *readable*, not merely rendered.
+             *
+             * The first version was `text-meta` in `fg-meta` — the smallest and
+             * dimmest type on the screen — wrapped onto its own line under a
+             * two-line paragraph on a phone. It was on screen and the founder
+             * reported it missing, which for a two-minute deadline is the same
+             * thing. A person who cannot find the clock is a person being cut
+             * off without warning.
+             *
+             * So it is a bordered chip at body size, and it turns amber under
+             * thirty seconds. `role="timer"` with `aria-live="off"`: a screen
+             * reader should be able to ask for it, never have every second
+             * announced at it.
              */
             <p
               role="timer"
               aria-live="off"
-              className={`font-mono text-meta ${
-                loginSecondsLeft * 1000 <= LOGIN_URGENT_MS ? "text-amber" : "text-fg-meta"
+              className={`rounded-nav border px-3 py-1.5 font-mono text-sm ${
+                loginSecondsLeft * 1000 <= LOGIN_URGENT_MS
+                  ? "border-amber text-amber"
+                  : "border-line-2 text-fg-body"
               }`}
             >
               {formatCountdown(loginSecondsLeft)} to sign in
@@ -535,7 +606,13 @@ function LiveViewDialog({
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
+          <Button
+            type="button"
+            onClick={onAnalyze}
+            // There is no browser left to analyse once the deadline has passed.
+            disabled={busy || expired || !liveViewUrl}
+            busy={busy}
+          >
             {busy
               ? "Looking around…"
               : signIn.signedIn
@@ -772,6 +849,70 @@ function deviceViewport(): "desktop" | "mobile" {
   if (typeof window === "undefined") return "desktop";
   const coarse = window.matchMedia?.("(pointer: coarse)").matches ?? false;
   return coarse && window.innerWidth < 900 ? "mobile" : "desktop";
+}
+
+/** How often the running analysis is asked how far it has got. */
+const PROGRESS_POLL_MS = 2_500;
+
+/**
+ * Pages read so far, while the analysis runs.
+ *
+ * `null` until the first answer, and `null` again if the read fails — the
+ * animation then runs without a count, which is exactly where it was before
+ * this existed and is better than an error over a working scan.
+ *
+ * Two and a half seconds because that is roughly the pace a page is read at.
+ * Polling faster would ask the same question twice for one answer.
+ */
+function useScanProgress(sessionId: string | null, running: boolean): DeepScanProgress | null {
+  const [progress, setProgress] = useState<DeepScanProgress | null>(null);
+
+  useEffect(() => {
+    if (!running || sessionId === null) {
+      return;
+    }
+
+    let cancelled = false;
+
+    const ask = async () => {
+      /*
+       * `fetch`, not a Server Action, and that is the whole reason this works.
+       *
+       * Next.js runs Server Actions from one client one at a time, and the
+       * analysis *is* a Server Action that lasts ninety seconds. As an action
+       * this poll queued behind it — a real run produced thirty of them, and
+       * the runtime log shows all thirty arriving in a burst over eight
+       * seconds after the analysis returned. The count could never have moved
+       * while it mattered, and the queue draining afterwards is why the panel
+       * then sat blank for half a minute.
+       */
+      const answer = await fetch(`/api/deep-scan/${encodeURIComponent(sessionId)}/progress`, {
+        cache: "no-store",
+      })
+        .then((response) => (response.ok ? (response.json() as Promise<DeepScanProgress | null>) : null))
+        .catch(() => null);
+      if (cancelled) return;
+      // Only ever forward. The row is read while it is being written, so a
+      // read that lands between two updates can answer with the earlier
+      // number — and a count that goes backwards reads as work being undone.
+      setProgress((current) =>
+        answer === null || (current !== null && answer.pagesInspected < current.pagesInspected)
+          ? current
+          : answer,
+      );
+    };
+
+    void ask();
+    const timer = setInterval(() => void ask(), PROGRESS_POLL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [sessionId, running]);
+
+  // Belongs to one run: a finished scan's number must not seed the next one.
+  return running ? progress : null;
 }
 
 /** How often the browser is asked whether the founder has finished signing in. */
@@ -1031,15 +1172,31 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             "Recognised" rather than "found", because that is the claim. These
             are the surfaces Vibe has a name for; a product can contain
             something Vibe does not recognise, and this list would not say so.
+
+            Each one now carries the pages that are the reason Vibe says it.
+            They were flat chips: a claim with no way to check it, over
+            evidence the snapshot had been storing all along.
           */}
           <p className="text-fg-meta font-mono text-meta uppercase">Surfaces Vibe recognised</p>
-          <ul className="flex flex-wrap gap-2">
+          <ul className="flex flex-col gap-2">
             {result.surfaces.map((surface) => (
               <li
                 key={surface.id}
-                className="border-line-2 bg-surface-2 text-fg-body rounded-nav border px-3 py-1.5 text-sm"
+                className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border px-3 py-2"
               >
-                {surface.name}
+                <span className="text-fg-body text-sm">{surface.name}</span>
+                <CitationCount
+                  citations={surface.evidence}
+                  title={surface.name}
+                  conclusion="Vibe recognised this in your signed-in product."
+                  /*
+                   * `judgment`, not `coverage`. Coverage is a fraction of
+                   * things scored; this is Vibe's own reading of what a page
+                   * is, and the snapshot's `Confidence` is exactly the
+                   * high/medium/low vocabulary that kind takes.
+                   */
+                  confidence={{ kind: "judgment", level: surface.confidence }}
+                />
               </li>
             ))}
           </ul>
@@ -1098,6 +1255,96 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             <>It also stops at a set number of pages, so one scan stays quick and cheap.</>
           )}
         </p>
+      )}
+
+      {result.screens.length > 0 && (
+        <div className="space-y-2">
+          {/*
+            What Vibe actually read, as screens rather than as paths.
+
+            Twenty-one paths is a list nobody reads; eight screens is the shape
+            of a product. The instances stay behind the template because "which
+            three projects did it open" is a real question — it is just not the
+            first one, and putting it first is how a summary becomes a log.
+          */}
+          <p className="text-fg-meta font-mono text-meta uppercase">
+            {result.screens.length === 1 ? "1 screen Vibe read" : `${result.screens.length} screens Vibe read`}
+          </p>
+          <ul className="flex flex-col gap-1.5">
+            {result.screens.map((screen) => (
+              <li
+                key={screen.template}
+                className="flex flex-wrap items-baseline justify-between gap-x-4"
+              >
+                <span className="text-fg-prose text-sm">
+                  {screen.heading ?? screen.template}
+                </span>
+                <span className="text-fg-meta font-mono text-meta">
+                  {screen.template}
+                  {screen.pages.length > 1 ? ` · ${screen.pages.length} of them` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(result.shape.navigation.length > 0 ||
+        result.shape.pagesWithForms > 0 ||
+        result.shape.pagesWithTables > 0) && (
+        <Disclosure label="What was on those pages">
+          {/*
+            The answer to "what did you see", in the product's own words.
+
+            The scan reads navigation, forms, tables and empty states on every
+            page and none of it reached the screen — a founder spent 25 Credits
+            and ninety seconds and got back a page count. Behind a disclosure
+            because it is the second question, not the first.
+          */}
+          <div className="space-y-3">
+            <dl className="space-y-1 text-sm">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Signed in on</dt>
+                <dd className="text-fg-prose font-mono text-meta">{result.shape.landingPath}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Pages with a form</dt>
+                <dd className="text-fg-prose">{result.shape.pagesWithForms}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Pages with a table</dt>
+                <dd className="text-fg-prose">{result.shape.pagesWithTables}</dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-fg-muted">Pages showing an empty state</dt>
+                <dd className="text-fg-prose">{result.shape.pagesWithEmptyState}</dd>
+              </div>
+            </dl>
+
+            {result.shape.navigation.length > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-fg-meta font-mono text-meta uppercase">
+                  Navigation Vibe saw
+                </p>
+                {/*
+                  The customer's own labels, and untrusted page content by
+                  rule 36 — rendered as text, never interpreted. React escapes
+                  them, and they were already length-capped on extraction.
+                */}
+                <ul className="flex flex-wrap gap-1.5">
+                  {result.shape.navigation.map((label) => (
+                    <li
+                      key={label}
+                      className="border-line-2 text-fg-muted rounded-nav border px-2 py-0.5 text-xs"
+                    >
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Disclosure>
       )}
 
       {/*
@@ -1163,6 +1410,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
    * not exist yet.
    */
   const [analysing, setAnalysing] = useState(false);
+  /** Sign-in ran past the deadline, and the dialog is saying so. */
+  const [expired, setExpired] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const loadLiveView = useCallback(async (id: string) => {
@@ -1184,6 +1433,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
     setFrame(null);
     setSealing(false);
     setAnalysing(false);
+    setExpired(false);
     // Dropping the capability is part of closing, not an afterthought.
     setLiveViewUrl(null);
     setStage("starting");
@@ -1234,12 +1484,11 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       // The server terminates the browser; the modal closes only afterwards.
       await cancelDeepScanAction(projectId, sessionId);
       setBusy(false);
-      // Not closed here. The handoff draws its check and calls `handleSealed`,
-      // which is what ends the dialog — so the last thing a founder sees is
-      // Vibe finishing, rather than a window vanishing.
-      setSealing(true);
+      setSessionId(null);
+      closeDialog();
+      router.refresh();
     });
-  }, [projectId, sessionId, closeDialog]);
+  }, [projectId, sessionId, closeDialog, router]);
 
   /**
    * The login deadline ran out.
@@ -1252,24 +1501,44 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
   const handleLoginExpired = useCallback(() => {
     if (!sessionId) return;
     setBusy(true);
+    /*
+     * The dialog stays open and says what happened.
+     *
+     * It used to terminate the browser, close, and leave a sentence in the
+     * panel behind — so from the founder's side the window simply vanished
+     * while they were typing a password. An ending they did not ask for has to
+     * be told to them where they are looking.
+     */
+    setExpired(true);
     startTransition(async () => {
       await cancelDeepScanAction(projectId, sessionId);
       setBusy(false);
       setSessionId(null);
-      closeDialog();
-      setError(
-        "The temporary browser closed because sign-in took longer than two minutes. Nothing was charged — you can start it again.",
-      );
       router.refresh();
     });
-  }, [projectId, sessionId, closeDialog, router]);
+  }, [projectId, sessionId, router]);
 
+  /**
+   * The dialog closes onto the result, not onto a blank panel.
+   *
+   * It used to close and *then* refresh, so the founder watched twenty to
+   * thirty seconds of nothing where the scan overview should have been. Most
+   * of that was the Server Action queue draining — thirty progress polls that
+   * had been stuck behind the analysis — and that cause is gone. What remains
+   * is the refresh itself, which is a real round trip.
+   *
+   * So the check stays up until the refreshed page has arrived. `refresh()` is
+   * awaited inside a transition, and the dialog closes after it: a beat longer
+   * on an answer, instead of a gap with nothing in it.
+   */
   const handleSealed = useCallback(() => {
-    setSealing(false);
-    setAnalysing(false);
-    setSessionId(null);
-    closeDialog();
-    router.refresh();
+    startTransition(async () => {
+      await Promise.resolve(router.refresh());
+      setSealing(false);
+      setAnalysing(false);
+      setSessionId(null);
+      closeDialog();
+    });
   }, [closeDialog, router]);
 
   const handleAnalyze = useCallback(() => {
@@ -1297,9 +1566,12 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
         return;
       }
 
-      setSessionId(null);
-      closeDialog();
-      router.refresh();
+      /*
+       * Not closed here. The handoff draws its check and calls `handleSealed`,
+       * which is what ends the dialog — so the last thing a founder sees is
+       * Vibe finishing, rather than a window vanishing.
+       */
+      setSealing(true);
     });
   }, [projectId, sessionId, closeDialog, router]);
 
@@ -1309,6 +1581,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
    * still opening, and a probe would be a round trip that cannot learn
    * anything.
    */
+  const progress = useScanProgress(sessionId, analysing);
+
   const signIn = useSignInWatch({
     sessionId,
     active: dialogOpen && stage === "ready" && !busy && !pending,
@@ -1562,6 +1836,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           onUnavailable={handleUnavailable}
           sealing={sealing}
           analysing={analysing}
+          expired={expired}
+          progress={progress}
           onSealed={handleSealed}
           onLoginExpired={handleLoginExpired}
         />

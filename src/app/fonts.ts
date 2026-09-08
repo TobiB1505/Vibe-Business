@@ -142,7 +142,7 @@ const jetBrainsMonoVietnamese = localFont({
 
 /* Geist ------------------------------------------------------------- */
 /**
- * The v2 interface face (S1, ADR 0096).
+ * The v2 interface face (S1, ADR 0097).
  *
  * Split by writing system for the reason the mono above is split: the foundry
  * ships it that way and a browser then fetches only the parts a page needs.
@@ -236,7 +236,7 @@ const geistVietnamese = localFont({
 
 /* DM Mono ----------------------------------------------------------- */
 /**
- * The v2 identifier face (S1 follow-up, ADR 0096).
+ * The v2 identifier face (S1 follow-up, ADR 0097).
  *
  * Chosen at review from four candidates on the strings mono is actually kept
  * for — repository names, branches and SHAs — rather than on a pangram, which

@@ -1,4 +1,4 @@
-# 0096 - The second design system arrives as a scope, not as a rewrite
+# 0097 - The second design system arrives as a scope, not as a rewrite
 
 Status: Accepted
 Date: 2026-09-06

@@ -54,6 +54,7 @@ export const NOVA_ACTION_IDS = [
   "nova.continue_introduction",
   "nova.explain_workflow",
   "nova.skip_workflow",
+  "nova.begin_setup",
   /* The product reveal: confirming what Vibe read, and what follows it. */
   "nova.confirm_product",
   "nova.confirm_product_and_audit",
@@ -150,7 +151,7 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
   },
   "nova.explain_workflow": {
     control: "server_action",
-    label: "Show me how this works",
+    label: "Show me how you work",
     price: null,
     consequential: false,
     requiresConfirmation: false,
@@ -163,14 +164,34 @@ export const NOVA_ACTION_META: Record<NovaActionId, NovaActionMeta> = {
      * not happen.
      */
     control: "server_action",
-    label: "Start now",
+    label: "Let's start",
+    price: null,
+    consequential: false,
+    requiresConfirmation: false,
+  },
+  "nova.begin_setup": {
+    /*
+     * The end of the walkthrough, and the press that records `explained`.
+     *
+     * The write waits for this rather than firing when the walkthrough opens.
+     * Recording it at the start meant the column said somebody had been shown
+     * something at the moment they asked to see it — and worse, the write
+     * revalidates the route, so the position it derives became `handoff` and
+     * the four sentences were replaced by the next setup step. The founder
+     * asked to be shown how this works and was shown the connect screen.
+     *
+     * So the fact is written where it becomes true: at the bottom of the
+     * thing, by the person who read it.
+     */
+    control: "server_action",
+    label: "Set up my product",
     price: null,
     consequential: false,
     requiresConfirmation: false,
   },
   "nova.confirm_product": {
     control: "server_action",
-    label: "Yes, that is right",
+    label: "Yes, that's my product",
     price: null,
     consequential: false,
     requiresConfirmation: false,

@@ -32,6 +32,17 @@ const FILES = readdirSync(NOVA_DIR)
 
 const component = (name: string) => FILES.find((file) => file.name === name)?.body ?? "";
 
+/**
+ * The render blocks, which live beside the components rather than beside the
+ * screen.
+ *
+ * Home imports them through the barrel now, so the decisions they encode —
+ * which frame a composed surface gives up, which chrome a gate drops — are
+ * asserted where they are made rather than where they used to be pasted.
+ */
+const block = (name: string) =>
+  stripComments(readFileSync(join(process.cwd(), "src/components/nova/blocks", name), "utf8"));
+
 describe("Nova Home", () => {
   it("has the components this slice is made of", () => {
     for (const name of [
@@ -249,7 +260,13 @@ describe("Nova Home", () => {
      */
     it("is a rail and a thread, never a grid of equal tiles", () => {
       const home = component("nova-home.tsx");
-      expect(home).toContain("lg:grid-cols-[300px_1fr]");
+      /*
+       * The two columns are `NovaRoom`'s now. Home composes the room rather
+       * than drawing its own — the track was `[300px_1fr]` here and
+       * `[300px_minmax(0,1fr)]` in setup, which is a seam a founder crosses.
+       * `nova-room.test.ts` sweeps for a screen that goes back to drawing it.
+       */
+      expect(home).toContain("<NovaRoom");
       expect(home).not.toMatch(/grid-cols-[2-9]\b/);
       expect(home).not.toMatch(/grid-cols-(?:repeat|\[repeat)/);
     });
@@ -268,14 +285,10 @@ describe("Nova Home", () => {
     });
 
     /*
-     * And the rail goes second on a phone. A founder who opens this on a phone
-     * came for what Nova says; the plan and the log above it means scrolling
-     * past everything to reach the one thing that speaks.
+     * And the rail goes second on a phone — asserted in `nova-room.test.ts`,
+     * because the order moved into the room along with the grid and every
+     * screen inherits it rather than repeating it.
      */
-    it("puts the conversation first on a narrow screen", () => {
-      expect(component("nova-home.tsx")).toContain("max-lg:order-2");
-      expect(component("nova-home.tsx")).toContain("max-lg:order-1");
-    });
 
     it("has no chat input anywhere", () => {
       for (const { name, body } of FILES) {
@@ -300,6 +313,79 @@ describe("Nova Home", () => {
       expect(home).toContain("<MoveBlock");
     });
 
+    /**
+     * One frame, one heading, on the block a founder answers in.
+     *
+     * The thread drew `NovaRenderBlock` with `tone="waiting"` and the card
+     * drew its own amber `Surface` inside it — two amber borders around one
+     * question — under a label saying "Needs your answer" above a pill saying
+     * "Needs your decision". Three statements of one fact.
+     *
+     * `presentation="block"` is the same move the Product Scan and the file
+     * list already make: the composed surface drops its own frame because the
+     * render block is the frame.
+     */
+    it("answers inside one frame rather than two", () => {
+      expect(block("ask.tsx")).toMatch(/<FounderInputCard[\s\S]*?presentation="block"/);
+      /* The panel would be a fourth heading. It still owns the Agent route,
+         where it is a page-scale object rather than a heading inside somebody
+         else's frame. */
+      for (const { name, body } of FILES) {
+        expect(body, name).not.toContain("AgentQuestionPanel");
+      }
+      expect(block("ask.tsx")).not.toContain("AgentQuestionPanel");
+    });
+
+    /**
+     * One answer to "what does a founder see for this kind".
+     *
+     * `blocks/` held wrappers that made these decisions and nothing imported
+     * them, while Home wrote its own copy of each a level lower. The lab drew
+     * the wrappers; production drew the copy; nothing compared them. Home goes
+     * through the barrel now, so there is one of each.
+     */
+    /**
+     * A second true thing is said, and is not a second thing to do.
+     *
+     * `buildNovaHomeView` has ranked and capped `secondary` since this route
+     * existed and Home discarded it, so a founder with three things pending
+     * saw one. They are bubbles in the quiet register now — no controls and no
+     * prices, which is the rule that keeps them from rebuilding the wall of
+     * equally weighted choices the ranking exists to replace.
+     */
+    it("says the other moments without offering them", () => {
+      const home = component("nova-home.tsx");
+      const thread = component("nova-focus-thread.tsx");
+
+      expect(home).toContain("data.view.secondary");
+      expect(thread).toContain("speechBubbles");
+      /* Rendered as asides, and the control slot is a different branch — an
+         aside that grew a button would be the stack of cards coming back. */
+      expect(thread).toMatch(/asideBubbles\.map[\s\S]*?<NovaBubble key=\{bubble\.key\} aside/);
+    });
+
+    it("mounts the blocks rather than a second copy of their decisions", () => {
+      const home = component("nova-home.tsx");
+
+      expect(home).toContain('from "@/components/nova/blocks"');
+      for (const composed of ["<ReviewBlock", "<AskBlock", "<WorkspaceAskBlock"]) {
+        expect(home, composed).toContain(composed);
+      }
+      /* The pieces those wrappers compose, reached for directly. */
+      expect(home).not.toMatch(/<ChangeGates|<FounderInputCard|<AgentWorkspaceChoice\b/);
+    });
+
+    /*
+     * How long a run has been stopped waiting is the one thing this surface
+     * could not say, and it costs no read — the request has been in hand since
+     * the ranking put it first. Computed on the server, because a relative
+     * time read on the client would disagree with the markup around it.
+     */
+    it("says how long the run has been waiting", () => {
+      const home = component("nova-home.tsx");
+      expect(home).toMatch(/waitingSince=\{formatElapsedShort\(data\.question\.createdAt/);
+    });
+
     /*
      * The run's block belongs to the *run* rather than to the moment, and the
      * other registry picks it. This used to be the progress checklist and
@@ -311,6 +397,45 @@ describe("Nova Home", () => {
       expect(home).toContain("BLOCK_FOR_OPERATION");
       expect(home).toContain("<ProgressBlock");
       expect(home).toContain("<ScanBlock");
+      expect(home).toContain("<NovaAgentLive");
+    });
+
+    /*
+     * The agent's file list is the one composed block whose component does not
+     * poll for itself — the Product Scan does, which is why mounting it made
+     * it live for free. Rendering `AgentWorking` straight into the thread would
+     * draw the server render's list, hold it still, and pulse at it.
+     */
+    /*
+     * The stage history is this tab's observation, never a read. `stage` is a
+     * column the executor overwrites, so a surface that claimed to replay the
+     * sequence would be inventing one — which is the whole argument the
+     * dissolving lines rest on.
+     */
+    it("shows only the stages it watched happen", () => {
+      const live = component("nova-agent-live.tsx");
+      expect(live).toContain("<NovaDissolving");
+      expect(live).toContain("initialStage");
+      /* Newest first, appended only on a change: a poll answering the same
+         stage repeatedly must not stack copies of one line. */
+      expect(live).toMatch(/seen\[0\] === result\.activity\.stage/);
+    });
+
+    it("does not mount the agent's record without a reading behind it", () => {
+      const home = component("nova-home.tsx");
+      expect(home).not.toContain("<AgentWorking");
+      expect(component("nova-agent-live.tsx")).toContain("useOperationPoll");
+    });
+
+    /*
+     * One owner for "the run ended". The header polls the operation and
+     * refreshes the route, because a run finishing is what makes the ranking
+     * stale — a second component refreshing on the same fact would be two
+     * answers to a question that has one.
+     */
+    it("leaves the settling refresh to the header", () => {
+      expect(component("nova-agent-live.tsx")).not.toContain("router.refresh");
+      expect(component("nova-header-live.tsx")).toContain("router.refresh");
     });
 
     /*
@@ -358,9 +483,17 @@ describe("Nova Home", () => {
    */
   describe("the change gates", () => {
     it("mounts the shipped gates rather than a panel out of the middle", () => {
-      const home = component("nova-home.tsx");
-      expect(home).toContain("<ChangeGates");
-      expect(home).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);
+      const review = block("review.tsx");
+
+      expect(review).toContain("<ChangeGates");
+      /* The thread says the change's status sentence above the block, so the
+         gate drops its own. That decision lives in the block now rather than
+         being written out at the call site. */
+      expect(review).toContain("chrome={false}");
+
+      for (const body of [review, component("nova-home.tsx")]) {
+        expect(body).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);
+      }
     });
 
     it("never calls the merge action itself", () => {

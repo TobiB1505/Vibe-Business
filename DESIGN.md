@@ -47,7 +47,7 @@ The register is product-first **inside `/app`**: marketing expression does not l
 
 Everything here is one of two things, and they do not cost the same to change.
 
-**Design rules are revisable in place.** Composition, hierarchy, register, material, motion character, typography, restraint, which technique suits which surface. If you have a better argument, rewrite the rule and say why — no ADR, no ceremony. Being cheap to change is what keeps them true; three of them had gone stale before anyone noticed, precisely because they read as invariants. See [ADR 0097](docs/decisions/0097-design-rules-are-revisable-truth-rules-are-not.md).
+**Design rules are revisable in place.** Composition, hierarchy, register, material, motion character, typography, restraint, which technique suits which surface. If you have a better argument, rewrite the rule and say why — no ADR, no ceremony. Being cheap to change is what keeps them true; three of them had gone stale before anyone noticed, precisely because they read as invariants. See [ADR 0098](docs/decisions/0098-design-rules-are-revisable-truth-rules-are-not.md).
 
 **Truth rules are not.** No fabricated metric, count, percentage or success state; no motion asserting a state Vibe has not observed; missing evidence is `null` and says so; no control whose label misdescribes what pressing it does; no affordance that appears available and is not. Those have the standing of the security invariants, and changing one needs a record.
 
@@ -57,7 +57,7 @@ The runtime source of truth is [src/app/globals.css](src/app/globals.css). This 
 
 ### Two vocabularies, one of them not switched on
 
-Since [ADR 0096](docs/decisions/0096-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
+Since [ADR 0097](docs/decisions/0097-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
 
 v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, opaque panels with bright hairlines and tight corners, glass spent on chrome and signature moments rather than on dense data, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
 
@@ -248,6 +248,17 @@ A signature surface is one where the product's understanding is the thing being 
 _Nova is the project Home at HEAD._ The first slice ships the surface itself: `deriveNovaFocus`'s ranking mounted as `src/app/app/projects/[projectId]/nova/`, one Focus Card carrying one priced control, a working strip, a bounded attention stack and the business reading as context. [ADR 0085](docs/decisions/0085-nova-is-the-project-home.md) records the reversal of [ADR 0047](docs/decisions/0047-business-health-is-project-home.md); Business Health keeps every address it had.
 
 What has _not_ shipped is the choreography this section describes. Nova Home is currently calm by construction — one card reveal, one working dot, and no motion language of its own — because the surface had to be legible before it was expressive. The paragraph above therefore remains a standing design decision about what Nova is to become, and the three surfaces described below remain the product's current signature set.
+
+
+### Nova's voice
+
+**Nova speaks like a trusted operator sitting beside the founder — not like an AI assistant explaining its capabilities.** Competent, calm, opinionated, and not a know-all. She is allowed to say *I've seen enough to know where I'd start*, *I wouldn't spend time on that yet*, *this matters more*, *I need one answer from you before I decide* — and, importantly, *this part is good, I'd leave it alone*. A Nova who has to find a problem every time she looks is a Nova nobody can trust when she does.
+
+She uses contractions, because contraction-free English read aloud is a briefing rather than somebody sitting next to you. This is a revision: a test once asserted the opposite, on the observation that no sentence in the product used one. The observation was right and the conclusion was wrong, and the copy it protected proved it — the walkthrough opened *"I am not a chat box"*, which is an assistant describing what it is not instead of a person saying what happens next.
+
+Controls are the **founder's** voice, not hers. A button is a person deciding, so it says what they are choosing — *Set up my product*, *Show me how you work*, *Yes, that's my product*, *Go to my workspace*. A label in the first person is Nova answering her own question on the founder's behalf.
+
+None of this touches what she may *claim*. The truth rules are elsewhere and are not revisable: no invented cause, no promise to deploy, nothing called safe or correct, no figure a component renders from state, and a name only where the product actually holds one. `src/modules/nova/feed.test.ts` sweeps every sentence she has — the twenty-one moments, the ten setup states, and her first run — against all of it.
 
 ## Signature Surface: the Landing Page
 

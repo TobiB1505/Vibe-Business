@@ -1,8 +1,9 @@
 "use client";
 
-import { motion, useReducedMotion } from "motion/react";
+import { motion } from "motion/react";
 import { useId, useMemo } from "react";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
+import { useMotionAllowed } from "./nova-motion";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -234,7 +235,23 @@ export function NovaPresence({
   still?: boolean;
   className?: string;
 }) {
-  const reduceMotion = useReducedMotion();
+  /*
+   * Vibe's own reading of the preference, not Motion's.
+   *
+   * `useReducedMotion` answers from a media query the browser has already
+   * evaluated before React hydrates, so a reader with `prefers-reduced-motion:
+   * reduce` got a client first render that disagreed with the server's — the
+   * server emitted the keyframe `<style>` below and the client did not. React
+   * responds by discarding the whole subtree and rebuilding it, on every page
+   * that mounts this mark: the landing page, Nova's rail, her status row.
+   *
+   * `useMotionAllowed` is a `useSyncExternalStore` whose *server* snapshot is
+   * "no motion", so the server and the hydrating client agree by construction
+   * and the preference lands in the commit after. It also makes the markup a
+   * reader without JavaScript keeps the still one, which is the right default
+   * for the obligation this sits under.
+   */
+  const reduceMotion = !useMotionAllowed();
   const visible = useDocumentVisible();
   const animate = !reduceMotion && visible;
 
@@ -254,7 +271,7 @@ export function NovaPresence({
     [phase],
   );
 
-  const opening = introduce && reduceMotion !== true;
+  const opening = introduce && !reduceMotion;
   /* Only a live read turns the frame or traces the curve — and a legend
      asking for the state without the claim turns nothing at all. */
   const working = state === "working" && animate && !still;

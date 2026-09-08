@@ -6,7 +6,7 @@ import {
 } from "@/modules/projects/business-brain-view";
 import { buildOperationView, OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { AgentChecks, AgentWorking } from "@/components/nova/blocks/agent";
-import { AskBlock, PlanAskBlock } from "@/components/nova/blocks/ask";
+import { AskBlock } from "@/components/nova/blocks/ask";
 import { WorkspaceAskBlock } from "@/components/nova/blocks/workspace";
 import { MoveBlock } from "@/components/nova/blocks/move";
 import { ProgressBlock } from "@/components/nova/blocks/progress";
@@ -22,7 +22,6 @@ import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { Bubble, Context, Dissolving, Line, Move, Moves, RenderBlock } from "./elements";
 import { E2E_AUDIT_SCENARIOS } from "../audit-scenarios";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
-import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
 import type { WorkspaceCandidate } from "@/modules/validation/profile";
 import type { Study } from "./studies";
 
@@ -92,27 +91,6 @@ function auditView(scenario: "audit-synthesis" | "audit-unscored"): BusinessBrai
  * nobody had built a fixture for — which is some of why it kept being routed
  * away from rather than designed.
  */
-const ASK_INTERRUPT: StoredExecutionInterrupt = {
-  id: "interrupt_e2e",
-  projectId: "project_e2e",
-  userId: "user_e2e",
-  executionSpecId: "spec_e2e",
-  agentExecutionRunId: "run_e2e",
-  type: "business_decision_required",
-  question: "Which of the two checkout flows should stay?",
-  responseSchema: {
-    kind: "single_choice",
-    options: [
-      { id: "hosted", label: "The hosted checkout" },
-      { id: "embedded", label: "The embedded checkout" },
-    ],
-  },
-  status: "open",
-  answer: null,
-  createdAt: "2026-09-06T08:58:00.000Z",
-  answeredAt: null,
-};
-
 const ASK_REQUEST: FounderInputRequest = {
   id: "request_e2e",
   projectId: "project_e2e",
@@ -498,11 +476,11 @@ export function StudyBlock({ study }: { study: Study }) {
       <section className="flex flex-col gap-3">
         <Eyebrow>The Agent at work, and what survives it</Eyebrow>
         <Context>
-          The block where the dissolving lines earn their argument, because both
-          kinds of record are on screen at once. The lines at the top are the run&rsquo;s stages —
-          a column that is overwritten as the run moves, with nothing writing down the ones before
-          it. The files under them are stored rows, so they are rendered by the shipped component
-          that already knows how to show them, disclosure and pulse included.
+          The block where the dissolving lines earn their argument, because both kinds of record are
+          on screen at once. The lines at the top are the run&rsquo;s stages — a column that is
+          overwritten as the run moves, with nothing writing down the ones before it. The files
+          under them are stored rows, so they are rendered by the shipped component that already
+          knows how to show them, disclosure and pulse included.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble index={0}>
@@ -511,7 +489,10 @@ export function StudyBlock({ study }: { study: Study }) {
           <RenderBlock label="Building" index={1}>
             <div className="flex flex-col gap-5">
               <Dissolving stages={AGENT_STAGES} />
-              <AgentWorking events={AGENT.fileEvents} />
+              {/* The sheet draws a run in flight, and the pulse is a prop now
+                  rather than a constant — so it has to be asked for here, and
+                  the block beside a settled run will not claim activity. */}
+              <AgentWorking events={AGENT.fileEvents} live />
             </div>
           </RenderBlock>
         </div>
@@ -564,21 +545,34 @@ export function StudyBlock({ study }: { study: Study }) {
           <Bubble tone="waiting" open index={0}>
             <Line>I stopped part-way and need something from you.</Line>
           </Bubble>
-          <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
+          <RenderBlock label="Needs your answer" tone="waiting" index={1}>
             <AskBlock
               projectId="project_e2e"
-              interrupt={ASK_INTERRUPT}
               request={ASK_REQUEST}
+              context="runtime_execution"
+              waitingSince="12m"
               resolveAction={labResolveAction}
             />
           </RenderBlock>
         </div>
         <Context>
-          The block carries the amber and the panel gave up its own border to say it once instead of
-          twice. What the lab cannot show is the action: resolving writes a durable answer and
-          unblocks a paused run, and there is nothing here to unblock — so the control reports that
-          rather than pretending. In production Nova&rsquo;s route supplies the real one, the same
-          way the agent route supplies it today.
+          One frame and one heading, which took two attempts. The first drew the block&rsquo;s amber
+          border around the card&rsquo;s own amber surface, under a label saying{" "}
+          <em>Needs your answer</em>, above a panel saying <em>Vibe has a question</em>, above a
+          pill saying <em>Needs your decision</em>. Three statements of one fact and two borders —
+          in the sheet whose whole argument is that this surface says things once.
+        </Context>
+        <Context>
+          What survives is the half that could not be dropped: the card holds the options and the
+          submit. <em>Execution paused</em> stays because it is the one claim the frame does not
+          make — a <em>run</em> is stopped, which is why answering here matters — and the waiting
+          time moved onto it, because that was the only thing the panel said that nothing else did.
+        </Context>
+        <Context>
+          What the lab cannot show is the action: resolving writes a durable answer and unblocks a
+          paused run, and there is nothing here to unblock — so the control reports that rather than
+          pretending. In production Nova&rsquo;s route supplies the real one, the same way the agent
+          route supplies it today.
         </Context>
       </section>
 
@@ -588,15 +582,20 @@ export function StudyBlock({ study }: { study: Study }) {
         <Context>
           <em>Answer in the plan</em> and <em>Choose in the Agent</em>. Both are the same mechanism
           as the one above, and both were <code className="font-mono">elsewhere</code> controls for
-          a reason home-view.ts states plainly: Home did not hold the arguments the action needed.
-          A block that mounts the panel does hold them, because the panel is where they live.
+          a reason home-view.ts states plainly: Home did not hold the arguments the action needed. A
+          block that mounts the panel does hold them, because the panel is where they live.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble tone="waiting" open index={0}>
             <Line>The plan needs a decision only you can make.</Line>
           </Bubble>
-          <RenderBlock label="Needs your answer" tone="waiting" namesItself index={1}>
-            <PlanAskBlock projectId="project_e2e" request={PLAN_REQUEST} resolveAction={labResolveAction} />
+          <RenderBlock label="Needs your answer" tone="waiting" index={1}>
+            <AskBlock
+              projectId="project_e2e"
+              request={PLAN_REQUEST}
+              context="action_plan"
+              resolveAction={labResolveAction}
+            />
           </RenderBlock>
         </div>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
@@ -621,10 +620,10 @@ export function StudyBlock({ study }: { study: Study }) {
           </RenderBlock>
         </div>
         <Context>
-          The workspace list brings its own notice with it — <em>choosing is free and you can
-          change it later, nothing starts running</em> — which is the sentence that stops a founder
-          reading this as the moment a priced run begins. A block that rebuilt the list would have
-          had to remember to write it.
+          The workspace list brings its own notice with it —{" "}
+          <em>choosing is free and you can change it later, nothing starts running</em> — which is
+          the sentence that stops a founder reading this as the moment a priced run begins. A block
+          that rebuilt the list would have had to remember to write it.
         </Context>
       </section>
 
@@ -656,8 +655,11 @@ export function StudyBlock({ study }: { study: Study }) {
           I said last time I would not put a merge control in a thread, and the reason this is not
           that is that a <em>button</em> is not what arrives. The gate brings its own order —
           evidence, then approval, then merge, then outcome, each reachable only through the one
-          above it. Its own comment says it: <em>a merge needs an approval, an approval needs a
-          review, a review needs a preview, a preview needs a validation.</em>
+          above it. Its own comment says it:{" "}
+          <em>
+            a merge needs an approval, an approval needs a review, a review needs a preview, a
+            preview needs a validation.
+          </em>
         </Context>
         <Context>
           That ordering is rule 67 in component form. An approval binds to one immutable identity —
@@ -686,7 +688,9 @@ export function StudyBlock({ study }: { study: Study }) {
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble open index={0}>
-            <Line>A change reached your default branch. I have not looked at what changed yet.</Line>
+            <Line>
+              A change reached your default branch. I have not looked at what changed yet.
+            </Line>
           </Bubble>
           <RenderBlock label="The change" at="2h" index={1}>
             <ReviewBlock
@@ -733,7 +737,6 @@ export function StudyBlock({ study }: { study: Study }) {
           card gives up its own surface rather than the block giving up its frame.
         </Context>
       </section>
-
 
       {/* ── The minute after the press ───────────────────────────────── */}
       <section className="flex flex-col gap-3">

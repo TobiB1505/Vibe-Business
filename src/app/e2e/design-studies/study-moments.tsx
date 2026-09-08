@@ -1,23 +1,13 @@
 import type { ReactNode } from "react";
-import {
-  novaPresenceState,
-  statusForCandidate,
-  statusForFocusTier,
-} from "@/components/system/status-vocabulary";
+import { novaPresenceState, statusForFocusTier } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
-import {
-  deriveNovaFocus,
-  FOCUS_CANDIDATE_KINDS,
-} from "@/modules/nova/focus";
-import {
-  buildNovaHomeView,
-  novaControlLabel,
-  type NovaHomeEntry,
-} from "@/modules/nova/home-view";
+import { deriveNovaFocus, FOCUS_CANDIDATE_KINDS } from "@/modules/nova/focus";
+import { buildNovaHomeView, novaControlLabel, type NovaHomeEntry } from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
-import { Bubble, Context, Line, Moves } from "./elements";
+import { NovaFocusThread } from "@/app/app/projects/[projectId]/nova/nova-focus-thread";
+import { Moves } from "./elements";
 import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";
 import type { Study } from "./studies";
@@ -57,8 +47,6 @@ import type { Study } from "./studies";
  * `study-voice-dense` are for. This page answers the other question: what does
  * each moment *say*, on its own, before anything ranks it.
  */
-
-
 
 /** The four readings `operationPollPhase` produces, as the facts behind them. */
 const OPERATIONS: { label: string; note: string; operation: OperationView | null }[] = [
@@ -133,7 +121,7 @@ function priceOf(entry: NovaHomeEntry) {
 }
 
 /**
- * One moment, in the shape the thread will actually give it.
+ * One moment, in the thread the product actually draws.
  *
  * ## Why this replaced a row
  *
@@ -143,9 +131,18 @@ function priceOf(entry: NovaHomeEntry) {
  * carry twenty-one different situations?* A pill answers it by fiat, because
  * the word is right there. The thread has no pill.
  *
- * So each moment is drawn exactly as the wireframe draws one: the sentence in
- * a bubble carrying the moment's register, the subject's own line as an aside,
- * the question as a second bubble, and the control outside all of them.
+ * ## Why it mounts `NovaFocusThread` rather than drawing one
+ *
+ * Because the second version of this was a hand-built copy of that component:
+ * a bubble with the register, the detail as an aside, the prompt as a second
+ * bubble, the control outside. Every line of it correct, and none of it the
+ * thing production renders — so a change to the thread's arrangement showed up
+ * on twenty-one moments in the product and on none of them here, in the
+ * gallery that exists to judge exactly that.
+ *
+ * It mounts the component now. What the gallery still owns is the *control*,
+ * because the lab has no server actions to bind: a real one becomes a `Moves`
+ * picture, and the two moments that have none say so instead.
  *
  * ## What the page then shows, which is the finding
  *
@@ -161,56 +158,41 @@ function priceOf(entry: NovaHomeEntry) {
  * is the only label left on a row.
  */
 function Moment({ entry }: { entry: NovaHomeEntry }) {
-  const status = statusForCandidate(entry.kind);
   const control = controlOf(entry);
   const price = priceOf(entry);
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <Bubble tone={status.tone} open={status.open}>
-        <Line>{entry.message}</Line>
-      </Bubble>
-
-      {/* The subject's own sentence — a change's headline, a question's text.
-          Nova wrote neither, so neither leads. */}
-      {entry.detail && (
-        <Bubble aside tail={false}>
-          <Context>{entry.detail}</Context>
-        </Bubble>
-      )}
-
-      {/* The question above the control, when the candidate asks one. Not
-          every one does: a navigation needs nothing asked before it. */}
-      {entry.prompt && (
-        <Bubble tone={status.tone} open={status.open} tail={false}>
-          <Line>{entry.prompt}</Line>
-        </Bubble>
-      )}
-
-      {control ? (
-        <div className="pt-1">
-          <Moves
-            moves={[{ label: control.label, operation: price }]}
-            balance={STUDY_BALANCE}
-          />
-        </div>
-      ) : entry.control.kind === "answer" ? (
-        /*
-           Not the same as having nothing to press, and the gallery has to say
-           which. A question carries no separate control because the answering
-           card *is* the control — it brings the options, the recommendation and
-           the submit. Printing "no control" here would read as "nothing to do"
-           over the one moment that is entirely about doing something.
-        */
-        <p className="pt-1 font-mono text-caption text-fg-meta">
-          answered in the card — see /e2e/study-block
-        </p>
-      ) : (
-        /* `nothing_to_do` has no control on purpose. Saying so is part of the
-           moment: a screen that invented one would be work Nova made up. */
-        <p className="pt-1 font-mono text-caption text-fg-meta">no control</p>
-      )}
-    </div>
+    <NovaFocusThread
+      entry={entry}
+      /* Isolated by construction: each row runs facts built to raise exactly
+         one candidate, so there is never a second true thing behind it. The
+         register is shown once, below, where it can be looked at. */
+      asides={[]}
+      /* The label the thread needs to decide whether the prompt above the
+         control would repeat it — `footnoteFor`'s rule, asked here the way
+         Home asks it rather than skipped because the lab has no action. */
+      controlLabel={control?.label}
+      control={
+        control ? (
+          <Moves moves={[{ label: control.label, operation: price }]} balance={STUDY_BALANCE} />
+        ) : entry.control.kind === "answer" ? (
+          /*
+             Not the same as having nothing to press, and the gallery has to say
+             which. A question carries no separate control because the answering
+             card *is* the control — it brings the options, the recommendation and
+             the submit. Printing "no control" here would read as "nothing to do"
+             over the one moment that is entirely about doing something.
+          */
+          <p className="font-mono text-caption text-fg-meta">
+            answered in the card — see /e2e/study-block
+          </p>
+        ) : (
+          /* `nothing_to_do` has no control on purpose. Saying so is part of the
+             moment: a screen that invented one would be work Nova made up. */
+          <p className="font-mono text-caption text-fg-meta">no control</p>
+        )
+      }
+    />
   );
 }
 
@@ -242,27 +224,30 @@ export function StudyMoments({ study }: { study: Study }) {
           the product&rsquo;s; none of it is written for this page.
         </p>
         <p className="study-measure text-caption text-fg-secondary">
-          Each one is drawn the way the thread will draw it: the sentence in a bubble carrying the
-          moment&rsquo;s register, the subject&rsquo;s own line as an aside, the question as a
-          second bubble, the control outside all of them. The gallery used to be a table with a
-          status column, which is a fine index and a poor test — a pill answers &ldquo;can a
-          founder tell these apart?&rdquo; by fiat, and the thread has no pill.
+          Each one mounts the product&rsquo;s own <code className="font-mono">NovaFocusThread</code>
+          . It used to be a hand-built copy of it here — every line correct, and none of it the
+          component Home renders, so a change to the thread showed on twenty-one moments in the
+          product and on none of them in the gallery built to judge exactly that. Before the copy it
+          was a table with a status column, which is a fine index and a poor test: a pill answers
+          &ldquo;can a founder tell these apart?&rdquo; by fiat, and the thread has no pill.
         </p>
         <p className="study-measure text-caption text-fg-secondary">
-          Each row also says which block that moment shows, read from
-          block-registry.ts rather than decided here. The registry is total over both unions, so an
-          operation type or a moment added to the domain fails the build until somebody decides
-          what a founder sees — which is the difference between a state that was decided to show
-          nothing and one nobody got to.
+          Each row also says which block that moment shows, read from block-registry.ts rather than
+          decided here. The registry is total over both unions, so an operation type or a moment
+          added to the domain fails the build until somebody decides what a founder sees — which is
+          the difference between a state that was decided to show nothing and one nobody got to.
         </p>
         <p className="study-measure text-caption text-fg-secondary">
           So there is no status word anywhere below. That is the claim being tested rather than an
           omission: colour is never the only signal here, and the other signal is the sentence.
-          <em> My last audit did not finish</em> and <em>my audit has been running far longer than
-          it should</em> say what they are without a label, which is more than a label would.
-          Twenty-one of them in a column either read apart or they do not.
+          <em> My last audit did not finish</em> and{" "}
+          <em>my audit has been running far longer than it should</em> say what they are without a
+          label, which is more than a label would. Twenty-one of them in a column either read apart
+          or they do not.
         </p>
       </div>
+
+      <BehindTheFirst moments={moments} panel={panel} />
 
       {byTier.map((tier) => {
         const rows = moments.filter((moment) => moment.entry.tier === tier);
@@ -353,5 +338,75 @@ export function StudyMoments({ study }: { study: Study }) {
         </ul>
       </section>
     </div>
+  );
+}
+
+/**
+ * The quiet register, which every row above is isolated from.
+ *
+ * ## Why it needs its own section
+ *
+ * Because the gallery's whole method is one candidate per fact set, so
+ * `secondary` is empty on all twenty-one rows and the register never appears.
+ * It is the one thing on this page that only exists when *more than one* is
+ * true, which is the ordinary case in a real project and the case the page is
+ * built to exclude.
+ *
+ * ## Why this is not the combination the page refuses
+ *
+ * The page refuses combined *fact sets*, because a row built from two would
+ * stop being evidence about either candidate. Nothing is combined here: the
+ * sentences are the ones the rows above already produced, from their own
+ * isolated fact sets, borrowed to stand in the position the ranking would put
+ * them in. What is being shown is the register, not an ordering — the ordering
+ * is `deriveNovaFocus`'s and is not re-decided anywhere, least of all here.
+ *
+ * ## What it is evidence about
+ *
+ * That a second true thing can be said without becoming a second thing to do.
+ * Home computed these and threw them away, so a founder with three things
+ * pending saw one. The rule that makes them safe is that they carry no
+ * controls and no prices, and `speechBubbles` is what keeps five of them from
+ * being five stacked blocks: past a run's length they become one bubble with
+ * line breaks, the way a long message actually arrives.
+ */
+function BehindTheFirst({
+  moments,
+  panel,
+}: {
+  moments: { kind: string; entry: NovaHomeEntry }[];
+  panel: string;
+}) {
+  const lead = moments.find((moment) => moment.kind === "merge_ready");
+  const behind = moments
+    .filter((moment) =>
+      ["audit_outdated", "next_move_available", "scan_stalled"].includes(moment.kind),
+    )
+    .map((moment) => moment.entry.message);
+
+  if (!lead) return null;
+
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label>And the ones behind it</Label>
+        <p className="study-measure text-ui text-fg-body">
+          Every row below is one candidate alone. A real project raises several, and the ranking
+          says which leads — the rest are still true.
+        </p>
+      </div>
+      <div className={`p-5 max-sm:p-4 ${panel}`}>
+        <NovaFocusThread
+          entry={lead.entry}
+          asides={behind}
+          control={<p className="font-mono text-caption text-fg-meta">control omitted here</p>}
+        />
+      </div>
+      <p className="study-measure text-caption text-fg-secondary">
+        No control and no price on any of them, which is what stops a second true thing becoming a
+        second wall of buttons. Their sentences are the same ones the rows below produce from their
+        own fact sets; nothing is written for this picture.
+      </p>
+    </section>
   );
 }

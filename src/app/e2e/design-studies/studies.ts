@@ -281,6 +281,66 @@ export const BLOCK_SCENARIO = "study-block";
  */
 export const OPENING_SCENARIO = "study-opening";
 export const OPENING_WALKTHROUGH_SCENARIO = "study-opening-walkthrough";
+
+/**
+ * The opening the product actually renders, not the study of it.
+ *
+ * Same argument as `RAIL_SCENARIO`: `NovaOpeningScreen` is otherwise visible
+ * only to a founder opening a project for the very first time, which is a
+ * state that exists once per project and cannot be returned to. `?opening`
+ * replays it for a signed-in owner; this shows it to anyone reviewing the
+ * design, with the same `replay` flag, so nothing is recorded.
+ *
+ * It earns its place by having caught something. The study and the shipped
+ * screen were supposed to be one choreography and were not — a hand-written
+ * header, ungrouped bubbles, no staged arrival — and nothing said so, because
+ * the two were never on screen in the same place.
+ */
+export const SHIPPED_OPENING_SCENARIO = "study-opening-shipped";
+
+/**
+ * The screen straight after it: the question, and the walkthrough behind it.
+ *
+ * Reachable in the product exactly once per project, by a founder who has just
+ * met Nova and has not yet been asked whether they want to be shown how she
+ * works. So it is the same problem as the opening, with one addition — half of
+ * this screen is behind a press. *Show me how you work* swaps the thread for
+ * four sentences and a worked example, and nothing but this fixture can put
+ * that in front of a reviewer twice.
+ *
+ * It is also the fixture that would have caught the defect it now guards: the
+ * press used to write `explained`, which revalidates the route, which changes
+ * the derived position to `handoff` — so asking to be shown how Vibe works
+ * replaced the walkthrough with the connect-your-repository step.
+ */
+export const SHIPPED_FIRST_RUN_SCENARIO = "study-first-run-shipped";
+
+/**
+ * Setup's render blocks, with the real components inside them.
+ *
+ * `study-onboarding` reviews the ten sentences and *names* the component that
+ * fills each block, on the argument that every one of them needs a live
+ * project. That is true of some of them and was never true of all: a paused
+ * question, a finished audit and the first Move take props a fixture can build,
+ * and those three are exactly where a component brought its own frame into
+ * Nova's.
+ *
+ * So this mounts them. It is the same move that caught the hydration failure
+ * and the dissolving stages — put the shipped component on a page rather than
+ * a picture of it — applied to the half of setup nobody had looked at.
+ */
+export const ONBOARDING_BLOCKS_SCENARIO = "study-onboarding-blocks";
+
+/**
+ * Setup, all ten states at once.
+ *
+ * Same argument as `RAIL_SCENARIO` and the shipped opening: a state of
+ * `deriveOnboardingState` is reachable only by a project that happens to be in
+ * it, and three of them only by one that is stuck. The ten sentences were
+ * never on screen together, which is why they were written as eight separate
+ * posters.
+ */
+export const ONBOARDING_SCENARIO = "study-onboarding";
 export const WIREFRAME_OFFLINE_SCENARIO = "study-wireframe-offline";
 
 export function isWireframeScenario(scenario: string): boolean {

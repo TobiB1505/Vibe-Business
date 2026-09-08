@@ -58,6 +58,30 @@ A sandbox bills for every second it exists, and this one exists to hold a login 
 
 Two minutes is tight for a password manager plus a second factor on a phone. The mitigation is that it is *visible*: somebody who can see thirty seconds left knows to hurry, where somebody who can see nothing is simply cut off.
 
+## An overlay has to cover something
+
+A founder's sign-in ran out on a phone, and the notice that says so was drawn in `bg-surface-2` — 3% white, a *layer* colour meant to stack on the app ground. Over a live picture of a browser it covers nothing: two paragraphs of white text landed on top of a headline and a green button, unreadable, and that is what reached them.
+
+Underneath it the browser kept going. The picture scrolled, and then reached the signed-in home, while the sentence over it said Vibe had closed the browser. One defect with two faces — an overlay that covers nothing, over a socket that stops for nothing — and the second half is the serious one: the screencast outlives the session it belongs to, so nothing but unmounting the canvas makes the sentence true rather than merely written.
+
+The tense was wrong too. "Vibe closed the temporary browser" was rendered before `cancelDeepScanAction` had returned, which is a completed fact claimed about a request still in flight.
+
+All four overlays in this dialog sit over a live picture and now use the opaque ground, the same token the account menu and the project switcher already use for the same reason. A browser test reads the notice's computed alpha, because "looks covered" is exactly the judgement that shipped this.
+
+## Progress is counted, never estimated
+
+The analysis lives inside a single request and reports nothing until it returns, so the handoff ran for ninety seconds unable to say whether anything was happening. The alternative on offer was a bar timed against the expected duration — a percentage nobody measured, and the exact thing the motion rules forbid.
+
+So the analyzer reports each page as it *records* it (`onProgress`), the service writes that count to the running snapshot row, and the panel polls it every two and a half seconds — **over a route handler, not a Server Action**. That is not a style choice: Next.js executes Server Actions from one client one at a time, and the analysis is itself an action that lasts ninety seconds, so as an action every poll queued behind it. A real run produced about thirty, and the runtime log shows all thirty arriving in a burst over eight seconds *after* the analysis returned — which is also why the panel sat blank for half a minute before the result appeared. One cause, two symptoms. `pages_inspected` already exists on that row and is written at completion; this writes it during the crawl, so there is no schema change — a migration for an animation would have been the wrong trade.
+
+Three properties, each with a test:
+
+- **Pages read, not pages attempted.** The report fires after a page is in the snapshot, so a page that failed to load moves nothing. A counter that advanced on a failure would be counting Vibe's own failures as work.
+- **The budget is a ceiling, not a forecast.** The copy says "up to 25", because a scan usually stops earlier — it runs out of product before it runs out of budget — and "of 25" promises an ending that rarely arrives.
+- **The write can never fail the scan.** Fire-and-forget with a swallowed error, and the count only ever moves forward on the client: the row is read while it is being written, and a number that went backwards would read as work being undone.
+
+The count is the one piece of *information* in that scene, so it is the one thing announced — the decorative wrapper's `aria-hidden` moved onto the decorations after a browser test found `role="status"` unreachable inside it.
+
 ## The handoff, and why it is allowed to be decoration
 
 The live view is useful for the first seconds of an analysis — a person can watch the crawl start — and after that it is a video of pages flicking past that nobody is driving. What followed was a spinner and a seconds counter.
@@ -77,6 +101,30 @@ A phone driving a 1920-pixel desktop page is the fiddliest part of this flow —
 The **analysis** does not follow the device. `connectReadOnly` puts every page back to `BROWSER_SANDBOX.viewport` before it reads anything, because a mobile layout hides its navigation behind a menu: a phone-started scan would harvest fewer links and find fewer surfaces, and two scans of one product would stop being comparable depending on which device happened to start them. That override is best effort and never fatal — a browser that refuses it still holds a signed-in session worth reading.
 
 No image rebuild: the screencast ceiling only *limits* a frame, it never upscales one, so a narrow window simply arrives narrow. The dialog's box is sized from the frame, so a tall phone-shaped picture gets a tall phone-shaped box for free.
+
+## The overview a scan is worth
+
+A founder spends 25 Credits and ninety seconds letting Vibe into their signed-in product. What came back was a timestamp, a page count and a row of grey chips — while the snapshot held, for every one of those chips, the pages and headings that were the reason Vibe said it. The evidence had been stored since the module existed and none of it reached a screen.
+
+Three things the result now says, in the order a founder needs them:
+
+**Every surface can be checked.** Each recognised surface carries its evidence through Vibe's own `EvidenceDrawer` — `describeEvidence` turns a stored `{ kind, path, detail }` into a sentence with the page as its source, because that component takes `{ detail, source }` and never an id. A record whose kind cannot be made readable is *dropped* rather than rendered as a bare kind name: an unreadable citation is worse than one fewer (rule 45).
+
+**The pages are screens.** `groupIntoScreens` collapses them onto the same route templates the crawl already uses to stop spending its budget four times on one screen. Twenty-one paths is a list nobody reads; eight screens is the shape of a product, and the instances stay behind the template. Read order is kept — sorting would bury the page the founder actually handed over.
+
+**What was on them.** Navigation labels, and how many pages carried a form, a table, an empty state. Pages that *have* one, not how many there were: three forms on one page is one page with a form. Behind a disclosure, because it is the second question.
+
+## The doorway, where a founder actually looks
+
+Deep Scan's only entrance was the word *Deep Scan* inside the "Your signed-in product" row of My Product's four-source provenance list, rendered at the weight of "Add your website". The most revealing source Vibe has, and the only one a founder pays for, was the least visible thing on the page — and once a scan had run, My Product said nothing about it at all beyond a page count in grey.
+
+`spotlight.ts` narrows the panel's own view model into a card that sits directly under the Product Scan: what the last signed-in read found, or what one would find, and the way in.
+
+**It derives; it never re-decides.** Entitlement, cooldown, price and provider availability are answered once by `buildDeepScanViewModel`, and `loadDeepScanViewModel` in `service.ts` assembles that model for both routes. A second summary reading `includedScanAvailable` and `additionalScanPrice` and reaching its own verdict would be a copy free to drift, and the first thing it would get wrong is telling a founder a scan costs 25 Credits while their included one is unused.
+
+**It is a doorway, not a control.** Nothing on My Product starts a scan. The panel owns every priced control, on the one route allowed to raise `maxDuration`, because that is where the analysis actually runs.
+
+**A card is never a dead end.** An absent action always carries the reason there is none — and a short Credit balance is not one of them: that obstacle stands in front of the way forward rather than removing it.
 
 ## Finished is not the same as unlimited
 
@@ -122,6 +170,18 @@ Auth surfaces are named **once**, in `routes.ts`, and both the crawl and the sig
 
 A candidate that redirects onto a page already inspected is **recorded**, not dropped. `/app/onboarding` exists, was navigated to, and redirected to the dashboard because the founder is past onboarding — and the snapshot's only account of it was `onboarding: detected false, evidence: []`. "This path sent Vibe somewhere it had already been" and "Vibe found no onboarding" are different sentences.
 
+## The browser opens where the sign-in is
+
+It opened at `new URL(origin).origin` — the root, which for most products is the marketing page. A founder then had two minutes to find "Sign in" inside a canvas, on a phone, over a mobile connection, before typing anything. Reported from LTE: the deadline ran out before the password did.
+
+Vibe usually knows where the sign-in page is already. `sign-in-target.ts` reads it back out of the public scan, in the order the evidence deserves: a path the product's own server redirected to a login, then a page carrying a `login_like` form, then a recognised login surface. Null whenever it is not sure, which lands the browser exactly where it landed before.
+
+It is not `detectAuthenticatedSurfaces`. That answers "is there a login here at all", its evidence paths are the *protected* pages rather than the login page, and it counts a signup surface as evidence — right for its question, wrong for this one. Landing a founder on a registration form is worse than landing them on the homepage.
+
+Three refusals travel with it, and they are the half worth reading. The path comes from the customer's own site, so it is data and never text (rule 36): `toSameOriginPath` requires https, refuses another origin, strips query and fragment — a login redirect routinely carries `?next=` and `?token=` — and bounds the length. Then it must look like sign-in and not like signup, reset or verification. Then it must not look like anything that ends a session or changes state. No model is anywhere near it, which is what keeps rule 57 intact.
+
+And a 404 is not a landing. The snapshot may be days old, `goto` navigates to an error page perfectly well, and there is no address bar to recover with and never will be (ADR 0076) — so an error status falls back to the root. A response that cannot be read is left alone: that is normal for a cached document, and discarding a good landing over it is the same mistake in reverse.
+
 ## Noticing the login instead of asking about it
 
 The founder used to hand the session over by pressing **I'm logged in — Analyze**. `login-detection.ts` answers that question itself: while the browser is on screen, Vibe reads four booleans out of the page — is a password field present, is a sign-out affordance present, is an account affordance present, is there an application shell — and combines them with the path.
@@ -152,6 +212,7 @@ Two consecutive positive readings start the scan, after a grace window the found
 | `extract.ts`                       | The in-page extraction script, and sanitizing what it returns.                           |
 | `login-detection.ts`               | Whether the founder has finished signing in, and whether to start unasked.               |
 | `surface-detection.ts`             | Turning extracted signals into detected application surfaces.                            |
+| `sign-in-target.ts`                | Where the founder's browser opens, and every path it refuses to open at.                 |
 | `read-only-policy.ts`              | The pure decision layer: which requests and events are allowed.                          |
 | `budgets.ts`                       | Pages, bytes, time and concurrency. Tighter than the public crawl.                       |
 | `errors.ts`                        | The typed failure and warning codes. Nothing else escapes.                               |
@@ -170,4 +231,5 @@ Two consecutive positive readings start the scan, after a grace window the found
 | `service.ts`                       | Start, live view, analyze, cancel, and the access status a screen reads.                 |
 | `store.ts`                         | Persistence for sessions and snapshots.                                                  |
 | `view.ts`                          | Deriving the Deep Scan screen's state.                                                   |
+| `spotlight.ts`                     | The same state, narrowed to what My Product has room to say about it.                    |
 | `test-support.ts`                  | A fake database, a fake provider, and a seeded project.                                  |

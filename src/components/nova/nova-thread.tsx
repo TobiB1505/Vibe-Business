@@ -119,14 +119,22 @@ export function NovaThreadHeader({
   /** Whether the repository behind that name is still reachable. */
   connected,
   /**
-   * The moment before that is known, on the one screen that has one.
+   * Her availability line has not arrived on the screen yet.
    *
-   * Everywhere else this state does not exist: a page renders with the answer
-   * already read. The opening is the exception, and it needs its own word —
-   * "Disconnected" in coral for the second before the first read returns would
-   * be the product alarming a founder about nothing.
+   * Only the opening passes this, and only while the room is still being
+   * assembled: the row exists a beat before her presence does. It renders her
+   * name with nothing beside it — *absence*, not a word, because there is no
+   * true word to write there. She is not offline, and "Connecting…" about a
+   * session that is not connecting is the animated form of a lie.
+   *
+   * The line keeps its box either way, so nothing moves when it arrives.
+   *
+   * This replaced a `connecting` prop that said the same thing about the
+   * *repository* — and whose only two callers were this screen, where the
+   * repository answer is read on the server before the first frame. It was a
+   * fabricated connection attempt every time it rendered.
    */
-  connecting = false,
+  availabilityPending = false,
   /** The mark, passed in so this element never decides which state it is in. */
   mark,
   /** The viewer's clock. Passed in, because only a client component has one. */
@@ -136,7 +144,7 @@ export function NovaThreadHeader({
   status?: { word: string; tone: StatusTone };
   subject: string;
   connected: boolean;
-  connecting?: boolean;
+  availabilityPending?: boolean;
   mark: ReactNode;
   now?: ReactNode;
 }) {
@@ -147,7 +155,12 @@ export function NovaThreadHeader({
       {mark}
       <div className="min-w-0 flex-1">
         <p className="truncate text-ui font-semibold text-fg">Nova</p>
-        <p className="flex items-center gap-1.5 truncate text-caption text-fg-meta">
+        <p
+          aria-hidden={availabilityPending || undefined}
+          className={`flex items-center gap-1.5 truncate text-caption text-fg-meta transition-opacity duration-200 ${
+            availabilityPending ? "opacity-0" : "opacity-100"
+          }`}
+        >
           <span
             aria-hidden
             className={`size-1.5 shrink-0 rounded-full ${
@@ -175,10 +188,10 @@ export function NovaThreadHeader({
           <span
             aria-hidden
             className={`size-1.5 shrink-0 rounded-full ${
-              connecting ? "nova-pulse bg-fg-muted" : connected ? "bg-mint" : "bg-coral"
+              connected ? "bg-mint" : "bg-coral"
             }`}
           />
-          {connecting ? "Connecting…" : connected ? "Connected" : "Disconnected"}
+          {connected ? "Connected" : "Disconnected"}
         </span>
       </div>
       {now}
@@ -415,68 +428,5 @@ export function NovaRenderBlock({
       </div>
       {children}
     </section>
-  );
-}
-
-/**
- * The lines a block writes while it runs, and then forgets.
- *
- * ## What these are, exactly
- *
- * The **stages** of the operation in flight — `OPERATION_STAGE_LABELS[stage]`,
- * the value the executor wrote to the row. The current one is bright; the ones
- * before it fade out behind it and are gone.
- *
- * That they may vanish is not a liberty taken with the record. It is what the
- * record already says: the event log stores that a run started and that it
- * finished, and the stages in between were true for a moment and were never
- * written down. A surface that kept them would be inventing a history the
- * product does not have, and one that shows them going is telling the truth
- * about what they were — snapshots.
- *
- * ## Three rules, and the first is the one that makes it usable
- *
- * - **Nothing carrying a decision or a price is ever in here.** A control that
- *   goes away under a cursor is the worst thing an interface can do, so the
- *   dissolving surface holds no controls at all — not by convention, by
- *   construction: this element renders text.
- * - **A line goes because it stopped being true, never on a timer.** A timer
- *   is a claim about how fast somebody reads. The stage changing is a fact.
- * - **Under `prefers-reduced-motion` the faded lines are not rendered.** They
- *   do not appear and then vanish without animating, which would be a flicker
- *   with no meaning; the current stage stands alone, which is the whole of the
- *   information anyway.
- */
-export function NovaDissolving({
-  /** Newest first. Only the first is current; the rest are on their way out. */
-  stages,
-}: {
-  stages: readonly string[];
-}) {
-  const [current, ...fading] = stages;
-  if (!current) return null;
-
-  return (
-    <div className="flex flex-col gap-1">
-      <p className="nova-thinking text-ui font-medium" role="status">
-        {current}
-      </p>
-      {/*
-        `aria-hidden`, and not only because they are decorative: a screen
-        reader announcing three past stages every time one changes would be
-        reading out a history the product deliberately does not keep.
-      */}
-      <div aria-hidden className="nova-dissolve flex flex-col gap-1">
-        {fading.slice(0, 2).map((stage, index) => (
-          <p
-            key={stage}
-            className="text-caption text-fg-meta"
-            style={{ opacity: index === 0 ? 0.55 : 0.28 }}
-          >
-            {stage}
-          </p>
-        ))}
-      </div>
-    </div>
   );
 }

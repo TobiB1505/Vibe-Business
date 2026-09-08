@@ -6,23 +6,38 @@ import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-conte
 
 import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 
-import { ChangeGates } from "../agent/change-gates";
-import { AgentWorkspaceChoice } from "../agent/agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
-import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { formatElapsedShort } from "@/lib/utils/format-datetime";
 import { resolveFounderInputAction } from "../founder-input-action";
 
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
 import { NovaRail } from "./nova-rail";
+import { NovaRoom } from "@/components/nova/nova-room";
 import { ActionBlock } from "@/components/system/action-block";
 import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
 import { NovaClock } from "@/components/nova/nova-clock";
 import { NovaHeaderLive } from "./nova-header-live";
-import { AuditBlock } from "@/components/nova/blocks/audit";
-import { MoveBlock } from "@/components/nova/blocks/move";
-import { ProgressBlock } from "@/components/nova/blocks/progress";
-import { ScanBlock } from "@/components/nova/blocks/scan";
+/*
+ * Through the barrel, by the kind the registry names.
+ *
+ * These used to be mounted a level lower — `ChangeGates` with `chrome={false}`
+ * written out here, `FounderInputCard` with its presentation and context
+ * written out here — while `blocks/` held wrappers that made the same
+ * decisions and nothing imported them. Two answers to "what does a founder see
+ * for this kind", one of them in a directory whose purpose is to hold the
+ * other. The lab drew the wrappers; production drew its own copy.
+ */
+import {
+  AskBlock,
+  AuditBlock,
+  MoveBlock,
+  ProgressBlock,
+  ReviewBlock,
+  ScanBlock,
+  WorkspaceAskBlock,
+} from "@/components/nova/blocks";
+import { NovaAgentLive } from "./nova-agent-live";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
@@ -101,8 +116,8 @@ export async function NovaHome({
   const connected = project.repository !== null;
 
   return (
-    <div className="flex flex-col gap-6">
-      {/*
+    <NovaRoom
+      /*
         The status row, and the only piece of chrome on this page.
 
         Deliberately *not* wrapped in `NovaRise`. It is `sticky top-0`, and a
@@ -110,33 +125,32 @@ export async function NovaHome({
         wrapper that hugs the header is a wrapper with no room to stick in, so
         the header scrolled away with the thread instead of staying above it.
         An entrance is not worth a status row that leaves.
-      */}
-      <NovaHeaderLive
-        projectId={project.id}
-        working={data.view.working}
-        /*
-         * What the line says when nothing is running. The moment's own word,
-         * from the same table the bubble below it reads, so the header cannot
-         * describe a moment differently from the sentence under it.
-         */
-        resting={statusForCandidate(data.view.primary.kind)}
-        tier={data.view.primary.tier}
-        seed={project.id}
-        subject={data.identity.name}
-        connected={connected}
-        now={<NovaClock />}
-      />
-
-      {/*
-        Two halves: the work on the left, the conversation on the right.
-
-        On a phone the rail goes second. A founder who opens this on a phone
-        came for what Nova has to say, and putting the whole plan and the whole
-        log above it means scrolling past everything to reach the one thing
-        that speaks.
-      */}
-      <div className="grid gap-6 lg:grid-cols-[300px_1fr] lg:items-start">
-        <NovaRise className="max-lg:order-2" delay={0.03}>
+      */
+      header={
+        <NovaHeaderLive
+          projectId={project.id}
+          working={data.view.working}
+          /*
+           * What the line says when nothing is running. The moment's own word,
+           * from the same table the bubble below it reads, so the header cannot
+           * describe a moment differently from the sentence under it.
+           */
+          resting={statusForCandidate(data.view.primary.kind)}
+          tier={data.view.primary.tier}
+          seed={project.id}
+          subject={data.identity.name}
+          connected={connected}
+          now={<NovaClock />}
+        />
+      }
+      /*
+        The work column — the same one setup builds. `NovaRoom` owns the grid
+        so a founder crossing the seam out of onboarding lands in the room she
+        was already in, rather than one whose track happened to be written
+        `[300px_1fr]` here and `[300px_minmax(0,1fr)]` there.
+      */
+      rail={
+        <NovaRise delay={0.03}>
           <NovaRail
             presence={presence}
             seed={project.id}
@@ -145,8 +159,9 @@ export async function NovaHome({
             activity={data.activity}
           />
         </NovaRise>
-
-        {/*
+      }
+    >
+      {/*
           The thread, and nothing beside it.
 
           Everything that used to sit in this column was a second reading of
@@ -156,16 +171,15 @@ export async function NovaHome({
           ranking chose, and a business score that has its own rail item. A
           conversation with four panels stapled under it is not a conversation.
         */}
-        <NovaRise className="max-lg:order-1" delay={0.1}>
-          <FocusSection
-            data={data}
-            projectId={project.id}
-            sectionHref={sectionHref}
-            running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
-          />
-        </NovaRise>
-      </div>
-    </div>
+      <NovaRise delay={0.1}>
+        <FocusSection
+          data={data}
+          projectId={project.id}
+          sectionHref={sectionHref}
+          running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
+        />
+      </NovaRise>
+    </NovaRoom>
   );
 }
 
@@ -207,13 +221,40 @@ function FocusSection({
   const entry = data.view.primary;
   const control = entry.control;
 
+  /*
+   * The other moments, as sentences. `buildNovaHomeView` has ranked and capped
+   * them since this route existed and nothing rendered them — so a founder
+   * with three things pending saw one. The thread says them in the quiet
+   * register with no controls, which is what makes them a second true thing
+   * rather than a second wall of buttons.
+   */
+  const asides = [
+    /*
+     * Vibe's own line about the evidence under this moment, first, because it
+     * is about the sentence above it rather than about something else pending.
+     *
+     * It rides in `asides` rather than in a prop of its own: it is the same
+     * kind of thing — a quiet line with no control — and two nearly identical
+     * prop names on one component is a defect waiting for somebody to pass the
+     * wrong one. `speechBubbles` groups the run, so a situation line and one
+     * other pending thing read as one remark rather than two grey blocks.
+     */
+    ...(data.situationAside === null ? [] : [data.situationAside]),
+    /*
+     * The other moments, as sentences. `buildNovaHomeView` has ranked and
+     * capped them since this route existed and nothing rendered them — so a
+     * founder with three things pending saw one.
+     */
+    ...data.view.secondary.map((moment) => moment.message),
+  ];
+
   if (control.kind === "none") {
     return (
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         block={blockFor(data, entry)}
       />
     );
@@ -228,12 +269,7 @@ function FocusSection({
      */
     if (!data.question) {
       return (
-        <NovaFocusThread
-          entry={entry}
-          voice={data.momentVoice}
-          aside={data.situationAside}
-          running={running}
-        />
+        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
       );
     }
 
@@ -241,10 +277,10 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         block={
-          <FounderInputCard
+          <AskBlock
             projectId={projectId}
             request={data.question}
             /*
@@ -255,7 +291,14 @@ function FocusSection({
              * one.
              */
             context={entry.kind === "agent_question" ? "runtime_execution" : "action_plan"}
-            presentation="workspace"
+            /*
+             * How long a run has been stopped waiting, which is the one thing
+             * this surface could not say. It costs no read — the request has
+             * been in hand since the ranking put it first — and it is computed
+             * on the server, because a relative time read on the client would
+             * disagree with the markup around it.
+             */
+            waitingSince={formatElapsedShort(data.question.createdAt, new Date())}
             resolveAction={resolveFounderInputAction}
           />
         }
@@ -272,12 +315,7 @@ function FocusSection({
      */
     if (!data.change) {
       return (
-        <NovaFocusThread
-          entry={entry}
-          voice={data.momentVoice}
-          aside={data.situationAside}
-          running={running}
-        />
+        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
       );
     }
 
@@ -285,20 +323,14 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         block={
-          <ChangeGates
+          <ReviewBlock
             projectId={projectId}
             change={data.change}
             planHref={sectionHref["action-plan"]}
             stage={control.stage}
-            /*
-             * The thread says it above the block. `chrome` draws the change's
-             * status sentence, which is the sentence Nova has just said — the
-             * duplication this surface keeps removing.
-             */
-            chrome={false}
           />
         }
       />
@@ -314,12 +346,7 @@ function FocusSection({
      */
     if (data.workspaceCandidates.length === 0) {
       return (
-        <NovaFocusThread
-          entry={entry}
-          voice={data.momentVoice}
-          aside={data.situationAside}
-          running={running}
-        />
+        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
       );
     }
 
@@ -327,10 +354,10 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         block={
-          <AgentWorkspaceChoice
+          <WorkspaceAskBlock
             candidates={data.workspaceCandidates}
             /*
              * The panel asks; the control answers. Splitting them is what lets
@@ -356,8 +383,8 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         controlLabel={control.label}
         control={<NovaLinkControl href={sectionHref[control.section]} label={control.label} />}
       />
@@ -387,8 +414,8 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         block={blockFor(data, entry)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
@@ -403,8 +430,8 @@ function FocusSection({
       <NovaFocusThread
         entry={entry}
         voice={data.momentVoice}
-        aside={data.situationAside}
         running={running}
+        asides={asides}
         block={blockFor(data, entry)}
       />
     );
@@ -422,8 +449,8 @@ function FocusSection({
     <NovaFocusThread
       entry={entry}
       voice={data.momentVoice}
-      aside={data.situationAside}
       running={running}
+      asides={asides}
       block={blockFor(data, entry)}
       controlLabel={control.option.label}
       /*
@@ -474,6 +501,23 @@ function FocusSection({
  * asks it and supplies the block the data is in hand for. Before, the thread
  * asked nothing and drew the progress checklist alone — so twelve of the
  * fifteen types ran behind a blank column, the Product Scan among them.
+ *
+ * ## The two kinds it answers `undefined` for, and why that is not a gap
+ *
+ * `review` and `audit` both name blocks that exist and both draw nothing here,
+ * because in each case the honest content is already on screen or does not
+ * exist yet.
+ *
+ * A **change** operation runs while the moment leading the thread is about
+ * that same change, so `blockFor` has already drawn its gates. A second copy
+ * under it would be the same panel twice, which is the duplication this
+ * surface keeps removing.
+ *
+ * A running **audit** has produced no reading. The only one in hand is the
+ * previous audit's, and putting last month's score under a live progress line
+ * is the same false-freshness the Product Scan block refuses when it passes a
+ * null presentation. When the audit is stale, `audit_outdated` is the moment
+ * and `blockFor` draws that reading with the framing that says so.
  */
 function runningBlockFor(
   data: NovaHomeData,
@@ -525,12 +569,28 @@ function runningBlockFor(
         ),
       };
 
-    /*
-     * `agent` is the one kind the registry names and this cannot yet supply:
-     * its block reads the execution's own event log, which is keyed by the
-     * agent run rather than by the operation, and Home holds neither. A frame
-     * around an absence would be worse than none.
-     */
+    case "agent":
+      return {
+        kind,
+        node: (
+          <NovaAgentLive
+            projectId={context.projectId}
+            operationId={working.operationId}
+            initialEvents={data.agentEvents}
+            /* The one stage the server can honestly supply. `novaWorkingEntry`
+               already resolved it through `OPERATION_STAGE_LABELS`, which is
+               the same table the poll reads. */
+            initialStage={working.stageLabel}
+            /*
+             * The operations view's own answer, never a guess from the status
+             * string. It is already false for a stalled run — a run presumed
+             * lost is not worth pressing the database about every 2.5 seconds.
+             */
+            shouldPoll={working.shouldPoll}
+          />
+        ),
+      };
+
     default:
       return undefined;
   }

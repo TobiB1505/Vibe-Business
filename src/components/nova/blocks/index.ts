@@ -15,6 +15,6 @@ export { ScanBlock } from "./scan";
 export { AgentWorking, AgentChecks } from "./agent";
 export { ReviewBlock } from "./review";
 export { MoveBlock } from "./move";
-export { AskBlock, PlanAskBlock } from "./ask";
+export { AskBlock } from "./ask";
 export { WorkspaceAskBlock } from "./workspace";
 export { ProgressBlock } from "./progress";

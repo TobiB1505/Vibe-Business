@@ -921,29 +921,13 @@
 }
 
 /* Lines that were snapshots of a moment that has passed, leaving. */
-.nova-dissolve {
-  animation: nova-dissolve 420ms var(--ease-vibe) both;
-}
-
-@keyframes nova-dissolve {
-  from {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    opacity: 0;
-    transform: translate3d(0, -6px, 0);
-  }
-}
-
 :root[data-motion="paused"] .nova-thinking,
 :root[data-motion="paused"] .nova-pulse {
   animation-play-state: paused;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nova-rise,
-  .nova-dissolve {
+  .nova-rise {
     animation: none !important;
     opacity: 1;
     transform: none;

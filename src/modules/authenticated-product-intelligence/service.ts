@@ -8,6 +8,9 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { analyzeAuthenticatedProduct } from "./analyzer";
+import { isBrowserProviderConfigured } from "./sandbox-browser/client";
+import { findSignInTarget } from "./sign-in-target";
+import { detectAuthenticatedSurfaces } from "./surface-detection";
 import {
   holdDeepScanCredits,
   releaseDeepScanCredits,
@@ -23,6 +26,7 @@ import {
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
 import { detectSignedIn, type SignInReason } from "./login-detection";
+import { buildDeepScanViewModel, type DeepScanProgress, type DeepScanViewModel } from "./view";
 import type { BrowserSessionProvider, BrowserSessionUsage } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
@@ -36,6 +40,8 @@ import {
   failSnapshotRun,
   gatherEntitlementFacts,
   getActiveSession,
+  getLatestSession,
+  getLatestSuccessfulAuthenticatedSnapshot,
   getSessionWithProviderId,
   isExpired,
   isLive,
@@ -43,6 +49,8 @@ import {
   recordDeepScanUsage,
   updateSessionStatus,
   type StoredDeepScanSession,
+  recordSnapshotProgress,
+  getRunningSnapshotProgress,
 } from "./store";
 
 /**
@@ -338,10 +346,28 @@ export async function startDeepScan(
    * `analyzeDeepScan`: this pulls in the browser stack, and rendering the
    * project page must never do that.
    */
+  /*
+   * The sign-in page, when the public scan already found one.
+   *
+   * The browser used to open at the root, which for most products is the
+   * marketing page — so a two-minute deadline was partly spent finding "Sign
+   * in" inside a canvas on a phone. `findSignInTarget` reads evidence the
+   * public scan has been storing all along, and returns null whenever it is
+   * not sure, which lands the browser exactly where it landed before.
+   *
+   * Failing to read the snapshot must never fail the scan: this is a
+   * convenience, and a browser at the root is a working browser.
+   */
+  const signInTarget = await getLatestSuccessfulLiveSnapshot(supabase, params.projectId)
+    .then((snapshot) => findSignInTarget({ publicProduct: snapshot?.result ?? null, origin }))
+    .catch(() => null);
+
   let landing: { navigated: boolean; reason?: string };
   try {
     const { openSessionAtOrigin } = await import("./playwright/connector");
-    landing = await openSessionAtOrigin(handle.connectUrl, origin);
+    landing = await openSessionAtOrigin(handle.connectUrl, origin, {
+      path: signInTarget?.path ?? null,
+    });
   } catch (error) {
     landing = {
       navigated: false,
@@ -431,6 +457,35 @@ export async function getDeepScanLiveView(
   if (!liveView.ok) return { ok: false, error: liveView.error };
 
   return { ok: true, liveViewUrl: liveView.value.url };
+}
+
+/**
+ * How far the running analysis has got, for the caller's own session.
+ *
+ * Polled while the scan runs, and the only honest thing this flow has to say
+ * about progress: the analysis lives inside one request and reports nothing
+ * until it returns, so without this the choice was silence or a bar timed
+ * against a guess.
+ *
+ * A read, and nothing else. It writes nothing, charges nothing, and cannot
+ * start or stop anything — `maxPages` comes from Vibe's own budget rather than
+ * from the row, because it is a fact about the scan's design and not about
+ * this run.
+ */
+export async function getDeepScanProgress(
+  supabase: SupabaseClient,
+  params: { sessionId: string; userId: string },
+): Promise<DeepScanProgress | null> {
+  const session = await getSessionWithProviderId(supabase, params.sessionId);
+  if (!session) return null;
+
+  const project = await loadOwnedProject(supabase, session.projectId, params.userId);
+  if (!project) return null;
+
+  const progress = await getRunningSnapshotProgress(supabase, session.id);
+  if (!progress) return null;
+
+  return { pagesInspected: progress.pagesInspected, maxPages: DEFAULT_AUTHENTICATED_BUDGETS.maxPages };
 }
 
 /**
@@ -623,6 +678,18 @@ export async function analyzeDeepScan(
       browser: readOnly.port,
       repository: repository?.result ?? null,
       publicProduct: publicProduct?.result ?? null,
+      /*
+       * Written as the crawl goes, so the panel can say how far it has got.
+       *
+       * Fire-and-forget with a swallowed error: a progress write is a nicety
+       * and the scan is not, so it must never be able to fail one. Twenty-five
+       * of them across ninety seconds is not a load worth batching.
+       */
+      onProgress: ({ pagesInspected }) => {
+        void recordSnapshotProgress(supabase, run.snapshotId, pagesInspected).catch(
+          () => undefined,
+        );
+      },
       onDiagnostic: (event) => {
         pageFailures.push(`${event.step} ${event.path}: ${event.detail}`);
       },
@@ -799,4 +866,56 @@ export async function getDeepScanAccessStatus(
   ]);
 
   return toDeepScanAccessStatus(facts, active ? { id: active.id, status: active.status } : null);
+}
+
+/**
+ * Everything the Deep Scan UI needs, assembled once.
+ *
+ * ## Why it is here rather than in each route
+ *
+ * Two routes render Deep Scan state now — its own page, and the spotlight at
+ * the top of My Product — and both need the same six reads folded the same
+ * way: entitlement, the live session, the last snapshot, the repository and
+ * public-site evidence the recommendation rests on, and whether this
+ * deployment has a browser at all.
+ *
+ * Assembled twice, the two copies would answer the same question differently
+ * the first time either grew a condition, and the question is *what a paid
+ * control may offer*. So it is assembled once and narrowed by whoever renders
+ * it.
+ *
+ * Returns null only when the project does not exist for this user.
+ */
+export async function loadDeepScanViewModel(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; owned?: { productionUrl: string | null } },
+): Promise<DeepScanViewModel | null> {
+  const [accessStatus, repository, publicProduct, snapshot, session] = await Promise.all([
+    getDeepScanAccessStatus(supabase, params),
+    getLatestSuccessfulSnapshot(supabase, params.projectId),
+    getLatestSuccessfulLiveSnapshot(supabase, params.projectId),
+    getLatestSuccessfulAuthenticatedSnapshot(supabase, params.projectId),
+    getLatestSession(supabase, params.projectId),
+  ]);
+
+  if (!accessStatus) return null;
+
+  return buildDeepScanViewModel({
+    accessStatus,
+    latestSnapshot: snapshot
+      ? {
+          result: snapshot.result,
+          accessMode: snapshot.accessMode,
+          completedAt: snapshot.completedAt,
+          createdAt: snapshot.createdAt,
+          pagesInspected: snapshot.pagesInspected,
+        }
+      : null,
+    latestSession: session ? { status: session.status, failureCode: session.failureCode } : null,
+    surfaceDetection: detectAuthenticatedSurfaces({
+      repository: repository?.result ?? null,
+      publicProduct: publicProduct?.result ?? null,
+    }),
+    providerConfigured: isBrowserProviderConfigured(),
+  });
 }

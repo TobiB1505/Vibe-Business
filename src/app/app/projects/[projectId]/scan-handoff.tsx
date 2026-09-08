@@ -74,8 +74,16 @@ const COLLAPSE_MS = 620;
  * segment travelling a track accumulates nothing and claims nothing.
  */
 const BOOT_MS = 1_900;
-/** The check, when the analysis comes back. Long enough to read, short enough to leave. */
-const SEAL_MS = 1_500;
+/**
+ * The check, when the analysis comes back.
+ *
+ * Was 1.5 seconds, and the founder's report was "Haken und weg" — the tick
+ * drew and the dialog was already gone. 0.2s of delay plus 0.42s of drawing
+ * leaves under a second of a finished check on screen, which is not enough to
+ * register as the answer to a ninety-second wait. It is the last thing a
+ * person sees of this flow, and it should feel like an ending.
+ */
+const SEAL_MS = 2_600;
 
 export type ScanHandoffStage = "watching" | "collapsing" | "booting" | "gathering" | "sealing";
 
@@ -134,11 +142,21 @@ const TILE_STAGGER_S = 0.34;
 export function ScanHandoff({
   running,
   succeeded = false,
+  progress = null,
   onSealed,
 }: {
   running: boolean;
   /** The analysis came back with a result. Drives the closing check. */
   succeeded?: boolean;
+  /**
+   * Pages read so far, counted by the analysis itself.
+   *
+   * `null` until the running scan has answered, and the scene reads correctly
+   * without it — which is the test of whether it is decoration or information.
+   * This one is information: it is the only true thing this animation can say
+   * about how far the work has got, so it is rendered as text, not as motion.
+   */
+  progress?: { pagesInspected: number; maxPages: number } | null;
   /** Called once the check has played, so the dialog closes after it and not during. */
   onSealed?: () => void;
 }) {
@@ -256,7 +274,6 @@ export function ScanHandoff({
       className={`pointer-events-none absolute inset-0 overflow-hidden ${
         stage === "watching" ? "" : "bg-app"
       }`}
-      aria-hidden
     >
       <AnimatePresence>
         {stage === "collapsing" && !reducedMotion && (
@@ -269,6 +286,7 @@ export function ScanHandoff({
            */
           <motion.div
             key="collapse"
+            aria-hidden
             className="absolute inset-0 flex items-center justify-center"
             initial={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -298,7 +316,10 @@ export function ScanHandoff({
          * a completion claim, and it is the exact thing the motion rules name
          * as never animatable. A travelling segment accumulates nothing.
          */
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8">
+        <div
+          aria-hidden
+          className="absolute inset-0 flex flex-col items-center justify-center gap-4 px-8"
+        >
           <motion.p
             className="text-fg-meta font-mono text-meta tracking-[0.3em] uppercase"
             initial={{ opacity: 0, y: 6 }}
@@ -331,7 +352,7 @@ export function ScanHandoff({
          * result exists would be success animated before success — the first
          * entry on the never-animate list.
          */
-        <div className="absolute inset-0 flex items-center justify-center">
+        <div aria-hidden className="absolute inset-0 flex items-center justify-center">
           <motion.div
             className="bg-mint text-mint-ink flex size-20 items-center justify-center rounded-full"
             initial={reducedMotion ? false : { scale: 0.4, opacity: 0 }}
@@ -375,12 +396,63 @@ export function ScanHandoff({
             initial={reducedMotion ? false : { scale: 0.7, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ duration: 0.42, ease: [0.2, 0.8, 0.2, 1] }}
+            aria-hidden
             className="relative"
           >
             {/* A soft ground so the tiles disappear into something. */}
             <div className="absolute -inset-8 rounded-full bg-mint-tint blur-2xl" />
             <VibeMark size={56} className="relative" />
           </motion.div>
+
+          {progress !== null && (
+            /*
+             * The count, and the reason this scene is worth watching.
+             *
+             * Measured, not estimated: it is pages the analysis has actually
+             * recorded, polled from the running row. The bar behind it is the
+             * same number against Vibe's page budget — honest as a ceiling
+             * rather than a forecast, which is why the words say "up to". A
+             * scan often stops before the budget because it runs out of
+             * product, so the bar reaching four fifths and then handing over
+             * to the check is the normal ending, not a truncation.
+             *
+             * `role="status"` and `aria-live="polite"`: this is the one thing
+             * on screen here that carries information, so it is the one thing
+             * announced.
+             */
+            <div
+              role="status"
+              aria-live="polite"
+              /*
+               * Announced, and the only thing here that is.
+               *
+               * The whole container used to be `aria-hidden`, which is right
+               * for twelve orbiting shapes and wrong for the one element that
+               * carries a fact. A browser test caught it: `getByRole("status")`
+               * found nothing, because a decorative wrapper had removed the
+               * information inside it from the accessibility tree.
+               */
+              className="absolute inset-x-6 bottom-6 space-y-2 text-center sm:inset-x-10"
+            >
+              <p className="text-fg-body font-mono text-sm">
+                {progress.pagesInspected === 0
+                  ? "Opening the first page"
+                  : `${progress.pagesInspected} ${progress.pagesInspected === 1 ? "page" : "pages"} read`}
+                <span className="text-fg-meta"> · up to {progress.maxPages}</span>
+              </p>
+              <div className="bg-surface-3 mx-auto h-[3px] w-full max-w-xs overflow-hidden rounded-full">
+                <motion.div
+                  className="bg-mint h-full rounded-full"
+                  initial={false}
+                  animate={{
+                    scaleX: Math.min(1, progress.pagesInspected / progress.maxPages),
+                  }}
+                  style={{ transformOrigin: "left" }}
+                  transition={{ duration: 0.5, ease: [0.2, 0.8, 0.2, 1] }}
+                />
+              </div>
+            </div>
+          )}
 
           {/*
             The tiles run only while the tab is being looked at. A loop in a
@@ -393,6 +465,7 @@ export function ScanHandoff({
             TILE_ORIGINS.map(({ Glyph, ...origin }, index) => (
               <motion.div
                 key={index}
+                aria-hidden
                 className="border-line-2 bg-surface-3 rounded-nav shadow-card text-fg-muted absolute flex h-11 w-11 items-center justify-center border"
                 initial={{
                   x: origin.x * box.w,

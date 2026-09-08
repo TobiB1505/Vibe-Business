@@ -133,7 +133,7 @@ describe("a browser that cannot be reached says so", () => {
     // Two panels in the same box would show a spinner next to the sentence
     // saying the spinner is wrong.
     expect(source).toContain('{!error && unreachable && (');
-    expect(source).toContain('{!error && !unreachable && stage !== "ready" && (');
+    expect(source).toContain('{!error && !expired && !unreachable && stage !== "ready" && (');
   });
 
   it("stops the startup clock once waiting is over", () => {
@@ -226,7 +226,7 @@ describe("the login deadline is visible before it bites", () => {
      * A cold sandbox can take two minutes to build. Charging that to the
      * founder's sign-in time would be billing them for Vibe's own wait.
      */
-    expect(source).toContain('stage === "ready" && !busy && !sealing && !unreachable');
+    expect(source).toContain('stage === "ready" && !busy && !sealing && !expired && !unreachable');
   });
 
   it("stops as soon as the scan starts", () => {
@@ -240,8 +240,25 @@ describe("the login deadline is visible before it bites", () => {
     const expired = source.slice(source.indexOf("const handleLoginExpired = useCallback"));
     const body = expired.slice(0, expired.indexOf("}, ["));
     expect(body).toContain("cancelDeepScanAction");
-    // And says why, rather than closing a dialog with no explanation.
-    expect(body).toContain("Nothing was charged");
+  });
+
+  it("says what happened where the founder was looking", () => {
+    /*
+     * It used to terminate the browser, close the dialog, and leave a sentence
+     * in the panel behind — so from the founder's side the window vanished
+     * while they were typing a password. The dialog now stays and explains.
+     */
+    const expired = source.slice(source.indexOf("const handleLoginExpired = useCallback"));
+    const body = expired.slice(0, expired.indexOf("}, ["));
+    expect(body).toContain("setExpired(true)");
+    expect(body).not.toContain("closeDialog()");
+
+    /*
+     * The copy itself is asserted in the browser, where it is rendered rather
+     * than line-wrapped by a formatter. A source-text match on a paragraph is
+     * a test of Prettier's wrap width, which is not a thing worth failing on.
+     */
+    expect(source).toContain("Sign-in took longer than two minutes");
   });
 
   it("does not hand out a fresh two minutes on every render", () => {

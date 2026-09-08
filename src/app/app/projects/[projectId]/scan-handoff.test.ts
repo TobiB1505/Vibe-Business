@@ -340,3 +340,122 @@ describe("what the handoff is bound to", () => {
     expect(panel).not.toContain("useElapsedSeconds(busy)");
   });
 });
+
+/*
+ * The closing check never appeared, and a cancelled scan drew one.
+ *
+ * The edit that was meant to hold the dialog open for the check landed on
+ * `handleCancel` instead of `handleAnalyze` — both handlers ended with the
+ * same four lines, and a first-match replace took the earlier one. So a
+ * successful analysis closed the dialog instantly, and pressing Cancel
+ * celebrated with a green tick: success animated where there was no success,
+ * which is the exact thing the motion rules forbid.
+ *
+ * Unit tests passed. The component was correct in isolation and the wiring was
+ * inverted, so the assertions below are about *which handler* owns which
+ * ending — the thing that was actually wrong.
+ */
+describe("which ending belongs to which handler", () => {
+  const panel = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  function handler(name: string): string {
+    const start = panel.indexOf(`const ${name} = useCallback`);
+    expect(start, `${name} must exist`).toBeGreaterThan(-1);
+    const body = panel.slice(start);
+    return body.slice(0, body.indexOf("\n  }, ["));
+  }
+
+  it("gives the check to a result and to nothing else", () => {
+    const arms = panel.match(/setSealing\(true\)/g) ?? [];
+    expect(arms).toHaveLength(1);
+    expect(handler("handleAnalyze")).toContain("setSealing(true)");
+  });
+
+  it("does not celebrate a cancellation", () => {
+    const cancel = handler("handleCancel");
+    expect(cancel).not.toContain("setSealing");
+    // It closes, which is the whole point of pressing it.
+    expect(cancel).toContain("closeDialog()");
+  });
+
+  it("does not celebrate a login that ran out of time", () => {
+    const expired = handler("handleLoginExpired");
+    expect(expired).not.toContain("setSealing");
+    // It no longer closes either — the dialog stays and says what happened,
+    // because a window that vanishes mid-password explains nothing.
+    expect(expired).toContain("setExpired(true)");
+  });
+
+  it("does not close the dialog on the answer it is meant to show", () => {
+    // The success path hands the ending to the animation; `handleSealed` is
+    // what actually closes, after the check has played.
+    const analyse = handler("handleAnalyze");
+    const success = analyse.slice(analyse.lastIndexOf("return;"));
+    expect(success).not.toContain("closeDialog()");
+    expect(handler("handleSealed")).toContain("closeDialog()");
+  });
+});
+
+/*
+ * The progress count never appeared, and the panel then sat blank for twenty
+ * to thirty seconds. One cause: Next.js runs Server Actions from a client one
+ * at a time, and the analysis *is* an action that lasts ninety seconds. Every
+ * poll queued behind it — a real run produced about thirty, and the runtime
+ * log shows all thirty arriving in a burst over eight seconds after the
+ * analysis returned, which is exactly the blank interval the founder measured.
+ */
+describe("the progress poll cannot queue behind the analysis", () => {
+  const panel = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+  const actions = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-actions.ts"),
+    "utf8",
+  );
+
+  it("reads progress over an ordinary request", () => {
+    const poll = panel.slice(panel.indexOf("function useScanProgress"));
+    const body = poll.slice(0, poll.indexOf("\n}"));
+    expect(body).toContain("await fetch(`/api/deep-scan/");
+    expect(body).toContain('cache: "no-store"');
+  });
+
+  it("has no Server Action left to fall back into", () => {
+    // A second, queued way in is a way somebody restores by accident.
+    expect(actions).not.toContain("deepScanProgressAction");
+    expect(panel).not.toContain("deepScanProgressAction");
+  });
+
+  it("does not let a poll that lands mid-write move the count backwards", () => {
+    // The row is read while it is being written, so a read between two updates
+    // can answer with the earlier number.
+    const poll = panel.slice(panel.indexOf("function useScanProgress"));
+    expect(poll.slice(0, poll.indexOf("\n}"))).toContain(
+      "answer.pagesInspected < current.pagesInspected",
+    );
+  });
+
+  it("gives the check long enough to read before the dialog closes", () => {
+    // "Haken und weg": 0.2s of delay plus 0.42s of drawing left under a second
+    // of a finished tick on screen, at the end of a ninety-second wait.
+    const handoff = readFileSync(
+      join(process.cwd(), "src/app/app/projects/[projectId]/scan-handoff.tsx"),
+      "utf8",
+    );
+    const seal = /const SEAL_MS = ([\d_]+);/.exec(handoff)?.[1]?.replace(/_/g, "");
+    expect(Number(seal)).toBeGreaterThanOrEqual(2_000);
+  });
+
+  it("closes onto the result rather than onto a blank panel", () => {
+    // The refresh is awaited *before* the dialog closes, so the check stays up
+    // while the page comes back instead of leaving a gap with nothing in it.
+    const sealed = panel.slice(panel.indexOf("const handleSealed = useCallback"));
+    const body = sealed.slice(0, sealed.indexOf("}, ["));
+    expect(body.indexOf("router.refresh()")).toBeLessThan(body.indexOf("closeDialog()"));
+    expect(body).toContain("await Promise.resolve(router.refresh())");
+  });
+});
