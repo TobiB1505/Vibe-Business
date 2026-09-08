@@ -1,5 +1,7 @@
 import { ONBOARDING_STATES, type OnboardingState } from "@/modules/onboarding/state";
 import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
+import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
+import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
 import { Moves } from "./elements";
 import type { Study } from "./studies";
 
@@ -58,6 +60,89 @@ const CONTROL_FOR_STATE: Record<OnboardingState, string | null> = {
   complete: null,
 };
 
+/**
+ * The room, before the ten states in it.
+ *
+ * ## Why this is the part worth looking at
+ *
+ * Because the opening's choreography only means something if this exists. The
+ * mark assembles alone, travels into a status row, and a panel closes around
+ * it — Nova assembling the environment she then works in. Setup used to hand
+ * her a logo bar and a four-step progress list instead, so a founder watched
+ * something be built and then met a different room.
+ *
+ * It is the same header and the same rail Home mounts, not copies.
+ *
+ * ## The rail without its plan
+ *
+ * There is no action plan during setup, and the column used to hold the
+ * product's own four phases with ticks — a to-do list about Vibe's process
+ * rather than anything a founder decides, saying the one thing Nova now says
+ * in a sentence. What is left is her mark and what has already happened, which
+ * is what makes a column a place rather than a form.
+ */
+function TheRoom({ panel }: { panel: string }) {
+  return (
+    <section className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <p className="text-label text-fg-meta font-mono tracking-[0.16em] uppercase">
+          The environment
+        </p>
+        <p className="study-measure text-ui text-fg-body">
+          The status row the mark travels into, the rail beside it, and the thread between them —
+          the room the opening builds, and the room setup runs in.
+        </p>
+      </div>
+
+      <div className={`flex flex-col gap-6 p-5 max-sm:p-4 ${panel}`}>
+        <NovaOnboardingHeader
+          state="product_scanning"
+          projectId="project_e2e"
+          projectName="Vibe Business"
+          connected
+          operation={null}
+        />
+        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+          <NovaRail
+            presence="working"
+            seed="project_e2e"
+            working={null}
+            /* No plan during setup. The prop stays because the rail is Home's
+               and Home has one; passing null is the decision, not an absence. */
+            checklist={null}
+            activity={ROOM_ACTIVITY}
+          />
+          <NovaOnboardingThread
+            state="product_scanning"
+            blockLabel="In the product"
+            block={<p className="text-caption text-fg-meta font-mono">ProductScanExperience</p>}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** What has already happened, in the shape `buildActivityFeed` produces. */
+const ROOM_ACTIVITY = [
+  {
+    id: "e1",
+    eventType: "github.installation.connected" as const,
+    at: "2026-09-07T21:40:00.000Z",
+    title: "GitHub installation connected",
+    tone: "neutral" as const,
+    facts: [],
+  },
+  {
+    id: "e2",
+    eventType: "project.created" as const,
+    at: "2026-09-07T21:41:00.000Z",
+    title: "Project created",
+    tone: "neutral" as const,
+    facts: [],
+  },
+];
+
 export function StudyOnboarding({ study }: { study: Study }) {
   const panel =
     study.skin === "glass"
@@ -88,6 +173,8 @@ export function StudyOnboarding({ study }: { study: Study }) {
           as eight separate posters, one per section.
         </p>
       </div>
+
+      <TheRoom panel={panel} />
 
       <div className={`flex flex-col divide-y divide-line-1 ${panel}`}>
         {ONBOARDING_STATES.map((state) => (

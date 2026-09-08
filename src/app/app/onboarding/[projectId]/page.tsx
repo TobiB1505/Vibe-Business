@@ -17,14 +17,8 @@ import {
 import { resolveAuditCreditGate } from "@/modules/business-audit/entitlement";
 import { getAuditAccessStatus } from "@/modules/business-audit/service";
 import { NovaMoveButton, NovaMoveLink } from "@/components/nova/nova-move";
-import { NovaMessage } from "@/components/nova/nova-message";
 import { buildNovaFirstRunFeed, deriveNovaFirstRun } from "@/modules/nova/first-run";
-import {
-  buildNovaRevealFeed,
-  buildNovaScanFeed,
-  deriveNovaOnboarding,
-  novaRevealBundlesAudit,
-} from "@/modules/nova/onboarding";
+import { novaRevealBundlesAudit } from "@/modules/nova/onboarding";
 import { auditSurface } from "@/modules/onboarding/audit-surface";
 import {
   markOnboardingMilestone,
@@ -39,6 +33,14 @@ import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
 import { completeOnboardingAction } from "./actions";
 import { NovaFirstRun } from "./nova-first-run";
+import { NovaOnboardingHeader } from "./nova-onboarding-header";
+import { NovaRail } from "../../projects/[projectId]/nova/nova-rail";
+import { novaPresenceState } from "@/components/system/status-vocabulary";
+import { novaWorkingEntry } from "@/modules/nova/home-view";
+import { operationPollPhase } from "@/modules/operations/view";
+import { listAuditEventsForProject } from "@/modules/audit-log/queries";
+import { buildActivityFeed } from "@/modules/audit-log/view";
+import { NOVA_ONBOARDING_TIER } from "@/modules/nova/onboarding";
 import { NovaOnboardingThread } from "./nova-onboarding-thread";
 import { OnboardingAuditReveal } from "./audit-reveal";
 import { AuditLivePrerequisite } from "./audit-live-prerequisite";
@@ -140,6 +142,7 @@ export default async function ProjectOnboardingPage({
     understandingFailure,
     auditAccess,
     balance,
+    auditEvents,
   ] = await Promise.all([
     onboarding.understandingOperation
       ? getProductScanEvents(supabase, {
@@ -182,6 +185,17 @@ export default async function ProjectOnboardingPage({
     onboarding.state === "first_move"
       ? getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null)
       : null,
+    /*
+     * What has already happened, for the rail (§O.4).
+     *
+     * Unconditional, and the one read in this wave that is: the rail is on
+     * screen in every state, and a column that emptied while a scan ran would
+     * be the one part of Nova's environment that disappears exactly when she
+     * is working. Six rows with a limit, the same read Home makes — the
+     * expensive things on this route are the documents above, and they are
+     * still gated.
+     */
+    listAuditEventsForProject(supabase, { projectId, userId: session.userId, limit: 6 }),
   ]);
 
   /* The Move onboarding ends on, when the Opportunity Engine produced one. */
@@ -196,30 +210,32 @@ export default async function ProjectOnboardingPage({
     auditAccess !== null && novaRevealBundlesAudit(resolveAuditCreditGate(auditAccess));
 
   /*
-   * Nova's sentence above the two screens she narrates (§L Slice 4).
+   * Nova's sentence above the screens she narrates (§L Slice 4).
    *
    * The screens themselves are unchanged — `ProductScanExperience` still owns
    * the named stages, and the reveal card still owns what was understood and
    * the bounded correction form. What Nova adds is the sentence that says what
    * is happening and why she is asking, which is the half a founder reads
    * first and the half that was previously a heading.
+   *
+   * It was two screens when only two states had a sentence. All ten do now, so
+   * `deriveNovaOnboarding`'s three-way position is no longer what decides
+   * whether she speaks — the state itself is, through the table.
    */
-  const novaOnboarding = deriveNovaOnboarding(onboarding.state);
   /*
-   * Only the sentences are rendered from the feed. The control under the
-   * reveal is `ProductConfirmation`'s, because it owns the correction form
-   * beside it — a bounded, allowlisted set of fields that Nova has no way to
-   * render and no business restating. Both read the same gate, so the button
-   * Nova would have drawn and the one that is drawn cannot disagree about
-   * whether the audit rides along.
+   * Nova's sentence is no longer assembled here.
+   *
+   * `buildNovaScanFeed` and `buildNovaRevealFeed` produced a feed for two of
+   * the ten states, and the page filtered it down to the messages and rendered
+   * them in a box above the section. The thread reads `NOVA_ONBOARDING_MESSAGE`
+   * for all ten instead — the same table those two functions now take their
+   * own text from, so nothing was rewritten and the two cannot disagree.
+   *
+   * What did not move is the control under the reveal. `ProductConfirmation`
+   * owns it, because it owns the correction form beside it: a bounded,
+   * allowlisted set of fields Nova has no way to render and no business
+   * restating. Both still read the same gate through `novaBundlesAudit`.
    */
-  const novaOnboardingMessages = (
-    novaOnboarding === "scanning"
-      ? buildNovaScanFeed()
-      : novaOnboarding === "reveal" && auditAccess !== null
-        ? buildNovaRevealFeed(resolveAuditCreditGate(auditAccess))
-        : []
-  ).filter((entry) => entry.kind === "nova.message");
 
   /*
    * What the audit step should show (UI-S1 §9–§12).
@@ -294,6 +310,12 @@ export default async function ProjectOnboardingPage({
         )
       : null;
 
+  /*
+   * The run in flight, whichever it is. One setup state has at most one, so
+   * the header takes an operation rather than a list to choose between.
+   */
+  const runningOperation = onboarding.understandingOperation ?? onboarding.auditOperation ?? null;
+
   return (
     <OnboardingShell
       email={session.email}
@@ -301,293 +323,356 @@ export default async function ProjectOnboardingPage({
       projectName={onboarding.projectName}
       canLeave={canLeave}
     >
-      {novaOnboardingMessages.length > 0 && (
-        <div className="flex max-w-[44rem] flex-col gap-4">
-          {novaOnboardingMessages.map((entry) => (
-            <NovaMessage key={entry.id} entry={entry} />
-          ))}
-        </div>
-      )}
+      <div className="flex flex-col gap-6">
+        {/*
+          The row Nova assembled, and the reason the opening's choreography is
+          not decoration: the mark travels into this header and the panel
+          closes around the thread below it. Both have to still be here
+          afterwards, or the founder watched something be built and thrown
+          away.
 
-      {onboarding.state === "connect_source" && (
-        <NovaOnboardingThread
-          state="connect_source"
-          control={<NovaMoveLink href="/app/connect/github" label="Connect GitHub" />}
+          Deliberately not wrapped: it is `sticky top-0`, and a sticky element
+          only sticks inside its own containing block — the same thing that
+          made Home's header scroll away with the thread.
+        */}
+        <NovaOnboardingHeader
+          state={onboarding.state}
+          projectId={projectId}
+          projectName={onboarding.projectName}
+          connected={onboarding.repository !== null}
+          operation={runningOperation}
         />
-      )}
 
-      {onboarding.state === "add_live_product" && (
-        <NovaOnboardingThread
-          state="add_live_product"
-          blockLabel="Where your product runs"
-          block={
-            <div className="flex flex-col gap-5">
-              {/*
+        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)] lg:items-start">
+          {/*
+            Her side of the room. No plan: there is none during setup, and a
+            checklist of the product's own phases is what this column used to
+            hold — a to-do list about Vibe's process rather than anything a
+            founder decides.
+
+            On a phone it goes second, for the reason Home's does: somebody who
+            opens this on a phone came for what Nova has to say.
+          */}
+          <div className="max-lg:order-2">
+            <NovaRail
+              presence={novaPresenceState({
+                tier: NOVA_ONBOARDING_TIER[onboarding.state],
+                phase: operationPollPhase(runningOperation),
+              })}
+              seed={projectId}
+              working={novaWorkingEntry(
+                runningOperation
+                  ? {
+                      type:
+                        runningOperation === onboarding.auditOperation
+                          ? "business_audit"
+                          : "product_scan",
+                      view: runningOperation,
+                    }
+                  : null,
+              )}
+              checklist={null}
+              activity={buildActivityFeed(auditEvents.events).reverse()}
+            />
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-6 max-lg:order-1">
+            {onboarding.state === "connect_source" && (
+              <NovaOnboardingThread
+                state="connect_source"
+                control={<NovaMoveLink href="/app/connect/github" label="Connect GitHub" />}
+              />
+            )}
+
+            {onboarding.state === "add_live_product" && (
+              <NovaOnboardingThread
+                state="add_live_product"
+                blockLabel="Where your product runs"
+                block={
+                  <div className="flex flex-col gap-5">
+                    {/*
                 The repository, as a fact rather than a sentence. Its name is
                 repository-derived and therefore untrusted (rule 25): rendered
                 as text, never interpolated into a href or a class.
               */}
-              {onboarding.repository && (
-                <div className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-3 border px-3 py-2">
-                  <span className="text-fg-body text-sm font-medium">
-                    {onboarding.repository.fullName}
-                  </span>
-                  <span className="text-fg-meta font-mono text-xs">
-                    {onboarding.repository.defaultBranch} · connected
-                  </span>
-                </div>
-              )}
-              <LiveSiteStep
-                projectId={projectId}
-                currentUrl={onboarding.productionUrl}
-                liveScanFailed={onboarding.liveSiteStatus === "scan_failed"}
+                    {onboarding.repository && (
+                      <div className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-3 border px-3 py-2">
+                        <span className="text-fg-body text-sm font-medium">
+                          {onboarding.repository.fullName}
+                        </span>
+                        <span className="text-fg-meta font-mono text-xs">
+                          {onboarding.repository.defaultBranch} · connected
+                        </span>
+                      </div>
+                    )}
+                    <LiveSiteStep
+                      projectId={projectId}
+                      currentUrl={onboarding.productionUrl}
+                      liveScanFailed={onboarding.liveSiteStatus === "scan_failed"}
+                    />
+                  </div>
+                }
               />
-            </div>
-          }
-        />
-      )}
+            )}
 
-      {onboarding.state === "product_scanning" && (
-        <NovaOnboardingThread
-          state="product_scanning"
-          /*
+            {onboarding.state === "product_scanning" && (
+              <NovaOnboardingThread
+                state="product_scanning"
+                /*
             The scan writes its own "Product scan · live", so the frame does
             not write it again. `variant="onboarding"` stays: it is not only
             framing — it also owns the pause before this route refreshes on a
             completed run, and the submit this flow ends on.
           */
-          blockNamesItself
-          blockLabel="Product scan"
-          block={
-            onboarding.understandingOperation ? (
-              <>
-                <ProductScanExperience
-                  projectId={projectId}
-                  variant="onboarding"
-                  initialOperation={onboarding.understandingOperation}
-                  initialEvents={scanEvents}
-                  initialPresentation={scanPresentation}
-                  productName={onboarding.projectName}
-                />
-                {onboarding.understandingOperation.stalled && (
-                  <OnboardingStalled
-                    what="getting to know your product"
-                    action={<RetryProductScan projectId={projectId} />}
-                  />
-                )}
-              </>
-            ) : understandingFailure ? (
-              <OnboardingOperationFailure
-                what="getting to know your product"
-                operation={understandingFailure}
-                action={<RetryProductScan projectId={projectId} />}
-              />
-            ) : (
-              /*
+                blockNamesItself
+                blockLabel="Product scan"
+                block={
+                  onboarding.understandingOperation ? (
+                    <>
+                      <ProductScanExperience
+                        projectId={projectId}
+                        variant="onboarding"
+                        initialOperation={onboarding.understandingOperation}
+                        initialEvents={scanEvents}
+                        initialPresentation={scanPresentation}
+                        productName={onboarding.projectName}
+                      />
+                      {onboarding.understandingOperation.stalled && (
+                        <OnboardingStalled
+                          what="getting to know your product"
+                          action={<RetryProductScan projectId={projectId} />}
+                        />
+                      )}
+                    </>
+                  ) : understandingFailure ? (
+                    <OnboardingOperationFailure
+                      what="getting to know your product"
+                      operation={understandingFailure}
+                      action={<RetryProductScan projectId={projectId} />}
+                    />
+                  ) : (
+                    /*
                 No run and no failure: the repository is connected and nothing
                 has read it yet. The reassurance is the block's, because it is
                 about the repository rather than about Nova.
               */
-              <div className="flex flex-col gap-4">
-                <p className="text-fg-body text-sm">
-                  Your repository stays connected. Nothing else needs repeating.
-                </p>
-                <RetryProductScan projectId={projectId} />
-              </div>
-            )
-          }
-        />
-      )}
+                    <div className="flex flex-col gap-4">
+                      <p className="text-fg-body text-sm">
+                        Your repository stays connected. Nothing else needs repeating.
+                      </p>
+                      <RetryProductScan projectId={projectId} />
+                    </div>
+                  )
+                }
+              />
+            )}
 
-      {onboarding.state === "product_reveal" && understanding && onboarding.productProfile && (
-        <NovaOnboardingThread
-          state="product_reveal"
-          blockLabel="What I understood"
-          block={
-            <div className="flex flex-col items-center gap-7 text-center">
-              {understanding.brand.logo ? (
-                <ProductLogo
-                  src={understanding.brand.logo.url}
-                  alt={understanding.brand.logo.alt}
-                  size={44}
-                />
-              ) : (
-                <VibeMark size={44} />
-              )}
-              <div className="flex flex-col gap-3">
-                {/* The product's own headline, which is what the block is about.
+            {onboarding.state === "product_reveal" &&
+              understanding &&
+              onboarding.productProfile && (
+                <NovaOnboardingThread
+                  state="product_reveal"
+                  blockLabel="What I understood"
+                  block={
+                    <div className="flex flex-col items-center gap-7 text-center">
+                      {understanding.brand.logo ? (
+                        <ProductLogo
+                          src={understanding.brand.logo.url}
+                          alt={understanding.brand.logo.alt}
+                          size={44}
+                        />
+                      ) : (
+                        <VibeMark size={44} />
+                      )}
+                      <div className="flex flex-col gap-3">
+                        {/* The product's own headline, which is what the block is about.
                   Nova's sentence is above the block and does not repeat it. */}
-                <h2 className="text-fg text-title leading-snug font-semibold">
-                  {understanding.headline.title}
-                </h2>
-                {understanding.headline.productName && (
-                  <p className="text-fg-body text-xl font-semibold">
-                    {understanding.headline.productName}
-                  </p>
-                )}
-                {understanding.headline.understanding && (
-                  <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">
-                    {understanding.headline.understanding}
-                  </p>
-                )}
-              </div>
-              <ProductRevealFacts facts={understanding.audience.slice(0, 2)} />
+                        <h2 className="text-fg text-title leading-snug font-semibold">
+                          {understanding.headline.title}
+                        </h2>
+                        {understanding.headline.productName && (
+                          <p className="text-fg-body text-xl font-semibold">
+                            {understanding.headline.productName}
+                          </p>
+                        )}
+                        {understanding.headline.understanding && (
+                          <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">
+                            {understanding.headline.understanding}
+                          </p>
+                        )}
+                      </div>
+                      <ProductRevealFacts facts={understanding.audience.slice(0, 2)} />
 
-              <div className="border-line-2 w-full border-t pt-6">
-                <h3 className="text-fg-body mb-4 font-semibold">Did Vibe get this right?</h3>
-                <ProductConfirmation
-                  projectId={projectId}
-                  profileId={onboarding.productProfile.stored.id}
-                  bundlesAudit={novaBundlesAudit}
-                  values={{
-                    name: onboarding.productProfile.profile.identity.name.value ?? "",
-                    shortDescription:
-                      onboarding.productProfile.profile.identity.shortDescription.value ?? "",
-                    understanding:
-                      onboarding.productProfile.profile.identity.understanding.value ?? "",
-                    mainPurpose: onboarding.productProfile.profile.identity.mainPurpose.value ?? "",
-                    mainPromise: onboarding.productProfile.profile.identity.mainPromise.value ?? "",
-                    primaryAudience:
-                      onboarding.productProfile.profile.audience.primaryAudience.value ?? "",
-                    problemSolved:
-                      onboarding.productProfile.profile.audience.problemSolved.value ?? "",
-                  }}
-                />
-              </div>
-            </div>
-          }
-        />
-      )}
-
-      {(onboarding.state === "audit_preparing" || onboarding.state === "audit_running") && (
-        <NovaOnboardingThread
-          state={onboarding.state}
-          blockLabel="Business audit"
-          block={
-            surface === "running" && onboarding.auditOperation ? (
-              <>
-                <OperationWatcher projectId={projectId} operation={onboarding.auditOperation} />
-                {onboarding.auditOperation.stage === "running_ai" ? (
-                  <AuditAnalyzing />
-                ) : (
-                  <AuditPreparing />
-                )}
-                {onboarding.auditOperation.stalled && (
-                  <OnboardingStalled
-                    what="looking at your business"
-                    action={
-                      onboarding.productProfile ? (
-                        <StartAudit
+                      <div className="border-line-2 w-full border-t pt-6">
+                        <h3 className="text-fg-body mb-4 font-semibold">
+                          Did Vibe get this right?
+                        </h3>
+                        <ProductConfirmation
                           projectId={projectId}
                           profileId={onboarding.productProfile.stored.id}
+                          bundlesAudit={novaBundlesAudit}
+                          values={{
+                            name: onboarding.productProfile.profile.identity.name.value ?? "",
+                            shortDescription:
+                              onboarding.productProfile.profile.identity.shortDescription.value ??
+                              "",
+                            understanding:
+                              onboarding.productProfile.profile.identity.understanding.value ?? "",
+                            mainPurpose:
+                              onboarding.productProfile.profile.identity.mainPurpose.value ?? "",
+                            mainPromise:
+                              onboarding.productProfile.profile.identity.mainPromise.value ?? "",
+                            primaryAudience:
+                              onboarding.productProfile.profile.audience.primaryAudience.value ??
+                              "",
+                            problemSolved:
+                              onboarding.productProfile.profile.audience.problemSolved.value ?? "",
+                          }}
                         />
-                      ) : undefined
-                    }
-                  />
-                )}
-              </>
-            ) : surface === "parked_no_live_product" ? (
-              <AuditLivePrerequisite projectId={projectId} mode="parked" />
-            ) : surface === "awaiting_live_product" ? (
-              <AuditLivePrerequisite projectId={projectId} mode="awaiting" />
-            ) : auditFailure ? (
-              <OnboardingOperationFailure
-                what="looking at your business"
-                operation={auditFailure}
-                action={
-                  onboarding.productProfile ? (
+                      </div>
+                    </div>
+                  }
+                />
+              )}
+
+            {(onboarding.state === "audit_preparing" || onboarding.state === "audit_running") && (
+              <NovaOnboardingThread
+                state={onboarding.state}
+                blockLabel="Business audit"
+                block={
+                  surface === "running" && onboarding.auditOperation ? (
+                    <>
+                      <OperationWatcher
+                        projectId={projectId}
+                        operation={onboarding.auditOperation}
+                      />
+                      {onboarding.auditOperation.stage === "running_ai" ? (
+                        <AuditAnalyzing />
+                      ) : (
+                        <AuditPreparing />
+                      )}
+                      {onboarding.auditOperation.stalled && (
+                        <OnboardingStalled
+                          what="looking at your business"
+                          action={
+                            onboarding.productProfile ? (
+                              <StartAudit
+                                projectId={projectId}
+                                profileId={onboarding.productProfile.stored.id}
+                              />
+                            ) : undefined
+                          }
+                        />
+                      )}
+                    </>
+                  ) : surface === "parked_no_live_product" ? (
+                    <AuditLivePrerequisite projectId={projectId} mode="parked" />
+                  ) : surface === "awaiting_live_product" ? (
+                    <AuditLivePrerequisite projectId={projectId} mode="awaiting" />
+                  ) : auditFailure ? (
+                    <OnboardingOperationFailure
+                      what="looking at your business"
+                      operation={auditFailure}
+                      action={
+                        onboarding.productProfile ? (
+                          <StartAudit
+                            projectId={projectId}
+                            profileId={onboarding.productProfile.stored.id}
+                          />
+                        ) : undefined
+                      }
+                    />
+                  ) : onboarding.productProfile ? (
                     <StartAudit
                       projectId={projectId}
                       profileId={onboarding.productProfile.stored.id}
                     />
-                  ) : undefined
+                  ) : null
                 }
               />
-            ) : onboarding.productProfile ? (
-              <StartAudit projectId={projectId} profileId={onboarding.productProfile.stored.id} />
-            ) : null
-          }
-        />
-      )}
+            )}
 
-      {onboarding.state === "audit_needs_user" && onboarding.pausedAudit && (
-        <NovaOnboardingThread
-          state="audit_needs_user"
-          tone="waiting"
-          blockLabel="Needs your answer"
-          block={
-            <NeedsUserPanel projectId={projectId} question={onboarding.pausedAudit.question} />
-          }
-        />
-      )}
+            {onboarding.state === "audit_needs_user" && onboarding.pausedAudit && (
+              <NovaOnboardingThread
+                state="audit_needs_user"
+                tone="waiting"
+                blockLabel="Needs your answer"
+                block={
+                  <NeedsUserPanel
+                    projectId={projectId}
+                    question={onboarding.pausedAudit.question}
+                  />
+                }
+              />
+            )}
 
-      {onboarding.state === "audit_reveal" && revealedAudit?.result && (
-        <NovaOnboardingThread
-          state="audit_reveal"
-          /* The reveal writes its own heading and its own reading. */
-          blockNamesItself
-          blockLabel="Business audit"
-          block={<OnboardingAuditReveal audit={revealedAudit.result} projectId={projectId} />}
-        />
-      )}
+            {onboarding.state === "audit_reveal" && revealedAudit?.result && (
+              <NovaOnboardingThread
+                state="audit_reveal"
+                /* The reveal writes its own heading and its own reading. */
+                blockNamesItself
+                blockLabel="Business audit"
+                block={<OnboardingAuditReveal audit={revealedAudit.result} projectId={projectId} />}
+              />
+            )}
 
-      {onboarding.state === "first_move" && (
-        <>
-          <OperationWatcher projectId={projectId} operation={opportunityOperation} />
-          <NovaOnboardingThread
-            state="first_move"
-            blockLabel="Where I would start"
-            block={
-              onboarding.opportunities?.set.opportunities[0] ? (
-                <div className="flex flex-col gap-4">
-                  <h2 className="text-fg text-title font-semibold">
-                    {onboarding.opportunities.set.opportunities[0].title}
-                  </h2>
-                  <p className="text-fg-prose leading-relaxed">
-                    {onboarding.opportunities.set.opportunities[0].problem}
-                  </p>
-                  <div className="border-line-2 border-t pt-4">
-                    <p className="text-fg-meta mb-1 text-xs">Why this comes first</p>
-                    <p className="text-fg-secondary text-sm leading-relaxed">
-                      {onboarding.opportunities.set.opportunities[0].whyNow}
-                    </p>
-                  </div>
-                  {firstMovePlan?.firstActionableStep && (
-                    <div className="border-line-2 border-t pt-4">
-                      <p className="text-fg-meta mb-1 text-xs">
-                        Vibe already has a plan — starting with
-                      </p>
-                      <p className="text-fg-body text-sm font-medium">
-                        {firstMovePlan.firstActionableStep.title}
-                      </p>
-                      <p className="text-fg-muted mt-1 text-xs">
-                        {ACTOR_LABELS[firstMovePlan.firstActionableStep.actor]} ·{" "}
-                        {
-                          EXECUTION_SUPPORT_LABELS[
-                            firstMovePlan.firstActionableStep.executionSupport
-                          ]
-                        }
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ) : opportunityOperation ? (
-                <div className="flex flex-col gap-3" role="status">
-                  <p className="text-fg-body text-sm">
-                    You can leave and come back. No Move will be invented while this runs.
-                  </p>
-                </div>
-              ) : (
-                <Notice tone="info" label="Your Audit is ready">
-                  Vibe knows where the business needs attention first. No actual Next Move is
-                  available yet, so onboarding will not pretend one exists.
-                </Notice>
-              )
-            }
-            control={
-              !opportunityOperation ? (
-                <>
-                  {/*
+            {onboarding.state === "first_move" && (
+              <>
+                <OperationWatcher projectId={projectId} operation={opportunityOperation} />
+                <NovaOnboardingThread
+                  state="first_move"
+                  blockLabel="Where I would start"
+                  block={
+                    onboarding.opportunities?.set.opportunities[0] ? (
+                      <div className="flex flex-col gap-4">
+                        <h2 className="text-fg text-title font-semibold">
+                          {onboarding.opportunities.set.opportunities[0].title}
+                        </h2>
+                        <p className="text-fg-prose leading-relaxed">
+                          {onboarding.opportunities.set.opportunities[0].problem}
+                        </p>
+                        <div className="border-line-2 border-t pt-4">
+                          <p className="text-fg-meta mb-1 text-xs">Why this comes first</p>
+                          <p className="text-fg-secondary text-sm leading-relaxed">
+                            {onboarding.opportunities.set.opportunities[0].whyNow}
+                          </p>
+                        </div>
+                        {firstMovePlan?.firstActionableStep && (
+                          <div className="border-line-2 border-t pt-4">
+                            <p className="text-fg-meta mb-1 text-xs">
+                              Vibe already has a plan — starting with
+                            </p>
+                            <p className="text-fg-body text-sm font-medium">
+                              {firstMovePlan.firstActionableStep.title}
+                            </p>
+                            <p className="text-fg-muted mt-1 text-xs">
+                              {ACTOR_LABELS[firstMovePlan.firstActionableStep.actor]} ·{" "}
+                              {
+                                EXECUTION_SUPPORT_LABELS[
+                                  firstMovePlan.firstActionableStep.executionSupport
+                                ]
+                              }
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    ) : opportunityOperation ? (
+                      <div className="flex flex-col gap-3" role="status">
+                        <p className="text-fg-body text-sm">
+                          You can leave and come back. No Move will be invented while this runs.
+                        </p>
+                      </div>
+                    ) : (
+                      <Notice tone="info" label="Your Audit is ready">
+                        Vibe knows where the business needs attention first. No actual Next Move is
+                        available yet, so onboarding will not pretend one exists.
+                      </Notice>
+                    )
+                  }
+                  control={
+                    !opportunityOperation ? (
+                      <>
+                        {/*
                 Onboarding ends on a decision, not a door (audit Slice 6).
                 
                 The founder has just read the one Move Vibe would start with
@@ -600,32 +685,35 @@ export default async function ProjectOnboardingPage({
                 not the global dashboard — "Go to dashboard" sent people
                 looking for a screen they had not been taken to (UI-S1 §16).
               */}
-                  {firstOpportunity ? (
-                    <FirstMoveDecision
-                      projectId={projectId}
-                      opportunityId={firstOpportunity.id}
-                      balance={balance}
-                      skip={
-                        <button
-                          type="submit"
-                          formAction={completeOnboardingAction.bind(null, projectId)}
-                          className="text-fg-secondary hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                        >
-                          Go to your workspace
-                        </button>
-                      }
-                    />
-                  ) : (
-                    <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
-                      <NovaMoveButton type="submit" label="Go to your workspace" />
-                    </form>
-                  )}
-                </>
-              ) : undefined
-            }
-          />
-        </>
-      )}
+                        {firstOpportunity ? (
+                          <FirstMoveDecision
+                            projectId={projectId}
+                            opportunityId={firstOpportunity.id}
+                            balance={balance}
+                            skip={
+                              <button
+                                type="submit"
+                                formAction={completeOnboardingAction.bind(null, projectId)}
+                                className="text-fg-secondary hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                              >
+                                Go to your workspace
+                              </button>
+                            }
+                          />
+                        ) : (
+                          <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
+                            <NovaMoveButton type="submit" label="Go to your workspace" />
+                          </form>
+                        )}
+                      </>
+                    ) : undefined
+                  }
+                />
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </OnboardingShell>
   );
 }

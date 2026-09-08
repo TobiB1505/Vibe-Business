@@ -3,6 +3,7 @@ import type { OnboardingState } from "../onboarding/state";
 import { NOVA_ACTION_META } from "./actions";
 import type { NovaActionId } from "./actions";
 import type { NovaChoiceOption, NovaEntry } from "./feed";
+import type { NovaFocusTier } from "./focus";
 
 /**
  * The onboarding lane, once Nova's own two screens are behind us.
@@ -155,6 +156,49 @@ export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
   first_move: "Your setup is behind us either way. The workspace is where everything lives now.",
   /* The handover says itself. */
   complete: null,
+};
+
+/**
+ * Which register each setup state is in.
+ *
+ * ## Why the environment needs this at all
+ *
+ * Because Nova's mark, her status word and the contour of her bubble are all
+ * derived from a tier, and setup had none — it had a four-step progress rail
+ * instead, which says how far along you are and nothing about whose turn it
+ * is. Those are different facts, and only the second one changes what she
+ * looks like.
+ *
+ * So the same vocabulary the twenty-one moments use: `blocked` is nothing Vibe
+ * can do without a person, `decision` is the founder's turn, `ready` is Vibe
+ * working, `setup` is the state before there is anything to work on.
+ *
+ * ## Why `product_reveal` is a decision and `audit_running` is not
+ *
+ * The reveal asks a question and waits — the mark listens. A run in flight is
+ * Vibe working and the mark turns, which is honest because an operation row
+ * says so. Nothing here asserts activity: `novaPresenceState` still takes the
+ * live operation's phase, and this only says what the state is *about* when
+ * nothing is running.
+ */
+export const NOVA_ONBOARDING_TIER: Record<OnboardingState, NovaFocusTier> = {
+  /* Vibe cannot look at anything until somebody connects something. */
+  connect_source: "setup",
+  add_live_product: "decision",
+
+  /* Vibe's turn. The mark turns only while the operation row says it runs. */
+  product_scanning: "ready",
+  audit_preparing: "ready",
+  audit_running: "ready",
+
+  /* The founder's turn, and the mark listens. */
+  product_reveal: "decision",
+  audit_needs_user: "decision",
+  audit_reveal: "decision",
+  first_move: "decision",
+
+  /* Setup is behind us; the next screen has its own ranking. */
+  complete: "settled",
 };
 
 const SCANNING_MESSAGE = NOVA_ONBOARDING_MESSAGE.product_scanning;
