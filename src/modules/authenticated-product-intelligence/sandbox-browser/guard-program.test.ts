@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { BROWSER_GUARD_ENV, BROWSER_GUARD_PROGRAM, BROWSER_RUNTIME_VERSION } from "./guard-program";
+import { BROWSER_SANDBOX } from "./runtime";
 
 /**
  * The guard, asserted rather than executed.
@@ -254,5 +255,47 @@ describe("the screencast paces itself to the viewer", () => {
 
   it("measures the backlog rather than guessing at it", () => {
     expect(BROWSER_GUARD_PROGRAM).toContain("client.bufferedAmount");
+  });
+});
+
+/*
+ * `runtime.ts` says the viewport is "matched to the screencast ceiling in the
+ * guard rather than chosen twice". Nothing enforced that — the guard holds the
+ * ceiling as literals, because the program contains no interpolation and that
+ * absence is a security property, so the two numbers could drift apart in
+ * silence. A comment is not a constraint; this is.
+ *
+ * Drift is not cosmetic. A cast smaller than the window is scaled down, and
+ * the canvas maps a click through the frame's coordinate space — so the click
+ * lands somewhere other than where the person aimed, on their own signed-in
+ * product, with no error anywhere.
+ */
+describe("the screencast ceiling matches the window Chromium is given", () => {
+  const capture = () => {
+    const start = BROWSER_GUARD_PROGRAM.indexOf('send("Page.startScreencast"');
+    expect(start, "the guard must still start a screencast").toBeGreaterThan(-1);
+    return BROWSER_GUARD_PROGRAM.slice(start, start + 300);
+  };
+
+  it("casts at exactly the viewport's width and height", () => {
+    expect(capture()).toContain(`maxWidth: ${BROWSER_SANDBOX.viewport.width}`);
+    expect(capture()).toContain(`maxHeight: ${BROWSER_SANDBOX.viewport.height}`);
+  });
+
+  it("keeps the viewport at the 16:10 the dialog was built around", () => {
+    // The dialog now sizes its box from the frame itself, so a different ratio
+    // would no longer distort — but a ratio nobody chose is still a ratio
+    // nobody chose.
+    const { width, height } = BROWSER_SANDBOX.viewport;
+    expect(width / height).toBeCloseTo(16 / 10, 5);
+  });
+
+  it("sends a quality a person can read text at", () => {
+    const quality = /quality: (\d+)/.exec(capture())?.[1];
+    expect(quality).toBeDefined();
+    // 60 put visible ringing on every glyph. Above 85 the bytes stop buying
+    // anything a person can see.
+    expect(Number(quality)).toBeGreaterThanOrEqual(70);
+    expect(Number(quality)).toBeLessThanOrEqual(85);
   });
 });

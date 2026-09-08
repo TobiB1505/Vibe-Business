@@ -4,6 +4,7 @@ import { DEFAULT_AUTHENTICATED_BUDGETS } from "./budgets";
 import {
   buildRouteCandidates,
   extendCandidates,
+  isAuthSurfacePath,
   isNeverVisit,
   isSafeAnalysisTarget,
   routeShape,
@@ -474,5 +475,54 @@ describe("routeShape", () => {
   it("is stable and idempotent", () => {
     const shaped = routeShape("/app/projects/88d1c463-74f4-43a4-b2ce-8b58cfdfbb4b");
     expect(routeShape(shaped)).toBe(shaped);
+  });
+});
+
+/*
+ * A real scan inspected `/reset-password` while signed in — a page nobody
+ * signed in ever sees, holding no product, costing one of twenty-five pages.
+ *
+ * It got through because this module held two lists of what an auth page is
+ * and they disagreed: `NEVER_VISIT` knew login and signup, and
+ * `login-detection.ts` knew reset, verification and MFA because detecting a
+ * finished login required it. One path, two answers, in one module.
+ */
+describe("auth surfaces are one list", () => {
+  it("refuses the password-recovery pages the scan actually wasted a page on", () => {
+    for (const path of ["/reset-password", "/forgot-password", "/recover", "/auth/reset/token"]) {
+      expect(isNeverVisit(path), path).toBe(true);
+      expect(isAuthSurfacePath(path), path).toBe(true);
+    }
+  });
+
+  it("still refuses what it always refused", () => {
+    for (const path of ["/logout", "/login", "/signup", "/account/sign-out", "/billing/cancel"]) {
+      expect(isNeverVisit(path), path).toBe(true);
+    }
+  });
+
+  it("refuses verification and MFA surfaces", () => {
+    for (const path of ["/verify", "/verify/email", "/mfa", "/2fa", "/otp"]) {
+      expect(isNeverVisit(path), path).toBe(true);
+    }
+  });
+
+  it("does not refuse product paths that merely sound like auth", () => {
+    /*
+     * The reason `confirm` and `callback` are not in the shared list. Refusing
+     * a real surface loses evidence permanently; the sign-in probe's version
+     * of the same mistake costs one poll. The two lists differ on purpose, and
+     * this is the assertion that keeps them differing.
+     */
+    for (const path of [
+      "/orders/confirm",
+      "/app/settings",
+      "/app/billing",
+      "/app/products",
+      "/app/connect/github",
+      "/reports/verify-results",
+    ]) {
+      expect(isNeverVisit(path), path).toBe(false);
+    }
   });
 });

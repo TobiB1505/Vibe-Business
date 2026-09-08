@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { buildDeepScanViewModel, type BuildViewModelInput } from "./view";
+import { buildDeepScanViewModel, type BuildViewModelInput,
+  describeCompletion,
+} from "./view";
 import type { DeepScanAccessStatus } from "./entitlement";
 import type { AuthenticatedSurfaceDetection } from "./surface-detection";
 import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
@@ -171,9 +173,9 @@ describe("buildDeepScanViewModel — completed", () => {
     expect(model.lastResult).toEqual({
       analyzedAt: "2026-08-11T10:00:00.000Z",
       pagesInspected: 7,
-      completeness: "complete",
+      completion: { kind: "complete", policyLimited: false, budgetLimited: false },
       surfaces: [{ id: "dashboard", name: "Dashboard" }],
-      warnings: [],
+      notes: [],
       accessMode: "included_first_scan",
     });
   });
@@ -182,8 +184,14 @@ describe("buildDeepScanViewModel — completed", () => {
    * The snapshot has carried warnings since it existed, and the view model
    * dropped them — so a partial scan could say only "finished: only partly"
    * about four specific things it had already written down.
+   *
+   * Then they arrived as one flat list, and a real scan produced six of them
+   * of which **one** was a failure. Two were facts Vibe had established by
+   * looking, one was the page budget working exactly as designed, two were
+   * safety refusals. Under a heading reading "6 things Vibe could not check",
+   * a founder learns that Vibe failed six times.
    */
-  it("carries what the scan could not check, in the words it recorded", () => {
+  it("carries what the scan recorded, with the kind of statement each one is", () => {
     const withWarnings = {
       ...completed,
       latestSnapshot: {
@@ -192,16 +200,48 @@ describe("buildDeepScanViewModel — completed", () => {
           ...completed.latestSnapshot!.result,
           warnings: [
             { code: "navigation_timeout", message: "One page took too long to load." },
-            { code: "surface_ambiguous", message: "Vibe could not tell two settings pages apart." },
+            {
+              code: "redirected_to_seen_page",
+              path: "/app/onboarding",
+              message: "This path redirected to a page Vibe had already inspected.",
+            },
+            { code: "repeated_screen_skipped", message: "7 screens exist in more copies." },
           ],
         },
       },
     } as typeof completed;
 
-    expect(build(withWarnings).lastResult?.warnings).toEqual([
-      "One page took too long to load.",
-      "Vibe could not tell two settings pages apart.",
+    expect(build(withWarnings).lastResult?.notes).toEqual([
+      { kind: "failed", path: null, message: "One page took too long to load." },
+      {
+        kind: "observed",
+        path: "/app/onboarding",
+        message: "This path redirected to a page Vibe had already inspected.",
+      },
+      { kind: "by_design", path: null, message: "7 screens exist in more copies." },
     ]);
+  });
+
+  it("counts one failure in a list of three, not three", () => {
+    // The whole point of the kind. A budget reached and a redirect observed
+    // are not failures, and presenting them as ones teaches a founder to
+    // distrust a scan that worked.
+    const notes = [
+      { code: "page_unreachable", path: "/app/reports", message: "A page could not be read." },
+      { code: "budget_reached", message: "The page budget was reached." },
+      { code: "non_get_request_blocked", message: "51 non-GET requests were blocked." },
+    ];
+    const model = build({
+      ...completed,
+      latestSnapshot: {
+        ...completed.latestSnapshot!,
+        result: { ...completed.latestSnapshot!.result, warnings: notes },
+      },
+    } as typeof completed);
+
+    const kinds = model.lastResult!.notes.map((note) => note.kind);
+    expect(kinds.filter((kind) => kind === "failed")).toHaveLength(1);
+    expect(kinds).toEqual(["failed", "by_design", "observed"]);
   });
 
   it("lists detected surfaces only, never the undetected ones", () => {
@@ -601,5 +641,69 @@ describe("buildDeepScanViewModel — unavailability is always explained", () => 
         model.canStart || model.unavailableReason !== null || model.blockedReason !== null || model.lastFailure !== null;
       expect(explainable).toBe(true);
     }
+  });
+});
+
+/*
+ * "Only partly", in amber, was the whole account of a scan whose single limit
+ * was `mutation_blocked` — Vibe refusing every non-GET request, which it does
+ * because the session is the founder's own, and which it always will.
+ *
+ * A permanent, deliberate safety property presented as a shortfall teaches a
+ * person that Vibe half-works. It ran to the end.
+ */
+describe("describeCompletion", () => {
+  it("calls a scan finished when only Vibe's own policy limited it", () => {
+    expect(describeCompletion({ status: "partial", reasons: ["mutation_blocked"] })).toEqual({
+      kind: "within_limits",
+      policyLimited: true,
+      budgetLimited: false,
+    });
+  });
+
+  it("keeps a budget separate from a policy, because the sentence differs", () => {
+    // "Vibe will never do this" and "Vibe stopped after 25 pages" are both
+    // deliberate, and only one of them is an argument about safety.
+    expect(
+      describeCompletion({ status: "partial", reasons: ["page_budget_reached"] }),
+    ).toEqual({ kind: "within_limits", policyLimited: false, budgetLimited: true });
+
+    expect(
+      describeCompletion({
+        status: "partial",
+        reasons: ["mutation_blocked", "page_budget_reached"],
+      }),
+    ).toEqual({ kind: "within_limits", policyLimited: true, budgetLimited: true });
+  });
+
+  it("still says a scan is incomplete when something actually went wrong", () => {
+    const completion = describeCompletion({
+      status: "partial",
+      reasons: ["mutation_blocked", "navigation_failed"],
+    });
+
+    expect(completion.kind).toBe("incomplete");
+    // And the limits are still reported, so the copy can explain both.
+    expect(completion.policyLimited).toBe(true);
+  });
+
+  it("treats an unrecognised reason as a failure rather than as a limit", () => {
+    /*
+     * Written as the remainder rather than as its own list. A reason added
+     * later is a failure until someone decides otherwise, which is the safe
+     * direction for a label a founder trusts — the opposite default would let
+     * a new fault quietly render as "finished".
+     */
+    expect(describeCompletion({ status: "partial", reasons: ["something_new"] }).kind).toBe(
+      "incomplete",
+    );
+  });
+
+  it("reports a clean scan as complete", () => {
+    expect(describeCompletion({ status: "complete", reasons: [] })).toEqual({
+      kind: "complete",
+      policyLimited: false,
+      budgetLimited: false,
+    });
   });
 });

@@ -22,6 +22,8 @@ There is no fixed template. What every document does carry:
 
 The list below is **append-ordered, not sorted**: a row is added at the end when a sprint is recorded, so reading order is the order work happened rather than numeric order. Do not sort it. Numeric gaps are normal (0013, 0034, 0049 and 0050 have no document); the two 0054 rows are a genuine duplicate, and renaming either would break four documents that link to one of them.
 
+**For scanning rather than reading**: `pnpm atlas` renders a searchable register of every decision and every sprint — number, title, status — in one page under `.atlas/`. It is generated from this directory on every run, so it cannot fall behind it. The entries below stay the long form, which is what they are for.
+
 `src/lib/docs/documentation-currency.test.ts` fails the build if a sprint document is missing from this list, or if a row here points at a file that does not exist.
 
 - [0000-application-bootstrap](0000-application-bootstrap.md) — application bootstrap and development foundation (Complete)

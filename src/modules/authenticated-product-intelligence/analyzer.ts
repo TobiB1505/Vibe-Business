@@ -60,7 +60,22 @@ export type AnalysisBrowserPort = {
   /** Every open tab, including ones the user's OAuth flow opened. */
   pages(): Promise<AnalysisPagePort[]>;
   /** Blocked-request and download counters recorded by the transport. */
-  readonly blocked: { mutatingRequests: number; downloads: number; externalNavigations: number };
+  readonly blocked: {
+    /**
+     * Blocked non-GET requests that could plausibly have rendered something.
+     *
+     * The count that decides whether the result admits to being incomplete.
+     */
+    mutatingRequests: number;
+    /**
+     * Blocked non-GET requests that definitionally could not — beacons,
+     * images, fonts. Counted, reported, and never allowed to downgrade a
+     * scan: a blocked analytics beacon does not change what a page displays.
+     */
+    mutatingBeacons: number;
+    downloads: number;
+    externalNavigations: number;
+  };
 };
 
 export type AnalyzeInput = {
@@ -91,6 +106,24 @@ export type AnalyzeInput = {
    * (ADR 0011).
    */
   onDiagnostic?: (event: { step: string; path: string; detail: string }) => void;
+  /**
+   * A page was read, and how many that makes.
+   *
+   * The one honest source of progress this scan has. The analysis runs inside
+   * a single request and reports nothing until it returns, so a founder
+   * watched ninety seconds of animation that could not say whether anything
+   * was happening — and the alternative on offer was a bar timed against a
+   * guess, which is a percentage nobody measured.
+   *
+   * Called after a page is *recorded*, never before it is read: the number is
+   * pages that exist in the snapshot, not pages attempted. A page that failed
+   * to load moves nothing, which is correct — it taught us nothing.
+   *
+   * A seam rather than a write, for the same reason `onDiagnostic` is one: the
+   * analyzer stays a function of its inputs, and where progress goes is the
+   * caller's business.
+   */
+  onProgress?: (progress: { pagesInspected: number; maxPages: number }) => void;
 };
 
 export type AnalyzeResult =
@@ -394,7 +427,30 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     // /app/connect/github/repositories twice — once via a link (200) and once
     // as a repository route (404).
     if (landedPath !== candidate.path) {
-      if (visited.has(landedPath)) continue;
+      if (visited.has(landedPath)) {
+        /*
+         * Said, not swallowed.
+         *
+         * A real scan reported `onboarding` as **not detected** with no
+         * evidence. `/app/onboarding` exists, was a candidate, and was
+         * navigated to — and it redirected to the dashboard, because the
+         * founder is long past onboarding. The loop dropped it here without a
+         * trace, so the snapshot's only account of it was an absence.
+         *
+         * "This surface sent Vibe somewhere it had already been" is a fact
+         * about the product. "Vibe found no onboarding" is not the same
+         * sentence, and reading the first as the second is how a scan comes to
+         * report a budget as a finding (rule 44).
+         */
+        warnings.push(
+          warning(
+            "redirected_to_seen_page",
+            "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
+            candidate.path,
+          ),
+        );
+        continue;
+      }
       visited.add(landedPath);
     }
 
@@ -424,6 +480,7 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
     const landedShape = routeShape(landedPath);
     shapeVisits.set(landedShape, (shapeVisits.get(landedShape) ?? 0) + 1);
     tracker.recordPage();
+    input.onProgress?.({ pagesInspected: pages.length, maxPages: budgets.maxPages });
     maxDepthReached = Math.max(maxDepthReached, candidate.depth);
 
     if (candidate.depth < budgets.maxDepth) {
@@ -461,15 +518,27 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
   }
 
   const blocked = input.browser.blocked;
-  if (blocked.mutatingRequests > 0) {
+  const refused = blocked.mutatingRequests + blocked.mutatingBeacons;
+  if (refused > 0) {
     warnings.push(
       warning(
         "non_get_request_blocked",
-        `${blocked.mutatingRequests} non-GET request(s) were blocked during analysis.`,
+        `${refused} non-GET request(s) were blocked during analysis; ${blocked.mutatingBeacons} of them were beacons or media that cannot affect a page.`,
       ),
     );
-    // Said plainly rather than implied: if the app needed those requests to
-    // render, what we saw is incomplete and the result must not claim otherwise.
+  }
+  if (blocked.mutatingRequests > 0) {
+    /*
+     * Said plainly rather than implied: if the app needed those requests to
+     * render, what we saw is incomplete and the result must not claim
+     * otherwise.
+     *
+     * But only for requests that could have. A scan of 21 pages reported 53
+     * blocked non-GET requests and downgraded itself on all of them, when most
+     * were analytics beacons fired once per page view. Blocking is unchanged —
+     * every non-GET is still refused — and what changed is only what Vibe
+     * concludes from having refused it.
+     */
     warnings.push(
       warning(
         "application_requires_mutating_method_for_render",

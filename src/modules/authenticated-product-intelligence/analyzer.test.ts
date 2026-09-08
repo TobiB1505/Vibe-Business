@@ -61,7 +61,7 @@ function fakeBrowser(options: {
 
   const browser: AnalysisBrowserPort & { visited: string[] } = {
     pages: async () => [page, ...extraTabs],
-    blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0, ...options.blocked },
+    blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0, ...options.blocked },
     visited,
   };
 
@@ -219,7 +219,7 @@ describe("analyzeAuthenticatedProduct", () => {
     };
     const browser: AnalysisBrowserPort = {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     };
 
     const result = await analyzeAuthenticatedProduct({
@@ -374,7 +374,7 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
 
     const browser: AnalysisBrowserPort = {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     };
 
     return { browser, requested };
@@ -451,7 +451,7 @@ describe("analyzeAuthenticatedProduct — a single-page app interrupting its own
 
     const browser: AnalysisBrowserPort = {
       pages: async () => [page],
-      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
     };
 
     return { browser, attempts };
@@ -496,7 +496,7 @@ describe("analyzeAuthenticatedProduct — a single-page app interrupting its own
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
       repository: repositoryWith(["/app/plan"]),
     });
@@ -538,7 +538,7 @@ describe("analyzeAuthenticatedProduct — pages the public scan already read", (
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
       publicProduct: publicWith([{ path: "/privacy", redirectedTo: null }]),
     });
@@ -623,7 +623,7 @@ describe("analyzeAuthenticatedProduct — a page is let go still before it is re
     return {
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       } satisfies AnalysisBrowserPort,
       order,
     };
@@ -704,7 +704,7 @@ describe("analyzeAuthenticatedProduct — a page is let go still before it is re
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
       repository: repositoryWith(["/app/settings"]),
     });
@@ -767,7 +767,7 @@ describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it
     return {
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       } satisfies AnalysisBrowserPort,
       visited,
     };
@@ -855,7 +855,7 @@ describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it
       ...baseInput,
       browser: {
         pages: async () => [page],
-        blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
       },
     });
 
@@ -863,5 +863,262 @@ describe("analyzeAuthenticatedProduct — a screen is worth a page, a copy of it
     const settings = read.filter((path) => path.endsWith("/settings"));
     expect(settings).toHaveLength(DEFAULT_AUTHENTICATED_BUDGETS.maxPagesPerRouteShape);
     expect(settings).not.toContain(new URL(broken).pathname);
+  });
+});
+
+/*
+ * The snapshot said `onboarding: detected false, evidence: []`.
+ *
+ * `/app/onboarding` exists, was a candidate, and was navigated to. It
+ * redirected to the dashboard — the founder is long past onboarding — and the
+ * loop dropped it without a trace, so the only account of it was an absence.
+ * "This surface sent Vibe somewhere it had already been" and "Vibe found no
+ * onboarding" are different sentences.
+ */
+describe("analyzeAuthenticatedProduct — a redirect onto a seen page is a fact, not a silence", () => {
+  function redirectingTo(seen: string, from: string) {
+    let current = `${ORIGIN}/app`;
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        current = new URL(url).pathname === from ? `${ORIGIN}${seen}` : url;
+        return { status: 200 };
+      },
+      settle: async () => undefined,
+      extract: async () => extraction(),
+    };
+
+    return {
+      pages: async () => [page],
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
+    } satisfies AnalysisBrowserPort;
+  }
+
+  it("records the path that redirected instead of dropping it", async () => {
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: redirectingTo("/app", "/app/onboarding"),
+      repository: repositoryWith(["/app/onboarding"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const redirected = result.snapshot.warnings.filter(
+      (entry) => entry.code === "redirected_to_seen_page",
+    );
+    expect(redirected).toHaveLength(1);
+    expect(redirected[0]!.path).toBe("/app/onboarding");
+
+    // And it is still not counted as a page: nothing new was read.
+    expect(result.snapshot.pages.map((entry) => entry.path)).toEqual(["/app"]);
+  });
+
+  it("says nothing when a redirect lands somewhere genuinely new", async () => {
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: redirectingTo("/app/welcome", "/app/onboarding"),
+      repository: repositoryWith(["/app/onboarding"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(
+      result.snapshot.warnings.filter((entry) => entry.code === "redirected_to_seen_page"),
+    ).toHaveLength(0);
+    expect(result.snapshot.pages.map((entry) => entry.path)).toContain("/app/welcome");
+  });
+});
+
+/*
+ * A scan of 21 pages ended `partial` for one reason: 53 non-GET requests were
+ * blocked. Most were analytics beacons — one `sendBeacon` per page view — and
+ * the result told the founder that *parts of this application may render via
+ * non-GET requests*, about requests that render nothing anywhere.
+ */
+describe("analyzeAuthenticatedProduct — a blocked beacon is not an incomplete scan", () => {
+  function browserBlocking(blocked: Partial<AnalysisBrowserPort["blocked"]>): AnalysisBrowserPort {
+    let current = `${ORIGIN}/app`;
+    return {
+      pages: async () => [
+        {
+          url: () => current,
+          goto: async (url: string) => {
+            current = url;
+            return { status: 200 };
+          },
+          settle: async () => undefined,
+          extract: async () => extraction(),
+        },
+      ],
+      blocked: {
+        mutatingRequests: 0,
+        mutatingBeacons: 0,
+        downloads: 0,
+        externalNavigations: 0,
+        ...blocked,
+      },
+    };
+  }
+
+  it("does not downgrade a scan whose only blocked requests were beacons", async () => {
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserBlocking({ mutatingBeacons: 53 }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.snapshot.completeness.reasons).not.toContain("mutation_blocked");
+    expect(result.snapshot.completeness.status).toBe("complete");
+    // And it never claims surfaces may be missing on the strength of them.
+    expect(
+      result.snapshot.warnings.map((entry) => entry.code),
+    ).not.toContain("application_requires_mutating_method_for_render");
+  });
+
+  it("still downgrades when a request that could have rendered was blocked", async () => {
+    // A GraphQL POST is a `fetch`. Blocking one can genuinely leave a page
+    // half-rendered, and the result must keep saying so.
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserBlocking({ mutatingRequests: 1, mutatingBeacons: 52 }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.snapshot.completeness.reasons).toContain("mutation_blocked");
+    expect(result.snapshot.warnings.map((entry) => entry.code)).toContain(
+      "application_requires_mutating_method_for_render",
+    );
+  });
+
+  it("reports both counts, so the number is not silently smaller", async () => {
+    // Every non-GET is still refused. Hiding the beacons would replace one
+    // misleading number with another.
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserBlocking({ mutatingRequests: 2, mutatingBeacons: 51 }),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const blocked = result.snapshot.warnings.find(
+      (entry) => entry.code === "non_get_request_blocked",
+    );
+    expect(blocked?.message).toContain("53");
+    expect(blocked?.message).toContain("51");
+  });
+});
+
+/*
+ * The animation ran for ninety seconds and could not say whether anything was
+ * happening, because the analysis lives inside one request and reports nothing
+ * until it returns. The alternative on offer was a bar timed against a guess,
+ * which is a percentage nobody measured.
+ */
+describe("analyzeAuthenticatedProduct — progress is counted, never estimated", () => {
+  function browserWith(links: string[]) {
+    let current = `${ORIGIN}/app`;
+    return {
+      pages: async () => [
+        {
+          url: () => current,
+          goto: async (url: string) => {
+            current = url;
+            return { status: 200 };
+          },
+          settle: async () => undefined,
+          extract: async () => extraction({ sameOriginLinks: links }),
+        },
+      ],
+      blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
+    } satisfies AnalysisBrowserPort;
+  }
+
+  it("reports after every page, counting up by one", async () => {
+    const seen: number[] = [];
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([`${ORIGIN}/app/settings`, `${ORIGIN}/app/billing`]),
+      onProgress: ({ pagesInspected }) => seen.push(pagesInspected),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(seen).toEqual([1, 2, 3]);
+    // And the last number is the number in the snapshot: this is the same
+    // fact, reported earlier — not a second count that could disagree.
+    expect(seen.at(-1)).toBe(result.snapshot.crawl.pagesInspected);
+  });
+
+  it("carries the budget, so the number has a ceiling and not a forecast", async () => {
+    const seen: { pagesInspected: number; maxPages: number }[] = [];
+
+    await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([]),
+      onProgress: (progress) => seen.push(progress),
+    });
+
+    expect(seen[0]?.maxPages).toBe(DEFAULT_AUTHENTICATED_BUDGETS.maxPages);
+  });
+
+  it("does not move for a page that failed to load", async () => {
+    /*
+     * Progress is pages the snapshot has, not pages attempted. A page that
+     * could not be read taught us nothing, and a counter that moved for it
+     * would be counting Vibe's own failures as work.
+     */
+    let current = `${ORIGIN}/app`;
+    const seen: number[] = [];
+
+    await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: {
+        pages: async () => [
+          {
+            url: () => current,
+            goto: async (url: string) => {
+              if (url.endsWith("/app/broken")) throw new Error("page.goto: Timeout exceeded");
+              current = url;
+              return { status: 200 };
+            },
+            settle: async () => undefined,
+            extract: async () => extraction({ sameOriginLinks: [`${ORIGIN}/app/broken`] }),
+          },
+        ],
+        blocked: { mutatingRequests: 0, mutatingBeacons: 0, downloads: 0, externalNavigations: 0 },
+      },
+      onProgress: ({ pagesInspected }) => seen.push(pagesInspected),
+    });
+
+    // One page read, one page failed, one report.
+    expect(seen).toEqual([1]);
+  });
+
+  it("is optional, and a scan without it is unchanged", async () => {
+    const withReporter = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([`${ORIGIN}/app/settings`]),
+      onProgress: () => {},
+    });
+    const without = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser: browserWith([`${ORIGIN}/app/settings`]),
+    });
+
+    expect(withReporter.ok && without.ok).toBe(true);
+    if (!withReporter.ok || !without.ok) return;
+    expect(withReporter.snapshot.pages.map((page) => page.path)).toEqual(
+      without.snapshot.pages.map((page) => page.path),
+    );
   });
 });

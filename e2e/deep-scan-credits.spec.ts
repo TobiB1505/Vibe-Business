@@ -134,25 +134,71 @@ test.describe("a finished Deep Scan while a cooldown is in force", () => {
 });
 
 /*
- * Slice 3: a finished scan says what it could not check, behind a disclosure.
- * The snapshot has carried these warnings since it existed and the view model
- * dropped them, so "Check finished: only partly" was the entire account of a
- * scan that had specific things to report.
+ * Slice 3: a finished scan says what it noticed, behind a disclosure, grouped
+ * by what kind of statement each note is.
+ *
+ * The snapshot has carried these since it existed and the view model dropped
+ * them, so "Check finished: only partly" was once the entire account of a scan
+ * that had specific things to report. Then they arrived as one flat list under
+ * "N things Vibe could not check" — and a real scan produced six of them of
+ * which **one** was a failure. Two were facts Vibe had established by looking,
+ * one was the page budget working as designed, two were safety refusals.
+ *
+ * A founder reading that heading learns Vibe failed six times. It failed once.
+ * Only a browser says what the heading actually reads (rule 69).
  */
-test.describe("what a finished scan could not check", () => {
-  test("keeps the caveats behind a label that counts them", async ({ page }) => {
+test.describe("what a finished scan reports about itself", () => {
+  test("counts failures, and groups the rest as what it is", async ({ page }) => {
     await page.goto("/e2e/deep-scan-completed-with-warnings");
 
-    // The result leads. The caveats are not above it.
-    await expect(page.getByText("Pages Vibe looked at")).toBeVisible();
+    /*
+     * The finding leads. This card opened with a three-row definition list and
+     * put what Vibe had actually found underneath it as small grey chips — a
+     * receipt with the answer stapled to the back.
+     */
+    const surfaces = page.getByText("Surfaces Vibe recognised");
+    const receipt = page.getByText("Pages Vibe looked at");
+    await expect(surfaces).toBeVisible();
+    await expect(receipt).toBeVisible();
 
-    const disclosure = page.getByText("2 things Vibe could not check");
+    const surfacesBox = await surfaces.boundingBox();
+    const receiptBox = await receipt.boundingBox();
+    expect(surfacesBox!.y).toBeLessThan(receiptBox!.y);
+
+    /*
+     * And the scan is not called half-done for having behaved.
+     *
+     * "Only partly", in amber, was the whole account of a scan whose single
+     * limit was that Vibe refuses every non-GET request — which it does
+     * because the session is the founder's own, and always will.
+     */
+    await expect(page.getByText("Yes, within Vibe's limits")).toBeVisible();
+    await expect(page.getByText(/refuses anything that could change your data/i)).toBeVisible();
+    await expect(page.getByText(/by design and not by configuration/i)).toBeVisible();
+
+    // One failure in three notes, and the label says exactly that.
+    const disclosure = page.getByText("1 page Vibe could not read · 2 notes");
     await expect(disclosure).toBeVisible();
 
     // Counted before it is opened, so the label is the size of what is behind it.
     await expect(page.getByText(/took too long to load/i)).toBeHidden();
     await disclosure.click();
+
+    await expect(page.getByText("Could not be read")).toBeVisible();
     await expect(page.getByText(/took too long to load/i)).toBeVisible();
-    await expect(page.getByText(/could not tell two settings pages apart/i)).toBeVisible();
+
+    await expect(page.getByText("Stopped on purpose")).toBeVisible();
+    await expect(page.getByText(/exist in more copies/i)).toBeVisible();
+
+    await expect(page.getByText("Left alone")).toBeVisible();
+    await expect(page.getByText(/redirected to a page Vibe had already/i)).toBeVisible();
+
+    /*
+     * And the path, which is what tells two notes apart. A real scan produced
+     * two identical redirect sentences with nothing between them, and that is
+     * how a correct message reads as the same message printed twice.
+     */
+    await expect(page.getByText("/app/onboarding")).toBeVisible();
+    await expect(page.getByText("/app/reports")).toBeVisible();
   });
 });

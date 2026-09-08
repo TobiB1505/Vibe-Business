@@ -630,3 +630,51 @@ export async function recordDeepScanUsage(
     });
   }
 }
+
+/**
+ * How far a running analysis has got.
+ *
+ * `pages_inspected` already exists on the row and is written at completion;
+ * this writes it *during* the crawl so a founder can see the number move. No
+ * new column, and deliberately so: the alternative was a schema change for an
+ * animation, and this one is the same fact a completed row already carries.
+ *
+ * Best effort by contract. Progress is a nicety and a scan is not — a failed
+ * update must never take a crawl down with it, so this swallows its error and
+ * the caller does not check.
+ */
+export async function recordSnapshotProgress(
+  supabase: SupabaseClient,
+  snapshotId: string,
+  pagesInspected: number,
+): Promise<void> {
+  await supabase
+    .from("authenticated_product_intelligence_snapshots")
+    .update({ pages_inspected: pagesInspected })
+    .eq("id", snapshotId)
+    // Only while it is still running. A late write must not touch a row that
+    // has already been completed or failed with its real count.
+    .eq("status", "analyzing");
+}
+
+/**
+ * The count a running analysis has reached, for the caller's own session.
+ *
+ * Reads the in-flight row rather than any row: a finished scan's number is in
+ * the result, and showing it as progress would restart a bar over a scan that
+ * is over.
+ */
+export async function getRunningSnapshotProgress(
+  supabase: SupabaseClient,
+  sessionId: string,
+): Promise<{ pagesInspected: number } | null> {
+  const { data, error } = await supabase
+    .from("authenticated_product_intelligence_snapshots")
+    .select("pages_inspected")
+    .eq("session_id", sessionId)
+    .eq("status", "analyzing")
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return { pagesInspected: typeof data.pages_inspected === "number" ? data.pages_inspected : 0 };
+}

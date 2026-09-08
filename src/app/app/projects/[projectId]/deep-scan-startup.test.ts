@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { startupSteps, type BrowserStartupStage } from "./deep-scan-panel";
+import { formatCountdown, startupSteps, type BrowserStartupStage } from "./deep-scan-panel";
 
 /**
  * What fills the wait between clicking start and seeing a browser.
@@ -83,7 +83,7 @@ describe("the wait is opened by the click, not by the answer", () => {
 
   it("shows the dialog before the server action is awaited", () => {
     const opened = source.indexOf('setStage("starting");\n    setDialogOpen(true);');
-    const awaited = source.indexOf("await startDeepScanAction(projectId)");
+    const awaited = source.indexOf("await startDeepScanAction(projectId,");
 
     expect(opened).toBeGreaterThan(0);
     expect(opened).toBeLessThan(awaited);
@@ -133,7 +133,7 @@ describe("a browser that cannot be reached says so", () => {
     // Two panels in the same box would show a spinner next to the sentence
     // saying the spinner is wrong.
     expect(source).toContain('{!error && unreachable && (');
-    expect(source).toContain('{!error && !unreachable && stage !== "ready" && (');
+    expect(source).toContain('{!error && !expired && !unreachable && stage !== "ready" && (');
   });
 
   it("stops the startup clock once waiting is over", () => {
@@ -152,5 +152,121 @@ describe("a browser that cannot be reached says so", () => {
   it("clears the failure whenever a fresh view is fetched", () => {
     const load = source.slice(source.indexOf("const loadLiveView = useCallback"));
     expect(load.slice(0, load.indexOf("const result"))).toContain("setUnreachable(false)");
+  });
+});
+
+/*
+ * A founder on a high-density display said the preview looked wrong
+ * "resolution-wise". Two separate causes, and the second is the dangerous one.
+ *
+ * The box was `aspect-[16/10]`, a Tailwind class restating
+ * `BROWSER_SANDBOX.viewport` from another module, with nothing keeping the two
+ * equal. A disagreement stretches the frame — and stretching is the worst kind
+ * of wrong here, because the click coordinates are computed from this
+ * element's own geometry and still look correct in code. The only symptom is
+ * a person's tap landing somewhere else on their own signed-in product.
+ */
+describe("the picture is never stretched to fit a box", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  it("sizes the box from the frame that actually arrived", () => {
+    expect(source).toContain("aspectRatio: frame ? `${frame.w} / ${frame.h}`");
+    // The constant is gone, not merely overridden.
+    expect(source).not.toContain("aspect-[16/10] w-full");
+  });
+
+  it("keeps the viewport's ratio only as the guess before a frame exists", () => {
+    expect(source).toContain('"16 / 10"');
+  });
+
+  it("does not re-render the dialog on every painted frame", () => {
+    // `onPainted` fires per frame. A new object each time would re-render the
+    // whole dialog sixty times a second to report the same two numbers.
+    const painted = source.slice(source.indexOf("const handlePainted = useCallback"));
+    expect(painted.slice(0, painted.indexOf("}, ["))).toContain(
+      "current.w === painted.w && current.h === painted.h ? current : painted",
+    );
+  });
+
+  it("forgets the shape when the dialog closes", () => {
+    // A stale ratio would size the next session's box before its first frame.
+    const close = source.slice(source.indexOf("const closeDialog = useCallback"));
+    expect(close.slice(0, close.indexOf("}, ["))).toContain("setFrame(null)");
+  });
+});
+
+/*
+ * A sandbox bills for every second it exists, and this one exists to hold a
+ * login form. Ten minutes of it — the provider ceiling — is nine minutes of
+ * paying for an empty room when somebody walks away mid-flow.
+ */
+describe("the login deadline is visible before it bites", () => {
+  const source = readFileSync(
+    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-panel.tsx"),
+    "utf8",
+  );
+
+  it("reads as a clock, because people read clocks", () => {
+    expect(formatCountdown(120)).toBe("2:00");
+    expect(formatCountdown(95)).toBe("1:35");
+    expect(formatCountdown(9)).toBe("0:09");
+    expect(formatCountdown(0)).toBe("0:00");
+  });
+
+  it("never shows a negative or a fractional second", () => {
+    expect(formatCountdown(-4)).toBe("0:00");
+    expect(formatCountdown(59.7)).toBe("0:59");
+  });
+
+  it("starts when the browser is on screen, not when the dialog opens", () => {
+    /*
+     * A cold sandbox can take two minutes to build. Charging that to the
+     * founder's sign-in time would be billing them for Vibe's own wait.
+     */
+    expect(source).toContain('stage === "ready" && !busy && !sealing && !expired && !unreachable');
+  });
+
+  it("stops as soon as the scan starts", () => {
+    // `!busy` covers the auto-start firing near the deadline: once Vibe is
+    // reading, the founder is no longer signing in and the clock is over.
+    const armed = source.slice(source.indexOf("const loginSecondsLeft = useLoginCountdown("));
+    expect(armed.slice(0, armed.indexOf(");"))).toContain("!busy");
+  });
+
+  it("ends the browser rather than leaving it running", () => {
+    const expired = source.slice(source.indexOf("const handleLoginExpired = useCallback"));
+    const body = expired.slice(0, expired.indexOf("}, ["));
+    expect(body).toContain("cancelDeepScanAction");
+  });
+
+  it("says what happened where the founder was looking", () => {
+    /*
+     * It used to terminate the browser, close the dialog, and leave a sentence
+     * in the panel behind — so from the founder's side the window vanished
+     * while they were typing a password. The dialog now stays and explains.
+     */
+    const expired = source.slice(source.indexOf("const handleLoginExpired = useCallback"));
+    const body = expired.slice(0, expired.indexOf("}, ["));
+    expect(body).toContain("setExpired(true)");
+    expect(body).not.toContain("closeDialog()");
+
+    /*
+     * The copy itself is asserted in the browser, where it is rendered rather
+     * than line-wrapped by a formatter. A source-text match on a paragraph is
+     * a test of Prettier's wrap width, which is not a thing worth failing on.
+     */
+    expect(source).toContain("Sign-in took longer than two minutes");
+  });
+
+  it("does not hand out a fresh two minutes on every render", () => {
+    // The deadline is set once per arming. A hook that re-derived it per
+    // render is a clock that never runs down.
+    const hook = source.slice(source.indexOf("function useLoginCountdown"));
+    const body = hook.slice(0, hook.indexOf("\n}"));
+    expect(body).toContain("}, [armed, onExpired]);");
+    expect(body).toContain("deadlineRef.current = Date.now() + LOGIN_DEADLINE_MS;");
   });
 });

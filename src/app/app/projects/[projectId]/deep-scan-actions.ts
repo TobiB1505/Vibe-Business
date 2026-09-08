@@ -40,6 +40,16 @@ export type LiveViewActionState =
 
 export type SimpleDeepScanActionState = { ok: true } | { ok: false; error: DeepScanActionFailure };
 
+/*
+ * The progress read is deliberately **not** here.
+ *
+ * It was, and it could never have worked: Next.js executes Server Actions from
+ * one client one at a time, and the analysis is itself an action that runs for
+ * ninety seconds — so every poll queued behind it and arrived in a burst after
+ * it finished. It lives at `/api/deep-scan/[sessionId]/progress`, which is an
+ * ordinary request and is not queued behind anything.
+ */
+
 export type SignInProbeActionState =
   | { ok: true; signedIn: boolean }
   | { ok: false; error: DeepScanActionFailure };
@@ -57,13 +67,26 @@ function provider() {
   return getBrowserSessionProvider();
 }
 
-export async function startDeepScanAction(projectId: string): Promise<StartDeepScanActionState> {
+export async function startDeepScanAction(
+  projectId: string,
+  /**
+   * The shape of screen the founder is signing in from.
+   *
+   * A hint, not an instruction: the service re-validates it against a closed
+   * set, and the analysis viewport is fixed regardless of what arrives here.
+   */
+  viewport?: string,
+): Promise<StartDeepScanActionState> {
   const session = await requireSession();
   const supabase = await createClient();
 
   let result;
   try {
-    result = await startDeepScan(supabase, provider(), { projectId, userId: session.userId });
+    result = await startDeepScan(supabase, provider(), {
+      projectId,
+      userId: session.userId,
+      viewport,
+    });
   } catch {
     // Reaching here means the provider could not even be constructed — a
     // configuration problem, not a user-facing failure of their product.

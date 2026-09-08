@@ -973,3 +973,87 @@ describe("probeDeepScanSignIn — a question, not an action", () => {
     expect(releaseMock).not.toHaveBeenCalled();
   });
 });
+
+/*
+ * The login window follows the founder's device, because a phone driving a
+ * 1920-pixel page is the fiddliest part of this flow. That means a value from
+ * a client decides a window Chromium is launched with — so it is a name from a
+ * closed set, and this is where the set is enforced.
+ */
+describe("startDeepScan — the viewport hint is a name, never a size", () => {
+  it("passes the mobile shape through when the founder is on a phone", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER, viewport: "mobile" });
+
+    expect(provider.createdWith).toEqual({ viewport: "mobile" });
+  });
+
+  it("refuses anything that is not one of the two shapes", async () => {
+    for (const hint of ["", "1920x1200", "--headless", "../../etc", "DESKTOP", "tablet"]) {
+      const { supabase, projectId } = setup();
+      const provider = new FakeBrowserProvider();
+
+      await startDeepScan(supabase, provider, { projectId, userId: OWNER, viewport: hint });
+
+      // Not rejected — normalised. An unrecognised hint is a client Vibe does
+      // not recognise, not an attack to fail the scan over, and desktop is the
+      // shape the analysis uses anyway.
+      expect(provider.createdWith, hint).toEqual({ viewport: "desktop" });
+    }
+  });
+
+  it("defaults to desktop when no hint is given at all", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(provider.createdWith).toEqual({ viewport: "desktop" });
+  });
+});
+
+/*
+ * Progress is a nicety and a scan is not. The write goes to a row that is
+ * being read while it is being written, and it must never be able to take the
+ * crawl down with it.
+ */
+describe("startDeepScan → analyzeDeepScan — progress while it runs", () => {
+  it("writes the count as pages are read, on the running row", async () => {
+    const { db, supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    const counts: number[] = [];
+    analyzeMock.mockImplementation(async (input: { onProgress?: (p: { pagesInspected: number }) => void }) => {
+      // Stand in for the crawl: three pages, reported one at a time.
+      for (const n of [1, 2, 3]) {
+        input.onProgress?.({ pagesInspected: n });
+        // The write is fire-and-forget, so give it a turn to land.
+        await Promise.resolve();
+        const row = db.rows("authenticated_product_intelligence_snapshots").at(-1);
+        counts.push(Number(row?.pages_inspected ?? -1));
+      }
+      return { ok: true, snapshot: fakeSnapshot() };
+    });
+
+    await runFullScan(supabase, provider, projectId);
+
+    expect(counts).toEqual([1, 2, 3]);
+  });
+
+  it("does not fail a scan when the progress write fails", async () => {
+    const { supabase, projectId } = setup();
+    const provider = new FakeBrowserProvider();
+
+    analyzeMock.mockImplementation(async (input: { onProgress?: (p: { pagesInspected: number }) => void }) => {
+      // A rejected write, exactly as a dropped connection would produce.
+      input.onProgress?.({ pagesInspected: Number.NaN });
+      return { ok: true, snapshot: fakeSnapshot() };
+    });
+
+    const { analyzed } = await runFullScan(supabase, provider, projectId);
+
+    expect(analyzed.ok).toBe(true);
+  });
+});

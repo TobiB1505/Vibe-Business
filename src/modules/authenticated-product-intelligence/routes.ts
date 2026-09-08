@@ -38,15 +38,43 @@ export type RouteCandidate = {
 };
 
 /**
+ * Authentication surfaces, named once and shared.
+ *
+ * A real scan inspected `/reset-password` while signed in — a page nobody
+ * signed in ever sees, holding no product, costing one of twenty-five pages.
+ * The reason it got through is that this module held **two** lists of what an
+ * auth page is and they disagreed: `NEVER_VISIT` knew about login and signup,
+ * and `login-detection.ts` knew about reset, verification and MFA because it
+ * had to. A path was an auth page in one file and product in the other.
+ *
+ * So the unambiguous ones live here and both callers read them. Only the
+ * unambiguous ones: `confirm` and `callback` are *not* in this list even
+ * though the sign-in probe treats them as auth, because the two questions
+ * carry opposite risks. Delaying an unprompted scan start by one poll costs
+ * nothing; refusing to visit `/orders/confirm` would silently drop a real
+ * product surface. `login-detection.ts` documents its own additions.
+ */
+export const AUTH_SURFACE_PATHS = [
+  /(^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|anmelden|registrieren)(\/|$)/i,
+  /(^|\/)(forgot|reset|recover)(-|\/|$)/i,
+  /(^|\/)(verify|verification|mfa|2fa|otp)(\/|$)/i,
+];
+
+export function isAuthSurfacePath(path: string): boolean {
+  return AUTH_SURFACE_PATHS.some((pattern) => pattern.test(path));
+}
+
+/**
  * Paths that are never worth an authenticated navigation.
  *
  * `logout` is the important one: visiting it would end the very session we are
- * analysing (Sprint 5 §17). The rest are auth surfaces we have already
- * analysed anonymously, or destructive-by-name endpoints.
+ * analysing (Sprint 5 §17). The rest are auth surfaces — which a signed-in
+ * person never sees, so they hold no authenticated product — or
+ * destructive-by-name endpoints.
  */
 const NEVER_VISIT = [
-  /(^|\/)(logout|signout|sign-out|log-out)(\/|$)/i,
-  /(^|\/)(login|signin|sign-in|log-in|signup|sign-up|register)(\/|$)/i,
+  /(^|\/)(logout|signout|sign-out|log-out|abmelden|ausloggen)(\/|$)/i,
+  ...AUTH_SURFACE_PATHS,
   /(^|\/)(delete|destroy|remove|cancel|unsubscribe|checkout|pay|purchase)(\/|$)/i,
 ];
 

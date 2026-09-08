@@ -4,6 +4,7 @@ import {
   DENIED_PERMISSIONS,
   FORBIDDEN_INTERACTIONS,
   SAFE_METHODS,
+  couldHaveRenderedPage,
   decideRequest,
   shouldBlockDownload,
 } from "./read-only-policy";
@@ -96,5 +97,46 @@ describe("capability denial", () => {
     for (const interaction of ["click", "fill", "type", "setInputFiles"]) {
       expect(FORBIDDEN_INTERACTIONS).toContain(interaction);
     }
+  });
+});
+
+/*
+ * A scan of 21 pages reported 53 blocked non-GET requests and downgraded
+ * itself to `partial` on all of them: *parts of this application may render
+ * via non-GET requests*. Most of the 53 were analytics beacons, fired once per
+ * page view. A blocked beacon cannot change what a page displays, and saying
+ * it might is not caution — it is a false statement that costs a founder
+ * confidence in a scan that worked.
+ *
+ * The blocking is unchanged. Every non-GET is still refused. What this decides
+ * is only what Vibe concludes from having refused it.
+ */
+describe("couldHaveRenderedPage", () => {
+  it("clears the kinds that are definitionally not page data", () => {
+    for (const type of ["ping", "image", "media", "font", "manifest", "texttrack"]) {
+      expect(couldHaveRenderedPage(type), type).toBe(false);
+    }
+  });
+
+  it("keeps every kind that could carry a page's data", () => {
+    // A GraphQL mutation is a `fetch`; a form post is a `document`. These are
+    // exactly the requests whose absence can leave a page half-rendered.
+    for (const type of ["fetch", "xhr", "document", "eventsource", "script", "stylesheet"]) {
+      expect(couldHaveRenderedPage(type), type).toBe(true);
+    }
+  });
+
+  it("treats an unrecognised kind as capable, never as harmless", () => {
+    // The list is an allow-list of things proven inert. Anything else — a new
+    // resource type, a provider that reports something unexpected — must fall
+    // on the cautious side, because the cost of the two errors is not equal.
+    for (const type of ["other", "websocket", "", "prefetch", "signedexchange"]) {
+      expect(couldHaveRenderedPage(type), type).toBe(true);
+    }
+  });
+
+  it("does not depend on casing", () => {
+    expect(couldHaveRenderedPage("PING")).toBe(false);
+    expect(couldHaveRenderedPage("Image")).toBe(false);
   });
 });

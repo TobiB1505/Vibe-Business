@@ -153,6 +153,7 @@ These six must be scoped to **Production only** in Vercel:
 | Variable | What a Preview holding it can do |
 |---|---|
 | `SUPABASE_SERVICE_ROLE_KEY` | Bypass RLS and read or write any tenant's rows |
+| `SUPABASE_ACCESS_TOKEN` | Read the linked project's migration history. Local and CI only — never a deployed environment. Absent means the session-start drift report says so and exits, rather than failing the session ([ADR 0096](../decisions/0096-a-contradiction-is-not-a-measurement.md)) |
 | `ANTHROPIC_API_KEY` | Spend real money on inference |
 | `VIBE_AGENT_GATEWAY_SECRET` | Mint tokens the gateway accepts, against the production budget |
 | `STRIPE_SECRET_KEY` (live) | Move real money |
