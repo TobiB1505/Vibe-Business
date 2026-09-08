@@ -79,23 +79,61 @@ export type InlineVariant = "ghost" | "danger";
  */
 export type ButtonSize = "normal" | "marketing";
 
+/**
+ * The skin (UI-27), chosen from `study-button-look` — treatment 3, "Verlauf
+ * und Lichtkante", against four alternatives rendered at rest and in hover.
+ *
+ * ## One mechanism, four variants
+ *
+ * A control has a **surface**, not a colour: a wash down the face, a lit top
+ * edge, and — on the accent — the glow underneath. The wash is white over
+ * black rather than a pair of hand-mixed hexes, which is what lets the same
+ * two stops work over mint, over coral and over a 4%-white neutral. Three
+ * intensities, because what reads as lit on a saturated fill bleaches a
+ * neutral one.
+ *
+ * ## Hover raises the light, it does not change the colour
+ *
+ * `primary` used to swap `bg-mint` for `bg-mint-hover` — a different green
+ * under the pointer. It lifts the sheen instead, so the button stays the one
+ * mint and the hover reads as light arriving rather than as a second brand
+ * colour. `--color-mint-hover` is still the hover for mint *text*, which is
+ * where it belongs.
+ *
+ * ## The two arguments that came before the skin, and survive it
+ *
+ * **A container exists at rest** — touch has no hover, so a control whose
+ * container only arrives under a pointer is not a control on a phone. Every
+ * variant below has a resting fill, and the sheen sits on top of it rather
+ * than standing in for it.
+ *
+ * **Destruction warns at rest** — `danger` carries a coral fill, line and
+ * text from the first frame, and its sheen is coral rather than white so the
+ * warning is not washed grey.
+ */
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
-  primary: "bg-mint text-mint-ink font-bold shadow-mint hover:bg-mint-hover",
+  primary:
+    "bg-mint bg-gradient-to-b from-sheen-lift to-sheen-sink text-mint-ink font-bold " +
+    "shadow-mint-sheen hover:from-sheen-lift-strong hover:shadow-mint-sheen-strong",
   secondary:
-    "bg-surface-hover text-fg-body border border-line-strong hover:bg-white/10 hover:text-fg",
+    "bg-surface-hover bg-gradient-to-b from-sheen-soft to-transparent text-fg-body " +
+    "border border-line-strong shadow-sheen " +
+    "hover:from-sheen-soft-strong hover:text-fg hover:shadow-sheen-strong",
   // A resting container, then hover, then a press that is a visible step past
   // it. A pointer gets three states and a finger gets two, and the last one is
   // the only feedback touch ever receives.
   ghost:
-    "bg-surface-3 text-fg-secondary hover:bg-surface-hover hover:text-fg " +
+    "bg-surface-3 bg-gradient-to-b from-sheen-soft to-transparent text-fg-secondary shadow-sheen " +
+    "hover:from-sheen-soft-strong hover:text-fg hover:shadow-sheen-strong " +
     "active:bg-surface-pressed active:text-fg",
   // Coral at rest, deepening on hover and again on press. `--color-coral-pressed`
   // exists for that third step; without it hover and press were the same value,
   // which is a control that stops responding exactly where a finger presses
   // hardest.
   danger:
-    "border border-coral-line bg-coral-tint-soft text-coral " +
-    "hover:bg-coral-tint active:bg-coral-pressed",
+    "border border-coral-line bg-coral-tint-soft bg-gradient-to-b from-sheen-warn to-transparent " +
+    "text-coral shadow-coral-sheen " +
+    "hover:from-sheen-warn-strong hover:shadow-coral-sheen-strong active:bg-coral-pressed",
 };
 
 /**
@@ -173,8 +211,12 @@ const BASE_CLASSES =
   // the coral line is replaced rather than merely faded. Per the writing rules
   // it should also be accompanied by a reason somewhere on screen; the button
   // itself cannot enforce that.
+  // `disabled:bg-none` and not only `disabled:shadow-none`: the sheen is a
+  // `background-image`, which a background-colour utility does not replace and
+  // `shadow-none` does not reach. Without it a disabled primary keeps a 36%
+  // white wash over the disabled grey and reads as a lit, pressable control.
   "disabled:pointer-events-none disabled:border disabled:border-line-2 disabled:bg-surface-3 " +
-  "disabled:text-fg-disabled disabled:shadow-none disabled:font-normal";
+  "disabled:bg-none disabled:text-fg-disabled disabled:shadow-none disabled:font-normal";
 
 /**
  * The classes, separately from the component, for the 28 `<Link>` and `<span>`

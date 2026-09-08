@@ -79,6 +79,23 @@
   --color-coral-tint-soft: rgb(255 122 92 / 0.06);
   --color-coral-line: rgb(255 122 92 / 0.32);
   --color-coral-pressed: rgb(255 122 92 / 0.24);
+
+  /* ── The sheen (UI-27) ───────────────────────────────────────────────
+     A control has a surface, not a colour. Founder's pick from
+     `study-button-look`: a wash down the face, a lit top edge, and the
+     glow underneath — one mechanism, applied at three intensities because
+     what reads as "lit" on a saturated fill would bleach a neutral one.
+
+     A wash rather than a pair of hand-mixed hexes, so the same two stops
+     work over mint, over coral and over a 4%-white surface. `-strong` is
+     the hover step: the light rises, the button does not change colour. */
+  --color-sheen-lift: rgb(255 255 255 / 0.36);
+  --color-sheen-lift-strong: rgb(255 255 255 / 0.46);
+  --color-sheen-sink: rgb(0 0 0 / 0.12);
+  --color-sheen-soft: rgb(255 255 255 / 0.05);
+  --color-sheen-soft-strong: rgb(255 255 255 / 0.1);
+  --color-sheen-warn: rgb(255 122 92 / 0.13);
+  --color-sheen-warn-strong: rgb(255 122 92 / 0.22);
   /* Gold is an object, not a surface — see the note in globals.css. Same
      five values, so a Credit is the same coin in either palette. */
   --color-gold-light: #ffdd8f;

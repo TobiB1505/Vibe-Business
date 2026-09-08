@@ -33,8 +33,12 @@ import { describe, expect, it } from "vitest";
  * a description of the product, not a menu.
  */
 
+/** Code, not the prose about it — this file's own docblock names all five. */
+function withoutComments(text: string): string {
+  return text.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
+}
+
 const BUTTON = "src/components/ui/button.tsx";
-const SOURCE = readFileSync(BUTTON, "utf8");
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
@@ -52,10 +56,17 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
  */
 const STUDIES = "src/app/e2e/design-studies/";
 
-/** Code, not the prose about it — this file's own docblock names all five. */
-function withoutComments(text: string): string {
-  return text.replace(/\{?\/\*[\s\S]*?\*\/\}?/g, " ").replace(/\/\/[^\n]*/g, " ");
-}
+/**
+ * The button's own source, **without its prose**.
+ *
+ * Not a precaution: a mutation removing `disabled:bg-none` from the class list
+ * left this file green, because the comment above that class explains it by
+ * name and a raw-source assertion read the explanation as the code. Sprint
+ * 0154 lost a `role="alert"` this way and 0162 lost a `<select>`; this is the
+ * third time, and it is the reason every assertion below reads `SOURCE` and
+ * nothing reads the file.
+ */
+const SOURCE = withoutComments(readFileSync(BUTTON, "utf8"));
 
 const PRODUCT = sourceFiles("src")
   .filter((path) => path !== BUTTON && !path.startsWith(STUDIES))
@@ -158,14 +169,44 @@ describe("the two arguments a phone made", () => {
    */
   it("gives every variant a container at rest", () => {
     for (const [variant, classes] of Object.entries(variantClasses())) {
-      const resting = classes
-        .split(/\s+/)
-        .filter((token) => !token.startsWith("hover:") && !token.startsWith("active:"));
+      // `bg-gradient-to-b` starts with `bg-` and paints no fill of its own —
+      // it is a `background-image` over whatever colour is underneath. Since
+      // UI-27 every variant carries one, so a naive `startsWith("bg-")` would
+      // pass on a variant that has *only* the sheen and no ground at all.
       expect(
-        resting.some((token) => token.startsWith("bg-")),
+        restingFill(classes),
         `${variant} has no resting fill — on a phone it is not a control until it is pressed`,
       ).toBe(true);
     }
+  });
+
+  it("answers a pointer on every variant", () => {
+    // The sheen is what hover moves since UI-27 — the fill stays put, the
+    // light rises. A variant with no hover step is a control that does not
+    // acknowledge the pointer at all, which is how `accent` used to read.
+    for (const [variant, classes] of Object.entries(variantClasses())) {
+      expect(
+        /hover:(from-|bg-)/.test(classes),
+        `${variant} does not answer a pointer`,
+      ).toBe(true);
+    }
+  });
+
+  it("keeps the sheen from standing in for a fill", () => {
+    // The guard above, checked against its own loophole: a variant that is
+    // gradient and nothing else must fail it.
+    expect(restingFill("bg-gradient-to-b from-sheen-soft to-transparent text-fg")).toBe(false);
+    expect(restingFill("bg-surface-3 bg-gradient-to-b from-sheen-soft to-transparent")).toBe(true);
+  });
+
+  it("takes the light off a control that cannot be pressed", () => {
+    /*
+     * The sheen is a `background-image`. `disabled:bg-surface-3` replaces the
+     * background *colour* and `disabled:shadow-none` reaches the box-shadow —
+     * neither touches the wash, so without `bg-none` a disabled primary keeps
+     * a 36% white gradient over the disabled grey and reads as lit.
+     */
+    expect(SOURCE).toContain("disabled:bg-none");
   });
 
   it("makes the destructive one warn before it is touched", () => {
@@ -180,6 +221,21 @@ describe("the two arguments a phone made", () => {
     expect(resting).toContain("text-coral");
   });
 });
+
+/** A real ground, as opposed to the wash that sits on one. */
+function restingFill(classes: string): boolean {
+  return classes
+    .split(/\s+/)
+    .filter((token) => !token.startsWith("hover:") && !token.startsWith("active:"))
+    .some(
+      (token) =>
+        token.startsWith("bg-") &&
+        !token.startsWith("bg-gradient-") &&
+        !token.startsWith("bg-linear-") &&
+        token !== "bg-transparent" &&
+        token !== "bg-none",
+    );
+}
 
 function variantClasses(): Record<string, string> {
   const body = block("VARIANT_CLASSES");

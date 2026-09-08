@@ -141,6 +141,23 @@
      above both or the last state a finger reaches says nothing. */
   --color-coral-pressed: rgb(255 122 92 / 0.22);
 
+  /* ── The sheen (UI-27) ───────────────────────────────────────────────
+     A control has a surface, not a colour. Founder's pick from
+     `study-button-look`: a wash down the face, a lit top edge, and the
+     glow underneath — one mechanism, applied at three intensities because
+     what reads as "lit" on a saturated fill would bleach a neutral one.
+
+     A wash rather than a pair of hand-mixed hexes, so the same two stops
+     work over mint, over coral and over a 4%-white surface. `-strong` is
+     the hover step: the light rises, the button does not change colour. */
+  --color-sheen-lift: rgb(255 255 255 / 0.36);
+  --color-sheen-lift-strong: rgb(255 255 255 / 0.46);
+  --color-sheen-sink: rgb(0 0 0 / 0.12);
+  --color-sheen-soft: rgb(255 255 255 / 0.05);
+  --color-sheen-soft-strong: rgb(255 255 255 / 0.1);
+  --color-sheen-warn: rgb(255 122 92 / 0.13);
+  --color-sheen-warn-strong: rgb(255 122 92 / 0.22);
+
   /* ── Type ────────────────────────────────────────────────────────────
      Product UI uses the operating system's native interface family. On
      Apple devices that is SF Pro, on Windows Segoe UI Variable. Inter is
@@ -358,6 +375,16 @@
   --shadow-panel: 0 24px 60px -30px rgb(0 0 0 / 0.8);
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.08) inset, 0 30px 70px -30px rgb(0 0 0 / 0.8);
   --shadow-mint: 0 14px 34px -12px rgb(0 229 160 / 0.6);
+  /* The lit top edge, and the glow it sits above (UI-27). The inset is
+     what makes a fill read as a face rather than as a rectangle of colour;
+     it is brighter on the accent because a saturated fill swallows it. */
+  --shadow-sheen: inset 0 1px 0 rgb(255 255 255 / 0.09);
+  --shadow-sheen-strong: inset 0 1px 0 rgb(255 255 255 / 0.14);
+  --shadow-mint-sheen: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 12px 30px -12px rgb(0 229 160 / 0.75);
+  --shadow-mint-sheen-strong:
+    inset 0 1px 0 rgb(255 255 255 / 0.6), 0 16px 38px -10px rgb(0 229 160 / 0.95);
+  --shadow-coral-sheen: inset 0 1px 0 rgb(255 122 92 / 0.2);
+  --shadow-coral-sheen-strong: inset 0 1px 0 rgb(255 122 92 / 0.3);
   --shadow-dot-mint: 0 0 8px 1px rgb(0 229 160 / 0.6);
   --shadow-dot-amber: 0 0 8px 1px rgb(232 181 74 / 0.5);
 

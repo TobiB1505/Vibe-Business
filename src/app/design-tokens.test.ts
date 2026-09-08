@@ -235,8 +235,13 @@ describe("every colour a class name asks for exists", () => {
    * so a name with no token is not a compile error and not a runtime error:
    * it is a silent no-op on exactly the text that most needed to be seen.
    */
+  /*
+   * `from|to|via` are here because UI-27 made gradient stops carry tokens, and
+   * a stop with no token fails exactly the way `text-danger` did: Tailwind
+   * emits nothing, the wash silently disappears, and no build says so.
+   */
   const COLOUR_UTILITIES =
-    /\b(?:text|bg|border)-((?:fg|mint|amber|coral|surface|line|danger|success|warning|error)(?:-[a-z0-9]+)*)\b/g;
+    /\b(?:text|bg|border|from|to|via)-((?:fg|mint|amber|coral|surface|line|sheen|danger|success|warning|error)(?:-[a-z0-9]+)*)\b/g;
 
   it("resolves every colour utility used in the app to a token", () => {
     const sources = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
