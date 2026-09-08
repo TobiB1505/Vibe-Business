@@ -95,6 +95,7 @@ import {
   RAIL_SCENARIO,
   REPOSITORIES_SCENARIO,
   PROFILE_SCENARIO,
+  PRODUCTS_SCENARIO,
   SHIPPED_FIRST_RUN_SCENARIO,
   SHIPPED_OPENING_SCENARIO,
   STUDIES,
@@ -190,6 +191,7 @@ import { StudyButtonLook } from "../design-studies/study-button-look";
 import { StudyCta } from "../design-studies/study-cta";
 import { StudyRepositories } from "../design-studies/study-repositories";
 import { StudyProfile } from "../design-studies/study-profile";
+import { StudyProducts } from "../design-studies/study-products";
 import { StudyIconActions } from "../design-studies/study-icon-actions";
 import { StudyMark } from "../design-studies/study-mark";
 import { StudyDismiss } from "../design-studies/study-dismiss";
@@ -791,6 +793,7 @@ export default async function E2eScenarioPage({
     [CTA_SCENARIO]: StudyCta,
     [REPOSITORIES_SCENARIO]: StudyRepositories,
     [PROFILE_SCENARIO]: StudyProfile,
+    [PRODUCTS_SCENARIO]: StudyProducts,
     [ICON_ACTIONS_SCENARIO]: StudyIconActions,
     [MARK_SCENARIO]: StudyMark,
     [DISMISS_SCENARIO]: StudyDismiss,

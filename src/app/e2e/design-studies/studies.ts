@@ -175,6 +175,9 @@ export const REPOSITORIES_SCENARIO = "study-repositories";
 /** What shape a page holds two facts in — the Profile page, four ways. */
 export const PROFILE_SCENARIO = "study-profile";
 
+/** Whether the products page is a list or a wall of cards. */
+export const PRODUCTS_SCENARIO = "study-products";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 
