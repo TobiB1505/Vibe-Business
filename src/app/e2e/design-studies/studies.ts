@@ -160,6 +160,9 @@ export const DISCLOSURE_SCENARIO = "study-disclosure";
 /** What the action work left open: the links, and how loud a delete is. */
 export const LINKS_SCENARIO = "study-links";
 
+/** Which button, and how many of it — four systems against the six real jobs. */
+export const BUTTON_SCENARIO = "study-button";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 
