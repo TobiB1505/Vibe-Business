@@ -166,6 +166,9 @@ export const BUTTON_SCENARIO = "study-button";
 /** How the button looks, once how many of it is settled. */
 export const BUTTON_LOOK_SCENARIO = "study-button-look";
 
+/** What Button does not cover: the links, the Credits, and how loud money is. */
+export const CTA_SCENARIO = "study-cta";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 

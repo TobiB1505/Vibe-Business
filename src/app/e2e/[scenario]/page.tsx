@@ -36,6 +36,7 @@ import { StudyMono } from "../design-studies/study-mono";
 import { StudyActions } from "../design-studies/study-actions";
 import { StudyButton } from "../design-studies/study-button";
 import { StudyButtonLook } from "../design-studies/study-button-look";
+import { StudyCta } from "../design-studies/study-cta";
 import { StudyIconActions } from "../design-studies/study-icon-actions";
 import { StudyMark } from "../design-studies/study-mark";
 import { StudyDismiss } from "../design-studies/study-dismiss";
@@ -51,6 +52,7 @@ import {
   ACTIONS_SCENARIO,
   BUTTON_SCENARIO,
   BUTTON_LOOK_SCENARIO,
+  CTA_SCENARIO,
   DISCLOSURE_SCENARIO,
   BACKGROUND_SCENARIO,
   CREDITS_SCENARIO,
@@ -271,6 +273,7 @@ export default async function E2eScenarioPage({
     [ACTIONS_SCENARIO]: StudyActions,
     [BUTTON_SCENARIO]: StudyButton,
     [BUTTON_LOOK_SCENARIO]: StudyButtonLook,
+    [CTA_SCENARIO]: StudyCta,
     [ICON_ACTIONS_SCENARIO]: StudyIconActions,
     [MARK_SCENARIO]: StudyMark,
     [DISMISS_SCENARIO]: StudyDismiss,
