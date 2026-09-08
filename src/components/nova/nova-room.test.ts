@@ -96,6 +96,44 @@ describe("the room", () => {
     ]);
   });
 
+  /**
+   * The floor, written once.
+   *
+   * Two elements wear it — the room's own thread wrapper, and the opening's
+   * arriving column — and they must wear the same one. A second hand-written
+   * `bg-surface-1 rounded-panel p-5` somewhere is how the thread ends up with
+   * one padding during the choreography and another the moment it finishes.
+   */
+  it("gives the thread one floor, defined in one place", () => {
+    const room = FILES.find((file) => file.path === ROOM)?.source ?? "";
+    expect(room).toContain("export const NOVA_THREAD_SURFACE");
+
+    /*
+     * The value itself, swept. `bg-surface-1 rounded-panel` on its own is the
+     * product's ordinary panel and appears on half a dozen surfaces; what may
+     * exist exactly once is *this* combination, which is the thread's ground.
+     */
+    const floor = room.match(/NOVA_THREAD_SURFACE = "([^"]+)"/)?.[1] ?? "";
+    expect(floor.length).toBeGreaterThan(10);
+
+    const copies = FILES.filter(
+      (file) => file.path !== ROOM && rendered(file.source).includes(floor),
+    ).map((file) => file.path);
+
+    expect(copies).toEqual([]);
+    /* Fill and radius, and no border: a bubble already carries its own edge. */
+    expect(room).toMatch(/NOVA_THREAD_SURFACE = "bg-surface-1 rounded-panel[^"]*"/);
+    expect(room).not.toMatch(/NOVA_THREAD_SURFACE = "[^"]*border/);
+
+    const opening =
+      FILES.find(
+        (file) => file.path === "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
+      )?.source ?? "";
+    /* And the opening wears the constant rather than a copy of its value. */
+    expect(opening).toContain("className={NOVA_THREAD_SURFACE}");
+    expect(opening).toContain("surface={false}");
+  });
+
   it("puts the conversation first on a narrow screen", () => {
     /*
      * A founder who opens this on a phone came for what Nova has to say, and

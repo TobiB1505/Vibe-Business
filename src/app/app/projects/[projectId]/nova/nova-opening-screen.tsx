@@ -18,7 +18,7 @@ import { useOpening } from "@/components/nova/nova-opening";
 import { speechBubbles } from "@/components/nova/nova-speech";
 import { NovaAside, NovaLine, NovaThreadHeader } from "@/components/nova/nova-thread";
 import { NovaRail } from "./nova-rail";
-import { NovaRoom } from "@/components/nova/nova-room";
+import { NOVA_THREAD_SURFACE, NovaRoom } from "@/components/nova/nova-room";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
@@ -156,6 +156,9 @@ export function NovaOpeningScreen({
 
       {settled && (
         <NovaRoom
+          /* The floor rides on the column that flies in, not on the wrapper
+             that is already there — see `NOVA_THREAD_SURFACE`. */
+          surface={false}
           header={
             atLeast(beat, "header") && (
               <OpeningFade arrive={staged}>
@@ -206,7 +209,7 @@ export function NovaOpeningScreen({
           }
         >
           {atLeast(beat, "panel") && (
-            <OpeningColumn show arrive={staged}>
+            <OpeningColumn show arrive={staged} className={NOVA_THREAD_SURFACE}>
               {/*
                   The column the next render draws, to the class — the same
                   `section` at the same width, with the same gap, holding the
