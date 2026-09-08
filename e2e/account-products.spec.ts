@@ -90,6 +90,12 @@ for (const width of [1440, 1024, 768, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(PRODUCTS);
 
+    // Measure on the real faces. This failed at 768px by 4px under a full
+    // parallel run — the second time this session, after the same mechanism on
+    // the repository index: a fallback face is wider, and nothing here waited
+    // for the web fonts.
+    await page.evaluate(() => document.fonts.ready);
+
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
