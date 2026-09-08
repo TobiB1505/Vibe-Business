@@ -1,6 +1,8 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
 import { EmptyState } from "@/components/ui/states";
+import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";
+import { buildDeepScanSpotlight } from "@/modules/authenticated-product-intelligence/spotlight";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import {
   getActiveProductScanOperation,
@@ -21,6 +23,7 @@ import {
   getLatestSnapshotAttempt,
   getLatestSuccessfulSnapshot,
 } from "@/modules/repository-intelligence/store";
+import { DeepScanSpotlight } from "./deep-scan-spotlight";
 import { UnderstandingConfirm } from "../understanding-confirm";
 import { UnderstandingPanel } from "../understanding-panel";
 import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
@@ -52,9 +55,16 @@ export const metadata: Metadata = {
  * ## Deep Scan
  *
  * A child route of this one and deliberately not in the navigation — it is a
- * source, not a destination, and it stays a separate, metered control.
- * The Product Understanding source cards are therefore the only way to reach
- * it, which is why every card carries a link.
+ * source, not a destination, and it stays a separate, metered control. The
+ * route stays separate for a second reason too: it is the one route in this
+ * workspace allowed to raise the platform's function ceiling, because the
+ * analysis runs inside its own function.
+ *
+ * What reaches *this* page is the spotlight beneath the Product Scan: what the
+ * last signed-in read found, or what one would find, and the doorway to it.
+ * The source cards still link there, but they are no longer the only way in —
+ * a founder should not have to read a four-row provenance list to discover
+ * that Vibe can see inside their product.
  *
  * ## What it loads
  *
@@ -71,7 +81,7 @@ export default async function MyProductPage({
   const { projectId } = await params;
   // Re-checked here, not inherited from the layout: an App Router layout does
   // not gate the routes beneath it.
-  const { supabase, project } = await requireProjectAccess(projectId);
+  const { supabase, userId, project } = await requireProjectAccess(projectId);
 
   const [
     latest,
@@ -83,6 +93,7 @@ export default async function MyProductPage({
     liveAttempt,
     deepScanSnapshot,
     founderIntent,
+    deepScanModel,
   ] = await Promise.all([
     getLatestProfile(supabase, projectId),
     getActiveProductScanOperation(supabase, projectId),
@@ -93,6 +104,11 @@ export default async function MyProductPage({
     getLatestLiveSnapshotAttempt(supabase, projectId),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getFounderIntent(supabase, projectId),
+    loadDeepScanViewModel(supabase, {
+      projectId,
+      userId,
+      owned: { productionUrl: project.productionUrl },
+    }),
   ]);
 
   const displayedScan = activeOperation ?? latestScanOperation;
@@ -114,6 +130,16 @@ export default async function MyProductPage({
       : null;
 
   const SCAN_ANCHOR = "product-scan";
+
+  /*
+   * Deep Scan, said out loud (founder report, 2026-09-08).
+   *
+   * It used to reach this page as one word inside a source row. It is the only
+   * source a founder pays for and the only one that sees the product a
+   * customer actually uses, so it now gets a card of its own directly under
+   * the Product Scan — with what the last one read on it.
+   */
+  const deepScanSpotlight = buildDeepScanSpotlight(deepScanModel);
 
   /*
    * What the understanding rests on (audit C8/R6).
@@ -172,6 +198,11 @@ export default async function MyProductPage({
             blockedReason={blockedReason}
           />
         </div>
+
+        <DeepScanSpotlight
+          spotlight={deepScanSpotlight}
+          href={projectSectionHref(project.id, "deep-scan")}
+        />
 
         {view && latest ? (
           <UnderstandingPanel

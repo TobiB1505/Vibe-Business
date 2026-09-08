@@ -8,6 +8,8 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { analyzeAuthenticatedProduct } from "./analyzer";
+import { isBrowserProviderConfigured } from "./sandbox-browser/client";
+import { detectAuthenticatedSurfaces } from "./surface-detection";
 import {
   holdDeepScanCredits,
   releaseDeepScanCredits,
@@ -23,7 +25,7 @@ import {
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
 import { detectSignedIn, type SignInReason } from "./login-detection";
-import type { DeepScanProgress } from "./view";
+import { buildDeepScanViewModel, type DeepScanProgress, type DeepScanViewModel } from "./view";
 import type { BrowserSessionProvider, BrowserSessionUsage } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
@@ -37,6 +39,8 @@ import {
   failSnapshotRun,
   gatherEntitlementFacts,
   getActiveSession,
+  getLatestSession,
+  getLatestSuccessfulAuthenticatedSnapshot,
   getSessionWithProviderId,
   isExpired,
   isLive,
@@ -843,4 +847,56 @@ export async function getDeepScanAccessStatus(
   ]);
 
   return toDeepScanAccessStatus(facts, active ? { id: active.id, status: active.status } : null);
+}
+
+/**
+ * Everything the Deep Scan UI needs, assembled once.
+ *
+ * ## Why it is here rather than in each route
+ *
+ * Two routes render Deep Scan state now — its own page, and the spotlight at
+ * the top of My Product — and both need the same six reads folded the same
+ * way: entitlement, the live session, the last snapshot, the repository and
+ * public-site evidence the recommendation rests on, and whether this
+ * deployment has a browser at all.
+ *
+ * Assembled twice, the two copies would answer the same question differently
+ * the first time either grew a condition, and the question is *what a paid
+ * control may offer*. So it is assembled once and narrowed by whoever renders
+ * it.
+ *
+ * Returns null only when the project does not exist for this user.
+ */
+export async function loadDeepScanViewModel(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; owned?: { productionUrl: string | null } },
+): Promise<DeepScanViewModel | null> {
+  const [accessStatus, repository, publicProduct, snapshot, session] = await Promise.all([
+    getDeepScanAccessStatus(supabase, params),
+    getLatestSuccessfulSnapshot(supabase, params.projectId),
+    getLatestSuccessfulLiveSnapshot(supabase, params.projectId),
+    getLatestSuccessfulAuthenticatedSnapshot(supabase, params.projectId),
+    getLatestSession(supabase, params.projectId),
+  ]);
+
+  if (!accessStatus) return null;
+
+  return buildDeepScanViewModel({
+    accessStatus,
+    latestSnapshot: snapshot
+      ? {
+          result: snapshot.result,
+          accessMode: snapshot.accessMode,
+          completedAt: snapshot.completedAt,
+          createdAt: snapshot.createdAt,
+          pagesInspected: snapshot.pagesInspected,
+        }
+      : null,
+    latestSession: session ? { status: session.status, failureCode: session.failureCode } : null,
+    surfaceDetection: detectAuthenticatedSurfaces({
+      repository: repository?.result ?? null,
+      publicProduct: publicProduct?.result ?? null,
+    }),
+    providerConfigured: isBrowserProviderConfigured(),
+  });
 }

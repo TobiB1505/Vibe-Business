@@ -104,6 +104,18 @@ Three things the result now says, in the order a founder needs them:
 
 **What was on them.** Navigation labels, and how many pages carried a form, a table, an empty state. Pages that *have* one, not how many there were: three forms on one page is one page with a form. Behind a disclosure, because it is the second question.
 
+## The doorway, where a founder actually looks
+
+Deep Scan's only entrance was the word *Deep Scan* inside the "Your signed-in product" row of My Product's four-source provenance list, rendered at the weight of "Add your website". The most revealing source Vibe has, and the only one a founder pays for, was the least visible thing on the page — and once a scan had run, My Product said nothing about it at all beyond a page count in grey.
+
+`spotlight.ts` narrows the panel's own view model into a card that sits directly under the Product Scan: what the last signed-in read found, or what one would find, and the way in.
+
+**It derives; it never re-decides.** Entitlement, cooldown, price and provider availability are answered once by `buildDeepScanViewModel`, and `loadDeepScanViewModel` in `service.ts` assembles that model for both routes. A second summary reading `includedScanAvailable` and `additionalScanPrice` and reaching its own verdict would be a copy free to drift, and the first thing it would get wrong is telling a founder a scan costs 25 Credits while their included one is unused.
+
+**It is a doorway, not a control.** Nothing on My Product starts a scan. The panel owns every priced control, on the one route allowed to raise `maxDuration`, because that is where the analysis actually runs.
+
+**A card is never a dead end.** An absent action always carries the reason there is none — and a short Credit balance is not one of them: that obstacle stands in front of the way forward rather than removing it.
+
 ## Finished is not the same as unlimited
 
 `completeness: "partial"` rendered as **"Only partly"**, in amber, over a scan that had done everything it was ever going to do. The single reason was `mutation_blocked` — Vibe refuses every non-GET request because the session is the founder's own, and it always will. A permanent, deliberate safety property presented as a shortfall teaches a founder that Vibe half-works.
@@ -196,4 +208,5 @@ Two consecutive positive readings start the scan, after a grace window the found
 | `service.ts`                       | Start, live view, analyze, cancel, and the access status a screen reads.                 |
 | `store.ts`                         | Persistence for sessions and snapshots.                                                  |
 | `view.ts`                          | Deriving the Deep Scan screen's state.                                                   |
+| `spotlight.ts`                     | The same state, narrowed to what My Product has room to say about it.                    |
 | `test-support.ts`                  | A fake database, a fake provider, and a seeded project.                                  |
