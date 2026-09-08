@@ -614,11 +614,17 @@ export default async function ProjectOnboardingPage({
                     <VibeMark size={44} />
                   )}
                   <div className="flex flex-col gap-3">
-                    {/* The product's own headline, which is what the block is about.
-                  Nova's sentence is above the block and does not repeat it. */}
-                    <h2 className="text-fg text-title leading-snug font-semibold">
-                      {understanding.headline.title}
-                    </h2>
+                    {/*
+                      The headline is gone, not moved.
+
+                      `headline.title` is the pipeline's generic line — "I
+                      understand what you built." — and by the time it renders
+                      it is the third statement of the same thing: the block is
+                      labelled *What I understood*, and Nova's bubble above it
+                      says she has a good picture of what you built. What is
+                      specific is the product's name and the sentence under it,
+                      and those stay.
+                    */}
                     {understanding.headline.productName && (
                       <p className="text-fg-body text-xl font-semibold">
                         {understanding.headline.productName}
@@ -669,9 +675,9 @@ export default async function ProjectOnboardingPage({
                   <>
                     <OperationWatcher projectId={projectId} operation={onboarding.auditOperation} />
                     {onboarding.auditOperation.stage === "running_ai" ? (
-                      <AuditAnalyzing />
+                      <AuditAnalyzing presentation="block" />
                     ) : (
-                      <AuditPreparing />
+                      <AuditPreparing presentation="block" />
                     )}
                     {onboarding.auditOperation.stalled && (
                       <OnboardingStalled

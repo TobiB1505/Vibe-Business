@@ -57,6 +57,9 @@ import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onbo
 import { OnboardingAuditReveal } from "@/app/app/onboarding/[projectId]/audit-reveal";
 import { FirstMoveDecision } from "@/app/app/onboarding/[projectId]/first-move-decision";
 import { NovaMoveButton } from "@/components/nova/nova-move";
+import { LiveSiteStep } from "@/app/app/onboarding/[projectId]/live-site-step";
+import { ProductConfirmation } from "@/app/app/onboarding/[projectId]/product-confirmation";
+import { VibeMark } from "@/components/brand/vibe-mark";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
@@ -426,8 +429,68 @@ export default async function E2eScenarioPage({
 
             The bodies bind real Server Actions. Pressing does nothing useful
             in a fixture and is not the point; the point is that nobody had
-            ever seen these three on a screen.
+            ever seen any of these on a screen.
           */}
+          <BlockCase title="add_live_product">
+            <NovaOnboardingThread
+              state="add_live_product"
+              blockLabel="Where your product runs"
+              block={
+                <div className="flex flex-col gap-5">
+                  <div className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-3 border px-3 py-2">
+                    <span className="text-fg-body text-sm font-medium">acme/acme-app</span>
+                    <span className="text-fg-meta font-mono text-xs">main · connected</span>
+                  </div>
+                  <LiveSiteStep projectId="project_e2e" currentUrl={null} liveScanFailed={false} />
+                </div>
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="product_scanning">
+            <NovaOnboardingThread
+              state="product_scanning"
+              blockNamesItself
+              blockLabel="Product scan"
+              block={
+                <ProductScanExperience
+                  projectId="project_e2e"
+                  variant="onboarding"
+                  initialOperation={E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete.operation}
+                  initialEvents={[...E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete.events]}
+                  initialPresentation={
+                    E2E_PRODUCT_SCAN_SCENARIOS.product_scan_complete.presentation
+                  }
+                  productName="Acme"
+                />
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="product_reveal">
+            <NovaOnboardingThread
+              state="product_reveal"
+              blockLabel="What I understood"
+              block={<RevealBlockFixture />}
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_preparing">
+            <NovaOnboardingThread
+              state="audit_preparing"
+              blockLabel="Business audit"
+              block={<AuditPreparing presentation="block" />}
+            />
+          </BlockCase>
+
+          <BlockCase title="audit_running">
+            <NovaOnboardingThread
+              state="audit_running"
+              blockLabel="Business audit"
+              block={<AuditAnalyzing presentation="block" />}
+            />
+          </BlockCase>
+
           <BlockCase title="audit_needs_user">
             <NovaOnboardingThread
               state="audit_needs_user"
@@ -2160,5 +2223,55 @@ function BlockCase({ title, children }: { title: string; children: ReactNode }) 
           block sits on the ground it will sit on in the product. */}
       <div className={NOVA_THREAD_SURFACE}>{children}</div>
     </section>
+  );
+}
+
+/**
+ * The reveal's block body, on the understanding the real pipeline produced.
+ *
+ * A copy of the page's markup, and the one case in this fixture that is. The
+ * page builds it inline from four different reads — the profile, the view, the
+ * audit gate, the stored id — and there is no component to mount instead. What
+ * the copy is for is the *frames*: whether a logo, a headline, two facts and a
+ * confirmation form read as one block or as four things in a box.
+ *
+ * If it drifts from the page, this is the file that is wrong.
+ */
+function RevealBlockFixture() {
+  const view = E2E_UNDERSTANDING_SCENARIOS.understanding_ready().view;
+
+  return (
+    <div className="flex flex-col items-center gap-7 text-center">
+      <VibeMark size={44} />
+      <div className="flex flex-col gap-3">
+        {view.headline.productName && (
+          <p className="text-fg-body text-xl font-semibold">{view.headline.productName}</p>
+        )}
+        {view.headline.understanding && (
+          <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">
+            {view.headline.understanding}
+          </p>
+        )}
+      </div>
+      <ProductRevealFacts facts={view.audience.slice(0, 2)} />
+
+      <div className="border-line-2 w-full border-t pt-6">
+        <h3 className="text-fg-body mb-4 font-semibold">Did Vibe get this right?</h3>
+        <ProductConfirmation
+          projectId="project_e2e"
+          profileId="profile_e2e"
+          bundlesAudit
+          values={{
+            name: "Acme",
+            shortDescription: "A web application for small product teams.",
+            understanding: "Visitors can create an account and reach a signed-in workspace.",
+            mainPurpose: "Give small teams one place to run their product work.",
+            mainPromise: "Less time spent keeping track of what is happening.",
+            primaryAudience: "Software founders and builders",
+            problemSolved: "Work scattered across tools nobody keeps up to date.",
+          }}
+        />
+      </div>
+    </div>
   );
 }

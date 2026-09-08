@@ -33,10 +33,16 @@ import type { Study } from "./studies";
  * `NOVA_ONBOARDING_DETAIL` are the product's own tables, read by the product's
  * own component, and nothing is written for this page.
  *
- * The blocks are not. Each one needs a live project — a scan with events, a
- * profile to confirm, an audit to reveal — so this names the component that
- * goes there instead of faking one. A fixture block would be a picture of a
- * screen rather than the screen, which is the thing this lab keeps removing.
+ * The blocks are named rather than drawn *here*, because this page is about
+ * the ten sentences and their order and ten mounted blocks would bury them.
+ *
+ * They are mounted at `study-onboarding-blocks`, and that page is where the
+ * claim this docblock used to make was disproved: it said each block "needs a
+ * live project — a scan with events, a profile to confirm, an audit to
+ * reveal", and every one of those already had a fixture builder. Eight of the
+ * eight states that have a block are on that page with the shipped component
+ * inside them, and every one of them was bringing a frame, an eyebrow or a
+ * headline of its own into Nova's.
  */
 
 /** Which component fills the block, named rather than imitated. */

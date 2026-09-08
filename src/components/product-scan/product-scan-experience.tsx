@@ -1034,6 +1034,10 @@ export function ProductScanExperience({
     expandedOperationId === operation?.operationId;
   const savedDiscoveryCount = discoveryCount(events);
 
+  /* The workspace is the only caller that owns a whole page, and therefore the
+     only one that may draw a page's frame and a page's hero. */
+  const page = variant === "workspace";
+
   return (
     <motion.section
       layout={!reduceMotion}
@@ -1051,7 +1055,7 @@ export function ProductScanExperience({
         a caller that has already framed it.
       */
       className={
-        variant === "workspace"
+        page
           ? "relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
           : "relative overflow-hidden"
       }
@@ -1110,7 +1114,28 @@ export function ProductScanExperience({
               exit={reduceMotion ? undefined : { opacity: 0, y: 6 }}
               transition={{ duration: reduceMotion ? 0 : 0.28 }}
             >
-              <header className="relative flex min-h-[8.25rem] flex-col items-center justify-center px-3 text-center">
+              {/*
+                The hero belongs to the page, not to the block.
+
+                Composed into a thread — Home's focus block or setup's — this
+                header printed a thirty-six point "Understanding your product"
+                and, under it, "Vibe is learning what you built, how it works,
+                and what kind of business it could become". Nova's bubble two
+                inches above says that already, in her own words, from a table
+                somebody reviewed for that position. So a founder read the same
+                thing twice, and the poster was the louder copy.
+
+                The eyebrow stays either way: it is the block's own name, which
+                is why both callers pass `blockNamesItself` and the frame does
+                not print a label of its own. The title goes to `sr-only`
+                rather than away, because `aria-labelledby` points at it and a
+                section that loses its accessible name has been made worse.
+              */}
+              <header
+                className={`relative flex flex-col items-center justify-center px-3 text-center ${
+                  page ? "min-h-[8.25rem]" : ""
+                }`}
+              >
                 <MonoLabel className={active ? "text-mint" : undefined}>
                   {active
                     ? "Product scan · live"
@@ -1120,14 +1145,20 @@ export function ProductScanExperience({
                 </MonoLabel>
                 <h2
                   id="product-scan-title"
-                  className="mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl"
+                  className={
+                    page
+                      ? "mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl"
+                      : "sr-only"
+                  }
                 >
                   Understanding <span className="text-mint">your product</span>
                 </h2>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
-                  Vibe is learning what you built, how it works, and what kind of business it could
-                  become.
-                </p>
+                {page && (
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
+                    Vibe is learning what you built, how it works, and what kind of business it
+                    could become.
+                  </p>
+                )}
 
                 {variant === "workspace" && !active ? (
                   <div className="absolute right-0 top-0 flex items-center gap-2 max-lg:relative max-lg:mt-4 max-lg:flex-wrap max-lg:justify-center">
@@ -1176,7 +1207,24 @@ export function ProductScanExperience({
                 </div>
               ) : null}
 
-              <div className="grid grid-cols-[minmax(0,1fr)_21rem] gap-4 max-lg:grid-cols-1">
+              {/*
+                Two columns belong to a page-width surface.
+
+                These collapse at `max-lg`, which is a *viewport* query — and a
+                block is 704px inside a 1440px window, so the query never fires
+                and a two-column layout was squeezed into half its measure.
+                Every label in it truncated: "Compiled from bou…", "Audience
+                sig…", "Pro… Cor… Liv…". A container query would be the
+                general answer; the caller already knows which surface it is,
+                so it says so.
+              */}
+              <div
+                className={
+                  page
+                    ? "grid grid-cols-[minmax(0,1fr)_21rem] gap-4 max-lg:grid-cols-1"
+                    : "flex flex-col gap-4"
+                }
+              >
                 <DiscoveryGraph
                   facets={facets}
                   presentation={revealedPresentation}
@@ -1192,7 +1240,13 @@ export function ProductScanExperience({
                 />
               </div>
 
-              <div className="mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1">
+              <div
+                className={
+                  page
+                    ? "mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1"
+                    : "mt-4 flex flex-col gap-4"
+                }
+              >
                 <LiveActivity events={revealedEvents} active={active} pulseEventId={pulseEventId} />
                 <DiscoveriesGrid
                   facets={facets}
