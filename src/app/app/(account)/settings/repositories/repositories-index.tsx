@@ -2,13 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   BranchIcon,
-  CodeIcon,
-  LockIcon,
   PlusIcon,
-  ProductsIcon,
   RepositoriesIcon,
   SearchIcon,
   SettingsIcon,
@@ -54,27 +51,6 @@ function RepositoryTile({ repository }: { repository: ConnectedRepository }) {
   );
 }
 
-function TrustItem({
-  icon,
-  title,
-  description,
-}: {
-  icon: ReactNode;
-  title: string;
-  description: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <span className="bg-mint-tint-soft text-mint rounded-nav flex size-9 shrink-0 items-center justify-center">
-        {icon}
-      </span>
-      <span>
-        <strong className="text-fg-body block text-body font-semibold">{title}</strong>
-        <span className="text-fg-muted mt-1 block text-caption leading-5">{description}</span>
-      </span>
-    </div>
-  );
-}
 
 /**
  * What a customer sees after removing the GitHub App (VB-041).
@@ -498,32 +474,6 @@ export function RepositoriesIndex({
           )}
         </Surface>
       )}
-
-      <Surface level="section" padding="md">
-        <h2 className="text-fg text-title font-semibold">How repositories are used</h2>
-        <div className="mt-5 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
-          <TrustItem
-            icon={<CodeIcon size={17} />}
-            title="Bounded analysis"
-            description="Vibe reads only the targeted context needed for product intelligence."
-          />
-          <TrustItem
-            icon={<ProductsIcon size={17} />}
-            title="Product context"
-            description="Each repository belongs to one product workspace and its business evidence."
-          />
-          <TrustItem
-            icon={<LockIcon size={17} />}
-            title="Secure by design"
-            description="Repository access follows the permissions granted through your GitHub App installation."
-          />
-          <TrustItem
-            icon={<RepositoriesIcon size={17} />}
-            title="You stay in control"
-            description="Manage repository access at any time from your GitHub installation settings."
-          />
-        </div>
-      </Surface>
     </div>
   );
 }
