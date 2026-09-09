@@ -1,4 +1,3 @@
-import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { SourceCoverageStrip } from "@/components/system/source-coverage";
 import { StatusPill } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
@@ -18,19 +17,17 @@ import { EXAMPLE_SOURCES } from "./landing-sources";
  * The bento is the catalogue's pattern (kinfe123, uilayout), and in every one
  * of them the large tiles hold an abstract 3D render. That is what a template
  * has to do, because it has no product behind it. Here the same slots hold the
- * source strip, a resolved price and the status vocabulary — the actual parts,
- * doing the actual thing the sentence beside them claims.
- *
- * The price in particular is not typed into this file: `CostDisclosure`
- * resolves it from the rate card in force, so a landing page cannot advertise
- * a number the product has stopped charging.
+ * source strip and the status vocabulary — the actual parts, doing the actual
+ * thing the sentence beside them claims.
  *
  * ## Four tiles, and shrinking
  *
  * *Your code — no stored copy* left for `LandingBoundary`, which draws the
  * same claim as a boundary with things crossing it rather than asserting it in
- * three lines. The rest of this bento is being taken apart the same way the
- * tab bar was: one claim at a time, into the block that can show it.
+ * three lines, and *Before you press* left for `LandingPrice`, which shows the
+ * whole rate card instead of two prices. The rest of this bento is being taken
+ * apart the same way the tab bar was: one claim at a time, into the block that
+ * can show it.
  */
 export function LandingTrust() {
   return (
@@ -45,8 +42,8 @@ export function LandingTrust() {
             An opinion you can <span className="text-mint">check</span>.
           </h2>
           <p className="text-fg-prose max-w-[62ch] leading-relaxed">
-            Vibe is wrong sometimes. What it does not do is hide which part was a reading, which
-            was a guess, and which was never looked at.
+            Vibe is wrong sometimes. What it does not do is hide which part was a reading, which was
+            a guess, and which was never looked at.
           </p>
         </div>
 
@@ -74,32 +71,14 @@ export function LandingTrust() {
               <MonoLabel>Your branch, your call</MonoLabel>
               <p className="text-fg text-lead font-semibold">One exact commit waits for you.</p>
               <p className="text-fg-muted text-body leading-relaxed">
-                Vibe writes to an isolated branch. Your approval binds to that commit and no other
-                — if the branch moves, the merge stops rather than guessing.
+                Vibe writes to an isolated branch. Your approval binds to that commit and no other —
+                if the branch moves, the merge stops rather than guessing.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <StatusPill tone="success">Validated</StatusPill>
               <StatusPill tone="waiting">Waiting for you</StatusPill>
               <StatusPill tone="neutral">Not merged</StatusPill>
-            </div>
-          </article>
-
-          <article className="border-line-2 bg-surface-2 rounded-card flex flex-col justify-between gap-6 border p-6">
-            <div className="flex flex-col gap-2">
-              <MonoLabel>Before you press</MonoLabel>
-              <p className="text-fg text-lead font-semibold">Never a surprise charge.</p>
-              <p className="text-fg-muted text-body leading-relaxed">
-                Every paid action states its price and your balance first. Free ones say so instead
-                of staying quiet.
-              </p>
-            </div>
-            <div className="border-line-1 bg-surface-3 rounded-well flex flex-wrap items-center gap-x-4 gap-y-2 border p-4">
-              <span className="text-fg-secondary text-body">Deep Scan</span>
-              <CostDisclosure operation="deep_scan" />
-              <span className="text-line-strong">·</span>
-              <span className="text-fg-secondary text-body">Scan again</span>
-              <CostDisclosure operation="product_understanding" />
             </div>
           </article>
 

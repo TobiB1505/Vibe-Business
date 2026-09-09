@@ -1192,3 +1192,64 @@ test.describe("the boundary", () => {
     await expect(boundary).toContainText(/no clone, no checkout and no working tree/i);
   });
 });
+
+/*
+ * Step eight: the ledger.
+ *
+ * Every number in it is resolved by `resolveRetailPrice` — the same function
+ * the reservation calls — so the guard's job is to prove the resolution
+ * happened rather than to re-type the rate card beside it. A price that is
+ * merely present proves nothing; a *free* operation naming itself and a priced
+ * one carrying a number is what only a resolved card produces.
+ */
+test.describe("the ledger", () => {
+  test("resolves every price from the rate card in force", async ({ page }) => {
+    await page.goto("/");
+    const ledger = page.locator("#credits");
+    await ledger.scrollIntoViewIfNeeded();
+
+    const rows = ledger.locator("ul > li");
+    await expect(rows).toHaveCount(6);
+
+    /*
+      Five priced and one free, which is the shape of `launch-v1`. The free one
+      says "Included" rather than printing a zero — a decision taken in billing
+      (BILLING CORE-2 §56) and inherited here rather than re-taken, because a
+      zero beside a control invites the question of when it stops being zero.
+    */
+    await expect(rows.filter({ hasText: /\d+ Credits/ })).toHaveCount(5);
+    await expect(rows.filter({ hasText: "Included" })).toHaveCount(1);
+    /*
+      `\b` and not a bare `0`: this block carries 20-, 200- and 25-Credit
+      prices, and `/0 Credits/` matches inside "200 Credits" — measured, as a
+      failing test on a page with nothing wrong with it.
+    */
+    await expect(ledger).not.toContainText(/\b0 Credits/);
+
+    // The free one is the Product Scan, and it is the first row: what Vibe
+    // does before anything is paid for.
+    await expect(rows.first()).toContainText("Product Scan");
+    await expect(rows.first()).toContainText("Included");
+  });
+
+  test("answers the money question a price list does not", async ({ page }) => {
+    await page.goto("/");
+    const ledger = page.locator("#credits");
+    await ledger.scrollIntoViewIfNeeded();
+
+    /*
+      A reserved-then-failed run charged nothing, and the product's own
+      `CostLine` is what says so — rendered here in the state a founder would
+      otherwise assume the worst about.
+    */
+    const lines = ledger.getByTestId("cost-line");
+    await expect(lines).toHaveCount(2);
+    await expect(lines.filter({ hasText: /nothing was charged/i })).toHaveCount(1);
+
+    // Rule 50 and rule 60, in the words a founder cares about.
+    await expect(ledger).toContainText(
+      /resolves that as a failure rather than risking a second charge/i,
+    );
+    await expect(ledger).toContainText(/never starts a paid refresh on your behalf/i);
+  });
+});

@@ -8,6 +8,7 @@ import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
+import { LandingPrice } from "@/components/marketing/landing-price";
 import { LandingOutcome } from "@/components/marketing/landing-outcome";
 import { LandingProblem } from "@/components/marketing/landing-problem";
 import { LandingScan } from "@/components/marketing/landing-scan";
@@ -139,6 +140,14 @@ export default function HomePage() {
         keeps. Its "no stored copy" tile came out of `LandingTrust`.
       */}
       <LandingBoundary />
+
+      {/*
+        Step eight, and the last of the walk's arguments: what any of it costs.
+        Its "never a surprise charge" tile came out of `LandingTrust`; the plan
+        table further down answers a different question — what a month costs —
+        and stays where it is.
+      */}
+      <LandingPrice />
 
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">

@@ -455,16 +455,18 @@ test.describe("walking the steps", () => {
  * page cannot advertise a number the product has stopped charging.
  */
 test.describe("why it can be believed", () => {
-  test("shows the source strip and resolves its prices from the rate card", async ({ page }) => {
+  test("shows the source strip, with the coverage the strip is for", async ({ page }) => {
     await page.goto("/");
     const trust = page.getByRole("region", { name: /an opinion you can check/i });
     await trust.scrollIntoViewIfNeeded();
 
     await expect(trust.getByTestId("source-coverage-strip")).toBeVisible();
 
-    // Deep Scan is priced; a rescan is free and says so rather than staying quiet.
-    await expect(trust).toContainText(/\d+ Credits/);
-    await expect(trust).toContainText("Included");
-    await expect(trust).not.toContainText(/0 Credits/);
+    /*
+      The price half of this test went with the tile it was written for:
+      *Before you press* is `LandingPrice` now, which shows the whole rate card
+      rather than two prices, and `landing.spec.ts` asserts the resolution
+      against the block that owns it.
+    */
   });
 });
