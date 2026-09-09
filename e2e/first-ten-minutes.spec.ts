@@ -382,26 +382,20 @@ test.describe("meeting Nova before signing up", () => {
    * The property this section is most likely to lose. Nothing is running on a
    * marketing page — no project, no repository, no operation — so a turning
    * aperture here would be the "activity while a process is in fact waiting"
-   * DESIGN.md forbids at any level of polish. The four states are a legend,
-   * and every one of them is drawn at rest.
+   * DESIGN.md forbids at any level of polish.
+   *
+   * The four-state key this used to count went with the block's rebuild: a
+   * legend explains a notation to somebody already reading one, and a visitor
+   * who has never seen Nova has no notation in front of them. What it was
+   * really holding is below, and it holds for the whole section rather than
+   * for four marks in a row.
    */
-  test("shows the four states as a key, with none of them claiming to be running", async ({
-    page,
-  }) => {
+  test("shows a mark that never claims to be running", async ({ page }) => {
     await page.goto("/");
     const section = page.getByTestId("landing-nova");
     await section.scrollIntoViewIfNeeded();
 
-    /*
-      Scoped to the legend by name rather than by being "the list": the
-      introduction above it is a second `listening` mark at hero size, and the
-      thread beside it is a second list. A locator that means "the list in this
-      section" stops meaning the legend the moment the block gains one.
-    */
-    const legend = section.getByTestId("nova-legend");
-    for (const state of ["idle", "listening", "working", "settled"]) {
-      await expect(legend.locator(`[data-nova-presence="${state}"]`)).toHaveCount(1);
-    }
+    await expect(section.locator("[data-nova-presence]")).toHaveCount(1);
 
     // The spin class only ever appears on a live run; nothing here is one.
     const spinning = await section.locator('[class*="nSpin-"]').count();
@@ -416,7 +410,6 @@ test.describe("meeting Nova before signing up", () => {
     await expect(
       section.getByRole("heading", { name: /your co-founder has a name/i }),
     ).toBeVisible();
-    await expect(section.getByText(/what her mark tells you/i)).toBeVisible();
     // The mark itself is present at first paint, not assembled into existence.
     await expect(section.locator("[data-nova-presence]").first()).toBeVisible();
   });

@@ -1,5 +1,4 @@
 import { NovaBubble } from "@/components/nova/nova-bubble";
-import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { NovaLine } from "@/components/nova/nova-thread";
 import { LandingStep } from "@/components/marketing/landing-step";
 import { NovaEntrance } from "@/components/marketing/nova-entrance";
@@ -44,6 +43,15 @@ import type { FocusCandidateKind } from "@/modules/nova/focus";
  * They are the argument. A co-founder who only ever reports good news is one
  * you cannot use to make a decision.
  *
+ * ## No key beside her
+ *
+ * An earlier version of this block ended with the four states of the mark and
+ * a sentence each — resting, listening, working, settled. It is good material
+ * and it is the wrong page for it: a legend explains a notation to somebody who
+ * is already reading one, and a visitor who has never seen Nova has no notation
+ * in front of them yet. It also made the block end on a reference table rather
+ * than on the sentence it exists for, which is *Nothing needs you right now*.
+ *
  * ## The mark
  *
  * The same component the founder will see every day, at the same geometry.
@@ -73,38 +81,6 @@ const MOMENTS: { kind: FocusCandidateKind; note: string }[] = [
   {
     kind: "nothing_to_do",
     note: "And when there is nothing, she says so. A product that always has something for you is a product inventing work.",
-  },
-];
-
-/**
- * The four states of the mark, as a key.
- *
- * Nothing is running on this page — no project, no repository, no operation —
- * so every one is drawn `still`, including `working`. An aperture that turned
- * here would be the "activity while a process is in fact waiting" DESIGN.md
- * forbids at any level of polish, and the sentence beside it carries the
- * motion instead.
- */
-const STATES: { state: NovaPresenceState; label: string; meaning: string }[] = [
-  {
-    state: "idle",
-    label: "Resting",
-    meaning: "Nothing needs you, and Nova says so rather than inventing work.",
-  },
-  {
-    state: "listening",
-    label: "Listening",
-    meaning: "A question is waiting for you — Nova will not spend anything until you answer.",
-  },
-  {
-    state: "working",
-    label: "Working",
-    meaning: "A run Vibe is actually watching. The mark turns only while that is true.",
-  },
-  {
-    state: "settled",
-    label: "Settled",
-    meaning: "The work finished. A failed run lands here too, so nothing about it celebrates.",
   },
 ];
 
@@ -189,31 +165,6 @@ export function LandingNova() {
             })}
           </ol>
         </div>
-
-        <Reveal from="up" className="border-line-2 mt-16 border-t pt-10">
-          <div>
-            <MonoLabel as="h3" className="mb-6 block">
-              What her mark tells you
-            </MonoLabel>
-            <ul data-testid="nova-legend" className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
-              {STATES.map((entry) => (
-                <li key={entry.state} className="flex flex-col items-start gap-3">
-                  {/*
-                    `lg`, not `md`: the four states differ by how far the iris
-                    stands open — 26 units against 35 at the extremes — and at
-                    44px that difference is invisible, which makes a legend of
-                    four identical marks.
-                  */}
-                  <NovaPresence state={entry.state} seed="vibe" size="lg" still />
-                  <div className="flex flex-col gap-1.5">
-                    <span className="text-fg text-ui font-semibold">{entry.label}</span>
-                    <span className="text-fg-muted text-body leading-relaxed">{entry.meaning}</span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Reveal>
       </div>
     </LandingStep>
   );
