@@ -181,6 +181,9 @@ export const PRODUCTS_SCENARIO = "study-products";
 /** What the front door shows, when the honest answer is "nothing yet". */
 export const LANDING_SCENARIO = "study-landing";
 
+/** One card in the middle, and the four grounds it could stand on. */
+export const HERO_CARD_SCENARIO = "study-hero-card";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 

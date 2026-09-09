@@ -97,6 +97,7 @@ import {
   PROFILE_SCENARIO,
   PRODUCTS_SCENARIO,
   LANDING_SCENARIO,
+  HERO_CARD_SCENARIO,
   SHIPPED_FIRST_RUN_SCENARIO,
   SHIPPED_OPENING_SCENARIO,
   STUDIES,
@@ -194,6 +195,7 @@ import { StudyRepositories } from "../design-studies/study-repositories";
 import { StudyProfile } from "../design-studies/study-profile";
 import { StudyProducts } from "../design-studies/study-products";
 import { StudyLanding } from "../design-studies/study-landing";
+import { StudyHeroCard } from "../design-studies/study-hero-card";
 import { StudyIconActions } from "../design-studies/study-icon-actions";
 import { StudyMark } from "../design-studies/study-mark";
 import { StudyDismiss } from "../design-studies/study-dismiss";
@@ -797,6 +799,7 @@ export default async function E2eScenarioPage({
     [PROFILE_SCENARIO]: StudyProfile,
     [PRODUCTS_SCENARIO]: StudyProducts,
     [LANDING_SCENARIO]: StudyLanding,
+    [HERO_CARD_SCENARIO]: StudyHeroCard,
     [ICON_ACTIONS_SCENARIO]: StudyIconActions,
     [MARK_SCENARIO]: StudyMark,
     [DISMISS_SCENARIO]: StudyDismiss,

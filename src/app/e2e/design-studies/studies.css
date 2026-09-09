@@ -838,3 +838,156 @@
     display: none;
   }
 }
+
+/*
+ * The four hero-card backgrounds (UI-34).
+ *
+ * ## Why the CSS lives here and not in `globals.css`
+ *
+ * Because none of it has been chosen yet. A study draws four candidates so
+ * one can be picked; putting them in the product's stylesheet first would
+ * ship three treatments nobody selected and one the product does not use.
+ * Whichever survives the review graduates to `globals.css` with its own
+ * argument written where it lands.
+ *
+ * ## The three obligations, in CSS rather than in a comment
+ *
+ * Every animation below stops under `prefers-reduced-motion` — see the block
+ * at the end — and none of them changes geometry: what moves is
+ * `background-position`, an `opacity`, or a transform on an element that is
+ * `position: absolute` inside its own stacking context. Nothing reflows, so
+ * the card underneath holds its box whether the background is animating,
+ * paused, or absent.
+ *
+ * `will-change: transform` is deliberately *not* set on the drifting layers.
+ * It promotes a full-viewport blurred surface to its own compositor layer for
+ * the life of the page, which on a phone costs more than the animation does.
+ */
+
+/* A · a field that points at the card. Static; the meaning is the direction. */
+.study-hero-field {
+  --field-mark: color-mix(in oklab, var(--color-fg-faint) 55%, transparent);
+  background-image:
+    linear-gradient(var(--field-mark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--field-mark) 1px, transparent 1px);
+  background-size: 46px 46px;
+  mask-image: radial-gradient(circle at 50% 45%, transparent 12%, black 62%, transparent 92%);
+}
+
+/*
+ * B · aurora.
+ *
+ * Ported by hand from Aceternity's `aurora-background`, which is two repeating
+ * linear gradients at 300%/200% with an animated `background-position`, blurred
+ * and masked to a soft ellipse. What arrives here is the mechanism; the colours
+ * are Vibe's mint and the arbitrary hex stops are gone.
+ */
+@keyframes study-aurora {
+  from {
+    background-position:
+      50% 50%,
+      50% 50%;
+  }
+  to {
+    background-position:
+      350% 50%,
+      350% 50%;
+  }
+}
+
+.study-hero-aurora::after {
+  content: "";
+  position: absolute;
+  inset: -12%;
+  pointer-events: none;
+  background-image:
+    repeating-linear-gradient(
+      100deg,
+      var(--color-app) 0%,
+      var(--color-app) 8%,
+      transparent 11%,
+      transparent 14%,
+      var(--color-app) 18%
+    ),
+    repeating-linear-gradient(
+      100deg,
+      var(--color-mint-dim) 6%,
+      var(--color-mint) 14%,
+      var(--color-mint-deep) 22%,
+      var(--color-mint) 30%
+    );
+  background-size:
+    300% 200%,
+    200% 140%;
+  filter: blur(46px);
+  opacity: 0.34;
+  animation: study-aurora 26s linear infinite;
+  mask-image: radial-gradient(ellipse at 50% 42%, black 18%, transparent 72%);
+}
+
+/*
+ * C · the card is the light. A beam travelling one border, nothing behind it.
+ *
+ * ## Why there is no mask here
+ *
+ * The first draft masked a conic gradient down to a 1px frame with
+ * `mask-composite: exclude`. The compiled CSS was correct and the result was
+ * not: the card wears `overflow-hidden` and a 4%-white glass fill, so a
+ * gradient painted behind it at `z-index: -1` shows *through* the card as a
+ * diagonal wash instead of reading as an edge. Measured, not guessed — the
+ * screenshot is what said so.
+ *
+ * So the ring is geometry rather than a mask. The wrapper paints the conic
+ * gradient edge to edge; an inner layer paints the page's own ground on top of
+ * it, inset by the 1px that becomes the ring; the card sits on that. Nothing
+ * can leak through, because there is an opaque layer between the gradient and
+ * the glass.
+ */
+.study-hero-beam {
+  position: relative;
+  padding: 1px;
+  border-radius: var(--radius-stage);
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    transparent 296deg,
+    color-mix(in oklab, var(--color-mint) 60%, transparent) 330deg,
+    var(--color-mint) 350deg,
+    transparent 360deg
+  );
+  animation: study-beam 7s linear infinite;
+}
+
+/*
+ * The opaque layer, and why it is a div of its own.
+ *
+ * Setting `background` on the card directly did not hold: `.vibe-surface-card`
+ * is declared unlayered in `theme-v2.css` and wins on cascade order, and the
+ * card carries `backdrop-filter` — so the glass sampled the gradient behind it
+ * and the beam bled across the whole surface as a mint wash from the top.
+ * Twice, in two different constructions, before the screenshot said what was
+ * happening.
+ *
+ * A plain element with nothing else on it cannot lose that argument.
+ */
+.study-hero-beam-inner {
+  position: relative;
+  border-radius: calc(var(--radius-stage) - 1px);
+  background: var(--color-app);
+}
+
+/* D · Vibe's own grid, with one soft light behind the card. */
+.study-hero-spot {
+  background-image: radial-gradient(
+    ellipse 70% 55% at 50% 42%,
+    color-mix(in oklab, var(--color-mint) 16%, transparent),
+    transparent 70%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .study-hero-aurora::after,
+  .study-hero-beam {
+    animation: none;
+  }
+}
