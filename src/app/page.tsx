@@ -7,6 +7,7 @@ import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
+import { LandingOutcome } from "@/components/marketing/landing-outcome";
 import { LandingProblem } from "@/components/marketing/landing-problem";
 import { LandingScan } from "@/components/marketing/landing-scan";
 import { LandingTrust } from "@/components/marketing/landing-trust";
@@ -122,6 +123,14 @@ export default function HomePage() {
         its top and then hands over a page that has already been scrolled past.
       */}
       <LandingNova />
+
+      {/*
+        Step six, and the end of the loop the walk has been following: what
+        Vibe says once a change has landed, and the two rungs above it that it
+        will not climb without evidence. Its panel came out of `LandingFlow`'s
+        *Measure* tab, the fourth step to leave the tab bar.
+      */}
+      <LandingOutcome />
 
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">

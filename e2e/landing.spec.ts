@@ -910,3 +910,93 @@ test.describe("meeting Nova on the walk", () => {
     await expect(mark.locator("[data-nova-presence]")).toBeVisible();
   });
 });
+
+/*
+ * Step six: the outcome, as a ladder of three claims.
+ *
+ * This is the block a marketing page is most tempted to soften, because the
+ * honest version ends on "not measured". The guards hold the three things that
+ * would quietly undo it: the word Vibe never renders, the check that did not
+ * pass staying on the list, and the third rung staying empty.
+ */
+test.describe("the outcome ladder", () => {
+  test("says what it read back, and refuses the word deployed", async ({ page }) => {
+    await page.goto("/");
+    const outcome = page.locator("#outcome");
+    await outcome.scrollIntoViewIfNeeded();
+
+    await expect(outcome).toContainText(/points at the commit you approved/i);
+
+    /*
+      Vibe calls no deployment provider and has no provenance for which build
+      is serving. Observing the expected behaviour is consistent with the new
+      build being live and is not evidence of it — so the block says so on the
+      rung where a reader would otherwise assume it, and the word never appears
+      as a claim anywhere in the section.
+    */
+    await expect(outcome).toContainText(/does not say deployed/i);
+    const claims = await outcome.innerText();
+    expect(claims).not.toMatch(/\b(is live|deployment succeeded|successfully deployed)\b/i);
+  });
+
+  test("leaves the check that was not observed on the list", async ({ page }) => {
+    await page.goto("/");
+    const outcome = page.locator("#outcome");
+    await outcome.scrollIntoViewIfNeeded();
+
+    /*
+      A card showing only its passing lines turns a partial outcome into a
+      verified one by omission, and three ticks is exactly what a landing page
+      wants to show. The labels are the product's own — "/pricing answers",
+      never "/pricing works", because that check cannot tell anybody that.
+
+      Asserted against the **list**, not against the section. The first version
+      of this test asked whether the words "not observed" appeared anywhere in
+      the block, and the paragraph below the list says them — so deleting the
+      unobserved row left it green. Three of its four assertions were reading
+      prose about the thing rather than the thing.
+    */
+    const lines = outcome.locator("ul li");
+    await expect(lines).toHaveCount(3);
+    await expect(lines.filter({ hasText: "not observed" })).toHaveCount(1);
+    await expect(lines.first()).toContainText("/pricing answers");
+
+    await expect(outcome).toContainText(/never left off the list/i);
+    await expect(outcome).toContainText(/Not observed is not a failed deployment/i);
+  });
+
+  test("draws the third rung empty, and never fills it with a result", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const outcome = page.locator("#outcome");
+    await outcome.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(800);
+
+    const rungs = outcome.locator("ol > li");
+    await expect(rungs).toHaveCount(3);
+
+    /*
+      Drawn open rather than described as open: a dashed contour is this
+      product's mark for a loop that has not closed, and the third rung carries
+      no fill because there is nothing in it. Measured off the rendered page so
+      a redesign that quietly gives it a surface fails here.
+    */
+    const styles = await rungs.evaluateAll((items) =>
+      items.map((item) => {
+        const card = item.querySelector("[data-reveal] > div") as HTMLElement;
+        const computed = getComputedStyle(card);
+        return { border: computed.borderTopStyle, background: computed.backgroundColor };
+      }),
+    );
+    expect(styles[0].border).toBe("solid");
+    expect(styles[1].border).toBe("solid");
+    expect(styles[2].border).toBe("dashed");
+    expect(styles[2].background).toBe("rgba(0, 0, 0, 0)");
+
+    // And it says the thing that makes an unmeasured change unmeasured rather
+    // than a null result.
+    await expect(outcome).toContainText("Not measured — no source");
+    await expect(outcome).toContainText(/never becomes "no impact"/i);
+  });
+});

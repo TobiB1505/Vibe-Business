@@ -18,18 +18,18 @@ import { LandingFlowTabs, type FlowTab } from "./landing-flow-tabs";
  * they are honest everywhere.
  *
  * The data is example data and the section says so. What is *not* example is
- * the behaviour: a partial source states why it stopped short, a step nobody
- * can do for you says so instead of showing a percentage, and the closing
- * panel names the thing Vibe cannot measure.
+ * the behaviour: a finding carries the coverage its confidence rests on, and a
+ * step nobody can do for you says so instead of showing a percentage.
  *
- * ## Three tabs, and shrinking
+ * ## Two tabs, and shrinking
  *
  * UI-34 is taking this bar apart one step at a time, because a tab bar asks a
  * reader to stop and choose inside a page whose whole shape is a scroll.
  * *Understand* left first and is `LandingScan`; *Prioritize* left next and is
  * `LandingMove`; *Execute* left with its file list, its validation depth and
- * its cost line, and is `LandingAgent`. What remains is what has not been given
- * a block of its own yet.
+ * its cost line, and is `LandingAgent`; *Measure* left with the sentence about
+ * what Vibe cannot see, and is `LandingOutcome`. What remains is what has not
+ * been given a block of its own yet.
  */
 
 const PLAN_STEPS = [
@@ -81,33 +81,6 @@ const TABS: FlowTab[] = [
           </li>
         ))}
       </ul>
-    ),
-  },
-  {
-    id: "measure",
-    label: "Measure",
-    headline: "After it ships, Vibe checks what became visible — and admits what it cannot see.",
-    panel: (
-      <div className="flex flex-col gap-4">
-        <div className="border-line-1 bg-surface-3 rounded-well flex flex-col gap-3 border p-5">
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusPill tone="success">Observed</StatusPill>
-            <span className="text-fg-body text-body">
-              A pricing page is now reachable from your homepage.
-            </span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusPill tone="neutral">Not measured</StatusPill>
-            <span className="text-fg-body text-body">
-              Whether more people paid. Vibe reads your public product, not your revenue.
-            </span>
-          </div>
-        </div>
-        <p className="text-fg-muted max-w-[62ch] text-ui leading-relaxed">
-          Vibe proves a change is reachable, never that it worked. The second line is the one most
-          products would quietly leave out.
-        </p>
-      </div>
     ),
   },
 ];
