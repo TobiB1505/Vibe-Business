@@ -1,15 +1,11 @@
-import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
-import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
-import { CostLine } from "@/components/system/cost-line";
 import { FindingCard } from "@/components/system/finding-card";
 import { StatusPill } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
-import { creditsToUnits } from "@/modules/credits/units";
-import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
 import { LandingFlowTabs, type FlowTab } from "./landing-flow-tabs";
 
 /**
- * The six steps, each shown through the component the product actually uses.
+ * What is left of the tab bar, each tab shown through the component the
+ * product actually uses.
  *
  * ## The one thing a template cannot copy
  *
@@ -22,36 +18,19 @@ import { LandingFlowTabs, type FlowTab } from "./landing-flow-tabs";
  * they are honest everywhere.
  *
  * The data is example data and the section says so. What is *not* example is
- * the behaviour: a partial source states why it stopped short, a skipped
- * validation step says it was skipped, a refused path is named, and the price
- * beside a remedy is resolved from the rate card in force rather than typed
- * into this file.
+ * the behaviour: a partial source states why it stopped short, a step nobody
+ * can do for you says so instead of showing a percentage, and the closing
+ * panel names the thing Vibe cannot measure.
+ *
+ * ## Three tabs, and shrinking
+ *
+ * UI-34 is taking this bar apart one step at a time, because a tab bar asks a
+ * reader to stop and choose inside a page whose whole shape is a scroll.
+ * *Understand* left first and is `LandingScan`; *Prioritize* left next and is
+ * `LandingMove`; *Execute* left with its file list, its validation depth and
+ * its cost line, and is `LandingAgent`. What remains is what has not been given
+ * a block of its own yet.
  */
-
-const RUN_FILES: LiveFile[] = [
-  {
-    path: "src/app/pricing/page.tsx",
-    kind: "generated",
-    detail: null,
-    bytes: 1840,
-    withheldBy: null,
-  },
-  {
-    path: "src/components/pricing-table.tsx",
-    kind: "generated",
-    detail: null,
-    bytes: 920,
-    withheldBy: null,
-  },
-  { path: "package.json", kind: "observed", detail: null, bytes: null, withheldBy: null },
-  {
-    path: ".env.local",
-    kind: "candidate",
-    detail: null,
-    bytes: null,
-    withheldBy: "Sensitive path policy",
-  },
-];
 
 const PLAN_STEPS = [
   { title: "Add a pricing section people can reach", actor: "Vibe can do this", tone: "active" },
@@ -102,25 +81,6 @@ const TABS: FlowTab[] = [
           </li>
         ))}
       </ul>
-    ),
-  },
-  {
-    id: "execute",
-    label: "Execute",
-    headline: "Vibe works on its own branch, and shows you everything it touched.",
-    panel: (
-      <div className="flex flex-col gap-5">
-        <AgentRunFiles files={RUN_FILES} />
-        <ValidationDepthNote
-          depth={{
-            depth: "fast",
-            label: "Fast",
-            reason: "a low-risk presentational change",
-            notRun: ["test", "build"],
-          }}
-        />
-        <CostLine cost={{ kind: "settled", credits: creditsToUnits(200) }} />
-      </div>
     ),
   },
   {

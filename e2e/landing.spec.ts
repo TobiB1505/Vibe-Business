@@ -40,9 +40,24 @@ test.describe("the landing page reveals what it hides", () => {
     // without the reveal ever running.
     expect(await blocks.last().evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
 
-    for (let index = 0; index < count; index++) {
-      await blocks.nth(index).scrollIntoViewIfNeeded();
-    }
+    /*
+      Walked in viewport-sized steps rather than jumped element to element.
+
+      `scrollIntoViewIfNeeded` per block is an instant jump, and once the page
+      grew past a certain length one jump cleared a whole block: the observer
+      is evaluated at the position it lands on, so a block that was below the
+      viewport before the jump and above it afterwards was never once inside
+      one. That is an artefact of jumping — a reader scrolling produces a
+      position every frame — and it was hiding the question this test asks,
+      which is whether a *scroll* brings every block up.
+    */
+    await page.evaluate(async () => {
+      const step = Math.round(window.innerHeight * 0.6);
+      for (let y = 0; y <= document.body.scrollHeight; y += step) {
+        window.scrollTo(0, y);
+        await new Promise((resolve) => setTimeout(resolve, 90));
+      }
+    });
     await page.waitForTimeout(1200);
 
     const stillHidden = await page.evaluate(
@@ -657,5 +672,129 @@ test.describe("the move", () => {
     // thing the architecture already enforces.
     await expect(page.locator("#move")).toContainText(/A Move is a proposal/i);
     await expect(page.locator("#move")).toContainText(/until you say so/i);
+  });
+});
+
+/*
+ * Step four: the Agent, drawn as a passage with gates across it.
+ *
+ * The block's whole claim is the shape — three barriers that part as they are
+ * reached, and a fourth that does not part at all — so the guards measure the
+ * drawing as well as reading the words. A page that said "the last gate is
+ * you" while animating it open would be contradicting the architecture in the
+ * one place a founder is looking for reassurance.
+ */
+test.describe("the agent, and its gates", () => {
+  /** Where each gate leaf sits once the block has been walked past. */
+  async function gateLeaves(page: import("@playwright/test").Page) {
+    return page.locator("#agent [data-gate-leaf]").evaluateAll((els) =>
+      els.map((el) => {
+        const box = el.getBoundingClientRect();
+        return { left: box.left, right: box.right };
+      }),
+    );
+  }
+
+  test("names four stages, and what stops the run at each gate", async ({ page }) => {
+    await page.goto("/");
+    const agent = page.locator("#agent");
+    await agent.scrollIntoViewIfNeeded();
+
+    for (const stage of ["Understand", "Build", "Validate", "Preview"]) {
+      await expect(agent.getByText(stage, { exact: true })).toBeVisible();
+    }
+
+    /*
+      Every gate carries its failure. A gate that only ever passes is
+      decoration, and each of these is a rule this repository enforces: a moved
+      branch blocks rather than triggering merge reasoning (56), a workspace
+      reading Vibe cannot complete fails the run instead of becoming a partial
+      change (77), and a validation that passes authorizes nothing (66).
+    */
+    await expect(agent).toContainText(/A branch that moved stops the run/i);
+    await expect(agent).toContainText(/never takes the agent's account of its own work/i);
+    await expect(agent).toContainText(/never that the change is safe, correct or ready/i);
+  });
+
+  test("opens three gates and leaves the fourth shut", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator("#agent").scrollIntoViewIfNeeded();
+    // Walk the whole block, so every gate has been reached by the viewport.
+    await page.evaluate(async () => {
+      const el = document.querySelector("#agent") as HTMLElement;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      for (let y = top - 400; y < top + el.scrollHeight + 400; y += 300) {
+        window.scrollTo(0, y);
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    });
+    await page.waitForTimeout(1000);
+
+    const leaves = await gateLeaves(page);
+    expect(leaves).toHaveLength(8);
+
+    // Three gaps a run passes through…
+    for (let gate = 0; gate < 3; gate += 1) {
+      const gap = leaves[gate * 2 + 1].left - leaves[gate * 2].right;
+      expect(gap, `gate ${gate + 1} did not open`).toBeGreaterThan(200);
+    }
+
+    // …and one that is still closed, because nothing inside this product opens
+    // it. Rules 58, 67 and 70: the default branch moves for a human approval
+    // bound to one exact commit, or it does not move.
+    const shut = leaves[7].left - leaves[6].right;
+    expect(Math.abs(shut), "the last gate is not drawn shut").toBeLessThanOrEqual(2);
+  });
+
+  test("draws the same open gates for a reader who asked for no motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await page.waitForTimeout(600);
+
+    /*
+      Deliberately without scrolling to the block. A gate that only opens once
+      it is reached is a gate this reader never sees open, and the whole
+      picture would then say four shut gates beside a heading that says three
+      of them are not.
+    */
+    const leaves = await gateLeaves(page);
+    const gap = leaves[1].left - leaves[0].right;
+    expect(gap, "reduced motion left the first gate closed").toBeGreaterThan(200);
+    expect(Math.abs(leaves[7].left - leaves[6].right)).toBeLessThanOrEqual(2);
+  });
+
+  test("names the path it was not allowed to touch", async ({ page }) => {
+    await page.goto("/");
+    const agent = page.locator("#agent");
+    await agent.scrollIntoViewIfNeeded();
+
+    // The one fact about a run that no diff can carry: a path the agent offered
+    // and policy refused. It is a state, not a warning.
+    await expect(agent.getByTestId("agent-run-files")).toBeVisible();
+    await expect(agent).toContainText(".env.local");
+    await expect(agent).toContainText("Sensitive path policy");
+  });
+
+  test("never lets a merge read as a deployment", async ({ page }) => {
+    await page.goto("/");
+    const agent = page.locator("#agent");
+    await agent.scrollIntoViewIfNeeded();
+
+    // Rule 71, then rule 74 — both halves, because either alone is misleading.
+    await expect(agent).toContainText(/fast-forwards your default branch/i);
+    await expect(agent).toContainText(/It never merges, rebases, forces or deletes/i);
+    await expect(agent).toContainText(/does not mean deployed/i);
+    await expect(agent).toContainText(/can still start your own pipeline/i);
+
+    // And no control that would imply Vibe ships anything. None of these exist
+    // anywhere in the product, so none of them may exist on the page selling it.
+    for (const word of ["Deploy", "Ship it", "Publish", "Go live"]) {
+      await expect(agent.getByRole("button", { name: word })).toHaveCount(0);
+      await expect(agent.getByRole("link", { name: word })).toHaveCount(0);
+    }
   });
 });

@@ -1516,6 +1516,17 @@
     opacity: 1 !important;
     transform: none !important;
   }
+
+  /*
+   * The Agent block's gates (UI-34). Three of the four are drawn open, and the
+   * fourth is drawn shut because nothing inside the product opens it — so a
+   * reader who asked for no movement cannot be shown four shut gates while the
+   * text beside them says three are open. Each leaf carries its own end
+   * position, and a shut one carries `0%`.
+   */
+  [data-gate-leaf] {
+    transform: translateX(var(--gate-part, 0%)) !important;
+  }
 }
 
 /*

@@ -422,13 +422,15 @@ test.describe("meeting Nova before signing up", () => {
  * The steps, walkable. This was a static grid of equal cards — it said what the
  * product does and showed none of it.
  *
- * Four, not six: UI-34 is taking the tab bar apart one step at a time, because
- * a tab bar asks the reader to stop and choose inside a page whose whole shape
- * is a scroll. *Understand* left first and is `LandingScan`; *Prioritize* left
- * next and is `LandingMove`. Their assertions went with them, to
- * `landing.spec.ts` against the blocks that own them now. The count is asserted
- * rather than left loose, so the next step to move has to come past this line
- * deliberately.
+ * Three, not six: UI-34 is taking the tab bar apart one step at a time,
+ * because a tab bar asks the reader to stop and choose inside a page whose
+ * whole shape is a scroll. *Understand* left first and is `LandingScan`;
+ * *Prioritize* left next and is `LandingMove`; *Execute* left with its file
+ * list and is `LandingAgent`. Their assertions went with them, to
+ * `landing.spec.ts` against the blocks that own them now — including the
+ * refused path, which is asserted there against the gate it belongs to. The
+ * count is asserted rather than left loose, so the next step to move has to
+ * come past this line deliberately.
  */
 test.describe("walking the steps", () => {
   test("switches one reserved panel, and shows the real components in it", async ({ page }) => {
@@ -436,20 +438,17 @@ test.describe("walking the steps", () => {
     const flow = page.getByTestId("landing-flow");
     await flow.scrollIntoViewIfNeeded();
 
-    await expect(flow.getByRole("tab")).toHaveCount(4);
+    await expect(flow.getByRole("tab")).toHaveCount(3);
 
     /*
      * Reserved geometry: switching a tab must not move the page under somebody
      * reading it, which on a marketing page matters most.
      */
     const before = await flow.boundingBox();
-    await flow.getByRole("tab", { name: "Execute" }).click();
-    await expect(flow.getByTestId("agent-run-files")).toBeVisible();
+    await flow.getByRole("tab", { name: "Plan" }).click();
+    await expect(flow.getByText("Needs your input")).toBeVisible();
     const after = await flow.boundingBox();
     expect(Math.abs((before?.height ?? 0) - (after?.height ?? 0))).toBeLessThanOrEqual(2);
-
-    // The refused path is named here too — it is the thing a diff cannot show.
-    await expect(flow).toContainText("Sensitive path policy");
   });
 
   test("admits on Measure what it cannot see", async ({ page }) => {

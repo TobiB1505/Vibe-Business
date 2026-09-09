@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
+import { LandingAgent } from "@/components/marketing/landing-agent";
 import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
 import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
@@ -12,18 +13,10 @@ import { LandingTrust } from "@/components/marketing/landing-trust";
 import { Reveal } from "@/components/marketing/reveal";
 import { buttonClasses } from "@/components/ui/button";
 import { MarketingCta } from "@/components/marketing/marketing-cta";
-import { AgentIcon, ArrowRightIcon, CheckIcon, LockIcon } from "@/components/ui/dashboard-icons";
+import { ArrowRightIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
 import { listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
-
-const AGENT_STAGES = [
-  ["Understand", "Goal and live premises checked"],
-  ["Build", "Change prepared in an isolated workspace"],
-  ["Validate", "Project checks run independently"],
-  ["Preview", "Current and proposed result made comparable"],
-  ["Review", "One exact commit waits for your decision"],
-] as const;
 
 const PLAN_FEATURES: Record<string, string[]> = {
   free: ["100 Welcome Credits", "No recurring monthly grant", "Start with one product"],
@@ -51,7 +44,10 @@ export default function HomePage() {
         same guarantee is a media query in `globals.css`.
       */}
       <noscript>
-        <style>{"[data-reveal]{opacity:1!important;transform:none!important}"}</style>
+        <style>
+          {"[data-reveal]{opacity:1!important;transform:none!important}" +
+            "[data-gate-leaf]{transform:translateX(var(--gate-part,0%))!important}"}
+        </style>
       </noscript>
 
       {/*
@@ -108,6 +104,13 @@ export default function HomePage() {
       */}
       <LandingMove />
 
+      {/*
+        Step four, and the one a founder is actually deciding about: whether a
+        machine gets near the branch they ship from. Its panels came out of
+        `LandingFlow`'s *Execute* tab, the third step to leave the tab bar.
+      */}
+      <LandingAgent />
+
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">
           <MonoLabel>Built for products made with</MonoLabel>
@@ -152,92 +155,6 @@ export default function HomePage() {
 
       <Reveal>
         <LandingTrust />
-      </Reveal>
-
-      <Reveal>
-        <section
-          id="agent"
-          aria-labelledby="agent-heading"
-          className="border-line-1 scroll-mt-24 border-t py-20 sm:py-28"
-        >
-          <div className="grid gap-10 lg:grid-cols-[minmax(18rem,0.7fr)_minmax(0,1.3fr)] lg:items-center lg:gap-16">
-            <div className="flex flex-col gap-5">
-              <MonoLabel className="text-mint">AI agent execution</MonoLabel>
-              <h2
-                id="agent-heading"
-                className="text-fg text-[clamp(2.25rem,4vw,3.5rem)] leading-[1.04] font-bold tracking-[-0.045em] text-balance"
-              >
-                Turn decisions into <span className="text-mint">real progress.</span>
-              </h2>
-              <p className="text-fg-prose max-w-[48ch] leading-relaxed">
-                For supported product changes, Vibe prepares the work in isolation, validates it
-                independently and gives you the exact result to review.
-              </p>
-              <div className="border-line-2 bg-surface-2 rounded-panel flex items-center gap-4 border p-4">
-                <span className="text-mint flex size-11 shrink-0 items-center justify-center rounded-field border border-mint-line bg-mint-tint">
-                  <LockIcon size={19} />
-                </span>
-                <div>
-                  <p className="text-fg font-semibold">Built for control</p>
-                  <p className="text-fg-secondary mt-1 text-body">
-                    No change reaches the default branch without approval.
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="border-line-2 bg-surface-2 rounded-card overflow-hidden border shadow-card">
-              <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-4 sm:px-7">
-                <div className="flex items-center gap-3">
-                  <span className="text-mint flex size-9 items-center justify-center rounded-field bg-mint-tint">
-                    <AgentIcon size={18} />
-                  </span>
-                  <span className="text-fg font-semibold">AI Agent</span>
-                </div>
-                <span className="text-mint flex items-center gap-2 text-caption">
-                  <span className="size-1.5 rounded-full bg-mint" /> Prepared for review
-                </span>
-              </div>
-              <div className="grid sm:grid-cols-[13rem_minmax(0,1fr)]">
-                <ol className="border-line-2 flex flex-col border-b p-5 sm:border-r sm:border-b-0 sm:p-6">
-                  {AGENT_STAGES.map(([title, detail], index) => (
-                    <li key={title} className="relative flex gap-3 pb-6 last:pb-0">
-                      {index < AGENT_STAGES.length - 1 && (
-                        <span
-                          aria-hidden="true"
-                          className="bg-mint-line absolute top-7 bottom-0 left-3 w-px"
-                        />
-                      )}
-                      <span className="border-mint-line bg-app text-mint relative z-10 flex size-6 shrink-0 items-center justify-center rounded-full border font-mono text-[0.65rem]">
-                        {index + 1}
-                      </span>
-                      <span>
-                        <span className="text-fg-body block text-body font-semibold">{title}</span>
-                        <span className="text-fg-muted mt-1 block text-caption leading-relaxed sm:hidden">
-                          {detail}
-                        </span>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <div className="flex flex-col gap-3 p-5 sm:p-6">
-                  <MonoLabel>What each stage proves</MonoLabel>
-                  {AGENT_STAGES.map(([title, detail]) => (
-                    <div
-                      key={title}
-                      className="border-line-1 bg-app/50 rounded-nav flex items-start gap-3 border p-3.5"
-                    >
-                      <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
-                      <p className="text-fg-secondary text-body leading-relaxed">
-                        <span className="text-fg-body font-semibold">{title}:</span> {detail}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
       </Reveal>
 
       <Reveal>
