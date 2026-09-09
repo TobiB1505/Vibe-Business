@@ -248,13 +248,13 @@ test.describe("Nova's voice through setup", () => {
     await page.emulateMedia({ reducedMotion: "reduce" });
   });
 
-  test("says something in every one of the ten states", async ({ page }) => {
+  test("says something in every one of the eleven states", async ({ page }) => {
     await page.goto(STATES);
 
     /*
      * A sentence per state is the guarantee `NOVA_ONBOARDING_MESSAGE` makes as
      * a total record, and this is that guarantee in a browser: the study
-     * renders all ten, so a state that stopped rendering its bubble would show
+     * renders all eleven, so a state that stopped rendering its bubble would show
      * up here as a missing one.
      */
     for (const state of ONBOARDING_STATES) {
@@ -272,7 +272,7 @@ test.describe("Nova's voice through setup", () => {
     await page.goto(STATES);
 
     /*
-     * §M, and the claim the walkthrough makes out loud. The ten-state study
+     * §M, and the claim the walkthrough makes out loud. The all-states study
      * renders no block, so any field here would be one Nova's own chrome had
      * grown — which is exactly what this surface exists to have removed.
      */
@@ -284,6 +284,109 @@ test.describe("Nova's voice through setup", () => {
 test.describe("what setup's blocks are allowed to bring", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  /**
+   * The signed-in read, in the two shapes it comes in.
+   *
+   * It is the one setup state whose block is decided by evidence rather than
+   * by where the founder is: the public crawl either watched a path bounce to
+   * a login, or it did not. Both are offers and both are free the first time,
+   * and everything that went wrong here went wrong because the two had never
+   * been on a screen together.
+   */
+  test("says what it found, once, and does not repeat Nova's own line", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "add_signed_in_product · a login was found");
+    await expect(block.getByText("Vibe found a sign-in surface on your website.")).toBeVisible();
+
+    /*
+     * The panel's own prose said it too — "Vibe can see your code and public
+     * website, but some of your product is behind a login" — three inches
+     * under a bubble in which Nova had just said exactly that. It is the
+     * caption problem, and in block presentation the two lines are gone.
+     */
+    await expect(block.getByText("but some of your product is behind a login")).toHaveCount(0);
+    await expect(block.getByText(NOVA_ONBOARDING_MESSAGE.add_signed_in_product)).toBeVisible();
+  });
+
+  /**
+   * Price before the press, in the branch that had none.
+   *
+   * `not_recommended` hand-rolled a "Run Deep Scan" button and said nothing
+   * about what it cost, while the branch beside it — reached on the same
+   * offer — said the first one is included. Every other kind of offer ranks
+   * above `not_recommended` in the view model, so the scan being offered with
+   * no terms at all was always the free one.
+   */
+  test("says the first read is free in both shapes of the offer", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    for (const title of [
+      "add_signed_in_product · a login was found",
+      "add_signed_in_product · nothing found either way",
+    ]) {
+      const block = blockCase(page, title);
+      await expect(block.getByRole("button", { name: "Run free Deep Scan" })).toBeVisible();
+    }
+  });
+
+  /**
+   * One way past, and it is a control.
+   *
+   * The panel carries a `Not now` that is a `span` — muted text beside a
+   * button, reading as the other option and doing nothing. Setup puts a real
+   * one under the block, so in block presentation the inert one is dropped:
+   * two "Not now"s with the dead one first is worse than either alone.
+   */
+  test("offers exactly one way to decline, and it is pressable", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "add_signed_in_product · a login was found");
+    await expect(block.getByText("Not now", { exact: true })).toHaveCount(0);
+    await expect(block.getByRole("button", { name: "Not now — go on without it" })).toBeVisible();
+  });
+
+  /**
+   * The beat that was missing, and the two things it must not do.
+   *
+   * Setup used to end ninety seconds of signing in with the next step's
+   * screen: a completed snapshot ended the step, and a completed snapshot says
+   * Vibe read the product, never that anybody was shown the reading.
+   */
+  test("shows what the signed-in read came back with", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "signed_in_reveal");
+    await expect(block.getByText(NOVA_ONBOARDING_MESSAGE.signed_in_reveal)).toBeVisible();
+    await expect(block.getByText("Pages Vibe looked at")).toBeVisible();
+    await expect(block.getByRole("button", { name: "Go on to the audit" })).toBeVisible();
+  });
+
+  /**
+   * And it does not sell the next one here.
+   *
+   * The included scan has just been spent, so `nextScan` on this screen is
+   * priced — the panel's own rerun offer would put "Scan again · 25 Credits"
+   * under a result the founder has not finished reading, seconds after they
+   * did what Nova asked.
+   */
+  test("offers no paid rerun over a reading seconds old", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "signed_in_reveal");
+    await expect(block.getByRole("button", { name: /Scan again/ })).toHaveCount(0);
+    await expect(block.getByText(/Credits/)).toHaveCount(0);
+  });
+
+  /** An instruction to look at something already read is the wrong sentence. */
+  test("names the reading rather than asking for it again", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "signed_in_reveal");
+    await expect(block.getByText("What Vibe read inside your product")).toBeVisible();
+    await expect(block.getByText("Look inside your signed-in product")).toHaveCount(0);
   });
 
   test("gives the paused question one frame, not two", async ({ page }) => {

@@ -168,6 +168,7 @@ const LABELS: Record<AuditEventType, string> = {
   "onboarding.product_understanding_started": "Setup: Vibe started working out what you built",
   "onboarding.product_understanding_completed": "Setup: Vibe worked out what you built",
   "onboarding.product_confirmed": "Setup: you confirmed what Vibe understood",
+  "onboarding.signed_in_product_declined": "Setup: you left the signed-in read for later",
   "onboarding.audit_started": "Setup: your first audit started",
   "onboarding.audit_needs_user": "Setup: the audit asked you a question",
   "onboarding.audit_completed": "Setup: your first audit finished",

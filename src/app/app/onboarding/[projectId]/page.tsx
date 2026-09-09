@@ -1,11 +1,13 @@
 import { notFound, redirect } from "next/navigation";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
+import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
+import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";
 import { getAuditReadiness } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getOnboardingFirstMove } from "@/modules/action-plans/service";
@@ -29,9 +31,15 @@ import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { getProductScanEvents } from "@/modules/product-scan/store";
 import { buildProductScanPresentation } from "@/modules/product-scan/presentation";
 import { AuditAnalyzing, AuditPreparing } from "../../projects/[projectId]/audit-lifecycle";
+import { DeepScanPanel } from "../../projects/[projectId]/deep-scan-panel";
 import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
-import { completeOnboardingAction, revealAuditAndFindFirstMoveAction } from "./actions";
+import {
+  completeOnboardingAction,
+  declineSignedInProductAction,
+  revealAuditAndFindFirstMoveAction,
+  revealSignedInProductAction,
+} from "./actions";
 import { NovaFirstRun } from "./nova-first-run";
 import { NovaOnboardingHeader } from "./nova-onboarding-header";
 import { NovaOpeningScreen } from "../../projects/[projectId]/nova/nova-opening-screen";
@@ -64,6 +72,22 @@ export const metadata: Metadata = {
   description: "Vibe is getting to know your product.",
 };
 
+/**
+ * Setup's ceiling, and the one step that needs it.
+ *
+ * The signed-in read runs its analysis inside the route segment that hosts the
+ * panel — the Deep Scan page carries the same number for the same reason, and
+ * its docblock says what the platform default costs: the founder signs in, a
+ * browser session is paid for, and the function is killed before the result
+ * comes back.
+ *
+ * The objection recorded there was that the ceiling used to sit on the project
+ * page, "which meant every section of the workspace ran under a 120-second
+ * function". This route is one screen with one step on it at a time, so what
+ * it makes long is itself.
+ */
+export const maxDuration = 240;
+
 export default async function ProjectOnboardingPage({
   params,
 }: {
@@ -85,7 +109,7 @@ export default async function ProjectOnboardingPage({
    * Nova's own two screens come before the rest of setup (NOVA-3).
    *
    * Derived from `deriveOnboardingState`'s answer rather than replacing it —
-   * the ten states, their reconciliation and their tests are untouched. When
+   * the eleven states, their reconciliation and their tests are untouched. When
    * the first run is behind us this is `handoff`, the feed is empty, and every
    * screen below renders exactly as it did.
    *
@@ -269,6 +293,7 @@ export default async function ProjectOnboardingPage({
     auditAccess,
     balance,
     auditEvents,
+    deepScan,
   ] = await Promise.all([
     onboarding.understandingOperation
       ? getProductScanEvents(supabase, {
@@ -322,6 +347,27 @@ export default async function ProjectOnboardingPage({
      * still gated.
      */
     listAuditEventsForProject(supabase, { projectId, userId: session.userId, limit: 6 }),
+    /*
+     * Everything the signed-in step needs, as the one question it is.
+     *
+     * Entitlement, the live session, the last snapshot and whether the public
+     * pages pointed at a login are answered together by the module, and the
+     * Deep Scan page and My Product's spotlight both ask it the same way. A
+     * second assembly here would be free to tell a founder their scan costs
+     * Credits while their included one is still unused, which is the one
+     * mistake that derivation exists to make impossible.
+     *
+     * Gated hard on the state: it reads the authenticated snapshot's result,
+     * which is large, and this route is polled every two and a half seconds
+     * in the states either side of it.
+     */
+    onboarding.state === "add_signed_in_product" || onboarding.state === "signed_in_reveal"
+      ? loadDeepScanViewModel(supabase, {
+          projectId,
+          userId: session.userId,
+          owned: { productionUrl: onboarding.productionUrl },
+        })
+      : null,
   ]);
 
   /* The Move onboarding ends on, when the Opportunity Engine produced one. */
@@ -333,7 +379,17 @@ export default async function ProjectOnboardingPage({
    * audit out of a question about whether Vibe read the product correctly.
    */
   const novaBundlesAudit =
-    auditAccess !== null && novaRevealBundlesAudit(resolveAuditCreditGate(auditAccess));
+    auditAccess !== null &&
+    novaRevealBundlesAudit(
+      resolveAuditCreditGate(auditAccess),
+      /*
+        Whether the signed-in read comes next, from the same predicate that
+        places the step rather than a second reading of it here. Confirming is
+        one press; confirming *and starting the audit* would run it over an
+        answer the founder has not been asked for yet.
+      */
+      onboarding.signedInProductPending,
+    );
 
   /*
    * Nova's sentence above the screens she narrates (§L Slice 4).
@@ -344,7 +400,7 @@ export default async function ProjectOnboardingPage({
    * is happening and why she is asking, which is the half a founder reads
    * first and the half that was previously a heading.
    *
-   * It was two screens when only two states had a sentence. All ten do now, so
+   * It was two screens when only two states had a sentence. All eleven do now, so
    * `deriveNovaOnboarding`'s three-way position is no longer what decides
    * whether she speaks — the state itself is, through the table.
    */
@@ -352,9 +408,9 @@ export default async function ProjectOnboardingPage({
    * Nova's sentence is no longer assembled here.
    *
    * `buildNovaScanFeed` and `buildNovaRevealFeed` produced a feed for two of
-   * the ten states, and the page filtered it down to the messages and rendered
+   * the eleven states, and the page filtered it down to the messages and rendered
    * them in a box above the section. The thread reads `NOVA_ONBOARDING_MESSAGE`
-   * for all ten instead — the same table those two functions now take their
+   * for all eleven instead — the same table those two functions now take their
    * own text from, so nothing was rewritten and the two cannot disagree.
    *
    * What did not move is the control under the reveal. `ProductConfirmation`
@@ -662,6 +718,76 @@ export default async function ProjectOnboardingPage({
                     />
                   </div>
                 </div>
+              }
+            />
+          )}
+
+          {onboarding.state === "add_signed_in_product" && (
+            <NovaOnboardingThread
+              state="add_signed_in_product"
+              /*
+                The panel writes "Look inside your signed-in product" itself,
+                and it is the better sentence: it says what the read is, where
+                the frame would only say what it is called.
+              */
+              blockNamesItself
+              blockLabel="Your signed-in product"
+              block={
+                deepScan ? (
+                  /*
+                    The shipped Deep Scan surface, composed rather than copied.
+                    `presentation="block"` drops its own border and its jump
+                    anchor and nothing else, so the entitlement, the price, the
+                    two-minute deadline, the live picture and every failure
+                    state are the ones a founder meets everywhere else.
+                  */
+                  <DeepScanPanel projectId={projectId} model={deepScan} presentation="block" />
+                ) : (
+                  /*
+                    No model means the module could not answer — no production
+                    origin it will accept, or no provider configured here. It
+                    says nothing about the founder's product, and the control
+                    below is still the way on, so this states the gap and
+                    stops.
+                  */
+                  <p className="text-fg-muted text-sm">
+                    Vibe can&apos;t open a browser for this project right now. That is a gap on
+                    Vibe&apos;s side, and nothing else about your setup is affected.
+                  </p>
+                )
+              }
+              /*
+                The way past, outside the block, as every decision is. It is
+                the founder's voice and it says where it leads — declining
+                writes one fact and starts nothing, and the audit is still
+                their press on the next screen.
+              */
+              control={
+                <form action={declineSignedInProductAction.bind(null, projectId)} noValidate>
+                  <Button type="submit" variant="secondary">
+                    Not now — go on without it
+                  </Button>
+                </form>
+              }
+            />
+          )}
+
+          {onboarding.state === "signed_in_reveal" && (
+            <NovaOnboardingThread
+              state="signed_in_reveal"
+              /* "Look inside your signed-in product · Ready", written by the
+                 panel over the reading it is about. */
+              blockNamesItself
+              blockLabel="Your signed-in product"
+              block={
+                deepScan ? (
+                  <DeepScanPanel projectId={projectId} model={deepScan} presentation="block" />
+                ) : null
+              }
+              control={
+                <form action={revealSignedInProductAction.bind(null, projectId)} noValidate>
+                  <NovaMoveButton type="submit" label="Go on to the audit" />
+                </form>
               }
             />
           )}

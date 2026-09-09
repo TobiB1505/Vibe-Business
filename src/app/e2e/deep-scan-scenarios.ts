@@ -93,7 +93,11 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
         },
       ],
       screens: [
-        { template: "/app", heading: "Welcome back", pages: [{ path: "/app", heading: "Welcome back" }] },
+        {
+          template: "/app",
+          heading: "Welcome back",
+          pages: [{ path: "/app", heading: "Welcome back" }],
+        },
         {
           template: "/app/projects/:id/settings",
           heading: "Project Settings",
@@ -119,12 +123,14 @@ export const E2E_DEEP_SCAN_SCENARIOS = {
         {
           kind: "by_design",
           path: null,
-          message: "3 screen(s) exist in more copies than Vibe inspected. Each was read up to 2 time(s).",
+          message:
+            "3 screen(s) exist in more copies than Vibe inspected. Each was read up to 2 time(s).",
         },
         {
           kind: "observed",
           path: "/app/onboarding",
-          message: "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
+          message:
+            "This path redirected to a page Vibe had already inspected, so it added no new evidence.",
         },
       ],
       accessMode: "credits",
@@ -231,6 +237,51 @@ export function isE2eDeepScanScenario(value: string): value is E2eDeepScanScenar
  * They are `DeepScanViewModel`s and pass through `buildDeepScanSpotlight` in
  * the route, so the fixture cannot skip the derivation being tested.
  */
+/**
+ * The two a founder meets during setup, before any scan has run.
+ *
+ * `add_signed_in_product` sits after the product is confirmed and before the
+ * audit, and which of these it renders is decided by evidence rather than by a
+ * question: the public crawl either saw a path bounce to a login, or it did
+ * not. Both are offers; only one of them leads with what Vibe already found.
+ */
+export const E2E_ONBOARDING_DEEP_SCAN_SCENARIOS = {
+  /** Evidence says the product is behind a login. She leads with what she saw. */
+  recommended: {
+    ...BASE,
+    state: "recommended",
+    includedScanAvailable: true,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    showRecommendation: true,
+    recommendationReason: "Vibe found a sign-in surface on your website.",
+    nextScan: { kind: "included" },
+  } satisfies DeepScanViewModel,
+  /**
+   * The reading, seconds old, on the screen the founder lands on after it.
+   *
+   * `nextScan` is `priced` and that is not a fixture quirk: the included scan
+   * has just been spent, so a rerun offer here would be a 25-Credit button
+   * under a result nobody has finished reading. The block presentation drops
+   * it, and this fixture is what proves that rather than a comment saying so.
+   */
+  read: E2E_DEEP_SCAN_SCENARIOS["deep-scan-completed-with-warnings"],
+
+  /** No evidence either way. Offered quietly, and never pushed. */
+  not_recommended: {
+    ...BASE,
+    state: "not_recommended",
+    includedScanAvailable: true,
+    additionalScansRequireCredits: true,
+    additionalScanPrice: creditUnits(25_000),
+    blockedReason: null,
+    canStart: true,
+    nextScan: { kind: "included" },
+  } satisfies DeepScanViewModel,
+} as const;
+
 export const E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS = {
   /** Never run, included scan intact, and evidence says the product is behind a login. */
   "deep-scan-spotlight-offered": {
