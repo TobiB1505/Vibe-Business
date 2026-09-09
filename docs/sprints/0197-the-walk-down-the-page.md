@@ -72,7 +72,7 @@ a real box height after scrolling, plus the `aria-hidden` that keeps a drawn
 line from being described to a screen reader that already has the headings.
 Mutated by animating `scaleY` to zero: it failed.
 
-Unit 9,475 · browser 768 with 2 new · tsc clean · eslint 0 · build clean
+Unit 9,475 · browser 769 with 3 new · tsc clean · eslint 0 · build clean
 
 ## Sources
 
@@ -80,3 +80,38 @@ Unit 9,475 · browser 768 with 2 new · tsc clean · eslint 0 · build clean
 - [What is whiteboard animation process — Hatch Studios](https://hatchstudios.com/what-is-whiteboard-animation-process-uses-elements-process-examples/)
 - [Scroll Drawing — CSS-Tricks](https://css-tricks.com/scroll-drawing/)
 - [stroke-dashoffset — CSS-Tricks](https://css-tricks.com/almanac/properties/s/stroke-dashoffset/)
+
+## Addendum — the background that was there and invisible
+
+The founder, looking at the hero on a phone: *"Wo ist der background hin?"*
+
+Nothing had been deleted; `git diff` over `globals.css` since the hero landed
+shows no removed line. It was measurably present and effectively invisible, and
+the reason was **geometry, not opacity**.
+
+Sampled off the rendered page at 1440:
+
+| probe | before | after |
+| --- | --- | --- |
+| ground, far left | `7,10,12` | `11,13,14` |
+| beside the card | `6,12,13` | `9,45,35` |
+| above the card | `8,21,19` | `15,56,47` |
+
+A 46%×42% mint pool at `50% 52%` is 626px wide, sitting behind a 768px card
+that is opaque by design. The whole light was painted underneath the thing
+covering it, and the only place it escaped was a thin band above the card. An
+earlier pass widened the **mask**, which was never what was hiding it.
+
+The light frames the card now — two pools at the shoulders and a broad low wash
+reaching the section's edges — and the grid went from 8.5% white to 13%, because
+8.5% composites to about +8 per channel over this ground: enough on a good
+monitor at full brightness, and nothing on a phone, which is where it was
+reported missing.
+
+**One guard, mutated both ways**: the pools must sit off the centre line, and
+the grid mark must clear the threshold this ground swallows. Recentring the pool
+fails it; dropping the mark back to 8.5% fails it. Its limit is stated where it
+lives — it reads the computed value rather than sampling pixels, so it would not
+catch a light that is off-centre and still too weak, because decoding a
+screenshot needs an image library the browser suite does not carry. The pixel
+sampling stays a thing done by hand, which is how both of these were found.

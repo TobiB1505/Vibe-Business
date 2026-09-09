@@ -1444,12 +1444,32 @@
  * is a second, tighter one that exists only where the hero is.
  */
 .landing-hero-field {
-  --hero-field-mark: rgb(255 255 255 / 0.085);
+  /*
+    Measured, twice, off the rendered page rather than argued about.
+
+    The first version put a 46%×42% mint pool at dead centre — 626px wide,
+    behind a 768px card that is opaque by design. Sampled pixels: the light
+    beside the card read `6,12,13` against a `7,10,12` ground, so the
+    atmosphere was painted entirely underneath the thing covering it, and the
+    only place it escaped was a thin band above the card at `8,21,19`. Widening
+    the *mask* did not help, because the mask was never what was hiding it.
+
+    So the light frames the card instead of sitting under it: two pools at the
+    shoulders, plus a broad low wash that reaches the section's edges. And the
+    grid went from 8.5% white to 13%, because 8.5% composites to about +8 per
+    channel over this ground — enough on a good monitor at full brightness, and
+    nothing at all on a phone, which is where it was reported missing.
+  */
+  --hero-field-mark: rgb(255 255 255 / 0.13);
   background-image:
-    radial-gradient(ellipse 46% 42% at 50% 52%, rgb(0 229 160 / 0.16), transparent 74%),
+    radial-gradient(ellipse 34% 46% at 16% 46%, rgb(0 229 160 / 0.2), transparent 70%),
+    radial-gradient(ellipse 34% 46% at 84% 46%, rgb(0 229 160 / 0.16), transparent 70%),
+    radial-gradient(ellipse 90% 62% at 50% 40%, rgb(0 229 160 / 0.08), transparent 72%),
     linear-gradient(var(--hero-field-mark) 1px, transparent 1px),
     linear-gradient(90deg, var(--hero-field-mark) 1px, transparent 1px);
   background-size:
+    100% 100%,
+    100% 100%,
     100% 100%,
     46px 46px,
     46px 46px;

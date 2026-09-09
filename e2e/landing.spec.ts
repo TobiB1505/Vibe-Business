@@ -429,3 +429,54 @@ test.describe("the walk", () => {
     expect(drawn.transform).not.toContain("matrix(1, 0, 0, 0,");
   });
 });
+
+test.describe("the hero's ground", () => {
+  test("puts its light beside the card, not underneath it", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const image = await page
+      .locator(".landing-hero-field")
+      .evaluate((el) => getComputedStyle(el).backgroundImage);
+
+    /*
+      This shipped faint twice, and the reason was geometry rather than opacity:
+      a 46%×42% mint pool at `50% 52%` is 626px wide behind a 768px card that is
+      opaque by design, so the atmosphere was painted entirely underneath the
+      thing covering it. Sampled off the rendered page, the light beside the
+      card read `6,12,13` against a `7,10,12` ground — the background was
+      measurably there and invisible, and on a phone it read as missing.
+
+      So the guard is about *where* the light is: pools off the centre line, and
+      a grid mark that clears the threshold below which this ground swallows it.
+
+      It reads the computed value rather than sampling pixels, and that is a
+      real limit worth stating: it would not catch a light that is off-centre
+      and still too weak to see. Decoding a screenshot needs an image library
+      the browser suite does not have, so the pixel sampling stays a thing done
+      by hand when this is changed — which is how both defects were found.
+    */
+    expect(image).toContain("rgba(0, 229, 160");
+
+    const centres = [...image.matchAll(/at (\d+)% \d+%/g)].map((match) => Number(match[1]));
+    expect(centres.length, "the field should carry more than one pool").toBeGreaterThan(1);
+    expect(
+      centres.some((centre) => centre <= 25 || centre >= 75),
+      `every mint pool sits mid-page, where the card covers it: ${centres.join(", ")}`,
+    ).toBe(true);
+
+    const mark = await page
+      .locator(".landing-hero-field")
+      .evaluate((el) => getComputedStyle(el).getPropertyValue("--hero-field-mark"));
+    /*
+      Chromium serialises `rgb(255 255 255 / 0.13)` as `#ffffff21`, so the
+      slash form is not what comes back — read both rather than the one that
+      was written.
+    */
+    const hex = mark.trim().match(/^#[0-9a-f]{6}([0-9a-f]{2})$/i);
+    const alpha = hex
+      ? parseInt(hex[1], 16) / 255
+      : Number(mark.match(/\/\s*([\d.]+)\s*\)/)?.[1] ?? 0);
+    expect(alpha, `grid mark ${mark} is below what this ground shows`).toBeGreaterThanOrEqual(0.12);
+  });
+});
