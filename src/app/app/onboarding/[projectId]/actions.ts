@@ -227,6 +227,30 @@ export async function declineSignedInProductAction(projectId: string): Promise<v
   revalidatePath(onboardingHref(projectId));
 }
 
+/**
+ * "I have seen it" — the signed-in reading, acknowledged.
+ *
+ * The mirror of `markOnboardingMilestone("product_revealed_at")` and the audit's
+ * own, and it exists because a completed snapshot and a founder having been
+ * shown one are different facts. Setup treated them as the same, so the
+ * ninety seconds a founder had just spent ended with a modal closing and the
+ * next step's screen underneath it.
+ *
+ * Write-once, and it starts nothing: the audit is a separate press on the
+ * screen this moves to.
+ */
+export async function revealSignedInProductAction(projectId: string): Promise<void> {
+  await requireSession();
+  const supabase = await createClient();
+
+  await markOnboardingMilestone(supabase, {
+    projectId,
+    milestone: "signed_in_product_revealed_at",
+  });
+
+  revalidatePath(onboardingHref(projectId));
+}
+
 export type ConfirmAndAuditState =
   | { ok: true }
   | { ok: false; error: "not_found" | OperationFailureCode }

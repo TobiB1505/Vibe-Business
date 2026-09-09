@@ -1658,7 +1658,23 @@ export function DeepScanPanel({
       <Section presentation={presentation}>
         {model.state === "completed" && model.lastResult ? (
           <>
-            <Heading title="Look inside your signed-in product" status="Ready" />
+            {/*
+              An imperative over something already done.
+
+              On My Product this heads a section that still offers a rerun, so
+              "look inside" has something to point at. In setup the block is
+              the reading and nothing else — the offer directly below it is
+              gone — so the heading has to name what is there rather than ask
+              for it again.
+            */}
+            <Heading
+              title={
+                presentation === "block"
+                  ? "What Vibe read inside your product"
+                  : "Look inside your signed-in product"
+              }
+              status="Ready"
+            />
             <ResultSummary result={model.lastResult} />
             {/*
               A finished result is not the end of the section. A product changes
@@ -1668,13 +1684,23 @@ export function DeepScanPanel({
               scan turned the panel into a read-only card permanently. The offer
               is a separate question and is answered by `model.nextScan`.
             */}
-            <NextScan
-              next={model.nextScan}
-              rerun
-              onStart={handleStart}
-              disabled={disabled}
-              now={browserNow}
-            />
+            {/*
+              Not in setup. Here the reading is seconds old, the included scan
+              has just been spent, and `nextScan` is therefore priced — so this
+              would put "Scan again · 25 Credits" under a result the founder has
+              not finished reading, as the answer to having just done what Nova
+              asked. My Product is where a product that has since changed is
+              scanned again; setup's control is *go on*.
+            */}
+            {presentation === "panel" && (
+              <NextScan
+                next={model.nextScan}
+                rerun
+                onStart={handleStart}
+                disabled={disabled}
+                now={browserNow}
+              />
+            )}
           </>
         ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
           <>

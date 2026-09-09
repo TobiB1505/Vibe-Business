@@ -122,6 +122,8 @@ export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
     "I've got a good picture of what you built. Here's how I understand it — take a look, and if I've misunderstood anything important, tell me before I go further.",
   add_signed_in_product:
     "I've read your code and the pages anyone can reach. What I haven't seen is your product from the inside, signed in — and for most products that's where nearly all of it is.",
+  signed_in_reveal:
+    "I've been through your product signed in. This is what's in there — the part I'd have had to guess at otherwise.",
   audit_preparing:
     "Good. Now I'm going to look at the business around the product — what's working for it, what's in its way, and what deserves attention first.",
   audit_needs_user:
@@ -177,6 +179,19 @@ export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
   */
   add_signed_in_product:
     "If we go into the audit without it, I have to judge the business with everything behind your login unread — and I'd rather not guess at that part.",
+
+  /*
+    Why anyone put two minutes into signing in, said at the moment it pays off
+    rather than before it. The block above is the reading itself; what it
+    cannot say is where the reading goes next, and that is the whole reason the
+    step exists.
+
+    Deliberately not a claim about coverage. A signed-in read is bounded — a
+    page budget, a partial result where it runs out — so "nothing behind your
+    login has to be guessed at now" would be a completeness Vibe never
+    measured.
+  */
+  signed_in_reveal: "What I read in there goes into the audit with everything else.",
 
   /* The scan reports its own stages, from rows it writes as it goes. */
   product_scanning: null,
@@ -237,6 +252,7 @@ export const NOVA_ONBOARDING_TIER: Record<OnboardingState, NovaFocusTier> = {
   /* The founder's turn, and the mark listens. */
   product_reveal: "decision",
   add_signed_in_product: "decision",
+  signed_in_reveal: "decision",
   audit_needs_user: "decision",
   audit_reveal: "decision",
   first_move: "decision",

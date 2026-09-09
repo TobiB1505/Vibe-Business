@@ -29,10 +29,21 @@
 -- setting that closes a door.
 
 alter table public.project_onboarding
-  add column signed_in_product_declined_at timestamptz;
+  add column signed_in_product_declined_at timestamptz,
+  add column signed_in_product_revealed_at timestamptz;
 
 comment on column public.project_onboarding.signed_in_product_declined_at is
   'When the founder declined the signed-in read during setup. Null means not asked or not answered; whether a scan happened is the snapshot table''s fact, not this one.';
+
+-- And the other half of the same step: a completed snapshot says Vibe read the
+-- product, never that anybody was shown the reading. Setup used to treat the
+-- two as one fact, so a founder who signed in, waited ninety seconds and
+-- watched the browser close was answered by the next step's screen. The
+-- product profile and the audit both have a `_revealed_at` for exactly this
+-- reason; the signed-in read had the reveal missing rather than deliberately
+-- absent.
+comment on column public.project_onboarding.signed_in_product_revealed_at is
+  'When the founder was shown what the signed-in read came back with. Null while a completed read has not been put in front of them.';
 
 -- The lifecycle gains a step, so the constraint that guards it has to learn it.
 --
@@ -53,6 +64,7 @@ alter table public.project_onboarding
       'product_scanning',
       'product_reveal',
       'add_signed_in_product',
+      'signed_in_reveal',
       'audit_preparing',
       'audit_needs_user',
       'audit_running',

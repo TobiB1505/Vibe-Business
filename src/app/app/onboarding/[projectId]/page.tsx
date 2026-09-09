@@ -38,6 +38,7 @@ import {
   completeOnboardingAction,
   declineSignedInProductAction,
   revealAuditAndFindFirstMoveAction,
+  revealSignedInProductAction,
 } from "./actions";
 import { NovaFirstRun } from "./nova-first-run";
 import { NovaOnboardingHeader } from "./nova-onboarding-header";
@@ -360,7 +361,7 @@ export default async function ProjectOnboardingPage({
      * which is large, and this route is polled every two and a half seconds
      * in the states either side of it.
      */
-    onboarding.state === "add_signed_in_product"
+    onboarding.state === "add_signed_in_product" || onboarding.state === "signed_in_reveal"
       ? loadDeepScanViewModel(supabase, {
           projectId,
           userId: session.userId,
@@ -766,6 +767,26 @@ export default async function ProjectOnboardingPage({
                   <Button type="submit" variant="secondary">
                     Not now — go on without it
                   </Button>
+                </form>
+              }
+            />
+          )}
+
+          {onboarding.state === "signed_in_reveal" && (
+            <NovaOnboardingThread
+              state="signed_in_reveal"
+              /* "Look inside your signed-in product · Ready", written by the
+                 panel over the reading it is about. */
+              blockNamesItself
+              blockLabel="Your signed-in product"
+              block={
+                deepScan ? (
+                  <DeepScanPanel projectId={projectId} model={deepScan} presentation="block" />
+                ) : null
+              }
+              control={
+                <form action={revealSignedInProductAction.bind(null, projectId)} noValidate>
+                  <NovaMoveButton type="submit" label="Go on to the audit" />
                 </form>
               }
             />

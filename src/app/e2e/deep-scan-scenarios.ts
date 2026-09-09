@@ -259,6 +259,16 @@ export const E2E_ONBOARDING_DEEP_SCAN_SCENARIOS = {
     recommendationReason: "Vibe found a sign-in surface on your website.",
     nextScan: { kind: "included" },
   } satisfies DeepScanViewModel,
+  /**
+   * The reading, seconds old, on the screen the founder lands on after it.
+   *
+   * `nextScan` is `priced` and that is not a fixture quirk: the included scan
+   * has just been spent, so a rerun offer here would be a 25-Credit button
+   * under a result nobody has finished reading. The block presentation drops
+   * it, and this fixture is what proves that rather than a comment saying so.
+   */
+  read: E2E_DEEP_SCAN_SCENARIOS["deep-scan-completed-with-warnings"],
+
   /** No evidence either way. Offered quietly, and never pushed. */
   not_recommended: {
     ...BASE,

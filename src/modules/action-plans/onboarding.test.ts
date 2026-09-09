@@ -50,6 +50,7 @@ const READY_FOR_FIRST_MOVE: OnboardingFacts = {
   hasSignedInProduct: true,
   signedInProductOfferable: true,
   signedInProductDeclined: false,
+  signedInProductRevealed: true,
   auditNeedsUser: false,
   auditRunning: false,
   auditAnalyzing: false,

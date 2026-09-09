@@ -77,10 +77,48 @@ the function is killed before the result comes back. The objection recorded
 there — that the ceiling used to make *every* section of the workspace long —
 does not apply to a route that is one step at a time.
 
+## The beat that was missing, found by pressing the button
+
+The founder asked what happens on *Run free Deep Scan*, and the honest answer
+had two halves.
+
+**A modal opens, and that is right.** The founder is typing a password into a
+live browser at 1920×1200; the thread column is a little over seven hundred
+pixels, and a password field scaled into it is a worse thing than a dialog. The
+shipped dialog also carries the focus trap, ESC cancelling the *session* rather
+than hiding a window, the two-minute countdown, and the four overlays whose
+own bug is recorded in the module's README. The render-block idea is that
+*Vibe's output* is composed into the thread; a founder signing in to their own
+product is not output.
+
+**And then setup answered them with the next step's screen.** `router.refresh()`
+ran, a completed snapshot made `signedInProductPending` false, and the cascade
+fell through to `audit_preparing`. The reading they had just spent ninety
+seconds on was rendered nowhere: the panel's `completed` branch, with its pages,
+its surfaces and its screens, is unreachable from setup.
+
+The cause is one conflation. **A completed snapshot says Vibe read the product.
+It says nothing about whether anybody was shown the reading.** The product
+profile has `product_revealed_at` and the audit has `audit_revealed_at` for
+exactly this reason; the signed-in read had the reveal missing rather than
+deliberately absent.
+
+So `signed_in_reveal` is a second state, on the same pattern as the other two
+reveals, and the block is the same panel again — its own completed branch, on
+the reading that just landed. Two things it does not do:
+
+- **It does not sell the next scan.** The included one has just been spent, so
+  `nextScan` here is priced, and the panel's rerun offer would put *"Scan again
+  · 25 Credits"* under a result nobody has finished reading, as the answer to
+  having just done what Nova asked. Dropped in block presentation.
+- **It does not tell them to look inside.** The heading is an imperative, which
+  is right on My Product where a rerun sits under it and wrong over a reading
+  already done.
+
 ## What rendering found that green tests did not
 
-Three, and the pattern from 0163 held exactly: the suite was green before each,
-and each came from putting the thing on a screen.
+Three in the offer, and the pattern from 0163 held exactly: the suite was green
+before each, and each came from putting the thing on a screen.
 
 1. **The panel said Nova's sentence back to her.** The `recommended` branch
    opens *"Vibe can see your code and public website, but some of your product
@@ -116,13 +154,13 @@ about setup.
 
 ## What has not been proved
 
-**Nothing here has been dogfooded**, the third sprint running. In particular
-nobody has signed in to a real product through this step: the browser tests
-cover the offer, its two readings, its price and its way out, and every one of
-those is a fixture holding a `DeepScanViewModel`. What happens after *Run free
-Deep Scan* is pressed from inside setup — the dialog, the countdown, the
-handoff, the ninety seconds, the result landing in a state that then moves on
-— has been read in code and never watched.
+**Nothing here has been dogfooded**, the third sprint running. The dialog was
+opened from inside setup by pressing the button in a fixture, which is how the
+missing reveal was found, but nothing behind it ran: no browser was built, no
+login happened, no snapshot landed. So the *transition* — a real scan sealing,
+the modal closing, and the thread arriving on `signed_in_reveal` with that
+reading in it — is the one step of this flow that has been reasoned about and
+never watched.
 
 **The 240-second ceiling is asserted by nothing.** It is a route export, and a
 test that proves the analysis survives on that route needs a browser session
@@ -134,7 +172,7 @@ recording the absence.
 
 ## Validation
 
-Domain 9,311 · lint 0/0 · typecheck clean · build green · browser suite 676
-passed, none failed, flaky or skipped. One migration, one nullable column and
+Domain 9,315 · lint 0/0 · typecheck clean · build green · browser suite 679
+passed, none failed, flaky or skipped. One migration: two nullable columns and
 one widened CHECK, no schema change beyond it, no new dependency, no widened
 allowlist.

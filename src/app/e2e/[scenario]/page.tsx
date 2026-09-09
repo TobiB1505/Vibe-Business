@@ -538,6 +538,29 @@ export default async function E2eScenarioPage({
             />
           </BlockCase>
 
+          {/*
+            The beat that was missing: what a founder sees after the browser
+            closes. Setup used to answer ninety seconds of signing in with the
+            next step's screen, because a completed snapshot ended the step —
+            and a completed snapshot says Vibe read the product, not that
+            anybody was shown the reading.
+          */}
+          <BlockCase title="signed_in_reveal">
+            <NovaOnboardingThread
+              state="signed_in_reveal"
+              blockNamesItself
+              blockLabel="Your signed-in product"
+              block={
+                <DeepScanPanel
+                  projectId="project_e2e"
+                  model={E2E_ONBOARDING_DEEP_SCAN_SCENARIOS.read}
+                  presentation="block"
+                />
+              }
+              control={<NovaMoveButton type="button" label="Go on to the audit" />}
+            />
+          </BlockCase>
+
           <BlockCase title="audit_preparing">
             <NovaOnboardingThread
               state="audit_preparing"

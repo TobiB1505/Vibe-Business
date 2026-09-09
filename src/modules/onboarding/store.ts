@@ -35,6 +35,8 @@ export type StoredOnboarding = {
    * here, so null reads as "not answered" rather than as "no".
    */
   signedInProductDeclinedAt: string | null;
+  /** When the founder was shown what that read came back with. */
+  signedInProductRevealedAt: string | null;
   /** Nova's own first-run facts. Null and 'unseen' until she has spoken. */
   novaIntroducedAt: string | null;
   novaWorkflowStatus: NovaWorkflowStatus;
@@ -84,12 +86,13 @@ type OnboardingRow = {
   first_move_viewed_at: string | null;
   completed_at: string | null;
   signed_in_product_declined_at: string | null;
+  signed_in_product_revealed_at: string | null;
   nova_introduced_at: string | null;
   nova_workflow_status: NovaWorkflowStatus;
 };
 
 const COLUMNS =
-  "project_id, state, live_site_status, product_revealed_at, audit_revealed_at, first_move_viewed_at, completed_at, signed_in_product_declined_at, nova_introduced_at, nova_workflow_status";
+  "project_id, state, live_site_status, product_revealed_at, audit_revealed_at, first_move_viewed_at, completed_at, signed_in_product_declined_at, signed_in_product_revealed_at, nova_introduced_at, nova_workflow_status";
 
 function mapRow(row: OnboardingRow): StoredOnboarding {
   return {
@@ -101,6 +104,7 @@ function mapRow(row: OnboardingRow): StoredOnboarding {
     firstMoveViewedAt: row.first_move_viewed_at,
     completedAt: row.completed_at,
     signedInProductDeclinedAt: row.signed_in_product_declined_at,
+    signedInProductRevealedAt: row.signed_in_product_revealed_at,
     novaIntroducedAt: row.nova_introduced_at,
     novaWorkflowStatus: row.nova_workflow_status,
   };
@@ -149,7 +153,8 @@ export async function markOnboardingMilestone(
       | "product_revealed_at"
       | "audit_revealed_at"
       | "first_move_viewed_at"
-      | "signed_in_product_declined_at";
+      | "signed_in_product_declined_at"
+      | "signed_in_product_revealed_at";
   },
 ): Promise<boolean> {
   const { data, error } = await supabase
@@ -444,6 +449,7 @@ export async function getProjectOnboarding(
         setup months ago back to a question about it.
       */
       signed_in_product_declined_at: mature ? completedAt : null,
+      signed_in_product_revealed_at: mature ? completedAt : null,
       completed_at: completedAt,
     };
     const { data: inserted, error: insertError } = await supabase
@@ -489,6 +495,7 @@ export async function getProjectOnboarding(
     */
     signedInProductOfferable: liveSiteStatus === "provided",
     signedInProductDeclined: stored.signedInProductDeclinedAt !== null,
+    signedInProductRevealed: stored.signedInProductRevealedAt !== null,
     auditNeedsUser: Boolean(pausedAudit),
     auditRunning: Boolean(auditOperation),
     auditAnalyzing: auditOperation?.stage === "running_ai",

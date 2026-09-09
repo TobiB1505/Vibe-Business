@@ -13,6 +13,7 @@ export const ONBOARDING_STATES = [
   "product_scanning",
   "product_reveal",
   "add_signed_in_product",
+  "signed_in_reveal",
   "audit_preparing",
   "audit_needs_user",
   "audit_running",
@@ -57,6 +58,17 @@ export type OnboardingFacts = {
   signedInProductOfferable: boolean;
   /** The founder was offered the signed-in read and said not now. */
   signedInProductDeclined: boolean;
+  /**
+   * The founder has been shown what the signed-in read came back with.
+   *
+   * The reason this is not the same fact as `hasSignedInProduct`: a completed
+   * snapshot says Vibe read the product, and says nothing about whether
+   * anybody was shown the reading. Without the distinction, setup answered a
+   * founder who had just signed in, waited ninety seconds and watched a
+   * modal close by moving straight on to the audit — the one screen in the
+   * whole flow where what Vibe found was never put in front of them.
+   */
+  signedInProductRevealed: boolean;
   auditNeedsUser: boolean;
   auditRunning: boolean;
   auditAnalyzing: boolean;
@@ -100,6 +112,7 @@ export function deriveOnboardingState(facts: OnboardingFacts): OnboardingState {
   }
   if (!facts.productConfirmed) return "product_reveal";
   if (signedInProductPending(facts)) return "add_signed_in_product";
+  if (facts.hasSignedInProduct && !facts.signedInProductRevealed) return "signed_in_reveal";
   if (facts.auditNeedsUser) return "audit_needs_user";
   if (facts.auditRunning) return facts.auditAnalyzing ? "audit_running" : "audit_preparing";
   if (!facts.hasAudit) return "audit_preparing";
@@ -112,7 +125,8 @@ export function onboardingPhase(state: OnboardingState): OnboardingPhase {
   if (
     state === "product_scanning" ||
     state === "product_reveal" ||
-    state === "add_signed_in_product"
+    state === "add_signed_in_product" ||
+    state === "signed_in_reveal"
   ) {
     return "understand";
   }

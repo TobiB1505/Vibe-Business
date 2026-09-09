@@ -17,6 +17,7 @@ const ready: OnboardingFacts = {
   hasSignedInProduct: true,
   signedInProductOfferable: true,
   signedInProductDeclined: false,
+  signedInProductRevealed: true,
   auditNeedsUser: false,
   auditRunning: false,
   auditAnalyzing: false,
@@ -37,6 +38,15 @@ describe("project onboarding reconciliation", () => {
     [
       { ...ready, hasSignedInProduct: false, hasAudit: false, auditRevealed: false },
       "add_signed_in_product",
+    ],
+    [
+      {
+        ...ready,
+        signedInProductRevealed: false,
+        hasAudit: false,
+        auditRevealed: false,
+      },
+      "signed_in_reveal",
     ],
     [{ ...ready, auditNeedsUser: true, hasAudit: false }, "audit_needs_user"],
     [{ ...ready, auditRunning: true, auditAnalyzing: false, hasAudit: false }, "audit_preparing"],
@@ -100,8 +110,45 @@ describe("project onboarding reconciliation", () => {
       expect(deriveOnboardingState(asked)).toBe("add_signed_in_product");
     });
 
-    it("is behind us the moment a scan has read the product from the inside", () => {
-      expect(deriveOnboardingState({ ...asked, hasSignedInProduct: true })).toBe("audit_preparing");
+    /*
+     * The reading is shown before setup moves on, and this is the assertion
+     * that says so. It used to read `audit_preparing` — a completed snapshot
+     * ended the step — so a founder who signed in, waited ninety seconds and
+     * watched the browser close was answered by the next step's screen.
+     */
+    it("shows what the read came back with before the audit", () => {
+      expect(
+        deriveOnboardingState({
+          ...asked,
+          hasSignedInProduct: true,
+          signedInProductRevealed: false,
+        }),
+      ).toBe("signed_in_reveal");
+    });
+
+    it("is behind us once that reading has been seen", () => {
+      expect(
+        deriveOnboardingState({
+          ...asked,
+          hasSignedInProduct: true,
+          signedInProductRevealed: true,
+        }),
+      ).toBe("audit_preparing");
+    });
+
+    /*
+     * Declining never produces a reveal: there is nothing to reveal, and a
+     * screen showing an empty reading would be setup congratulating somebody
+     * for saying no.
+     */
+    it("never reveals a reading to a founder who declined", () => {
+      expect(
+        deriveOnboardingState({
+          ...asked,
+          signedInProductDeclined: true,
+          signedInProductRevealed: false,
+        }),
+      ).toBe("audit_preparing");
     });
 
     it("is behind us when the founder said not now", () => {
@@ -116,9 +163,9 @@ describe("project onboarding reconciliation", () => {
      * available answer is no.
      */
     it("is never offered when there is nothing to sign in to", () => {
-      expect(
-        deriveOnboardingState({ ...asked, signedInProductOfferable: false }),
-      ).toBe("audit_preparing");
+      expect(deriveOnboardingState({ ...asked, signedInProductOfferable: false })).toBe(
+        "audit_preparing",
+      );
     });
 
     /*
@@ -129,7 +176,12 @@ describe("project onboarding reconciliation", () => {
      */
     it("does not interrupt an audit that is already running", () => {
       expect(
-        deriveOnboardingState({ ...asked, hasSignedInProduct: true, auditRunning: true }),
+        deriveOnboardingState({
+          ...asked,
+          hasSignedInProduct: true,
+          signedInProductRevealed: true,
+          auditRunning: true,
+        }),
       ).toBe("audit_preparing");
     });
   });
@@ -145,6 +197,7 @@ describe("project onboarding reconciliation", () => {
     ["product_scanning", "understand"],
     ["product_reveal", "understand"],
     ["add_signed_in_product", "understand"],
+    ["signed_in_reveal", "understand"],
     ["audit_preparing", "audit"],
     ["audit_needs_user", "audit"],
     ["audit_running", "audit"],

@@ -348,6 +348,47 @@ test.describe("what setup's blocks are allowed to bring", () => {
     await expect(block.getByRole("button", { name: "Not now — go on without it" })).toBeVisible();
   });
 
+  /**
+   * The beat that was missing, and the two things it must not do.
+   *
+   * Setup used to end ninety seconds of signing in with the next step's
+   * screen: a completed snapshot ended the step, and a completed snapshot says
+   * Vibe read the product, never that anybody was shown the reading.
+   */
+  test("shows what the signed-in read came back with", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "signed_in_reveal");
+    await expect(block.getByText(NOVA_ONBOARDING_MESSAGE.signed_in_reveal)).toBeVisible();
+    await expect(block.getByText("Pages Vibe looked at")).toBeVisible();
+    await expect(block.getByRole("button", { name: "Go on to the audit" })).toBeVisible();
+  });
+
+  /**
+   * And it does not sell the next one here.
+   *
+   * The included scan has just been spent, so `nextScan` on this screen is
+   * priced — the panel's own rerun offer would put "Scan again · 25 Credits"
+   * under a result the founder has not finished reading, seconds after they
+   * did what Nova asked.
+   */
+  test("offers no paid rerun over a reading seconds old", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "signed_in_reveal");
+    await expect(block.getByRole("button", { name: /Scan again/ })).toHaveCount(0);
+    await expect(block.getByText(/Credits/)).toHaveCount(0);
+  });
+
+  /** An instruction to look at something already read is the wrong sentence. */
+  test("names the reading rather than asking for it again", async ({ page }) => {
+    await page.goto(BLOCKS);
+
+    const block = blockCase(page, "signed_in_reveal");
+    await expect(block.getByText("What Vibe read inside your product")).toBeVisible();
+    await expect(block.getByText("Look inside your signed-in product")).toHaveCount(0);
+  });
+
   test("gives the paused question one frame, not two", async ({ page }) => {
     await page.goto(BLOCKS);
 
