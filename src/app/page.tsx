@@ -111,6 +111,18 @@ export default function HomePage() {
       */}
       <LandingAgent />
 
+      {/*
+        Step five, and the one that is not about mechanism: who says all of
+        this. It closes the walk's first half — four blocks explaining what
+        Vibe does, and then the voice they arrive in.
+
+        `Reveal` is not wrapped around it, and around none of the numbered
+        steps: each block reveals its own parts as they are reached, and a
+        reveal around the whole of a block two thousand pixels tall waits for
+        its top and then hands over a page that has already been scrolled past.
+      */}
+      <LandingNova />
+
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">
           <MonoLabel>Built for products made with</MonoLabel>
@@ -139,14 +151,6 @@ export default function HomePage() {
             </span>
           </div>
         </div>
-      </Reveal>
-
-      {/*
-        Nova, immediately after the hero that names her — before the flow,
-        because "who is doing this" comes before "how does it work".
-      */}
-      <Reveal>
-        <LandingNova />
       </Reveal>
 
       <Reveal>

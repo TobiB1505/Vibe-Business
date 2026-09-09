@@ -798,3 +798,115 @@ test.describe("the agent, and its gates", () => {
     }
   });
 });
+
+/*
+ * Step five: Nova, met as a thread.
+ *
+ * The block's argument is that a co-founder who only reports good news is one
+ * you cannot use to make a decision — so the guards check the two things that
+ * would quietly undo it: that the sentences are the product's own rather than
+ * a marketing rewrite, and that the register beside each is the product's
+ * reading of the moment rather than a colour chosen to look calm.
+ */
+test.describe("meeting Nova on the walk", () => {
+  test("says the product's own sentences, not sentences written for a marketing page", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const nova = page.locator("#nova");
+    await nova.scrollIntoViewIfNeeded();
+
+    /*
+      These five are `MESSAGE_FOR_CANDIDATE`'s, reached through
+      `novaCandidateMessage` — the accessor that hands out one sentence per
+      candidate and cannot be iterated. Asserted as text so that rewording
+      Nova's voice fails here, which is the point: her words may change, and
+      when they do this page must change with them rather than keeping a
+      flattering copy of the old ones.
+    */
+    for (const sentence of [
+      "There is a change waiting for you to look at.",
+      "I stopped part-way and need something from you.",
+      "A check on one of your changes did not pass.",
+      "What I know about your code is older than your code.",
+      "Nothing needs you right now.",
+    ]) {
+      await expect(nova.locator(".bubble").getByText(sentence, { exact: true })).toBeVisible();
+    }
+
+    // A bubble is speech and only speech, on this page as in the product.
+    await expect(nova.locator(".bubble").getByRole("button")).toHaveCount(0);
+    await expect(nova.locator(".bubble").getByRole("link")).toHaveCount(0);
+  });
+
+  test("gives each moment the register the product gives it", async ({ page }) => {
+    await page.goto("/");
+    const nova = page.locator("#nova");
+    await nova.scrollIntoViewIfNeeded();
+
+    const bubbles = await nova.locator(".bubble").evaluateAll((els) =>
+      els.map((el) => ({
+        text: el.textContent ?? "",
+        classes: el.className,
+      })),
+    );
+    expect(bubbles).toHaveLength(5);
+
+    const of = (fragment: string) => bubbles.find((bubble) => bubble.text.includes(fragment));
+
+    /*
+      A check that ran and returned non-zero is `problem` and closed — the
+      checks have an answer. A run suspended on a person is `waiting` and
+      **open**, drawn as a dashed contour, because the loop is still hanging.
+      Rendering the second as the first would be the "less bad" reading the
+      product's own status vocabulary was rewritten to stop.
+    */
+    expect(of("did not pass")?.classes).toContain("bubble-problem");
+    expect(of("did not pass")?.classes).not.toContain("bubble-open");
+    expect(of("need something from you")?.classes).toContain("bubble-waiting");
+    expect(of("need something from you")?.classes).toContain("bubble-open");
+    // Nothing to do is a plain fact and carries no alarm at all.
+    expect(of("Nothing needs you right now")?.classes).toContain("bubble-neutral");
+  });
+
+  test("holds her introduction until somebody is there to see it", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+
+    /*
+      `NovaPresence introduce` assembles on mount, and on an endless scroll
+      every block mounts at load — so without this the one entrance the
+      component exists for played six thousand pixels above the reader.
+    */
+    const mark = page.locator("[data-nova-entrance]");
+    await expect(mark).toHaveAttribute("data-nova-entrance", "held");
+
+    await page.locator("#nova").scrollIntoViewIfNeeded();
+    await expect(mark).toHaveAttribute("data-nova-entrance", "arrived");
+  });
+
+  test("never assembles the mark for a reader who asked for no motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+
+    /*
+      Asserted *after* the block has been reached, not at first paint. At first
+      paint the attribute reads `drawn` because the server drew it, so a test
+      that looked then would pass whatever the client went on to do — measured:
+      removing the reduced-motion branch entirely left this green.
+
+      The property is that there is no assembly coming and none arrives: the
+      mark stays the server's, drawn and still, however far this reader
+      scrolls. Holding it back until it was scrolled to would be movement of a
+      different kind — an element appearing on a page that asked for none.
+    */
+    const mark = page.locator("[data-nova-entrance]");
+    await page.locator("#nova").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(900);
+
+    await expect(mark).toHaveAttribute("data-nova-entrance", "drawn");
+    await expect(mark.locator("[data-nova-presence]")).toBeVisible();
+  });
+});

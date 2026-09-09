@@ -392,9 +392,13 @@ test.describe("meeting Nova before signing up", () => {
     const section = page.getByTestId("landing-nova");
     await section.scrollIntoViewIfNeeded();
 
-    // Scoped to the legend: the introduction above it is a second
-    // `listening` mark, and it is the same one at hero size.
-    const legend = section.getByRole("list");
+    /*
+      Scoped to the legend by name rather than by being "the list": the
+      introduction above it is a second `listening` mark at hero size, and the
+      thread beside it is a second list. A locator that means "the list in this
+      section" stops meaning the legend the moment the block gains one.
+    */
+    const legend = section.getByTestId("nova-legend");
     for (const state of ["idle", "listening", "working", "settled"]) {
       await expect(legend.locator(`[data-nova-presence="${state}"]`)).toHaveCount(1);
     }
