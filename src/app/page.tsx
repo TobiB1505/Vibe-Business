@@ -2,6 +2,7 @@ import Link from "next/link";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { LandingAgent } from "@/components/marketing/landing-agent";
+import { LandingBoundary } from "@/components/marketing/landing-boundary";
 import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
 import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
@@ -131,6 +132,13 @@ export default function HomePage() {
         *Measure* tab, the fourth step to leave the tab bar.
       */}
       <LandingOutcome />
+
+      {/*
+        Step seven, and the objection every block above it postpones: a product
+        that asks for the repository a company is built on has to say what it
+        keeps. Its "no stored copy" tile came out of `LandingTrust`.
+      */}
+      <LandingBoundary />
 
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">

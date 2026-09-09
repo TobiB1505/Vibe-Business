@@ -1086,3 +1086,109 @@ test.describe("the marketing header", () => {
     expect((await bar(page).boundingBox())?.y).toBe(0);
   });
 });
+
+/*
+ * Step seven: the boundary.
+ *
+ * The block's picture is a line with some things crossing it and others
+ * stopping at it, and which side a path falls on is decided by the product's
+ * own `isSensitivePath` at render time rather than by a list typed into a
+ * marketing file. So the guards check the routing and the line, not the prose
+ * about them.
+ */
+test.describe("the boundary", () => {
+  test("lets the policy decide which paths are refused", async ({ page }) => {
+    await page.goto("/");
+    const boundary = page.locator("#boundary");
+    await boundary.scrollIntoViewIfNeeded();
+
+    const rows = boundary.locator("ul > li");
+    await expect(rows).toHaveCount(5);
+
+    /*
+      Two refused and three crossing, and the two are the ones the policy calls
+      sensitive. A page that promised "we never read .env" would be a sentence;
+      this asks the function, so widening the policy moves a row on its own.
+    */
+    const refused = rows.filter({ hasText: "Never opened" });
+    await expect(refused).toHaveCount(2);
+    await expect(refused.first()).toContainText(".env.local");
+    await expect(refused.nth(1)).toContainText("certs/private.key");
+
+    // And the three that cross arrive as sentences about the product.
+    await expect(rows.filter({ hasText: "A Next.js application" })).toHaveCount(1);
+    await expect(boundary).toContainText("The path, never the text.");
+
+    /*
+      The treatment is read off the policy, not off the copy. Asserting only the
+      words "Never opened" tests the row's own text — measured: a mutation that
+      decoupled the strike-through from `isSensitivePath` left that green, and
+      the two refused paths went on reading as ordinary ones. The struck rows
+      must be exactly the sensitive ones.
+    */
+    const struck = await rows.evaluateAll((items) =>
+      items.map((item) => {
+        const path = item.querySelector("p") as HTMLElement;
+        return {
+          path: path.textContent ?? "",
+          struck: getComputedStyle(path).textDecorationLine.includes("line-through"),
+        };
+      }),
+    );
+    expect(struck.filter((row) => row.struck).map((row) => row.path)).toEqual([
+      ".env.local",
+      "certs/private.key",
+    ]);
+  });
+
+  test("draws one line for all five rows to meet", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator("#boundary").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(800);
+
+    /*
+      The shape is the argument here as everywhere on this page, so the rule is
+      measured rather than assumed: five segments, all at one x, and each tall
+      enough to reach its neighbours — which is what makes five rows read as one
+      boundary instead of five ticks.
+    */
+    const marks = await page
+      .locator("#boundary li span[aria-hidden] > span:first-child")
+      .evaluateAll((els) =>
+        els.map((el) => {
+          const box = el.getBoundingClientRect();
+          return {
+            x: Math.round(box.left),
+            top: Math.round(box.top),
+            bottom: Math.round(box.bottom),
+          };
+        }),
+      );
+
+    expect(marks).toHaveLength(5);
+    const xs = new Set(marks.map((mark) => mark.x));
+    expect(xs.size, "the boundary is not one line").toBe(1);
+
+    // Each segment reaches the next. A fixed minimum height would be a number
+    // nobody chose; touching is the property that makes five segments one line.
+    for (let index = 1; index < marks.length; index += 1) {
+      const gap = marks[index].top - marks[index - 1].bottom;
+      expect(gap, `the boundary breaks before row ${index + 1}`).toBeLessThanOrEqual(1);
+    }
+  });
+
+  test("says what is kept, and what is never kept", async ({ page }) => {
+    await page.goto("/");
+    const boundary = page.locator("#boundary");
+    await boundary.scrollIntoViewIfNeeded();
+
+    // Rule 26 on one side, rule 37 on the other — the second half is the one a
+    // marketing page would leave out, and the query-string clause is the part
+    // nobody would think to ask about.
+    await expect(boundary).toContainText(/evidence paths that justify it/i);
+    await expect(boundary).toContainText(/no cookies, and no query strings/i);
+    await expect(boundary).toContainText(/no clone, no checkout and no working tree/i);
+  });
+});

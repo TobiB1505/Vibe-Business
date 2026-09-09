@@ -24,6 +24,13 @@ import { EXAMPLE_SOURCES } from "./landing-sources";
  * The price in particular is not typed into this file: `CostDisclosure`
  * resolves it from the rate card in force, so a landing page cannot advertise
  * a number the product has stopped charging.
+ *
+ * ## Four tiles, and shrinking
+ *
+ * *Your code — no stored copy* left for `LandingBoundary`, which draws the
+ * same claim as a boundary with things crossing it rather than asserting it in
+ * three lines. The rest of this bento is being taken apart the same way the
+ * tab bar was: one claim at a time, into the block that can show it.
  */
 export function LandingTrust() {
   return (
@@ -94,15 +101,6 @@ export function LandingTrust() {
               <span className="text-fg-secondary text-body">Scan again</span>
               <CostDisclosure operation="product_understanding" />
             </div>
-          </article>
-
-          <article className="border-line-2 bg-surface-2 rounded-card flex flex-col gap-2 border p-6">
-            <MonoLabel>Your code</MonoLabel>
-            <p className="text-fg text-lead font-semibold">No stored copy.</p>
-            <p className="text-fg-muted text-body leading-relaxed">
-              Vibe keeps what it concluded and the paths that justify it. Not your source, not your
-              README, not your configs.
-            </p>
           </article>
 
           <article className="border-line-2 bg-surface-2 rounded-card flex flex-col gap-2 border p-6">
