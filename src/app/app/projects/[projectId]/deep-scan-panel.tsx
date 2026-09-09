@@ -64,7 +64,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   browser_provider_unavailable: "Deep Scan couldn't start. Try again in a moment.",
   browser_session_expired: "This temporary Deep Scan session expired. You can start again.",
   browser_session_not_found: "This Deep Scan session is no longer available.",
-  browser_connection_failed: "We lost the connection to the temporary browser. You can start again.",
+  browser_connection_failed:
+    "We lost the connection to the temporary browser. You can start again.",
   session_not_live: "This temporary Deep Scan session is no longer active.",
   session_not_found: "This Deep Scan session is no longer available.",
   authenticated_origin_not_reached:
@@ -73,7 +74,8 @@ const ERROR_MESSAGES: Record<string, string> = {
     "We couldn't confirm you were signed in. Finish signing in inside the temporary browser, then try again.",
   navigation_timeout: "Your product took too long to respond. You can try again.",
   page_unreachable: "Some pages of your product couldn't be reached.",
-  analysis_budget_reached: "Deep Scan reached its limit before finishing. The result may be partial.",
+  analysis_budget_reached:
+    "Deep Scan reached its limit before finishing. The result may be partial.",
   analysis_failed: "The Deep Scan couldn't be completed.",
   persist_failed: "We couldn't save the Deep Scan result. Your included scan is still available.",
   included_scan_already_consumed: "Your included Deep Scan for this project has already been used.",
@@ -98,7 +100,9 @@ function waitHint(retryAvailableAt: string | null, now: number | null): string |
   const remainingMs = Date.parse(retryAvailableAt) - now;
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
   const minutes = Math.ceil(remainingMs / 60_000);
-  return minutes <= 1 ? "You can try again in about a minute." : `You can try again in about ${minutes} minutes.`;
+  return minutes <= 1
+    ? "You can try again in about a minute."
+    : `You can try again in about ${minutes} minutes.`;
 }
 
 /**
@@ -142,8 +146,32 @@ export function startupSteps(stage: BrowserStartupStage): OperationProgressStep[
   ];
 }
 
-function Section({ children }: { children: React.ReactNode }) {
-  // `id` is the jump target for the audit section's "Run included Deep Scan".
+/**
+ * How this panel is framed, and the one caller that wants no frame.
+ *
+ * `panel` is My Product and the Deep Scan page: a bordered card inside a
+ * workspace section. `block` is setup, where Nova has already drawn the frame
+ * — a render block with its own border, padding and label — and a second
+ * border inside it is the exact defect sprint 0163 removed from eight setup
+ * states. The panel drops its own frame and keeps everything else, so there is
+ * one Deep Scan surface rather than an onboarding copy of it.
+ *
+ * The `id` goes with the frame. It is the jump target for the audit section's
+ * "Run included Deep Scan", which is a link on a page that has an audit
+ * section; setup has neither, and an anchor nothing links to is a duplicate
+ * waiting to be one.
+ */
+export type DeepScanPresentation = "panel" | "block";
+
+function Section({
+  children,
+  presentation,
+}: {
+  children: React.ReactNode;
+  presentation: DeepScanPresentation;
+}) {
+  if (presentation === "block") return <div className="space-y-3">{children}</div>;
+
   return (
     <section id="deep-scan" className="space-y-3 rounded-md border border-line-2 p-4">
       {children}
@@ -435,9 +463,9 @@ export function LiveViewDialog({
                   Vibe cannot reach the temporary browser
                 </p>
                 <p className="text-xs text-fg-muted">
-                  The browser is running, but its picture is not getting through. This is
-                  usually the connection between this device and it. Trying again costs
-                  nothing — the browser is already open.
+                  The browser is running, but its picture is not getting through. This is usually
+                  the connection between this device and it. Trying again costs nothing — the
+                  browser is already open.
                 </p>
               </div>
               <div>
@@ -485,9 +513,9 @@ export function LiveViewDialog({
                   Sign-in took longer than two minutes
                 </p>
                 <p className="max-w-[54ch] text-xs text-fg-muted">
-                  Vibe is closing the temporary browser rather than leaving it running.
-                  Nothing was charged. You can start again — Vibe waits two minutes between
-                  attempts, and closing this shows when.
+                  Vibe is closing the temporary browser rather than leaving it running. Nothing was
+                  charged. You can start again — Vibe waits two minutes between attempts, and
+                  closing this shows when.
                 </p>
               </div>
               <div>
@@ -511,8 +539,8 @@ export function LiveViewDialog({
                   is told that waits differently than one who is not.
                 */}
                 <p className="text-xs text-fg-muted">
-                  Usually about twenty seconds. Occasionally a couple of minutes, when Vibe
-                  has to build its browser first — that happens roughly once a week.
+                  Usually about twenty seconds. Occasionally a couple of minutes, when Vibe has to
+                  build its browser first — that happens roughly once a week.
                 </p>
               </div>
               <ProgressSteps steps={startupSteps(stage)} className="max-w-md" />
@@ -571,16 +599,12 @@ export function LiveViewDialog({
            * the same lie as a progress bar that sits at 60%.
            */
           <div role="status" className="space-y-1 rounded-md border border-line-2 bg-surface-2 p-3">
-            <p className="text-sm text-fg-prose">
-              Vibe is looking around your signed-in product.
-            </p>
+            <p className="text-sm text-fg-prose">Vibe is looking around your signed-in product.</p>
             <p className="text-xs text-fg-muted">
-              This usually takes up to about 90 seconds. Keep this window open — the scan runs
-              while it is here, and closing it stops the browser Vibe is signed in to.
+              This usually takes up to about 90 seconds. Keep this window open — the scan runs while
+              it is here, and closing it stops the browser Vibe is signed in to.
             </p>
-            <p className="font-mono text-meta text-fg-meta">
-              {elapsedSeconds}s elapsed
-            </p>
+            <p className="font-mono text-meta text-fg-meta">{elapsedSeconds}s elapsed</p>
           </div>
         )}
 
@@ -613,11 +637,7 @@ export function LiveViewDialog({
             disabled={busy || expired || !liveViewUrl}
             busy={busy}
           >
-            {busy
-              ? "Looking around…"
-              : signIn.signedIn
-                ? "Analyze now"
-                : "I'm logged in — Analyze"}
+            {busy ? "Looking around…" : signIn.signedIn ? "Analyze now" : "I'm logged in — Analyze"}
           </Button>
           <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
             Cancel
@@ -889,7 +909,9 @@ function useScanProgress(sessionId: string | null, running: boolean): DeepScanPr
       const answer = await fetch(`/api/deep-scan/${encodeURIComponent(sessionId)}/progress`, {
         cache: "no-store",
       })
-        .then((response) => (response.ok ? (response.json() as Promise<DeepScanProgress | null>) : null))
+        .then((response) =>
+          response.ok ? (response.json() as Promise<DeepScanProgress | null>) : null,
+        )
         .catch(() => null);
       if (cancelled) return;
       // Only ever forward. The row is read while it is being written, so a
@@ -1111,8 +1133,8 @@ function NextScan({
       return (
         <div className="space-y-2">
           <p className="text-sm text-fg-secondary">
-            Another Deep Scan costs {formatCreditsForDisplay(next.price)} Credits, and your
-            balance doesn&apos;t cover it yet.
+            Another Deep Scan costs {formatCreditsForDisplay(next.price)} Credits, and your balance
+            doesn&apos;t cover it yet.
           </p>
           <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
             Top up Credits
@@ -1205,8 +1227,8 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
         // Never a heading with nothing under it: a scan that recognised no
         // surface is a real answer, and it has to read as one.
         <p className="text-fg-prose max-w-[62ch] text-sm">
-          Vibe read your signed-in pages but did not recognise any of the surfaces it looks
-          for. The notes below say what it saw.
+          Vibe read your signed-in pages but did not recognise any of the surfaces it looks for. The
+          notes below say what it saw.
         </p>
       )}
 
@@ -1245,9 +1267,9 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
         <p className="max-w-[62ch] text-xs text-fg-muted leading-relaxed">
           {result.completion.policyLimited && (
             <>
-              Vibe only ever reads. It refuses anything that could change your data, and
-              anything that leaves your product — so a few requests are always turned down,
-              by design and not by configuration.
+              Vibe only ever reads. It refuses anything that could change your data, and anything
+              that leaves your product — so a few requests are always turned down, by design and not
+              by configuration.
             </>
           )}
           {result.completion.policyLimited && result.completion.budgetLimited && " "}
@@ -1268,7 +1290,9 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             first one, and putting it first is how a summary becomes a log.
           */}
           <p className="text-fg-meta font-mono text-meta uppercase">
-            {result.screens.length === 1 ? "1 screen Vibe read" : `${result.screens.length} screens Vibe read`}
+            {result.screens.length === 1
+              ? "1 screen Vibe read"
+              : `${result.screens.length} screens Vibe read`}
           </p>
           <ul className="flex flex-col gap-1.5">
             {result.screens.map((screen) => (
@@ -1276,9 +1300,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
                 key={screen.template}
                 className="flex flex-wrap items-baseline justify-between gap-x-4"
               >
-                <span className="text-fg-prose text-sm">
-                  {screen.heading ?? screen.template}
-                </span>
+                <span className="text-fg-prose text-sm">{screen.heading ?? screen.template}</span>
                 <span className="text-fg-meta font-mono text-meta">
                   {screen.template}
                   {screen.pages.length > 1 ? ` · ${screen.pages.length} of them` : ""}
@@ -1323,9 +1345,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
 
             {result.shape.navigation.length > 0 && (
               <div className="space-y-1.5">
-                <p className="text-fg-meta font-mono text-meta uppercase">
-                  Navigation Vibe saw
-                </p>
+                <p className="text-fg-meta font-mono text-meta uppercase">Navigation Vibe saw</p>
                 {/*
                   The customer's own labels, and untrusted page content by
                   rule 36 — rendered as text, never interpreted. React escapes
@@ -1373,7 +1393,15 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
   );
 }
 
-export function DeepScanPanel({ projectId, model }: { projectId: string; model: DeepScanViewModel }) {
+export function DeepScanPanel({
+  projectId,
+  model,
+  presentation = "panel",
+}: {
+  projectId: string;
+  model: DeepScanViewModel;
+  presentation?: DeepScanPresentation;
+}) {
   // Coarse by design — the hint says "about two minutes", so it need not tick.
   const browserNow = useBrowserClock();
   const router = useRouter();
@@ -1555,7 +1583,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       if (!result.ok) {
         // Keep the dialog open only while signing in could still fix it.
         const code = result.error;
-        const recoverable = code === "authenticated_origin_not_reached" || code === "authentication_not_confirmed";
+        const recoverable =
+          code === "authenticated_origin_not_reached" || code === "authentication_not_confirmed";
         setError(messageFor(code));
         setAnalysing(false);
         if (!recoverable) {
@@ -1626,7 +1655,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
 
   return (
     <>
-      <Section>
+      <Section presentation={presentation}>
         {model.state === "completed" && model.lastResult ? (
           <>
             <Heading title="Look inside your signed-in product" status="Ready" />
@@ -1639,7 +1668,13 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               scan turned the panel into a read-only card permanently. The offer
               is a separate question and is answered by `model.nextScan`.
             */}
-            <NextScan next={model.nextScan} rerun onStart={handleStart} disabled={disabled} now={browserNow} />
+            <NextScan
+              next={model.nextScan}
+              rerun
+              onStart={handleStart}
+              disabled={disabled}
+              now={browserNow}
+            />
           </>
         ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
           <>
@@ -1667,8 +1702,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           <>
             <Heading title="Additional Deep Scan" />
             <p className="text-sm text-fg-secondary">
-              Another Deep Scan costs {formatCreditsForDisplay(model.additionalScanPrice)}{" "}
-              Credits, and your balance doesn&apos;t cover it yet.
+              Another Deep Scan costs {formatCreditsForDisplay(model.additionalScanPrice)} Credits,
+              and your balance doesn&apos;t cover it yet.
             </p>
             <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
               Top up Credits
@@ -1713,7 +1748,10 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           </>
         ) : model.state === "waiting_for_login" ? (
           <>
-            <Heading title="Look inside your signed-in product" status="Waiting for you to sign in" />
+            <Heading
+              title="Look inside your signed-in product"
+              status="Waiting for you to sign in"
+            />
             <p className="text-sm text-fg-secondary">
               A temporary browser is open. Sign in to continue.
             </p>
@@ -1762,7 +1800,9 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               // broken", which is exactly how it was reported.
               <p className="text-sm text-fg-muted">
                 {waitHint(model.retryAvailableAt, browserNow) ??
-                  (model.blockedReason ? messageFor(model.blockedReason) : "Deep Scan can't be started right now.")}
+                  (model.blockedReason
+                    ? messageFor(model.blockedReason)
+                    : "Deep Scan can't be started right now.")}
               </p>
             )}
           </>
@@ -1770,16 +1810,42 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           <>
             <Heading title="Look inside your signed-in product" />
             <div className="space-y-1 text-sm text-fg-secondary">
-              <p>
-                Vibe can see your code and public website, but some of your product is behind a
-                login.
-              </p>
-              <p>
-                Run a Deep Scan so Vibe can understand what users actually experience after signing
-                in.
-              </p>
+              {/*
+                In setup, Nova's bubble two inches above says both of these in
+                her own words — that the code and the public pages are read and
+                the rest is behind a login, and what is left unread if we go on
+                without it. Printing them again is the caption problem, and the
+                two sentences that survive are the two she cannot say: the
+                specific evidence, and the price.
+              */}
+              {presentation === "panel" && (
+                <>
+                  <p>
+                    Vibe can see your code and public website, but some of your product is behind a
+                    login.
+                  </p>
+                  <p>
+                    Run a Deep Scan so Vibe can understand what users actually experience after
+                    signing in.
+                  </p>
+                </>
+              )}
+              {/*
+                The specific, personal half — a sign-in surface Vibe actually
+                found on *this* website. As a footnote under two lines of
+                general prose that was the right weight; as the first line of
+                the block in setup it is the observation the offer rests on,
+                and reading it dimmer than the sentence about pricing had the
+                hierarchy backwards.
+              */}
               {model.recommendationReason && (
-                <p className="text-xs text-fg-muted">{model.recommendationReason}</p>
+                <p
+                  className={
+                    presentation === "block" ? "text-sm text-fg-secondary" : "text-xs text-fg-muted"
+                  }
+                >
+                  {model.recommendationReason}
+                </p>
               )}
               <p className="text-fg-prose">Your first Deep Scan for this project is included.</p>
             </div>
@@ -1787,7 +1853,14 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Run free Deep Scan"}
               </Button>
-              <span className="text-sm text-fg-muted">Not now</span>
+              {/*
+                A `span` that reads as the other option and is not one. It
+                stays where it has always been and is dropped in setup, where
+                a real control saying the same words sits directly below the
+                block — two "Not now"s, one of them inert, and the inert one
+                first.
+              */}
+              {presentation === "panel" && <span className="text-sm text-fg-muted">Not now</span>}
             </div>
           </>
         ) : (
@@ -1797,9 +1870,25 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               Optional deeper analysis of what users experience after signing in.
             </p>
             {model.canStart ? (
-              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
-                {disabled ? "Starting…" : "Run Deep Scan"}
-              </Button>
+              /*
+                The offer's own terms, from the field that holds them.
+
+                This branch hand-rolled "Run Deep Scan" and said nothing about
+                what it costs — while the branch directly above, reached on the
+                same `nextScan`, says "Run free Deep Scan" and that the first
+                one is included. Every other kind is ranked above
+                `not_recommended` in `buildDeepScanViewModel`, so what was
+                being offered here with no terms at all was always the included
+                scan. `NextScan` is the one place that turns an offer into a
+                verb and a price, and reading it here is what stops the two
+                branches describing the same thing differently.
+              */
+              <NextScan
+                next={model.nextScan}
+                onStart={handleStart}
+                disabled={disabled}
+                now={browserNow}
+              />
             ) : (
               // Never a heading and a sentence with no action and no reason:
               // that state is indistinguishable from a broken page.

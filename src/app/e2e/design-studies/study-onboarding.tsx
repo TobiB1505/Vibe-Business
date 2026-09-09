@@ -13,7 +13,7 @@ import { Moves } from "./elements";
 import type { Study } from "./studies";
 
 /**
- * Setup, all ten states, in the thread the product now draws (S0, onboarding).
+ * Setup, all eleven states, in the thread the product now draws (S0, onboarding).
  *
  * ## Why this exists
  *
@@ -34,15 +34,17 @@ import type { Study } from "./studies";
  * own component, and nothing is written for this page.
  *
  * The blocks are named rather than drawn *here*, because this page is about
- * the ten sentences and their order and ten mounted blocks would bury them.
+ * the eleven sentences and their order, and nine mounted blocks would bury
+ * them.
  *
  * They are mounted at `study-onboarding-blocks`, and that page is where the
  * claim this docblock used to make was disproved: it said each block "needs a
  * live project — a scan with events, a profile to confirm, an audit to
- * reveal", and every one of those already had a fixture builder. Eight of the
- * eight states that have a block are on that page with the shipped component
- * inside them, and every one of them was bringing a frame, an eyebrow or a
- * headline of its own into Nova's.
+ * reveal", and every one of those already had a fixture builder. Every state
+ * that has a block is on that page with the shipped component inside it, and
+ * every one of them was bringing a frame, an eyebrow or a headline of its own
+ * into Nova's — the signed-in read included, which arrived repeating Nova's
+ * own sentence back at her and carrying a second, inert "Not now".
  */
 
 /** Which component fills the block, named rather than imitated. */
@@ -51,6 +53,7 @@ const BLOCK_FOR_STATE: Record<OnboardingState, string | null> = {
   add_live_product: "LiveSiteStep, under the connected repository",
   product_scanning: "ProductScanExperience",
   product_reveal: "the reveal, and ProductConfirmation under it",
+  add_signed_in_product: "DeepScanPanel, in block presentation",
   audit_preparing: "StartAudit, or the live-product prerequisite",
   audit_needs_user: "NeedsUserPanel",
   audit_running: "OperationWatcher and the audit's own stage",
@@ -65,6 +68,7 @@ const CONTROL_FOR_STATE: Record<OnboardingState, string | null> = {
   add_live_product: null,
   product_scanning: null,
   product_reveal: null,
+  add_signed_in_product: "Not now — go on without it",
   audit_preparing: null,
   audit_needs_user: null,
   audit_running: null,
@@ -74,7 +78,7 @@ const CONTROL_FOR_STATE: Record<OnboardingState, string | null> = {
 };
 
 /**
- * The room, before the ten states in it.
+ * The room, before the eleven states in it.
  *
  * ## Why this is the part worth looking at
  *

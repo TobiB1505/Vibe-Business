@@ -14,6 +14,9 @@ const ready: OnboardingFacts = {
   understandingRunning: false,
   hasProductProfile: true,
   productConfirmed: true,
+  hasSignedInProduct: true,
+  signedInProductOfferable: true,
+  signedInProductDeclined: false,
   auditNeedsUser: false,
   auditRunning: false,
   auditAnalyzing: false,
@@ -31,6 +34,10 @@ describe("project onboarding reconciliation", () => {
     [{ ...ready, understandingRunning: true }, "product_scanning"],
     [{ ...ready, hasProductProfile: false }, "product_scanning"],
     [{ ...ready, productConfirmed: false }, "product_reveal"],
+    [
+      { ...ready, hasSignedInProduct: false, hasAudit: false, auditRevealed: false },
+      "add_signed_in_product",
+    ],
     [{ ...ready, auditNeedsUser: true, hasAudit: false }, "audit_needs_user"],
     [{ ...ready, auditRunning: true, auditAnalyzing: false, hasAudit: false }, "audit_preparing"],
     [{ ...ready, auditRunning: true, auditAnalyzing: true, hasAudit: false }, "audit_running"],
@@ -66,6 +73,67 @@ describe("project onboarding reconciliation", () => {
     ).toBe("product_scanning");
   });
 
+  /**
+   * The signed-in step, and the three ways past it.
+   *
+   * It sits after the confirmation and before the audit because that is where
+   * it is both true and useful: the code and the public pages have been read,
+   * so Vibe can say what it has *not* seen, and the audit — which records the
+   * absence of a signed-in read as a gap in its own evidence — has not run yet.
+   *
+   * There is no fourth way past it. A founder who declines is past it, a
+   * founder who scans is past it, and a project with nothing to sign in to
+   * never reaches it. What must never happen is the state persisting after a
+   * scan succeeds, because the only thing on that screen would be an offer to
+   * do the thing that was just done.
+   */
+  describe("the signed-in read", () => {
+    const asked: OnboardingFacts = {
+      ...ready,
+      hasSignedInProduct: false,
+      signedInProductDeclined: false,
+      hasAudit: false,
+      auditRevealed: false,
+    };
+
+    it("is offered once the product is confirmed and before the audit", () => {
+      expect(deriveOnboardingState(asked)).toBe("add_signed_in_product");
+    });
+
+    it("is behind us the moment a scan has read the product from the inside", () => {
+      expect(deriveOnboardingState({ ...asked, hasSignedInProduct: true })).toBe("audit_preparing");
+    });
+
+    it("is behind us when the founder said not now", () => {
+      expect(deriveOnboardingState({ ...asked, signedInProductDeclined: true })).toBe(
+        "audit_preparing",
+      );
+    });
+
+    /*
+     * A product with no live address has no origin to open, and the Deep Scan
+     * domain refuses it outright. Asking anyway would be a question whose only
+     * available answer is no.
+     */
+    it("is never offered when there is nothing to sign in to", () => {
+      expect(
+        deriveOnboardingState({ ...asked, signedInProductOfferable: false }),
+      ).toBe("audit_preparing");
+    });
+
+    /*
+     * The cascade's own guarantee, stated where it matters most: this step is
+     * not a gate in front of work that is already running. An audit in flight
+     * outranks nothing here — it is *below* this in the cascade — so the
+     * ordering is asserted rather than assumed.
+     */
+    it("does not interrupt an audit that is already running", () => {
+      expect(
+        deriveOnboardingState({ ...asked, hasSignedInProduct: true, auditRunning: true }),
+      ).toBe("audit_preparing");
+    });
+  });
+
   it("does not replay completed onboarding", () => {
     expect(deriveOnboardingState({ ...ready, completed: true })).toBe("complete");
     expect(onboardingPhase("complete")).toBe("first_move");
@@ -76,6 +144,7 @@ describe("project onboarding reconciliation", () => {
     ["add_live_product", "connect"],
     ["product_scanning", "understand"],
     ["product_reveal", "understand"],
+    ["add_signed_in_product", "understand"],
     ["audit_preparing", "audit"],
     ["audit_needs_user", "audit"],
     ["audit_running", "audit"],

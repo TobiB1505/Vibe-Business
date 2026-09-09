@@ -183,6 +183,50 @@ export async function retryProductScanAction(
   return startDurableProductScan(projectId);
 }
 
+/**
+ * "Not now" to the signed-in read.
+ *
+ * ## Why this writes and starts nothing else
+ *
+ * Because the founder answered one question, and the audit is a separate one.
+ * The state machine moves on its own the moment this column is set —
+ * `deriveOnboardingState` reads it as a fact, exactly as it reads the live-site
+ * answer — so there is nothing to start here and nothing to redirect to. The
+ * same reasoning `parkLiveProductAction` was written under: Vibe never begins
+ * paid work as a side effect of somebody saying "not yet".
+ *
+ * ## Why it is a milestone and not a status
+ *
+ * Declining is one event that either happened or did not, and the column is
+ * write-once for the same reason every other milestone is: two tabs, two
+ * presses, one answer. Whether a scan has *happened* is never written here at
+ * all — that is the snapshot table's fact, and a copy of it in this row would
+ * be a second answer free to disagree with the first.
+ *
+ * It is not a door that closes. My Product carries the Deep Scan offer for
+ * exactly this founder afterwards, which is why nothing here says "never".
+ */
+export async function declineSignedInProductAction(projectId: string): Promise<void> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  const wrote = await markOnboardingMilestone(supabase, {
+    projectId,
+    milestone: "signed_in_product_declined_at",
+  });
+
+  if (wrote) {
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      projectId,
+      eventType: "onboarding.signed_in_product_declined",
+      metadata: { projectId },
+    });
+  }
+
+  revalidatePath(onboardingHref(projectId));
+}
+
 export type ConfirmAndAuditState =
   | { ok: true }
   | { ok: false; error: "not_found" | OperationFailureCode }

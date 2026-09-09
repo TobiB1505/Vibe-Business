@@ -12,6 +12,7 @@ export const ONBOARDING_STATES = [
   "add_live_product",
   "product_scanning",
   "product_reveal",
+  "add_signed_in_product",
   "audit_preparing",
   "audit_needs_user",
   "audit_running",
@@ -39,6 +40,23 @@ export type OnboardingFacts = {
   understandingRunning: boolean;
   hasProductProfile: boolean;
   productConfirmed: boolean;
+  /**
+   * A Deep Scan has already read this product from the inside.
+   *
+   * Existence of a completed snapshot, never a flag somebody sets — the same
+   * authority `deep-scan/entitlement.ts` uses to decide whether the included
+   * scan is spent.
+   */
+  hasSignedInProduct: boolean;
+  /**
+   * There is something to sign in to: a live address was given, so the origin
+   * a Deep Scan would open exists. Without one the domain refuses the scan
+   * outright (`production_origin_missing`), and a step that can only be
+   * declined is not a step.
+   */
+  signedInProductOfferable: boolean;
+  /** The founder was offered the signed-in read and said not now. */
+  signedInProductDeclined: boolean;
   auditNeedsUser: boolean;
   auditRunning: boolean;
   auditAnalyzing: boolean;
@@ -46,6 +64,30 @@ export type OnboardingFacts = {
   auditRevealed: boolean;
   completed: boolean;
 };
+
+/**
+ * Whether the signed-in read is still an open question for this project.
+ *
+ * Exported because two screens need the answer and only one of them is the
+ * step itself. The product reveal has to know it as well: its control bundles
+ * the audit with the confirmation whenever the audit is free, and bundling is
+ * wrong the moment something stands between the two. A second copy of this
+ * predicate on the page would be free to disagree with the cascade below it,
+ * one render later.
+ *
+ * It says nothing about *where* setup is — the cascade decides that, and a
+ * project whose audit is already running is past this whatever this returns.
+ */
+export function signedInProductPending(
+  facts: Pick<
+    OnboardingFacts,
+    "hasSignedInProduct" | "signedInProductOfferable" | "signedInProductDeclined"
+  >,
+): boolean {
+  return (
+    facts.signedInProductOfferable && !facts.hasSignedInProduct && !facts.signedInProductDeclined
+  );
+}
 
 export function deriveOnboardingState(facts: OnboardingFacts): OnboardingState {
   if (facts.completed) return "complete";
@@ -57,6 +99,7 @@ export function deriveOnboardingState(facts: OnboardingFacts): OnboardingState {
     return "product_scanning";
   }
   if (!facts.productConfirmed) return "product_reveal";
+  if (signedInProductPending(facts)) return "add_signed_in_product";
   if (facts.auditNeedsUser) return "audit_needs_user";
   if (facts.auditRunning) return facts.auditAnalyzing ? "audit_running" : "audit_preparing";
   if (!facts.hasAudit) return "audit_preparing";
@@ -66,7 +109,13 @@ export function deriveOnboardingState(facts: OnboardingFacts): OnboardingState {
 
 export function onboardingPhase(state: OnboardingState): OnboardingPhase {
   if (state === "connect_source" || state === "add_live_product") return "connect";
-  if (state === "product_scanning" || state === "product_reveal") return "understand";
+  if (
+    state === "product_scanning" ||
+    state === "product_reveal" ||
+    state === "add_signed_in_product"
+  ) {
+    return "understand";
+  }
   if (
     state === "audit_preparing" ||
     state === "audit_needs_user" ||
@@ -140,6 +189,10 @@ export function onboardingSteps(state: OnboardingState): OnboardingStep[] {
     id: phase.id,
     label: phase.label,
     state:
-      state === "complete" || index < here ? "done" : index === here ? "here" : ("waiting" as const),
+      state === "complete" || index < here
+        ? "done"
+        : index === here
+          ? "here"
+          : ("waiting" as const),
   }));
 }

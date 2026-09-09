@@ -11,8 +11,14 @@ import {
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { hasSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { hasSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { liveConnections } from "@/modules/projects/repository-connection";
-import { deriveOnboardingState, type LiveSiteStatus, type OnboardingState } from "./state";
+import {
+  deriveOnboardingState,
+  signedInProductPending,
+  type LiveSiteStatus,
+  type OnboardingState,
+} from "./state";
 
 export type StoredOnboarding = {
   projectId: string;
@@ -22,6 +28,13 @@ export type StoredOnboarding = {
   auditRevealedAt: string | null;
   firstMoveViewedAt: string | null;
   completedAt: string | null;
+  /**
+   * When the founder declined the signed-in read during setup.
+   *
+   * Whether one *happened* is the snapshot table's fact and is never copied
+   * here, so null reads as "not answered" rather than as "no".
+   */
+  signedInProductDeclinedAt: string | null;
   /** Nova's own first-run facts. Null and 'unseen' until she has spoken. */
   novaIntroducedAt: string | null;
   novaWorkflowStatus: NovaWorkflowStatus;
@@ -49,6 +62,17 @@ export type ProjectOnboarding = StoredOnboarding & {
   auditOperation: Awaited<ReturnType<typeof getActiveBusinessAuditOperation>>;
   understandingOperation: Awaited<ReturnType<typeof getActiveProductScanOperation>>;
   opportunities: Awaited<ReturnType<typeof getLatestOpportunities>>;
+  /**
+   * Whether the signed-in read is still an open question, from the same
+   * predicate the cascade uses to place the step.
+   *
+   * On the reveal it decides whether confirming may carry the audit with it.
+   * That screen cannot answer it from what it holds — whether a Deep Scan has
+   * ever run is a snapshot row, not a column on this one — and a page that
+   * guessed would put a control on screen that starts an audit over a question
+   * the founder has not been asked.
+   */
+  signedInProductPending: boolean;
 };
 
 type OnboardingRow = {
@@ -59,12 +83,13 @@ type OnboardingRow = {
   audit_revealed_at: string | null;
   first_move_viewed_at: string | null;
   completed_at: string | null;
+  signed_in_product_declined_at: string | null;
   nova_introduced_at: string | null;
   nova_workflow_status: NovaWorkflowStatus;
 };
 
 const COLUMNS =
-  "project_id, state, live_site_status, product_revealed_at, audit_revealed_at, first_move_viewed_at, completed_at, nova_introduced_at, nova_workflow_status";
+  "project_id, state, live_site_status, product_revealed_at, audit_revealed_at, first_move_viewed_at, completed_at, signed_in_product_declined_at, nova_introduced_at, nova_workflow_status";
 
 function mapRow(row: OnboardingRow): StoredOnboarding {
   return {
@@ -75,6 +100,7 @@ function mapRow(row: OnboardingRow): StoredOnboarding {
     auditRevealedAt: row.audit_revealed_at,
     firstMoveViewedAt: row.first_move_viewed_at,
     completedAt: row.completed_at,
+    signedInProductDeclinedAt: row.signed_in_product_declined_at,
     novaIntroducedAt: row.nova_introduced_at,
     novaWorkflowStatus: row.nova_workflow_status,
   };
@@ -119,7 +145,11 @@ export async function markOnboardingMilestone(
   supabase: SupabaseClient,
   params: {
     projectId: string;
-    milestone: "product_revealed_at" | "audit_revealed_at" | "first_move_viewed_at";
+    milestone:
+      | "product_revealed_at"
+      | "audit_revealed_at"
+      | "first_move_viewed_at"
+      | "signed_in_product_declined_at";
   },
 ): Promise<boolean> {
   const { data, error } = await supabase
@@ -345,6 +375,7 @@ export async function getProjectOnboarding(
     auditOperation,
     understandingOperation,
     opportunities,
+    signedInProduct,
   ] = await Promise.all([
     supabase
       .from("project_onboarding")
@@ -363,6 +394,11 @@ export async function getProjectOnboarding(
     getActiveBusinessAuditOperation(supabase, params.projectId),
     getActiveProductScanOperation(supabase, params.projectId),
     getLatestOpportunities(supabase, params.projectId),
+    // Existence again, for the same reason `hasSuccessfulSnapshot` is: the
+    // authenticated snapshot is large JSONB and this read runs on every poll
+    // of every setup state, while the document itself is needed by none of
+    // them.
+    hasSuccessfulAuthenticatedSnapshot(supabase, params.projectId),
   ]);
   if (rowError) throw rowError;
   if (repositoryError) throw repositoryError;
@@ -402,6 +438,12 @@ export async function getProjectOnboarding(
       product_revealed_at: mature ? completedAt : null,
       audit_revealed_at: mature ? completedAt : null,
       first_move_viewed_at: mature ? completedAt : null,
+      /*
+        A project that already has an audit is past the point this step sits
+        at, and inserting it as unanswered would send a founder who finished
+        setup months ago back to a question about it.
+      */
+      signed_in_product_declined_at: mature ? completedAt : null,
       completed_at: completedAt,
     };
     const { data: inserted, error: insertError } = await supabase
@@ -439,6 +481,14 @@ export async function getProjectOnboarding(
     understandingRunning: Boolean(understandingOperation),
     hasProductProfile: Boolean(profile),
     productConfirmed: Boolean(profile?.stored.confirmedAt),
+    hasSignedInProduct: signedInProduct,
+    /*
+      A live address is what a Deep Scan opens. Without one the domain refuses
+      the scan outright (`production_origin_missing`), so the step would be a
+      question whose only available answer is no.
+    */
+    signedInProductOfferable: liveSiteStatus === "provided",
+    signedInProductDeclined: stored.signedInProductDeclinedAt !== null,
     auditNeedsUser: Boolean(pausedAudit),
     auditRunning: Boolean(auditOperation),
     auditAnalyzing: auditOperation?.stage === "running_ai",
@@ -490,5 +540,10 @@ export async function getProjectOnboarding(
     auditOperation,
     understandingOperation,
     opportunities,
+    signedInProductPending: signedInProductPending({
+      hasSignedInProduct: signedInProduct,
+      signedInProductOfferable: liveSiteStatus === "provided",
+      signedInProductDeclined: stored.signedInProductDeclinedAt !== null,
+    }),
   };
 }

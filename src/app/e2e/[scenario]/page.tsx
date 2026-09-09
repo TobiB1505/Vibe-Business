@@ -213,6 +213,7 @@ import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
 import { DeepScanDialogFixture } from "./deep-scan-dialog-fixture";
 import {
   E2E_DEEP_SCAN_SCENARIOS,
+  E2E_ONBOARDING_DEEP_SCAN_SCENARIOS,
   E2E_DEEP_SCAN_SPOTLIGHT_SCENARIOS,
   isE2eDeepScanScenario,
   isE2eDeepScanSpotlightScenario,
@@ -485,6 +486,55 @@ export default async function E2eScenarioPage({
               state="product_reveal"
               blockLabel="What I understood"
               block={<RevealBlockFixture />}
+            />
+          </BlockCase>
+
+          {/*
+            The signed-in step, in both readings.
+
+            Which one a founder gets is decided by evidence rather than by a
+            question — the public crawl either saw a path bounce to a login or
+            it did not — and the two were never on a screen together, which is
+            how the recommended one came to repeat Nova's own sentence back at
+            her inside her own block.
+          */}
+          <BlockCase title="add_signed_in_product · a login was found">
+            <NovaOnboardingThread
+              state="add_signed_in_product"
+              blockNamesItself
+              blockLabel="Your signed-in product"
+              block={
+                <DeepScanPanel
+                  projectId="project_e2e"
+                  model={E2E_ONBOARDING_DEEP_SCAN_SCENARIOS.recommended}
+                  presentation="block"
+                />
+              }
+              control={
+                <Button type="button" variant="secondary">
+                  Not now — go on without it
+                </Button>
+              }
+            />
+          </BlockCase>
+
+          <BlockCase title="add_signed_in_product · nothing found either way">
+            <NovaOnboardingThread
+              state="add_signed_in_product"
+              blockNamesItself
+              blockLabel="Your signed-in product"
+              block={
+                <DeepScanPanel
+                  projectId="project_e2e"
+                  model={E2E_ONBOARDING_DEEP_SCAN_SCENARIOS.not_recommended}
+                  presentation="block"
+                />
+              }
+              control={
+                <Button type="button" variant="secondary">
+                  Not now — go on without it
+                </Button>
+              }
             />
           </BlockCase>
 

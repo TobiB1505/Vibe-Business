@@ -392,6 +392,35 @@ async function getLatestSuccessfulAuthenticatedSnapshotUncached(
 
 export const getLatestSuccessfulAuthenticatedSnapshot = cache(getLatestSuccessfulAuthenticatedSnapshotUncached);
 
+/**
+ * Whether this product has ever been read from the inside.
+ *
+ * Existence, not the document. `SNAPSHOT_COLUMNS` carries the result JSONB,
+ * which is large, and setup reconciles its state on every poll of every state
+ * — including the eight that have no use for a page of authenticated
+ * intelligence. Same shape and same reason as
+ * `repository-intelligence/store.ts`'s `hasSuccessfulSnapshot`.
+ *
+ * `completed` is the authority here for the same reason it is in
+ * `entitlement.ts`: a session that opened, a browser that ran, and an analysis
+ * that failed have all read nothing.
+ */
+export async function hasSuccessfulAuthenticatedSnapshot(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("authenticated_product_intelligence_snapshots")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
 export type CreateSnapshotRunResult =
   | { ok: true; snapshotId: string }
   | { ok: false; error: "already_running" }

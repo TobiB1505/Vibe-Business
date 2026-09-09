@@ -258,7 +258,7 @@ She uses contractions, because contraction-free English read aloud is a briefing
 
 Controls are the **founder's** voice, not hers. A button is a person deciding, so it says what they are choosing — *Set up my product*, *Show me how you work*, *Yes, that's my product*, *Go to my workspace*. A label in the first person is Nova answering her own question on the founder's behalf.
 
-None of this touches what she may *claim*. The truth rules are elsewhere and are not revisable: no invented cause, no promise to deploy, nothing called safe or correct, no figure a component renders from state, and a name only where the product actually holds one. `src/modules/nova/feed.test.ts` sweeps every sentence she has — the twenty-one moments, the ten setup states, and her first run — against all of it.
+None of this touches what she may *claim*. The truth rules are elsewhere and are not revisable: no invented cause, no promise to deploy, nothing called safe or correct, no figure a component renders from state, and a name only where the product actually holds one. `src/modules/nova/feed.test.ts` sweeps every sentence she has — the twenty-one moments, the eleven setup states, and her first run — against all of it.
 
 ## Signature Surface: the Landing Page
 
