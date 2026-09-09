@@ -1,13 +1,15 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
+import { MarketingHeader } from "@/components/layout/marketing-header";
 import { buttonClasses } from "@/components/ui/button";
 
 /**
  * The public marketing shell (UI-0).
  *
- * Sticky blurred nav, an ambient mint wash and a faint grid behind the content,
- * a quiet footer. The wash and grid are decorative and `aria-hidden`; the grid
+ * A blurred nav that leaves on the way down and returns on the way up
+ * (`MarketingHeader`), an ambient mint wash and a faint grid behind the
+ * content, a quiet footer. The wash and grid are decorative and `aria-hidden`; the grid
  * is drawn with a gradient rather than an asset so it costs no request.
  *
  * The nav carries the two ways in. The footer carries the legal surfaces, which
@@ -74,7 +76,13 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         }}
       />
 
-      <header className="border-line-1 bg-app/60 sticky top-0 z-30 border-b backdrop-blur-xl">
+      {/*
+        Out of the way on the way down, back on the way up — the founder's
+        note on the endless scroll. `MarketingHeader` owns the behaviour and
+        the three obligations that come with it; the nav inside is unchanged
+        and still renders on the server.
+      */}
+      <MarketingHeader>
         <nav className="mx-auto flex w-full max-w-[96rem] items-center gap-4 px-5 py-4 sm:px-10">
           <Link href="/" className="rounded-nav" aria-label="Vibe Business — home">
             <VibeLockup size={22} />
@@ -108,7 +116,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             </Link>
           </div>
         </nav>
-      </header>
+      </MarketingHeader>
 
       <main className="mx-auto w-full max-w-[96rem] px-5 sm:px-10">{children}</main>
 

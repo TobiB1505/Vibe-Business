@@ -1000,3 +1000,89 @@ test.describe("the outcome ladder", () => {
     await expect(outcome).toContainText(/never becomes "no impact"/i);
   });
 });
+
+/*
+ * The nav, out of the way on the way down.
+ *
+ * The founder, on the endless scroll: it gets in the way. The bar leaves when a
+ * reader is going down and comes back when they turn around — and the two
+ * things that would make that a bad trade are held here: it never hides a
+ * control the keyboard is inside, and a reader who asked for no movement keeps
+ * it where it was.
+ */
+test.describe("the marketing header", () => {
+  const bar = (page: import("@playwright/test").Page) => page.locator("[data-marketing-header]");
+
+  /** Scroll in steps, the way a reader does — a jump gives one event and no direction. */
+  async function drift(page: import("@playwright/test").Page, distance: number) {
+    await page.evaluate(async (total) => {
+      const step = total > 0 ? 120 : -120;
+      for (let moved = 0; Math.abs(moved) < Math.abs(total); moved += step) {
+        window.scrollBy(0, step);
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
+      }
+    }, distance);
+    await page.waitForTimeout(250);
+  }
+
+  test("leaves on the way down and comes back on the way up", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+
+    // At the top it is where somebody looking for it expects it.
+    await expect(bar(page)).toHaveAttribute("data-marketing-header", "shown");
+    const seated = await bar(page).boundingBox();
+    expect(seated?.y).toBe(0);
+
+    await drift(page, 1400);
+    await expect(bar(page)).toHaveAttribute("data-marketing-header", "hidden");
+    // Not merely labelled hidden: measured off the page, above its own top edge.
+    const gone = await bar(page).boundingBox();
+    expect(gone?.y ?? 0).toBeLessThan(0);
+
+    await drift(page, -400);
+    await expect(bar(page)).toHaveAttribute("data-marketing-header", "shown");
+    const back = await bar(page).boundingBox();
+    expect(back?.y).toBe(0);
+  });
+
+  test("never leaves the keyboard inside a bar nobody can see", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await drift(page, 1400);
+    await expect(bar(page)).toHaveAttribute("data-marketing-header", "hidden");
+
+    /*
+      `preventScroll`, and it is the whole test. A plain `.focus()` on an
+      element the browser considers off screen scrolls the window to it — which
+      scrolls *up*, which reveals the bar through the ordinary direction rule.
+      Measured: the first version of this test passed with the focus handler
+      deleted, because the browser had done the revealing.
+    */
+    const before = await page.evaluate(() => window.scrollY);
+    await bar(page)
+      .getByRole("link", { name: "Get started" })
+      .evaluate((link: HTMLElement) => link.focus({ preventScroll: true }));
+
+    await expect(bar(page)).toHaveAttribute("data-marketing-header", "shown");
+    expect(await page.evaluate(() => window.scrollY)).toBe(before);
+  });
+
+  test("stays put for a reader who asked for no movement", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+
+    /*
+      Reduced motion is not a degraded experience: it is the same information
+      without the movement. A bar that slid away would take Sign in and Get
+      started off the screen of the one reader who asked for nothing to move.
+    */
+    await drift(page, 1400);
+    await expect(bar(page)).toHaveAttribute("data-marketing-header", "shown");
+    expect((await bar(page).boundingBox())?.y).toBe(0);
+  });
+});
