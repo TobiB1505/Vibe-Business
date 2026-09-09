@@ -1,55 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, type ReactNode } from "react";
-import {
-  AlertIcon,
-  PlusIcon,
-  ProductsIcon,
-  SearchIcon,
-  TrendIcon,
-} from "@/components/ui/dashboard-icons";
+import { useMemo, useState } from "react";
+import { PlusIcon } from "@/components/ui/dashboard-icons";
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
-import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
-import { Figure } from "@/components/ui/figure";
+import { SearchField, SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { EmptyState } from "@/components/ui/states";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
-import { ProductListCard } from "./product-list-card";
-import {
-  filterAndSortProducts,
-  productNeedsAttention,
-  type ProductFilter,
-  type ProductSort,
-} from "./product-list-state";
-
-function SummaryMetric({
-  icon,
-  value,
-  label,
-  tone = "mint",
-}: {
-  icon: ReactNode;
-  value: string | number;
-  label: string;
-  tone?: "mint" | "amber";
-}) {
-  return (
-    <Surface level="panel" padding="sm" className="flex min-h-24 items-center gap-3.5">
-      <span
-        className={cn(
-          "rounded-nav flex size-9 shrink-0 items-center justify-center",
-          tone === "mint" ? "bg-mint-tint-soft text-mint" : "bg-amber-tint-soft text-amber",
-        )}
-      >
-        {icon}
-      </span>
-      <Figure value={value} tier="sm" label={label} />
-    </Surface>
-  );
-}
+import { ProductListRow } from "./product-list-row";
+import { filterAndSortProducts, type ProductFilter, type ProductSort } from "./product-list-state";
 
 export function ProductsIndex({ products }: { products: ProductOverviewItem[] }) {
   const [query, setQuery] = useState("");
@@ -60,96 +22,98 @@ export function ProductsIndex({ products }: { products: ProductOverviewItem[] })
     () => filterAndSortProducts(products, { query, filter, sort }),
     [filter, products, query, sort],
   );
-  const analysed = products.filter((product) => product.scoreState !== "not_audited").length;
-  const attention = products.filter(productNeedsAttention).length;
-
   return (
     <div className="flex flex-col gap-7" data-testid="products-index">
       <SectionHeader
         level={1}
         title="My Products"
         description="All products you're building and growing."
+        /*
+          The header carries the page's one action, and nothing else.
+
+          `Connect product` used to be the fourth tile in a row of three
+          statistics — the same size and the same shape as "3 Products", so the
+          only thing a founder could *do* here wore the costume of something to
+          read. It also drew its own border, fill and hover, after 0185 folded
+          every pressable control into `Button`.
+
+          The list's own controls moved out of this slot and above the list,
+          where they belong: `SectionHeader` gives `actions` `sm:shrink-0`, so
+          four controls in it overflowed the page at 1024 and 768 rather than
+          wrapping. Measured, before this split.
+        */
         actions={
-          /* `items-stretch` rather than `items-center`: the three controls
-             have different intrinsic heights — an input, a pill of pills and a
-             select — and a toolbar where they disagree by two pixels reads as
-             a misalignment nobody can name. The tallest sets the row. */
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-            <label className="border-line-2 bg-surface-2 focus-within:border-mint-line rounded-nav flex min-w-0 flex-1 basis-full items-center gap-2.5 border px-3.5 py-2.5 sm:w-64 sm:flex-none sm:basis-auto">
-              <SearchIcon size={16} className="text-fg-meta shrink-0" />
-              <span className="sr-only">Search products</span>
-              <input
-                type="search"
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search products…"
-                className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-body outline-none"
-              />
-            </label>
-
-            <SegmentedControl
-              label="Filter products"
-              value={filter}
-              onChange={setFilter}
-              options={[
-                { value: "all", label: "All" },
-                { value: "attention", label: "Attention" },
-                { value: "analysed", label: "Analysed" },
-                { value: "setup", label: "Setup" },
-              ]}
-            />
-
-            <SortSelect
-              label="Sort products"
-              value={sort}
-              onChange={setSort}
-              options={[
-                { value: "priority", label: "Priority" },
-                { value: "recent", label: "Recent" },
-                { value: "signal", label: "Signal" },
-                { value: "name", label: "Name" },
-              ]}
-            />
-          </div>
+          <Link
+            href="/app/connect/github"
+            className={cn(buttonClasses({ variant: "primary" }), "shrink-0")}
+          >
+            <PlusIcon size={16} />
+            Connect product
+          </Link>
         }
       />
 
-      <section aria-label="Product summary" className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <SummaryMetric icon={<ProductsIcon size={18} />} value={products.length} label="Products" />
-        <SummaryMetric
-          icon={<TrendIcon size={18} />}
-          value={`${analysed}/${products.length}`}
-          label="Analysed products"
+      {/*
+        The list's controls, above the list.
+
+        Three controls with three intrinsic heights — an input, a pill of pills
+        and a select — and a toolbar where they disagree by two pixels reads as
+        a misalignment nobody can name, so `items-center` settles it.
+      */}
+      <div className="flex flex-wrap items-center gap-2">
+        <SearchField
+          label="Search products"
+          value={query}
+          onChange={setQuery}
+          onClear={() => setQuery("")}
+          clearLabel="Clear product search"
+          placeholder="Search products…"
+          className="flex-1 basis-full sm:w-64 sm:flex-none sm:basis-auto"
         />
-        <SummaryMetric
-          icon={<AlertIcon size={18} />}
-          value={attention}
-          label="Need attention"
-          tone="amber"
+
+        <SegmentedControl
+          label="Filter products"
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: "all", label: "All" },
+            { value: "attention", label: "Attention" },
+            { value: "analysed", label: "Analysed" },
+            { value: "setup", label: "Setup" },
+          ]}
         />
-        <Link
-          href="/app/connect/github"
-          className={cn(
-            "border-mint-line bg-mint-tint-soft rounded-panel flex min-h-24 items-center gap-3.5 border p-4",
-            "text-mint transition-interactive hover:bg-mint-tint hover:border-mint",
-          )}
-        >
-          <span className="bg-mint-tint rounded-nav flex size-9 shrink-0 items-center justify-center">
-            <PlusIcon size={18} />
-          </span>
-          <span className="flex flex-col">
-            <strong className="text-body font-semibold">Connect product</strong>
-            <span className="text-mint-dim text-caption">Add from GitHub</span>
-          </span>
-        </Link>
-      </section>
+
+        <SortSelect
+          label="Sort products"
+          value={sort}
+          onChange={setSort}
+          options={[
+            { value: "priority", label: "Priority" },
+            { value: "recent", label: "Recent" },
+            { value: "signal", label: "Signal" },
+            { value: "name", label: "Name" },
+          ]}
+        />
+      </div>
 
       {visible.length > 0 ? (
-        <ul className="flex flex-col gap-4" aria-live="polite">
-          {visible.map((product) => (
-            <ProductListCard key={product.id} product={product} />
-          ))}
-        </ul>
+        /*
+          One surface, and the products are rows inside it.
+
+          Three cards rendered at three different heights — 252, 194 and 231 at
+          1280 — because each card carried a grid of profile facts that
+          collapses when Vibe has not read a product yet. A list whose rows
+          change height with how much is known about each item is a list that
+          cannot be scanned, and what a product *does* is a thing to read
+          inside the product rather than on the way to it.
+        */
+        <Surface level="card" padding="none" className="overflow-hidden">
+          <ul aria-live="polite">
+            {visible.map((product, index) => (
+              <ProductListRow key={product.id} product={product} divided={index > 0} />
+            ))}
+          </ul>
+        </Surface>
       ) : (
         <EmptyState
           as="h2"

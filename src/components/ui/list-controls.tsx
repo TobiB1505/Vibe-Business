@@ -1,6 +1,8 @@
 "use client";
 
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode, type RefObject } from "react";
+import { SearchIcon } from "@/components/ui/dashboard-icons";
+import { DismissIcon } from "@/components/ui/icons.generated";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -157,6 +159,103 @@ export function SortSelect<T extends string>({
           </option>
         ))}
       </select>
+    </label>
+  );
+}
+
+/**
+ * The search field above a list.
+ *
+ * ## Why this exists, and it is not a style preference
+ *
+ * There were two of these, hand-written, one on each index screen — and when
+ * the repositories audit (0189) found focus invisible on that one and fixed
+ * it, the products page kept the defect. Measured with real Tab presses in
+ * UI-33: `box-shadow: none` and a border going to 32% mint on one page,
+ * `rgb(0, 229, 160) 0px 0px 0px 2px` on the other. Two copies, one repair.
+ *
+ * The fills had drifted too — `bg-surface-2` against `bg-field` — and only
+ * one of them offered a way to clear the query.
+ *
+ * So the ring lives here now, on the label, for the reason {@link SortSelect}
+ * records at length: the element that takes focus is a bare `<input>` with
+ * `outline-none`, and it is not the element anybody is looking at.
+ *
+ * ## Why the clear control is optional
+ *
+ * Not every list wants one — a short list is faster to re-read than to clear.
+ * Passing `onClear` draws it, and it returns focus to the input, because a
+ * control that empties a field and then leaves the keyboard nowhere is a
+ * control that costs a sighted user nothing and a keyboard user their place.
+ */
+export function SearchField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  onClear,
+  clearLabel = "Clear search",
+  inputRef,
+  className,
+}: {
+  /** Announced for the input. The magnifier is decoration. */
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  /** Draws a clear control while there is a query. */
+  onClear?: () => void;
+  /**
+   * What the clear control is called.
+   *
+   * Named rather than derived from `label`: "Clear search repositories" is
+   * what a template produces and not what anybody says.
+   */
+  clearLabel?: string;
+  inputRef?: RefObject<HTMLInputElement | null>;
+  className?: string;
+}): ReactNode {
+  const fallbackRef = useRef<HTMLInputElement>(null);
+  const ref = inputRef ?? fallbackRef;
+
+  return (
+    <label
+      className={cn(
+        "border-line-2 bg-field focus-within:border-mint-line rounded-nav",
+        "flex min-w-0 items-center gap-2.5 border px-3.5 py-2.5",
+        "has-[:focus-visible]:ring-mint has-[:focus-visible]:ring-2",
+        className,
+      )}
+    >
+      <SearchIcon size={16} className="text-fg-meta shrink-0" />
+      <span className="sr-only">{label}</span>
+      <input
+        ref={ref}
+        type="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-body outline-none"
+      />
+      {onClear && value && (
+        <button
+          type="button"
+          onClick={() => {
+            onClear();
+            ref.current?.focus();
+          }}
+          aria-label={clearLabel}
+          /*
+            `DismissIcon`, not `×`. A text character takes the font's weight
+            instead of the icon frame's 1.5px and sits on the baseline rather
+            than the optical centre — the defect the disclosure caret and
+            `ArrowIcon` both record, in two other files.
+          */
+          className="text-fg-meta hover:text-fg rounded-inline transition-interactive shrink-0"
+        >
+          <DismissIcon size={14} />
+        </button>
+      )}
     </label>
   );
 }

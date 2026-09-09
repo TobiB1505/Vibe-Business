@@ -120,12 +120,17 @@ describe("a figure is one object with three sizes", () => {
   it("is worn, not merely written", () => {
     // The `.vibe-atmosphere` failure: a component that exists and renders
     // nowhere is a decision the product does not actually have.
+    //
+    // Seven, down from eight in UI-33: the products page had a row of metric
+    // tiles counting the list directly beneath it, and they went. A floor is
+    // the point of this test — it catches a component going dark — so the
+    // number moves when a deliberate deletion moves it, and never quietly.
     const wearers = sourceFiles("src").filter(
       (path) =>
         !path.startsWith(STUDIES) &&
         path !== "src/components/ui/figure.tsx" &&
         /\bFigure\b|figureClasses/.test(readFileSync(path, "utf8")),
     );
-    expect(wearers.length).toBeGreaterThanOrEqual(8);
+    expect(wearers.length).toBeGreaterThanOrEqual(7);
   });
 });

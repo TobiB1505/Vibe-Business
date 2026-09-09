@@ -7,10 +7,9 @@ import {
   BranchIcon,
   PlusIcon,
   RepositoriesIcon,
-  SearchIcon,
   SettingsIcon,
 } from "@/components/ui/dashboard-icons";
-import { DismissIcon, ExternalLinkIcon } from "@/components/ui/icons.generated";
+import { ExternalLinkIcon } from "@/components/ui/icons.generated";
 import { GithubMark } from "@/components/brand/provider-marks";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -30,10 +29,9 @@ import {
   type RepositorySort,
 } from "./repository-list-state";
 import { proseLinkClasses } from "@/components/ui/text-link";
-import { SegmentedControl, SortSelect } from "@/components/ui/list-controls";
+import { SearchField, SegmentedControl, SortSelect } from "@/components/ui/list-controls";
 import { Figure } from "@/components/ui/figure";
 import { EmptyState } from "@/components/ui/states";
-
 
 function Metric({ value, label }: { value: number; label: string }) {
   return (
@@ -50,7 +48,6 @@ function RepositoryTile({ repository }: { repository: ConnectedRepository }) {
     </span>
   );
 }
-
 
 /**
  * What a customer sees after removing the GitHub App (VB-041).
@@ -275,49 +272,27 @@ export function RepositoriesIndex({
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
-              {/* The ring goes on the label, for the reason `SortSelect`
-                  records: the input carries `outline-none` and the border
-                  colour it swapped in is 26% alpha. */}
-              <label className="border-line-2 bg-field focus-within:border-mint-line has-[:focus-visible]:ring-mint has-[:focus-visible]:ring-2 rounded-nav flex min-w-0 items-center gap-2.5 border px-3.5 py-2.5 sm:w-64">
-                <SearchIcon size={16} className="text-fg-meta shrink-0" />
-                <span className="sr-only">Search repositories</span>
-                <input
-                  ref={searchRef}
-                  type="search"
-                  value={currentQuery}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    replaceParams((params) => {
-                      if (value.trim()) params.set("q", value);
-                      else params.delete("q");
-                      params.delete("page");
-                    });
-                  }}
-                  placeholder="Search repositories…"
-                  className="text-fg-body placeholder:text-fg-meta min-w-0 flex-1 bg-transparent text-body outline-none"
-                />
-                {currentQuery && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      replaceParams((params) => {
-                        params.delete("q");
-                        params.delete("page");
-                      });
-                      searchRef.current?.focus();
-                    }}
-                    aria-label="Clear repository search"
-                    // `DismissIcon`, not `×`. A text character takes the
-                    // font's weight instead of the icon frame's 1.5px and
-                    // sits on the baseline rather than the optical centre —
-                    // the defect the disclosure caret and `ArrowIcon` both
-                    // record, in a third file.
-                    className="text-fg-meta hover:text-fg rounded-inline transition-interactive shrink-0"
-                  >
-                    <DismissIcon size={14} />
-                  </button>
-                )}
-              </label>
+              <SearchField
+                label="Search repositories"
+                value={currentQuery}
+                placeholder="Search repositories…"
+                inputRef={searchRef}
+                className="sm:w-64"
+                onChange={(value) =>
+                  replaceParams((params) => {
+                    if (value.trim()) params.set("q", value);
+                    else params.delete("q");
+                    params.delete("page");
+                  })
+                }
+                clearLabel="Clear repository search"
+                onClear={() =>
+                  replaceParams((params) => {
+                    params.delete("q");
+                    params.delete("page");
+                  })
+                }
+              />
 
               {/* Three options, so all three are shown. A filter changes what
                   you are looking at rather than collecting an answer, and a
