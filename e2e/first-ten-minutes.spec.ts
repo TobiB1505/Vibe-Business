@@ -82,8 +82,15 @@ test.describe("the landing page", () => {
     await expect(
       page.getByRole("heading", { name: "From code to business. Vibe every step." }),
     ).toBeVisible();
+    /*
+      The Business Brain's own heading. It read "See your business as a system."
+      while that section drew the radial map; UI-34 unrolled the nine areas into
+      a staircase and the section went with it, so what is pinned is the
+      heading the block has now — the assertion's job is that the page names its
+      three subjects, not that it words them one particular way for ever.
+    */
     await expect(
-      page.getByRole("heading", { name: "See your business as a system." }),
+      page.getByRole("heading", { name: "Nine areas, and an honest answer for each." }),
     ).toBeVisible();
   });
 
@@ -102,9 +109,17 @@ test.describe("the landing page", () => {
     for (const area of ["Offer", "Audience", "Acquisition", "Conversion", "Retention"]) {
       await expect(page.getByText(area, { exact: true }).first()).toBeVisible();
     }
-    await expect(
-      page.getByText("Scores and relationships appear only after Vibe has evidence"),
-    ).toBeVisible();
+
+    /*
+      The claim, not the sentence that used to carry it. The radial preview
+      said "Scores and relationships appear only after Vibe has evidence" under
+      a map of nine empty tiles; the staircase says it on every orb and in the
+      block's own prose. `landing.spec.ts` holds the stronger version of this —
+      nine orbs, no digits — and this one stays as the sweep a stranger's first
+      ten minutes gets.
+    */
+    await expect(page.getByText("Never scored zero, never averaged in")).toBeVisible();
+    await expect(page.getByText("Not assessed").first()).toBeVisible();
   });
 
   test("reaches the legal surfaces from the footer", async ({ page }) => {

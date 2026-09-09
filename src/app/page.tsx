@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
-import { LandingBusinessBrain } from "@/components/marketing/landing-business-brain";
+import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
@@ -89,13 +89,18 @@ export default function HomePage() {
       <LandingScan />
 
       {/*
-        The product, immediately under the claim: not a screenshot and not a
-        mockup, but the real Business Brain rendered from the component the app
-        uses, in the state a visitor with no product would actually get.
-      */}
-      <Reveal className="pb-16 sm:pb-20">
-        <LandingBusinessBrain />
+        Step two, and the radial map is deliberately not here.
 
+        `LandingBusinessBrain` drew all nine areas as one picture, which is the
+        right shape in the product — where they are looked at together and the
+        relationships between them are the point — and the wrong one on a page
+        a stranger is scrolling. `LandingBusinessMap` unrolls the same nine
+        orbs down the scroll, one to a tread, so each is read rather than
+        decoded.
+      */}
+      <LandingBusinessMap />
+
+      <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">
           <MonoLabel>Built for products made with</MonoLabel>
           <div className="text-fg-secondary flex flex-wrap justify-center gap-x-6 gap-y-2 text-body font-semibold">
@@ -139,46 +144,6 @@ export default function HomePage() {
 
       <Reveal>
         <LandingTrust />
-      </Reveal>
-
-      <Reveal>
-        <section
-          id="brain"
-          aria-labelledby="brain-heading"
-          className="border-line-1 scroll-mt-24 border-t py-20 sm:py-28"
-        >
-          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,0.72fr)] lg:items-center lg:gap-16">
-            <div className="flex flex-col gap-5">
-              <MonoLabel className="text-mint">Business Brain</MonoLabel>
-              <h2
-                id="brain-heading"
-                className="text-fg max-w-[16ch] text-[clamp(2.25rem,4vw,3.5rem)] leading-[1.04] font-bold tracking-[-0.045em] text-balance"
-              >
-                See your business as a <span className="text-mint">system.</span>
-              </h2>
-              <p className="text-fg-prose max-w-[58ch] leading-relaxed">
-                Nine business areas reveal what is healthy, what is blocked, and what matters now.
-                Missing evidence stays unscored rather than becoming a bad result.
-              </p>
-            </div>
-            <div className="border-coral-line bg-coral-tint/30 rounded-card border p-6 sm:p-8">
-              <MonoLabel className="text-coral">What matters now</MonoLabel>
-              <h3 className="text-fg mt-5 text-moment font-semibold">
-                One prioritized move, not another report.
-              </h3>
-              <p className="text-fg-secondary mt-3 leading-relaxed">
-                Vibe ties every recommendation back to the evidence that produced it, then turns the
-                selected opportunity into an action plan.
-              </p>
-              <Link
-                href="/signup"
-                className={`${buttonClasses({ variant: "secondary" })} mt-6 w-full justify-between`}
-              >
-                Build your Business Brain <ArrowRightIcon size={16} />
-              </Link>
-            </div>
-          </div>
-        </section>
       </Reveal>
 
       <Reveal>

@@ -522,3 +522,74 @@ test.describe("the ground under the walk", () => {
     expect(["16%", "84%"]).toContain(side);
   });
 });
+
+test.describe("the business map, as a staircase", () => {
+  test("walks all nine areas, named by the audit's own labels", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#brain").scrollIntoViewIfNeeded();
+
+    const treads = page.locator("#brain li");
+    await expect(treads).toHaveCount(9);
+
+    // The labels come from `LENS_LABELS`, so an area invented for the landing
+    // page cannot appear here without also existing in the product.
+    for (const label of [
+      "Offer",
+      "Audience",
+      "Revenue & Economics",
+      "Acquisition",
+      "Conversion",
+      "Retention",
+      "Measurement",
+      "Business Readiness",
+      "Scalability",
+    ]) {
+      await expect(page.locator("#brain").getByText(label, { exact: true }).first()).toBeVisible();
+    }
+  });
+
+  test("scores nothing, because there is nothing connected to score", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#brain").scrollIntoViewIfNeeded();
+
+    /*
+      Nine orbs reading "Not assessed" is a strange thing to put on a landing
+      page and the correct one: an area Vibe cannot see stays unscored rather
+      than scoring zero, and that claim is the reason this block exists. A
+      number on any orb here would be one nobody measured.
+    */
+    await expect(page.locator("#brain .business-brain-planet")).toHaveCount(9);
+    const withNumbers = await page.evaluate(
+      () =>
+        [...document.querySelectorAll("#brain .business-brain-planet")].filter((el) =>
+          /\d/.test(el.textContent ?? ""),
+        ).length,
+    );
+    expect(withNumbers).toBe(0);
+    await expect(page.locator("#brain").getByText("Not assessed")).toHaveCount(9);
+  });
+
+  test("alternates sides, and threads one orb to the next but not off the end", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator("#brain").scrollIntoViewIfNeeded();
+
+    /*
+      The alternation is the staircase. Measured as page-relative centres
+      rather than read off a class, because the class could be right while the
+      grid ordering puts both on the same side.
+    */
+    const centres = await page
+      .locator("#brain .business-brain-planet")
+      .evaluateAll((els) => els.map((el) => el.getBoundingClientRect().left));
+    const mid = Math.max(...centres) / 2 + Math.min(...centres) / 2;
+    const sides = centres.map((left) => (left < mid ? "L" : "R"));
+    expect(sides.join("")).toBe("LRLRLRLRL");
+
+    // Eight threads for nine orbs: a curve off the last one leads nowhere.
+    await expect(page.locator("#brain li > svg")).toHaveCount(8);
+  });
+});

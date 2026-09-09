@@ -20,7 +20,7 @@ import { BUSINESS_LENSES, type BusinessLens } from "@/modules/business-audit/sch
  * ## The questions are the product's own areas, asked as questions
  *
  * They come from `BUSINESS_LENSES` rather than a list typed here, for the same
- * reason `LandingBusinessBrain` reads them: a marketing page that names its own
+ * reason `LandingBusinessMap` reads them: a marketing page that names its own
  * categories drifts from the product the first time the product changes, and
  * nobody notices because both sides look plausible. Five of the nine, in the
  * order the audit holds them, phrased as the question a founder actually has.

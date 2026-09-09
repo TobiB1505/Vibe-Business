@@ -46,8 +46,13 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
  * A contract pointed at an unrendered component guards nothing, so this is the
  * component a visitor meets. Its predecessor survived the redesign as an
  * unimported file for a while and has since been deleted.
+ *
+ * It moved again at UI-34, and for the same reason: the radial
+ * `LandingBusinessBrain` came off the page when the nine areas were unrolled
+ * into a staircase, so it was deleted rather than left as a file this contract
+ * still pointed at.
  */
-const PROOF = read("src/components/marketing/landing-business-brain.tsx");
+const PROOF = read("src/components/marketing/landing-business-map.tsx");
 /*
  * The hero, which is now a component rather than a block of the page (UI-34).
  *
@@ -250,16 +255,27 @@ describe("the product proof is real", () => {
     ]) {
       expect(copy, `proof must not contain "${banned}"`).not.toContain(banned);
     }
-    // No score-shaped values either. The tiles carry an em dash on purpose:
-    // there is no product connected, so there is nothing to have judged.
-    // Inline styles are dropped first — a gradient stop at `50%` is a colour,
-    // not a claim about anybody's business.
-    const text = copy.replace(/style=\{\{[\s\S]*?\}\}/g, "");
+    /*
+      No score-shaped values either. The orbs carry "Not assessed" on purpose:
+      there is no product connected, so there is nothing to have judged.
+
+      Object-valued JSX attributes are dropped first. The rule was written for
+      `style={{…}}` — a gradient stop at `50%` is a colour, not a claim about
+      anybody's business — and the staircase showed that the principle is wider
+      than the one attribute: `viewport={{ margin: "0px 0px -10% 0px" }}` is a
+      scroll threshold, and it failed a guard about invented statistics.
+    */
+    const text = copy.replace(/[a-zA-Z]+=\{\{[\s\S]*?\}\}/g, "");
     expect(text).not.toMatch(/\b(?:[1-9]|10)\s*\/\s*10\b/);
     expect(text).not.toMatch(/\b\d{1,3}\s*%/);
-    // The same claim, in the words the preview now uses: nothing is filled in,
-    // and the page says so rather than letting an empty map imply data.
-    expect(copy).toContain("Scores and relationships appear only after Vibe has evidence");
+    /*
+      And the claim itself, which is the reason nine dashes are on a landing
+      page at all: an area Vibe cannot see stays unscored rather than scoring
+      zero. The sentence moved with the block — the radial preview said "Scores
+      and relationships appear only after Vibe has evidence" — so what is pinned
+      is the claim rather than the wording that carried it.
+    */
+    expect(copy).toContain("Never scored zero, never averaged in");
   });
 });
 

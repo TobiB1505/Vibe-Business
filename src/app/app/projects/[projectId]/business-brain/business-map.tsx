@@ -63,7 +63,20 @@ type PlanetStyle = CSSProperties & {
   "--planet-accent": string;
 };
 
-function planetStyle(node: BusinessBrainNode): PlanetStyle {
+/**
+ * The orb's palette, keyed on health.
+ *
+ * Exported because the landing page draws the same nine orbs as a staircase
+ * (UI-34) and the alternative was four RGB triples copied into a marketing
+ * file — where "149 146 138" would have quietly stopped meaning *unscored* the
+ * first time this changed.
+ *
+ * It takes only the health, which is all it ever read. The full node was the
+ * signature because every caller happened to have one; the landing page does
+ * not, and the alternative was casting an object with one field through
+ * `unknown` to satisfy a parameter the body never touches.
+ */
+export function planetStyle(node: Pick<BusinessBrainNode, "health">): PlanetStyle {
   if (node.health === "strong") {
     return { "--planet-rgb": "0 229 160", "--planet-accent": "var(--color-mint)" };
   }
