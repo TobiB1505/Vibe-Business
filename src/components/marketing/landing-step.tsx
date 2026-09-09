@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -62,14 +62,41 @@ export function LandingStep({
     <section
       id={id}
       aria-labelledby={labelledBy}
-      className={cn("scroll-mt-24 lg:grid lg:grid-cols-[3.5rem_minmax(0,1fr)]", className)}
+      className={cn(
+        "relative isolate scroll-mt-24 lg:grid lg:grid-cols-[3.5rem_minmax(0,1fr)]",
+        className,
+      )}
     >
+      {/*
+        The ground, lit from one side and alternating down the page.
+
+        The hero stands on a field and everything under it stood on nothing —
+        sampled at the Product Scan the ground read `12,14,16` at both edges
+        against the hero's `9,45,35`. The mask fades the field in and out
+        vertically, so where two steps meet the light travels rather than
+        restarting, which is the difference between a flowing page and the same
+        patch stamped once per module.
+
+        It bleeds past the section's own measure because the shell's content
+        column is narrower than the window, and an atmosphere that stops at a
+        text column is a rectangle.
+      */}
+      <div
+        aria-hidden
+        style={{ "--step-side": Number(index) % 2 === 1 ? "16%" : "84%" } as CSSProperties}
+        className="landing-step-field pointer-events-none absolute -inset-y-24 -left-[6vw] -z-10 w-[112vw]"
+      />
       {/*
         The rail. `aria-hidden` because it is the drawing of a structure the
         headings already carry: a screen reader walking this page meets
         "Module one · Product Scan" and does not need a line described to it.
       */}
-      <div aria-hidden className="relative hidden lg:block">
+      {/*
+        A class, not a position. This was found by `#scan > [aria-hidden]` until
+        the step gained a second decorative layer above it and the selector
+        silently started measuring the ground instead of the rail.
+      */}
+      <div aria-hidden className="landing-step-rail relative hidden lg:block">
         <motion.span
           initial={reduced ? false : { opacity: 0, scale: 0.6 }}
           whileInView={{ opacity: 1, scale: 1 }}

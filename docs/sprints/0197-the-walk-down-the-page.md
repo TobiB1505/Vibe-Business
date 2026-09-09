@@ -72,7 +72,7 @@ a real box height after scrolling, plus the `aria-hidden` that keeps a drawn
 line from being described to a screen reader that already has the headings.
 Mutated by animating `scaleY` to zero: it failed.
 
-Unit 9,475 · browser 769 with 3 new · tsc clean · eslint 0 · build clean
+
 
 ## Sources
 
@@ -115,3 +115,55 @@ lives — it reads the computed value rather than sampling pixels, so it would n
 catch a light that is off-centre and still too weak, because decoding a
 screenshot needs an image library the browser suite does not carry. The pixel
 sampling stays a thing done by hand, which is how both of these were found.
+
+## Addendum 2 — the ground between the lit places
+
+*"Beim Product Scan sollte ja doch ein fließender Background sein oder nicht?"*
+
+Yes, and it was not. A vertical profile down the left edge at 1440, green
+channel, before:
+
+```
+hero          15  18  19  19  19  17  17  16  18  15  15  16
+between       14  13  12  12  12  13  13          ← five hundred pixels
+module 01     21  26  28  25  19
+```
+
+The hero stood on a field and the walk below it stood on nothing. A page that
+goes dark between its lit places is three pictures with gaps, not one
+atmosphere.
+
+Two things fixed it.
+
+**A room.** One `fixed` layer the size of the window, very low, so every scroll
+position has ground under it. `fixed` rather than `absolute` on purpose: an
+absolute layer would have to span ten thousand pixels and place its light at
+percentages of a height that changes every time a block is added. Its pools are
+centred vertically, because a fixed layer paints the same light at every scroll
+position and an off-centre one put an identical dark quarter at the foot of
+every screen — a vignette stuck to the window rather than a room.
+
+**A pool per module**, alternating sides down the page and masked to fade in and
+out, so consecutive steps are lit from opposite edges and the light travels
+rather than restarting. The first mask fade was 22% and left a seam; with the
+vertical bleed the component gives the element, 8% is enough.
+
+After, at a real 900px viewport, the left edge reads 23–41 through the whole
+scroll and never returns to the flat 12–13 it was.
+
+## Addendum 3 — a selector that moved under its own guard
+
+Adding the ground broke the rail guard, and the way it broke is worth keeping.
+It found its subject with `#scan > [aria-hidden]` — a *position*, not a name —
+so the moment the step gained a second decorative layer above the rail, the
+guard started measuring the ground and timed out looking for a `span` inside it.
+
+Both layers carry a class now (`landing-step-rail`, `landing-room`), and the
+guards ask for them by name. A guard that identifies its subject by where it
+happens to sit is one edit away from asserting something else entirely — and it
+would not always fail loudly, which is the part that makes it worth a note.
+
+**Two more guards, both mutated**: the room must be `fixed` (made absolute →
+fails), and a module's pool must sit off the centre line (recentred → fails).
+
+Unit 9,475 · browser 771 with 5 new · tsc clean · eslint 0 · build clean

@@ -415,7 +415,7 @@ test.describe("the walk", () => {
 
     // The line is the drawing of a structure the headings already carry, so it
     // is `aria-hidden` — and it has to have actually drawn, not sat at zero.
-    const rail = page.locator("#scan > [aria-hidden]").first();
+    const rail = page.locator("#scan .landing-step-rail");
     await expect(rail).toHaveAttribute("aria-hidden", "true");
 
     const drawn = await rail
@@ -478,5 +478,47 @@ test.describe("the hero's ground", () => {
       ? parseInt(hex[1], 16) / 255
       : Number(mark.match(/\/\s*([\d.]+)\s*\)/)?.[1] ?? 0);
     expect(alpha, `grid mark ${mark} is below what this ground shows`).toBeGreaterThanOrEqual(0.12);
+  });
+});
+
+test.describe("the ground under the walk", () => {
+  test("carries atmosphere between the lit places, not only in them", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    /*
+      Profiled down the left edge before this existed: 15–19 in the green
+      channel through the hero, **12–13 for five hundred pixels** after it, then
+      21–28 at the first module. A page that goes dark between its lit places is
+      three pictures with gaps rather than one atmosphere.
+
+      The fix is a `fixed` layer the size of the window, so every scroll position
+      has ground under it and nothing has to be re-tuned when the page grows —
+      an absolute one would have to place its light at percentages of a height
+      that changes with every block added.
+
+      Same limit as the hero's guard, and worth restating: this reads computed
+      values, so it would not catch a layer that exists and is too weak. The
+      profiling stays a thing done by hand.
+    */
+    const room = page.locator(".landing-room");
+    await expect(room).toHaveCount(1);
+
+    const image = await room.evaluate((el) => getComputedStyle(el).backgroundImage);
+    expect(image).toContain("rgba(0, 229, 160");
+    expect(await room.evaluate((el) => getComputedStyle(el).position)).toBe("fixed");
+  });
+
+  test("lights consecutive modules from opposite sides", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await page.locator("#scan").scrollIntoViewIfNeeded();
+
+    // One pool per step, alternating, so a page of modules does not read as the
+    // same patch stamped once each.
+    const side = await page
+      .locator("#scan .landing-step-field")
+      .evaluate((el) => getComputedStyle(el).getPropertyValue("--step-side").trim());
+    expect(["16%", "84%"]).toContain(side);
   });
 });

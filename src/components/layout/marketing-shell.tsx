@@ -38,6 +38,42 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         }}
       />
 
+      {/*
+        The room the whole scroll happens in (UI-34).
+
+        The hero stands on a lit field and each module step carries a pool of
+        its own, but the stretches between them were flat black: a vertical
+        profile down the left edge read 15–19 in the green channel through the
+        hero, **12–13 for five hundred pixels** after it, then 21–28 at the
+        first module. A page that goes dark between its lit places is not one
+        atmosphere, it is three pictures with gaps.
+
+        This is `fixed` rather than `absolute` on purpose. An absolute layer
+        would have to span ten thousand pixels and place its light at
+        percentages of a height that changes every time a block is added; a
+        fixed one is the size of the window, so every scroll position has
+        ground under it and nothing has to be re-tuned when the page grows.
+
+        It is very low — the pools at the hero and at each step are what a
+        reader actually notices. This only stops the floor from falling away
+        between them.
+
+        The pools are centred vertically and tall, because a fixed layer paints
+        the same light at every scroll position: an off-centre one put an
+        identical dark quarter at the foot of every screen, which reads as a
+        vignette stuck to the window rather than as a room. Centred, the
+        variation as you scroll comes from the step pools moving through it,
+        which is the half that is supposed to move.
+      */}
+      <div
+        aria-hidden
+        className="landing-room pointer-events-none fixed inset-0 -z-10"
+        style={{
+          backgroundImage:
+            "radial-gradient(ellipse 46% 78% at 4% 50%, rgb(0 229 160 / 0.075), transparent 74%), radial-gradient(ellipse 46% 78% at 96% 50%, rgb(0 229 160 / 0.06), transparent 74%)",
+        }}
+      />
+
       <header className="border-line-1 bg-app/60 sticky top-0 z-30 border-b backdrop-blur-xl">
         <nav className="mx-auto flex w-full max-w-[96rem] items-center gap-4 px-5 py-4 sm:px-10">
           <Link href="/" className="rounded-nav" aria-label="Vibe Business — home">
@@ -84,7 +120,10 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           the links wrapping around it.
         */}
         <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-4 px-5 py-8 sm:px-10">
-          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-caption">
+          <nav
+            aria-label="Footer"
+            className="flex flex-wrap items-center gap-x-6 gap-y-3 text-caption"
+          >
             <span className="text-fg-muted font-mono">Vibe Business</span>
             {[
               ["Privacy", "/privacy"],

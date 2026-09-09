@@ -1591,3 +1591,50 @@
     --scan-scale: 0.62;
   }
 }
+
+/*
+ * The ground the walk happens on (UI-34).
+ *
+ * ## Why the modules needed one
+ *
+ * The hero stands on a lit field and everything below it stood on nothing:
+ * sampled at the Product Scan block, the ground read `12,14,16` at both edges
+ * against the hero's `9,45,35` beside its card. The page went from an
+ * atmosphere to a flat black rectangle at exactly the point where the walk
+ * starts, which is the opposite of a scroll that flows.
+ *
+ * ## Flowing rather than stamped
+ *
+ * Two things stop this reading as the same patch repeated. The pool sits at one
+ * side and `--step-side` alternates it down the page, so consecutive modules
+ * are lit from opposite edges; and the whole field is masked to fade in at the
+ * top and out at the bottom, so where two steps meet there is no seam — the
+ * light travels rather than restarting.
+ *
+ * It is deliberately quieter than the hero: a 13% pool against the hero's 20%,
+ * and a 7.5% grid against its 13%. The hero is the lit stage and the walk is
+ * the room it is in; if every block were as bright, none of them would be.
+ */
+.landing-step-field {
+  --step-field-mark: rgb(255 255 255 / 0.075);
+  --step-side: 14%;
+  background-image:
+    radial-gradient(
+      ellipse 40% 52% at var(--step-side) 50%,
+      rgb(0 229 160 / 0.13),
+      transparent 72%
+    ),
+    linear-gradient(var(--step-field-mark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--step-field-mark) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    46px 46px,
+    46px 46px;
+  /*
+    A gentle fade rather than a long one. At 22% the fields of two consecutive
+    steps did not reach each other and the seam between them read as a band;
+    combined with the bleed the component gives this element, 8% is enough to
+    stop a hard edge without leaving a gap.
+  */
+  mask-image: linear-gradient(180deg, transparent 0%, black 8%, black 92%, transparent 100%);
+}
