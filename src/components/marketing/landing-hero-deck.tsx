@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { GithubMark } from "@/components/brand/provider-marks";
 import { MarketingCta } from "@/components/marketing/marketing-cta";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { ArrowRightIcon, BranchIcon, LockIcon } from "@/components/ui/dashboard-icons";
+import { BranchIcon, LockIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 
@@ -139,10 +139,16 @@ export function LandingHeroDeck() {
             the next step — with your approval before anything merges.
           </p>
 
+          {/*
+            "Start with GitHub" rather than "Start with your GitHub repo", and
+            no arrow beside the mark. The label is a length constraint now that
+            `MarketingCta` refuses to wrap — the long one did not fit the card
+            at 390 — and a mark on the left plus an arrow on the right is two
+            ornaments on a control whose whole job is to be one thing.
+          */}
           <MarketingCta href="/signup" assurance="No credit card to start">
-            <GithubMark size={20} />
-            Start with your GitHub repo
-            <ArrowRightIcon size={17} />
+            <GithubMark size={19} />
+            Start with GitHub
           </MarketingCta>
 
           <ul className="text-fg-muted flex flex-wrap justify-center gap-x-6 gap-y-2 text-caption">

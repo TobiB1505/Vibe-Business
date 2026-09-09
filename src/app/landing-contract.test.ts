@@ -59,6 +59,8 @@ const PROOF = read("src/components/marketing/landing-business-brain.tsx");
  * a stranger reads.
  */
 const HERO = read("src/components/marketing/landing-hero-deck.tsx");
+/* The block under it, which is the first argument a stranger reads (UI-34). */
+const PROBLEM = read("src/components/marketing/landing-problem.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");
 
 const PRIVACY = read("src/app/privacy/page.tsx");
@@ -68,6 +70,7 @@ const TERMS = read("src/app/terms/page.tsx");
 const PUBLIC_SURFACES: [string, string][] = [
   ["landing", copyOf(LANDING)],
   ["landing hero", copyOf(HERO)],
+  ["landing problem", copyOf(PROBLEM)],
   ["marketing shell", copyOf(SHELL)],
   ["product proof", copyOf(PROOF)],
   ["signup", copyOf(SIGNUP)],
@@ -85,6 +88,7 @@ const PUBLIC_SURFACES: [string, string][] = [
 const SELLING_SURFACES: [string, string][] = [
   ["landing", copyOf(LANDING)],
   ["landing hero", copyOf(HERO)],
+  ["landing problem", copyOf(PROBLEM)],
   ["marketing shell", copyOf(SHELL)],
   ["product proof", copyOf(PROOF)],
 ];
@@ -235,7 +239,15 @@ describe("the product proof is real", () => {
 
   it("invents no scores, testimonials or customer numbers", () => {
     const copy = copyOf(PROOF);
-    for (const banned of ["customers say", "testimonial", "MRR", "ARR", "★", "Healthy", "At risk"]) {
+    for (const banned of [
+      "customers say",
+      "testimonial",
+      "MRR",
+      "ARR",
+      "★",
+      "Healthy",
+      "At risk",
+    ]) {
       expect(copy, `proof must not contain "${banned}"`).not.toContain(banned);
     }
     // No score-shaped values either. The tiles carry an em dash on purpose:
@@ -262,7 +274,13 @@ describe("the legal surfaces are honest about being drafts", () => {
 
   it("invents no company registration, address or officer", () => {
     for (const source of [PRIVACY, TERMS]) {
-      for (const banned of ["VAT", "Registered office", "Data Protection Officer", "GmbH", "Ltd."]) {
+      for (const banned of [
+        "VAT",
+        "Registered office",
+        "Data Protection Officer",
+        "GmbH",
+        "Ltd.",
+      ]) {
         expect(source, banned).not.toContain(banned);
       }
     }

@@ -53,7 +53,7 @@ test.describe("the landing page", () => {
     const hero = page.getByRole("main").locator("section").first();
     // The hero's own first control. Its words changed with UI-19; where it
     // sends a stranger with no account did not.
-    const primary = hero.getByRole("link", { name: "Start with your GitHub repo" });
+    const primary = hero.getByRole("link", { name: "Start with GitHub" });
     await expect(primary).toBeVisible();
     await expect(primary).toHaveAttribute("href", "/signup");
 

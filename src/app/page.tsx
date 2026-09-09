@@ -5,6 +5,7 @@ import { LandingBusinessBrain } from "@/components/marketing/landing-business-br
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
+import { LandingProblem } from "@/components/marketing/landing-problem";
 import { LandingTrust } from "@/components/marketing/landing-trust";
 import { Reveal } from "@/components/marketing/reveal";
 import { buttonClasses } from "@/components/ui/button";
@@ -65,6 +66,19 @@ export default function HomePage() {
       <section id="top">
         <LandingHeroDeck />
       </section>
+
+      {/*
+        Before the product, the gap it exists in. The page used to go from the
+        claim straight to a preview of the Business Brain — *here is the thing*
+        ahead of *here is why you would want a thing* — and every block after it
+        was another feature at the same rhythm.
+
+        `LandingProblem` brings its own reveals rather than being wrapped in
+        one, because its two halves arrive from opposite sides and the list
+        staggers. That is the exception; everything else on this page is one
+        block, one arrival.
+      */}
+      <LandingProblem />
 
       {/*
         The product, immediately under the claim: not a screenshot and not a

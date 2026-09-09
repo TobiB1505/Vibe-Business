@@ -29,9 +29,13 @@ import type { ReactNode } from "react";
  *
  * **Hidden tab.** No loop, as above.
  *
- * **Reserved geometry.** `opacity` and `translateY` only. The block occupies
- * its full height from first paint, so nothing below it moves when it arrives
- * — which is what makes a long page scrollable while it is still revealing.
+ * **Reserved geometry.** `opacity` and a translate, never a layout property.
+ * The block occupies its full box from first paint, so nothing below it moves
+ * when it arrives — which is what makes a long page scrollable while it is
+ * still revealing. A sideways entrance translates *outside* the page's own
+ * width, which is why `MarketingShell` clips the horizontal axis: without that,
+ * a block waiting off to the right is a horizontal scrollbar on every screen
+ * the page has not reached yet.
  *
  * ## What happens with no JavaScript
  *
@@ -39,24 +43,46 @@ import type { ReactNode } from "react";
  * `globals.css` to make every block visible. A landing page that is blank
  * without JavaScript is not a landing page.
  */
+/**
+ * Which edge a block comes in from.
+ *
+ * `up` is the default and the one to reach for. The horizontal pair exists so a
+ * two-part block can arrive as two parts — the argument from one side, the
+ * evidence from the other — which is a thing the page is *saying* about how
+ * those two relate. Alternating sides down a page because alternating looks
+ * busy is the failure mode; the motion skill's test applies here as everywhere
+ * else, and "it looks nice" is not one of the five answers.
+ */
+export type RevealFrom = "up" | "left" | "right";
+
+/** Distance in pixels, per direction. Sideways travels further because it has room to. */
+const OFFSET: Record<RevealFrom, { x: number; y: number }> = {
+  up: { x: 0, y: 26 },
+  left: { x: -44, y: 0 },
+  right: { x: 44, y: 0 },
+};
+
 export function Reveal({
   children,
   /** Seconds. Use sparingly — a stagger inside one block, never between blocks. */
   delay = 0,
+  from = "up",
   className,
 }: {
   children: ReactNode;
   delay?: number;
+  from?: RevealFrom;
   className?: string;
 }) {
   const reduced = useReducedMotion();
+  const offset = OFFSET[from];
 
   return (
     <motion.div
       data-reveal
       className={className}
-      initial={reduced ? false : { opacity: 0, y: 26 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={reduced ? false : { opacity: 0, ...offset }}
+      whileInView={{ opacity: 1, x: 0, y: 0 }}
       /*
         `-12%` fires the reveal a little before the block's top edge reaches
         the bottom of the viewport, so a block is already resolving by the time

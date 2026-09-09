@@ -172,3 +172,71 @@ test.describe("the hero deck", () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+test.describe("the call to action", () => {
+  test("is one line, at one height, on a phone and on a desktop", async ({ page }) => {
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await page.evaluate(() => document.fonts.ready);
+
+      /*
+        `getClientRects()` returns one box per line box, so a label that has
+        wrapped returns two. Asserting the count rather than a height keeps the
+        guard independent of the type scale — which is the thing most likely to
+        change under it.
+      */
+      const lines = await page
+        .getByRole("link", { name: /Start with GitHub/i })
+        .first()
+        .evaluate((el) => (el.firstElementChild?.lastElementChild ?? el).getClientRects().length);
+
+      expect(lines, `the CTA wrapped at ${width}px`).toBe(1);
+    }
+  });
+
+  test("keeps the assurance out of the pressable area", async ({ page }) => {
+    await page.goto("/");
+
+    // UI-29 put it inside the button and UI-34 took it out: the control is a
+    // single row of type, and the promise is a line under it.
+    const cta = page.getByRole("link", { name: /Start with GitHub/i }).first();
+    await expect(cta).not.toContainText("No credit card");
+    await expect(page.getByText("No credit card to start").first()).toBeVisible();
+  });
+});
+
+test.describe("the gap", () => {
+  test("asks five questions, each named by an area the audit actually holds", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#gap").scrollIntoViewIfNeeded();
+
+    const section = page.locator("#gap");
+    await expect(section.getByRole("listitem")).toHaveCount(5);
+
+    // The labels come from `LENS_LABELS`, so a category invented for the
+    // marketing page cannot appear here without also existing in the product.
+    for (const label of ["Offer", "Audience", "Acquisition", "Conversion", "Measurement"]) {
+      await expect(section.getByText(label, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("arrives from both sides, and is fully there once reached", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#gap").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1400);
+
+    const hidden = await page.evaluate(
+      () =>
+        [...document.querySelectorAll("#gap [data-reveal]")].filter(
+          (el) => Number(getComputedStyle(el).opacity) < 0.99,
+        ).length,
+    );
+    expect(hidden).toBe(0);
+
+    // Six reveals in one section — the heading and the five questions — which
+    // is the exception the page documents: everything else is one block, one
+    // arrival.
+    await expect(page.locator("#gap [data-reveal]")).toHaveCount(6);
+  });
+});
