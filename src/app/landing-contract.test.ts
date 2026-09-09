@@ -48,6 +48,17 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
  * unimported file for a while and has since been deleted.
  */
 const PROOF = read("src/components/marketing/landing-business-brain.tsx");
+/*
+ * The hero, which is now a component rather than a block of the page (UI-34).
+ *
+ * The headline moved into `LandingHeroDeck` when the hero became a card, and
+ * the positioning assertion below went with it — a contract that reads only
+ * `page.tsx` would have gone on passing an empty search after the sentence it
+ * pins had left the file. It is read alongside the page rather than instead of
+ * it, and it joins `PUBLIC_SURFACES` for the same reason: it is the first thing
+ * a stranger reads.
+ */
+const HERO = read("src/components/marketing/landing-hero-deck.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");
 
 const PRIVACY = read("src/app/privacy/page.tsx");
@@ -56,6 +67,7 @@ const TERMS = read("src/app/terms/page.tsx");
 /** Everything a stranger reads before they have an account, comments removed. */
 const PUBLIC_SURFACES: [string, string][] = [
   ["landing", copyOf(LANDING)],
+  ["landing hero", copyOf(HERO)],
   ["marketing shell", copyOf(SHELL)],
   ["product proof", copyOf(PROOF)],
   ["signup", copyOf(SIGNUP)],
@@ -72,6 +84,7 @@ const PUBLIC_SURFACES: [string, string][] = [
  */
 const SELLING_SURFACES: [string, string][] = [
   ["landing", copyOf(LANDING)],
+  ["landing hero", copyOf(HERO)],
   ["marketing shell", copyOf(SHELL)],
   ["product proof", copyOf(PROOF)],
 ];
@@ -203,8 +216,8 @@ describe("the landing page describes the product that exists", () => {
    * what the visitor already has and what Vibe adds to it.
    */
   it("keeps the product positioning it was written to carry", () => {
-    expect(LANDING).toContain("You built the product. Now build");
-    expect(LANDING).toContain("the business.");
+    expect(HERO).toContain("You built the product. Now build");
+    expect(HERO).toContain("the business.");
     expect(LANDING).toContain("From product to business, together.");
   });
 });

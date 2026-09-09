@@ -380,7 +380,8 @@
      it is brighter on the accent because a saturated fill swallows it. */
   --shadow-sheen: inset 0 1px 0 rgb(255 255 255 / 0.09);
   --shadow-sheen-strong: inset 0 1px 0 rgb(255 255 255 / 0.14);
-  --shadow-mint-sheen: inset 0 1px 0 rgb(255 255 255 / 0.45), 0 12px 30px -12px rgb(0 229 160 / 0.75);
+  --shadow-mint-sheen:
+    inset 0 1px 0 rgb(255 255 255 / 0.45), 0 12px 30px -12px rgb(0 229 160 / 0.75);
   --shadow-mint-sheen-strong:
     inset 0 1px 0 rgb(255 255 255 / 0.6), 0 16px 38px -10px rgb(0 229 160 / 0.95);
   --shadow-coral-sheen: inset 0 1px 0 rgb(255 122 92 / 0.2);
@@ -1431,5 +1432,68 @@
     animation: none !important;
     opacity: 1;
     transform: none;
+  }
+}
+
+/*
+ * The landing hero's ground, and the deck that stands on it (UI-34).
+ *
+ * The field is a grid masked to a soft ellipse, so it is dense under the deck
+ * and gone by the edges of the section — a lit patch rather than wallpaper.
+ * `MarketingShell` already draws a faint 80px grid behind the whole page; this
+ * is a second, tighter one that exists only where the hero is.
+ */
+.landing-hero-field {
+  --hero-field-mark: rgb(255 255 255 / 0.085);
+  background-image:
+    radial-gradient(ellipse 46% 42% at 50% 52%, rgb(0 229 160 / 0.16), transparent 74%),
+    linear-gradient(var(--hero-field-mark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hero-field-mark) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    46px 46px,
+    46px 46px;
+  /*
+    Wide enough that the grid reaches most of the section's width. A tighter
+    mask put the whole lit patch behind the deck, where an opaque card covers
+    it — so the ground was measurably there and visible only as two slivers
+    either side of the card.
+  */
+  mask-image: radial-gradient(ellipse 92% 78% at 50% 50%, black 30%, transparent 86%);
+}
+
+/*
+ * The deck's cards, opaque.
+ *
+ * The v2 surfaces are translucent films — `--color-surface-2` is white at 3.4%
+ * — built to sit on the app's opaque ground and pick its atmosphere up. Over a
+ * lit field they do exactly that and let the grid through, so a `bg-surface-2`
+ * hero card reads as a ghost with grid lines running across its own text. Both
+ * classes composite the same film over `--color-ground` as one opaque colour;
+ * the back cards use a thinner film because they are further away.
+ */
+.landing-hero-card {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.034), rgb(255 255 255 / 0.034)), var(--color-ground);
+}
+
+.landing-hero-card-back {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.02), rgb(255 255 255 / 0.02)), var(--color-ground);
+}
+
+/*
+ * The scroll-reveal backstop for `Reveal` (UI-34).
+ *
+ * `useReducedMotion` returns `null` during the server render, so the server
+ * ships the hidden state to everybody. These two rules are what make that safe:
+ * a reader who asked for no movement, and a reader with no JavaScript at all,
+ * both get every block at full opacity in its final position — which for the
+ * second one is the difference between a landing page and a blank page.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
