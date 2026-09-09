@@ -178,6 +178,9 @@ export const PROFILE_SCENARIO = "study-profile";
 /** Whether the products page is a list or a wall of cards. */
 export const PRODUCTS_SCENARIO = "study-products";
 
+/** What the front door shows, when the honest answer is "nothing yet". */
+export const LANDING_SCENARIO = "study-landing";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 
