@@ -1,5 +1,15 @@
 -- The founder was offered the signed-in read of their product, and said not now.
 --
+-- Applied through the Supabase MCP rather than `db push`, because
+-- SUPABASE_ACCESS_TOKEN is not set in the session that shipped it and the CLI
+-- could not link. That path is sanctioned by
+-- `docs/deployment/migrations-and-rollback.md` — "the same authenticated path,
+-- not a SQL Editor paste" — and it stamps its own wall-clock version. This
+-- file carries the version the remote recorded (20260909114600) rather than
+-- the one it was written under, which is the rename that document asks for:
+-- without it `db push` would try to apply an already-applied migration, and
+-- `add column` without `if not exists` fails loudly when it does.
+--
 -- Setup gains one step between confirming what Vibe understood and the audit:
 -- Vibe has read the code and the public site, and everything behind the
 -- product's login is still unread. `evidence-v3.ts` already writes that gap
