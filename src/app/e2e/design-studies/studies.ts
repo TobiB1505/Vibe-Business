@@ -184,6 +184,9 @@ export const LANDING_SCENARIO = "study-landing";
 /** One card in the middle, and the four grounds it could stand on. */
 export const HERO_CARD_SCENARIO = "study-hero-card";
 
+/** Four hero cards built from scratch — the ground held constant, the shape varying. */
+export const HERO_SHAPE_SCENARIO = "study-hero-shape";
+
 /** What lies behind the glass — the ground the product does not yet have. */
 export const BACKGROUND_SCENARIO = "study-background";
 

@@ -991,3 +991,29 @@
     animation: none;
   }
 }
+
+/*
+ * The base every hero card in `study-hero-shape` stands on.
+ *
+ * V2's surfaces are translucent films — `--color-surface-2` is white at 3.4%
+ * — designed to sit on the app's opaque ground and pick up its atmosphere.
+ * Over a lit field they do exactly what they were built to do and let the grid
+ * through, so the first render of these four had grid lines running across
+ * every log row and the cards read as ghosts rather than objects.
+ *
+ * So the card gets the ground back underneath it: the same film, composited
+ * over `--color-ground`, as one opaque colour. Sub-surfaces *inside* the card
+ * (a header bar, a nested row) keep their `bg-surface-*` film, because they
+ * now have something opaque to sit on — which is the arrangement the tokens
+ * were designed for.
+ */
+.study-hero-object {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.034), rgb(255 255 255 / 0.034)), var(--color-ground);
+}
+
+/* The two cards behind the deck: dimmer, so the front one is unambiguously nearer. */
+.study-hero-object-back {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.02), rgb(255 255 255 / 0.02)), var(--color-ground);
+}
