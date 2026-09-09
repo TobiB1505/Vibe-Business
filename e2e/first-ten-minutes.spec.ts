@@ -422,12 +422,13 @@ test.describe("meeting Nova before signing up", () => {
  * The steps, walkable. This was a static grid of equal cards — it said what the
  * product does and showed none of it.
  *
- * Five, not six: UI-34 is taking the tab bar apart one step at a time, because
+ * Four, not six: UI-34 is taking the tab bar apart one step at a time, because
  * a tab bar asks the reader to stop and choose inside a page whose whole shape
- * is a scroll. *Understand* left first and is `LandingScan` now, so the
- * source-coverage assertions that used to live here are in `landing.spec.ts`
- * against that block. The count is asserted rather than left loose, so the next
- * step to move has to come past this line deliberately.
+ * is a scroll. *Understand* left first and is `LandingScan`; *Prioritize* left
+ * next and is `LandingMove`. Their assertions went with them, to
+ * `landing.spec.ts` against the blocks that own them now. The count is asserted
+ * rather than left loose, so the next step to move has to come past this line
+ * deliberately.
  */
 test.describe("walking the steps", () => {
   test("switches one reserved panel, and shows the real components in it", async ({ page }) => {
@@ -435,7 +436,7 @@ test.describe("walking the steps", () => {
     const flow = page.getByTestId("landing-flow");
     await flow.scrollIntoViewIfNeeded();
 
-    await expect(flow.getByRole("tab")).toHaveCount(5);
+    await expect(flow.getByRole("tab")).toHaveCount(4);
 
     /*
      * Reserved geometry: switching a tab must not move the page under somebody

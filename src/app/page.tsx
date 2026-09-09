@@ -2,6 +2,7 @@ import Link from "next/link";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
+import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
@@ -99,6 +100,13 @@ export default function HomePage() {
         decoded.
       */}
       <LandingBusinessMap />
+
+      {/*
+        Step three, and the narrowing the two above it were building to. Its
+        card came out of `LandingFlow`'s *Prioritize* tab rather than being
+        copied from it — the same dissolution the Product Scan started.
+      */}
+      <LandingMove />
 
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">

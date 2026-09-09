@@ -593,3 +593,69 @@ test.describe("the business map, as a staircase", () => {
     await expect(page.locator("#brain li > svg")).toHaveCount(8);
   });
 });
+
+test.describe("the move", () => {
+  test("shows what it set aside to get to one", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#move").scrollIntoViewIfNeeded();
+
+    /*
+      A single card would be a claim with nothing behind it. The three above it
+      are the findings Vibe did *not* pick, each carrying the reason it ranks
+      lower — which is the only thing that makes "one prioritized move" read as
+      a judgement rather than as a product that found exactly one problem.
+    */
+    await expect(page.locator("#move ol > li")).toHaveCount(3);
+    for (const why of [
+      "Worth fixing, but it changes nothing on its own",
+      "Matters after people arrive and pay",
+      "Cheaper to fix once the offer is decided",
+    ]) {
+      await expect(page.locator("#move").getByText(why)).toBeVisible();
+    }
+
+    // And exactly one winner, drawn by the product's own card — which renders
+    // as an `article`, so the locator asks for the element rather than for a
+    // test hook the component does not carry.
+    await expect(page.locator("#move article")).toHaveCount(1);
+    await expect(page.locator("#move article")).toContainText("Decide how customers pay");
+  });
+
+  test("keeps every set-aside finding readable, not decorative", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    await page.locator("#move").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1200);
+
+    /*
+      The receding stack fades, and the block's own argument is that these are
+      sentences rather than decoration — so they have to stay legible. Measured
+      off the rendered page, the first version's third row came out at 4.10:1
+      against its ground, under AA for body text. The floor is asserted as the
+      effective opacity, which is what the pixels followed.
+    */
+    const opacities = await page
+      .locator("#move ol > li > [data-reveal] > div")
+      .evaluateAll((els) => els.map((el) => Number(getComputedStyle(el).opacity)));
+
+    expect(opacities).toHaveLength(3);
+    for (const [index, value] of opacities.entries()) {
+      expect(value, `set-aside finding ${index + 1} is too faint to read`).toBeGreaterThanOrEqual(
+        0.58,
+      );
+    }
+    // Still a recession: they must not all be at full strength either.
+    expect(opacities[0]).toBeGreaterThan(opacities[2]);
+  });
+
+  test("says a Move is a proposal, not a thing already running", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#move").scrollIntoViewIfNeeded();
+
+    // Rule 54: model output is an opinion, never authority. The page says the
+    // thing the architecture already enforces.
+    await expect(page.locator("#move")).toContainText(/A Move is a proposal/i);
+    await expect(page.locator("#move")).toContainText(/until you say so/i);
+  });
+});

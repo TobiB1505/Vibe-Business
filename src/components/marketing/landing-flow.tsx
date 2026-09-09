@@ -79,29 +79,6 @@ const TABS: FlowTab[] = [
     ),
   },
   {
-    id: "prioritize",
-    label: "Prioritize",
-    headline: "One move leads, and it leads with what it costs you to leave it alone.",
-    panel: (
-      <FindingCard
-        variant="priority"
-        rank={1}
-        lead="why"
-        title="Decide how customers pay"
-        explanation="Vibe found a payments library in your code and no reachable checkout on your site."
-        whyItMatters="Every visitor who wanted to buy today could not, and nothing on the page told them why."
-        severity="critical"
-        confidence={{ kind: "judgment", level: "high" }}
-        citations={[
-          {
-            detail: "Checkout was not reachable from any page Vibe visited.",
-            source: "Your live site",
-          },
-        ]}
-      />
-    ),
-  },
-  {
     id: "plan",
     label: "Plan",
     headline: "The move becomes steps, and each one says who does it.",
