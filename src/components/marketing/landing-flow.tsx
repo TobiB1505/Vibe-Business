@@ -2,11 +2,9 @@ import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-fi
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
 import { FindingCard } from "@/components/system/finding-card";
-import { SourceCoverageList, SourceCoverageStrip } from "@/components/system/source-coverage";
 import { StatusPill } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
 import { creditsToUnits } from "@/modules/credits/units";
-import type { SourceCoverage } from "@/modules/provenance/source-coverage";
 import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
 import { LandingFlowTabs, type FlowTab } from "./landing-flow-tabs";
 
@@ -29,52 +27,6 @@ import { LandingFlowTabs, type FlowTab } from "./landing-flow-tabs";
  * beside a remedy is resolved from the rate card in force rather than typed
  * into this file.
  */
-
-/** Shared with the trust bento, which shows the same four at strip density. */
-export const EXAMPLE_SOURCES: SourceCoverage[] = [
-  {
-    source: "repository",
-    label: "Your code",
-    state: "ready",
-    detail: "Vibe has read what your repository builds.",
-    reasons: [],
-    measured: { files: 128 },
-    at: "2026-08-14T08:22:59.917Z",
-    remedy: { label: "Scan again", href: "#top", operation: "product_understanding" },
-  },
-  {
-    source: "live",
-    label: "Your public product",
-    state: "partial",
-    detail: "Vibe visited your product, but couldn't read all of it.",
-    reasons: [
-      "Two pages on your site build themselves in your visitor's browser, so Vibe saw an empty shell for those.",
-    ],
-    measured: { pages: 6 },
-    at: "2026-08-14T08:24:11.000Z",
-    remedy: { label: "Scan again", href: "#top", operation: "product_understanding" },
-  },
-  {
-    source: "deep_scan",
-    label: "Your signed-in product",
-    state: "none",
-    detail: "Vibe hasn't seen past your sign-in yet.",
-    reasons: [],
-    measured: {},
-    at: null,
-    remedy: { label: "Deep Scan", href: "#pricing", operation: "deep_scan" },
-  },
-  {
-    source: "founder",
-    label: "What you told Vibe",
-    state: "ready",
-    detail: "Your own words about the business, which outrank anything derived.",
-    reasons: [],
-    measured: {},
-    at: null,
-    remedy: null,
-  },
-];
 
 const RUN_FILES: LiveFile[] = [
   {
@@ -109,25 +61,6 @@ const PLAN_STEPS = [
 
 const TABS: FlowTab[] = [
   {
-    id: "understand",
-    label: "Understand",
-    headline: "Vibe reads your code and your live product, and says how far it got.",
-    /*
-      The strip says what the whole reading rests on; one card shows what a
-      source looks like when it could not finish. Four full cards was the
-      other option and it made this panel half again as tall as every other
-      one — which is a page that jumps 337px under a reader on a tab click.
-    */
-    panel: (
-      <div className="flex flex-col gap-5">
-        <div className="border-line-1 bg-surface-3 rounded-well border p-4">
-          <SourceCoverageStrip sources={EXAMPLE_SOURCES} />
-        </div>
-        <SourceCoverageList sources={EXAMPLE_SOURCES.slice(1, 3)} />
-      </div>
-    ),
-  },
-  {
     id: "diagnose",
     label: "Diagnose",
     headline: "Nine business areas, judged together on evidence you can open.",
@@ -160,7 +93,10 @@ const TABS: FlowTab[] = [
         severity="critical"
         confidence={{ kind: "judgment", level: "high" }}
         citations={[
-          { detail: "Checkout was not reachable from any page Vibe visited.", source: "Your live site" },
+          {
+            detail: "Checkout was not reachable from any page Vibe visited.",
+            source: "Your live site",
+          },
         ]}
       />
     ),
@@ -251,9 +187,14 @@ export function LandingFlow() {
           >
             From code to business. <span className="text-mint">Vibe</span> every step.
           </h2>
+          {/*
+            "from what it read" rather than "from product understanding": the
+            step that reads is a block of its own now (`LandingScan`), so this
+            section starts where that one ends and must not claim to contain it.
+          */}
           <p className="text-fg-prose max-w-[62ch] leading-relaxed">
-            One continuous path from product understanding to a reviewed, measurable change. Every
-            panel below is the real screen from the product, on example data.
+            One continuous path from what Vibe read to a reviewed, measurable change. Every panel
+            below is the real screen from the product, on example data.
           </p>
         </div>
 

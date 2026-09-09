@@ -404,21 +404,23 @@ test.describe("meeting Nova before signing up", () => {
 });
 
 /*
- * The six steps, walkable. This was a static grid of six equal cards — it said
- * what the product does and showed none of it.
+ * The steps, walkable. This was a static grid of equal cards — it said what the
+ * product does and showed none of it.
+ *
+ * Five, not six: UI-34 is taking the tab bar apart one step at a time, because
+ * a tab bar asks the reader to stop and choose inside a page whose whole shape
+ * is a scroll. *Understand* left first and is `LandingScan` now, so the
+ * source-coverage assertions that used to live here are in `landing.spec.ts`
+ * against that block. The count is asserted rather than left loose, so the next
+ * step to move has to come past this line deliberately.
  */
-test.describe("walking the six steps", () => {
+test.describe("walking the steps", () => {
   test("switches one reserved panel, and shows the real components in it", async ({ page }) => {
     await page.goto("/");
     const flow = page.getByTestId("landing-flow");
     await flow.scrollIntoViewIfNeeded();
 
-    await expect(flow.getByRole("tab")).toHaveCount(6);
-
-    // Understand: the same source-coverage list My Product renders, with a
-    // partial source that states why it stopped short.
-    await expect(flow.getByTestId("source-coverage")).toBeVisible();
-    await expect(flow).toContainText(/build themselves in your visitor's browser/i);
+    await expect(flow.getByRole("tab")).toHaveCount(5);
 
     /*
      * Reserved geometry: switching a tab must not move the page under somebody

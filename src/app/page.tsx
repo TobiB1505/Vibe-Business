@@ -6,6 +6,7 @@ import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
 import { LandingProblem } from "@/components/marketing/landing-problem";
+import { LandingScan } from "@/components/marketing/landing-scan";
 import { LandingTrust } from "@/components/marketing/landing-trust";
 import { Reveal } from "@/components/marketing/reveal";
 import { buttonClasses } from "@/components/ui/button";
@@ -79,6 +80,13 @@ export default function HomePage() {
         block, one arrival.
       */}
       <LandingProblem />
+
+      {/*
+        Step one, and the first thing the gap's questions get answered by.
+        Brings its own two reveals — the object from one side, the argument
+        from the other.
+      */}
+      <LandingScan />
 
       {/*
         The product, immediately under the claim: not a screenshot and not a

@@ -240,3 +240,60 @@ test.describe("the gap", () => {
     await expect(page.locator("#gap [data-reveal]")).toHaveCount(6);
   });
 });
+
+test.describe("the scan", () => {
+  test("shows a source Vibe half-read and one it has not seen at all", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#scan").scrollIntoViewIfNeeded();
+
+    // A marketing page's instinct is four greens. These are the product's own
+    // states, and two of them say Vibe fell short — which is the block's
+    // argument, not a blemish on it.
+    const sources = page.locator("#scan [data-testid='source-coverage'] > li");
+    await expect(sources).toHaveCount(4);
+    await expect(page.locator("#scan li[data-state='partial']")).toHaveCount(1);
+    await expect(page.locator("#scan li[data-state='none']")).toHaveCount(1);
+    await expect(page.locator("#scan li[data-state='ready']")).toHaveCount(2);
+
+    // And a partial source states *why* it stopped short, in the words the
+    // module that owns the vocabulary chose. This assertion moved here from
+    // `first-ten-minutes.spec.ts` when the step left the flow's tab bar.
+    await expect(page.locator("#scan")).toContainText(
+      /build themselves in your visitor's browser/i,
+    );
+  });
+
+  test("offers nothing to press, because there is nothing here to press it on", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await page.locator("#scan").scrollIntoViewIfNeeded();
+
+    /*
+      In the product each partial source carries its own way out — "Scan again",
+      "Deep Scan", and a price beside it. Here there is no project to rescan and
+      nothing to charge, so a rendered remedy is a control that cannot do what
+      it says. `EXAMPLE_SOURCES` sets every `remedy` to null and this is what
+      notices if one comes back.
+    */
+    await expect(page.locator("#scan a, #scan button")).toHaveCount(0);
+    await expect(page.locator("#scan")).not.toContainText("Credits");
+  });
+
+  test("puts the argument above the evidence on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+
+    const headingTop = await page
+      .locator("#scan-heading")
+      .evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    const evidenceTop = await page
+      .locator("#scan [data-testid='source-coverage']")
+      .evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+
+    // One column means "left" and "right" have become "above" and "below", and
+    // four evidence cards ahead of the sentence explaining them is backwards.
+    expect(headingTop).toBeLessThan(evidenceTop);
+  });
+});

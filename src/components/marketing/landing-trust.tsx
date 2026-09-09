@@ -2,7 +2,7 @@ import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { SourceCoverageStrip } from "@/components/system/source-coverage";
 import { StatusPill } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
-import { EXAMPLE_SOURCES } from "./landing-flow";
+import { EXAMPLE_SOURCES } from "./landing-sources";
 
 /**
  * Why this can be believed — as a bento, with real parts in the tiles.
