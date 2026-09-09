@@ -69,8 +69,22 @@ export type ProductScanExperienceProps = {
    * idea — but it drops two things the thread already owns: the panel frame,
    * which the block supplies, and the controls, which sit beside the block as
    * every other control in a thread does.
+   *
+   * `showcase` is the landing page (UI-34), and it exists because a settled
+   * scan is exactly what the other three callers *collapse*. In the product
+   * that is right: a founder who has seen their scan wants the summary line
+   * back, not the constellation again. A visitor who has never seen one wants
+   * the opposite, and there is nothing to collapse *into* — no live activity,
+   * no next step, no project. So `showcase` keeps the details open and, more
+   * importantly, **never refreshes the router**: the refresh below fires on a
+   * completed operation to pick up what the scan wrote, and on a marketing page
+   * there is nothing to pick up and no session to pick it up with.
+   *
+   * It is a read-only variant. Pair it with `canStart={false}`; nothing here
+   * dispatches an action, and the two places a control could appear are keyed
+   * on `workspace` and `onboarding`.
    */
-  variant?: "onboarding" | "workspace" | "block";
+  variant?: "onboarding" | "workspace" | "block" | "showcase";
 };
 
 const CONNECTORS: Record<FacetId, string> = {
@@ -386,9 +400,21 @@ function ScanFacetCard({
           )}
         </AnimatePresence>
       </div>
+      {/*
+        The card is a fixed 10.75rem beside the graph, where truncating is the
+        only option — but below `md` it becomes a full-width tile in a
+        two-column grid, and there it was still truncating: "Product t…", "Core
+        feat…", "Audience…", "Brand / i…". Four of the six labels unreadable on
+        a phone, in the surface whose entire subject is what Vibe recognised.
+        Two lines there, one line where there is only room for one.
+      */}
       <div className="min-w-0">
-        <p className="truncate text-[0.78rem] font-semibold text-fg">{facet.label}</p>
-        <p className={`truncate text-[0.68rem] ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}>
+        <p className="truncate text-[0.78rem] font-semibold text-fg max-md:text-clip max-md:whitespace-normal">
+          {facet.label}
+        </p>
+        <p
+          className={`truncate text-[0.68rem] max-md:text-clip max-md:whitespace-normal ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}
+        >
           {facet.detail}
         </p>
       </div>
@@ -588,12 +614,24 @@ function DiscoveringPanel({
   productName,
   active,
   motionEnabled,
+  /**
+   * True when this panel is full width rather than a 21rem sidebar.
+   *
+   * The value column was capped at `9.5rem` for every caller, which is right
+   * beside a graph in a two-column page and wrong under one: at full width it
+   * truncated "AI builders and founders" to "AI builders and foun…" with eight
+   * hundred pixels of empty row beside it. Keyed on the caller for the same
+   * reason the layout above it is — a `max-lg` viewport query cannot tell a
+   * 704px block inside a 1440px window from a 1440px page.
+   */
+  stacked,
 }: {
   facets: ScanFacet[];
   presentation: ProductScanPresentation | null;
   productName: string;
   active: boolean;
   motionEnabled: boolean;
+  stacked: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const rows = [
@@ -632,7 +670,16 @@ function DiscoveringPanel({
   return (
     <aside className="flex h-[31rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-body font-semibold text-fg">What we&apos;re discovering</h3>
+        {/*
+          The heading is a tense, and it was one tense for two states. A scan
+          that has finished and produced a picture is not still discovering
+          anything — in the workspace that was a small wrongness at the end of a
+          run, and on the landing page's settled showcase it is the heading over
+          six ticked rows.
+        */}
+        <h3 className="text-body font-semibold text-fg">
+          {!active && presentation ? "What Vibe worked out" : "What we’re discovering"}
+        </h3>
         <SparklesIcon size={17} className="text-mint" />
       </div>
 
@@ -673,15 +720,24 @@ function DiscoveringPanel({
         {rows.map(({ facet, icon: Icon }) => (
           <div
             key={facet.label}
-            className="grid min-h-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-line-1 px-3 last:border-b-0"
+            /*
+              Two columns need room for a label and a value side by side, and a
+              390px phone does not have it: "Audience signals" beside "AI
+              builders and founders" clipped the label, whichever cap the value
+              was given. Below `sm` the value goes under its label instead —
+              the panel is `h-auto` there, so the rows may take the height.
+            */
+            className="grid min-h-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-line-1 px-3 last:border-b-0 max-sm:grid-cols-1 max-sm:items-start max-sm:gap-1 max-sm:py-2.5"
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <Icon size={16} className={facet.ready ? "text-fg-body" : "text-fg-muted"} />
               <span className="truncate text-caption text-fg-muted">{facet.label}</span>
             </div>
-            <div className="flex min-w-0 max-w-[9.5rem] items-center gap-2">
+            <div
+              className={`flex min-w-0 items-center gap-2 max-sm:max-w-none ${stacked ? "max-w-[26rem]" : "max-w-[9.5rem]"}`}
+            >
               <span
-                className={`truncate text-right text-caption ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+                className={`truncate text-right text-caption max-sm:text-left ${facet.ready ? "text-mint" : "text-fg-meta"}`}
               >
                 {facet.summary}
               </span>
@@ -695,9 +751,13 @@ function DiscoveringPanel({
         ))}
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-2 text-caption text-mint">
+      {/*
+        No arrow. UI-26 settled that the mark means *navigation*, and this is a
+        status line on a `<span>` that goes nowhere — an ornament beside a
+        label, which is the exact thing that sprint removed seventeen of.
+      */}
+      <div className="mt-3 flex items-center justify-end text-caption text-mint">
         <span>{presentation ? "Product profile ready" : "Live discovery"}</span>
-        <span aria-hidden="true">→</span>
       </div>
     </aside>
   );
@@ -984,6 +1044,13 @@ export function ProductScanExperience({
 
   useEffect(() => {
     if (
+      /*
+        The showcase is a picture on a public page. A completed operation there
+        is example data rather than something the server has just written, so a
+        refresh would re-render the marketing page to learn nothing — and it is
+        the one caller with no session to learn it with.
+      */
+      variant === "showcase" ||
       !operation ||
       (operation.status !== "completed" && operation.status !== "failed") ||
       refreshedOperation.current === operation.operationId
@@ -1029,6 +1096,11 @@ export function ProductScanExperience({
      a thread shows the result, and the live view is for while it is live. */
   const detailsExpanded =
     variant === "onboarding" ||
+    /*
+      The settled constellation is the whole point on the landing page, and it
+      is the one thing every other caller collapses once the scan has finished.
+    */
+    variant === "showcase" ||
     active ||
     !scanFinished ||
     expandedOperationId === operation?.operationId;
@@ -1237,24 +1309,44 @@ export function ProductScanExperience({
                   productName={productName}
                   active={active}
                   motionEnabled={motionEnabled}
+                  stacked={!page}
                 />
               </div>
 
-              <div
-                className={
-                  page
-                    ? "mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1"
-                    : "mt-4 flex flex-col gap-4"
-                }
-              >
-                <LiveActivity events={revealedEvents} active={active} pulseEventId={pulseEventId} />
-                <DiscoveriesGrid
-                  facets={facets}
-                  events={revealedEvents}
-                  presentation={revealedPresentation}
-                  pulseEvent={pulseEvent}
-                />
-              </div>
+              {/*
+                The console half: the trail as it arrives, and the same six
+                facets again as saved cards. Both are for somebody watching
+                their own scan run — a live log is a live log, and the grid is
+                the trail's result in a form you can scan afterwards.
+
+                `showcase` drops them. On the landing page the scan is settled
+                by definition, so a "Live activity" heading over a finished list
+                is a label that is not true, and a third rendering of the same
+                six facets is length rather than evidence. What that variant
+                shows is the *result* — the constellation and the product
+                picture — with the footer's own count under it.
+              */}
+              {variant === "showcase" ? null : (
+                <div
+                  className={
+                    page
+                      ? "mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1"
+                      : "mt-4 flex flex-col gap-4"
+                  }
+                >
+                  <LiveActivity
+                    events={revealedEvents}
+                    active={active}
+                    pulseEventId={pulseEventId}
+                  />
+                  <DiscoveriesGrid
+                    facets={facets}
+                    events={revealedEvents}
+                    presentation={revealedPresentation}
+                    pulseEvent={pulseEvent}
+                  />
+                </div>
+              )}
 
               <ScanFooter
                 operation={operation}

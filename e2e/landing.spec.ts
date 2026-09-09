@@ -242,25 +242,45 @@ test.describe("the gap", () => {
 });
 
 test.describe("the scan", () => {
-  test("shows a source Vibe half-read and one it has not seen at all", async ({ page }) => {
+  test("shows a finished scan of a product it recognised", async ({ page }) => {
     await page.goto("/");
     await page.locator("#scan").scrollIntoViewIfNeeded();
 
-    // A marketing page's instinct is four greens. These are the product's own
-    // states, and two of them say Vibe fell short — which is the block's
-    // argument, not a blemish on it.
-    const sources = page.locator("#scan [data-testid='source-coverage'] > li");
-    await expect(sources).toHaveCount(4);
-    await expect(page.locator("#scan li[data-state='partial']")).toHaveCount(1);
-    await expect(page.locator("#scan li[data-state='none']")).toHaveCount(1);
-    await expect(page.locator("#scan li[data-state='ready']")).toHaveCount(2);
+    const scan = page.locator("#scan");
 
-    // And a partial source states *why* it stopped short, in the words the
-    // module that owns the vocabulary chose. This assertion moved here from
-    // `first-ten-minutes.spec.ts` when the step left the flow's tab bar.
-    await expect(page.locator("#scan")).toContainText(
-      /build themselves in your visitor's browser/i,
-    );
+    // The settled state, not the empty one. The component builds its picture
+    // from operation + events + presentation together, and passing the last
+    // two without the first renders six facets all saying "Detecting…" — which
+    // is what the first attempt at this block did.
+    await expect(scan).toContainText(/product scan . complete/i);
+    await expect(scan).toContainText("What Vibe worked out");
+    await expect(scan).not.toContainText("Detecting");
+    await expect(scan).not.toContainText("Not observed");
+
+    // Six facets, each one a thing worked out rather than a field filled in.
+    for (const value of [
+      "Web application",
+      "Subscription signals",
+      "AI builders and founders",
+      "Next.js",
+    ]) {
+      await expect(scan.getByText(value, { exact: true }).first()).toBeVisible();
+    }
+  });
+
+  test("still says what a scan cannot reach", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#scan").scrollIntoViewIfNeeded();
+
+    /*
+      The block's subject is the picture coming out, so the caveat is a line
+      under it rather than four cards instead of it. It is still on the page:
+      the strip names all four sources and marks the two Vibe fell short on.
+    */
+    const strip = page.locator("#scan [data-testid='source-coverage-strip']");
+    await expect(strip).toBeVisible();
+    await expect(strip).toHaveAttribute("data-gap", "live");
+    await expect(page.locator("#scan")).toContainText(/behind your sign-in stays invisible/i);
   });
 
   test("offers nothing to press, because there is nothing here to press it on", async ({
@@ -270,30 +290,40 @@ test.describe("the scan", () => {
     await page.locator("#scan").scrollIntoViewIfNeeded();
 
     /*
-      In the product each partial source carries its own way out — "Scan again",
-      "Deep Scan", and a price beside it. Here there is no project to rescan and
-      nothing to charge, so a rendered remedy is a control that cannot do what
-      it says. `EXAMPLE_SOURCES` sets every `remedy` to null and this is what
-      notices if one comes back.
+      The workspace's copy of this surface carries "Scan my product again", and
+      the source rows carry "Scan again" and "Deep Scan · 25 Credits". Here
+      there is no project to scan and no balance to charge, so every one of
+      them is a control that cannot do what it says. `variant="showcase"` plus
+      `canStart={false}` plus null remedies is what keeps this at zero.
     */
     await expect(page.locator("#scan a, #scan button")).toHaveCount(0);
     await expect(page.locator("#scan")).not.toContainText("Credits");
   });
 
-  test("puts the argument above the evidence on a phone", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
+  test("clips none of its own labels on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/");
     await page.evaluate(() => document.fonts.ready);
+    await page.locator("#scan").scrollIntoViewIfNeeded();
 
-    const headingTop = await page
-      .locator("#scan-heading")
-      .evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
-    const evidenceTop = await page
-      .locator("#scan [data-testid='source-coverage']")
-      .evaluate((el) => el.getBoundingClientRect().top + window.scrollY);
+    /*
+      Measured rather than eyeballed. The facet cards truncated four of six
+      labels here — "Product t…", "Core feat…", "Audience…", "Brand / i…" — and
+      the panel rows clipped "Audience signals" beside "AI builders and
+      founders" at any cap the value column was given. Both are the product's
+      own component, so both were fixed there rather than papered over here.
 
-    // One column means "left" and "right" have become "above" and "below", and
-    // four evidence cards ahead of the sentence explaining them is backwards.
-    expect(headingTop).toBeLessThan(evidenceTop);
+      **390 only, deliberately.** Beside the graph a facet card is a fixed
+      10.75rem and truncating is what it is for, so the same assertion at 1440
+      is measuring an intended ellipsis — and measuring it right on the boundary
+      at that: it passed alone and failed under parallel load, which is the font
+      race `expectNoHorizontalOverflow` documents, arriving in a third form.
+    */
+    const clipped = await page.evaluate(() =>
+      [...document.querySelectorAll("#scan *")]
+        .filter((el) => el.children.length === 0 && el.scrollWidth > el.clientWidth + 1)
+        .map((el) => el.textContent),
+    );
+    expect(clipped).toEqual([]);
   });
 });

@@ -1497,3 +1497,17 @@
     transform: none !important;
   }
 }
+
+/*
+ * The stage the landing page's Product Scan stands on (UI-34).
+ *
+ * Same argument as `.landing-hero-card`: the scan draws its own translucent
+ * surfaces, which are built to sit on the app's opaque ground. On the marketing
+ * page they sit on the shell's grid instead, so the constellation's own panels
+ * let it through. This gives them a ground to sit on, one shade above the page
+ * so the block reads as an object rather than a hole.
+ */
+.landing-scan-stage {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.022), rgb(255 255 255 / 0.022)), var(--color-ground);
+}
