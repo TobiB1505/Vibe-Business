@@ -1499,15 +1499,75 @@
 }
 
 /*
- * The stage the landing page's Product Scan stands on (UI-34).
+ * The tile the landing page's Product Scan preview is seen through (UI-34).
  *
  * Same argument as `.landing-hero-card`: the scan draws its own translucent
  * surfaces, which are built to sit on the app's opaque ground. On the marketing
  * page they sit on the shell's grid instead, so the constellation's own panels
  * let it through. This gives them a ground to sit on, one shade above the page
- * so the block reads as an object rather than a hole.
+ * so the tile reads as an object rather than a hole.
  */
-.landing-scan-stage {
+.landing-scan-preview {
   background:
     linear-gradient(rgb(255 255 255 / 0.022), rgb(255 255 255 / 0.022)), var(--color-ground);
+}
+
+/*
+ * The crop, and the scale that makes it a preview rather than a screen.
+ *
+ * The scanner needs a desktop measure to look like itself — above `md` it
+ * positions its facet cards absolutely against a fixed drawing — so it is
+ * rendered wide and shrunk to whatever the tile is.
+ *
+ * The arithmetic runs the other way round from the obvious one. A scale of
+ * `100cqw / 880` looks right and is not even valid: dividing a length by a
+ * number yields a **length**, so `--scan-scale` came out as `0.69px`, the
+ * height calc that multiplied by it was dropped, and the tile grew to its
+ * content — 1,139px of preview. So the *scale* is the fixed number and the
+ * render width is derived from it: `100% / 0.62` is a percentage divided by a
+ * number, which is a length, and the scaled result is exactly the tile's width
+ * at every viewport. The scale then only decides how much detail the preview
+ * carries — not which layout the scan draws, because the scanner's own
+ * breakpoints are *viewport* queries: on a phone the preview shows the phone
+ * arrangement however wide the element it is rendered into.
+ *
+ * The box is an aspect ratio rather than a height, so the crop stays the same
+ * shape as the tile narrows. The transform does not shrink the element's
+ * layout box, which is why the crop needs a definite width and the grid cell
+ * needs `min-w-0`: without both, a 350px phone column measured 906.
+ *
+ * The fade is a mask on the wrapper, not an overlay: a gradient painted *over*
+ * the preview would need the page's own ground colour to blend into, and this
+ * block sits on the shell's grid.
+ */
+.landing-scan-preview-crop {
+  --scan-scale: 0.42;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, black 76%, transparent 100%);
+}
+
+.landing-scan-preview-crop > * {
+  width: calc(100% / var(--scan-scale));
+  transform: scale(var(--scan-scale));
+  transform-origin: top left;
+}
+
+@media (min-width: 640px) {
+  .landing-scan-preview-crop {
+    --scan-scale: 0.55;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-scan-preview-crop {
+    --scan-scale: 0.5;
+  }
+}
+
+@media (min-width: 1280px) {
+  .landing-scan-preview-crop {
+    --scan-scale: 0.62;
+  }
 }

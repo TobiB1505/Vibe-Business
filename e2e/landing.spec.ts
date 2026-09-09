@@ -300,6 +300,62 @@ test.describe("the scan", () => {
     await expect(page.locator("#scan")).not.toContainText("Credits");
   });
 
+  test("is a picture beside the words, not instead of them", async ({ page }) => {
+    await page.goto("/");
+    await page.locator("#scan").scrollIntoViewIfNeeded();
+
+    /*
+      This is a landing page and its job is to explain the modules. A visitor
+      who has never used Vibe cannot infer what a Product Scan is from a picture
+      of one, so the preview is `aria-hidden` and every fact in it is said in
+      words in the tile beside it — which is also what stops a screen reader
+      meeting the same six facets twice, once illegibly.
+    */
+    const preview = page.locator(".landing-scan-preview");
+    await expect(preview).toHaveAttribute("aria-hidden", "true");
+
+    const heading = page.locator("#scan-heading");
+    await expect(heading).toBeVisible();
+    expect(
+      await heading.evaluate((el) => Boolean(el.closest(".landing-scan-preview"))),
+      "the explanation must not live inside the picture",
+    ).toBe(false);
+
+    await expect(page.locator("#scan").getByRole("listitem")).toHaveCount(3);
+  });
+
+  test("scales the preview to its tile rather than past it", async ({ page }) => {
+    for (const width of [1440, 1024, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await page.evaluate(() => document.fonts.ready);
+      await page.locator("#scan").scrollIntoViewIfNeeded();
+
+      /*
+        A `transform` does not shrink an element's layout box, so the scan's
+        render width would size the grid cell if the crop had no definite width
+        — a 350px phone column measured 906 before `min-w-0` and `width: 100%`.
+        And the scale is a plain number with the render width derived from it,
+        because `calc(100cqw / 880)` is a *length* rather than a ratio: it made
+        the height calc invalid and the tile grew to 1,139px of preview.
+      */
+      const fit = await page.locator(".landing-scan-preview-crop").evaluate((crop) => {
+        const child = crop.firstElementChild as HTMLElement;
+        return {
+          crop: crop.getBoundingClientRect().width,
+          painted: child.getBoundingClientRect().width,
+        };
+      });
+
+      expect(fit.painted, `preview overflows its tile at ${width}px`).toBeLessThanOrEqual(
+        fit.crop + 1,
+      );
+      expect(fit.painted, `preview leaves its tile half empty at ${width}px`).toBeGreaterThan(
+        fit.crop - 4,
+      );
+    }
+  });
+
   test("clips none of its own labels on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 900 });
     await page.goto("/");
