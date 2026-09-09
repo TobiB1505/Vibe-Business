@@ -1,3 +1,4 @@
+import { LandingStep } from "@/components/marketing/landing-step";
 import { Reveal } from "@/components/marketing/reveal";
 import {
   LANDING_SCAN_EVENTS,
@@ -59,7 +60,7 @@ const READS = [
 
 export function LandingScan() {
   return (
-    <section id="scan" aria-labelledby="scan-heading" className="scroll-mt-24 py-20 sm:py-28">
+    <LandingStep index="01" id="scan" labelledBy="scan-heading" className="py-20 sm:py-28">
       <div className="grid gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1fr)] lg:items-center lg:gap-16">
         <Reveal from="left" className="min-w-0">
           {/*
@@ -90,7 +91,7 @@ export function LandingScan() {
 
         <Reveal from="right" delay={0.08} className="max-lg:order-first">
           <div className="flex flex-col gap-6">
-            <MonoLabel className="text-mint">Module one · Product Scan</MonoLabel>
+            <MonoLabel className="text-mint">Product Scan</MonoLabel>
             <h2
               id="scan-heading"
               className="text-fg text-[clamp(2rem,3.6vw,3rem)] leading-[1.06] font-bold tracking-[-0.045em] text-balance"
@@ -123,6 +124,6 @@ export function LandingScan() {
           </div>
         </Reveal>
       </div>
-    </section>
+    </LandingStep>
   );
 }

@@ -56,6 +56,11 @@ export function LandingProblem() {
   }));
 
   return (
+    /*
+      No number and no rail. The walk starts at the Product Scan; this block is
+      the reason there is a walk, and putting "00" on it would count the
+      question as one of the modules.
+    */
     <section
       id="gap"
       aria-labelledby="gap-heading"

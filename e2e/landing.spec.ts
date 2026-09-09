@@ -383,3 +383,49 @@ test.describe("the scan", () => {
     expect(clipped).toEqual([]);
   });
 });
+
+test.describe("the walk", () => {
+  test("numbers each module once, on the rail or inline but never both", async ({ page }) => {
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.goto("/");
+      await page.locator("#scan").scrollIntoViewIfNeeded();
+
+      /*
+        The rail is a column of its own above `lg` and gone below it, where the
+        number moves inline above the block. Both are in the DOM; exactly one is
+        painted, and a reader seeing "01" twice would be counting a walk with
+        two of every step.
+      */
+      const painted = await page.evaluate(
+        () =>
+          [...document.querySelectorAll("#scan span, #scan p")].filter(
+            (el) => el.textContent?.trim() === "01" && el.getClientRects().length > 0,
+          ).length,
+      );
+      expect(painted, `at ${width}px`).toBe(1);
+    }
+  });
+
+  test("draws its segment to full height, and keeps it out of the reading", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await page.locator("#scan").scrollIntoViewIfNeeded();
+    await page.waitForTimeout(1400);
+
+    // The line is the drawing of a structure the headings already carry, so it
+    // is `aria-hidden` — and it has to have actually drawn, not sat at zero.
+    const rail = page.locator("#scan > [aria-hidden]").first();
+    await expect(rail).toHaveAttribute("aria-hidden", "true");
+
+    const drawn = await rail
+      .locator("span")
+      .last()
+      .evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return { height: box.height, transform: getComputedStyle(el).transform };
+      });
+    expect(drawn.height).toBeGreaterThan(200);
+    expect(drawn.transform).not.toContain("matrix(1, 0, 0, 0,");
+  });
+});

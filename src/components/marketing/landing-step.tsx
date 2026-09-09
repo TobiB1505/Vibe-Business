@@ -1,0 +1,130 @@
+"use client";
+
+import { motion, useReducedMotion } from "motion/react";
+import type { ReactNode } from "react";
+import { cn } from "@/lib/utils/cn";
+
+/**
+ * One numbered step on the landing page's spine (UI-34).
+ *
+ * ## The reference, and what was taken from it
+ *
+ * The founder's: *"durch das Endlos-Scroll kann es sich anfühlen wie diese
+ * typischen Whiteboard-Tutorial-Illustrationen … und dann erklären wir den
+ * Ablauf und die Module von Vibe Business."*
+ *
+ * A whiteboard explainer is a line that gets drawn while somebody talks, with
+ * numbered steps hanging off it and short notes pointing at the thing being
+ * explained. Three things transfer to a scrolling page and one does not:
+ *
+ * - **The path.** A spine runs down the page and each step's segment draws
+ *   itself as that step arrives. The scroll becomes the narrator's hand.
+ * - **The numbering.** Steps are counted, so a reader always knows where in
+ *   the walk they are and how much of it is left.
+ * - **The annotation.** A short mono note beside the subject, not a paragraph
+ *   about it.
+ * - **Not the skin.** No handwriting face, no marker, no white board.
+ *   `DESIGN.md` owns the type scale and the ground; a felt-tip drawn on a dark
+ *   product page is a costume, and it would make every real screenshot beside
+ *   it look pasted in.
+ *
+ * ## Geometry
+ *
+ * The rail is a column of its own at `lg`, so the content beside it keeps a
+ * full measure rather than being indented into a narrower one. Below that the
+ * rail would eat a quarter of a phone's width for decoration, so it is gone and
+ * the number sits inline above the block — the walk is still counted, which is
+ * the part that carries information.
+ *
+ * The rail element occupies its full height from first paint and only its fill
+ * grows, so nothing below a step moves while it draws.
+ */
+export function LandingStep({
+  /** `01`, `02` — written out rather than derived, so the page's order is readable in the page. */
+  index,
+  /** The last step closes the line rather than running it into the block below. */
+  last = false,
+  id,
+  labelledBy,
+  className,
+  children,
+}: {
+  index: string;
+  last?: boolean;
+  id?: string;
+  labelledBy?: string;
+  className?: string;
+  children: ReactNode;
+}) {
+  const reduced = useReducedMotion();
+
+  return (
+    <section
+      id={id}
+      aria-labelledby={labelledBy}
+      className={cn("scroll-mt-24 lg:grid lg:grid-cols-[3.5rem_minmax(0,1fr)]", className)}
+    >
+      {/*
+        The rail. `aria-hidden` because it is the drawing of a structure the
+        headings already carry: a screen reader walking this page meets
+        "Module one · Product Scan" and does not need a line described to it.
+      */}
+      <div aria-hidden className="relative hidden lg:block">
+        <motion.span
+          initial={reduced ? false : { opacity: 0, scale: 0.6 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true, margin: "0px 0px -20% 0px" }}
+          transition={{ duration: 0.4, ease: [0.22, 0.61, 0.36, 1] }}
+          className={cn(
+            /*
+              `top-0` puts the number level with the block's own eyebrow, which
+              is the thing it numbers. At `6.5rem` it sat beside the preview
+              tile instead — 104px below the line it was supposed to be
+              counting, because the rail column starts where the section's
+              padding ends and the eyebrow does too.
+            */
+            "border-mint-line bg-app text-mint absolute top-0 left-2 z-10",
+            "flex size-9 items-center justify-center rounded-full border font-mono text-meta font-semibold",
+          )}
+        >
+          {index}
+        </motion.span>
+
+        {/*
+          The segment, drawn top-down. It starts at the node and runs to the
+          foot of the step, so the line arrives before the next number does —
+          which is the order a narrator draws it in.
+        */}
+        <motion.span
+          initial={reduced ? false : { scaleY: 0 }}
+          whileInView={{ scaleY: 1 }}
+          viewport={{ once: true, margin: "0px 0px -12% 0px" }}
+          transition={{ duration: 0.9, ease: [0.22, 0.61, 0.36, 1], delay: 0.1 }}
+          style={{ transformOrigin: "top center" }}
+          className={cn(
+            /*
+              A steady hairline with the mint concentrated at the node, not a
+              fade to nothing: the spine is continuous down the page, and a
+              segment that dies out halfway reads as an unfinished drawing
+              rather than a path between two steps.
+            */
+            "from-mint/40 via-line-strong to-line-strong absolute w-px bg-gradient-to-b",
+            "left-[1.5625rem] top-[3.25rem]",
+            last ? "bottom-[6rem]" : "bottom-0",
+          )}
+        />
+      </div>
+
+      <div className="min-w-0">
+        {/* The number, where there is no room for a rail. */}
+        <p
+          aria-hidden
+          className="border-mint-line bg-app text-mint mb-6 flex size-9 items-center justify-center rounded-full border font-mono text-meta font-semibold lg:hidden"
+        >
+          {index}
+        </p>
+        {children}
+      </div>
+    </section>
+  );
+}
