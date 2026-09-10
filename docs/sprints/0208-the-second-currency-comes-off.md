@@ -41,12 +41,32 @@ writing them is not a thing to do on the way past a marketing block.
 Nothing was removed from the **product**: the agent screen still shows a
 returned hold in the product's own words, because that is where somebody has one.
 
+## And then the arithmetic went too
+
+*"Auch die agent runs weg."*
+
+The line that survived the first cut — *every 1,000 Credits is 5 agent runs at
+the standard class, or 28 Business Brain audits* — was true, derived at render
+time from the same function the reservation calls, and still one more thing to
+read before the price. Three removals in a row, all in the same direction, and
+the direction is right: a landing page is not where somebody does arithmetic
+about a currency they do not hold yet.
+
+The whole sentence went rather than only the runs half, because *"or 28 Business
+Brain audits"* standing alone is half a comparison.
+
 ## What stayed, and why
 
 **The plan grants.** "1,000 Credits each paid month" is what €19 buys, and hiding it would misrepresent the product rather than simplify it.
 
-**The plan grants, and one line translating them.** Nothing else. The block is
-now a heading, a switch, three cards and a sentence.
+**The plan grants, and nothing else.** Three Credit figures on the whole block
+— 100 Welcome, 1,000 a month, 3,000 a month — because they are what a euro
+buys. The block is a heading, a switch and three cards.
+
+The intro keeps one product sentence: *every action that spends them shows its
+price at the control that starts it*. It is a promise about how the product
+behaves rather than a price or a term, and it is the reason a Credit system is
+tolerable at all.
 
 ## One guard inverted, one deleted
 
@@ -56,7 +76,13 @@ beside a free operation. Broken by adding *"an audit is 35 Credits"* to the
 surviving sentence, which is exactly the way this would come back.
 
 The one that asserted the charge rules is deleted rather than weakened, because
-its subject is gone from the page.
+its subject is gone from the page — as is the one that asserted the arithmetic.
+
+What the surviving guard asserts is now an exact list: `100 Welcome Credits`,
+`1,000 Credits`, `3,000 Credits` and no fourth figure. A fourth is a price, an
+aside, or a rate card creeping back, and it fails whichever it is — proved by
+putting *"a paid month is 1,000 Credits — five agent runs"* into the intro
+paragraph, which is exactly the shape this would return in.
 
 ## And the same formatting mistake, one commit after correcting it
 

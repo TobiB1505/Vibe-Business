@@ -1239,24 +1239,6 @@ test.describe("what a month costs", () => {
     await expect(pricing.getByRole("link", { name: /Start with Builder/i })).toBeVisible();
   });
 
-  test("says what a month's Credits actually buy, divided out of the rate card", async ({
-    page,
-  }) => {
-    await page.goto("/");
-    const pricing = page.locator("#pricing");
-    await pricing.scrollIntoViewIfNeeded();
-
-    /*
-      1,000 Credits at 200 a standard agent run is five, and at 35 an audit is
-      twenty-eight. Asserted as the numbers because they are the ones a founder
-      reads — and because the sentence is a division on the same card printed
-      below it, changing either price fails here rather than leaving the page
-      quietly wrong.
-    */
-    await expect(pricing).toContainText("5 agent runs");
-    await expect(pricing).toContainText("28 Business Brain audits");
-  });
-
   test("keeps the per-action Credit prices off the page", async ({ page }) => {
     await page.goto("/");
     const pricing = page.locator("#pricing");
@@ -1265,16 +1247,20 @@ test.describe("what a month costs", () => {
     /*
       A visitor weighing €19 does not need a second currency to learn first, so
       the rate card is not printed here — no "35 Credits" beside an audit, no
-      "Included" beside the scan. What a grant is worth is said in work instead,
-      one line, and that line is the only place a Credit figure and a number of
-      runs appear together.
+      "Included" beside the scan, and no line converting a grant into runs and
+      audits either. The only Credit figures left are the grants themselves,
+      which are what a euro buys.
     */
     const text = await pricing.innerText();
-    const creditFigures = text.match(/\b[\d,]+ Credits\b/g) ?? [];
+    const creditFigures = text.match(/\b[\d,]+ (?:Welcome )?Credits\b/g) ?? [];
 
-    // The plan grants, and the one line that translates them. Nothing priced.
-    expect(creditFigures.length).toBeGreaterThan(0);
-    expect(pricing).not.toBeNull();
+    /*
+      Three figures and no more: the Welcome grant and the two paid grants. Any
+      fourth is a price, an arithmetic aside or a rate card creeping back — the
+      three things this block has now shed in a row.
+    */
+    expect(creditFigures).toEqual(["100 Welcome Credits", "1,000 Credits", "3,000 Credits"]);
+    await expect(pricing).not.toContainText("agent runs");
     await expect(pricing).not.toContainText("35 Credits");
     await expect(pricing).not.toContainText("25 Credits");
     await expect(pricing).not.toContainText("200 Credits");

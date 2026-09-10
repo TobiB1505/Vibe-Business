@@ -3,9 +3,7 @@ import { PlanCards, type PlanCard } from "@/components/marketing/plan-cards";
 import { Reveal } from "@/components/marketing/reveal";
 import { MonoLabel } from "@/components/ui/typography";
 import { ANNUAL_PAID_MONTHS, listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
-import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
-import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
-import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 
 /**
  * What a month costs, in money (UI-34).
@@ -22,11 +20,16 @@ import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
  * question they *do* have is what a month costs, and it has a two-digit euro
  * answer.
  *
- * So the euros lead, and the per-action Credit prices are not on this page at
- * all — a visitor weighing €19 does not need a second currency to learn first.
- * What a grant is worth still has to be sayable, so one line says it in *work*
- * rather than in Credits: five agent runs, or twenty-eight audits, divided out
- * of the same rate card the reservation uses rather than estimated.
+ * So the euros lead, and nothing else is on the page. The per-action Credit
+ * prices went first — a visitor weighing €19 does not need a second currency to
+ * learn before reaching the question they arrived with. Then the terms of a
+ * charge. Then the line translating a grant into work, *"every 1,000 Credits is
+ * five agent runs or twenty-eight audits"*, which was true and derived and
+ * still one more thing to read before the price.
+ *
+ * What is left is what a month costs, what it grants, and a switch between two
+ * commitments. A visitor who wants the arithmetic can have it after they sign
+ * up, where the balance is real and the numbers are theirs.
  *
  * ## Nothing here is typed
  *
@@ -89,29 +92,6 @@ function euros(cents: number): string {
   return cents === 0 ? "€0" : `€${cents / 100}`;
 }
 
-/**
- * How many of one thing a grant buys.
- *
- * Divided out of the rate card rather than estimated, so the sentence cannot
- * come to disagree with the prices printed under it. `null` where the operation
- * has no single number — a free one buys no fixed count of anything, and
- * Agentic Execution is priced per class.
- */
-function buys(grant: CreditUnits, operation: RetailOperationKind, klass?: ExecutionPricingClass) {
-  const resolved = resolveRetailPrice(operation);
-  if (!resolved) return null;
-
-  const price =
-    resolved.price.kind === "fixed"
-      ? resolved.price.creditUnits
-      : resolved.price.kind === "by_execution_class" && klass
-        ? resolved.price.creditUnitsByClass[klass]
-        : null;
-
-  if (price === null || price <= 0) return null;
-  return Math.floor(grant / price);
-}
-
 export function LandingPrice() {
   const plans = listPlans();
   const builder = plans.find((plan) => plan.key === "builder");
@@ -146,10 +126,6 @@ export function LandingPrice() {
       : null,
   }));
 
-  // The connecting line, computed rather than claimed.
-  const runs = builder ? buys(builder.monthlyCreditUnits, "agent_execution", "standard") : null;
-  const audits = builder ? buys(builder.monthlyCreditUnits, "business_audit") : null;
-
   return (
     <LandingStep index="08" id="pricing" labelledBy="pricing-heading" className="py-20 sm:py-28">
       <Reveal from="up">
@@ -176,27 +152,6 @@ export function LandingPrice() {
           savingLabel={`${MONTHS_PER_YEAR - ANNUAL_PAID_MONTHS} months free`}
         />
       </Reveal>
-
-      {/*
-        What a grant is, in work. A division on the rate card rather than a
-        claim about it, so the sentence cannot come to disagree with what the
-        product actually charges — and it is what makes "1,000 Credits" mean
-        something now that the per-action prices are not printed underneath it.
-
-        "Every 1,000 Credits" rather than "1,000 Credits is", because the cards
-        above it say 1,000 under a month and 12,000 under a year — a rate reads
-        correctly under both, where a total reads as the wrong one half the
-        time.
-      */}
-      {builder && runs !== null && audits !== null && (
-        <Reveal from="up" delay={0.12} className="mt-10">
-          <p className="text-fg-prose mx-auto max-w-[62ch] text-center leading-relaxed">
-            Every {formatCreditsForDisplay(builder.monthlyCreditUnits)} Credits is{" "}
-            <span className="text-fg">{runs} agent runs</span> at the standard class, or{" "}
-            <span className="text-fg">{audits} Business Brain audits</span>, or any mix of the two.
-          </p>
-        </Reveal>
-      )}
     </LandingStep>
   );
 }
