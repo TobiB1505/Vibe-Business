@@ -64,6 +64,15 @@ const PROOF = read("src/components/marketing/landing-business-map.tsx");
  */
 const PLANS = read("src/components/marketing/landing-price.tsx");
 /*
+ * The close, which is a component rather than the foot of the page (UI-34).
+ *
+ * The fourth contract to move for the same reason as the hero, the proof
+ * section and the plan cards: the closing section became step ten of the walk,
+ * and an assertion left pointing at `page.tsx` would go on passing against a
+ * file that no longer contains the sentence.
+ */
+const CLOSE = read("src/components/marketing/landing-close.tsx");
+/*
  * The hero, which is now a component rather than a block of the page (UI-34).
  *
  * The headline moved into `LandingHeroDeck` when the hero became a card, and
@@ -120,13 +129,23 @@ describe("the landing page sends people the right way", () => {
    * assertion is now the stronger form of the same thing.
    */
   it("points the first control on the page at signing up, not signing in", () => {
-    expect(LANDING).toContain('href="/signup"');
+    /*
+      Asserted against the hero rather than the page file. `page.tsx` composes
+      ten components and contains no `href` of its own any more, so this test
+      was checking an empty string — the fourth time this contract has had to
+      follow a claim into the component that now carries it.
 
-    const firstCta = LANDING.indexOf('href="/signup"');
+      What is pinned is unchanged: the first control a visitor meets goes to
+      signing up, and the hero offers no sign-in beside it. The way back in
+      lives in the shell's header, which every public page wears and which the
+      test below covers.
+    */
+    expect(HERO).toContain('href="/signup"');
+    expect(HERO).not.toContain('href="/login"');
+
+    // And the page itself introduces no control ahead of the hero's.
     const firstSignIn = LANDING.indexOf('href="/login"');
-    expect(firstCta).toBeGreaterThan(-1);
-    // Either the page offers no sign-in of its own, or sign-up comes first.
-    if (firstSignIn > -1) expect(firstCta).toBeLessThan(firstSignIn);
+    expect(firstSignIn).toBe(-1);
   });
 
   /**
@@ -237,7 +256,7 @@ describe("the landing page describes the product that exists", () => {
   it("keeps the product positioning it was written to carry", () => {
     expect(HERO).toContain("You built the product. Now build");
     expect(HERO).toContain("the business.");
-    expect(LANDING).toContain("From product to business, together.");
+    expect(CLOSE).toContain("From product to business, together.");
   });
 });
 

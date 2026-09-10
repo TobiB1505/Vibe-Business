@@ -36,12 +36,13 @@ import { MonoLabel } from "@/components/ui/typography";
  * — and the first one admits Vibe is wrong sometimes, which is the sentence a
  * marketing rewrite deletes first and the reason the rest is believable.
  *
- * The quotes are objections, not testimonials. Nobody is credited with them,
- * because nobody said them: they are the doubts this product actually meets,
- * written plainly. A page that put a name and a face beside a sentence
- * somebody did not say would be the fabricated record `DESIGN.md` forbids, and
- * the same rule that keeps invented metrics off this page keeps invented
- * people off it.
+ * Written without quotation marks, and that is the same rule rather than a
+ * typographic preference: quotation marks around a sentence nobody said
+ * *imply* somebody said it. These are the doubts this product meets, written
+ * plainly, and nobody is credited with them because nobody is owed the credit.
+ * A name or a face beside one would be the fabricated record `DESIGN.md`
+ * forbids — the rule that keeps invented metrics off this page keeps invented
+ * people off it too.
  */
 
 const OBJECTIONS: { doubt: string; answer: string }[] = [
@@ -117,9 +118,9 @@ export function LandingObjections() {
                 >
                   <span
                     data-objection
-                    className="text-fg text-lead font-semibold tracking-[-0.01em] text-balance"
+                    className="text-fg text-moment font-semibold tracking-[-0.015em] text-balance"
                   >
-                    &ldquo;{doubt}&rdquo;
+                    {doubt}
                   </span>
                   <ChevronDownIcon
                     size={16}

@@ -1441,7 +1441,7 @@ test.describe("the objections", () => {
       "I am not letting an AI near the repository I ship from.",
       "Setting this up will eat an afternoon.",
     ]) {
-      await expect(objections.getByText(`\u201C${doubt}\u201D`)).toBeVisible();
+      await expect(objections.getByText(doubt, { exact: true })).toBeVisible();
     }
 
     // And opening one shows its answer and no other.
@@ -1494,18 +1494,21 @@ test.describe("the objections", () => {
     });
   });
 
-  test("quotes nobody, because nobody said these", async ({ page }) => {
+  test("attributes nothing, because nobody said these", async ({ page }) => {
     await page.goto("/");
     const objections = page.locator("#objections");
     await objections.scrollIntoViewIfNeeded();
 
     /*
-      The quotes are objections, not testimonials. An attribution would turn a
-      doubt this product meets into a person who does not exist — the
-      fabricated record the truthfulness rules forbid, and the same rule that
-      keeps invented metrics off this page.
+      These are objections, not testimonials — which is also why they carry no
+      quotation marks: marks around a sentence nobody said imply somebody said
+      it. An attribution would turn a doubt this product meets into a person
+      who does not exist, the fabricated record the truthfulness rules forbid.
     */
     await expect(objections.locator("cite")).toHaveCount(0);
+    await expect(objections.locator("[data-objection]").first()).not.toContainText(
+      /[\u201C\u201D"]/,
+    );
     await expect(objections.locator("img")).toHaveCount(0);
     await expect(objections).not.toContainText(/—\s*[A-Z][a-z]+ [A-Z]/);
   });
@@ -1562,5 +1565,70 @@ test.describe("who this is for", () => {
     await expect(strip.locator("img")).toHaveCount(0);
     await expect(strip).not.toContainText(/trusted by|used by|customers|partners/i);
     await expect(strip).toContainText(/whatever else you built it in/i);
+  });
+});
+
+/*
+ * Step ten: the close, and the end of the walk.
+ *
+ * A bookend rather than a tenth shape — an object on a lit ground with a
+ * sentence and one control, which is the hero. The guards hold the two things
+ * that make it a close rather than a repeat: the rail stops here, and the last
+ * sentence on the page is the one no other call to action would print.
+ */
+test.describe("the close", () => {
+  test("ends the walk, and asks once", async ({ page }) => {
+    await page.goto("/");
+    const close = page.locator("#start");
+    await close.scrollIntoViewIfNeeded();
+
+    await expect(close.getByRole("heading", { level: 2 })).toContainText(
+      "From product to business, together.",
+    );
+
+    // One control, going where the hero's goes.
+    const actions = close.getByRole("link");
+    await expect(actions).toHaveCount(1);
+    await expect(actions).toHaveAttribute("href", "/signup");
+    await expect(close).toContainText(/No credit card to start/i);
+  });
+
+  test("keeps the honest sentence a call to action would cut", async ({ page }) => {
+    await page.goto("/");
+    const close = page.locator("#start");
+    await close.scrollIntoViewIfNeeded();
+
+    /*
+      Nine blocks of refusing to overclaim cannot end in an overclaim, and this
+      is the line that would go first in any rewrite that tried.
+    */
+    await expect(close).toContainText(
+      /if there is nothing worth doing yet, Vibe will say that too/i,
+    );
+  });
+
+  test("stops the spine rather than running it off the page", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const close = page.locator("#start");
+    await close.scrollIntoViewIfNeeded();
+    await page.waitForTimeout(900);
+
+    /*
+      `LandingStep`'s `last` draws the rail short — `bottom-[6rem]` instead of
+      `bottom-0`. Measured against the **rail's own box**, not the section's:
+      the section carries 112px of bottom padding that the rail sits inside, so
+      a threshold against the section passed with `last` removed and proved
+      nothing.
+    */
+    const gap = await close.evaluate((section) => {
+      const rail = section.querySelector(".landing-step-rail") as HTMLElement;
+      const segment = rail.querySelector("span:last-child") as HTMLElement;
+      return rail.getBoundingClientRect().bottom - segment.getBoundingClientRect().bottom;
+    });
+
+    // Six rems, less whatever a browser rounds off.
+    expect(gap).toBeGreaterThan(80);
   });
 });

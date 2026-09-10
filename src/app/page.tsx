@@ -1,8 +1,8 @@
-import { VibeMark } from "@/components/brand/vibe-mark";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { LandingAgent } from "@/components/marketing/landing-agent";
 import { LandingBoundary } from "@/components/marketing/landing-boundary";
 import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
+import { LandingClose } from "@/components/marketing/landing-close";
 import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
@@ -14,8 +14,6 @@ import { LandingProblem } from "@/components/marketing/landing-problem";
 import { LandingScan } from "@/components/marketing/landing-scan";
 import { LandingTrust } from "@/components/marketing/landing-trust";
 import { Reveal } from "@/components/marketing/reveal";
-import { MarketingCta } from "@/components/marketing/marketing-cta";
-import { ArrowRightIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
 
 export default function HomePage() {
@@ -164,30 +162,7 @@ export default function HomePage() {
         <LandingTrust />
       </Reveal>
 
-      <Reveal>
-        <section className="border-line-2 bg-surface-2 rounded-card relative mb-8 overflow-hidden border px-6 py-14 sm:px-12 sm:py-16">
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute top-1/2 -left-24 size-80 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgb(0_229_160/0.16),transparent_68%)]"
-          />
-          <div className="relative grid gap-10 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center">
-            <span className="business-brain-core flex size-28 items-center justify-center rounded-full">
-              <VibeMark size={46} />
-            </span>
-            <div>
-              <h2 className="text-fg text-[clamp(2rem,4vw,3.25rem)] leading-[1.04] font-bold tracking-[-0.045em]">
-                From product to business, together.
-              </h2>
-              <p className="text-fg-prose mt-3 max-w-[52ch] leading-relaxed">
-                Bring the product you already built. Vibe will show you what matters next.
-              </p>
-            </div>
-            <MarketingCta href="/signup" assurance="No credit card to start">
-              Start for free <ArrowRightIcon size={17} />
-            </MarketingCta>
-          </div>
-        </section>
-      </Reveal>
+      <LandingClose />
     </MarketingShell>
   );
 }
