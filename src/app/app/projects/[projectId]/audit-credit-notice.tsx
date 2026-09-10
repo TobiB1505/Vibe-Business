@@ -88,8 +88,8 @@ export function AuditCreditNotice({ gate }: { gate: AuditCreditGate }) {
           <div className="flex min-w-0 items-center gap-3">
             <AuditStatusIcon tone="mint" />
             <div className="min-w-0">
-              <p className="text-fg text-sm font-semibold">Included audit used</p>
-              <p className="text-fg-muted mt-0.5 text-xs leading-relaxed">
+              <p className="text-fg text-body font-semibold">Included audit used</p>
+              <p className="text-fg-muted mt-0.5 text-caption leading-relaxed">
                 Your included audit is complete. Running another one costs{" "}
                 <span className="text-fg-secondary font-medium">
                   {formatCreditsForDisplay(gate.requiredCredits)} Credits
@@ -102,7 +102,7 @@ export function AuditCreditNotice({ gate }: { gate: AuditCreditGate }) {
             <span className="text-fg-meta text-[0.65rem] tracking-[0.12em] uppercase">
               Available
             </span>
-            <span className="text-fg text-sm font-semibold tabular-nums">
+            <span className="text-fg text-body font-semibold tabular-nums">
               {formatCreditsForDisplay(gate.availableCredits)} Credits
             </span>
           </div>
@@ -121,16 +121,16 @@ export function AuditCreditNotice({ gate }: { gate: AuditCreditGate }) {
           <div className="flex min-w-0 items-center gap-3">
             <AuditStatusIcon tone="amber" />
             <div className="min-w-0">
-              <p className="text-fg text-sm font-semibold">Not enough Credits</p>
-              <p className="text-fg-muted mt-0.5 text-xs leading-relaxed">
+              <p className="text-fg text-body font-semibold">Not enough Credits</p>
+              <p className="text-fg-muted mt-0.5 text-caption leading-relaxed">
                 Another business audit costs {formatCreditsForDisplay(gate.requiredCredits)} Credits.
                 You have {formatCreditsForDisplay(gate.availableCredits)}.
               </p>
             </div>
           </div>
           <Link
-            href="/app/billing"
-            className="border-amber/30 bg-amber/[0.08] text-amber hover:border-amber/55 hover:bg-amber/[0.12] inline-flex min-h-10 shrink-0 items-center justify-center rounded-xl border px-4 text-sm font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-amber"
+            href="/app/settings/billing"
+            className="border-amber/30 bg-amber/[0.08] text-amber hover:border-amber/55 hover:bg-amber/[0.12] inline-flex min-h-10 shrink-0 items-center justify-center rounded-field border px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-amber"
           >
             Top up Credits
           </Link>
@@ -148,8 +148,8 @@ export function AuditCreditNotice({ gate }: { gate: AuditCreditGate }) {
         >
           <AuditStatusIcon tone="amber" />
           <div className="min-w-0">
-            <p className="text-fg text-sm font-semibold">Another audit is not available yet</p>
-            <p className="text-fg-muted mt-0.5 text-xs leading-relaxed">
+            <p className="text-fg text-body font-semibold">Another audit is not available yet</p>
+            <p className="text-fg-muted mt-0.5 text-caption leading-relaxed">
               Your included audit is complete, but another run is not priced right now.
             </p>
           </div>

@@ -279,7 +279,7 @@ export function AgentCore({
 
       {eyebrow !== undefined && (
         <motion.p
-          className="text-mint font-mono text-[0.6875rem] font-semibold tracking-[0.12em] uppercase"
+          className="text-mint font-mono text-meta font-semibold tracking-[0.12em] uppercase"
           initial={reduceMotion ? false : { opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.36, ease: [0.2, 0.7, 0.2, 1] }}
@@ -290,7 +290,7 @@ export function AgentCore({
 
       {headline !== undefined && (
         <motion.p
-          className="text-fg max-w-[34ch] text-center text-lg font-semibold tracking-[-0.015em] text-balance"
+          className="text-fg max-w-[34ch] text-center text-title font-semibold text-balance"
           initial={reduceMotion ? false : { opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, ease: [0.2, 0.7, 0.2, 1] }}
@@ -304,7 +304,7 @@ export function AgentCore({
         changes and the rail already announces that; two announcements for one
         event is how a screen reader turns into noise.
       */}
-      <p className="text-fg-muted max-w-[44ch] text-center text-[0.9375rem] leading-relaxed text-balance">
+      <p className="text-fg-muted max-w-[44ch] text-center text-lead leading-relaxed text-balance">
         {caption}
       </p>
     </div>

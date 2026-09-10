@@ -1,13 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import { useStageNavigation } from "./agent-stage-navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Stage four — before and after (UI-19, artboard 2d).
@@ -94,7 +94,7 @@ function Frame({
         )}
       >
         {src === null ? (
-          <div className="bg-well text-fg-muted flex h-full items-center justify-center px-6 text-center text-sm">
+          <div className="bg-well text-fg-muted flex h-full items-center justify-center px-6 text-center text-body">
             No capture available for this change.
           </div>
         ) : (
@@ -163,10 +163,10 @@ export function AgentPreviewStage({
       <div className="flex min-w-0 flex-col gap-5">
         <div className="flex flex-col gap-2">
           <MonoLabel className="text-mint">Stage 4 of 5</MonoLabel>
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
+          <h3 className="text-fg text-moment font-bold">
             Your change is ready to preview
           </h3>
-          <p className="text-fg-muted max-w-[46ch] text-[0.9375rem] leading-relaxed">
+          <p className="text-fg-muted max-w-[46ch] text-lead leading-relaxed">
             Vibe has prepared the changes below. Review what&rsquo;s new before deciding.
           </p>
         </div>
@@ -225,7 +225,7 @@ export function AgentPreviewStage({
                     delay: reduceMotion ? 0 : index * 0.08,
                   }}
                 >
-                  <span className="border-mint-line bg-mint-tint text-mint flex size-8 flex-none items-center justify-center rounded-[10px] border">
+                  <span className="border-mint-line bg-mint-tint text-mint flex size-8 flex-none items-center justify-center rounded-nav border">
                     <svg
                       viewBox="0 0 24 24"
                       width="16"
@@ -241,8 +241,8 @@ export function AgentPreviewStage({
                     </svg>
                   </span>
                   <span className="flex min-w-0 flex-col gap-1">
-                    <span className="text-fg-body text-sm font-semibold">{change.title}</span>
-                    <span className="text-fg-muted text-[0.8125rem] leading-relaxed">
+                    <span className="text-fg-body text-body font-semibold">{change.title}</span>
+                    <span className="text-fg-muted text-ui leading-relaxed">
                       {change.detail}
                     </span>
                   </span>
@@ -258,19 +258,19 @@ export function AgentPreviewStage({
           </MonoLabel>
           <dl className="flex flex-col gap-2">
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-fg-muted text-sm">Files changed</dt>
-              <dd className="text-fg font-mono text-sm">{filesChanged}</dd>
+              <dt className="text-fg-muted text-body">Files changed</dt>
+              <dd className="text-fg font-mono text-body">{filesChanged}</dd>
             </div>
             {linesAdded !== undefined && (
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-fg-muted text-sm">Lines added</dt>
-                <dd className="text-mint font-mono text-sm">+{linesAdded}</dd>
+                <dt className="text-fg-muted text-body">Lines added</dt>
+                <dd className="text-mint font-mono text-body">+{linesAdded}</dd>
               </div>
             )}
             {linesRemoved !== undefined && (
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="text-fg-muted text-sm">Lines removed</dt>
-                <dd className="text-coral font-mono text-sm">−{linesRemoved}</dd>
+                <dt className="text-fg-muted text-body">Lines removed</dt>
+                <dd className="text-coral font-mono text-body">−{linesRemoved}</dd>
               </div>
             )}
           </dl>
@@ -295,16 +295,11 @@ export function AgentPreviewStage({
               Review and approve
             </button>
           )}
-          <p className="text-fg-meta text-center text-xs">
+          <p className="text-fg-meta text-center text-caption">
             Nothing is live yet. You&rsquo;re in control.
           </p>
           {filesHref !== undefined && (
-            <Link
-              href={filesHref}
-              className="text-fg-muted hover:text-fg-body text-center text-[0.8125rem] underline underline-offset-4"
-            >
-              View changed files ({filesChanged})
-            </Link>
+            <StandaloneLink href={filesHref}>View changed files ({filesChanged})</StandaloneLink>
           )}
         </div>
       </aside>

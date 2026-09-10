@@ -101,13 +101,52 @@ Nothing here needed to change:
 | `VIBE_AGENT_GATEWAY_ORIGIN` | unset (agent execution unavailable locally) | set only if deliberately dogfooding the Coding Agent on that Preview | your production custom domain, or a pinned dogfood Preview — see above |
 | `VIBE_AGENT_GATEWAY_SECRET` | as needed for local dogfooding | as needed | required alongside the origin above |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | required | required | required |
-| `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/billing` |
+| `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/settings/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/settings/billing` |
+| `STRIPE_PRICE_BUILDER_ANNUAL`, `STRIPE_PRICE_PRO_ANNUAL` | unset | unset | set to the annual Stripe Price ids once they exist — a deployment without them sells months and refuses a year with `sku_not_configured` ([ADR 0107](../decisions/0107-a-year-is-ten-months.md)) |
 | `PAID_OPERATIONS_DISABLED` | unset | unset | **unset** — set to exactly `1` only to stop paid work during an incident (VB-032) |
 | `VIBE_INTERNAL_OPERATOR_USER_IDS` | your own Supabase user id, if you want the console locally | **unset** | the operator user ids, comma-separated ([ADR 0088](../decisions/0088-the-internal-operator-console.md)) |
+| `VIBE_PALETTE` | `v2` while working on the design system | `v2` to look at the second palette on a branch | **unset** — set to exactly `v2` when it ships to customers ([ADR 0102](../decisions/0102-the-palette-ships-behind-one-switch.md)) |
 
 `VERCEL_URL`, `VERCEL_ENV` and `VERCEL_GIT_COMMIT_SHA` are injected
 automatically by Vercel on every build — never set them yourself. The last is
 what `/api/health` reports as `commit`.
+
+### Which design system renders
+
+`VIBE_PALETTE=v2` makes the root layout write `data-vibe="v2"` on `<html>`, and
+`theme-v2.css` — which scopes every redefinition to that attribute — takes over
+the whole colour, type, shape and material vocabulary. Anything else, including
+unset, renders the first palette.
+
+It gates no capability. Every operation, price, control and permission is
+identical in both; only the paint differs. That distinction is what keeps it
+clear of CLAUDE.md rule 78, which forbids gating a *customer capability* on an
+environment variable nothing documents.
+
+The resolved value is always written to the document, in both states, so
+"which design is this deployment showing" is answerable by looking at `<html>`
+rather than by finding out which variable the build read.
+
+It is global rather than per route on purpose: `.vibe-atmosphere` is a fixed
+layer behind the whole app, so a half-migrated product would change its own
+background as a founder navigates between screens. See
+[ADR 0102](../decisions/0102-the-palette-ships-behind-one-switch.md).
+
+**It takes effect at build time, so changing it needs a redeploy.** The root
+layout is a server component and Next.js bakes it into every statically
+prerendered page — today `/`, `/privacy`, `/terms` and `/_not-found`. Measured:
+setting the variable on a running server without rebuilding switches the
+dynamic routes and leaves those four on the old palette, which looks like a bug
+and is not one. Vercel prompts for a redeploy when an environment variable
+changes; take it.
+
+**For looking at a screen in both, use the switch, not this.** Every
+non-production deployment carries a palette control in the account menu, at the
+foot of the rail under the profile card. It writes the choice to
+`localStorage`, applies it before the first paint, and marks the rail "local
+override" so a screenshot says whether it shows the deployment or your browser.
+It is a tool for the redesign and never renders in production — see
+`src/app/palette.ts` and `src/components/layout/palette-switch.tsx`.
 
 ### The paid-operations kill switch
 

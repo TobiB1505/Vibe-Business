@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { InfoIcon } from "@/components/ui/dashboard-icons";
@@ -30,6 +29,7 @@ import { MoveStepper } from "./move-stepper";
 import { PlanDetailPanel } from "./plan-detail-panel";
 import { PlanGenerating } from "./plan-generating";
 import { OperationProgress } from "@/components/system/operation-progress";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 const POLL_INTERVAL_MS = 3_000;
 const SWIPE_DISTANCE = 72;
@@ -209,19 +209,14 @@ export function ActionPlanWorkspace({
           data-testid="moves-context"
         >
           <MonoLabel className="text-mint">From your audit</MonoLabel>
-          <p className="text-fg-body text-sm leading-relaxed">{movesContext.headline}</p>
+          <p className="text-fg-body text-body leading-relaxed">{movesContext.headline}</p>
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <p className="text-fg-muted text-xs">
+            <p className="text-fg-muted text-caption">
               {movesContext.moveIds.length === 1
                 ? "1 move addresses this"
                 : `${movesContext.moveIds.length} moves address this`}
             </p>
-            <Link
-              href={movesHref}
-              className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4"
-            >
-              See the full priority order
-            </Link>
+            <StandaloneLink href={movesHref}>See the full priority order</StandaloneLink>
           </div>
         </Surface>
       ) : null}
@@ -256,7 +251,7 @@ export function ActionPlanWorkspace({
 
           <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
-            <p className="text-fg-muted text-xs leading-relaxed">
+            <p className="text-fg-muted text-caption leading-relaxed">
               Moves are ordered by impact and by what has to happen first. Choose a step or swipe
               the active Move to explore the plan.
             </p>
@@ -383,12 +378,7 @@ export function ActionPlanWorkspace({
               tone="waiting"
               label="Why a refresh is blocked"
               action={
-                <a
-                  href={auditHref}
-                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {movesBlockNotice.actionLabel}
-                </a>
+                <StandaloneLink href={auditHref}>{movesBlockNotice.actionLabel}</StandaloneLink>
               }
             >
               {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}
@@ -397,7 +387,7 @@ export function ActionPlanWorkspace({
 
           <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
-            <p className="text-fg-muted text-xs leading-relaxed">
+            <p className="text-fg-muted text-caption leading-relaxed">
               Priorities can change as your business evolves. Re-scanning re-orders this plan
               against current evidence.
             </p>
@@ -411,12 +401,7 @@ export function ActionPlanWorkspace({
               label="Why this is blocked"
               className="text-left"
               action={
-                <a
-                  href={auditHref}
-                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {movesBlockNotice.actionLabel}
-                </a>
+                <StandaloneLink href={auditHref}>{movesBlockNotice.actionLabel}</StandaloneLink>
               }
             >
               {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}
@@ -426,7 +411,7 @@ export function ActionPlanWorkspace({
       )}
 
       {movesOperationView?.status === "failed" && movesOperationView.failureCode ? (
-        <p className="text-amber text-sm">
+        <p className="text-amber text-body">
           Vibe couldn&apos;t work out your next Moves.{" "}
           {OPERATION_FAILURE_MESSAGES[movesOperationView.failureCode]}
         </p>

@@ -19,6 +19,7 @@ import {
   type StopPreviewActionState,
 } from "./preview-actions";
 import { formatTime } from "@/lib/utils/format-datetime";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * Temporary preview, as the user sees it (Sprint 10B-3 §2, §4, §8, §10, §17).
@@ -151,7 +152,7 @@ function ConfirmDialog({
  */
 function NotApproved({ approved, merged }: { approved: boolean; merged: boolean }) {
   return (
-    <p className="text-xs text-fg-muted">
+    <p className="text-caption text-fg-muted">
       {merged ? "Merged · Deployment not verified by Vibe" : "Not merged · Not deployed"}
       {approved ? "" : " · Not reviewed by a human"}
     </p>
@@ -377,32 +378,32 @@ export function PreviewPanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-sm font-medium text-fg-body">Temporary preview</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Temporary preview</h4>
 
       {starting ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Starting temporary preview…</p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-prose">Starting temporary preview…</p>
+          <p className="text-body text-fg-secondary">
             {PREVIEW_STAGE_LABELS[stage ?? "preflight"]}
           </p>
           {/* The Sprint 7 promise, restated where it matters. */}
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             You can leave this page. Vibe will continue starting the preview.
           </p>
         </div>
       ) : stopping ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Stopping preview…</p>
+          <p className="text-body text-fg-prose">Stopping preview…</p>
           {/* The workflow owns the sandbox, the snapshot and the ledger from
               here. Saying "stopped" before it confirms would be the one claim
               this panel is in no position to make (§12). */}
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             Vibe is stopping the environment and releasing the saved build.
           </p>
         </div>
       ) : previewState === "running" ? (
         <div className="space-y-3">
-          <p className="text-sm text-mint">Temporary public preview</p>
+          <p className="text-body text-mint">Temporary public preview</p>
 
           <div className="flex flex-wrap gap-2">
             {/* The poll's answer first, the server render's second. Both come
@@ -418,12 +419,12 @@ export function PreviewPanel({
                 // Referer header, handing an internal identifier to code Vibe
                 // did not write.
                 rel="noreferrer noopener"
-                className="rounded-md border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-sm text-mint hover:bg-mint-tint"
+                className="rounded-inset border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-body text-mint hover:bg-mint-tint"
               >
                 Open preview
               </a>
             ) : (
-              <span className="rounded-md border border-line-2 px-3 py-1.5 text-sm text-fg-muted">
+              <span className="rounded-inset border border-line-2 px-3 py-1.5 text-body text-fg-muted">
                 Resolving preview address…
               </span>
             )}
@@ -442,7 +443,7 @@ export function PreviewPanel({
                 href={productionUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="rounded-md border border-line-2 px-3 py-1.5 text-sm text-fg-prose hover:text-fg"
+                className="rounded-inset border border-line-2 px-3 py-1.5 text-body text-fg-prose hover:text-fg"
               >
                 Open your live site now
               </a>
@@ -451,7 +452,6 @@ export function PreviewPanel({
             <Button
               type="button"
               variant="secondary"
-              size="sm"
               onClick={stop}
               disabled={intent !== null}
             >
@@ -463,7 +463,7 @@ export function PreviewPanel({
           </div>
 
           {expiresAt && (
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               Expires at {localTime(expiresAt)}
               {countdown ? ` · ${countdown}` : ""}
             </p>
@@ -474,20 +474,20 @@ export function PreviewPanel({
               to read a working page as a checked one — it is a development
               server on the prepared commit, and the checks are a separate
               answer arriving separately. */}
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             This is the prepared code running, not a checked build. Vibe&apos;s safety checks are
             a separate answer.
           </p>
 
-          <p className="text-xs text-amber/80">
+          <p className="text-caption text-amber/80">
             Anyone with the preview URL may be able to access it until it expires.
           </p>
           <NotApproved approved={approved} merged={merged} />
         </div>
       ) : previewState === "not_available" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Nothing to preview yet</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Nothing to preview yet</p>
+          <p className="text-caption text-fg-muted">
             Vibe has not written a commit for this change.
           </p>
         </div>
@@ -506,8 +506,8 @@ export function PreviewPanel({
          * merging too, and they have not.
          */
         <div className="space-y-2" data-testid="preview-not-supported">
-          <p className="text-sm text-fg-secondary">Nothing to look at for this project</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Nothing to look at for this project</p>
+          <p className="text-caption text-fg-muted">
             Vibe does not know how to start a development server for this project&apos;s framework
             yet. Checking a change and merging it still work.
           </p>
@@ -524,13 +524,13 @@ export function PreviewPanel({
          * this sentence points at one and the other does not.
          */
         <div className="space-y-2" data-testid="preview-repository-not-ready">
-          <p className="text-sm text-fg-secondary">Nothing to look at yet</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Nothing to look at yet</p>
+          <p className="text-caption text-fg-muted">
             Vibe cannot tell which application to run for this project. Scan your product again
             from{" "}
             <Link
-              className="underline"
               href={`${projectSectionHref(projectId, "my-product")}#product-scan`}
+              className={proseLinkClasses()}
             >
               My Product
             </Link>
@@ -546,25 +546,25 @@ export function PreviewPanel({
          * instead of on an instruction they cannot follow.
          */
         <div className="space-y-2" data-testid="preview-workspace-not-previewable">
-          <p className="text-sm text-fg-secondary">Nothing to look at for this application</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Nothing to look at for this application</p>
+          <p className="text-caption text-fg-muted">
             This application installs from a workspace root, and Vibe cannot start a development
             server for it yet. Checking a change and merging it still work.
           </p>
         </div>
       ) : previewState === "failed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-coral">Preview failed</p>
+          <p className="text-body text-coral">Preview failed</p>
           {/* Safe copy from a stable code. Never a provider message, never a
               sandbox stack trace (§14). */}
-          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-body text-fg-secondary">{card.failureMessage}</p>}
         </div>
       ) : previewState === "stopped" || previewState === "expired" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             {previewState === "expired" ? "Preview expired" : "Preview stopped"}
           </p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             {previewState === "expired"
               ? "The temporary preview has ended."
               : "The temporary preview was stopped and its environment was released."}
@@ -581,8 +581,8 @@ export function PreviewPanel({
         />
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Not started</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Not started</p>
+          <p className="text-caption text-fg-muted">
             Vibe will run this change&rsquo;s code in an isolated environment for 15 minutes, on a
             public, unlisted URL. It is the prepared code running, not a checked build. Your
             repository and production site are not changed.
@@ -591,7 +591,6 @@ export function PreviewPanel({
             ref={openerRef}
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => setConfirming(true)}
             disabled={intent !== null}
           >
@@ -600,10 +599,10 @@ export function PreviewPanel({
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
+      {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
 
       {state?.ok && state.kind === "reused" && (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           A preview of this exact build is already running — nothing new was started.
         </p>
       )}

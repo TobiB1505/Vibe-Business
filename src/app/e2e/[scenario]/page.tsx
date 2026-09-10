@@ -63,34 +63,55 @@ import { VibeMark } from "@/components/brand/vibe-mark";
 import { StudyLabels } from "../design-studies/study-labels";
 import { StudyMono } from "../design-studies/study-mono";
 import {
+  ACTIONS_SCENARIO,
+  BACKGROUND_SCENARIO,
+  BLOCKED_SCENARIO,
+  BLOCK_SCENARIO,
+  BUBBLE_SCENARIO,
+  BUTTON_LOOK_SCENARIO,
+  BUTTON_SCENARIO,
+  CHAT_ANSWERED_SCENARIO,
   COMPOSITION_DENSE_SCENARIO,
   COMPOSITION_SETTLED_SCENARIO,
-  chosenStudy,
-  isCompositionScenario,
-  isVoiceScenario,
-  isChatScenario,
-  isConsoleScenario,
+  CONSOLE_IDLE_SCENARIO,
+  CREDITS_SCENARIO,
+  CTA_SCENARIO,
+  DISCLOSURE_SCENARIO,
+  DISMISS_SCENARIO,
+  FIGURE_SCENARIO,
+  FORMS_SCENARIO,
+  ICON_ACTIONS_SCENARIO,
+  INLINE_SCENARIO,
+  LABELS_SCENARIO,
+  LINKS_SCENARIO,
+  MARK_SCENARIO,
   MOMENTS_SCENARIO,
-  BLOCKED_SCENARIO,
+  MONO_SCENARIO,
   MOVE_SCENARIO,
-  BUBBLE_SCENARIO,
-  BLOCK_SCENARIO,
-  RAIL_SCENARIO,
-  OPENING_SCENARIO,
-  OPENING_WALKTHROUGH_SCENARIO,
-  SHIPPED_OPENING_SCENARIO,
-  SHIPPED_FIRST_RUN_SCENARIO,
   ONBOARDING_BLOCKS_SCENARIO,
   ONBOARDING_SCENARIO,
-  WIREFRAME_OFFLINE_SCENARIO,
-  isWireframeScenario,
-  CHAT_ANSWERED_SCENARIO,
-  CONSOLE_IDLE_SCENARIO,
-  LABELS_SCENARIO,
-  MONO_SCENARIO,
+  OPENING_SCENARIO,
+  OPENING_WALKTHROUGH_SCENARIO,
+  RAIL_SCENARIO,
+  REPOSITORIES_SCENARIO,
+  PROFILE_SCENARIO,
+  PRODUCTS_SCENARIO,
+  LANDING_SCENARIO,
+  HERO_CARD_SCENARIO,
+  HERO_SHAPE_SCENARIO,
+  SHIPPED_FIRST_RUN_SCENARIO,
+  SHIPPED_OPENING_SCENARIO,
+  STUDIES,
+  TYPE_SCENARIO,
   VOICE_DENSE_SCENARIO,
   VOICE_SETTLED_SCENARIO,
-  STUDIES,
+  WIREFRAME_OFFLINE_SCENARIO,
+  chosenStudy,
+  isChatScenario,
+  isCompositionScenario,
+  isConsoleScenario,
+  isVoiceScenario,
+  isWireframeScenario,
   studyByScenario,
 } from "../design-studies/studies";
 import {
@@ -125,7 +146,7 @@ import {
   isE2eInternalConsoleScenario,
 } from "../internal-console-scenarios";
 import { AppErrorPreview } from "../app-error-preview";
-import BillingLoading from "@/app/app/(account)/billing/loading";
+import BillingLoading from "@/app/app/(account)/settings/billing/loading";
 import { E2E_AUDIT_CREDIT_SCENARIOS, isE2eAuditCreditScenario } from "../audit-credit-scenarios";
 import { e2eProvenance, isE2eProvenanceScenario } from "../provenance-scenarios";
 import {
@@ -142,7 +163,6 @@ import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agen
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
 import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
-import { WalletChip } from "@/components/system/wallet-chip";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
@@ -156,28 +176,46 @@ import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-read
 import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-run-task-header";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
-  E2E_ACCOUNT_SCENARIOS,
   E2E_PROFILE_SCENARIOS,
   isE2eProfileScenario,
   E2E_PRODUCTS_SCENARIOS,
   E2E_REPOSITORIES_SCENARIOS,
-  isE2eAccountScenario,
   isE2eProductsScenario,
   isE2eRepositoriesScenario,
 } from "../account-scenarios";
-import { AccountHome } from "@/app/app/account-home";
-import { ProfileView } from "@/app/app/(account)/profile/profile-view";
+import { ProfileView } from "@/app/app/(account)/settings/profile/profile-view";
 import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-account";
 import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
-import { ProductsIndex } from "@/app/app/(account)/products/products-index";
-import { RepositoriesIndex } from "@/app/app/(account)/repositories/repositories-index";
-import { AccountMenu } from "@/components/layout/account-menu";
-import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
+import { ProductsIndex } from "@/app/app/(account)/settings/products/products-index";
+import { RepositoriesIndex } from "@/app/app/(account)/settings/repositories/repositories-index";
+import { StudyActions } from "../design-studies/study-actions";
+import { StudyButton } from "../design-studies/study-button";
+import { StudyButtonLook } from "../design-studies/study-button-look";
+import { StudyCta } from "../design-studies/study-cta";
+import { StudyRepositories } from "../design-studies/study-repositories";
+import { StudyProfile } from "../design-studies/study-profile";
+import { StudyProducts } from "../design-studies/study-products";
+import { StudyLanding } from "../design-studies/study-landing";
+import { StudyHeroCard } from "../design-studies/study-hero-card";
+import { StudyHeroShape } from "../design-studies/study-hero-shape";
+import { StudyIconActions } from "../design-studies/study-icon-actions";
+import { StudyMark } from "../design-studies/study-mark";
+import { StudyDismiss } from "../design-studies/study-dismiss";
+import { StudyInline } from "../design-studies/study-inline";
+import { StudyDisclosure } from "../design-studies/study-disclosure";
+import { StudyBackground } from "../design-studies/study-background";
+import { StudyCredits } from "../design-studies/study-credits";
+import { StudyForms } from "../design-studies/study-forms";
+import { StudyType } from "../design-studies/study-type";
+import { StudyFigure } from "../design-studies/study-figure";
+import { StudyLinks } from "../design-studies/study-links";
+import { AccountShell, SettingsRail } from "@/components/layout/account-shell";
+import { AppFrame, RailBrand, RailFooter } from "@/components/layout/app-frame";
 import {
   PROJECT_SECTIONS,
   ProjectBreadcrumb,
   ProjectShell,
-  ProjectSidebar,
+  ProjectRail,
   WorkspaceSection,
   projectSectionHref,
   type ProjectNavItem,
@@ -206,9 +244,13 @@ import { ActionPlanWorkspace } from "@/app/app/projects/[projectId]/plan/action-
 import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refresh-bar";
 import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
-import { BillingView } from "@/app/app/(account)/billing/billing-view";
+import { BillingView } from "@/app/app/(account)/settings/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { AtmosphereField } from "@/components/layout/atmosphere";
+import { CookieSettings } from "@/components/consent/cookie-settings";
+import { Surface } from "@/components/ui/surface";
+import { ProjectSettingsView } from "@/app/app/projects/[projectId]/settings/project-settings-view";
 import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
 import { DeepScanDialogFixture } from "./deep-scan-dialog-fixture";
 import {
@@ -280,6 +322,38 @@ function fixturesEnabled(): boolean {
   return process.env.VIBE_E2E_FIXTURES === "1";
 }
 
+function FixtureRail({ credits, children }: { credits: number; children: ReactNode }) {
+  return (
+    <>
+      <RailBrand />
+      {children}
+      {/*
+        The balance, where the real rail carries it (audit R22) — so the
+        browser proves a founder can see what they have from a project route,
+        not only from Billing.
+      */}
+      <RailFooter
+        credits={creditsToUnits(credits)}
+        identity={{
+          displayName: "Tobi",
+          initials: "TB",
+          avatarUrl: null,
+          fromGithub: true,
+          chosen: false,
+        }}
+      />
+    </>
+  );
+}
+
+function FixtureSettingsRail() {
+  return (
+    <FixtureRail credits={2480}>
+      <SettingsRail back={{ href: "/app/projects/project_e2e", label: "Back to Acme" }} />
+    </FixtureRail>
+  );
+}
+
 export default async function E2eScenarioPage({
   params,
 }: {
@@ -294,7 +368,7 @@ export default async function E2eScenarioPage({
   /* The scenario name is rendered so a failing trace says which fixture was on
      screen, rather than leaving that to be inferred. */
   const label = (
-    <p className="mb-4 text-xs text-zinc-600" data-testid="e2e-scenario">
+    <p className="mb-4 text-caption text-fg-meta" data-testid="e2e-scenario">
       {scenario}
     </p>
   );
@@ -452,8 +526,8 @@ export default async function E2eScenarioPage({
               block={
                 <div className="flex flex-col gap-5">
                   <div className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-3 border px-3 py-2">
-                    <span className="text-fg-body text-sm font-medium">acme/acme-app</span>
-                    <span className="text-fg-meta font-mono text-xs">main · connected</span>
+                    <span className="text-fg-body text-body font-medium">acme/acme-app</span>
+                    <span className="text-fg-meta font-mono text-caption">main · connected</span>
                   </div>
                   <LiveSiteStep projectId="project_e2e" currentUrl={null} liveScanFailed={false} />
                 </div>
@@ -617,11 +691,10 @@ export default async function E2eScenarioPage({
                 <FirstMoveDecision
                   projectId="project_e2e"
                   opportunityId="opportunity_e2e"
-                  balance={null}
                   skip={
                     <button
                       type="button"
-                      className="text-fg-secondary hover:text-fg transition-interactive rounded-sm text-sm underline underline-offset-4"
+                      className="text-fg-secondary hover:text-fg transition-interactive rounded-inline text-body underline underline-offset-4"
                     >
                       Go to my workspace
                     </button>
@@ -790,6 +863,43 @@ export default async function E2eScenarioPage({
     );
   }
 
+  const FOLLOW_UPS = {
+    [LABELS_SCENARIO]: StudyLabels,
+    [MONO_SCENARIO]: StudyMono,
+    [ACTIONS_SCENARIO]: StudyActions,
+    [BUTTON_SCENARIO]: StudyButton,
+    [BUTTON_LOOK_SCENARIO]: StudyButtonLook,
+    [CTA_SCENARIO]: StudyCta,
+    [REPOSITORIES_SCENARIO]: StudyRepositories,
+    [PROFILE_SCENARIO]: StudyProfile,
+    [PRODUCTS_SCENARIO]: StudyProducts,
+    [LANDING_SCENARIO]: StudyLanding,
+    [HERO_CARD_SCENARIO]: StudyHeroCard,
+    [HERO_SHAPE_SCENARIO]: StudyHeroShape,
+    [ICON_ACTIONS_SCENARIO]: StudyIconActions,
+    [MARK_SCENARIO]: StudyMark,
+    [DISMISS_SCENARIO]: StudyDismiss,
+    [INLINE_SCENARIO]: StudyInline,
+    [DISCLOSURE_SCENARIO]: StudyDisclosure,
+    [LINKS_SCENARIO]: StudyLinks,
+    [BACKGROUND_SCENARIO]: StudyBackground,
+    [CREDITS_SCENARIO]: StudyCredits,
+    [FORMS_SCENARIO]: StudyForms,
+    [TYPE_SCENARIO]: StudyType,
+    [FIGURE_SCENARIO]: StudyFigure,
+  } as const;
+  const FollowUp = FOLLOW_UPS[scenario as keyof typeof FOLLOW_UPS];
+  if (FollowUp) {
+    const chosen = STUDIES.find((entry) => entry.chosen);
+    if (chosen) {
+      return (
+        <StudyShell study={chosen}>
+          <FollowUp study={chosen} />
+        </StudyShell>
+      );
+    }
+  }
+
   const study = studyByScenario(scenario);
   if (study) {
     return (
@@ -819,6 +929,14 @@ export default async function E2eScenarioPage({
       <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
         {label}
 
+        {/*
+          Mirrors `nova-home.tsx`, which opts this one screen into the
+          contained field. The fixture composes Nova Home's parts by hand, so
+          a part it leaves out is a part no browser test can see — and the
+          ground is the part that decides whether the glass above it is glass.
+        */}
+        <AtmosphereField />
+
         <ProductIdentity
           name="Payflow"
           logoUrl={null}
@@ -844,7 +962,6 @@ export default async function E2eScenarioPage({
             beside a 35-Credit price. The brand exists to catch exactly that,
             and casting past it is how a fixture ends up asserting a bug.
           */
-          balance={{ availableCredits: creditsToUnits(420), display: "420" }}
           consequence={priced?.confirmationNote ?? undefined}
           /* The same label the button carries, so the fixture exercises the
              footnote's refusal to repeat it rather than rendering past it. */
@@ -967,29 +1084,6 @@ export default async function E2eScenarioPage({
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
           at={"at" in fixture ? new Date(fixture.at) : undefined}
-          /*
-            The two events that belong to no product, which the project-scoped
-            read filters out by construction — so this is the only place a
-            browser can see them (audit R24).
-          */
-          accountActivity={[
-            {
-              id: "a1",
-              eventType: "credit_grant.posted",
-              at: "2026-08-16T10:00:00.000Z",
-              title: "Credits added",
-              tone: "success",
-              facts: [],
-            },
-            {
-              id: "a2",
-              eventType: "github.installation.connected",
-              at: "2026-08-10T09:00:00.000Z",
-              title: "GitHub installation connected",
-              tone: "success",
-              facts: [],
-            },
-          ]}
         />
       </main>
     );
@@ -1141,174 +1235,159 @@ export default async function E2eScenarioPage({
     }));
 
     return (
-      <ProjectShell
-        sidebar={
-          <ProjectSidebar
-            projectId="project_e2e"
-            projectName="Acme"
-            repositoryFullName="acme/acme"
-            connected
-            switcherItems={[
-              { id: "project_e2e", name: "Acme", href: currentHref },
-              {
-                id: "project_e2e_planner",
-                name: "Planner Agent",
-                href: "/app/projects/project_e2e_planner",
-              },
-            ]}
-            items={navItems}
-            footer={
-              <div className="flex flex-col gap-3">
-                {/*
-                  The balance, where the real rail carries it (audit R22) — so
-                  the browser proves a founder can see what they have from a
-                  project route, not only from Billing.
-                */}
-                <WalletChip
-                  balance={{ availableCredits: creditsToUnits(35), display: "35 Credits" }}
-                  href="/app/billing"
-                />
-                <AccountMenu
-                  identity={{
-                    displayName: "Tobi",
-                    initials: "TB",
-                    avatarUrl: null,
-                    fromGithub: true,
-                    chosen: false,
-                  }}
-                  subtitle="Founder"
-                  placement="above"
-                />
-              </div>
-            }
-          />
+      <AppFrame
+        rail={
+          <FixtureRail credits={35}>
+            <ProjectRail
+              projectId="project_e2e"
+              projectName="Acme"
+              connected
+              planName="Free"
+              switcherItems={[
+                {
+                  id: "project_e2e",
+                  name: "Acme",
+                  href: currentHref,
+                  repositoryFullName: "acme/acme",
+                },
+                {
+                  id: "project_e2e_planner",
+                  name: "Planner Agent",
+                  href: "/app/projects/project_e2e_planner",
+                },
+              ]}
+              items={navItems}
+            />
+          </FixtureRail>
         }
       >
-        <div className="sr-only">{label}</div>
-        <ProjectBreadcrumb projectName="Acme" />
-        <WorkspaceSection
-          id="my-product"
-          actions={
-            <UnderstandingProgress
-              projectId="project_e2e"
-              hasProfile
-              activeOperation={null}
-              canStart
-              blockedReason={null}
-            />
-          }
-        >
-          <UnderstandingPanel
-            view={fixture.view}
-            projectId="project_e2e"
-            confirmedAt={fixture.confirmedAt}
-            understoodAt="2026-08-15T12:00:00.000Z"
-            founderIntent={{
-              stage: "active_users",
-              monetizationModel: "subscription",
-              primaryGoal: "grow_revenue",
-            }}
-            founderContextHref="#founder-context"
-            sources={[
-              /*
-                The fixture states the same four sources the real page builds,
-                at the shape `SourceCoverage` fixed — including a partial read
-                with its reason and its measured count, which is the state the
-                grid of cards had no room for and no fixture ever showed.
-              */
-              {
-                source: "repository",
-                label: "Your code",
-                state: fixture.view.sources.some(
-                  (source) => source.label === "Your code" && source.used,
-                )
-                  ? "ready"
-                  : "none",
-                detail: fixture.view.sources.some(
-                  (source) => source.label === "Your code" && source.used,
-                )
-                  ? "Vibe has read what your repository builds."
-                  : "Vibe hasn't read your code yet.",
-                reasons: [],
-                measured: { files: 128 },
-                at: "2026-08-14T08:22:59.917Z",
-                remedy: {
-                  label: "See what it read",
-                  href: "#product-evidence",
-                  operation: "product_understanding",
-                },
-              },
-              {
-                source: "live",
-                label: "Your public product",
-                state: fixture.view.sources.some(
-                  (source) => source.label === "Your public product" && source.used,
-                )
-                  ? "partial"
-                  : "none",
-                detail: fixture.view.sources.some(
-                  (source) => source.label === "Your public product" && source.used,
-                )
-                  ? "Vibe visited your product, but couldn't read all of it."
-                  : "Your public product has not been checked yet.",
-                reasons: fixture.view.sources.some(
-                  (source) => source.label === "Your public product" && source.used,
-                )
-                  ? [
-                      "Two pages on your site build themselves in your visitor's browser, so Vibe saw an empty shell for those.",
-                    ]
-                  : [],
-                measured: { pages: 6 },
-                at: "2026-08-14T08:24:11.000Z",
-                remedy: {
-                  label: "See what it saw",
-                  href: "#product-evidence",
-                  operation: "product_understanding",
-                },
-              },
-              {
-                source: "deep_scan",
-                label: "Your signed-in product",
-                detail: "Your signed-in product has not been checked yet.",
-                state: "none",
-                reasons: [],
-                measured: {},
-                at: null,
-                remedy: {
-                  label: "Deep Scan",
-                  href: "#product-evidence",
-                  operation: "deep_scan",
-                },
-              },
-              {
-                source: "founder",
-                label: "What you told Vibe",
-                detail: "Your stated stage, monetization intent and primary goal.",
-                state: "ready",
-                reasons: [],
-                measured: {},
-                at: null,
-                remedy: { label: "View context", href: "#founder-context", operation: null },
-              },
-            ]}
+        <ProjectShell>
+          <div className="sr-only">{label}</div>
+          <ProjectBreadcrumb projectName="Acme" />
+          <WorkspaceSection
+            id="my-product"
             actions={
-              <UnderstandingConfirm
+              <UnderstandingProgress
                 projectId="project_e2e"
-                profileId="profile_e2e"
-                values={{
-                  name: fixture.view.headline.productName ?? "",
-                  shortDescription: "",
-                  understanding: fixture.view.headline.understanding ?? "",
-                  mainPurpose: "",
-                  mainPromise: "",
-                  primaryAudience: "",
-                  problemSolved: "",
-                }}
+                hasProfile
+                activeOperation={null}
+                canStart
+                blockedReason={null}
               />
             }
-          />
-        </WorkspaceSection>
-      </ProjectShell>
+          >
+            <UnderstandingPanel
+              view={fixture.view}
+              projectId="project_e2e"
+              confirmedAt={fixture.confirmedAt}
+              understoodAt="2026-08-15T12:00:00.000Z"
+              founderIntent={{
+                stage: "active_users",
+                monetizationModel: "subscription",
+                primaryGoal: "grow_revenue",
+              }}
+              founderContextHref="#founder-context"
+              sources={[
+                /*
+                  The fixture states the same four sources the real page builds,
+                  at the shape `SourceCoverage` fixed — including a partial read
+                  with its reason and its measured count, which is the state the
+                  grid of cards had no room for and no fixture ever showed.
+                */
+                {
+                  source: "repository",
+                  label: "Your code",
+                  state: fixture.view.sources.some(
+                    (source) => source.label === "Your code" && source.used,
+                  )
+                    ? "ready"
+                    : "none",
+                  detail: fixture.view.sources.some(
+                    (source) => source.label === "Your code" && source.used,
+                  )
+                    ? "Vibe has read what your repository builds."
+                    : "Vibe hasn't read your code yet.",
+                  reasons: [],
+                  measured: { files: 128 },
+                  at: "2026-08-14T08:22:59.917Z",
+                  remedy: {
+                    label: "See what it read",
+                    href: "#product-evidence",
+                    operation: "product_understanding",
+                  },
+                },
+                {
+                  source: "live",
+                  label: "Your public product",
+                  state: fixture.view.sources.some(
+                    (source) => source.label === "Your public product" && source.used,
+                  )
+                    ? "partial"
+                    : "none",
+                  detail: fixture.view.sources.some(
+                    (source) => source.label === "Your public product" && source.used,
+                  )
+                    ? "Vibe visited your product, but couldn't read all of it."
+                    : "Your public product has not been checked yet.",
+                  reasons: fixture.view.sources.some(
+                    (source) => source.label === "Your public product" && source.used,
+                  )
+                    ? [
+                        "Two pages on your site build themselves in your visitor's browser, so Vibe saw an empty shell for those.",
+                      ]
+                    : [],
+                  measured: { pages: 6 },
+                  at: "2026-08-14T08:24:11.000Z",
+                  remedy: {
+                    label: "See what it saw",
+                    href: "#product-evidence",
+                    operation: "product_understanding",
+                  },
+                },
+                {
+                  source: "deep_scan",
+                  label: "Your signed-in product",
+                  detail: "Your signed-in product has not been checked yet.",
+                  state: "none",
+                  reasons: [],
+                  measured: {},
+                  at: null,
+                  remedy: {
+                    label: "Deep Scan",
+                    href: "#product-evidence",
+                    operation: "deep_scan",
+                  },
+                },
+                {
+                  source: "founder",
+                  label: "What you told Vibe",
+                  detail: "Your stated stage, monetization intent and primary goal.",
+                  state: "ready",
+                  reasons: [],
+                  measured: {},
+                  at: null,
+                  remedy: { label: "View context", href: "#founder-context", operation: null },
+                },
+              ]}
+              actions={
+                <UnderstandingConfirm
+                  projectId="project_e2e"
+                  profileId="profile_e2e"
+                  values={{
+                    name: fixture.view.headline.productName ?? "",
+                    shortDescription: "",
+                    understanding: fixture.view.headline.understanding ?? "",
+                    mainPurpose: "",
+                    mainPromise: "",
+                    primaryAudience: "",
+                    problemSolved: "",
+                  }}
+                />
+              }
+            />
+          </WorkspaceSection>
+        </ProjectShell>
+      </AppFrame>
     );
   }
 
@@ -1663,7 +1742,7 @@ export default async function E2eScenarioPage({
                         : "Run with Vibe"}
                     </button>
                     {chainOffer && (
-                      <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                      <p className="text-fg-meta text-caption" data-testid="agent-chain-boundary">
                         {chainOffer.boundary}
                       </p>
                     )}
@@ -1845,31 +1924,6 @@ export default async function E2eScenarioPage({
    * The density budget in `e2e/account-dashboard.spec.ts` counts this screen,
    * so a composition assembled here instead would measure nothing real.
    */
-  if (isE2eAccountScenario(scenario)) {
-    return (
-      <AccountShell
-        sidebar={
-          <AccountSidebar
-            credits="2,480"
-            footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                  chosen: false,
-                }}
-              />
-            }
-          />
-        }
-      >
-        <div className="sr-only">{label}</div>
-        <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
-      </AccountShell>
-    );
-  }
 
   /*
    * Profile, through the component `/app/profile` renders. It takes the
@@ -1879,31 +1933,16 @@ export default async function E2eScenarioPage({
   if (isE2eProfileScenario(scenario)) {
     const fixture = E2E_PROFILE_SCENARIOS[scenario]();
     return (
-      <AccountShell
-        sidebar={
-          <AccountSidebar
-            credits="2,480"
-            footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                  chosen: false,
-                }}
-              />
-            }
+      <AppFrame rail={<FixtureSettingsRail />}>
+        <AccountShell>
+          <div className="sr-only">{label}</div>
+          <ProfileView
+            email={fixture.email}
+            github={fixture.github}
+            founderName={fixture.founderName ?? null}
           />
-        }
-      >
-        <div className="sr-only">{label}</div>
-        <ProfileView
-          email={fixture.email}
-          github={fixture.github}
-          founderName={fixture.founderName ?? null}
-        />
-      </AccountShell>
+        </AccountShell>
+      </AppFrame>
     );
   }
 
@@ -1915,82 +1954,146 @@ export default async function E2eScenarioPage({
    */
   if (isE2eErasureScenario(scenario)) {
     return (
-      <AccountShell
-        sidebar={
-          <AccountSidebar
-            credits="2,480"
-            footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                  chosen: false,
-                }}
-              />
-            }
-          />
+      <AppFrame rail={<FixtureSettingsRail />}>
+        <AccountShell>
+          <div className="sr-only">{label}</div>
+          <DeleteAccountSection state={E2E_ERASURE_SCENARIOS[scenario]()} />
+        </AccountShell>
+      </AppFrame>
+    );
+  }
+
+  /**
+   * The frame on a route that has no navigation.
+   *
+   * Onboarding and the GitHub connect flow render nothing into the `@rail`
+   * slot, and the `<aside>` is hidden by `empty:hidden` rather than by a
+   * conditional the layout would have to reason its way to. That rule is one
+   * CSS declaration between a founder's first screen and 256px of empty
+   * chrome beside it, and the only place it can be checked is a browser.
+   */
+  if (scenario === "shell-without-a-rail") {
+    return (
+      <AppFrame rail={null}>
+        <main className="mx-auto w-full max-w-[40rem] p-8">
+          <div className="sr-only">{label}</div>
+          <h1 className="text-fg text-display font-bold">A focused flow</h1>
+        </main>
+      </AppFrame>
+    );
+  }
+
+  /*
+   * Project settings (UI-21).
+   *
+   * The route needs a session and a project in Supabase, which the browser
+   * suite deliberately does not have — so the one screen carrying "disconnect
+   * this repository" and "delete this product" had no browser coverage at all.
+   * Both states are rendered here, because the page is a different page
+   * without a repository: the disconnect row is gone and a connect link takes
+   * its place.
+   */
+  if (scenario === "project-settings" || scenario === "project-settings-disconnected") {
+    const connected = scenario === "project-settings";
+    const settingsHref = projectSectionHref("project_e2e", "settings");
+
+    return (
+      <AppFrame
+        rail={
+          <FixtureRail credits={35}>
+            <ProjectRail
+              projectId="project_e2e"
+              projectName="Acme"
+              connected={connected}
+              planName="Free"
+              switcherItems={[
+                {
+                  id: "project_e2e",
+                  name: "Acme",
+                  href: settingsHref,
+                  repositoryFullName: connected ? "acme/acme" : null,
+                },
+              ]}
+              items={PROJECT_SECTIONS.map((section) => ({
+                id: section.id,
+                label: section.label,
+                icon: section.icon,
+                href:
+                  section.id === "settings"
+                    ? settingsHref
+                    : projectSectionHref("project_e2e", section.id),
+                count: null,
+                countTone: "neutral" as const,
+              }))}
+            />
+          </FixtureRail>
         }
       >
-        <div className="sr-only">{label}</div>
-        <DeleteAccountSection state={E2E_ERASURE_SCENARIOS[scenario]()} />
-      </AccountShell>
+        <ProjectShell>
+          <div className="sr-only">{label}</div>
+          <ProjectBreadcrumb projectName="Acme" />
+          <ProjectSettingsView
+            projectId="project_e2e"
+            projectName="Acme"
+            repository={
+              connected
+                ? {
+                    fullName: "acme/acme",
+                    htmlUrl: "https://github.com/acme/acme",
+                    defaultBranch: "main",
+                  }
+                : null
+            }
+            productionUrl={connected ? "https://acme.example" : null}
+            founderIntent={{ stage: null, monetizationModel: null, primaryGoal: null }}
+            reconnectHref="/app/connect/github"
+          />
+        </ProjectShell>
+      </AppFrame>
+    );
+  }
+
+  /*
+   * The cookie panel from Settings → General (UI-23).
+   *
+   * The settings route needs a session, and consent is the one screen where
+   * "the switches match the cookie" has to be true in a browser rather than in
+   * a unit test — the whole feature is a browser fact.
+   */
+  if (scenario === "cookie-settings") {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <h1 className="text-fg mb-6 text-display font-bold">General</h1>
+        <Surface level="panel" padding="md">
+          <CookieSettings />
+        </Surface>
+      </main>
     );
   }
 
   if (isE2eProductsScenario(scenario)) {
     return (
-      <AccountShell
-        sidebar={
-          <AccountSidebar
-            credits="2,480"
-            footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                  chosen: false,
-                }}
-              />
-            }
-          />
-        }
-      >
-        <div className="sr-only">{label}</div>
-        <ProductsIndex products={E2E_PRODUCTS_SCENARIOS[scenario]()} />
-      </AccountShell>
+      <AppFrame rail={<FixtureSettingsRail />}>
+        <AccountShell>
+          <div className="sr-only">{label}</div>
+          <ProductsIndex products={E2E_PRODUCTS_SCENARIOS[scenario]()} />
+        </AccountShell>
+      </AppFrame>
     );
   }
 
   if (isE2eRepositoriesScenario(scenario)) {
     return (
-      <AccountShell
-        sidebar={
-          <AccountSidebar
-            credits="2,480"
-            footer={
-              <AccountMenu
-                identity={{
-                  displayName: "Tobi",
-                  initials: "TB",
-                  avatarUrl: null,
-                  fromGithub: true,
-                  chosen: false,
-                }}
-              />
-            }
+      <AppFrame rail={<FixtureSettingsRail />}>
+        <AccountShell>
+          <div className="sr-only">{label}</div>
+          <RepositoriesIndex
+            repositories={E2E_REPOSITORIES_SCENARIOS[scenario]()}
+            githubLogin={scenario === "account-repositories-empty" ? null : "TobiB1505"}
           />
-        }
-      >
-        <div className="sr-only">{label}</div>
-        <RepositoriesIndex
-          repositories={E2E_REPOSITORIES_SCENARIOS[scenario]()}
-          githubLogin={scenario === "account-repositories-empty" ? null : "TobiB1505"}
-        />
-      </AccountShell>
+        </AccountShell>
+      </AppFrame>
     );
   }
 
@@ -2393,7 +2496,7 @@ function RevealBlockFixture() {
       <VibeMark size={44} />
       <div className="flex flex-col gap-3">
         {view.headline.productName && (
-          <p className="text-fg-body text-xl font-semibold">{view.headline.productName}</p>
+          <p className="text-fg-body text-moment font-semibold">{view.headline.productName}</p>
         )}
         {view.headline.understanding && (
           <p className="text-fg-prose mx-auto max-w-[62ch] leading-relaxed">

@@ -72,9 +72,9 @@ export function AgentStartCta({
               <circle cx="12" cy="12" r="8.5" />
               <path d="M9.2 8.5h4.1a2.2 2.2 0 0 1 0 4.4h-2.6a2.2 2.2 0 0 0 0 4.4h4.1M12 6.6v10.8" />
             </svg>
-            <span className="text-fg-muted text-sm">Estimated Credit use</span>
+            <span className="text-fg-muted text-body">Estimated Credit use</span>
           </span>
-          <strong className="text-fg-body shrink-0 text-sm font-semibold tabular-nums">
+          <strong className="text-fg-body shrink-0 text-body font-semibold tabular-nums">
             Up to {creditEstimate} Credits
           </strong>
         </div>
@@ -82,7 +82,7 @@ export function AgentStartCta({
 
       {creditEstimate && forecastNotes && forecastNotes.length > 0 && (
         <ul
-          className="text-fg-muted flex w-full flex-col gap-1.5 text-[0.8125rem] leading-snug"
+          className="text-fg-muted flex w-full flex-col gap-1.5 text-ui leading-snug"
           data-testid="agent-run-forecast"
         >
           {forecastNotes.map((sentence) => (
@@ -111,7 +111,7 @@ export function AgentStartCta({
         )}
       </div>
 
-      <span className="text-fg-muted flex items-center gap-2 text-[0.8125rem]">
+      <span className="text-fg-muted flex items-center gap-2 text-ui">
         <svg
           viewBox="0 0 24 24"
           width="14"
@@ -210,8 +210,8 @@ export function AgentReadyFacts({
             {fact.icon}
           </svg>
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="text-fg-body text-sm font-semibold">{fact.title}</span>
-            <span className="text-fg-muted truncate text-sm">{fact.detail}</span>
+            <span className="text-fg-body text-body font-semibold">{fact.title}</span>
+            <span className="text-fg-muted truncate text-body">{fact.detail}</span>
           </span>
         </div>
       ))}

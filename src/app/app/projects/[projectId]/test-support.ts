@@ -41,7 +41,19 @@ export function source(file: string): string {
  * `getByRole` — they are the same thing. Only a source-text scanner can tell
  * them apart, and it must not care.
  */
-const CONTROL_TAGS = ["button", "a", "Button", "Link"] as const;
+const CONTROL_TAGS = [
+  "button",
+  "a",
+  "Button",
+  "Link",
+  // `StandaloneLink` renders a `Link` or an `<a>`, so to a reader and to
+  // `getByRole` nothing changed — but a source scanner sees only the tag it was
+  // told about, which is why the extractor throws on an empty result rather
+  // than reporting that a panel offers no controls. `InlineAction` was here for
+  // the same reason until UI-26 folded it into `Button`, which was already on
+  // this list.
+  "StandaloneLink",
+] as const;
 
 /**
  * The visible label of every control in a panel's source.

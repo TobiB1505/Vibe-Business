@@ -16,6 +16,8 @@ import {
   type FounderIntent,
 } from "@/modules/projects/founder-intent";
 import type { ConfidenceTone, UnderstandingView } from "@/modules/product-understanding/view";
+import { StandaloneLink } from "@/components/ui/text-link";
+import { Figure } from "@/components/ui/figure";
 
 /**
  * Evidence ids to citations, resolved through the one table that knows how to
@@ -155,7 +157,7 @@ export function UnderstandingPanel({
           <div className="flex min-w-0 flex-col justify-between gap-8 p-6 sm:p-7 lg:p-8">
             <div>
               <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <div className="border-line-2 bg-surface-3 flex size-20 shrink-0 items-center justify-center rounded-2xl border">
+                <div className="border-line-2 bg-surface-3 flex size-20 shrink-0 items-center justify-center rounded-card border">
                   {brand.logo ? <ProductLogo src={brand.logo.url} alt={brand.logo.alt} size={56} /> : <VibeMark size={52} />}
                 </div>
                 <div className="min-w-0">
@@ -163,15 +165,15 @@ export function UnderstandingPanel({
                   <h2 className="text-fg mt-2 text-[clamp(1.75rem,3vw,2.45rem)] leading-none font-semibold tracking-[-0.045em]">
                     {headline.productName ?? headline.title}
                   </h2>
-                  {headline.category && <span className="border-line-2 bg-surface-3 text-fg-secondary mt-4 inline-flex min-h-7 items-center rounded-full border px-3 text-xs">{headline.category}</span>}
+                  {headline.category && <span className="border-line-2 bg-surface-3 text-fg-secondary mt-4 inline-flex min-h-7 items-center rounded-full border px-3 text-caption">{headline.category}</span>}
                 </div>
               </div>
 
-              {headline.understanding ? <p className="text-fg-prose mt-7 max-w-[58ch] text-base leading-7 sm:text-[1.05rem]">{headline.understanding}</p> : <p className="text-fg-muted mt-7 max-w-[58ch] text-base leading-7">{headline.title}</p>}
-              {headline.synthesisNote && <p className="text-fg-muted mt-3 max-w-[58ch] text-sm leading-6">{headline.synthesisNote}</p>}
+              {headline.understanding ? <p className="text-fg-prose mt-7 max-w-[58ch] text-lead leading-7">{headline.understanding}</p> : <p className="text-fg-muted mt-7 max-w-[58ch] text-lead leading-7">{headline.title}</p>}
+              {headline.synthesisNote && <p className="text-fg-muted mt-3 max-w-[58ch] text-body leading-6">{headline.synthesisNote}</p>}
             </div>
 
-            <div className="border-line-1 flex flex-wrap items-center gap-x-6 gap-y-2 border-t pt-5 text-xs">
+            <div className="border-line-1 flex flex-wrap items-center gap-x-6 gap-y-2 border-t pt-5 text-caption">
               {headline.understanding && <span className="text-fg-secondary flex items-center gap-2"><span className="bg-mint size-2 rounded-full" aria-hidden />{headline.title}</span>}
               {understoodLabel && <span className="text-fg-meta">Last understood {understoodLabel}</span>}
             </div>
@@ -179,7 +181,7 @@ export function UnderstandingPanel({
 
           <div className="border-line-1 bg-[radial-gradient(circle_at_50%_30%,rgb(0_229_160/0.1),transparent_48%),linear-gradient(145deg,rgb(255_255_255/0.025),transparent)] flex min-h-[18rem] flex-col justify-between border-t p-6 lg:border-t-0 lg:border-l lg:p-8">
             <div className="flex items-start justify-between gap-4">
-              <div><p className="text-fg text-sm font-semibold">Vibe&apos;s product read</p><p className="text-fg-muted mt-1 max-w-xs text-sm leading-6">A compact identity assembled from the sources Vibe could actually reach.</p></div>
+              <div><p className="text-fg text-body font-semibold">Vibe&apos;s product read</p><p className="text-fg-muted mt-1 max-w-xs text-body leading-6">A compact identity assembled from the sources Vibe could actually reach.</p></div>
               <span className="border-mint/20 bg-mint/[0.06] text-mint flex size-11 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind="scan" className="size-6" /></span>
             </div>
             <div className="my-8 flex min-h-28 items-center justify-center">
@@ -189,8 +191,8 @@ export function UnderstandingPanel({
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="border-line-1 bg-surface-2 rounded-xl border p-3"><span className="text-fg text-xl font-semibold tabular-nums">{view.capabilities.length}</span><p className="text-fg-meta mt-1 text-xs">supported capabilities</p></div>
-              <div className="border-line-1 bg-surface-2 rounded-xl border p-3"><span className="text-fg text-xl font-semibold tabular-nums">{sourceCount}/{sourceTotal}</span><p className="text-fg-meta mt-1 text-xs">sources available</p></div>
+              <div className="border-line-1 bg-surface-2 rounded-field border p-3"><Figure value={view.capabilities.length} tier="sm" label="supported capabilities" /></div>
+              <div className="border-line-1 bg-surface-2 rounded-field border p-3"><Figure value={`${sourceCount}/${sourceTotal}`} tier="sm" label="sources available" /></div>
             </div>
           </div>
         </div>
@@ -200,10 +202,10 @@ export function UnderstandingPanel({
         <SectionLabel>Product DNA</SectionLabel>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {view.dna.map((fact) => (
-            <article key={fact.id} className="border-line-1 bg-surface-2 flex min-h-48 flex-col rounded-xl border p-4">
-              <div className="text-mint flex size-10 items-center justify-center rounded-xl border border-mint/20 bg-mint/[0.055]"><ProductGlyph kind={fact.id} /></div>
-              <h3 className="text-fg mt-4 text-sm font-semibold">{fact.label}</h3>
-              <p className={`${TONE_TEXT[fact.tone]} mt-2 flex-1 text-sm leading-6`}>{fact.value}</p>
+            <article key={fact.id} className="border-line-1 bg-surface-2 flex min-h-48 flex-col rounded-field border p-4">
+              <div className="text-mint flex size-10 items-center justify-center rounded-field border border-mint/20 bg-mint/[0.055]"><ProductGlyph kind={fact.id} /></div>
+              <h3 className="text-fg mt-4 text-card-title font-semibold">{fact.label}</h3>
+              <p className={`${TONE_TEXT[fact.tone]} mt-2 flex-1 text-body leading-6`}>{fact.value}</p>
               <p className="text-fg-meta mt-4 flex items-center gap-2 text-[0.7rem]"><span className={`${TONE_DOT[fact.tone]} size-1.5 rounded-full`} aria-hidden />{fact.note}</p>
               {/*
                 The same drawer every score and finding opens. The profile is
@@ -225,43 +227,43 @@ export function UnderstandingPanel({
         <Surface id="founder-context" level="panel" padding="lg" className="scroll-mt-32 flex flex-col gap-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <SectionLabel>Founder context</SectionLabel>
-            {founderContextHref && <Link href={founderContextHref} className="border-line-2 text-fg-secondary hover:border-line-strong hover:text-fg inline-flex min-h-10 items-center gap-2 rounded-lg border px-3 text-xs transition-interactive focus-visible:ring-2 focus-visible:ring-mint"><span aria-hidden>✎</span> Edit founder context</Link>}
+            {founderContextHref && <Link href={founderContextHref} className="border-line-2 text-fg-secondary hover:border-line-strong hover:text-fg inline-flex min-h-10 items-center gap-2 rounded-nav border px-3 text-caption transition-interactive focus-visible:ring-2 focus-visible:ring-mint"><span aria-hidden>✎</span> Edit founder context</Link>}
           </div>
           <dl className="grid gap-0 md:grid-cols-3 md:divide-x md:divide-line-1">
             {context.map((item) => (
               <div key={item.label} className="border-line-1 flex gap-4 border-b py-4 first:pt-0 last:border-b-0 last:pb-0 md:border-b-0 md:px-5 md:py-0 md:first:pl-0 md:last:pr-0">
                 <span className="border-mint/15 bg-mint/[0.045] text-mint flex size-10 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind={item.kind} /></span>
-                <div><dt className="text-fg text-sm font-semibold">{item.label}</dt><dd className={item.value ? "text-fg-prose mt-2 text-sm leading-6" : "text-fg-muted mt-2 text-sm leading-6"}>{item.value ?? "Not specified yet."}</dd></div>
+                <div><dt className="text-fg text-body font-semibold">{item.label}</dt><dd className={item.value ? "text-fg-prose mt-2 text-body leading-6" : "text-fg-muted mt-2 text-body leading-6"}>{item.value ?? "Not specified yet."}</dd></div>
               </div>
             ))}
           </dl>
-          <p className="text-fg-meta border-line-1 border-t pt-4 text-xs">Founder context tells Vibe what evidence cannot: where you are and what you want to do next.</p>
+          <p className="text-fg-meta border-line-1 border-t pt-4 text-caption">Founder context tells Vibe what evidence cannot: where you are and what you want to do next.</p>
         </Surface>
       )}
 
       <Surface level="panel" padding="lg" className="grid gap-7 lg:grid-cols-[minmax(0,1.25fr)_minmax(18rem,0.75fr)]">
         <div className="min-w-0">
           <SectionLabel>What Vibe discovered</SectionLabel>
-          <h3 className="text-fg mt-3 text-base font-semibold">Product capabilities</h3>
+          <h3 className="text-fg mt-3 text-title font-semibold">Product capabilities</h3>
           {view.capabilities.length > 0 ? (
             <ul className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2">
               {view.capabilities.map((capability) => (
-                <li key={capability.id} className="flex gap-3 text-sm">
+                <li key={capability.id} className="flex gap-3 text-body">
                   <span className="border-mint/20 bg-mint/[0.06] text-mint mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[0.65rem]" aria-hidden>✓</span>
                   <span className="min-w-0"><span className={TONE_TEXT[capability.tone]}>{capability.label}</span><span className="text-fg-meta mt-0.5 block text-[0.68rem]">{capability.note}</span></span>
                 </li>
               ))}
             </ul>
-          ) : <p className="text-fg-muted mt-4 text-sm">Vibe could not establish a supported capability yet.</p>}
+          ) : <p className="text-fg-muted mt-4 text-body">Vibe could not establish a supported capability yet.</p>}
         </div>
         <div className="border-line-1 min-w-0 border-t pt-6 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-7">
-          <h3 className="text-fg text-sm font-semibold">Product journey</h3>
+          <h3 className="text-fg text-card-title font-semibold">Product journey</h3>
           <ol className="mt-5 flex flex-col gap-0">
             {view.journey.map((stage, index) => (
               <li key={stage.id} className="relative flex gap-3 pb-4 last:pb-0">
                 {index < view.journey.length - 1 && <span className="bg-line-2 absolute top-5 bottom-0 left-[0.35rem] w-px" aria-hidden />}
                 <span className={`relative z-10 mt-0.5 size-3 shrink-0 rounded-full border-2 border-app ${stage.tone === "confirmed" ? "bg-mint" : stage.tone === "likely" ? "bg-fg-muted" : "bg-fg-disabled"}`} aria-hidden />
-                <span className="min-w-0"><span className="text-fg-secondary block text-xs font-medium">{stage.label}</span><span className={`${TONE_TEXT[stage.tone]} mt-0.5 block text-xs leading-5`}>{stage.detail}</span></span>
+                <span className="min-w-0"><span className="text-fg-secondary block text-caption font-medium">{stage.label}</span><span className={`${TONE_TEXT[stage.tone]} mt-0.5 block text-caption leading-5`}>{stage.detail}</span></span>
               </li>
             ))}
           </ol>
@@ -272,12 +274,12 @@ export function UnderstandingPanel({
         <SectionLabel>Brand &amp; visual identity</SectionLabel>
         {!brand.empty ? (
           <div className="grid gap-6 md:grid-cols-[auto_minmax(0,1.2fr)_minmax(12rem,0.7fr)_minmax(12rem,0.8fr)] md:divide-x md:divide-line-1">
-            <div className="pr-2"><p className="text-fg-muted text-xs">Logo</p><div className="border-line-2 bg-surface-2 mt-3 flex size-20 items-center justify-center rounded-xl border">{brand.logo ? <ProductLogo src={brand.logo.url} alt="" size={52} /> : <VibeMark size={48} />}</div>{brand.logoNote && <p className="text-fg-meta mt-2 max-w-36 text-[0.68rem] leading-5">{brand.logoNote}</p>}</div>
-            <div className="md:px-6"><p className="text-fg-muted text-xs">Colors</p>{brand.colors.length > 0 ? <ul className="mt-3 flex flex-wrap gap-4">{brand.colors.map((color) => <li key={`${color.role}-${color.value}`} className="flex flex-col items-center gap-2"><span aria-hidden className="border-line-strong size-11 rounded-full border shadow-[inset_0_0_0_1px_rgb(255_255_255/0.04)]" style={{ backgroundColor: color.value }} /><span className="text-fg-secondary font-mono text-[0.65rem] uppercase">{color.value}</span><span className="text-fg-meta text-[0.62rem]">{color.role}</span></li>)}</ul> : <p className="text-fg-muted mt-3 text-sm">No reliable palette was established.</p>}</div>
-            <div className="md:px-6"><p className="text-fg-muted text-xs">Interface type</p>{brand.typefaces.length > 0 ? <ul className="mt-3 space-y-3">{brand.typefaces.map((typeface) => <li key={`${typeface.role}-${typeface.family}`}><span className="text-fg block text-sm">{typeface.family}</span><span className="text-fg-meta text-[0.68rem]">{typeface.role}</span></li>)}</ul> : <p className="text-fg-muted mt-3 text-sm">No reliable typeface was established.</p>}</div>
-            <div className="md:pl-6"><p className="text-fg-muted text-xs">Tone</p><p className="text-fg-prose mt-3 text-sm leading-6">{brand.tone ? `Your product writes in a ${brand.tone} voice.` : "Vibe could not establish a consistent voice yet."}</p>{brand.phrases.length > 0 && <ul className="mt-3 flex flex-wrap gap-2">{brand.phrases.map((phrase) => <li key={phrase} className="border-line-1 bg-surface-2 text-fg-secondary rounded-full border px-2.5 py-1 text-[0.68rem]">{phrase}</li>)}</ul>}</div>
+            <div className="pr-2"><p className="text-fg-muted text-caption">Logo</p><div className="border-line-2 bg-surface-2 mt-3 flex size-20 items-center justify-center rounded-field border">{brand.logo ? <ProductLogo src={brand.logo.url} alt="" size={52} /> : <VibeMark size={48} />}</div>{brand.logoNote && <p className="text-fg-meta mt-2 max-w-36 text-[0.68rem] leading-5">{brand.logoNote}</p>}</div>
+            <div className="md:px-6"><p className="text-fg-muted text-caption">Colors</p>{brand.colors.length > 0 ? <ul className="mt-3 flex flex-wrap gap-4">{brand.colors.map((color) => <li key={`${color.role}-${color.value}`} className="flex flex-col items-center gap-2"><span aria-hidden className="border-line-strong size-11 rounded-full border shadow-[inset_0_0_0_1px_rgb(255_255_255/0.04)]" style={{ backgroundColor: color.value }} /><span className="text-fg-secondary font-mono text-[0.65rem] uppercase">{color.value}</span><span className="text-fg-meta text-[0.62rem]">{color.role}</span></li>)}</ul> : <p className="text-fg-muted mt-3 text-body">No reliable palette was established.</p>}</div>
+            <div className="md:px-6"><p className="text-fg-muted text-caption">Interface type</p>{brand.typefaces.length > 0 ? <ul className="mt-3 space-y-3">{brand.typefaces.map((typeface) => <li key={`${typeface.role}-${typeface.family}`}><span className="text-fg block text-body">{typeface.family}</span><span className="text-fg-meta text-[0.68rem]">{typeface.role}</span></li>)}</ul> : <p className="text-fg-muted mt-3 text-body">No reliable typeface was established.</p>}</div>
+            <div className="md:pl-6"><p className="text-fg-muted text-caption">Tone</p><p className="text-fg-prose mt-3 text-body leading-6">{brand.tone ? `Your product writes in a ${brand.tone} voice.` : "Vibe could not establish a consistent voice yet."}</p>{brand.phrases.length > 0 && <ul className="mt-3 flex flex-wrap gap-2">{brand.phrases.map((phrase) => <li key={phrase} className="border-line-1 bg-surface-2 text-fg-secondary rounded-full border px-2.5 py-1 text-[0.68rem]">{phrase}</li>)}</ul>}</div>
           </div>
-        ) : <p className="text-fg-muted text-sm">Vibe did not find enough reliable brand evidence to describe this identity yet.</p>}
+        ) : <p className="text-fg-muted text-body">Vibe did not find enough reliable brand evidence to describe this identity yet.</p>}
       </Surface>
 
       <Surface level="panel" padding="lg" className="flex flex-col gap-5">
@@ -290,17 +292,46 @@ export function UnderstandingPanel({
           know" and "Vibe couldn't find out".
         */}
         <SourceCoverageList sources={renderedSources} />
-        {view.limitations.length > 0 && <ul className="border-line-1 flex flex-col gap-1.5 border-t pt-4">{view.limitations.map((limitation) => <li key={limitation} className="text-fg-meta text-xs">{limitation}</li>)}</ul>}
+        {view.limitations.length > 0 && <ul className="border-line-1 flex flex-col gap-1.5 border-t pt-4">{view.limitations.map((limitation) => <li key={limitation} className="text-fg-meta text-caption">{limitation}</li>)}</ul>}
       </Surface>
 
-      <Surface id="product-evidence" level="section" padding="lg" className="scroll-mt-32 flex flex-col gap-4">
-        <Disclosure label="See what Vibe found"><div className="flex flex-col gap-3">{view.businessSignals.length > 0 ? <ul className="flex flex-col gap-2">{view.businessSignals.map((signal) => <li key={signal.id} className={`${TONE_TEXT[signal.tone]} text-sm`}>{signal.statement}</li>)}</ul> : <p className="text-fg-muted text-sm">No business observations were established yet.</p>}<Link href={projectSectionHref(projectId, "my-product")} className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-xs underline underline-offset-4 transition-interactive">Code and public product findings</Link></div></Disclosure>
-        {view.technical.length > 0 && <TechnicalDetails label="Technical details" entries={view.technical.map((row) => ({ key: row.label, value: row.value }))} />}
+      <Surface
+        id="product-evidence"
+        level="section"
+        padding="lg"
+        className="scroll-mt-32 flex flex-col gap-4"
+      >
+        <Disclosure label="See what Vibe found">
+          <div className="flex flex-col gap-3">
+            {view.businessSignals.length > 0 ? (
+              <ul className="flex flex-col gap-2">
+                {view.businessSignals.map((signal) => (
+                  <li key={signal.id} className={`${TONE_TEXT[signal.tone]} text-body`}>
+                    {signal.statement}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-fg-muted text-body">
+                No business observations were established yet.
+              </p>
+            )}
+            <StandaloneLink href={projectSectionHref(projectId, "my-product")}>
+              Code and public product findings
+            </StandaloneLink>
+          </div>
+        </Disclosure>
+        {view.technical.length > 0 && (
+          <TechnicalDetails
+            label="Technical details"
+            entries={view.technical.map((row) => ({ key: row.label, value: row.value }))}
+          />
+        )}
       </Surface>
 
       <Surface level="panel" tone={confirmedAt === null ? "mint" : undefined} padding="lg" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-start gap-4"><span className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind="scan" className="size-6" /></span><div><h3 className="text-fg text-base font-semibold">{confirmedAt === null ? "Is this correct?" : "You confirmed this product profile"}</h3><p className="text-fg-muted mt-1 max-w-xl text-sm leading-6">{confirmedAt === null ? "Your corrections become the strongest source in this product profile and survive future scans." : "Vibe will preserve your corrections when it refreshes the evidence behind this profile."}</p></div></div>
-        {confirmedAt === null ? <div className="shrink-0">{actions}</div> : <span className="border-mint/20 bg-mint/[0.06] text-mint shrink-0 rounded-full border px-3 py-1.5 text-xs">Confirmed {formatTimestamp(confirmedAt)}</span>}
+        <div className="flex min-w-0 items-start gap-4"><span className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind="scan" className="size-6" /></span><div><h3 className="text-fg text-title font-semibold">{confirmedAt === null ? "Is this correct?" : "You confirmed this product profile"}</h3><p className="text-fg-muted mt-1 max-w-xl text-body leading-6">{confirmedAt === null ? "Your corrections become the strongest source in this product profile and survive future scans." : "Vibe will preserve your corrections when it refreshes the evidence behind this profile."}</p></div></div>
+        {confirmedAt === null ? <div className="shrink-0">{actions}</div> : <span className="border-mint/20 bg-mint/[0.06] text-mint shrink-0 rounded-full border px-3 py-1.5 text-caption">Confirmed {formatTimestamp(confirmedAt)}</span>}
       </Surface>
     </div>
   );

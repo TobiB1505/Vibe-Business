@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { VibeLockup } from "@/components/brand/vibe-mark";
 import {
-  ArrowLeftIcon,
   ChevronRightIcon,
+  SettingsIcon,
   type DashboardIconName,
 } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
+import { RailNav, RailScroll } from "./app-frame";
 import { ProjectNav } from "./project-nav";
 import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";
 import { cn } from "@/lib/utils/cn";
@@ -194,7 +194,8 @@ export const WORKSPACE_SECTION_HEADINGS: Record<
   },
   settings: {
     title: "Project Settings",
-    description: "What Vibe is connected to, what you have told it, and how to disconnect or delete it.",
+    description:
+      "What Vibe is connected to, what you have told it, and how to disconnect or delete it.",
   },
   activity: {
     title: "Activity",
@@ -283,25 +284,33 @@ export type ProjectNavItem = {
   status?: string | null;
 };
 
-export function ProjectSidebar({
+/**
+ * The navigation the rail holds while a founder is inside a product.
+ *
+ * The middle of the rail and nothing else. The `<aside>` belongs to
+ * `AppFrame`, and the lockup above and the identity below belong to the slot
+ * that renders this — so those two are *the same DOM nodes* in Settings, not
+ * copies of them. Only what is between them is replaced, which is the whole of
+ * what the fold is.
+ */
+export function ProjectRail({
   projectId,
   projectName,
-  repositoryFullName,
   connected,
+  planName,
   switcherItems,
   items,
-  footer,
   // No `currentId`: the active section is derived from the URL inside
   // `ProjectNav`, so it cannot disagree with the address bar after a refresh,
   // a Back navigation, or a link opened in a new tab.
 }: {
   projectId: string;
   projectName: string;
-  repositoryFullName: string | null;
   connected: boolean;
+  /** The account's plan, resolved from its live subscription. */
+  planName: string;
   switcherItems: ProjectSwitcherItem[];
   items: ProjectNavItem[];
-  footer: ReactNode;
 }) {
   const current = {
     id: projectId,
@@ -310,49 +319,64 @@ export function ProjectSidebar({
   };
 
   return (
-    <aside
-      className={cn(
-        "border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
-        "lg:h-full lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-5 lg:py-6",
-      )}
-    >
-      <div className="px-1">
-        <Link href="/app" className="rounded-nav" aria-label="Vibe Business — your projects">
-          <VibeLockup />
-        </Link>
-      </div>
+    <RailNav direction="back" label="Project sections">
+      {/*
+        No eyebrow above the switcher. `PROJECT` labelled a control that
+        already says what it is — the product's mark, its name and a selector
+        glyph — and it cost a row in a rail whose section list was being cut
+        off four items in.
+      */}
+      <ProjectSwitcher
+        current={current}
+        connected={connected}
+        planName={planName}
+        items={switcherItems}
+      />
 
-      <nav aria-label="Project sections" className="mt-8 flex min-w-0 flex-col">
-        <div className="flex flex-col gap-2">
-          <MonoLabel className="px-1 tracking-[0.18em]">Project</MonoLabel>
-          <ProjectSwitcher
-            current={current}
-            repositoryFullName={repositoryFullName}
-            connected={connected}
-            items={switcherItems}
-          />
-        </div>
+      <div className="border-line-1 my-2 border-t" />
+      <RailScroll>
+        <ProjectNav items={items.filter((item) => item.id !== "settings")} />
+      </RailScroll>
 
+      {/*
+        The one row in this rail that is not about this product.
+
+        `Project Settings` was here, one row above the account's own Settings,
+        which asked a founder to read two nearly identical labels to tell a
+        product apart from an account. It moved into the switcher — the control
+        that says which product you are in — and what is left is the way out of
+        the product context entirely.
+
+        It does not open a page inside this navigation: it unfolds the rail
+        into the account's own, landing on General. The chevron says so, and
+        the label above it is `General` because that is where the fold arrives
+        — the founder is told the destination before the click, not after it.
+
+        `prefetch` is not decoration here. This is the one link in the product
+        that swaps the whole rail, and an unwarmed swap is the difference
+        between a fold and a wait.
+      */}
+      <div className="border-line-1 mt-2 flex flex-col gap-1.5 border-t pt-2">
+        <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
         <Link
-          href="/app/products"
+          href="/app/settings"
+          prefetch
           className={cn(
-            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav mt-3",
-            "flex items-center gap-2.5 px-3 py-2.5 text-sm transition-interactive",
+            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav group/settings",
+            "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
+            "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
           )}
         >
-          <ArrowLeftIcon size={17} className="shrink-0" />
-          All products
+          <SettingsIcon size={17} className="shrink-0" />
+          Settings
+          <ChevronRightIcon
+            size={15}
+            aria-hidden
+            className="text-fg-meta group-hover/settings:text-fg-secondary ml-auto shrink-0 transition-interactive"
+          />
         </Link>
-
-        <div className="border-line-1 my-4 border-t" />
-        <ProjectNav items={items.filter((item) => item.id !== "settings")} />
-
-        <div className="border-line-1 my-4 border-t" />
-        <ProjectNav items={items.filter((item) => item.id === "settings")} />
-      </nav>
-
-      <div className="mt-6 lg:mt-auto lg:pt-8">{footer}</div>
-    </aside>
+      </div>
+    </RailNav>
   );
 }
 
@@ -380,11 +404,11 @@ export function ProjectBreadcrumb({
 }) {
   return (
     <nav aria-label="Breadcrumb">
-      <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-sm">
+      <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-body">
         <li>
           <Link
-            href="/app/products"
-            className="text-fg-body hover:text-fg rounded-sm font-medium transition-interactive"
+            href="/app/settings/products"
+            className="text-fg-body hover:text-fg rounded-inline font-medium transition-interactive"
           >
             My Products
           </Link>
@@ -447,12 +471,15 @@ export function WorkspaceSection({
           className={cn(
             "flex flex-wrap items-end justify-between gap-5",
             intelligence &&
-              "business-brain-stage relative items-center overflow-hidden rounded-[1.25rem] border border-line-2 px-5 py-5 sm:px-6 sm:py-6",
+              "business-brain-stage relative items-center overflow-hidden rounded-stage border border-line-2 px-5 py-5 sm:px-6 sm:py-6",
           )}
           data-workspace-header={variant}
         >
           {intelligence && (
-            <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
+            <span
+              aria-hidden="true"
+              className="business-brain-grid pointer-events-none absolute inset-0"
+            />
           )}
           <div className="relative z-10 flex min-w-0 flex-col gap-2">
             {eyebrow && (
@@ -470,7 +497,12 @@ export function WorkspaceSection({
               {title}
             </h1>
             {description && (
-              <p className={cn("max-w-[70ch] text-[0.9375rem]", intelligence ? "text-fg-secondary" : "text-fg-muted")}>
+              <p
+                className={cn(
+                  "max-w-[70ch] text-lead",
+                  intelligence ? "text-fg-secondary" : "text-fg-muted",
+                )}
+              >
                 {description}
               </p>
             )}
@@ -481,9 +513,7 @@ export function WorkspaceSection({
             </div>
           )}
           {intelligence && headerStatus ? (
-            <div className="border-line-1 relative z-10 w-full border-t pt-4">
-              {headerStatus}
-            </div>
+            <div className="border-line-1 relative z-10 w-full border-t pt-4">{headerStatus}</div>
           ) : null}
         </div>
         {children}
@@ -492,22 +522,20 @@ export function WorkspaceSection({
   );
 }
 
-/** Fixed desktop rail + one independently scrolling project document. */
-export function ProjectShell({
-  sidebar,
-  children,
-}: {
-  sidebar: ReactNode;
-  children: ReactNode;
-}) {
+/**
+ * The workspace column. The rail beside it belongs to `AppFrame`.
+ *
+ * `--frame-inset` is the same number the rail pads with, so the breadcrumb and
+ * the lockup beside it start at one height — on this surface and on Settings,
+ * which is the point of there being one number. The bottom is generous rather
+ * than symmetric: a page ending 20px above the fold reads as cut off.
+ */
+export function ProjectShell({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-app text-fg-body flex min-h-dvh flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
-      {sidebar}
-      <main className="min-w-0 flex-1 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
-        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 py-7 sm:px-8 sm:py-9 xl:px-10 xl:py-10">
-          {children}
-        </div>
-      </main>
-    </div>
+    <main className="min-w-0 flex-1">
+      <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 pt-[var(--frame-inset)] pb-16 sm:px-8 xl:px-10">
+        {children}
+      </div>
+    </main>
   );
 }

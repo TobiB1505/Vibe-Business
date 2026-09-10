@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The Command Center in a real browser (CORE-5).
@@ -25,7 +26,9 @@ test.describe("Home says what it knows", () => {
 
     await expect(page.getByRole("heading", { name: "Acme" })).toBeVisible();
     await expect(page.getByText("64")).toBeVisible();
-    await expect(page.getByText("You have a real product, but nobody can pay for it.")).toBeVisible();
+    await expect(
+      page.getByText("You have a real product, but nobody can pay for it."),
+    ).toBeVisible();
     await expect(page.getByText("Give people a way to pay")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review this move" })).toBeVisible();
   });
@@ -144,9 +147,6 @@ test.describe("the agent reads as a colleague, not a build tool", () => {
     await page.setViewportSize({ width: 375, height: 780 });
     await page.goto("/e2e/agent-ready");
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });

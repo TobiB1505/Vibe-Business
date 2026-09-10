@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 const SYNTHESIS = "/e2e/audit-synthesis";
 const UNSCORED = "/e2e/audit-unscored";
@@ -36,7 +37,12 @@ test.describe("signature Business Brain", () => {
   test("exposes exactly the nine domain lenses as semantic controls", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    await expect(page.getByRole("list", { name: /business dimensions/i }).first().getByRole("button")).toHaveCount(9);
+    await expect(
+      page
+        .getByRole("list", { name: /business dimensions/i })
+        .first()
+        .getByRole("button"),
+    ).toHaveCount(9);
     for (const name of [
       "Offer",
       "Audience",
@@ -59,10 +65,7 @@ test.describe("signature Business Brain", () => {
       "aria-label",
       /score 38 out of 100.*weak.*priority soon/i,
     );
-    await expect(lens(page, /scalability/i)).toHaveAttribute(
-      "aria-label",
-      /not scored.*unknown/i,
-    );
+    await expect(lens(page, /scalability/i)).toHaveAttribute("aria-label", /not scored.*unknown/i);
     await expect(page.getByText(/missing evidence is never scored as zero/i)).toBeVisible();
   });
 
@@ -82,9 +85,7 @@ test.describe("signature Business Brain", () => {
     await expect(page.getByTestId("primary-priority")).toContainText(/medium effort/i);
   });
 
-  test("opens selected-area detail in a stable two-column layout", async ({
-    page,
-  }) => {
+  test("opens selected-area detail in a stable two-column layout", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
     const before = page.url();
@@ -108,7 +109,9 @@ test.describe("signature Business Brain", () => {
     await expect(signalsPanel).toContainText(/current lens score/i);
     await expect(signalsPanel).toContainText(/38\s*\/100/i);
     await expect(signalsPanel).toContainText(/signals behind this score/i);
-    await expect(signalsPanel).toContainText(/individual signals do not carry invented point values/i);
+    await expect(signalsPanel).toContainText(
+      /individual signals do not carry invented point values/i,
+    );
     /*
      * Three, not four. The evidence tab's numbered citation cards were the
      * shared drawer's content one tab away from the conclusion it supports;
@@ -171,7 +174,9 @@ test.describe("signature Business Brain", () => {
     // Why-first: the consequence leads, the diagnosis follows it.
     const paragraphs = await second.locator("p").allInnerTexts();
     const why = paragraphs.findIndex((text) => /every change you make is a guess/i.test(text));
-    const diagnosis = paragraphs.findIndex((text) => /couldn't find anything measuring/i.test(text));
+    const diagnosis = paragraphs.findIndex((text) =>
+      /couldn't find anything measuring/i.test(text),
+    );
     expect(why).toBeGreaterThanOrEqual(0);
     expect(diagnosis).toBeGreaterThan(why);
 
@@ -207,9 +212,7 @@ test.describe("signature Business Brain", () => {
    * was computed and rendered nowhere, so the founder saw the product decline
    * to answer without being told why it could not.
    */
-  test("says why there is no score, and does not colour the non-answer green", async ({
-    page,
-  }) => {
+  test("says why there is no score, and does not colour the non-answer green", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1100 });
     await page.goto(UNSCORED);
 
@@ -286,7 +289,9 @@ test.describe("signature Business Brain", () => {
     await expect(strip.getByRole("link")).toContainText(/deep scan/i);
   });
 
-  test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {
+  test("closes selected detail without collapsing or overlapping the overview", async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
     await lens(page, /acquisition/i).click();
@@ -357,9 +362,7 @@ test.describe("signature Business Brain", () => {
     }).toPass();
   });
 
-  test("keeps unsupported per-lens history honest in the selected focus view", async ({
-    page,
-  }) => {
+  test("keeps unsupported per-lens history honest in the selected focus view", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
     await lens(page, /revenue & economics/i).click();
@@ -382,7 +385,9 @@ test.describe("signature Business Brain", () => {
     await offer.focus();
     await expect(offer).toBeFocused();
     await page.keyboard.press("Enter");
-    await expect(page.getByTestId("selected-lens-detail").getByRole("heading", { name: /^offer$/i })).toBeVisible();
+    await expect(
+      page.getByTestId("selected-lens-detail").getByRole("heading", { name: /^offer$/i }),
+    ).toBeVisible();
   });
 
   test("renders an honest no-history state", async ({ page }) => {
@@ -418,9 +423,10 @@ test.describe("signature Business Brain", () => {
 
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
     await expect(page.locator("[data-business-signal]")).toHaveCount(0);
-    const animationDuration = await page.locator(".business-brain-node").first().evaluate(
-      (element) => getComputedStyle(element).animationDuration,
-    );
+    const animationDuration = await page
+      .locator(".business-brain-node")
+      .first()
+      .evaluate((element) => getComputedStyle(element).animationDuration);
     expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.001);
   });
 });
@@ -450,10 +456,7 @@ test.describe("responsive Business Brain", () => {
     const detailBox = await page.getByTestId("selected-lens-detail").boundingBox();
     expect(detailBox!.y).toBeGreaterThan(listBox!.y + listBox!.height);
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 });
 

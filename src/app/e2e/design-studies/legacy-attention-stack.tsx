@@ -66,7 +66,7 @@ export function AttentionStack({
                 <StatusPill tone={status.tone} className="mt-0.5 shrink-0 sm:mt-0">
                   {status.word}
                 </StatusPill>
-                <span className="text-fg-body min-w-0 flex-1 text-sm">
+                <span className="text-fg-body min-w-0 flex-1 text-body">
                   {entry.message}
                   {entry.detail && (
                     <span className="text-fg-muted block truncate text-ui">{entry.detail}</span>

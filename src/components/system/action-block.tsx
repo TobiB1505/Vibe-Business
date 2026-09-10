@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Disclosure } from "@/components/ui/disclosure";
 import { cn } from "@/lib/utils/cn";
-import { CostDisclosure, type CostBalance } from "./cost-disclosure";
+import { CostDisclosure } from "./cost-disclosure";
 import type { RetailOperationKind } from "@/modules/credits/retail";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
@@ -41,7 +41,6 @@ export function ActionBlock({
   control,
   operation = null,
   pricingClass,
-  balance,
   /**
    * What will exist afterwards, and what will not. Disclosed rather than
    * always visible because it is long — but never the price, which is not.
@@ -55,7 +54,6 @@ export function ActionBlock({
   control: ReactNode;
   operation?: RetailOperationKind | null;
   pricingClass?: ExecutionPricingClass | null;
-  balance?: CostBalance | null;
   consequence?: ReactNode;
   consequenceLabel?: string;
   footnote?: ReactNode;
@@ -63,15 +61,20 @@ export function ActionBlock({
 }) {
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{control}</div>
+      {/*
+        The price above the control, not under it. Reading order becomes cost,
+        then action — which is the order a person needs them in, and the order
+        a screen reader already gets from the DOM without being told.
+      */}
+      <CostDisclosure operation={operation} pricingClass={pricingClass} />
 
-      <CostDisclosure operation={operation} pricingClass={pricingClass} balance={balance} />
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">{control}</div>
 
       {footnote && <p className="text-fg-muted max-w-[62ch] text-ui">{footnote}</p>}
 
       {consequence && (
         <Disclosure label={consequenceLabel}>
-          <div className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{consequence}</div>
+          <div className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{consequence}</div>
         </Disclosure>
       )}
     </div>

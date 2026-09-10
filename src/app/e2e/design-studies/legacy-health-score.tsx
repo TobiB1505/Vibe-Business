@@ -1,9 +1,10 @@
-import Link from "next/link";
 import { CoverageLine } from "@/components/system/confidence";
 import { Surface } from "@/components/ui/surface";
 import { scoreDisplay } from "@/components/ui/score-display";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
+import { figureClasses } from "@/components/ui/figure";
 
 /**
  * Kept as the picture of what the thread replaced.
@@ -71,24 +72,14 @@ export function HealthScore({
         <MonoLabel as="h2" id="nova-health">
           Business health
         </MonoLabel>
-        <Link
-          href={healthHref}
-          className="text-fg-muted hover:text-fg-body text-ui underline underline-offset-4 transition-interactive"
-        >
-          See the nine areas
-        </Link>
+        <StandaloneLink href={healthHref}>See the nine areas</StandaloneLink>
       </div>
 
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <span
-          className={cn(
-            "text-fg text-display leading-none font-bold tabular-nums",
-            display.unscored && "text-fg-muted",
-          )}
-        >
+        <span className={figureClasses("md", display.unscored ? "text-fg-muted" : "text-fg")}>
           {display.text}
         </span>
-        <span className="text-fg-prose text-sm">{stateLabel}</span>
+        <span className="text-fg-prose text-body">{stateLabel}</span>
       </div>
 
       {/*
@@ -130,15 +121,10 @@ export function HealthScoreAbsent({
       <MonoLabel as="h2" id="nova-health-absent">
         Business health
       </MonoLabel>
-      <p className="text-fg-prose text-sm">
+      <p className="text-fg-prose text-body">
         Vibe has not audited this product yet, so there is no reading to show.
       </p>
-      <Link
-        href={healthHref}
-        className="text-fg-muted hover:text-fg-body self-start text-ui underline underline-offset-4 transition-interactive"
-      >
-        Go to Business Health
-      </Link>
+      <StandaloneLink href={healthHref}>Go to Business Health</StandaloneLink>
     </Surface>
   );
 }

@@ -52,7 +52,7 @@ export function NovaChoice({
       className="flex flex-col gap-4"
       data-testid="nova-choice"
     >
-      {entry.prompt ? <p className="text-fg text-ui-lg font-medium">{entry.prompt}</p> : null}
+      {entry.prompt ? <p className="text-fg text-card-title font-medium">{entry.prompt}</p> : null}
 
       {entry.options.map((option) => {
         if (confirming === option.actionId) {

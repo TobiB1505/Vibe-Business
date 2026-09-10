@@ -9,6 +9,7 @@ import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { getReviewStatusAction } from "./review-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Before/after review, as the user sees it (Sprint 11A §24, §25, §29, §30).
@@ -62,7 +63,7 @@ function localTime(iso: string | null): string | null {
  */
 function NotApproved({ approved, merged }: { approved: boolean; merged: boolean }) {
   return (
-    <p className="text-xs text-fg-muted">
+    <p className="text-caption text-fg-muted">
       A comparison is evidence, not a verdict
       {approved ? "" : " · Not approved"}
       {merged ? " · Merged · Deployment not verified by Vibe" : " · Not merged · Not deployed"}
@@ -84,18 +85,14 @@ function Panel({
   return (
     <figure className="min-w-0 space-y-2">
       <figcaption className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-fg-prose">{label}</span>
+        <span className="text-caption font-medium uppercase tracking-wide text-fg-prose">{label}</span>
+        {/* `external` carries rel="noreferrer", which is what keeps Vibe's
+            project URL — and the project id in it — out of the opened page's
+            Referer header. */}
         {href && (
-          <a
-            href={href}
-            target="_blank"
-            // Without this the opened page receives Vibe's project URL — and the
-            // project id in it — in a Referer header.
-            rel="noreferrer noopener"
-            className="text-xs text-fg-secondary underline underline-offset-2 hover:text-fg-body"
-          >
+          <StandaloneLink href={href} external>
             Open
-          </a>
+          </StandaloneLink>
         )}
       </figcaption>
 
@@ -117,11 +114,11 @@ function Panel({
           alt={`${label} screenshot`}
           width={REVIEW_POLICY.viewport.width}
           height={REVIEW_POLICY.viewport.height}
-          className="h-auto w-full rounded-md border border-line-2 bg-app"
+          className="h-auto w-full rounded-inset border border-line-2 bg-app"
         />
       </a>
 
-      {caption && <p className="text-xs text-fg-muted">{caption}</p>}
+      {caption && <p className="text-caption text-fg-muted">{caption}</p>}
     </figure>
   );
 }
@@ -198,15 +195,15 @@ export function ReviewPanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-sm font-medium text-fg-body">Visual comparison</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Visual comparison</h4>
 
       {capturing ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Preparing comparison…</p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-prose">Preparing comparison…</p>
+          <p className="text-body text-fg-secondary">
             Capturing your current live page and the preview.
           </p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             You can leave this page. Vibe will finish the comparison.
           </p>
         </div>
@@ -238,7 +235,7 @@ export function ReviewPanel({
                 />
               </div>
 
-              <p className="text-xs text-fg-muted">
+              <p className="text-caption text-fg-muted">
                 Route {images.route}
                 {images.width && images.height ? ` · ${images.width}×${images.height}` : ""}
                 {" · validated · "}
@@ -252,8 +249,8 @@ export function ReviewPanel({
                real comparison sat on that sentence while RLS silently refused
                to sign. */
             <div className="space-y-1">
-              <p className="text-sm text-fg-secondary">Comparison images unavailable</p>
-              <p className="text-xs text-fg-muted">
+              <p className="text-body text-fg-secondary">Comparison images unavailable</p>
+              <p className="text-caption text-fg-muted">
                 The comparison was captured, but its images could not be opened for viewing.
                 Reload the page to try again.
               </p>
@@ -266,7 +263,7 @@ export function ReviewPanel({
                 href={branchUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className={buttonClasses({ variant: "secondary", size: "sm" })}
+                className={buttonClasses({ variant: "secondary" })}
               >
                 View code diff
               </a>
@@ -277,14 +274,14 @@ export function ReviewPanel({
         </div>
       ) : card.state === "failed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-coral">Comparison failed</p>
+          <p className="text-body text-coral">Comparison failed</p>
           {/* Safe copy from a stable code. Never a provider message (§31). */}
-          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-body text-fg-secondary">{card.failureMessage}</p>}
         </div>
       ) : card.state === "expired" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Comparison expired</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Comparison expired</p>
+          <p className="text-caption text-fg-muted">
             Review images are kept for a limited time and this one has been removed.
           </p>
         </div>
@@ -292,7 +289,7 @@ export function ReviewPanel({
         /* Unreachable in practice, and deliberately inert: the section is only
            rendered when a historical artifact exists, and nothing creates a new
            one. It offers no way to make one, because there is none (ADR 0065). */
-        <p className="text-sm text-fg-secondary">No comparison was captured for this change.</p>
+        <p className="text-body text-fg-secondary">No comparison was captured for this change.</p>
       )}
 
     </section>

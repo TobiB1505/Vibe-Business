@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The first ten minutes, in a real browser (UI-S1 §22–§24).
@@ -45,14 +46,6 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
   return attempted;
 }
 
-/** Nothing may scroll sideways. A landing page that does is broken on a phone. */
-async function expectNoHorizontalOverflow(page: Page) {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow, "horizontal overflow in px").toBeLessThanOrEqual(1);
-}
-
 test.describe("the landing page", () => {
   test("sends the primary call to action to sign-up, not sign-in", async ({ page }) => {
     await page.goto("/");
@@ -60,7 +53,7 @@ test.describe("the landing page", () => {
     const hero = page.getByRole("main").locator("section").first();
     // The hero's own first control. Its words changed with UI-19; where it
     // sends a stranger with no account did not.
-    const primary = hero.getByRole("link", { name: "Start with your GitHub repo" });
+    const primary = hero.getByRole("link", { name: "Start with GitHub" });
     await expect(primary).toBeVisible();
     await expect(primary).toHaveAttribute("href", "/signup");
 
@@ -74,9 +67,10 @@ test.describe("the landing page", () => {
     // In the shell every public page wears since UI-19, rather than in the
     // hero. What matters is that an existing customer finds the way back in
     // without the page asking a stranger to sign in first.
-    await expect(
-      page.getByRole("banner").getByRole("link", { name: "Sign in" }),
-    ).toHaveAttribute("href", "/login");
+    await expect(page.getByRole("banner").getByRole("link", { name: "Sign in" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
   });
 
   test("says what the product does, in one heading a founder can act on", async ({ page }) => {
@@ -85,11 +79,26 @@ test.describe("the landing page", () => {
     await expect(page.getByRole("heading", { level: 1 })).toContainText(
       "You built the product. Now build the business.",
     );
+    /*
+      The third subject used to be the tab bar's heading, "From code to
+      business. Vibe every step." The tab bar is gone — its six tabs went one
+      at a time into the blocks that could show what each claimed — so what is
+      pinned is the block the navigation's *How it works* now points at. The
+      assertion's job is that the page names its three subjects, not that it
+      words them one particular way for ever.
+    */
     await expect(
-      page.getByRole("heading", { name: "From code to business. Vibe every step." }),
+      page.getByRole("heading", { name: "Four gates. The last one is you." }),
     ).toBeVisible();
+    /*
+      The Business Brain's own heading. It read "See your business as a system."
+      while that section drew the radial map; UI-34 unrolled the nine areas into
+      a staircase and the section went with it, so what is pinned is the
+      heading the block has now — the assertion's job is that the page names its
+      three subjects, not that it words them one particular way for ever.
+    */
     await expect(
-      page.getByRole("heading", { name: "See your business as a system." }),
+      page.getByRole("heading", { name: "Nine areas, and an honest answer for each." }),
     ).toBeVisible();
   });
 
@@ -108,9 +117,17 @@ test.describe("the landing page", () => {
     for (const area of ["Offer", "Audience", "Acquisition", "Conversion", "Retention"]) {
       await expect(page.getByText(area, { exact: true }).first()).toBeVisible();
     }
-    await expect(
-      page.getByText("Scores and relationships appear only after Vibe has evidence"),
-    ).toBeVisible();
+
+    /*
+      The claim, not the sentence that used to carry it. The radial preview
+      said "Scores and relationships appear only after Vibe has evidence" under
+      a map of nine empty tiles; the staircase says it on every orb and in the
+      block's own prose. `landing.spec.ts` holds the stronger version of this —
+      nine orbs, no digits — and this one stays as the sweep a stranger's first
+      ten minutes gets.
+    */
+    await expect(page.getByText("Never scored zero, never averaged in")).toBeVisible();
+    await expect(page.getByText("Not assessed").first()).toBeVisible();
   });
 
   test("reaches the legal surfaces from the footer", async ({ page }) => {
@@ -162,7 +179,11 @@ test.describe("sign-up", () => {
 
     const google = page.getByTestId("google-signup");
     await expect(google).toBeVisible();
-    await expect(google).toHaveText("Continue with Google");
+    // "Continue with Google" until UI-19. The provider button now names what
+    // the screen it is on does: the same OAuth call creates an account here
+    // and signs in on `/login`, and a person who came to create one should
+    // read a button that says so.
+    await expect(google).toHaveText("Sign up with Google");
     await expect(google).toBeEnabled();
 
     await expect(page.getByTestId("email-signup")).toBeEnabled();
@@ -335,9 +356,7 @@ test.describe("a product logo that will not load", () => {
 
     // The remote asset was genuinely attempted and genuinely refused, so the
     // fallback below is the browser's real error path rather than a stub.
-    await expect
-      .poll(() => attempted.some((url) => url.includes("acme.test")))
-      .toBe(true);
+    await expect.poll(() => attempted.some((url) => url.includes("acme.test"))).toBe(true);
 
     await expect(page.getByTestId("product-logo")).toHaveCount(0);
     const mark = page.locator("img[src*='vibe-mark']");
@@ -362,29 +381,29 @@ test.describe("meeting Nova before signing up", () => {
 
     const section = page.getByTestId("landing-nova");
     await expect(section).toBeVisible();
-    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
+    await expect(
+      section.getByRole("heading", { name: /your co-founder has a name/i }),
+    ).toBeVisible();
   });
 
   /*
    * The property this section is most likely to lose. Nothing is running on a
    * marketing page — no project, no repository, no operation — so a turning
    * aperture here would be the "activity while a process is in fact waiting"
-   * DESIGN.md forbids at any level of polish. The four states are a legend,
-   * and every one of them is drawn at rest.
+   * DESIGN.md forbids at any level of polish.
+   *
+   * The four-state key this used to count went with the block's rebuild: a
+   * legend explains a notation to somebody already reading one, and a visitor
+   * who has never seen Nova has no notation in front of them. What it was
+   * really holding is below, and it holds for the whole section rather than
+   * for four marks in a row.
    */
-  test("shows the four states as a key, with none of them claiming to be running", async ({
-    page,
-  }) => {
+  test("shows a mark that never claims to be running", async ({ page }) => {
     await page.goto("/");
     const section = page.getByTestId("landing-nova");
     await section.scrollIntoViewIfNeeded();
 
-    // Scoped to the legend: the introduction above it is a second
-    // `listening` mark, and it is the same one at hero size.
-    const legend = section.getByRole("list");
-    for (const state of ["idle", "listening", "working", "settled"]) {
-      await expect(legend.locator(`[data-nova-presence="${state}"]`)).toHaveCount(1);
-    }
+    await expect(section.locator("[data-nova-presence]")).toHaveCount(1);
 
     // The spin class only ever appears on a live run; nothing here is one.
     const spinning = await section.locator('[class*="nSpin-"]').count();
@@ -396,71 +415,10 @@ test.describe("meeting Nova before signing up", () => {
     await page.goto("/");
 
     const section = page.getByTestId("landing-nova");
-    await expect(section.getByRole("heading", { name: /your co-founder has a name/i })).toBeVisible();
-    await expect(section.getByText(/what her mark tells you/i)).toBeVisible();
+    await expect(
+      section.getByRole("heading", { name: /your co-founder has a name/i }),
+    ).toBeVisible();
     // The mark itself is present at first paint, not assembled into existence.
-    await expect(section.locator('[data-nova-presence]').first()).toBeVisible();
-  });
-});
-
-/*
- * The six steps, walkable. This was a static grid of six equal cards — it said
- * what the product does and showed none of it.
- */
-test.describe("walking the six steps", () => {
-  test("switches one reserved panel, and shows the real components in it", async ({ page }) => {
-    await page.goto("/");
-    const flow = page.getByTestId("landing-flow");
-    await flow.scrollIntoViewIfNeeded();
-
-    await expect(flow.getByRole("tab")).toHaveCount(6);
-
-    // Understand: the same source-coverage list My Product renders, with a
-    // partial source that states why it stopped short.
-    await expect(flow.getByTestId("source-coverage")).toBeVisible();
-    await expect(flow).toContainText(/build themselves in your visitor's browser/i);
-
-    /*
-     * Reserved geometry: switching a tab must not move the page under somebody
-     * reading it, which on a marketing page matters most.
-     */
-    const before = await flow.boundingBox();
-    await flow.getByRole("tab", { name: "Execute" }).click();
-    await expect(flow.getByTestId("agent-run-files")).toBeVisible();
-    const after = await flow.boundingBox();
-    expect(Math.abs((before?.height ?? 0) - (after?.height ?? 0))).toBeLessThanOrEqual(2);
-
-    // The refused path is named here too — it is the thing a diff cannot show.
-    await expect(flow).toContainText("Sensitive path policy");
-  });
-
-  test("admits on Measure what it cannot see", async ({ page }) => {
-    await page.goto("/");
-    const flow = page.getByTestId("landing-flow");
-    await flow.scrollIntoViewIfNeeded();
-    await flow.getByRole("tab", { name: "Measure" }).click();
-
-    await expect(flow).toContainText(/not measured/i);
-    await expect(flow).toContainText(/reads your public product, not your revenue/i);
-  });
-});
-
-/*
- * The trust bento. Its tiles hold real parts, and the prices in them are
- * resolved from the rate card rather than typed into the page — so a landing
- * page cannot advertise a number the product has stopped charging.
- */
-test.describe("why it can be believed", () => {
-  test("shows the source strip and resolves its prices from the rate card", async ({ page }) => {
-    await page.goto("/");
-    const trust = page.getByRole("region", { name: /an opinion you can check/i });
-    await trust.scrollIntoViewIfNeeded();
-
-    await expect(trust.getByTestId("source-coverage-strip")).toBeVisible();
-
-    // Deep Scan is priced; a rescan is free and says so rather than staying quiet.
-    await expect(trust).toContainText(/\d+ Credits/);
-    await expect(trust).toContainText("Included");
-    await expect(trust).not.toContainText(/0 Credits/);
+    await expect(section.locator("[data-nova-presence]").first()).toBeVisible();
   });
 });

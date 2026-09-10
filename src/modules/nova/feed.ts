@@ -192,12 +192,24 @@ export function novaCandidateMessage(kind: FocusCandidateKind): string {
   return MESSAGE_FOR_CANDIDATE[kind];
 }
 
-/** What the control above the options asks. */
+/**
+ * What the control above the options asks.
+ *
+ * Partial on purpose: a candidate gets a prompt only when the question adds
+ * something the button does not already say. "Move it onto your default
+ * branch?" earns its place beside a button reading "Merge it" — it names what
+ * merging *does*. `audit_outdated` had "Run the audit again?" beside a button
+ * reading "Run the audit again", which is the same sentence twice with a
+ * question mark, and on the focus card it rendered as a footnote under the
+ * control it was repeating.
+ *
+ * The rule, kept by `feed.test.ts`: a prompt may not be its own option's
+ * label. When there is nothing to add, there is no prompt.
+ */
 const PROMPT_FOR_CANDIDATE: Partial<Record<FocusCandidateKind, string>> = {
   merge_ready: "Move it onto your default branch?",
   execution_offered: "Want me to build it?",
   plan_offered: "Want a plan for it?",
-  audit_outdated: "Run the audit again?",
 };
 
 function subjectFor(candidate: FocusCandidate): NovaActionSubject {

@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import { MonoLabel } from "@/components/ui/typography";
 import { GOAL_LABELS, MONETIZATION_LABELS, STAGE_LABELS } from "@/modules/projects/founder-intent";
 import type { PendingQuestion } from "@/modules/business-audit/needs-user";
@@ -115,7 +116,7 @@ export function NeedsUserPanel({
           perceptive is worse than no premise at all.
         */}
         {question.context && (
-          <p className="text-fg-secondary max-w-[62ch] text-sm leading-relaxed">
+          <p className="text-fg-secondary max-w-[62ch] text-body leading-relaxed">
             {question.context}
           </p>
         )}
@@ -132,7 +133,7 @@ export function NeedsUserPanel({
             problem the audit reveal had one block down.
           */
           className={`text-fg max-w-[46ch] leading-snug font-semibold tracking-[-0.025em] ${
-            block ? "text-title" : "text-xl sm:text-2xl"
+            block ? "text-title" : "text-title sm:text-moment"
           }`}
         >
           {question.prompt}
@@ -146,38 +147,32 @@ export function NeedsUserPanel({
           <fieldset className="flex flex-col gap-2">
             <legend className="sr-only">{question.prompt}</legend>
             {options.map((option) => (
-              <label
+              <ChoiceCard
                 key={option}
-                className="border-line-3 hover:border-line-4 has-checked:border-mint/60 flex cursor-pointer items-center gap-3 rounded-md border px-3 py-2 transition-[border-color]"
-              >
-                <input
-                  type="radio"
-                  name="value"
-                  value={option}
-                  checked={value === option}
-                  onChange={() => setValue(option)}
-                  className="accent-mint"
-                />
-                <span className="text-fg-body text-sm">{labels?.[option] ?? option}</span>
-              </label>
+                name="value"
+                value={option}
+                checked={value === option}
+                onChange={() => setValue(option)}
+                label={labels?.[option] ?? option}
+              />
             ))}
           </fieldset>
         ) : (
           <label className="flex flex-col gap-1">
-            <span className="text-fg-muted text-xs">Your answer</span>
+            <span className="text-fg-muted text-caption">Your answer</span>
             <input
               name="value"
               value={value}
               onChange={(event) => setValue(event.target.value)}
               autoComplete="off"
-              className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 w-full rounded-md border px-3 py-1.5 text-sm focus:ring-4 focus:outline-none"
+              className="border-line-strong bg-field text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 w-full rounded-inset border px-3 py-1.5 text-body focus:ring-4 focus:outline-none"
               placeholder="Solo founders who already shipped something"
             />
           </label>
         )}
 
         {state && !state.ok && (
-          <p role="alert" className="text-amber text-sm">
+          <p role="alert" className="text-amber text-body">
             {ERROR_MESSAGES[state.error]}
           </p>
         )}

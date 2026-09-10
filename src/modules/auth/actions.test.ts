@@ -15,7 +15,10 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-const requestHeaders = new Map<string, string>([["host", "vibe.test"], ["x-forwarded-proto", "https"]]);
+const requestHeaders = new Map<string, string>([
+  ["host", "vibe.test"],
+  ["x-forwarded-proto", "https"],
+]);
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(async () => ({
@@ -212,7 +215,10 @@ describe("signUp", () => {
    * at six.
    */
   it("refuses a password shorter than eight characters, without asking Supabase", async () => {
-    const result = await signUp(null, formDataWith({ email: "new@example.com", password: "hunter2" }));
+    const result = await signUp(
+      null,
+      formDataWith({ email: "new@example.com", password: "hunter2" }),
+    );
 
     expect(result).toEqual({ ok: false, error: "Choose a password with at least 8 characters." });
     expect(authMock.signUp).not.toHaveBeenCalled();
@@ -255,7 +261,11 @@ describe("signUp", () => {
       formDataWith({ email: "new@example.com", password: "hunter22" }),
     );
 
-    expect(result).toEqual({ ok: true, needsConfirmation: true });
+    expect(result).toEqual({
+      ok: true,
+      needsConfirmation: true,
+      email: "new@example.com",
+    });
   });
 
   it("returns a generic error on signup failure", async () => {
@@ -400,7 +410,7 @@ describe("requestPasswordReset", () => {
 
     const result = await requestPasswordReset(null, formDataWith({ email: "user@example.com" }));
 
-    expect(result).toEqual({ ok: true });
+    expect(result).toEqual({ ok: true, email: "user@example.com" });
     expect(authMock.resetPasswordForEmail).toHaveBeenCalledWith("user@example.com", {
       redirectTo: "https://vibe.test/auth/confirm?next=%2Fapp&flow=recovery",
     });
@@ -409,24 +419,33 @@ describe("requestPasswordReset", () => {
   /**
    * The anti-enumeration property, stated as a test so a future refactor that
    * "improves the error message" fails here rather than in the wild.
+   *
+   * ## Why both calls now use the same address
+   *
+   * Because the result echoes the address back, so the screen can name it —
+   * and two calls with two different addresses would differ in that field for
+   * a reason that has nothing to do with the property under test. Holding the
+   * address fixed and varying only whether Supabase says the user exists is
+   * what the claim actually is: *the answer does not depend on existence.*
+   * The old form varied both at once and could only compare shapes.
    */
   it("answers identically whether or not the address has an account", async () => {
+    const email = "someone@example.com";
+
     authMock.resetPasswordForEmail.mockResolvedValue({ error: null });
-    const known = await requestPasswordReset(null, formDataWith({ email: "known@example.com" }));
+    const known = await requestPasswordReset(null, formDataWith({ email }));
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
     authMock.resetPasswordForEmail.mockResolvedValue({
       error: { message: "User not found", code: "user_not_found", status: 400 },
     });
-    const unknown = await requestPasswordReset(
-      null,
-      formDataWith({ email: "unknown@example.com" }),
-    );
+    const unknown = await requestPasswordReset(null, formDataWith({ email }));
     consoleError.mockRestore();
 
-    expect(known).toEqual({ ok: true });
-    expect(unknown).toEqual({ ok: true });
     expect(unknown).toEqual(known);
+    // And the only thing carried back is what was submitted, so the echo
+    // cannot become a channel for something the caller did not already know.
+    expect(known).toEqual({ ok: true, email });
   });
 
   it("does surface rate limiting, which says nothing about the address", async () => {
@@ -473,6 +492,21 @@ describe("requestPasswordReset", () => {
 });
 
 describe("updatePassword", () => {
+  /**
+   * A missing confirmation is not a matching one.
+   *
+   * The check read `typeof confirmation === "string" && confirmation !== password`,
+   * so a submission carrying no confirmation field at all skipped it and set
+   * the password. The browser marks the field `required`, which is a
+   * convenience for a person and not a property of a request.
+   */
+  it("refuses a submission that carries no confirmation at all", async () => {
+    const result = await updatePassword(null, formDataWith({ password: "hunter22" }));
+
+    expect(result).toEqual({ ok: false, error: "Both passwords need to match." });
+    expect(authMock.updateUser).not.toHaveBeenCalled();
+  });
+
   const recoverySession = { data: { claims: { sub: "user-1" } }, error: null };
 
   it("sets the password and lands the user in the app", async () => {
@@ -480,7 +514,10 @@ describe("updatePassword", () => {
     authMock.updateUser.mockResolvedValue({ error: null });
 
     await expectRedirectTo(
-      updatePassword(null, formDataWith({ password: "new-password", password_confirmation: "new-password" })),
+      updatePassword(
+        null,
+        formDataWith({ password: "new-password", password_confirmation: "new-password" }),
+      ),
       "/app",
     );
 
@@ -522,7 +559,11 @@ describe("updatePassword", () => {
   it("surfaces a rejected password without leaking the raw provider message", async () => {
     authMock.getClaims.mockResolvedValue(recoverySession);
     authMock.updateUser.mockResolvedValue({
-      error: { message: "Password should be at least 6 characters", code: "weak_password", status: 422 },
+      error: {
+        message: "Password should be at least 6 characters",
+        code: "weak_password",
+        status: 422,
+      },
     });
 
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);

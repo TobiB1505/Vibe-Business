@@ -78,6 +78,31 @@
   --color-coral-tint: rgb(255 122 92 / 0.14);
   --color-coral-tint-soft: rgb(255 122 92 / 0.06);
   --color-coral-line: rgb(255 122 92 / 0.32);
+  --color-coral-pressed: rgb(255 122 92 / 0.24);
+
+  /* ── The sheen (UI-27) ───────────────────────────────────────────────
+     A control has a surface, not a colour. Founder's pick from
+     `study-button-look`: a wash down the face, a lit top edge, and the
+     glow underneath — one mechanism, applied at three intensities because
+     what reads as "lit" on a saturated fill would bleach a neutral one.
+
+     A wash rather than a pair of hand-mixed hexes, so the same two stops
+     work over mint, over coral and over a 4%-white surface. `-strong` is
+     the hover step: the light rises, the button does not change colour. */
+  --color-sheen-lift: rgb(255 255 255 / 0.36);
+  --color-sheen-lift-strong: rgb(255 255 255 / 0.46);
+  --color-sheen-sink: rgb(0 0 0 / 0.12);
+  --color-sheen-soft: rgb(255 255 255 / 0.05);
+  --color-sheen-soft-strong: rgb(255 255 255 / 0.1);
+  --color-sheen-warn: rgb(255 122 92 / 0.13);
+  --color-sheen-warn-strong: rgb(255 122 92 / 0.22);
+  /* Gold is an object, not a surface — see the note in globals.css. Same
+     five values, so a Credit is the same coin in either palette. */
+  --color-gold-light: #ffdd8f;
+  --color-gold: #d9a13a;
+  --color-gold-deep: #8a5f1c;
+  --color-gold-rim: #6b4712;
+  --color-gold-ink: #3d270a;
 
   /* ── Foreground ramp ─────────────────────────────────────────────────
      Near-neutral, very slightly warm. Six steps carry text and every one
@@ -102,6 +127,7 @@
   --color-surface-3: rgb(255 255 255 / 0.048);
   --color-surface-4: rgb(255 255 255 / 0.062);
   --color-surface-hover: rgb(255 255 255 / 0.085);
+  --color-surface-pressed: rgb(255 255 255 / 0.14);
   --color-field: rgb(255 255 255 / 0.04);
   --color-well: rgb(0 0 0 / 0.36);
 
@@ -145,9 +171,38 @@
   --text-headline: 1.6875rem;
   --text-headline--line-height: 1.16;
   --text-headline--letter-spacing: -0.03em;
+  /* The moment, one notch tighter than v1's — the second palette sets its own
+     leading and tracking for every display step, and this is a display step. */
+  --text-moment: 1.5rem;
+  --text-moment--line-height: 1.24;
+  --text-moment--letter-spacing: -0.026em;
   --text-title: 1.1875rem;
   --text-title--line-height: 1.32;
   --text-title--letter-spacing: -0.02em;
+  /* D5's own number. v1 keeps `leading-snug` because that is what its eleven
+     card headings already render; here there is nothing to preserve. */
+  --text-card-title--line-height: 1.35;
+  /* v2 answers v1's body step. Same size — the direction is tighter in the
+     display range and unchanged where a founder reads. */
+  /* The figures, one notch tighter — the second palette sets its own tracking
+     for every display step, and a figure is one. */
+  --text-figure-sm: 1.25rem;
+  --text-figure-sm--line-height: 1;
+  --text-figure-sm--letter-spacing: -0.018em;
+  --text-figure: 2.25rem;
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.042em;
+  --text-figure-lg: 3.25rem;
+  --text-figure-lg--line-height: 1;
+  --text-figure-lg--letter-spacing: -0.055em;
+
+  --text-body: 0.875rem;
+  /* v1 keeps Tailwind's 1.4286 so the sweep moves nothing there. Loosening
+     prose is one of the things a second palette is for, and this is where
+     that decision lives. */
+  --text-body--line-height: 1.58;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.45;
 
   /* ── The eyebrow ─────────────────────────────────────────────────────
      Treatment 2, chosen at review: the interface family, uppercase, and
@@ -168,11 +223,16 @@
 
   /* ── Shape ───────────────────────────────────────────────────────────
      Tighter than v1 across the board. A precise corner is a small one. */
+  /* The second palette runs tighter throughout, and the three new corners
+     follow it rather than v1's values. */
+  --radius-inline: 3px;
+  --radius-inset: 5px;
   --radius-nav: 8px;
   --radius-well: 10px;
   --radius-field: 9px;
   --radius-panel: 11px;
   --radius-card: 12px;
+  --radius-stage: 16px;
 
   /* ── Elevation ───────────────────────────────────────────────────── */
   --shadow-panel: 0 20px 48px -30px rgb(0 0 0 / 0.85);
@@ -188,16 +248,40 @@
   --atmos-2: rgb(70 130 200 / 0.1);
   --atmos-3: rgb(0 229 160 / 0.045);
   --atmos-grain: 0.035;
+  /* The ramp: the ground everywhere, and the half of it that does the most
+     work. Bright enough at the top that a pane carries a gradient, gone by
+     four fifths so a long page does not end in a wash. */
+  --atmos-ramp-near: rgb(255 255 255 / 0.045);
+  --atmos-ramp-far: rgb(255 255 255 / 0.01);
 
   /* ── Glass ───────────────────────────────────────────────────────────
-     Values, not a default. `backdrop-filter` on stacked dense content is
-     what makes a product judder, so glass is for chrome, overlays and
-     signature moments; panels and tables stay opaque. S2 spends these. */
+     The material, now — not an accent. See ADR 0099: this direction was
+     asked for as glass rather than as flat tiles, and a product where one
+     surface in five is a pane and the rest are fills does not read as
+     glass, it reads as an inconsistency.
+
+     Two blurs, because a card and a panel are not the same object. The
+     card is the screen's subject and gets the deeper one; a panel is the
+     workhorse and there can be a dozen on a screen, so it gets a blur
+     shallow enough that a dozen of them composite without judder. A
+     section is the quiet grouping band behind panels and stays a fill —
+     glass behind glass is two panes and no ground. */
   --glass-blur: 14px;
+  --glass-blur-panel: 9px;
   --glass-sat: 130%;
   --glass-fill: rgb(255 255 255 / 0.04);
+  /* A panel sits *on* the ground rather than over the page, so it carries
+     less fill and a quieter edge than the card that may contain it. Without
+     the split, a panel inside a card disappeared into it. */
+  --glass-fill-panel: rgb(255 255 255 / 0.03);
   --glass-line: rgb(255 255 255 / 0.16);
+  --glass-line-panel: rgb(255 255 255 / 0.11);
   --glass-sheen: rgb(255 255 255 / 0.07);
+  --glass-sheen-panel: rgb(255 255 255 / 0.045);
+  /* Chrome — the rail and the top bar. Thinner than a panel because it is
+     the frame rather than a thing on the page, and it runs the full height:
+     a fill that reads right on a 240px card reads as a slab at 900px. */
+  --glass-fill-chrome: rgb(255 255 255 / 0.018);
 
   /* ── Motion ──────────────────────────────────────────────────────────
      v1's names, answered differently — not a second vocabulary beside them.
@@ -220,17 +304,36 @@
 }
 
 /*
- * The atmosphere itself.
+ * The ground.
  *
- * Two fixed layers rather than one background on the frame: the grain has to
- * sit above the gradients and below everything else, and a single background
- * cannot express that. Both are inert — no pointer events, nothing announced.
+ * ## What it is for
  *
- * Three of the five fields sit under the reading column rather than in the
- * corners. A first draft put every gradient at the edges and the middle of the
- * page had a flat backdrop, which is where all the glass sits; blurring a flat
- * backdrop returns the same flat backdrop. A pane only reads as a pane where
- * the light behind it changes across its width.
+ * `backdrop-filter` returns what is behind it, and behind a flat field it
+ * returns the same flat field — which is why an early draft of the glass read
+ * as translucent grey. So the ground is not decoration: it is the thing that
+ * makes a pane a pane, and the requirement is that the light *changes* under
+ * it.
+ *
+ * ## Why it is in two pieces
+ *
+ * Because two kinds of screen want different things, and one rule for both
+ * gets one of them wrong. `.vibe-atmosphere` is the product's ground
+ * everywhere: a luminance ramp and nothing else, legible behind a diff, a
+ * settings table or an agent log because there is nothing to compete with.
+ * `.vibe-atmosphere-field` is opt-in, for the screen a founder arrives on.
+ *
+ * Measured on a real screenshot, as a luminance ratio across a pane: the ramp
+ * alone gives 1.04× left-to-right and 4.75× top-to-bottom, and the ramp with
+ * the field gives 1.18× and 5.72× — the largest of the four grounds compared.
+ * The first measurement took only the horizontal axis and made the ramp look
+ * broken; a ramp is vertical, so a horizontal cut is the one line where by
+ * construction it does not change.
+ *
+ * ## Why three elements and not one background
+ *
+ * The grain has to sit above the gradients and below everything else, and a
+ * single background cannot express that. All three are inert — no pointer
+ * events, nothing announced, `z-index: -1`.
  */
 [data-vibe="v2"] .vibe-atmosphere {
   position: fixed;
@@ -238,14 +341,35 @@
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(38rem 26rem at 26% 18%, var(--atmos-1), transparent 68%),
-    radial-gradient(30rem 22rem at 74% 42%, var(--atmos-2), transparent 66%),
-    radial-gradient(22rem 18rem at 46% 74%, var(--atmos-3), transparent 70%),
-    radial-gradient(64rem 46rem at 8% -10%, var(--atmos-1), transparent 60%),
-    radial-gradient(58rem 44rem at 96% 104%, var(--atmos-2), transparent 62%), var(--color-ground);
+    linear-gradient(
+      180deg,
+      var(--atmos-ramp-near) 0%,
+      var(--atmos-ramp-far) 52%,
+      transparent 80%
+    ),
+    var(--color-ground);
 }
 
-/* Grain, so the gradients do not band on a wide dark screen. Generated by an
+/*
+ * The contained field, and the call site has to ask for it.
+ *
+ * That is the cost of the split, stated where somebody will meet it: a route
+ * renders `<AtmosphereField />` or it does not, and a screen that quietly
+ * forgets gets the ramp rather than a broken picture. Fixed rather than
+ * anchored to a card, so the field stays in the upper region where a primary
+ * card sits on every route that earns one.
+ */
+[data-vibe="v2"] .vibe-atmosphere-field {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(30rem 20rem at 34% 26%, var(--atmos-1), transparent 66%),
+    radial-gradient(26rem 18rem at 70% 34%, var(--atmos-2), transparent 64%);
+}
+
+/* Grain, so the ramp does not band on a wide dark screen. Generated by an
    SVG filter in a data URI: no request, and no byte in the image pipeline. */
 [data-vibe="v2"] .vibe-grain {
   position: fixed;
@@ -308,9 +432,107 @@
   pointer-events: none;
 }
 
-/* Panels and sections: opaque, and edge-carried. The line does the work the
-   fill used to do, which is the whole of "Precision & Light". */
-[data-vibe="v2"] .vibe-surface-panel,
+/*
+ * The sheet is the other place glass belongs.
+ *
+ * `DESIGN.md` and the chosen direction both spend glass on chrome, overlays
+ * and signature moments. An evidence drawer is literally an overlay: it sits
+ * over the page a founder was reading, and the page staying legible behind it
+ * is the reason `Sheet` exists rather than a route.
+ *
+ * Same treatment as the card, deliberately — two glass surfaces that disagree
+ * about what glass looks like is how a product acquires a second material by
+ * accident.
+ */
+[data-vibe="v2"] .vibe-overlay {
+  background: var(--glass-fill);
+  border-color: var(--glass-line);
+  position: relative;
+}
+
+[data-vibe="v2"] .vibe-overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/*
+ * The panel is glass too.
+ *
+ * ## Why this changed
+ *
+ * The rule here used to be "glass is spent on the card and nowhere else", and
+ * it was wrong about what this design system is. Measured on the dashboard,
+ * one surface was a pane and four were fills — and the four are the product
+ * grid, which is what a founder actually looks at. The direction was chosen as
+ * glass rather than flat tiles; a card floating alone over four tiles is not a
+ * lighter version of that, it is a different design.
+ *
+ * ## What is kept from the old argument
+ *
+ * The judder concern was real and is answered by the blur, not by opacity: a
+ * panel gets 9px where the card gets 14. `backdrop-filter` costs by radius,
+ * and a shallow blur over a ramp still reads as a pane because the ramp is
+ * what makes it one (see the ground, above).
+ *
+ * ## Why a section is still a fill
+ *
+ * A section groups panels. Glass behind glass gives the inner pane another
+ * pane to sample instead of the ground, and both stop reading as glass. The
+ * hierarchy needs one opaque step, and the quiet band is the right one.
+ */
+[data-vibe="v2"] .vibe-surface-panel {
+  background: var(--glass-fill-panel);
+  border-color: var(--glass-line-panel);
+  backdrop-filter: blur(var(--glass-blur-panel)) saturate(var(--glass-sat));
+  position: relative;
+}
+
+[data-vibe="v2"] .vibe-surface-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding-top: 1px;
+  background: linear-gradient(180deg, var(--glass-sheen-panel), transparent 42%);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/*
+ * Chrome: the rail, the top bar, the frame around the page.
+ *
+ * `DESIGN.md` named chrome as a place glass belongs before it named anything
+ * else, and it was the last one still painted as a flat fill. A rail that is
+ * opaque while everything inside it is a pane does not read as restraint; it
+ * reads as the one element nobody got to.
+ *
+ * The card's blur rather than the panel's, and much less fill: chrome is
+ * pinned, so its blur is computed against a ground that does not move under
+ * it, and it is the full height of the viewport, where a panel's fill would
+ * stack into a slab.
+ */
+[data-vibe="v2"] .vibe-chrome {
+  background: var(--glass-fill-chrome);
+  border-color: var(--glass-line-panel);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/* The one opaque step. Edge-carried: the line does the work the fill used to
+   do, which is the whole of "Precision & Light". */
 [data-vibe="v2"] .vibe-surface-section {
   backdrop-filter: none;
 }
@@ -345,10 +567,6 @@
   transform: translate3d(0, 1px, 0) scale(0.994);
 }
 
-[data-vibe="v2"] .vibe-control-text:active:not(:disabled) {
-  transform: translate3d(0, 1px, 0);
-}
-
 /*
  * Obligation 1 again, for the material rather than for the keyframes.
  *
@@ -358,12 +576,10 @@
  * it reads as though the question was already answered.
  */
 @media (prefers-reduced-motion: reduce) {
-  [data-vibe="v2"] .vibe-control,
-  [data-vibe="v2"] .vibe-control-text {
+  [data-vibe="v2"] .vibe-control {
     transition: none;
   }
-  [data-vibe="v2"] .vibe-control:active:not(:disabled),
-  [data-vibe="v2"] .vibe-control-text:active:not(:disabled) {
+  [data-vibe="v2"] .vibe-control:active:not(:disabled) {
     transform: none;
   }
 }

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
-import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/modules/auth/actions";
+import { cn } from "@/lib/utils/cn";
+import { SignOutIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
 
 /**
  * The signed-in application shell (UI-0).
@@ -60,7 +61,7 @@ export function AppShell({
   bleed?: boolean;
 }) {
   return (
-    <div className="bg-app text-fg-body flex min-h-dvh flex-col">
+    <div className="text-fg-body flex min-h-dvh flex-col">
       <header className="border-line-1 bg-app/70 sticky top-0 z-30 border-b backdrop-blur-xl">
         <div className="flex items-center gap-4 px-5 py-4 sm:px-8">
           {/* The ring used to be switched off here with nothing put in its
@@ -78,7 +79,7 @@ export function AppShell({
           <div className="ml-auto flex items-center gap-4">
             {credits != null && (
               <Link
-                href="/app/billing"
+                href="/app/settings/billing"
                 className="text-fg-body hover:text-fg rounded-nav text-ui tabular-nums transition-interactive"
               >
                 <span className="font-semibold">{credits}</span>{" "}
@@ -91,9 +92,9 @@ export function AppShell({
               </span>
             )}
             <form action={signOut}>
-              <TextAction type="submit" className="text-ui">
+              <Button variant="ghost" type="submit" icon={<SignOutIcon size={14} />}>
                 Sign out
-              </TextAction>
+              </Button>
             </form>
           </div>
         </div>

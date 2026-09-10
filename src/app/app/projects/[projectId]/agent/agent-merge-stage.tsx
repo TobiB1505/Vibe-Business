@@ -5,6 +5,8 @@ import { motion, useReducedMotion } from "motion/react";
 import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
+import { MonoChip, StatusPill } from "@/components/ui/status-pill";
 
 /**
  * Stage five — review and merge (UI-19, artboard 2e).
@@ -113,17 +115,17 @@ export function AgentMergeStage({
       <div className="flex flex-wrap items-start justify-between gap-5">
         <div className="flex min-w-0 flex-col gap-2">
           <MonoLabel className="text-mint">Stage 5 of 5</MonoLabel>
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
+          <h3 className="text-fg text-moment font-bold">
             Review and merge with your GitHub repository
           </h3>
-          <p className="text-fg-muted max-w-[52ch] text-[0.9375rem] leading-relaxed">
+          <p className="text-fg-muted max-w-[52ch] text-lead leading-relaxed">
             Review the changes and merge when you&rsquo;re ready.
           </p>
         </div>
         {canMerge && (
-          <span className="border-mint-line bg-mint-tint text-mint flex-none rounded-full border px-3 py-1 text-xs font-semibold">
+          <StatusPill tone="success" className="flex-none">
             Ready to merge
-          </span>
+          </StatusPill>
         )}
       </div>
 
@@ -132,7 +134,7 @@ export function AgentMergeStage({
           <MonoLabel as="h4" className="text-fg-secondary">
             Change summary
           </MonoLabel>
-          <dl className="flex flex-col text-sm">
+          <dl className="flex flex-col text-body">
             <div className="border-line-2 flex items-baseline justify-between gap-3 border-b py-3">
               <dt className="text-fg-muted">Files changed</dt>
               <dd className="text-fg font-mono">{summary.filesChanged}</dd>
@@ -185,7 +187,7 @@ export function AgentMergeStage({
                 <path d="m9 12.2 2.2 2.2 4-4.4" />
               </svg>
               <span className="flex flex-col gap-1">
-                <span className="text-fg-body text-[0.9375rem] font-semibold">
+                <span className="text-fg-body text-card-title font-semibold">
                   All checks passed
                 </span>
                 {/*
@@ -194,7 +196,7 @@ export function AgentMergeStage({
                   in an isolated VM — never that a change is safe, correct or
                   production ready (rule 66).
                 */}
-                <span className="text-fg-muted text-sm leading-relaxed">
+                <span className="text-fg-muted text-body leading-relaxed">
                   Every check Vibe ran on this change exited cleanly.
                 </span>
               </span>
@@ -208,14 +210,9 @@ export function AgentMergeStage({
               Files changed ({summary.filesChanged})
             </MonoLabel>
             {compareUrl !== null && (
-              <Link
-                href={compareUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-mint hover:text-mint-hover text-[0.8125rem] underline underline-offset-4"
-              >
+              <StandaloneLink href={compareUrl} external>
                 View all files
-              </Link>
+              </StandaloneLink>
             )}
           </div>
           <ul className="flex flex-col divide-y divide-[var(--color-line-1)]">
@@ -234,16 +231,16 @@ export function AgentMergeStage({
                 <span className="border-line-2 bg-well text-fg-meta flex-none rounded border px-1.5 py-0.5 font-mono text-[0.625rem]">
                   {extensionOf(file.path)}
                 </span>
-                <span className="text-fg-body min-w-0 flex-1 truncate font-mono text-[0.8125rem]">
+                <span className="text-fg-body min-w-0 flex-1 truncate font-mono text-ui">
                   {file.path}
                 </span>
                 {file.added !== undefined && (
-                  <span className="text-mint flex-none font-mono text-[0.75rem]">
+                  <span className="text-mint flex-none font-mono text-caption">
                     +{file.added}
                   </span>
                 )}
                 {file.removed !== undefined && (
-                  <span className="text-coral flex-none font-mono text-[0.75rem]">
+                  <span className="text-coral flex-none font-mono text-caption">
                     −{file.removed}
                   </span>
                 )}
@@ -278,24 +275,24 @@ export function AgentMergeStage({
           <p className="text-fg text-[1.0625rem] leading-snug font-semibold tracking-[-0.02em] text-pretty">
             {branchName}
           </p>
-          <p className="text-fg-muted text-sm leading-relaxed">
+          <p className="text-fg-muted text-body leading-relaxed">
             Vibe prepared one exact change for{" "}
-            <span className="border-line-2 bg-well text-fg-body rounded-full border px-2 py-0.5 font-mono text-[0.6875rem]">
+            <MonoChip>
               {baseBranch}
-            </span>
+            </MonoChip>
             .
           </p>
           {commitSha !== null && (
             <div className="border-line-3 flex items-center justify-between gap-3 border-y py-3">
               <MonoLabel>Prepared commit</MonoLabel>
-              <span className="text-fg-body font-mono text-[0.8125rem]">
+              <span className="text-fg-body font-mono text-ui">
                 {commitSha.slice(0, 12)}
               </span>
             </div>
           )}
           {addedShare !== null && (
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-3 font-mono text-[0.6875rem]">
+              <div className="flex items-center justify-between gap-3 font-mono text-meta">
                 <span className="text-mint">+{summary.linesAdded} additions</span>
                 <span className="text-coral">−{summary.linesRemoved} deletions</span>
               </div>
@@ -324,7 +321,7 @@ export function AgentMergeStage({
           {files[0] !== undefined && (
             <div className="rounded-well border-line-2 bg-well overflow-hidden border">
               <div className="border-line-2 flex items-center justify-between gap-3 border-b px-3 py-2.5">
-                <span className="text-fg-prose min-w-0 truncate font-mono text-[0.6875rem]">
+                <span className="text-fg-prose min-w-0 truncate font-mono text-meta">
                   {files[0].path}
                 </span>
                 <span className="flex-none font-mono text-[0.625rem]">
@@ -336,7 +333,7 @@ export function AgentMergeStage({
                   )}
                 </span>
               </div>
-              <p className="text-fg-meta px-3 py-4 text-xs leading-relaxed">
+              <p className="text-fg-meta px-3 py-4 text-caption leading-relaxed">
                 Open the comparison to inspect the exact source diff on GitHub.
               </p>
             </div>
@@ -347,7 +344,7 @@ export function AgentMergeStage({
               target="_blank"
               rel="noreferrer"
               className={cn(
-                buttonClasses({ variant: "secondary", size: "sm" }),
+                buttonClasses({ variant: "secondary" }),
                 "justify-center",
               )}
             >
@@ -361,14 +358,14 @@ export function AgentMergeStage({
 
       <div className="border-line-2 flex flex-wrap items-center justify-between gap-5 border-t pt-6">
         <div className="flex min-w-0 max-w-[52ch] flex-col gap-1.5">
-          <span className="text-fg-body text-[0.9375rem] font-semibold">What happens next?</span>
+          <span className="text-fg-body text-card-title font-semibold">What happens next?</span>
           {/*
             Neither of the two easy lies. Vibe does not deploy — it moves the
             default branch and reads it back. But "nothing happens" is equally
             untrue, because moving that branch can trigger the customer's own
             pipeline, and they are entitled to know before the click.
           */}
-          <span className="text-fg-muted text-sm leading-relaxed">
+          <span className="text-fg-muted text-body leading-relaxed">
             Merging moves {baseBranch} to this commit. Vibe does not deploy anything — but if your
             repository builds or releases from {baseBranch}, merging will start it.
           </span>
@@ -379,7 +376,7 @@ export function AgentMergeStage({
         </Link>
       </div>
 
-      <p className="text-fg-meta text-center text-xs">
+      <p className="text-fg-meta text-center text-caption">
         You&rsquo;re in control. Nothing is merged without your approval.
       </p>
     </div>

@@ -14,6 +14,7 @@ import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
 import { NovaRail } from "./nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
+import { AtmosphereField } from "@/components/layout/atmosphere";
 import { ActionBlock } from "@/components/system/action-block";
 import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
 import { NovaClock } from "@/components/nova/nova-clock";
@@ -161,6 +162,13 @@ export async function NovaHome({
         </NovaRise>
       }
     >
+      {/*
+        The one screen that earns the contained field. Nova's answer is the
+        thing a founder arrives for, and it is the primary glass card in the
+        product — the ground under it is the difference between a pane and a
+        translucent grey rectangle. Every other route keeps the ramp.
+      */}
+      <AtmosphereField />
       {/*
           The thread, and nothing beside it.
 
@@ -475,7 +483,6 @@ function FocusSection({
               requiresConfirmation={control.option.requiresConfirmation}
               confirmationNote={control.option.confirmationNote}
               operation={meta.price}
-              balance={data.balance}
             />
           }
         />

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
 import { Button } from "@/components/ui/button";
+import { Field, Input } from "@/components/ui/field";
 
 /**
  * The confirmation before a consequential action (UI-6 §3).
@@ -43,6 +44,24 @@ import { Button } from "@/components/ui/button";
  * nothing. That was a real bug in the first version of this file, and a
  * browser test caught it. `useReturnFocus` handles the other half from the
  * section, where the opener still exists.
+ *
+ * ## Typing the phrase (UI-24)
+ *
+ * `confirmPhrase` turns the confirm into a two-part act: read what is about to
+ * happen, then type the name of the thing it happens to. It exists for the two
+ * actions in this product that cannot be undone — erasing an account, deleting
+ * a product — and for nothing else.
+ *
+ * The reason is not friction for its own sake. A confirmation answered by one
+ * click can be answered by muscle memory, and both of these are reached from a
+ * page somebody opened to change something small. Typing a name cannot be done
+ * by accident, and it is the one interaction that requires having read which
+ * thing is about to go.
+ *
+ * It is deliberately **not** used for anything reversible. Disconnecting a
+ * repository keeps the project and everything it learned; asking somebody to
+ * type its name would be ceremony dressed as safety, and ceremony everywhere
+ * is how a real warning stops being read.
  *
  * ## The button order, and why the confirm is the primary
  *
@@ -94,6 +113,8 @@ export function ConfirmPanel({
   confirmLabel,
   confirmType = "button",
   cancelLabel = "Cancel",
+  confirmPhrase,
+  confirmPhraseLabel,
   pending = false,
   onConfirm,
   onCancel,
@@ -110,6 +131,16 @@ export function ConfirmPanel({
    */
   confirmType?: "button" | "submit";
   cancelLabel?: string;
+  /**
+   * The exact text that has to be typed before the confirm is available.
+   *
+   * Only for the irreversible. Matched after trimming, because a trailing
+   * space from a paste is not a different intention — but not
+   * case-insensitively, because the thing being named has a name.
+   */
+  confirmPhrase?: string;
+  /** What the field asks for, e.g. "Type the product's name to confirm". */
+  confirmPhraseLabel?: string;
   pending?: boolean;
   /** Optional for a `submit` confirm, whose form action is what runs. */
   onConfirm?: () => void;
@@ -118,7 +149,12 @@ export function ConfirmPanel({
   children: ReactNode;
 }) {
   const titleId = useId();
+  const phraseId = useId();
   const headingRef = useRef<HTMLHeadingElement>(null);
+  const [typed, setTyped] = useState("");
+
+  // No phrase asked for means nothing to match, not an empty phrase to match.
+  const phraseSatisfied = confirmPhrase === undefined || typed.trim() === confirmPhrase;
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -128,7 +164,7 @@ export function ConfirmPanel({
     <div
       role="dialog"
       aria-labelledby={titleId}
-      className={cn("space-y-3 rounded-md border p-4", TONE_SURFACE[tone])}
+      className={cn("space-y-3 rounded-inset border p-4", TONE_SURFACE[tone])}
       onKeyDown={(event) => {
         // Escape cancels for real — it runs the caller's cancel rather than
         // hiding the element, so nothing is left half-started behind it.
@@ -142,23 +178,40 @@ export function ConfirmPanel({
         id={titleId}
         ref={headingRef}
         tabIndex={-1}
-        className="text-sm font-medium text-fg focus-visible:outline-none"
+        className="text-body font-medium text-fg focus-visible:outline-none"
       >
         {title}
       </h5>
 
-      <div className="space-y-2 text-sm text-fg-prose">{children}</div>
+      <div className="space-y-2 text-body text-fg-prose">{children}</div>
+
+      {confirmPhrase !== undefined && (
+        <Field
+          id={phraseId}
+          label={confirmPhraseLabel ?? `Type ${confirmPhrase} to confirm`}
+        >
+          <Input
+            id={phraseId}
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            disabled={pending}
+            autoComplete="off"
+            spellCheck={false}
+            data-testid="confirm-phrase"
+            placeholder={confirmPhrase}
+          />
+        </Field>
+      )}
 
       <div className="flex gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
+        <Button type="button" variant="secondary" onClick={onCancel} disabled={pending}>
           {cancelLabel}
         </Button>
         <Button
           type={confirmType}
           variant="primary"
-          size="sm"
           onClick={onConfirm}
-          disabled={pending}
+          disabled={pending || !phraseSatisfied}
           busy={pending}
         >
           {confirmLabel}

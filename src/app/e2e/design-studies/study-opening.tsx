@@ -104,7 +104,7 @@ export function StudyOpening({ study }: { study: Study }) {
           subject="Vibe Business"
           connected={false}
           availabilityPending={!atLeast(beat, "online")}
-          mark={atLeast(beat, "header") ? <NovaPresence state="idle" size="md" /> : null}
+          mark={atLeast(beat, "header") ? <NovaPresence state="idle" /> : null}
           now={<Clock />}
         />
 

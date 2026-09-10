@@ -136,11 +136,11 @@ export function MoveCard({
           <h2 className="text-fg text-headline leading-tight font-bold" aria-current="step">
             {opportunity.title}
           </h2>
-          <p className="text-fg-prose mt-2 text-base leading-relaxed">{opportunity.problem}</p>
+          <p className="text-fg-prose mt-2 text-lead leading-relaxed">{opportunity.problem}</p>
         </div>
 
         {opportunity.dependencies.length > 0 ? (
-          <p className="text-fg-secondary text-xs leading-relaxed" data-testid="move-dependencies">
+          <p className="text-fg-secondary text-caption leading-relaxed" data-testid="move-dependencies">
             <span className="text-fg-meta">Do this after: </span>
             {opportunity.dependencies.join(" · ")}
           </p>
@@ -177,8 +177,8 @@ export function MoveCard({
           <ResponsibilityIcon size={17} />
         </span>
         <div className="flex min-w-0 flex-col gap-0.5">
-          <p className="text-fg-body text-sm font-semibold">{responsibility.headline}</p>
-          <p className="text-fg-muted text-xs leading-relaxed">{responsibility.detail}</p>
+          <p className="text-fg-body text-body font-semibold">{responsibility.headline}</p>
+          <p className="text-fg-muted text-caption leading-relaxed">{responsibility.detail}</p>
         </div>
       </div>
     </>

@@ -2,7 +2,6 @@ import Link from "next/link";
 import type { Ref } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
-import type { CostBalance } from "@/components/system/cost-disclosure";
 import type { RetailOperationKind } from "@/modules/credits/retail";
 
 /**
@@ -58,7 +57,6 @@ function moveSurface(layout: "row" | "tile", className?: string): string {
 function MoveFace({
   label,
   operation,
-  balance,
   leavesTo,
   status,
   layout,
@@ -66,7 +64,6 @@ function MoveFace({
 }: {
   label: string;
   operation: RetailOperationKind | null;
-  balance?: CostBalance | null;
   leavesTo?: string;
   status?: string;
   layout: "row" | "tile";
@@ -112,7 +109,7 @@ function MoveFace({
         ) : leavesTo ? (
           <span className={`shrink-0 text-caption text-fg-meta ${dim}`}>{leavesTo}</span>
         ) : (
-          <CostDisclosure operation={operation} balance={balance} className={dim} />
+          <CostDisclosure operation={operation} className={dim} />
         )}
       </span>
     </>
@@ -161,7 +158,6 @@ function MoveFace({
 export function NovaMove({
   label,
   operation = null,
-  balance,
   /** Where it goes, when pressing leaves the product. Said before the click. */
   leavesTo,
   /** `tile` stacks the cost under the label, so three can stand side by side. */
@@ -171,7 +167,6 @@ export function NovaMove({
   label: string;
   /** The retail kind this charges under. Null when free or unpriced. */
   operation?: RetailOperationKind | null;
-  balance?: CostBalance | null;
   leavesTo?: string;
   layout?: "row" | "tile";
   className?: string;
@@ -181,7 +176,6 @@ export function NovaMove({
       <MoveFace
         label={label}
         operation={operation}
-        balance={balance}
         leavesTo={leavesTo}
         layout={layout}
       />
@@ -214,7 +208,6 @@ export function NovaMove({
 export function NovaMoveButton({
   label,
   operation = null,
-  balance,
   leavesTo,
   layout = "row",
   className,
@@ -228,7 +221,6 @@ export function NovaMoveButton({
 }: {
   label: string;
   operation?: RetailOperationKind | null;
-  balance?: CostBalance | null;
   leavesTo?: string;
   layout?: "row" | "tile";
   className?: string;
@@ -251,7 +243,6 @@ export function NovaMoveButton({
       <MoveFace
         label={label}
         operation={operation}
-        balance={balance}
         leavesTo={leavesTo}
         status={busy ? busyLabel : undefined}
         layout={layout}
@@ -274,7 +265,6 @@ export function NovaMoveLink({
   href,
   label,
   operation = null,
-  balance,
   leavesTo,
   layout = "row",
   className,
@@ -282,7 +272,6 @@ export function NovaMoveLink({
   href: string;
   label: string;
   operation?: RetailOperationKind | null;
-  balance?: CostBalance | null;
   leavesTo?: string;
   layout?: "row" | "tile";
   className?: string;
@@ -292,7 +281,6 @@ export function NovaMoveLink({
       <MoveFace
         label={label}
         operation={operation}
-        balance={balance}
         leavesTo={leavesTo}
         layout={layout}
       />
@@ -330,14 +318,12 @@ export function NovaMoveLink({
  */
 export function NovaMoves({
   moves,
-  balance,
 }: {
   moves: readonly {
     label: string;
     operation?: RetailOperationKind | null;
     leavesTo?: string;
   }[];
-  balance?: CostBalance | null;
 }) {
   const shown = moves.slice(0, 3);
   const [only] = shown;
@@ -350,7 +336,6 @@ export function NovaMoves({
           label={only.label}
           operation={only.operation ?? null}
           leavesTo={only.leavesTo}
-          balance={balance}
         />
       </div>
     );
@@ -368,7 +353,6 @@ export function NovaMoves({
           label={move.label}
           operation={move.operation ?? null}
           leavesTo={move.leavesTo}
-          balance={balance}
           layout="tile"
         />
       ))}

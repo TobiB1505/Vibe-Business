@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
+import { ChevronDownIcon } from "./icons.generated";
+import { buttonClasses } from "./button";
 import { MonoLabel } from "./typography";
 
 /**
@@ -35,22 +37,37 @@ export function Disclosure({
 }) {
   return (
     <details open={defaultOpen} className={cn("group", className)}>
+      {/*
+        The trigger wears the ghost button's classes on a span rather than being a
+        nested button: a `<summary>` is already the control the browser hands
+        to the keyboard and to a screen reader, and a button inside one is two
+        controls sharing a hit area.
+
+        The caret used to be `▸`, a literal text character. It took the font's
+        weight instead of the icon frame's 1.5px, sat on the text baseline
+        rather than the optical centre, and rotated 90°, which is the most a
+        triangle pointing right can say. A chevron turning through 180° says
+        open and closed instead of pointing.
+      */}
       <summary
         className={cn(
-          "text-fg-muted hover:text-fg-body flex cursor-pointer list-none items-center gap-2",
-          "rounded-sm text-xs transition-interactive",
+          // `w-fit` so the hit area is the pill. A `<summary>` is block-level
+          // by default, which would leave the whole line clickable while only
+          // the container looks like a control — the mismatch the resting
+          // container exists to remove.
+          "w-fit cursor-pointer list-none",
           // Safari and Chrome each add their own marker; both are removed so
-          // the caret below is the only one.
+          // the chevron is the only one.
           "[&::-webkit-details-marker]:hidden",
         )}
       >
-        <span
-          aria-hidden
-          className="text-fg-meta inline-block transition-transform duration-150 group-open:rotate-90"
-        >
-          ▸
+        <span className={buttonClasses({ variant: "ghost" })}>
+          <ChevronDownIcon
+            size={14}
+            className="transition-transform duration-150 group-open:rotate-180"
+          />
+          {label}
         </span>
-        {label}
       </summary>
       <div className="pt-3">{children}</div>
     </details>
@@ -123,18 +140,18 @@ export function FoundList({
       <MonoLabel className="tracking-[0.14em]">{label}</MonoLabel>
       <ul className="flex flex-col gap-1.5">
         {found.map((item) => (
-          <li key={item} className="text-fg-prose flex items-baseline gap-2.5 text-sm">
+          <li key={item} className="text-fg-prose flex items-baseline gap-2.5 text-body">
             {/* The glyph is decorative; the two groups are separated by a
                 labelled heading, so nothing depends on colour or icon alone. */}
-            <span aria-hidden className="text-mint text-xs">
+            <span aria-hidden className="text-mint text-caption">
               ✓
             </span>
             {item}
           </li>
         ))}
         {(missing ?? []).map((item) => (
-          <li key={item} className="text-fg-muted flex items-baseline gap-2.5 text-sm">
-            <span aria-hidden className="text-fg-meta text-xs">
+          <li key={item} className="text-fg-muted flex items-baseline gap-2.5 text-body">
+            <span aria-hidden className="text-fg-meta text-caption">
               —
             </span>
             Not found: {item}

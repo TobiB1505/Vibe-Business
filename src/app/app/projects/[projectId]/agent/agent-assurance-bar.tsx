@@ -80,7 +80,7 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
             className={cn(
               "flex flex-none items-center justify-center",
               item.accent
-                ? "border-mint-line bg-mint-tint text-mint size-9 rounded-[10px] border"
+                ? "border-mint-line bg-mint-tint text-mint size-9 rounded-nav border"
                 : "text-fg-secondary mt-0.5",
             )}
           >
@@ -99,8 +99,8 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
             </svg>
           </span>
           <span className="flex min-w-0 flex-col gap-1">
-            <span className="text-fg-body text-[0.8125rem] font-semibold">{item.title}</span>
-            <span className="text-fg-muted max-w-[30ch] text-xs leading-relaxed">
+            <span className="text-fg-body text-ui font-semibold">{item.title}</span>
+            <span className="text-fg-muted max-w-[30ch] text-caption leading-relaxed">
               {item.detail}
             </span>
           </span>
@@ -118,7 +118,7 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
             aria-hidden="true"
             className="rounded-full border-line-3 bg-field flex items-center gap-3 border px-4.5 py-3"
           >
-            <span className="text-fg-meta flex-1 text-sm">Ask or guide Vibe&hellip;</span>
+            <span className="text-fg-meta flex-1 text-body">Ask or guide Vibe&hellip;</span>
             <span
               className="bg-mint h-[15px] w-0.5"
               style={animate ? { animation: "vibe-caret 1s steps(1) infinite" } : undefined}
@@ -137,7 +137,7 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
               <path d="M4 12h16m-6-6 6 6-6 6" />
             </svg>
           </div>
-          <span className="text-fg-meta text-center text-xs">
+          <span className="text-fg-meta text-center text-caption">
             Tip: Ask for adjustments or give direction
           </span>
         </div>

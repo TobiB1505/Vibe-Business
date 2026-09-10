@@ -46,8 +46,45 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
  * A contract pointed at an unrendered component guards nothing, so this is the
  * component a visitor meets. Its predecessor survived the redesign as an
  * unimported file for a while and has since been deleted.
+ *
+ * It moved again at UI-34, and for the same reason: the radial
+ * `LandingBusinessBrain` came off the page when the nine areas were unrolled
+ * into a staircase, so it was deleted rather than left as a file this contract
+ * still pointed at.
  */
-const PROOF = read("src/components/marketing/landing-business-brain.tsx");
+const PROOF = read("src/components/marketing/landing-business-map.tsx");
+/*
+ * The plan cards, which are a component rather than a block of the page
+ * (UI-34).
+ *
+ * The pricing section dissolved into `LandingPrice` when the euros became a
+ * numbered step of the walk, and the destination assertion below went with it.
+ * The same lesson as the hero and the proof section: a contract that reads only
+ * `page.tsx` goes on passing against an empty search.
+ */
+const PLANS = read("src/components/marketing/landing-price.tsx");
+/*
+ * The close, which is a component rather than the foot of the page (UI-34).
+ *
+ * The fourth contract to move for the same reason as the hero, the proof
+ * section and the plan cards: the closing section became step ten of the walk,
+ * and an assertion left pointing at `page.tsx` would go on passing against a
+ * file that no longer contains the sentence.
+ */
+const CLOSE = read("src/components/marketing/landing-close.tsx");
+/*
+ * The hero, which is now a component rather than a block of the page (UI-34).
+ *
+ * The headline moved into `LandingHeroDeck` when the hero became a card, and
+ * the positioning assertion below went with it — a contract that reads only
+ * `page.tsx` would have gone on passing an empty search after the sentence it
+ * pins had left the file. It is read alongside the page rather than instead of
+ * it, and it joins `PUBLIC_SURFACES` for the same reason: it is the first thing
+ * a stranger reads.
+ */
+const HERO = read("src/components/marketing/landing-hero-deck.tsx");
+/* The block under it, which is the first argument a stranger reads (UI-34). */
+const PROBLEM = read("src/components/marketing/landing-problem.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");
 
 const PRIVACY = read("src/app/privacy/page.tsx");
@@ -56,6 +93,8 @@ const TERMS = read("src/app/terms/page.tsx");
 /** Everything a stranger reads before they have an account, comments removed. */
 const PUBLIC_SURFACES: [string, string][] = [
   ["landing", copyOf(LANDING)],
+  ["landing hero", copyOf(HERO)],
+  ["landing problem", copyOf(PROBLEM)],
   ["marketing shell", copyOf(SHELL)],
   ["product proof", copyOf(PROOF)],
   ["signup", copyOf(SIGNUP)],
@@ -72,6 +111,8 @@ const PUBLIC_SURFACES: [string, string][] = [
  */
 const SELLING_SURFACES: [string, string][] = [
   ["landing", copyOf(LANDING)],
+  ["landing hero", copyOf(HERO)],
+  ["landing problem", copyOf(PROBLEM)],
   ["marketing shell", copyOf(SHELL)],
   ["product proof", copyOf(PROOF)],
 ];
@@ -88,13 +129,23 @@ describe("the landing page sends people the right way", () => {
    * assertion is now the stronger form of the same thing.
    */
   it("points the first control on the page at signing up, not signing in", () => {
-    expect(LANDING).toContain('href="/signup"');
+    /*
+      Asserted against the hero rather than the page file. `page.tsx` composes
+      ten components and contains no `href` of its own any more, so this test
+      was checking an empty string — the fourth time this contract has had to
+      follow a claim into the component that now carries it.
 
-    const firstCta = LANDING.indexOf('href="/signup"');
+      What is pinned is unchanged: the first control a visitor meets goes to
+      signing up, and the hero offers no sign-in beside it. The way back in
+      lives in the shell's header, which every public page wears and which the
+      test below covers.
+    */
+    expect(HERO).toContain('href="/signup"');
+    expect(HERO).not.toContain('href="/login"');
+
+    // And the page itself introduces no control ahead of the hero's.
     const firstSignIn = LANDING.indexOf('href="/login"');
-    expect(firstCta).toBeGreaterThan(-1);
-    // Either the page offers no sign-in of its own, or sign-up comes first.
-    if (firstSignIn > -1) expect(firstCta).toBeLessThan(firstSignIn);
+    expect(firstSignIn).toBe(-1);
   });
 
   /**
@@ -107,9 +158,9 @@ describe("the landing page sends people the right way", () => {
    * claim about the page a stranger sees.
    */
   it("carries a chosen paid plan through signup to the billing surface", () => {
-    expect(LANDING).toContain('/signup?next=${encodeURIComponent("/app/billing")}');
+    expect(PLANS).toContain('/signup?next=${encodeURIComponent("/app/settings/billing")}');
     // The free plan has nothing to pay for, so it keeps the plain destination.
-    expect(LANDING).toContain('plan.key === "free"');
+    expect(PLANS).toContain('plan.key === "free"');
   });
 
   it("still offers signing in, on every public page", () => {
@@ -203,9 +254,9 @@ describe("the landing page describes the product that exists", () => {
    * what the visitor already has and what Vibe adds to it.
    */
   it("keeps the product positioning it was written to carry", () => {
-    expect(LANDING).toContain("You built the product. Now build");
-    expect(LANDING).toContain("the business.");
-    expect(LANDING).toContain("From product to business, together.");
+    expect(HERO).toContain("You built the product. Now build");
+    expect(HERO).toContain("the business.");
+    expect(CLOSE).toContain("From product to business, together.");
   });
 });
 
@@ -222,19 +273,38 @@ describe("the product proof is real", () => {
 
   it("invents no scores, testimonials or customer numbers", () => {
     const copy = copyOf(PROOF);
-    for (const banned of ["customers say", "testimonial", "MRR", "ARR", "★", "Healthy", "At risk"]) {
+    for (const banned of [
+      "customers say",
+      "testimonial",
+      "MRR",
+      "ARR",
+      "★",
+      "Healthy",
+      "At risk",
+    ]) {
       expect(copy, `proof must not contain "${banned}"`).not.toContain(banned);
     }
-    // No score-shaped values either. The tiles carry an em dash on purpose:
-    // there is no product connected, so there is nothing to have judged.
-    // Inline styles are dropped first — a gradient stop at `50%` is a colour,
-    // not a claim about anybody's business.
-    const text = copy.replace(/style=\{\{[\s\S]*?\}\}/g, "");
+    /*
+      No score-shaped values either. The orbs carry "Not assessed" on purpose:
+      there is no product connected, so there is nothing to have judged.
+
+      Object-valued JSX attributes are dropped first. The rule was written for
+      `style={{…}}` — a gradient stop at `50%` is a colour, not a claim about
+      anybody's business — and the staircase showed that the principle is wider
+      than the one attribute: `viewport={{ margin: "0px 0px -10% 0px" }}` is a
+      scroll threshold, and it failed a guard about invented statistics.
+    */
+    const text = copy.replace(/[a-zA-Z]+=\{\{[\s\S]*?\}\}/g, "");
     expect(text).not.toMatch(/\b(?:[1-9]|10)\s*\/\s*10\b/);
     expect(text).not.toMatch(/\b\d{1,3}\s*%/);
-    // The same claim, in the words the preview now uses: nothing is filled in,
-    // and the page says so rather than letting an empty map imply data.
-    expect(copy).toContain("Scores and relationships appear only after Vibe has evidence");
+    /*
+      And the claim itself, which is the reason nine dashes are on a landing
+      page at all: an area Vibe cannot see stays unscored rather than scoring
+      zero. The sentence moved with the block — the radial preview said "Scores
+      and relationships appear only after Vibe has evidence" — so what is pinned
+      is the claim rather than the wording that carried it.
+    */
+    expect(copy).toContain("Never scored zero, never averaged in");
   });
 });
 
@@ -249,7 +319,13 @@ describe("the legal surfaces are honest about being drafts", () => {
 
   it("invents no company registration, address or officer", () => {
     for (const source of [PRIVACY, TERMS]) {
-      for (const banned of ["VAT", "Registered office", "Data Protection Officer", "GmbH", "Ltd."]) {
+      for (const banned of [
+        "VAT",
+        "Registered office",
+        "Data Protection Officer",
+        "GmbH",
+        "Ltd.",
+      ]) {
         expect(source, banned).not.toContain(banned);
       }
     }

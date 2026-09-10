@@ -55,7 +55,7 @@ export function OnboardingAuditReveal({ audit }: { audit: BusinessReadinessAudit
           {synthesis?.overall ?? "Your Business Audit is ready."}
         </p>
         {audit.overall.score !== null && (
-          <p className="text-fg-meta font-mono text-xs">{audit.overall.score} / 100 readiness</p>
+          <p className="text-fg-meta font-mono text-caption">{audit.overall.score} / 100 readiness</p>
         )}
       </div>
 
@@ -65,7 +65,7 @@ export function OnboardingAuditReveal({ audit }: { audit: BusinessReadinessAudit
         the border.
       */}
       {view && (
-        <section className="bg-surface-1 overflow-hidden rounded-2xl p-3 sm:p-5">
+        <section className="bg-surface-1 overflow-hidden rounded-card p-3 sm:p-5">
           <BusinessMap
             view={view}
             selected={selected}
@@ -77,10 +77,10 @@ export function OnboardingAuditReveal({ audit }: { audit: BusinessReadinessAudit
       )}
 
       {blocker && (
-        <section className="border-mint/30 bg-mint/[0.035] flex max-w-[50rem] flex-col gap-2 rounded-xl border p-5">
+        <section className="border-mint/30 bg-mint/[0.035] flex max-w-[50rem] flex-col gap-2 rounded-field border p-5">
           <MonoLabel className="text-mint">What matters first</MonoLabel>
-          <h2 className="text-fg text-xl font-semibold">{blocker.headline}</h2>
-          <p className="text-fg-prose text-sm leading-relaxed">{blocker.explanation}</p>
+          <h2 className="text-fg text-moment font-semibold">{blocker.headline}</h2>
+          <p className="text-fg-prose text-body leading-relaxed">{blocker.explanation}</p>
         </section>
       )}
     </div>

@@ -86,11 +86,11 @@ function ExecutionHeader({ model }: { model: AgentExecutionLiveModel }) {
     <Surface level="section" padding="md" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-1">
-          <h2 className="text-fg-body text-lg font-medium">
+          <h2 className="text-fg-body text-title font-medium">
             {live ? "Building your change" : headline(operation.status)}
           </h2>
           {model.currentAction ? (
-            <p className="text-fg-muted truncate text-sm">{model.currentAction}</p>
+            <p className="text-fg-muted truncate text-body">{model.currentAction}</p>
           ) : null}
         </div>
         <StatusPill tone={STATUS_TONES[operation.status] ?? "neutral"} dot={live}>
@@ -148,7 +148,7 @@ function ExecutionTimeline({ steps }: { steps: readonly TimelineStep[] }) {
           <li key={step.phase} className="flex items-start gap-3">
             <span
               aria-hidden
-              className={`mt-0.5 w-4 shrink-0 text-center font-mono text-sm ${MARK_CLASSES[step.state]}`}
+              className={`mt-0.5 w-4 shrink-0 text-center font-mono text-body ${MARK_CLASSES[step.state]}`}
             >
               {MARKS[step.state]}
             </span>
@@ -156,14 +156,14 @@ function ExecutionTimeline({ steps }: { steps: readonly TimelineStep[] }) {
               <span
                 className={
                   step.state === "pending" || step.state === "skipped"
-                    ? "text-fg-faint text-sm"
-                    : "text-fg-body text-sm"
+                    ? "text-fg-faint text-body"
+                    : "text-fg-body text-body"
                 }
               >
                 {step.label}
               </span>
               {step.detail ? (
-                <span className="text-fg-muted truncate text-xs">{step.detail}</span>
+                <span className="text-fg-muted truncate text-caption">{step.detail}</span>
               ) : null}
             </span>
           </li>
@@ -207,7 +207,7 @@ function ChangedFilesPanel({
     <Surface level="section" padding="md" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <MonoLabel>Files</MonoLabel>
-        <span className="text-fg-muted text-xs">
+        <span className="text-fg-muted text-caption">
           {verified
             ? `${candidateFiles} in the change · ${files.length} touched`
             : `${files.length} touched so far`}
@@ -215,7 +215,7 @@ function ChangedFilesPanel({
       </div>
 
       {!verified ? (
-        <p className="text-fg-faint text-xs">
+        <p className="text-fg-faint text-caption">
           Files the agent has opened or written. Which of them become the change is
           decided afterwards, by comparing the workspace against your repository.
         </p>
@@ -223,14 +223,14 @@ function ChangedFilesPanel({
 
       <ul className="flex flex-col gap-1">
         {files.slice(0, 40).map((file) => (
-          <li key={file.path} className="flex items-baseline gap-3 font-mono text-xs">
+          <li key={file.path} className="flex items-baseline gap-3 font-mono text-caption">
             <span className="text-fg-faint w-16 shrink-0 uppercase">{file.detail ?? "seen"}</span>
             <span className="text-fg-body min-w-0 break-all">{file.path}</span>
           </li>
         ))}
       </ul>
       {files.length > 40 ? (
-        <span className="text-fg-faint text-xs">and {files.length - 40} more</span>
+        <span className="text-fg-faint text-caption">and {files.length - 40} more</span>
       ) : null}
     </Surface>
   );
@@ -267,7 +267,7 @@ export function ValidationPanel({ state }: { state: ValidationState }) {
           {copy.label}
         </StatusPill>
       </div>
-      <p className="text-fg-faint text-xs">
+      <p className="text-fg-faint text-caption">
         {state === "not_started"
           ? "Runs in its own isolated sandbox once a change has been prepared. Typecheck, tests and build are re-run there — the agent's own checks do not decide this."
           : "Typecheck, tests and build, re-run independently against the prepared branch."}
@@ -616,7 +616,7 @@ export function ActivityFeed({ events }: { events: readonly StoredExecutionEvent
         Scrolls inside its own box rather than stretching the page. A run can
         produce hundreds of lines and the panel below it must stay reachable.
       */}
-      <div className="border-line-2 max-h-96 overflow-y-auto rounded-md border">
+      <div className="border-line-2 max-h-96 overflow-y-auto rounded-inset border">
         <ul className="divide-line-2 divide-y">
           {events.map((event) => (
             <li

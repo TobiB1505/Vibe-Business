@@ -3,8 +3,9 @@
 import { useActionState } from "react";
 import { updatePassword, type PasswordUpdateResult } from "@/modules/auth/actions";
 import { Button } from "@/components/ui/button";
-import { Field, Input } from "@/components/ui/field";
-import { VibeCard } from "@/components/ui/surface";
+import { MINIMUM_PASSWORD_LENGTH, PASSWORD_HINT } from "@/modules/auth/password";
+import { Field, FormError } from "@/components/ui/field";
+import { PasswordInput } from "@/components/ui/password-input";
 
 /**
  * Sets the new password.
@@ -22,49 +23,49 @@ export function ResetPasswordForm() {
 
   const error = state && !state.ok ? state.error : null;
 
+  const describedBy = error ? "new-password-error" : undefined;
+
   return (
-    <VibeCard padding="md">
-      <form action={formAction} className="flex flex-col gap-4">
-        <Field id="password" label="New password" hint="At least 8 characters">
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={6}
-            autoComplete="new-password"
-            placeholder="••••••••"
-            disabled={pending}
-            aria-invalid={error ? true : undefined}
-            aria-describedby="password-hint"
-          />
-        </Field>
-
-        <Field id="password_confirmation" label="Confirm new password" error={error}>
-          <Input
-            id="password_confirmation"
-            name="password_confirmation"
-            type="password"
-            required
-            minLength={6}
-            autoComplete="new-password"
-            placeholder="••••••••"
-            disabled={pending}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? "password_confirmation-error" : undefined}
-          />
-        </Field>
-
-        <Button
-          type="submit"
+    <form action={formAction} className="flex flex-col gap-4">
+      <Field id="password" label="New password" hint={PASSWORD_HINT}>
+        <PasswordInput
+          id="password"
+          name="password"
+          required
+          minLength={MINIMUM_PASSWORD_LENGTH}
+          autoComplete="new-password"
+          placeholder="••••••••"
           disabled={pending}
-          className="mt-1"
-          data-testid="set-password"
-          busy={pending}
-        >
-          {pending ? "Saving…" : "Set new password"}
-        </Button>
-      </form>
-    </VibeCard>
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy ? `password-hint ${describedBy}` : "password-hint"}
+        />
+      </Field>
+
+      <Field id="password_confirmation" label="Confirm new password">
+        <PasswordInput
+          id="password_confirmation"
+          name="password_confirmation"
+          required
+          minLength={MINIMUM_PASSWORD_LENGTH}
+          autoComplete="new-password"
+          placeholder="••••••••"
+          disabled={pending}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+        />
+      </Field>
+
+      {error && <FormError id="new-password-error">{error}</FormError>}
+
+      <Button
+        type="submit"
+        disabled={pending}
+        className="mt-1"
+        data-testid="set-password"
+        busy={pending}
+      >
+        {pending ? "Saving…" : "Set new password"}
+      </Button>
+    </form>
   );
 }

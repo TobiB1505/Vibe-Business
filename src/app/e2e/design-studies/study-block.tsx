@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { creditsToUnits } from "@/modules/credits/units";
 import {
   buildBusinessBrainView,
   type BusinessBrainView,
@@ -55,8 +54,6 @@ import type { Study } from "./studies";
  * This is also the only place on the surface where anything dissolves, and it
  * holds no controls at all — not by convention, by construction.
  */
-
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 /**
  * The audit, through the product's own fixture and view builder.
@@ -270,7 +267,6 @@ function CtaVariant({ id }: { id: string }) {
             label={move.label}
             operation={move.operation}
             leavesTo={move.leavesTo}
-            balance={STUDY_BALANCE}
           />
         ))}
       </div>
@@ -284,7 +280,6 @@ function CtaVariant({ id }: { id: string }) {
           label={lead.label}
           operation={lead.operation}
           leavesTo={lead.leavesTo}
-          balance={STUDY_BALANCE}
         />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
           {rest.map((move) => (
@@ -297,7 +292,7 @@ function CtaVariant({ id }: { id: string }) {
                 would be the cheapest way to make a spend look like a link.
               */}
               <span className="text-caption text-fg-meta">
-                <CostDisclosure operation={move.operation} balance={STUDY_BALANCE} />
+                <CostDisclosure operation={move.operation} />
               </span>
             </span>
           ))}
@@ -307,7 +302,7 @@ function CtaVariant({ id }: { id: string }) {
   }
 
   if (id.startsWith("C")) {
-    return <Moves moves={MOVES} balance={STUDY_BALANCE} />;
+    return <Moves moves={MOVES} />;
   }
 
   return (
@@ -316,7 +311,6 @@ function CtaVariant({ id }: { id: string }) {
         label={lead.label}
         operation={lead.operation}
         leavesTo={lead.leavesTo}
-        balance={STUDY_BALANCE}
       />
       <details className="rounded-nav border border-line-2 bg-surface-1">
         <summary className="cursor-pointer list-none px-4 py-2.5 text-caption text-fg-secondary">
@@ -329,7 +323,6 @@ function CtaVariant({ id }: { id: string }) {
               label={move.label}
               operation={move.operation}
               leavesTo={move.leavesTo}
-              balance={STUDY_BALANCE}
             />
           ))}
         </div>
@@ -728,7 +721,6 @@ export function StudyBlock({ study }: { study: Study }) {
               { label: "Plan this", operation: "action_plan" },
               { label: "Look at this move", leavesTo: "Action plan" },
             ]}
-            balance={STUDY_BALANCE}
           />
         </div>
         <Context>
@@ -778,7 +770,6 @@ export function StudyBlock({ study }: { study: Study }) {
           </RenderBlock>
           <Moves
             moves={[{ label: "Start again", operation: "action_plan" }]}
-            balance={STUDY_BALANCE}
           />
         </div>
         <Context>
@@ -829,7 +820,7 @@ export function StudyBlock({ study }: { study: Study }) {
             <AuditBlock view={auditView("audit-synthesis")} />
           </RenderBlock>
           <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">
-            <Move label="Plan this move" operation="action_plan" balance={STUDY_BALANCE} />
+            <Move label="Plan this move" operation="action_plan" />
             <Move label="Open the business map" leavesTo="Business health" />
           </div>
         </div>

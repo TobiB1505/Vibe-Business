@@ -1,5 +1,4 @@
 import { Surface } from "@/components/ui/surface";
-import { cn } from "@/lib/utils/cn";
 import type { NovaEntry } from "@/modules/nova/feed";
 
 /**
@@ -25,9 +24,7 @@ export function NovaMessage({ entry }: { entry: Extract<NovaEntry, { kind: "nova
 
   return (
     <Surface level="panel" padding="lg" data-testid="nova-message">
-      <p className={cn("text-fg text-[1.25rem] leading-snug font-medium tracking-[-0.02em]")}>
-        {entry.text}
-      </p>
+      <p className="text-fg text-moment font-medium">{entry.text}</p>
     </Surface>
   );
 }

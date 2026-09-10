@@ -106,7 +106,7 @@ export function SectionHeader({
         >
           {title}
         </Heading>
-        {description && <p className="text-fg-muted max-w-[70ch] text-sm">{description}</p>}
+        {description && <p className="text-fg-muted max-w-[70ch] text-body">{description}</p>}
       </div>
       {actions && (
         <div className="flex min-w-0 w-full flex-wrap items-center gap-3 sm:w-auto sm:shrink-0">

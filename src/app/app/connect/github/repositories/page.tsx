@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
@@ -15,6 +14,7 @@ import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { RepositoryPicker } from "./repository-picker";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 import type { Metadata } from "next";
+import { StandaloneLink, proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Choose a repository",
@@ -77,9 +77,9 @@ export default async function ConnectGithubRepositoriesPage({
     <OnboardingShell email={session.email} state="connect_source" canLeave={canLeave}>
       <section className="flex max-w-[52rem] flex-col gap-5 py-4 sm:py-10">
         <div className="space-y-2">
-          <p className="text-mint font-mono text-xs tracking-[0.12em] uppercase">Connect · Choose product</p>
-          <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">Which product should Vibe get to know?</h1>
-          <p className="text-fg-muted text-sm">
+          <p className="text-mint font-mono text-caption tracking-[0.12em] uppercase">Connect · Choose product</p>
+          <h1 className="text-fg text-display leading-tight font-semibold tracking-[-0.04em] sm:text-hero">Which product should Vibe get to know?</h1>
+          <p className="text-fg-muted text-body">
             From <span className="text-fg-body">{installation.accountLogin}</span>. You can connect one
             repository per project.
           </p>
@@ -91,28 +91,23 @@ export default async function ConnectGithubRepositoriesPage({
             Vibe look, and that reconnecting is what fixes it. */}
         {accessUnavailable && (
           <div className="space-y-2">
-            <p className="text-amber text-sm">
+            <p className="text-amber text-body">
               Vibe can&apos;t see this account&apos;s repositories right now. GitHub may have paused
               or removed Vibe&apos;s access — reconnecting will ask GitHub for it again.
             </p>
-            <Link
-              href="/app/connect/github?new=1"
-              className="text-fg-body hover:text-fg inline-block text-sm underline underline-offset-2"
-            >
-              Reconnect GitHub
-            </Link>
+            <StandaloneLink href="/app/connect/github?new=1">Reconnect GitHub</StandaloneLink>
           </div>
         )}
 
         {!accessUnavailable && repositories.length === 0 && (
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             No repositories are available through this installation. Grant Vibe Business access to a
             repository on GitHub, then refresh this page.
           </p>
         )}
 
         {!accessUnavailable && repositories.length > 0 && !canSelect && (
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             Every repository from this account is already connected to a project.
           </p>
         )}
@@ -129,14 +124,9 @@ export default async function ConnectGithubRepositoriesPage({
         {/* Distinct from connecting a project: this changes which
             repositories GitHub grants the App, rather than picking from
             what Vibe Business can already see. */}
-        <p className="text-fg-meta text-sm">
+        <p className="text-fg-meta text-body">
           Don&apos;t see your repository?{" "}
-          <a
-            href={manageAccessUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-fg-body hover:text-fg underline underline-offset-2"
-          >
+          <a href={manageAccessUrl} target="_blank" rel="noreferrer" className={proseLinkClasses()}>
             Manage GitHub repository access
           </a>
         </p>

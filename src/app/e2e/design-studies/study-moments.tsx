@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { novaPresenceState, statusForFocusTier } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { deriveNovaFocus, FOCUS_CANDIDATE_KINDS } from "@/modules/nova/focus";
 import { buildNovaHomeView, novaControlLabel, type NovaHomeEntry } from "@/modules/nova/home-view";
@@ -101,8 +100,6 @@ const OPERATIONS: { label: string; note: string; operation: OperationView | null
   },
 ];
 
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
-
 function Label({ children }: { children: ReactNode }) {
   return (
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
@@ -174,7 +171,7 @@ function Moment({ entry }: { entry: NovaHomeEntry }) {
       controlLabel={control?.label}
       control={
         control ? (
-          <Moves moves={[{ label: control.label, operation: price }]} balance={STUDY_BALANCE} />
+          <Moves moves={[{ label: control.label, operation: price }]} />
         ) : entry.control.kind === "answer" ? (
           /*
              Not the same as having nothing to press, and the gallery has to say

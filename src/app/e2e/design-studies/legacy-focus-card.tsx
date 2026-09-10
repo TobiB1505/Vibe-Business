@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { ActionBlock } from "@/components/system/action-block";
-import type { CostBalance } from "@/components/system/cost-disclosure";
 import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -56,7 +55,6 @@ export function FocusCard({
   seed,
   control,
   operation,
-  balance,
   consequence,
   controlLabel,
   children,
@@ -71,7 +69,6 @@ export function FocusCard({
   control?: ReactNode;
   /** The retail kind the control charges under. Null when it is free. */
   operation?: Parameters<typeof ActionBlock>[0]["operation"];
-  balance?: CostBalance | null;
   consequence?: ReactNode;
   /**
    * The control's own words, so the footnote can decline to repeat them.
@@ -146,7 +143,7 @@ export function FocusCard({
             <div className="flex items-center gap-3">
               {/* Below the large mark's breakpoint the small one keeps the
                   identity present rather than dropping Nova on a phone. */}
-              <NovaPresence state={presence} seed={seed} size="sm" className="sm:hidden" />
+              <NovaPresence state={presence} seed={seed} className="sm:hidden" />
               <StatusPill tone={status.tone}>{status.word}</StatusPill>
             </div>
 
@@ -167,7 +164,6 @@ export function FocusCard({
           <ActionBlock
             control={control}
             operation={operation ?? null}
-            balance={balance}
             consequence={consequence}
             footnote={footnote}
           />

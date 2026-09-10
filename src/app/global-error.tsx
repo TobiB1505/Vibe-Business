@@ -69,6 +69,10 @@ export default function GlobalError({ error }: { error: Error & { digest?: strin
             repository, and no work in progress. Reloading usually fixes it.
           </p>
           <p>
+            {/*
+              A document load, deliberately. The router is what failed; `Link`
+              would ask the thing that just broke to navigate.
+            */}
             <a
               href="/app"
               style={{

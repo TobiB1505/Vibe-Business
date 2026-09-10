@@ -6,7 +6,8 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getCreditPack,
-  getPlan,
+  planPricing,
+  type BillingInterval,
   type CreditPackKey,
   type PaidPlanKey,
 } from "./catalog";
@@ -44,6 +45,8 @@ export function catalogPriceIds(): CatalogPriceIds {
   return {
     builder: env.STRIPE_PRICE_BUILDER_MONTHLY,
     pro: env.STRIPE_PRICE_PRO_MONTHLY,
+    builder_annual: env.STRIPE_PRICE_BUILDER_ANNUAL,
+    pro_annual: env.STRIPE_PRICE_PRO_ANNUAL,
     pack_500: env.STRIPE_PRICE_PACK_500,
     pack_1500: env.STRIPE_PRICE_PACK_1500,
     pack_5000: env.STRIPE_PRICE_PACK_5000,
@@ -109,7 +112,7 @@ async function resolveStripeCustomerId(
  */
 export function billingReturnBase(): string {
   const env = getStripeEnv();
-  return env.STRIPE_BILLING_RETURN_URL ?? `${getAppUrl()}/app/billing`;
+  return env.STRIPE_BILLING_RETURN_URL ?? `${getAppUrl()}/app/settings/billing`;
 }
 
 function returnUrls(): { success: string; cancel: string } {
@@ -185,11 +188,28 @@ export async function startCreditPackCheckout(
  */
 export async function startPlanCheckout(
   supabase: SupabaseClient,
-  params: { userId: string; email: string | null; planKey: PaidPlanKey },
+  params: {
+    userId: string;
+    email: string | null;
+    planKey: PaidPlanKey;
+    /** Monthly unless a caller asked for a year. */
+    interval?: BillingInterval;
+  },
 ): Promise<CheckoutResult> {
   const env = getStripeEnv();
-  const plan = getPlan(params.planKey);
-  const priceId = catalogPriceIds()[params.planKey];
+  const interval = params.interval ?? "monthly";
+  const pricing = planPricing(params.planKey, interval);
+  if (!pricing) return { ok: false, refusal: "sku_not_configured" };
+
+  /*
+   * The interval is a SKU the browser may name and nothing more. Which Stripe
+   * Price it resolves to, what it costs and how many Credits a paid period
+   * grants are all decided here — the same rule the plan key already follows.
+   */
+  const priceId =
+    interval === "annual"
+      ? catalogPriceIds()[`${params.planKey}_annual`]
+      : catalogPriceIds()[params.planKey];
 
   if (!priceId) return { ok: false, refusal: "sku_not_configured" };
 
@@ -221,7 +241,12 @@ export async function startPlanCheckout(
   await recordAuditEvent(supabase, {
     userId: params.userId,
     eventType: "billing.checkout_started",
-    metadata: { sku: params.planKey, credits: plan.monthlyCreditUnits, mode: "subscription" },
+    metadata: {
+      sku: params.planKey,
+      interval,
+      credits: pricing.creditUnits,
+      mode: "subscription",
+    },
   });
 
   return session.url

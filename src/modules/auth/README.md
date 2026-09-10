@@ -19,26 +19,26 @@ doc before enabling Google for real users.
 
 ## What exists
 
-| File | Responsibility |
-|---|---|
-| `session.ts` | `getSession()` reads and *verifies* the current session; `requireSession()` is the authorization gate. |
-| `actions.ts` | Every Server Action: sign in, sign up, Google hand-off, password reset request, password update, sign out. |
-| `redirects.ts` | `sanitizeNextPath()` — the single open-redirect boundary. Also `internalRedirect()`. |
-| `errors.ts` | Classifies provider errors and maps them to copy. Nothing raw ever reaches a screen. |
-| `throttle.ts` | Per-account sign-in throttling (VB-010). One `SECURITY DEFINER` function holds all the state; a success clears only the caller's own verified identity. Fails open. |
+| File           | Responsibility                                                                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `session.ts`   | `getSession()` reads and _verifies_ the current session; `requireSession()` is the authorization gate.                                                              |
+| `actions.ts`   | Every Server Action: sign in, sign up, Google hand-off, password reset request, password update, sign out.                                                          |
+| `redirects.ts` | `sanitizeNextPath()` — the single open-redirect boundary. Also `internalRedirect()`.                                                                                |
+| `errors.ts`    | Classifies provider errors and maps them to copy. Nothing raw ever reaches a screen.                                                                                |
+| `throttle.ts`  | Per-account sign-in throttling (VB-010). One `SECURITY DEFINER` function holds all the state; a success clears only the caller's own verified identity. Fails open. |
 
 Routes and screens:
 
-| Path | Purpose |
-|---|---|
-| `src/app/login/` | Sign in — Google, then email + password. Redirects away if already signed in. |
-| `src/app/signup/` | Account creation. |
-| `src/app/forgot-password/` | Requests a reset link. Also where dead reset links land. |
-| `src/app/reset-password/` | Sets the new password. Requires the recovery session. |
-| `src/app/auth/callback/` | OAuth PKCE code exchange. |
-| `src/app/auth/confirm/` | Emailed links: signup confirmation, email change, recovery. |
-| `src/lib/supabase/proxy.ts` | Session refresh + the first-line `/app` guard. |
-| `src/app/app/layout.tsx` | `requireSession()` — the actual gate for every page under `/app`. |
+| Path                        | Purpose                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `src/app/login/`            | Sign in — Google, then email + password. Redirects away if already signed in. |
+| `src/app/signup/`           | Account creation.                                                             |
+| `src/app/forgot-password/`  | Requests a reset link. Also where dead reset links land.                      |
+| `src/app/reset-password/`   | Sets the new password. Requires the recovery session.                         |
+| `src/app/auth/callback/`    | OAuth PKCE code exchange.                                                     |
+| `src/app/auth/confirm/`     | Emailed links: signup confirmation, email change, recovery.                   |
+| `src/lib/supabase/proxy.ts` | Session refresh + the first-line `/app` guard.                                |
+| `src/app/app/layout.tsx`    | `requireSession()` — the actual gate for every page under `/app`.             |
 
 ## Session persistence
 
@@ -93,7 +93,7 @@ classification plus the provider's own code and status — never the message, th
 credentials, a token, or an authorization code.
 
 Password reset reports success regardless of whether the address exists. That
-neutrality *is* the anti-enumeration measure; only rate limiting and an
+neutrality _is_ the anti-enumeration measure; only rate limiting and an
 unreachable server are surfaced, because neither says anything about the
 address.
 
@@ -114,8 +114,8 @@ This requires the Supabase email templates to be changed; see the setup doc.
 
 Approaches tried and abandoned, in order:
 
-1. **Magic link + PKCE `exchangeCodeForSession(code)`** (`/auth/callback`, Sprint 0). The production root cause of sign-ins failing with `/login?error=auth`: PKCE requires a code-verifier cookie from the browser that *initiated* the sign-in, which isn't present when a magic link is opened in a different browser or device — extremely common with email links. Removed.
-2. **Magic link + `token_hash` + `verifyOtp`** (`/auth/confirm`) — the standard fix for problem #1. Implemented, then abandoned before shipping in favor of password auth, specifically because of Supabase's development email rate limits making *any* email-based flow unreliable for repeated local and E2E testing. Removed at the time.
+1. **Magic link + PKCE `exchangeCodeForSession(code)`** (`/auth/callback`, Sprint 0). The production root cause of sign-ins failing with `/login?error=auth`: PKCE requires a code-verifier cookie from the browser that _initiated_ the sign-in, which isn't present when a magic link is opened in a different browser or device — extremely common with email links. Removed.
+2. **Magic link + `token_hash` + `verifyOtp`** (`/auth/confirm`) — the standard fix for problem #1. Implemented, then abandoned before shipping in favor of password auth, specifically because of Supabase's development email rate limits making _any_ email-based flow unreliable for repeated local and E2E testing. Removed at the time.
 3. **Email + password only** (Sprint 1). What shipped, and still the default way in.
 
 The auth-persistence sprint brought approach #2 back — but only for the leg it is

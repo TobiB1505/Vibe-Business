@@ -1,10 +1,12 @@
 import {
+  BILLING_INTERVALS,
   getCreditPack,
-  getPlan,
   parseCreditPackKey,
   parsePaidPlanKey,
+  planPricing,
   subscriptionGrantIdempotencyKey,
   topUpGrantIdempotencyKey,
+  type BillingInterval,
   type CreditPackKey,
   type PaidPlanKey,
 } from "../catalog";
@@ -101,14 +103,53 @@ export type NormalizedStripeEvent = {
   subscription?: NormalizedSubscription;
 };
 
+/** Why a charged Price was refused. */
+type PriceRefusal = "price_not_in_catalog" | "price_mismatch";
+
 /** The configured Stripe Price id for each catalog SKU, resolved server-side. */
 export type CatalogPriceIds = {
   builder: string | undefined;
   pro: string | undefined;
+  /** The same plans bought by the year — separate Stripe Prices (ADR 0107). */
+  builder_annual: string | undefined;
+  pro_annual: string | undefined;
   pack_500: string | undefined;
   pack_1500: string | undefined;
   pack_5000: string | undefined;
 };
+
+/** Which configured Price id holds each interval of each paid plan. */
+const PLAN_PRICE_KEYS: Record<PaidPlanKey, Record<BillingInterval, keyof CatalogPriceIds>> = {
+  builder: { monthly: "builder", annual: "builder_annual" },
+  pro: { monthly: "pro", annual: "pro_annual" },
+};
+
+/**
+ * Which interval was actually charged.
+ *
+ * Read from the Price on the invoice rather than from metadata, and that is the
+ * module's own rule rather than a preference: **Stripe says what was paid; Vibe
+ * says what that is worth.** A subscription's metadata names the plan, and an
+ * annual grant is twelve times a monthly one — so taking the interval from
+ * anything other than the money that changed hands would let an edited metadata
+ * field mint eleven months of Credits.
+ */
+function chargedInterval(
+  planKey: PaidPlanKey,
+  catalogPriceIds: CatalogPriceIds,
+  chargedPriceIds: readonly string[],
+): { ok: true; interval: BillingInterval } | { ok: false; reason: PriceRefusal } {
+  const keys = PLAN_PRICE_KEYS[planKey];
+  const configured = BILLING_INTERVALS.map((interval) => ({
+    interval,
+    priceId: catalogPriceIds[keys[interval]],
+  })).filter((entry) => entry.priceId !== undefined);
+
+  if (configured.length === 0) return { ok: false, reason: "price_not_in_catalog" };
+
+  const match = configured.find((entry) => chargedPriceIds.includes(entry.priceId as string));
+  return match ? { ok: true, interval: match.interval } : { ok: false, reason: "price_mismatch" };
+}
 
 /* ---------------------------------------------------------------------------
  * Intents
@@ -190,7 +231,7 @@ export type IgnoreReason =
 function priceMatchesCatalog(
   configuredPriceId: string | undefined,
   chargedPriceIds: readonly string[],
-): { ok: true } | { ok: false; reason: "price_not_in_catalog" | "price_mismatch" } {
+): { ok: true } | { ok: false; reason: PriceRefusal } {
   if (!configuredPriceId) return { ok: false, reason: "price_not_in_catalog" };
   if (!chargedPriceIds.includes(configuredPriceId)) return { ok: false, reason: "price_mismatch" };
   return { ok: true };
@@ -314,9 +355,14 @@ function interpretInvoice(
   const planKey = parsePaidPlanKey(readMetadata(invoice.subscriptionMetadata, VIBE_SKU_METADATA_KEY));
   if (!planKey) return { kind: "ignored", reason: "unknown_sku" };
 
-  const plan = getPlan(planKey);
-  const priceCheck = priceMatchesCatalog(catalogPriceIds[planKey], invoice.priceIds);
-  if (!priceCheck.ok) return { kind: "ignored", reason: priceCheck.reason };
+  const charged = chargedInterval(planKey, catalogPriceIds, invoice.priceIds);
+  if (!charged.ok) return { kind: "ignored", reason: charged.reason };
+
+  // The allowance belongs to the period that was paid for. A year grants a
+  // year, in one lot expiring with it — never a month's worth because a
+  // month's worth is what the plan's headline number happens to be.
+  const pricing = planPricing(planKey, charged.interval);
+  if (!pricing) return { kind: "ignored", reason: "unknown_sku" };
 
   // The grant's expiry is the period end, so a missing period cannot be
   // defaulted — a subscription lot with no expiry would silently become a
@@ -328,7 +374,7 @@ function interpretInvoice(
   return {
     kind: "grant_subscription_period",
     planKey,
-    creditUnits: plan.monthlyCreditUnits,
+    creditUnits: pricing.creditUnits,
     idempotencyKey: subscriptionGrantIdempotencyKey(invoice.id),
     externalReference: invoice.id,
     stripeCustomerId: invoice.customerId,
@@ -360,10 +406,15 @@ function interpretSubscription(
   // acceptable answer — the snapshot is not a grant, so an unrecognized plan
   // costs nothing and is better recorded than dropped.
   const planKey =
-    (["builder", "pro"] as const).find((key) => {
-      const configured = catalogPriceIds[key];
-      return configured !== undefined && subscription.priceIds.includes(configured);
-    }) ?? null;
+    (["builder", "pro"] as const).find((key) =>
+      // Either interval names the same plan: a customer paying by the year is
+      // on Builder, and a snapshot that said otherwise would show them a plan
+      // they are not on.
+      BILLING_INTERVALS.some((interval) => {
+        const configured = catalogPriceIds[PLAN_PRICE_KEYS[key][interval]];
+        return configured !== undefined && subscription.priceIds.includes(configured);
+      }),
+    ) ?? null;
 
   return {
     kind: "sync_subscription",

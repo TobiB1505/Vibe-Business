@@ -1,4 +1,48 @@
-import type { SVGProps } from "react";
+import { IconFrame, type IconProps } from "./icon-frame";
+
+/*
+ * Re-exported from the generated set, under the names they already had.
+ *
+ * Both were hand-drawn here and both disagreed with Lucide's proportions —
+ * Vibe's chevron spanned 10 grid units against Lucide's 12, its arrow 16
+ * against 14 — so a row containing one of these beside a generated mark read
+ * as two icon sets. Re-exporting rather than renaming means the twenty-three
+ * call sites did not have to be touched to fix that.
+ *
+ * All ten generic marks now come from there. Leaving eight hand-drawn beside
+ * two generated ones would have been the same defect spread thinner and harder
+ * to notice, so they moved in one pass. Fifty-five call sites, none of them
+ * touched: the names did not change.
+ *
+ * What is left in this file is the part no catalogue has — Nova's aperture,
+ * the wordmark, and the nine navigation marks that carry Vibe's own vocabulary.
+ */
+export {
+  AlertIcon,
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+  /* The selector glyph on the product switcher: a single chevron says
+     "expand", two say "pick". The control changes what the row names. */
+  ChevronsUpDownIcon,
+  EyeIcon,
+  EyeOffIcon,
+  InfoIcon,
+  PlusIcon,
+  RefreshIcon,
+  SearchIcon,
+  /*
+   * Hand-drawn until the sign-out control took a mark. Measured, the two
+   * disagreed: this set's door spanned eleven grid units against Lucide's six,
+   * and its arrow started inside the door. Two sign-out marks in one product
+   * is the defect ADR 0097 exists to prevent, so the drawn one is gone and the
+   * name resolves here. The control moved from the account menu to
+   * Settings → General when the menu became a plain identity card.
+   */
+  SignOutIcon,
+} from "./icons.generated";
 
 export type DashboardIconName =
   | "nova"
@@ -10,28 +54,9 @@ export type DashboardIconName =
   | "agent"
   | "settings"
   | "experiments"
-  | "team";
-
-type IconProps = SVGProps<SVGSVGElement> & { size?: number };
-
-function IconFrame({ size = 18, children, ...props }: IconProps) {
-  return (
-    <svg
-      aria-hidden
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
+  | "team"
+  | "billing"
+  | "profile";
 
 /**
  * Nova, as a navigation icon.
@@ -172,55 +197,6 @@ export function AgentIcon(props: IconProps) {
   );
 }
 
-export function SignOutIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M14 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h7a2 2 0 0 0 2-2v-3" />
-      <path d="M10 12h11m-4-4 4 4-4 4" />
-    </IconFrame>
-  );
-}
-
-export function ChevronDownIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m7 10 5 5 5-5" />
-    </IconFrame>
-  );
-}
-
-export function ChevronRightIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m10 7 5 5-5 5" />
-    </IconFrame>
-  );
-}
-
-export function ArrowLeftIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M20 12H4m6-6-6 6 6 6" />
-    </IconFrame>
-  );
-}
-
-export function CheckIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="m5 12.5 4.2 4.2L19 7" />
-    </IconFrame>
-  );
-}
-
-export function ArrowRightIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M4 12h16m-6-6 6 6-6 6" />
-    </IconFrame>
-  );
-}
-
 export function RocketIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -228,32 +204,6 @@ export function RocketIcon(props: IconProps) {
       <path d="m8.2 11.8-3.5.7L3 15l4.2.4M12.2 15.8l-.7 3.5L9 21l-.4-4.2" />
       <circle cx="14.8" cy="9.2" r="1.6" />
       <path d="M5 19c1.1-2.1 2.3-2.8 4-3" />
-    </IconFrame>
-  );
-}
-
-export function PlusIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M12 4v16M4 12h16" />
-    </IconFrame>
-  );
-}
-
-export function InfoIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <circle cx="12" cy="12" r="9" />
-      <path d="M12 10.8V17M12 7.3h.01" />
-    </IconFrame>
-  );
-}
-
-export function SearchIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <circle cx="10.8" cy="10.8" r="6.8" />
-      <path d="m16 16 4.5 4.5" />
     </IconFrame>
   );
 }
@@ -271,15 +221,6 @@ export function TrendIcon(props: IconProps) {
     <IconFrame {...props}>
       <path d="m4 16 5-5 3 3 7-7" />
       <path d="M15 7h4v4" />
-    </IconFrame>
-  );
-}
-
-export function AlertIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M10.1 4.4 2.8 18a2 2 0 0 0 1.8 3h14.8a2 2 0 0 0 1.8-3L13.9 4.4a2.2 2.2 0 0 0-3.8 0Z" />
-      <path d="M12 9v5M12 17.5h.01" />
     </IconFrame>
   );
 }
@@ -359,17 +300,6 @@ export function SparklesIcon(props: IconProps) {
  * depends on a colour.
  * ------------------------------------------------------------------------ */
 
-export function RefreshIcon(props: IconProps) {
-  return (
-    <IconFrame {...props}>
-      <path d="M20 11.5A8 8 0 0 0 6.3 6.3L3.5 9" />
-      <path d="M4 12.5a8 8 0 0 0 13.7 5.2l2.8-2.7" />
-      <path d="M3.5 4.5V9H8" />
-      <path d="M20.5 19.5V15H16" />
-    </IconFrame>
-  );
-}
-
 export function BoltIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -411,6 +341,11 @@ export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardI
     settings: SettingsIcon,
     experiments: ExperimentsIcon,
     team: TeamIcon,
+    /* Both already existed as exports and had no navigable name, so the
+       Settings rail was reaching for a gauge to mean billing and two people to
+       mean one person. */
+    billing: CreditCardIcon,
+    profile: UserIcon,
   }[name];
 
   return <Icon {...props} />;

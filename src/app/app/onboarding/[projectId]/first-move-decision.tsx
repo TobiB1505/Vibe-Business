@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState } from "react";
-import type { CostBalance } from "@/components/system/cost-disclosure";
 import { NovaMoveButton } from "@/components/nova/nova-move";
 import {
   startPlanAction,
@@ -42,13 +41,11 @@ import {
 export function FirstMoveDecision({
   projectId,
   opportunityId,
-  balance,
   skip,
 }: {
   projectId: string;
   opportunityId: string;
   /** Null when the surface has not read one. Never suppresses the price. */
-  balance: CostBalance | null;
   /** The form that completes onboarding and opens the workspace. */
   skip: React.ReactNode;
 }) {
@@ -66,7 +63,6 @@ export function FirstMoveDecision({
           type="submit"
           label="Plan this move"
           operation="action_plan"
-          balance={balance}
           busy={pending}
           disabled={pending}
         />
@@ -78,7 +74,7 @@ export function FirstMoveDecision({
       </form>
 
       {state?.ok === false && (
-        <p className="text-amber text-sm" role="status">
+        <p className="text-amber text-body" role="status">
           Vibe could not start planning. Nothing was charged — you can try again from your
           workspace.
         </p>

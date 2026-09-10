@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TextAction } from "@/components/ui/button";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import {
   disconnectProjectAction,
   type DisconnectProjectActionState,
   type DisconnectProjectFailure,
 } from "./actions";
+import { DeleteIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
 
 /**
  * Disconnecting a repository (UI-6 §3, ADR 0056 §1).
@@ -43,7 +44,8 @@ const FAILURE_MESSAGES: Record<DisconnectProjectFailure, string> = {
   merge_in_progress: "A change is being merged right now. Disconnect once it has finished.",
   billing_not_finalized:
     "A Credit hold for this project has not settled yet. Disconnect again in a moment.",
-  detach_failed: "The repository could not be disconnected, and is still connected. Try again in a moment.",
+  detach_failed:
+    "The repository could not be disconnected, and is still connected. Try again in a moment.",
 };
 
 const initialState: DisconnectProjectActionState = null;
@@ -78,7 +80,7 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
           </>
         </ConfirmPanel>
         {failure && (
-          <p role="alert" className="mt-3 text-sm text-amber">
+          <p role="alert" className="mt-3 text-body text-amber">
             {FAILURE_MESSAGES[failure]}
           </p>
         )}
@@ -90,18 +92,24 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
     // Not `w-full`: this sits in the settings row's `justify-between` flex
     // line, and a full-width child would wrap the control onto its own line.
     // The column keeps the failure directly under the control that caused it.
-    <div className="flex flex-col items-end gap-2">
-      <TextAction
+    /*
+      `items-start` since UI-24: this sat at the right of a `justify-between`
+      line inside the Repository card. It is a danger-zone row now, under the
+      paragraph that explains it, and a control at the far edge of a region is
+      a control separated from its own sentence.
+    */
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        variant="danger"
         ref={openerRef}
         type="button"
-        tone="danger"
-        className="text-sm"
+        icon={<DeleteIcon size={14} />}
         onClick={() => setConfirming(true)}
       >
         Disconnect repository
-      </TextAction>
+      </Button>
       {failure && (
-        <p role="alert" className="text-sm text-amber">
+        <p role="alert" className="text-body text-amber">
           {FAILURE_MESSAGES[failure]}
         </p>
       )}

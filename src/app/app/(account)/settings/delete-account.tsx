@@ -1,14 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TextAction } from "@/components/ui/button";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
-import { Surface } from "@/components/ui/surface";
+import { DangerRow, DangerZone } from "@/components/system/danger-zone";
 import type {
   ErasureFailureReason,
   ErasureViewState,
 } from "@/modules/operations/account-erasure/view";
 import { deleteAccountAction, type DeleteAccountActionState } from "./delete-account-actions";
+import { DeleteIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
 
 /**
  * Erasing an account (ADR 0056 §4, §9).
@@ -64,75 +65,93 @@ export function DeleteAccountSection({ state }: { state: ErasureViewState }) {
     result && !result.ok ? result.error : state.kind === "failed" ? state.reason : null;
 
   return (
-    <Surface
-      level="panel"
-      padding="md"
-      className="flex flex-col gap-4"
+    <DangerZone
+      description="One control, and it is the one that cannot be taken back."
       data-testid="delete-account"
     >
-      <div className="flex flex-col gap-2">
-        <h2 className="text-fg text-title font-bold">Delete your account</h2>
-        <p className="text-fg-muted text-sm leading-6">
-          Erase your Vibe account, every project in it, and your sign-in.
-        </p>
-      </div>
-
-      {state.kind === "running" ? (
-        <p role="status" className="text-fg-muted text-sm leading-6">
-          Your account is being erased. Vibe has stopped starting new work, and you will be signed
-          out once it finishes.
-        </p>
-      ) : confirming ? (
-        <form action={formAction}>
-          <ConfirmPanel
-            title="Erase this account?"
-            tone="caution"
-            confirmLabel="Erase account"
-            confirmType="submit"
-            pending={pending}
-            onCancel={() => setConfirming(false)}
-          >
-            <>
-              <p>
-                Every project and everything Vibe has learned about it is permanently deleted, along
-                with your GitHub connection and your sign-in. You will not be able to sign back in.
-              </p>
-              <p>
-                Your billing history is kept without your name on it. Vibe has to be able to account
-                for payments it has already taken, so the Credit ledger and the payment references
-                survive with the owner removed — they are no longer linked to you.
-              </p>
-              <p>
-                Your subscription is cancelled straight away. The rest of the period you have paid
-                for is not refunded.
-              </p>
-              <p>
-                This does not uninstall the Vibe GitHub App. Remove it yourself in your GitHub
-                settings if you want Vibe&apos;s access gone as well.
-              </p>
-              <p>This cannot be undone.</p>
-            </>
-          </ConfirmPanel>
-        </form>
-      ) : (
-        <div>
-          <TextAction
-            ref={openerRef}
-            type="button"
-            tone="danger"
-            className="text-sm"
-            onClick={() => setConfirming(true)}
-          >
-            Delete account
-          </TextAction>
-        </div>
-      )}
-
-      {failure && (
-        <p role="alert" className="text-sm text-amber">
-          {FAILURE_MESSAGES[failure]}
-        </p>
-      )}
-    </Surface>
+      <DangerRow
+        title="Delete your account"
+        /*
+          What goes, not the whole disclosure. The confirmation below carries
+          the rest — the billing history that survives without a name on it,
+          the subscription ending, the GitHub App that stays installed — and
+          saying any of it twice makes the row and the confirmation two
+          differently-worded versions of one fact.
+        */
+        consequence="Erases your Vibe account, every project in it, and your sign-in."
+        reversible={false}
+        action={content()}
+      />
+    </DangerZone>
   );
+
+  function content() {
+    return (
+      <>
+        {state.kind === "running" ? (
+          <p role="status" className="text-fg-muted text-body leading-6">
+            Your account is being erased. Vibe has stopped starting new work, and you will be signed
+            out once it finishes.
+          </p>
+        ) : confirming ? (
+          <form action={formAction}>
+            <ConfirmPanel
+              title="Erase this account?"
+              tone="caution"
+              confirmLabel="Erase account"
+              confirmType="submit"
+              /*
+              Typed, not clicked (UI-24). This is reached from a page somebody
+              opened to change something small, and a confirmation answered by
+              one click can be answered by muscle memory.
+            */
+              confirmPhrase="delete my account"
+              confirmPhraseLabel="Type delete my account to confirm"
+              pending={pending}
+              onCancel={() => setConfirming(false)}
+            >
+              <>
+                <p>
+                  Every project and everything Vibe has learned about it is permanently deleted,
+                  along with your GitHub connection and your sign-in. You will not be able to sign
+                  back in.
+                </p>
+                <p>
+                  Your billing history is kept without your name on it. Vibe has to be able to
+                  account for payments it has already taken, so the Credit ledger and the payment
+                  references survive with the owner removed — they are no longer linked to you.
+                </p>
+                <p>
+                  Your subscription is cancelled straight away. The rest of the period you have paid
+                  for is not refunded.
+                </p>
+                <p>
+                  This does not uninstall the Vibe GitHub App. Remove it yourself in your GitHub
+                  settings if you want Vibe&apos;s access gone as well.
+                </p>
+                <p>This cannot be undone.</p>
+              </>
+            </ConfirmPanel>
+          </form>
+        ) : (
+          <div>
+            <Button
+              variant="danger"
+              ref={openerRef}
+              icon={<DeleteIcon size={14} />}
+              onClick={() => setConfirming(true)}
+            >
+              Delete account
+            </Button>
+          </div>
+        )}
+
+        {failure && (
+          <p role="alert" className="mt-3 text-body text-amber">
+            {FAILURE_MESSAGES[failure]}
+          </p>
+        )}
+      </>
+    );
+  }
 }

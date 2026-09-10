@@ -95,8 +95,8 @@ function FileDiff({ file }: { file: DiffFile }) {
   return (
     <div className="space-y-1">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="font-mono text-xs text-fg-prose break-all">{file.path}</p>
-        <p className="text-xs text-fg-muted">
+        <p className="font-mono text-caption text-fg-prose break-all">{file.path}</p>
+        <p className="text-caption text-fg-muted">
           <StatusLabel status={file.status} />
           {file.status === "modified" && <Counts added={file.added} removed={file.removed} />}
           {(file.status === "added" || file.status === "deleted") && (
@@ -112,7 +112,7 @@ function FileDiff({ file }: { file: DiffFile }) {
         /* Named rather than omitted. A file that is silently absent from a diff
            is a file nobody reviewed, and the reader has to be able to see that
            Vibe knows it is there. */
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           This file is part of the change, but Vibe could not read it as text — it may be binary or
           larger than the review limit. It is on the branch.
         </p>
@@ -120,12 +120,12 @@ function FileDiff({ file }: { file: DiffFile }) {
         /* The row says the path was removed; the base side is what could not be
            read. Saying "no textual difference" here would describe a deletion
            as a change that did nothing. */
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           This file was removed. Vibe could not read the version it removed — it may be binary or
           larger than the review limit.
         </p>
       ) : file.hunks.length === 0 ? (
-        <p className="text-xs text-fg-muted">No textual difference between the two commits.</p>
+        <p className="text-caption text-fg-muted">No textual difference between the two commits.</p>
       ) : (
         <div className="rounded-well border-line-2 bg-app overflow-x-auto border">
           {file.hunks.map((hunk, index) => {
@@ -135,7 +135,7 @@ function FileDiff({ file }: { file: DiffFile }) {
             return (
               <pre
                 key={`${hunk.baseStart}:${hunk.headStart}:${index}`}
-                className="py-2 text-xs leading-relaxed"
+                className="py-2 text-caption leading-relaxed"
               >
                 {index > 0 && (
                   <span aria-hidden className="block px-2 text-fg-meta">
@@ -163,7 +163,7 @@ function FileDiff({ file }: { file: DiffFile }) {
       )}
 
       {file.truncated && (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           This file was shortened for review. The whole file is on the branch.
         </p>
       )}
@@ -174,7 +174,7 @@ function FileDiff({ file }: { file: DiffFile }) {
 export function DiffView({ diff }: { diff: PreparedDiff }) {
   return (
     <div className="space-y-3">
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-fg-muted">
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-caption text-fg-muted">
         <div className="flex gap-2">
           <dt>Before</dt>
           <dd className="font-mono text-fg-prose">{diff.baseSha.slice(0, 7)}</dd>
@@ -198,7 +198,7 @@ export function DiffView({ diff }: { diff: PreparedDiff }) {
       ))}
 
       {diff.truncated && (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           Some files were left out of this view for review. Every changed file is on the branch.
         </p>
       )}

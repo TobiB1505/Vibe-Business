@@ -5,7 +5,12 @@ import type { OperationView } from "../operations/view";
 import { NOVA_ACTION_META, isOfferable } from "./actions";
 import type { AgentEconomicPolicy } from "../coding-agent/authorization";
 import { creditsToUnits } from "../credits/units";
-import { buildNovaAuditEntry, buildNovaExecutionOffer, buildNovaFeed } from "./feed";
+import {
+  buildNovaAuditEntry,
+  buildNovaExecutionOffer,
+  buildNovaFeed,
+  novaCandidatePrompt,
+} from "./feed";
 import type { NovaEntry } from "./feed";
 import { FOCUS_CANDIDATE_KINDS, deriveNovaFocus, novaCandidateAction } from "./focus";
 import { ONBOARDING_STATES } from "../onboarding/state";
@@ -606,5 +611,39 @@ describe("the offer to build a step", () => {
   /** A chain delivers several steps for one ceiling, and says how many. */
   it("says how many steps one run would deliver", () => {
     expect(offer({ memberCount: 3 })?.memberCount).toBe(3);
+  });
+});
+
+/**
+ * A prompt that repeats its own button is not a prompt.
+ *
+ * `audit_outdated` asked "Run the audit again?" beside a button reading "Run
+ * the audit again" — the same sentence twice with a question mark. On the
+ * focus card it was worse than redundant: `entry.prompt` is passed there as
+ * `ActionBlock`'s `footnote`, which is documented as "a limit, a caveat, what
+ * is unchanged", so the question rendered *under* the control it was echoing.
+ *
+ * The prompts that remain earn their place — "Move it onto your default
+ * branch?" says what "Merge it" does. This keeps that the bar.
+ */
+describe("a prompt says something the button does not", () => {
+  const plain = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[?.!]+$/, "")
+      .trim();
+
+  it.each(FOCUS_CANDIDATE_KINDS)("%s", (kind) => {
+    const prompt = novaCandidatePrompt(kind);
+    if (prompt === null) return;
+
+    const actionId = novaCandidateAction(kind);
+    if (actionId === null) return;
+
+    expect(
+      plain(prompt),
+      `the prompt for ${kind} is its own button's label with a question mark. ` +
+        "When there is nothing to add, there is no prompt.",
+    ).not.toBe(plain(NOVA_ACTION_META[actionId].label));
   });
 });

@@ -71,17 +71,17 @@ export function AgentReadyStage({
         <div className="min-w-0">
           {task === null ? (
             <div className="flex max-w-[38rem] flex-col gap-4" data-testid="agent-no-task">
-              <span className="text-mint font-mono text-[0.65625rem] tracking-[0.16em] uppercase">
+              <span className="text-mint font-mono text-label tracking-[0.16em] uppercase">
                 No Move selected
               </span>
               <h2 className="text-fg text-[2rem] leading-tight font-bold tracking-[-0.03em] text-balance">
                 Choose what Vibe should work on next.
               </h2>
-              <p className="text-fg-prose max-w-[46ch] text-base leading-relaxed">
+              <p className="text-fg-prose max-w-[46ch] text-lead leading-relaxed">
                 Your Action Plan holds the prioritized Moves. Pick one there and this workspace
                 will carry that exact task through build, validation, preview and review.
               </p>
-              <p className="text-fg-muted text-sm leading-relaxed">
+              <p className="text-fg-muted text-body leading-relaxed">
                 Opening the Agent starts nothing and spends nothing.
               </p>
             </div>
@@ -112,7 +112,7 @@ export function AgentReadyStage({
               {startAction ?? (
                 <Link
                   href={planHref}
-                  className={`${buttonClasses({ variant: "primary", size: "md" })} w-full justify-center`}
+                  className={`${buttonClasses({ variant: "primary" })} w-full justify-center`}
                 >
                   Choose a Move
                   <svg

@@ -1,9 +1,9 @@
-import Link from "next/link";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Table, TableCell, TableRow } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/states";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import type { AgentRunSummary } from "@/modules/coding-agent/observability/run-view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Every run this product has had (audit R29).
@@ -71,12 +71,9 @@ export function AgentRunHistory({
           <TableRow key={run.id}>
             <TableCell>
               {run.preparedChangeId ? (
-                <Link
-                  href={changeHref(run.preparedChangeId)}
-                  className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-                >
+                <StandaloneLink href={changeHref(run.preparedChangeId)}>
                   {when ?? "Not started"}
-                </Link>
+                </StandaloneLink>
               ) : (
                 (when ?? "Not started")
               )}

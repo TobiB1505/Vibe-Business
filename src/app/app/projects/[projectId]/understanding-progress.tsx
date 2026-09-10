@@ -87,7 +87,7 @@ function StepRow({ label, state }: { label: string; state: StepState }) {
     <li className="flex items-center justify-between gap-4">
       <span
         className={
-          state === "waiting" ? "text-fg-meta text-sm" : "text-fg-body text-sm transition-opacity"
+          state === "waiting" ? "text-fg-meta text-body" : "text-fg-body text-body transition-opacity"
         }
       >
         {label}
@@ -175,7 +175,7 @@ export function UnderstandingProgress({
               ? "Still getting to know your product."
               : "Vibe is getting to know your product."}
           </h2>
-          <p className="text-fg-muted max-w-[50ch] text-sm">
+          <p className="text-fg-muted max-w-[50ch] text-body">
             {operation.stalled
               ? "This is taking much longer than expected. You can start again if it never finishes."
               : "You can leave this page. Vibe will keep going."}
@@ -231,7 +231,7 @@ export function UnderstandingProgress({
   return (
     <div className="flex flex-col gap-3">
       {blockedReason ? (
-        <p className="text-fg-muted text-sm">{blockedReason}</p>
+        <p className="text-fg-muted text-body">{blockedReason}</p>
       ) : (
         <form action={formAction} className="flex items-center gap-3">
           <input type="hidden" name="force" value={hasProfile ? "true" : "false"} />
@@ -247,7 +247,7 @@ export function UnderstandingProgress({
 
       {failed && operation?.failureCode && (
         <div className="flex flex-col gap-2">
-          <p className="text-amber text-sm">
+          <p className="text-amber text-body">
             Vibe couldn&apos;t finish. {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
           </p>
           {/* Only offered where starting again is honest — never after an

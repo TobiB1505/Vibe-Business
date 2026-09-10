@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { MINIMUM_PASSWORD_LENGTH, passwordTooShortMessage } from "@/modules/auth/password";
 import { recordAuthAttempt, throttleMessage } from "@/modules/auth/throttle";
 import {
   authFailureMessage,
@@ -25,7 +26,6 @@ import { DEFAULT_POST_AUTH_PATH, sanitizeNextPath } from "@/modules/auth/redirec
  * makes it a second, independent refusal rather than the only one, which is
  * the right relationship between an application rule and a provider setting.
  */
-const MINIMUM_PASSWORD_LENGTH = 8;
 
 function parseCredentials(formData: FormData): { email: string; password: string } | null {
   const email = formData.get("email");
@@ -115,8 +115,12 @@ export async function signInWithPassword(
 }
 
 export type SignUpResult =
-  | { ok: true; needsConfirmation: boolean }
-  | { ok: false; error: string };
+  /**
+   * `email` is the address the confirmation was sent to — echoed back so the
+   * screen can name it. "Check your email" is not checkable against a typo
+   * the person cannot see any more.
+   */
+  { ok: true; needsConfirmation: boolean; email: string } | { ok: false; error: string };
 
 /**
  * Account creation.
@@ -141,10 +145,7 @@ export async function signUp(
   // is a dashboard setting, so relying on it alone would make this product's
   // password rule something no reader of this repository could determine.
   if (credentials.password.length < MINIMUM_PASSWORD_LENGTH) {
-    return {
-      ok: false,
-      error: `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`,
-    };
+    return { ok: false, error: passwordTooShortMessage() };
   }
 
   const origin = await requestOrigin();
@@ -165,7 +166,7 @@ export async function signUp(
     redirect(destination);
   }
 
-  return { ok: true, needsConfirmation: true };
+  return { ok: true, needsConfirmation: true, email: credentials.email };
 }
 
 export type OAuthStartResult = { ok: false; error: string };
@@ -208,9 +209,57 @@ export async function signInWithGoogle(
   redirect(data.url);
 }
 
+/**
+ * Starts GitHub sign-in (UI-19).
+ *
+ * ## Why this exists, and why the button is off by default
+ *
+ * Vibe is a GitHub-native product: every founder connects a repository, so the
+ * one provider every user of this product certainly has was the one not
+ * offered. This is the action that offers it.
+ *
+ * It is **not** the GitHub App ([ADR 0003](../../../docs/decisions/0003-github-app-integration.md)),
+ * which is how Vibe reads and writes repositories and is a separate identity
+ * with separate permissions. This is only "who are you", and it grants Vibe
+ * nothing it does not already ask for at connection time.
+ *
+ * Whether it works depends on the provider being enabled in the Supabase
+ * project, which is a dashboard setting this code cannot read. UI-19 put the
+ * button behind a flag for that reason; the provider is enabled now, and Vibe
+ * runs on one Supabase project (VB-011), so there is no deployment where the
+ * offer would be false. The flag is gone rather than left at one value.
+ */
+export async function signInWithGithub(
+  _prevState: OAuthStartResult | null,
+  formData: FormData,
+): Promise<OAuthStartResult> {
+  const destination = requestedDestination(formData);
+  const origin = await requestOrigin();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(destination)}`,
+      skipBrowserRedirect: true,
+    },
+  });
+
+  if (error || !data?.url) {
+    logAuthFailure("oauth_start_github", error);
+    return { ok: false, error: authFailureMessage("oauth_failed", "sign_in") };
+  }
+
+  redirect(data.url);
+}
+
 export type PasswordResetRequestResult =
-  | { ok: true }
-  | { ok: false; error: string };
+  /**
+   * `email` is what the person typed, echoed back. It says nothing about
+   * whether an account exists — that is the whole point of the wording on the
+   * success notice — and it is the only way a typo is visible afterwards.
+   */
+  { ok: true; email: string } | { ok: false; error: string };
 
 /**
  * Sends a password reset link.
@@ -254,11 +303,10 @@ export async function requestPasswordReset(
     }
   }
 
-  return { ok: true };
+  return { ok: true, email };
 }
 
-export type PasswordUpdateResult =
-  | { ok: false; error: string };
+export type PasswordUpdateResult = { ok: false; error: string };
 
 /**
  * Sets a new password for the user in the current recovery session.
@@ -276,12 +324,17 @@ export async function updatePassword(
   const confirmation = formData.get("password_confirmation");
 
   if (typeof password !== "string" || password.length < MINIMUM_PASSWORD_LENGTH) {
-    return {
-      ok: false,
-      error: `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`,
-    };
+    return { ok: false, error: passwordTooShortMessage() };
   }
-  if (typeof confirmation === "string" && confirmation !== password) {
+  /*
+   * A missing confirmation is not a matching one.
+   *
+   * This read `typeof confirmation === "string" && confirmation !== password`,
+   * so a submission that carried no confirmation field at all skipped the
+   * check and set the password. The browser marks the field `required`, which
+   * is a convenience for a person and not a property of the request.
+   */
+  if (confirmation !== password) {
     return { ok: false, error: "Both passwords need to match." };
   }
 

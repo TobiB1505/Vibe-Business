@@ -181,6 +181,10 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "metric_direction",
     "metric_key",
     "mode",
+    // ADR 0107: "monthly" | "annual" — which billing interval a Checkout was
+    // started for. A closed vocabulary about Vibe's own catalogue, naming no
+    // amount and no person.
+    "interval",
     "operation",
     "operationType",
     "outcome",

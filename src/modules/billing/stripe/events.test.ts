@@ -22,6 +22,8 @@ import {
 const PRICES: CatalogPriceIds = {
   builder: "price_builder_monthly",
   pro: "price_pro_monthly",
+  builder_annual: "price_builder_annual",
+  pro_annual: "price_pro_annual",
   pack_500: "price_pack_500",
   pack_1500: "price_pack_1500",
   pack_5000: "price_pack_5000",
@@ -422,5 +424,97 @@ describe("a Checkout return is not a payment (§25, §102.16)", () => {
     expect(
       interpretStripeEvent({ id: "evt_x", type: "invoice.payment_succeeded", livemode: false }, PRICES),
     ).toEqual({ kind: "ignored", reason: "unhandled_event_type" });
+  });
+});
+
+/**
+ * A paid year (ADR 0107).
+ *
+ * The property worth the most here is the last one: the interval is read from
+ * the **Price that was charged**, never from metadata. An annual grant is
+ * twelve times a monthly one, so a metadata field that could choose between
+ * them would be a field that could mint eleven months of Credits — and Stripe
+ * dashboard access is not supposed to be that.
+ */
+describe("annual subscriptions (ADR 0107)", () => {
+  it("grants a year of Credits for a paid annual period", () => {
+    expect(
+      interpretStripeEvent(invoiceEvent({ priceIds: ["price_builder_annual"] }), PRICES),
+    ).toMatchObject({
+      kind: "grant_subscription_period",
+      planKey: "builder",
+      creditUnits: creditsToUnits(12_000),
+    });
+  });
+
+  it("still grants one month for a monthly period on the same plan", () => {
+    expect(interpretStripeEvent(invoiceEvent(), PRICES)).toMatchObject({
+      kind: "grant_subscription_period",
+      planKey: "builder",
+      creditUnits: creditsToUnits(1_000),
+    });
+  });
+
+  it("takes the interval from the Price, not from the metadata", () => {
+    /*
+      Metadata says Builder — which it must, or the plan would be unknown — and
+      the money that changed hands was a *month* of it. The grant follows the
+      money. There is no field on a Stripe object that can turn this into a
+      year.
+    */
+    const forged = invoiceEvent({
+      priceIds: ["price_builder_monthly"],
+      subscriptionMetadata: {
+        [VIBE_SKU_METADATA_KEY]: "builder",
+        [VIBE_USER_METADATA_KEY]: "user-1",
+        interval: "annual",
+      },
+    });
+
+    expect(interpretStripeEvent(forged, PRICES)).toMatchObject({
+      creditUnits: creditsToUnits(1_000),
+    });
+  });
+
+  it("refuses an annual Price belonging to another plan", () => {
+    expect(
+      interpretStripeEvent(invoiceEvent({ priceIds: ["price_pro_annual"] }), PRICES),
+    ).toMatchObject({ kind: "ignored", reason: "price_mismatch" });
+  });
+
+  it("refuses a plan whose Prices are not configured at all", () => {
+    expect(
+      interpretStripeEvent(invoiceEvent({ priceIds: ["price_builder_annual"] }), {
+        ...PRICES,
+        builder: undefined,
+        builder_annual: undefined,
+      }),
+    ).toMatchObject({ kind: "ignored", reason: "price_not_in_catalog" });
+  });
+
+  it("names the plan on a subscription snapshot bought by the year", () => {
+    const event: NormalizedStripeEvent = {
+      id: "evt_annual_sub",
+      type: "customer.subscription.updated",
+      livemode: false,
+      subscription: {
+        id: "sub_annual",
+        customerId: "cus_1",
+        status: "active",
+        cancelAtPeriodEnd: false,
+        canceledAt: null,
+        currentPeriodStart: 1_756_684_800,
+        currentPeriodEnd: 1_788_220_800,
+        priceIds: ["price_pro_annual"],
+        metadata: {},
+      },
+    };
+
+    // A customer paying by the year is on Pro. A snapshot that said otherwise
+    // would show them a plan they are not on.
+    expect(interpretStripeEvent(event, PRICES)).toMatchObject({
+      kind: "sync_subscription",
+      planKey: "pro",
+    });
   });
 });

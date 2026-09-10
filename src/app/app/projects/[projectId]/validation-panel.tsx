@@ -102,16 +102,16 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
 
   return (
     <li className="space-y-1">
-      <div className="flex items-baseline gap-2 text-sm">
+      <div className="flex items-baseline gap-2 text-body">
         <span className={PHASE_TONES[phase.state]}>{PHASE_SYMBOLS[phase.state]}</span>
         <span className={muted ? "text-fg-muted" : "text-fg-prose"}>
           {active ? `${phase.activeLabel}…` : phase.label}
         </span>
         {phase.state === "skipped" && (
-          <span className="text-xs text-fg-muted">{SKIP_NOTES[phase.skipReason ?? "script_not_present"]}</span>
+          <span className="text-caption text-fg-muted">{SKIP_NOTES[phase.skipReason ?? "script_not_present"]}</span>
         )}
         {phase.durationMs !== null && (
-          <span className="text-xs text-fg-meta">{(phase.durationMs / 1000).toFixed(1)}s</span>
+          <span className="text-caption text-fg-meta">{(phase.durationMs / 1000).toFixed(1)}s</span>
         )}
       </div>
 
@@ -119,7 +119,7 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
           text in a <pre>: the content is untrusted output from code Vibe did
           not write, already ANSI-stripped and secret-redacted at storage. */}
       {phase.outputTail && (
-        <pre className="overflow-x-auto rounded-md border border-line-2 bg-app p-3 text-xs leading-relaxed text-fg-secondary">
+        <pre className="overflow-x-auto rounded-inset border border-line-2 bg-app p-3 text-caption leading-relaxed text-fg-secondary">
           {phase.outputTail}
           {phase.outputTruncated && "\n…output truncated"}
         </pre>
@@ -154,11 +154,11 @@ function DepthNote({ depth }: { depth: ValidationSummary["depth"] }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <p className="text-xs text-fg-secondary">
+      <p className="text-caption text-fg-secondary">
         <span className="text-fg-muted">Depth:</span> {depth.label} — {depth.reason}
       </p>
       {depth.notRun.length > 0 && (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           Not run at this depth: {depth.notRun.join(", ")}. The exact commit, the changed files and
           the build identity were verified regardless.
         </p>
@@ -264,11 +264,11 @@ export function ValidationPanel({
       {/* "Safety checks" rather than "Validation" (Sprint UI-3.5). The
           internal vocabulary is unchanged — the stored status is still
           `passed`/`failed`, and it is shown verbatim in the details below. */}
-      <h4 className="text-sm font-medium text-fg-body">Safety checks</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Safety checks</h4>
 
       {running ? (
         <div className="space-y-3">
-          <p className="text-sm text-fg-prose">Vibe is checking the change in a safe, isolated copy of your project…</p>
+          <p className="text-body text-fg-prose">Vibe is checking the change in a safe, isolated copy of your project…</p>
           {/* Real phases, from the database, updating as each one finishes.
               Before the first phase records itself there is nothing truthful to
               show, so the panel says only that it has started. */}
@@ -278,20 +278,20 @@ export function ValidationPanel({
               <PhaseList phases={liveSummary.phases} />
             </>
           ) : (
-            <p className="text-sm text-fg-secondary">Starting an isolated environment</p>
+            <p className="text-body text-fg-secondary">Starting an isolated environment</p>
           )}
           {/* The Sprint 7 promise, restated where it matters: this runs for
               minutes and does not belong to the browser tab. */}
-          <p className="text-xs text-fg-muted">You can leave this page.</p>
+          <p className="text-caption text-fg-muted">You can leave this page.</p>
         </div>
       ) : shown?.status === "passed" ? (
         <div className="space-y-3">
-          <p className={shown.underCurrentPolicy ? "text-sm text-mint" : "text-sm text-amber"}>
+          <p className={shown.underCurrentPolicy ? "text-body text-mint" : "text-body text-amber"}>
             {shown.underCurrentPolicy
               ? "All safety checks passed"
               : "Checked under earlier rules"}
           </p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             {shown.underCurrentPolicy
               ? "Your project still builds, and the change matches the exact commit Vibe prepared."
               : "This result was produced before Vibe's validation rules changed. It still describes what was checked at the time, but not what would be checked now."}
@@ -313,11 +313,11 @@ export function ValidationPanel({
               *
               * The deployment clause never drops, because Vibe never deploys.
               */}
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               {merged ? "Merged · Deployment not verified by Vibe" : "Not merged · Not deployed"}
               {approved ? "" : " · Not reviewed by a human"}
             </p>
-            <p className="text-fg-meta max-w-[70ch] text-xs">
+            <p className="text-fg-meta max-w-[70ch] text-caption">
               Passing these checks means the change is technically sound. It is not a judgement
               about whether the idea behind it will work for your business.
             </p>
@@ -329,7 +329,6 @@ export function ValidationPanel({
           <Button
             type="button"
             variant="secondary"
-            size="sm"
             onClick={() => validate(true)}
             disabled={pending}
           >
@@ -338,15 +337,15 @@ export function ValidationPanel({
         </div>
       ) : shown?.status === "failed" ? (
         <div className="space-y-3">
-          <p className="text-sm text-coral">
+          <p className="text-body text-coral">
             {failed ? `A safety check did not pass: ${failed.label.toLowerCase()}` : "A safety check did not pass"}
           </p>
-          {shown.failureMessage && <p className="text-sm text-fg-secondary">{shown.failureMessage}</p>}
+          {shown.failureMessage && <p className="text-body text-fg-secondary">{shown.failureMessage}</p>}
           <PhaseList phases={shown.phases} />
           {/* Says which phases never happened, rather than leaving empty
               circles that read as "still to come" on a run that is over. */}
           {shown.phases.some((phase) => phase.state === "not_run") && (
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               Later checks were not run: Vibe stops at the first failure rather than spending
               sandbox time on a change that already needs work.
             </p>
@@ -354,7 +353,6 @@ export function ValidationPanel({
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => validate(true)}
             disabled={pending}
           >
@@ -363,15 +361,14 @@ export function ValidationPanel({
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-fg-secondary">Not validated</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-secondary">Not validated</p>
+          <p className="text-caption text-fg-muted">
             Vibe will check out this exact commit in an isolated environment, install dependencies,
             and build it. Your repository is not modified.
           </p>
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={() => validate(false)}
             disabled={pending}
           >
@@ -381,14 +378,14 @@ export function ValidationPanel({
       )}
 
       {state?.ok === false && (
-        <p className="text-sm text-coral">
+        <p className="text-body text-coral">
           {OPERATION_FAILURE_MESSAGES[state.error as keyof typeof OPERATION_FAILURE_MESSAGES] ??
             "Validation could not be started."}
         </p>
       )}
 
       {state?.ok && state.kind === "reused" && (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           This commit already passed under the current rules — nothing was re-run.
         </p>
       )}

@@ -34,8 +34,18 @@ describe("footnoteFor", () => {
     expect(footnoteFor("Want a plan for it?", undefined)).toBe("Want a plan for it?");
   });
 
+  /*
+   * `audit_outdated` is deliberately not here.
+   *
+   * It used to ask "Run the audit again?" beside a button reading "Run the
+   * audit again", which is what this suppression was written for. That prompt
+   * is gone from `PROMPT_FOR_CANDIDATE` — the sentence was removed at the
+   * source rather than hidden at the footnote — so the pairing this asserts
+   * no longer exists to assert. `feed.test.ts` keeps the rule that produced
+   * that removal, across every candidate kind.
+   */
   it("pairs every prompt with its own action, and prints each sentence once", () => {
-    const kinds = ["merge_ready", "execution_offered", "plan_offered", "audit_outdated"] as const;
+    const kinds = ["merge_ready", "execution_offered", "plan_offered"] as const;
 
     for (const kind of kinds) {
       const prompt = novaCandidatePrompt(kind);

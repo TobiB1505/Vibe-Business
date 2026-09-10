@@ -72,7 +72,7 @@ function LensConstellation({ active }: { active: boolean }) {
             return (
               <li
                 key={lens}
-                className={`border-line-2 bg-app/95 text-fg-secondary absolute -translate-x-1/2 -translate-y-1/2 rounded-lg border px-2.5 py-2 text-center text-meta leading-tight font-medium ${
+                className={`border-line-2 bg-app/95 text-fg-secondary absolute -translate-x-1/2 -translate-y-1/2 rounded-inset border px-2.5 py-2 text-center text-meta leading-tight font-medium ${
                   active ? "motion-safe:animate-pulse" : ""
                 }`}
                 style={{
@@ -94,7 +94,7 @@ function LensConstellation({ active }: { active: boolean }) {
         {BUSINESS_LENSES.map((lens, index) => (
           <li
             key={lens}
-            className={`border-line-2 bg-app/70 text-fg-secondary rounded-lg border px-3 py-2.5 text-sm ${
+            className={`border-line-2 bg-app/70 text-fg-secondary rounded-inset border px-3 py-2.5 text-body ${
               active ? "motion-safe:animate-pulse" : ""
             }`}
             style={
@@ -160,7 +160,7 @@ function Shell({
             <MonoLabel as="h2" className="text-fg-secondary">
               {label}
             </MonoLabel>
-            <p className="text-fg max-w-[38ch] text-2xl leading-tight font-semibold tracking-[-0.03em]">
+            <p className="text-fg max-w-[38ch] text-moment font-semibold">
               {headline}
             </p>
           </>
@@ -197,7 +197,7 @@ export function AuditPreparing({
       presentation={presentation}
     >
       <LensConstellation active={false} />
-      <p className="text-fg-muted max-w-[58ch] text-sm">
+      <p className="text-fg-muted max-w-[58ch] text-body">
         Nothing has been judged yet. Vibe is gathering what it has about your product before it
         looks at the business.
       </p>
@@ -224,7 +224,7 @@ export function AuditAnalyzing({
       presentation={presentation}
     >
       <LensConstellation active />
-      <p className="text-fg-muted max-w-[58ch] text-sm">
+      <p className="text-fg-muted max-w-[58ch] text-body">
         All nine areas are judged together, so there is no order to watch. This usually takes a
         couple of minutes — you can leave this page and come back.
       </p>
@@ -249,10 +249,10 @@ export function AuditWaitingHeader() {
       <MonoLabel as="h2" className="text-mint">
         Vibe needs you · Business audit waiting for you
       </MonoLabel>
-      <p className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em]">
+      <p className="text-fg max-w-[46ch] text-moment leading-snug font-semibold tracking-[-0.025em]">
         Vibe found the one part of the business only you can clarify.
       </p>
-      <p className="text-fg-muted max-w-[58ch] text-sm leading-relaxed">
+      <p className="text-fg-muted max-w-[58ch] text-body leading-relaxed">
         Vibe has everything else it needs. Answer this and the audit carries on — nothing has been
         spent while it waits.
       </p>

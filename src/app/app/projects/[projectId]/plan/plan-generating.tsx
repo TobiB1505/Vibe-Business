@@ -154,7 +154,7 @@ export function PlanGenerating({
               return (
                 <div
                   key={item.label}
-                  className="text-fg-secondary flex items-center gap-3 text-xs leading-relaxed"
+                  className="text-fg-secondary flex items-center gap-3 text-caption leading-relaxed"
                 >
                   <span className="border-mint-line bg-mint-tint-soft text-mint flex size-9 shrink-0 items-center justify-center rounded-full border">
                     <Icon size={17} />
@@ -167,7 +167,7 @@ export function PlanGenerating({
         )}
 
         {running && (
-          <p className="text-fg-meta relative z-10 mt-8 text-xs">
+          <p className="text-fg-meta relative z-10 mt-8 text-caption">
             You can leave this page. Vibe will continue.
           </p>
         )}
@@ -175,7 +175,7 @@ export function PlanGenerating({
 
       <div className="border-line-2 bg-surface-1 rounded-panel flex flex-wrap items-center gap-3 border px-4 py-3">
         <LockIcon size={15} className="text-fg-meta shrink-0" />
-        <p className="text-fg-muted text-xs leading-relaxed">
+        <p className="text-fg-muted text-caption leading-relaxed">
           Your data is private. Vibe uses it only to work out what to recommend for this product.
         </p>
       </div>

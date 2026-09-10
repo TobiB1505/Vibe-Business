@@ -1,5 +1,6 @@
 import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
-import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
+import { type CreditUnits } from "@/modules/credits/units";
+import { CreditAmount } from "./credit-amount";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
 /**
@@ -85,11 +86,11 @@ export function CreditPrice({
   const display = priceDisplayFor(operation, pricingClass);
   if (display.kind === "silent") return null;
 
-  return (
-    <span className={className ?? "text-fg-meta text-ui tabular-nums"}>
-      {display.kind === "included"
-        ? INCLUDED_WORD
-        : `${formatCreditsForDisplay(display.credits)} Credits`}
-    </span>
-  );
+  if (display.kind === "included") {
+    return <span className={className ?? "text-fg-meta text-ui"}>{INCLUDED_WORD}</span>;
+  }
+
+  // The coin, from here on. A price is the one line on a screen that means
+  // money is about to move, and set in the interface face it said nothing.
+  return <CreditAmount credits={display.credits} className={className} />;
 }

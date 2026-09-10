@@ -6,6 +6,8 @@ import { MonoLabel } from "@/components/ui/typography";
 import { planMoveHref } from "@/modules/action-plans/source";
 import { IMPACT_LABELS } from "@/modules/opportunities/schema";
 import type { HomeView } from "@/modules/projects/command-center";
+import { proseLinkClasses } from "@/components/ui/text-link";
+import { RatingChip } from "@/components/ui/status-pill";
 
 /**
  * The one thing Home is for (CORE-5).
@@ -68,15 +70,12 @@ export function HomeStatus({
           </h3>
         )}
         {identity.purpose ? (
-          <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{identity.purpose}</p>
+          <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{identity.purpose}</p>
         ) : (
-          <p className="text-fg-muted max-w-[62ch] text-sm">
+          <p className="text-fg-muted max-w-[62ch] text-body">
             It reads your code and visits your product, then tells you in one paragraph what it
             thinks you built.{" "}
-            <Link
-              href={productHref}
-              className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-            >
+            <Link href={productHref} className={proseLinkClasses()}>
               Start there
             </Link>
             .
@@ -90,7 +89,7 @@ export function HomeStatus({
           {health.kind === "scored" && (
             <p className="text-fg text-title font-bold">
               <span className="font-mono tabular-nums">{health.score}</span>
-              <span className="text-fg-muted font-mono text-sm"> / 100</span>
+              <span className="text-fg-muted font-mono text-body"> / 100</span>
             </p>
           )}
           {/*
@@ -100,24 +99,21 @@ export function HomeStatus({
           */}
           {health.kind === "unscored" && (
             <>
-              <p className="text-fg-body text-sm font-medium">Not enough to score yet</p>
-              {health.reason && <p className="text-fg-muted max-w-[62ch] text-sm">{health.reason}</p>}
+              <p className="text-fg-body text-body font-medium">Not enough to score yet</p>
+              {health.reason && <p className="text-fg-muted max-w-[62ch] text-body">{health.reason}</p>}
             </>
           )}
           {health.kind === "not_analyzed" && (
-            <p className="text-fg-muted max-w-[62ch] text-sm">
+            <p className="text-fg-muted max-w-[62ch] text-body">
               Vibe hasn&apos;t judged this as a business yet.{" "}
-              <Link
-                href={healthHref}
-                className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-              >
+              <Link href={healthHref} className={proseLinkClasses()}>
                 Business Health
               </Link>{" "}
               is where that starts.
             </p>
           )}
           {health.kind !== "not_analyzed" && health.conclusion && (
-            <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+            <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
               {health.conclusion}
             </p>
           )}
@@ -126,9 +122,9 @@ export function HomeStatus({
         {finding && (
           <section className="flex flex-col gap-2">
             <MonoLabel>Current focus</MonoLabel>
-            <p className="text-fg-body text-sm leading-relaxed font-medium">{finding.headline}</p>
+            <p className="text-fg-body text-body leading-relaxed font-medium">{finding.headline}</p>
             {finding.whyItMatters && (
-              <p className="text-fg-muted max-w-[62ch] text-sm leading-relaxed">
+              <p className="text-fg-muted max-w-[62ch] text-body leading-relaxed">
                 {finding.whyItMatters}
               </p>
             )}
@@ -142,24 +138,24 @@ export function HomeStatus({
             <>
               <div className="flex flex-wrap items-center gap-2.5">
                 <StatusDot tone="active" />
-                <p className="text-fg text-base leading-snug font-semibold">{nextMove.title}</p>
+                <p className="text-fg text-card-title font-semibold">{nextMove.title}</p>
               </div>
-              <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+              <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
                 {nextMove.problem}
               </p>
               {/* The engine's own rating, named rather than re-derived here. */}
-              <p className="text-fg-meta font-mono text-meta">{IMPACT_LABELS[nextMove.impact]}</p>
+              <RatingChip>{IMPACT_LABELS[nextMove.impact]}</RatingChip>
             </>
           )}
 
           {nextMove.kind === "none_found" && (
-            <p className="text-fg-muted max-w-[62ch] text-sm">
+            <p className="text-fg-muted max-w-[62ch] text-body">
               Vibe looked and didn&apos;t find a move worth putting ahead of the others right now.
             </p>
           )}
 
           {nextMove.kind === "not_identified" && (
-            <p className="text-fg-muted max-w-[62ch] text-sm">
+            <p className="text-fg-muted max-w-[62ch] text-body">
               Vibe hasn&apos;t worked out what to do next yet. That comes from the business audit.
             </p>
           )}
@@ -170,7 +166,7 @@ export function HomeStatus({
                 clicked (UI-S3 §6). */}
             <Link
               href={nextMove.kind === "move" ? planMoveHref(planHref, nextMove.id) : planHref}
-              className={buttonClasses({ variant: "primary", size: "sm" })}
+              className={buttonClasses({ variant: "primary" })}
             >
               {nextMove.kind === "move" ? "Review this move" : "Open Action Plan"}
             </Link>
@@ -180,7 +176,7 @@ export function HomeStatus({
               prepared" is already said by the count in the navigation.
             */}
             {view.preparedCount > 0 && (
-              <Link href={agentHref} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+              <Link href={agentHref} className={buttonClasses({ variant: "secondary" })}>
                 See what Vibe prepared
               </Link>
             )}

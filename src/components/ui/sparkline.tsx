@@ -40,7 +40,20 @@ import { cn } from "@/lib/utils/cn";
 
 const WIDTH = 240;
 const HEIGHT = 56;
-/** Half a stroke plus a little, so a reading of 0 or 100 is not clipped. */
+/**
+ * Horizontal breathing room, so the first and last readings are not flush
+ * against the edge of the box.
+ *
+ * There is deliberately no *vertical* inset. There used to be, and it is what
+ * made the chart wrong: the axis beside it draws `100`, `50` and `0` against
+ * the edges of the plot box, so a data band inset from those edges labels
+ * every reading with a number it is not at. Measured on the dashboard, a score
+ * of 0 drew 7px below the line marked `0`.
+ *
+ * A stroke at exactly 0 or 100 therefore hangs half its width outside the
+ * viewBox, which is why the element is `overflow-visible`. Spilling 1.25px is
+ * invisible; labelling the data wrong is not.
+ */
 const INSET = 3;
 
 /** A run of consecutive scored readings — what actually becomes a stroke. */
@@ -53,7 +66,7 @@ function xFor(index: number, total: number): number {
 
 function yFor(score: number): number {
   const clamped = Math.max(0, Math.min(score, 100));
-  return HEIGHT - INSET - (clamped / 100) * (HEIGHT - INSET * 2);
+  return HEIGHT - (clamped / 100) * HEIGHT;
 }
 
 /**
@@ -95,6 +108,29 @@ export function sparklineBreakCaption(breakCount: number): string | null {
     : `The line breaks ${breakCount} times where Vibe changed how it scores. Readings either side of a break are not comparable.`;
 }
 
+/**
+ * A round marker at one reading.
+ *
+ * A zero-length line with a round cap rather than a `<circle>`, for the reason
+ * the file already gives once: `preserveAspectRatio="none"` stretches the
+ * viewBox horizontally, and a circle stretches with it into an ellipse. A cap
+ * is drawn in stroke space, and `non-scaling-stroke` keeps that in pixels.
+ */
+function Dot({ x, y, size, className }: { x: number; y: number; size: number; className: string }) {
+  return (
+    <line
+      x1={x}
+      y1={y}
+      x2={x}
+      y2={y}
+      className={className}
+      strokeWidth={size}
+      strokeLinecap="round"
+      vectorEffect="non-scaling-stroke"
+    />
+  );
+}
+
 export function Sparkline({
   segments,
   className,
@@ -125,6 +161,14 @@ export function Sparkline({
   const runs = indexed.flatMap((points) => runsIn(points, total));
 
   /*
+   * The most recent scored reading, so the chart can say which end of the line
+   * is now. Without it a founder reads a shape and has to work out the
+   * direction from the dates underneath — the one thing the drawing is for.
+   */
+  const lastRun = runs[runs.length - 1];
+  const latest = lastRun?.[lastRun.length - 1];
+
+  /*
    * Where one contract ended and the next began, placed midway between the two
    * readings so it belongs to neither of them.
    */
@@ -153,8 +197,14 @@ export function Sparkline({
        */
       preserveAspectRatio="none"
       className={cn(
-        "w-full",
-        variant === "chart" ? "h-40" : "h-8",
+        // `overflow-visible` so a reading of 0 or 100 keeps its full stroke.
+        // See `INSET`: the alternative is a data band that does not reach the
+        // lines the axis labels.
+        "w-full overflow-visible",
+        // The chart fills whatever plot box it was given, because the axis and
+        // the gridlines are drawn against that same box. It used to be `h-40`
+        // inside an `h-36` frame — 16px of chart hanging below the `0` line.
+        variant === "chart" ? "h-full" : "h-8",
         tone === "mint" && "text-mint",
         tone === "amber" && "text-amber",
         tone === "coral" && "text-coral",
@@ -165,8 +215,17 @@ export function Sparkline({
     >
       {variant === "chart" && (
         <defs>
+          {/*
+            The area is a hint that the line has a floor, not a block of
+            colour. It used to be a flat 22% wash from the stroke all the way
+            down, which on a two-point run at 46 painted a third of the panel
+            solid amber and made the *fill* the loudest thing in a card whose
+            subject is a number. Three stops instead of two: it leaves the
+            stroke at 18% and is gone by the halfway mark.
+          */}
           <linearGradient id="business-signal-area" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.18" />
+            <stop offset="45%" stopColor="currentColor" stopOpacity="0.05" />
             <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
           </linearGradient>
         </defs>
@@ -223,9 +282,38 @@ export function Sparkline({
               strokeLinejoin="round"
               vectorEffect="non-scaling-stroke"
             />
+            {/*
+              One marker per reading, on the chart only. The compact variant is
+              a shape in a row and dots would turn it into noise; the chart is
+              the screen's subject, and without markers a founder cannot tell
+              four audits from forty — the line looks continuous either way.
+            */}
+            {variant === "chart" &&
+              run.map((point) => (
+                <Dot
+                  key={`dot-${point.x}`}
+                  x={point.x}
+                  y={point.y}
+                  size={5}
+                  className="stroke-current"
+                />
+              ))}
           </g>
         );
       })}
+
+      {/*
+        Now, marked. A halo in the line's own colour rather than a knockout
+        ring in the page's: the card behind this is glass in the second
+        palette, so "the background colour" is not a thing this component can
+        know. A translucent halo is correct over any of them.
+      */}
+      {variant === "chart" && latest && (
+        <>
+          <Dot x={latest.x} y={latest.y} size={12} className="stroke-current opacity-20" />
+          <Dot x={latest.x} y={latest.y} size={7} className="stroke-current" />
+        </>
+      )}
     </svg>
   );
 }

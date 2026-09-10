@@ -7,6 +7,7 @@ import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
 import { CoverageLine } from "@/components/system/confidence";
 import type { ScoreTone } from "@/components/ui/score-display";
+import { figureClasses } from "@/components/ui/figure";
 
 /**
  * The overall reading's own tone, by state.
@@ -62,7 +63,20 @@ type PlanetStyle = CSSProperties & {
   "--planet-accent": string;
 };
 
-function planetStyle(node: BusinessBrainNode): PlanetStyle {
+/**
+ * The orb's palette, keyed on health.
+ *
+ * Exported because the landing page draws the same nine orbs as a staircase
+ * (UI-34) and the alternative was four RGB triples copied into a marketing
+ * file — where "149 146 138" would have quietly stopped meaning *unscored* the
+ * first time this changed.
+ *
+ * It takes only the health, which is all it ever read. The full node was the
+ * signature because every caller happened to have one; the landing page does
+ * not, and the alternative was casting an object with one field through
+ * `unknown` to satisfy a parameter the body never touches.
+ */
+export function planetStyle(node: Pick<BusinessBrainNode, "health">): PlanetStyle {
   if (node.health === "strong") {
     return { "--planet-rgb": "0 229 160", "--planet-accent": "var(--color-mint)" };
   }
@@ -212,7 +226,7 @@ function NodeButton({
       >
         <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
         <span className="text-fg mt-1.5 max-w-[6.5rem] text-[0.72rem] leading-[1.1] font-semibold tracking-[-0.018em]">{node.label}</span>
-        <span className="text-fg mt-1 text-[1.35rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">{node.score ?? "—"}</span>
+        <span className={figureClasses("sm", "text-fg mt-1")}>{node.score ?? "—"}</span>
         <span className={cn("mt-1.5 flex items-center gap-1.5 text-[0.65rem] font-medium", statusTone(node))}>
           <span aria-hidden="true" className="business-brain-status-dot size-1.5 rounded-full" />
           {node.healthLabel}
@@ -247,8 +261,8 @@ function MobileBrain({ view, selected, onSelect, always = false }: {
     >
       <div className="business-brain-mobile-core mx-auto flex size-48 flex-col items-center justify-center rounded-full text-center">
         <span className="text-fg text-5xl leading-none font-semibold tracking-[-0.05em]">{view.overall.score ?? "—"}</span>
-        <span className="text-fg mt-2 text-sm font-semibold">Business Health</span>
-        <span className={cn("mt-2 text-xs", SCORE_STATE_TEXT[view.overall.state])}>{view.overall.stateLabel}</span>
+        <span className="text-fg mt-2 text-body font-semibold">Business Health</span>
+        <span className={cn("mt-2 text-caption", SCORE_STATE_TEXT[view.overall.state])}>{view.overall.stateLabel}</span>
       </div>
 
       <CoverageLine
@@ -272,15 +286,15 @@ function MobileBrain({ view, selected, onSelect, always = false }: {
                 className="business-brain-planet flex size-36 cursor-pointer flex-col items-center justify-center rounded-full border text-center outline-none focus-visible:ring-2 focus-visible:ring-mint"
               >
                 <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
-                <span className="text-fg mt-2 max-w-28 text-xs font-semibold leading-tight">{node.label}</span>
-                <span className="text-fg mt-1 text-xl font-semibold tabular-nums">{node.score ?? "—"}</span>
+                <span className="text-fg mt-2 max-w-28 text-caption font-semibold leading-tight">{node.label}</span>
+                <span className={figureClasses("sm", "text-fg mt-1")}>{node.score ?? "—"}</span>
                 <span className={cn("mt-1 text-[0.65rem]", statusTone(node))}>{node.healthLabel}</span>
               </button>
             </li>
           ))}
         </ul>
       </div>
-      <p className="text-fg-muted text-center text-xs">Swipe through the nine business areas.</p>
+      <p className="text-fg-muted text-center text-caption">Swipe through the nine business areas.</p>
     </div>
   );
 }
@@ -399,8 +413,8 @@ export function BusinessMap({
           className="business-brain-core pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-[13.4rem] flex-col items-center justify-center rounded-full text-center"
           style={{ transform: "translate(-50%, -50%)" }}
         >
-          <span className="text-fg text-[3.9rem] leading-none font-semibold tracking-[-0.065em] tabular-nums">{view.overall.score ?? "—"}</span>
-          <span className="text-fg mt-2.5 text-base font-semibold">Business Health</span>
+          <span className={figureClasses("lg", "text-fg")}>{view.overall.score ?? "—"}</span>
+          <span className="text-fg mt-2.5 text-title font-semibold">Business Health</span>
           <span className={cn("mt-2.5 rounded-full px-3 py-1 text-[0.7rem] font-medium", SCORE_STATE_CHIP[view.overall.state])}>{view.overall.stateLabel}</span>
         </div>
 

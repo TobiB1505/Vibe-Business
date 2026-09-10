@@ -32,7 +32,7 @@ export function UnderstandingStatus({
         nothing to do about it (UI-S1 §14).
       */}
       <div className="flex flex-col gap-2">
-        <h2 className="text-fg text-2xl font-semibold">
+        <h2 className="text-fg text-moment font-semibold">
           {STAGE_COPY[operation.stage] ?? "Vibe is getting to know your product"}
         </h2>
         {/*
@@ -42,17 +42,17 @@ export function UnderstandingStatus({
           that is exactly the claim that has stopped being safe to make.
         */}
         {!operation.stalled && (
-          <p className="text-fg-muted text-sm">You can leave this page. Vibe will keep going.</p>
+          <p className="text-fg-muted text-body">You can leave this page. Vibe will keep going.</p>
         )}
       </div>
       <dl className="grid w-full max-w-[38rem] gap-2 text-left sm:grid-cols-2">
-        <div className="border-line-2 bg-surface-2 rounded-lg border p-3">
-          <dt className="text-fg-meta text-xs">Product source</dt>
-          <dd className="text-fg-body mt-1 text-sm">Repository connected</dd>
+        <div className="border-line-2 bg-surface-2 rounded-inset border p-3">
+          <dt className="text-fg-meta text-caption">Product source</dt>
+          <dd className="text-fg-body mt-1 text-body">Repository connected</dd>
         </div>
-        <div className="border-line-2 bg-surface-2 rounded-lg border p-3">
-          <dt className="text-fg-meta text-xs">Public product</dt>
-          <dd className="text-fg-body mt-1 text-sm">
+        <div className="border-line-2 bg-surface-2 rounded-inset border p-3">
+          <dt className="text-fg-meta text-caption">Public product</dt>
+          <dd className="text-fg-body mt-1 text-body">
             {hasLive ? "Live product read" : "No live site provided"}
           </dd>
         </div>

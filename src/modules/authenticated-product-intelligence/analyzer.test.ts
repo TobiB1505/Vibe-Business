@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { analyzeAuthenticatedProduct, selectAuthenticatedPage, type AnalysisBrowserPort, type AnalysisPagePort } from "./analyzer";
+import {
+  analyzeAuthenticatedProduct,
+  selectAuthenticatedPage,
+  type AnalysisBrowserPort,
+  type AnalysisPagePort,
+} from "./analyzer";
 import { DEFAULT_AUTHENTICATED_BUDGETS } from "./budgets";
 import { routeShape } from "./routes";
 import type { RawPageExtraction } from "./extract";
@@ -28,12 +33,14 @@ function extraction(overrides: Partial<RawPageExtraction> = {}): RawPageExtracti
 }
 
 /** A fake browser: one tab whose URL follows navigation, plus block counters. */
-function fakeBrowser(options: {
-  urls?: string[];
-  extractionFor?: (path: string) => RawPageExtraction;
-  blocked?: Partial<AnalysisBrowserPort["blocked"]>;
-  gotoImpl?: (url: string) => Promise<{ status: number | null }>;
-} = {}) {
+function fakeBrowser(
+  options: {
+    urls?: string[];
+    extractionFor?: (path: string) => RawPageExtraction;
+    blocked?: Partial<AnalysisBrowserPort["blocked"]>;
+    gotoImpl?: (url: string) => Promise<{ status: number | null }>;
+  } = {},
+) {
   let current = options.urls?.[0] ?? `${ORIGIN}/app`;
   const visited: string[] = [];
 
@@ -73,13 +80,22 @@ function repositoryWith(paths: string[]): RepositoryIntelligenceSnapshot {
     routes: {
       mode: "app_router",
       truncated: false,
-      routes: paths.map((path) => ({ path, kind: "page", dynamic: false, sourcePath: `src/app${path}/page.tsx` })),
+      routes: paths.map((path) => ({
+        path,
+        kind: "page",
+        dynamic: false,
+        sourcePath: `src/app${path}/page.tsx`,
+      })),
     },
   } as unknown as RepositoryIntelligenceSnapshot;
 }
 
-function publicWith(pages: { path: string; redirectedTo: string | null }[]): LiveProductIntelligenceSnapshot {
-  return { pages: pages.map((page) => ({ ...page, status: 200 })) } as unknown as LiveProductIntelligenceSnapshot;
+function publicWith(
+  pages: { path: string; redirectedTo: string | null }[],
+): LiveProductIntelligenceSnapshot {
+  return {
+    pages: pages.map((page) => ({ ...page, status: 200 })),
+  } as unknown as LiveProductIntelligenceSnapshot;
 }
 
 const baseInput = {
@@ -192,13 +208,16 @@ describe("analyzeAuthenticatedProduct", () => {
     for (const url of visited) {
       expect(new URL(url).origin).toBe(ORIGIN);
     }
-    expect(visited.some((url) => url.includes("google.com") || url.includes("stripe.com"))).toBe(false);
+    expect(visited.some((url) => url.includes("google.com") || url.includes("stripe.com"))).toBe(
+      false,
+    );
   });
 
   it("never navigates to logout, which would end the session under analysis", async () => {
     const { browser, visited } = fakeBrowser({
       urls: [`${ORIGIN}/app`],
-      extractionFor: () => extraction({ sameOriginLinks: [`${ORIGIN}/logout`, `${ORIGIN}/app/settings`] }),
+      extractionFor: () =>
+        extraction({ sameOriginLinks: [`${ORIGIN}/logout`, `${ORIGIN}/app/settings`] }),
     });
 
     await analyzeAuthenticatedProduct({ ...baseInput, browser });
@@ -381,10 +400,10 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
   }
 
   it("does not record a path twice when a candidate redirects onto another candidate", async () => {
-    const { browser } = redirectingBrowser(
-      { "/app/profile": "/app/settings" },
-      [`${ORIGIN}/app/profile`, `${ORIGIN}/app/settings`],
-    );
+    const { browser } = redirectingBrowser({ "/app/settings/profile": "/app/settings" }, [
+      `${ORIGIN}/app/settings/profile`,
+      `${ORIGIN}/app/settings`,
+    ]);
 
     const result = await analyzeAuthenticatedProduct({ ...baseInput, browser });
 
@@ -397,13 +416,13 @@ describe("analyzeAuthenticatedProduct — a redirect must not cause a second vis
   });
 
   it("inspects a path once when two independent sources offer it", async () => {
-    const { browser } = redirectingBrowser({}, [`${ORIGIN}/app/billing`]);
+    const { browser } = redirectingBrowser({}, [`${ORIGIN}/app/settings/billing`]);
 
     const result = await analyzeAuthenticatedProduct({
       ...baseInput,
       browser,
       // Offered as a repository route *and* discovered as a link.
-      repository: repositoryWith(["/app/billing"]),
+      repository: repositoryWith(["/app/settings/billing"]),
     });
 
     expect(result.ok).toBe(true);

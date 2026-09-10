@@ -1,5 +1,6 @@
 import { type RetailOperationKind } from "@/modules/credits/retail";
-import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
+import { type CreditUnits } from "@/modules/credits/units";
+import { CreditAmount } from "@/components/ui/credit-amount";
 import { INCLUDED_WORD, priceDisplayFor } from "@/components/ui/credit-price";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { cn } from "@/lib/utils/cn";
@@ -38,23 +39,14 @@ export type CostBalance = {
   display: string;
 };
 
-
-
 export function CostDisclosure({
   operation,
   pricingClass,
-  balance,
   className,
 }: {
   /** Null when the control is free or unpriced. Renders nothing. */
   operation: RetailOperationKind | null;
   pricingClass?: ExecutionPricingClass | null;
-  /**
-   * The account balance, when the surface has read it. Optional so a control
-   * on a page that does not read billing still discloses its price — a missing
-   * balance must never suppress a price that exists.
-   */
-  balance?: CostBalance | null;
   className?: string;
 }) {
   if (operation === null) return null;
@@ -68,30 +60,18 @@ export function CostDisclosure({
    * operation back into a conversation about spending that it is not in.
    */
   if (display.kind === "included") {
-    return (
-      <span className={cn("text-fg-meta text-ui", className)}>{INCLUDED_WORD}</span>
-    );
+    return <span className={cn("text-fg-meta text-ui", className)}>{INCLUDED_WORD}</span>;
   }
 
-  const credits = display.credits;
-  const affordable = balance ? balance.availableCredits >= credits : true;
-
-  return (
-    <span
-      className={cn("inline-flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-ui", className)}
-    >
-      <span className="text-fg-secondary tabular-nums">
-        {formatCreditsForDisplay(credits)} Credits
-      </span>
-      {balance && (
-        <span className={cn("tabular-nums", affordable ? "text-fg-meta" : "text-amber")}>
-          {affordable
-            ? `of ${balance.display} available`
-            : `You have ${balance.display}. Not enough for this.`}
-        </span>
-      )}
-    </span>
-  );
+  // The price, and nothing beside it. The balance moved out of this
+  // component: it is shown once in the chrome, where a person can glance at
+  // it all day, rather than repeated under every priced control. A refusal
+  // then carries the way out — `balance.ts` declines before any hold is
+  // placed, so nothing is charged and there is no half-started operation.
+  // `md` because this is the price *at* a control — the size the composition
+  // was decided at. `CreditPrice` stays `sm`: it renders in dense rows where
+  // the price is one column among several rather than the thing being weighed.
+  return <CreditAmount credits={display.credits} className={className} />;
 }
 
 /**

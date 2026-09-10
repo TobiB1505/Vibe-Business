@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ElementType } from "react";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { STATUS_GLYPHS, StatusDot, statusToneText, type StatusTone } from "@/components/ui/status-pill";
@@ -9,6 +8,7 @@ import type { OpportunityActionState } from "@/modules/execution/view";
 import type { AgentFocus } from "@/modules/projects/agent-focus";
 import type { AgentContext, AgentReadiness } from "@/modules/projects/command-center";
 import { cn } from "@/lib/utils/cn";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Vibe's engineer, as a presence rather than a status bar (CORE-5).
@@ -133,29 +133,23 @@ function FocusBlock({
   return (
     <div className="border-line-2 flex flex-col gap-2 border-t pt-5" data-testid="agent-focus">
       <MonoLabel>Working on</MonoLabel>
-      <p className="text-fg text-base leading-snug font-semibold">
+      <p className="text-fg text-card-title font-semibold">
         {/* The engine's persisted rank, not a position in a list. */}
         <span className="text-fg-meta font-mono text-meta">
           {String(focus.move.rank).padStart(2, "0")}
         </span>{" "}
         {focus.move.title}
       </p>
-      <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{detail}</p>
-      <p className="text-fg-muted text-sm">
+      <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{detail}</p>
+      <p className="text-fg-muted text-body">
         {preparedChangeId ? (
-          <Link
-            href={preparedChangeHref(agentHref, preparedChangeId)}
-            className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-          >
+          <StandaloneLink href={preparedChangeHref(agentHref, preparedChangeId)}>
             Review the prepared change
-          </Link>
+          </StandaloneLink>
         ) : (
-          <Link
-            href={planMoveHref(planHref, focus.move.id)}
-            className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-          >
+          <StandaloneLink href={planMoveHref(planHref, focus.move.id)}>
             Open this move in your Action Plan
-          </Link>
+          </StandaloneLink>
         )}
       </p>
     </div>
@@ -204,7 +198,7 @@ export function AgentPanel({
           <StatusDot tone={tone} />
           <h3 className="text-fg text-title font-bold">{READINESS_HEADLINE[context.readiness]}</h3>
         </div>
-        <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+        <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">
           {READINESS_DETAIL[context.readiness]}
         </p>
       </div>
@@ -220,14 +214,14 @@ export function AgentPanel({
             */}
             <span
               aria-hidden
-              className={cn("mt-px shrink-0 text-sm", row.ready ? statusToneText("success") : "text-fg-faint")}
+              className={cn("mt-px shrink-0 text-body", row.ready ? statusToneText("success") : "text-fg-faint")}
             >
               {row.ready ? STATUS_GLYPHS.confirmed : STATUS_GLYPHS.pending}
             </span>
             <span className="flex min-w-0 flex-col gap-0.5">
               <span
                 className={cn(
-                  "text-sm font-medium",
+                  "text-body font-medium",
                   row.ready ? "text-fg-body" : "text-fg-muted",
                 )}
               >
@@ -240,7 +234,7 @@ export function AgentPanel({
       </ul>
 
       <div className="border-line-2 flex flex-col gap-2 border-t pt-5">
-        <p className="text-fg-prose text-sm leading-relaxed">
+        <p className="text-fg-prose text-body leading-relaxed">
           {preparedCount > 0
             ? `${preparedCount} ${preparedCount === 1 ? "change is" : "changes are"} below, each with what Vibe checked and what still needs you.`
             : "Nothing is in progress. Work is chosen from your Action Plan, one move at a time."}
@@ -250,40 +244,22 @@ export function AgentPanel({
           preparing a change is priced and confirmed, and it happens beside the
           Move it belongs to.
         */}
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           {context.rows.every((row) => row.ready) ? (
             <>
               Pick what it works on from your{" "}
-              <Link
-                href={planHref}
-                className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-              >
-                Action Plan
-              </Link>
-              .
+              <StandaloneLink href={planHref}>Action Plan</StandaloneLink>.
             </>
           ) : (
             <>
               Fill in what it&apos;s missing on{" "}
-              <Link
-                href={productHref}
-                className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-              >
-                My Product
-              </Link>
-              .
+              <StandaloneLink href={productHref}>My Product</StandaloneLink>.
             </>
           )}
           {executionHref && (
             <>
               {" "}
-              <Link
-                href={executionHref}
-                className="text-fg-muted hover:text-fg-body rounded-sm underline underline-offset-4 transition-interactive"
-              >
-                Run a step directly
-              </Link>
-              .
+              <StandaloneLink href={executionHref}>Run a step directly</StandaloneLink>.
             </>
           )}
         </p>

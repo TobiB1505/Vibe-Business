@@ -3,7 +3,6 @@ import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import {
   deriveNovaFocus,
@@ -134,8 +133,6 @@ function priceOf(entry: NovaHomeEntry) {
   return NOVA_ACTION_META[control.option.actionId].price;
 }
 
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
-
 function Label({ children }: { children: ReactNode }) {
   return (
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
@@ -263,7 +260,7 @@ function Stop({
           */}
           {price && priceDisplayFor(price).kind !== "silent" && (
             <span className="rounded-nav border border-line-3 bg-well px-3 py-1.5 text-caption text-fg-body">
-              Trying again costs <CostDisclosure operation={price} balance={STUDY_BALANCE} />
+              Trying again costs <CostDisclosure operation={price} />
             </span>
           )}
           <span className="study-press rounded-nav border border-mint-line bg-mint-tint-soft px-4 py-2 text-ui font-semibold text-mint">
@@ -298,7 +295,7 @@ function Caught({ kind, seed, note }: { kind: FocusCandidateKind; seed: string; 
           <span className="study-press rounded-nav border border-line-3 bg-surface-3 px-4 py-2 text-ui font-semibold text-fg-body">
             {label}
           </span>
-          <CostDisclosure operation={priceOf(entry)} balance={STUDY_BALANCE} />
+          <CostDisclosure operation={priceOf(entry)} />
         </div>
       )}
     </li>

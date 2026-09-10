@@ -1,9 +1,11 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button, TextAction } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import type { SetProductionUrlFailure } from "@/modules/projects/production-url";
 import { setProductionUrlAction, type ProductionUrlActionState } from "./production-url-action";
+import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * Production URL configuration (Sprint 3 §3, §30).
@@ -41,17 +43,16 @@ export function ProductionUrlForm({
   if (!editing && currentUrl !== null) {
     return (
       <div className="flex items-baseline gap-3">
-        <a
-          href={currentUrl}
-          target="_blank"
-          rel="noreferrer nofollow"
-          className="text-sm text-fg-body underline underline-offset-2 hover:text-fg"
-        >
+        <StandaloneLink href={currentUrl} external>
           {currentUrl}
-        </a>
-        <TextAction type="button" onClick={() => setEditing(true)} className="text-xs">
+        </StandaloneLink>
+        <Button
+          variant="ghost"
+          icon={<EditIcon size={14} />}
+          onClick={() => setEditing(true)}
+        >
           Change
-        </TextAction>
+        </Button>
       </div>
     );
   }
@@ -65,19 +66,23 @@ export function ProductionUrlForm({
           defaultValue={currentUrl ?? ""}
           placeholder="https://example.com"
           required
-          className="min-w-64 flex-1 rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
+          className="min-w-64 flex-1 rounded-inset border border-line-strong bg-field px-3 py-1.5 text-body text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
         />
         <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
         </Button>
         {currentUrl !== null && (
-          <TextAction type="button" onClick={() => setEditing(false)} className="text-xs">
+          <Button
+            variant="ghost"
+            icon={<DismissIcon size={14} />}
+            onClick={() => setEditing(false)}
+          >
             Cancel
-          </TextAction>
+          </Button>
         )}
       </form>
 
-      {state && !state.ok && <p className="text-sm text-amber">{ERROR_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-body text-amber">{ERROR_MESSAGES[state.error]}</p>}
     </div>
   );
 }

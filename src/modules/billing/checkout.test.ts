@@ -39,7 +39,7 @@ describe("billingReturnBase", () => {
     delete process.env.VERCEL_URL;
 
     const { billingReturnBase } = await import("./checkout");
-    expect(billingReturnBase()).toBe("https://vibe.business/app/billing");
+    expect(billingReturnBase()).toBe("https://vibe.business/app/settings/billing");
   });
 
   it("falls back to localhost, never a stale hardcode, when nothing at all is configured", async () => {
@@ -49,7 +49,7 @@ describe("billingReturnBase", () => {
     delete process.env.VERCEL_URL;
 
     const { billingReturnBase } = await import("./checkout");
-    expect(billingReturnBase()).toBe("http://localhost:3000/app/billing");
+    expect(billingReturnBase()).toBe("http://localhost:3000/app/settings/billing");
   });
 
   it("an explicit STRIPE_BILLING_RETURN_URL still wins over the resolved origin", async () => {

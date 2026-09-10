@@ -69,8 +69,22 @@ export type ProductScanExperienceProps = {
    * idea — but it drops two things the thread already owns: the panel frame,
    * which the block supplies, and the controls, which sit beside the block as
    * every other control in a thread does.
+   *
+   * `showcase` is the landing page (UI-34), and it exists because a settled
+   * scan is exactly what the other three callers *collapse*. In the product
+   * that is right: a founder who has seen their scan wants the summary line
+   * back, not the constellation again. A visitor who has never seen one wants
+   * the opposite, and there is nothing to collapse *into* — no live activity,
+   * no next step, no project. So `showcase` keeps the details open and, more
+   * importantly, **never refreshes the router**: the refresh below fires on a
+   * completed operation to pick up what the scan wrote, and on a marketing page
+   * there is nothing to pick up and no session to pick it up with.
+   *
+   * It is a read-only variant. Pair it with `canStart={false}`; nothing here
+   * dispatches an action, and the two places a control could appear are keyed
+   * on `workspace` and `onboarding`.
    */
-  variant?: "onboarding" | "workspace" | "block";
+  variant?: "onboarding" | "workspace" | "block" | "showcase";
 };
 
 const CONNECTORS: Record<FacetId, string> = {
@@ -347,7 +361,7 @@ function ScanFacetCard({
   return (
     <motion.article
       data-facet={facet.id}
-      className={`absolute z-30 flex h-[4.2rem] w-[10.75rem] items-center gap-3 rounded-xl border bg-app/95 px-3 shadow-lg backdrop-blur-md max-md:relative max-md:inset-auto max-md:h-[4.5rem] max-md:w-full max-md:translate-x-0 ${FACET_POSITIONS[facet.id]} ${
+      className={`absolute z-30 flex h-[4.2rem] w-[10.75rem] items-center gap-3 rounded-field border bg-app/95 px-3 shadow-lg backdrop-blur-md max-md:relative max-md:inset-auto max-md:h-[4.5rem] max-md:w-full max-md:translate-x-0 ${FACET_POSITIONS[facet.id]} ${
         facet.ready ? "border-mint/35 shadow-mint/5" : "border-line-2"
       }`}
       initial={false}
@@ -359,7 +373,7 @@ function ScanFacetCard({
       transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
-        className={`grid size-8 shrink-0 place-items-center rounded-lg border ${
+        className={`grid size-8 shrink-0 place-items-center rounded-inset border ${
           facet.ready ? "border-mint/25 bg-mint/[0.07] text-mint" : "border-line-1 text-fg-muted"
         }`}
       >
@@ -367,7 +381,7 @@ function ScanFacetCard({
           {facet.id === "brand" && presentation?.logo ? (
             <motion.div
               key="brand-logo"
-              className="grid size-7 place-items-center overflow-hidden rounded-md"
+              className="grid size-7 place-items-center overflow-hidden rounded-inset"
               initial={reduceMotion ? false : { opacity: 0, scale: 0.7 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.3 }}
@@ -386,9 +400,21 @@ function ScanFacetCard({
           )}
         </AnimatePresence>
       </div>
+      {/*
+        The card is a fixed 10.75rem beside the graph, where truncating is the
+        only option — but below `md` it becomes a full-width tile in a
+        two-column grid, and there it was still truncating: "Product t…", "Core
+        feat…", "Audience…", "Brand / i…". Four of the six labels unreadable on
+        a phone, in the surface whose entire subject is what Vibe recognised.
+        Two lines there, one line where there is only room for one.
+      */}
       <div className="min-w-0">
-        <p className="truncate text-[0.78rem] font-semibold text-fg">{facet.label}</p>
-        <p className={`truncate text-[0.68rem] ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}>
+        <p className="truncate text-[0.78rem] font-semibold text-fg max-md:text-clip max-md:whitespace-normal">
+          {facet.label}
+        </p>
+        <p
+          className={`truncate text-[0.68rem] max-md:text-clip max-md:whitespace-normal ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}
+        >
           {facet.detail}
         </p>
       </div>
@@ -419,7 +445,7 @@ function DiscoveryGraph({
   return (
     <div
       data-testid="product-scan-graph"
-      className="relative h-[31rem] overflow-hidden rounded-2xl border border-line-2 bg-app/55 max-md:h-auto max-md:min-h-0 max-md:overflow-visible max-md:p-4"
+      className="relative h-[31rem] overflow-hidden rounded-card border border-line-2 bg-app/55 max-md:h-auto max-md:min-h-0 max-md:overflow-visible max-md:p-4"
     >
       <div
         aria-hidden="true"
@@ -588,12 +614,24 @@ function DiscoveringPanel({
   productName,
   active,
   motionEnabled,
+  /**
+   * True when this panel is full width rather than a 21rem sidebar.
+   *
+   * The value column was capped at `9.5rem` for every caller, which is right
+   * beside a graph in a two-column page and wrong under one: at full width it
+   * truncated "AI builders and founders" to "AI builders and foun…" with eight
+   * hundred pixels of empty row beside it. Keyed on the caller for the same
+   * reason the layout above it is — a `max-lg` viewport query cannot tell a
+   * 704px block inside a 1440px window from a 1440px page.
+   */
+  stacked,
 }: {
   facets: ScanFacet[];
   presentation: ProductScanPresentation | null;
   productName: string;
   active: boolean;
   motionEnabled: boolean;
+  stacked: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const rows = [
@@ -630,14 +668,23 @@ function DiscoveringPanel({
     .join("");
 
   return (
-    <aside className="flex h-[31rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
+    <aside className="flex h-[31rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-lg:h-auto max-lg:min-h-[31rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-fg">What we&apos;re discovering</h3>
+        {/*
+          The heading is a tense, and it was one tense for two states. A scan
+          that has finished and produced a picture is not still discovering
+          anything — in the workspace that was a small wrongness at the end of a
+          run, and on the landing page's settled showcase it is the heading over
+          six ticked rows.
+        */}
+        <h3 className="text-body font-semibold text-fg">
+          {!active && presentation ? "What Vibe worked out" : "What we’re discovering"}
+        </h3>
         <SparklesIcon size={17} className="text-mint" />
       </div>
 
       <div className="mt-4 flex min-h-[4.4rem] items-center gap-3 border-b border-line-1 pb-4">
-        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl border border-mint/25 bg-app text-lg font-semibold text-mint">
+        <div className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-field border border-mint/25 bg-app text-lg font-semibold text-mint">
           <AnimatePresence initial={false} mode="wait">
             {presentation?.logo ? (
               <motion.div
@@ -662,26 +709,35 @@ function DiscoveringPanel({
           </AnimatePresence>
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-fg">{productName}</p>
-          <p className="mt-1 line-clamp-2 text-xs leading-5 text-fg-muted">
+          <p className="truncate text-body font-semibold text-fg">{productName}</p>
+          <p className="mt-1 line-clamp-2 text-caption leading-5 text-fg-muted">
             {presentation?.description ?? "Vibe is assembling a grounded product picture."}
           </p>
         </div>
       </div>
 
-      <div className="mt-3 grid flex-1 grid-rows-6 overflow-hidden rounded-xl border border-line-1">
+      <div className="mt-3 grid flex-1 grid-rows-6 overflow-hidden rounded-field border border-line-1">
         {rows.map(({ facet, icon: Icon }) => (
           <div
             key={facet.label}
-            className="grid min-h-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-line-1 px-3 last:border-b-0"
+            /*
+              Two columns need room for a label and a value side by side, and a
+              390px phone does not have it: "Audience signals" beside "AI
+              builders and founders" clipped the label, whichever cap the value
+              was given. Below `sm` the value goes under its label instead —
+              the panel is `h-auto` there, so the rows may take the height.
+            */
+            className="grid min-h-0 grid-cols-[1fr_auto] items-center gap-3 border-b border-line-1 px-3 last:border-b-0 max-sm:grid-cols-1 max-sm:items-start max-sm:gap-1 max-sm:py-2.5"
           >
             <div className="flex min-w-0 items-center gap-2.5">
               <Icon size={16} className={facet.ready ? "text-fg-body" : "text-fg-muted"} />
-              <span className="truncate text-xs text-fg-muted">{facet.label}</span>
+              <span className="truncate text-caption text-fg-muted">{facet.label}</span>
             </div>
-            <div className="flex min-w-0 max-w-[9.5rem] items-center gap-2">
+            <div
+              className={`flex min-w-0 items-center gap-2 max-sm:max-w-none ${stacked ? "max-w-[26rem]" : "max-w-[9.5rem]"}`}
+            >
               <span
-                className={`truncate text-right text-xs ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+                className={`truncate text-right text-caption max-sm:text-left ${facet.ready ? "text-mint" : "text-fg-meta"}`}
               >
                 {facet.summary}
               </span>
@@ -695,9 +751,13 @@ function DiscoveringPanel({
         ))}
       </div>
 
-      <div className="mt-3 flex items-center justify-end gap-2 text-xs text-mint">
+      {/*
+        No arrow. UI-26 settled that the mark means *navigation*, and this is a
+        status line on a `<span>` that goes nowhere — an ornament beside a
+        label, which is the exact thing that sprint removed seventeen of.
+      */}
+      <div className="mt-3 flex items-center justify-end text-caption text-mint">
         <span>{presentation ? "Product profile ready" : "Live discovery"}</span>
-        <span aria-hidden="true">→</span>
       </div>
     </aside>
   );
@@ -716,19 +776,19 @@ function LiveActivity({
   const visibleEvents = events.slice(-8);
 
   return (
-    <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
+    <section className="flex h-[18rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center gap-2">
         <span
           className={`size-2 rounded-full ${active ? "bg-mint shadow-[0_0_10px_var(--color-mint)]" : "bg-mint/70"}`}
         />
-        <h3 className="text-sm font-semibold text-fg">Live activity</h3>
+        <h3 className="text-body font-semibold text-fg">Live activity</h3>
       </div>
       <ol className="mt-3 grid flex-1 grid-rows-8 overflow-hidden">
         {visibleEvents.length ? (
           visibleEvents.map((event) => (
             <motion.li
               key={event.id}
-              className={`grid min-h-0 grid-cols-[1.25rem_1fr_auto] items-center gap-2 rounded-lg px-1.5 text-xs ${
+              className={`grid min-h-0 grid-cols-[1.25rem_1fr_auto] items-center gap-2 rounded-inset px-1.5 text-caption ${
                 event.id === pulseEventId ? "bg-mint/[0.07] text-mint" : "text-fg-muted"
               }`}
               initial={false}
@@ -752,7 +812,7 @@ function LiveActivity({
             </motion.li>
           ))
         ) : (
-          <li className="col-span-full row-span-8 flex items-center justify-center text-center text-xs text-fg-muted">
+          <li className="col-span-full row-span-8 flex items-center justify-center text-center text-caption text-fg-muted">
             {active
               ? "The first grounded discovery will appear here."
               : "Start a scan to build the activity trail."}
@@ -777,9 +837,9 @@ function DiscoveriesGrid({
   const reduceMotion = useReducedMotion();
   const found = discoveryCount(events);
   return (
-    <section className="flex h-[18rem] flex-col rounded-2xl border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
+    <section className="flex h-[18rem] flex-col rounded-card border border-line-2 bg-surface-1 p-4 max-md:h-auto max-md:min-h-[18rem]">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold text-fg">What we&apos;ve discovered so far</h3>
+        <h3 className="text-body font-semibold text-fg">What we&apos;ve discovered so far</h3>
         <span className="rounded-full border border-mint/25 bg-mint/[0.06] px-2.5 py-1 font-mono text-[0.66rem] text-mint">
           {found} found
         </span>
@@ -791,7 +851,7 @@ function DiscoveriesGrid({
           return (
             <motion.article
               key={facet.id}
-              className={`flex min-h-0 items-center gap-3 rounded-xl border px-3 ${facet.ready ? "border-line-2 bg-app/65" : "border-line-1 bg-app/30"}`}
+              className={`flex min-h-0 items-center gap-3 rounded-field border px-3 ${facet.ready ? "border-line-2 bg-app/65" : "border-line-1 bg-app/30"}`}
               initial={false}
               animate={
                 pulse && !reduceMotion
@@ -807,7 +867,7 @@ function DiscoveriesGrid({
               transition={{ duration: reduceMotion ? 0 : 0.7 }}
             >
               <div
-                className={`grid size-8 shrink-0 place-items-center rounded-lg ${facet.ready ? "text-mint" : "text-fg-meta"}`}
+                className={`grid size-8 shrink-0 place-items-center rounded-inset ${facet.ready ? "text-mint" : "text-fg-meta"}`}
               >
                 {facet.id === "brand" && presentation?.logo ? (
                   <ProductLogo
@@ -821,7 +881,7 @@ function DiscoveriesGrid({
                 )}
               </div>
               <div className="min-w-0">
-                <p className="truncate text-xs font-semibold text-fg">{facet.label}</p>
+                <p className="truncate text-caption font-semibold text-fg">{facet.label}</p>
                 <p
                   className={`mt-1 line-clamp-2 text-[0.68rem] leading-4 ${facet.ready ? "text-fg-muted" : "text-fg-meta"}`}
                 >
@@ -849,14 +909,14 @@ function ScanFooter({
   const failed = operation?.status === "failed";
 
   return (
-    <footer className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-2xl border border-line-2 bg-surface-1 px-4 py-3">
+    <footer className="mt-4 flex min-h-[4.5rem] items-center gap-3 rounded-card border border-line-2 bg-surface-1 px-4 py-3">
       <div
         className={`grid size-10 shrink-0 place-items-center rounded-full ${failed ? "bg-coral-tint-soft text-coral" : "bg-mint-tint-soft text-mint"}`}
       >
         <SparklesIcon size={20} />
       </div>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-fg">
+        <p className="text-body font-medium text-fg">
           {failed
             ? "The scan needs attention"
             : active
@@ -865,7 +925,7 @@ function ScanFooter({
                 ? `${eventCount} individual discoveries saved`
                 : "Ready to understand your product"}
         </p>
-        <p className="mt-0.5 text-xs text-fg-muted">
+        <p className="mt-0.5 text-caption text-fg-muted">
           {active
             ? "You can leave this page — every discovery is stored as it arrives."
             : failed
@@ -984,6 +1044,13 @@ export function ProductScanExperience({
 
   useEffect(() => {
     if (
+      /*
+        The showcase is a picture on a public page. A completed operation there
+        is example data rather than something the server has just written, so a
+        refresh would re-render the marketing page to learn nothing — and it is
+        the one caller with no session to learn it with.
+      */
+      variant === "showcase" ||
       !operation ||
       (operation.status !== "completed" && operation.status !== "failed") ||
       refreshedOperation.current === operation.operationId
@@ -1029,6 +1096,11 @@ export function ProductScanExperience({
      a thread shows the result, and the live view is for while it is live. */
   const detailsExpanded =
     variant === "onboarding" ||
+    /*
+      The settled constellation is the whole point on the landing page, and it
+      is the one thing every other caller collapses once the scan has finished.
+    */
+    variant === "showcase" ||
     active ||
     !scanFinished ||
     expandedOperationId === operation?.operationId;
@@ -1082,11 +1154,11 @@ export function ProductScanExperience({
                 <MonoLabel className="text-mint">Product scan · complete</MonoLabel>
                 <h2
                   id="product-scan-title"
-                  className="mt-1 text-lg font-semibold tracking-[-0.02em] text-fg"
+                  className="mt-1 text-title font-semibold tracking-[-0.02em] text-fg"
                 >
                   Your product picture is ready
                 </h2>
-                <p className="mt-1 text-xs text-fg-muted">
+                <p className="mt-1 text-caption text-fg-muted">
                   {savedDiscoveryCount} individual discoveries saved for {productName}.
                 </p>
               </div>
@@ -1147,14 +1219,14 @@ export function ProductScanExperience({
                   id="product-scan-title"
                   className={
                     page
-                      ? "mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl"
+                      ? "mt-2 text-balance text-headline font-semibold tracking-[-0.035em] text-fg sm:text-display"
                       : "sr-only"
                   }
                 >
                   Understanding <span className="text-mint">your product</span>
                 </h2>
                 {page && (
-                  <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
+                  <p className="mt-2 max-w-2xl text-body leading-6 text-fg-muted sm:text-lead">
                     Vibe is learning what you built, how it works, and what kind of business it
                     could become.
                   </p>
@@ -1175,7 +1247,7 @@ export function ProductScanExperience({
                       </Button>
                     ) : null}
                     {blockedReason ? (
-                      <p className="max-w-xs text-right text-xs text-fg-muted max-lg:text-center">
+                      <p className="max-w-xs text-right text-caption text-fg-muted max-lg:text-center">
                         {blockedReason}
                       </p>
                     ) : (
@@ -1201,7 +1273,7 @@ export function ProductScanExperience({
               {displayFailure ? (
                 <div
                   role="alert"
-                  className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-sm text-coral"
+                  className="mb-4 rounded-field border border-coral-line bg-coral-tint-soft px-4 py-3 text-body text-coral"
                 >
                   {displayFailure}
                 </div>
@@ -1237,24 +1309,44 @@ export function ProductScanExperience({
                   productName={productName}
                   active={active}
                   motionEnabled={motionEnabled}
+                  stacked={!page}
                 />
               </div>
 
-              <div
-                className={
-                  page
-                    ? "mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1"
-                    : "mt-4 flex flex-col gap-4"
-                }
-              >
-                <LiveActivity events={revealedEvents} active={active} pulseEventId={pulseEventId} />
-                <DiscoveriesGrid
-                  facets={facets}
-                  events={revealedEvents}
-                  presentation={revealedPresentation}
-                  pulseEvent={pulseEvent}
-                />
-              </div>
+              {/*
+                The console half: the trail as it arrives, and the same six
+                facets again as saved cards. Both are for somebody watching
+                their own scan run — a live log is a live log, and the grid is
+                the trail's result in a form you can scan afterwards.
+
+                `showcase` drops them. On the landing page the scan is settled
+                by definition, so a "Live activity" heading over a finished list
+                is a label that is not true, and a third rendering of the same
+                six facets is length rather than evidence. What that variant
+                shows is the *result* — the constellation and the product
+                picture — with the footer's own count under it.
+              */}
+              {variant === "showcase" ? null : (
+                <div
+                  className={
+                    page
+                      ? "mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1"
+                      : "mt-4 flex flex-col gap-4"
+                  }
+                >
+                  <LiveActivity
+                    events={revealedEvents}
+                    active={active}
+                    pulseEventId={pulseEventId}
+                  />
+                  <DiscoveriesGrid
+                    facets={facets}
+                    events={revealedEvents}
+                    presentation={revealedPresentation}
+                    pulseEvent={pulseEvent}
+                  />
+                </div>
+              )}
 
               <ScanFooter
                 operation={operation}

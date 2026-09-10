@@ -18,7 +18,18 @@ import { describe, expect, it } from "vitest";
  */
 
 const DIR = join(process.cwd(), "src/app/app/(account)/settings");
-const src = readFileSync(join(DIR, "delete-account.tsx"), "utf8");
+
+/**
+ * The source with its line breaks flattened.
+ *
+ * These assertions are about sentences, and a sentence in JSX is wrapped by
+ * Prettier wherever the print width happens to fall. `says the person will not
+ * be able to sign back in` failed the moment an unrelated edit shifted that
+ * paragraph by two characters and the formatter broke the line between "sign"
+ * and "back in" — the disclosure was intact and the test was reading a line
+ * ending. What the obligation is about is the words, so the whitespace goes.
+ */
+const src = readFileSync(join(DIR, "delete-account.tsx"), "utf8").replace(/\s+/g, " ");
 const action = readFileSync(join(DIR, "delete-account-actions.ts"), "utf8");
 
 describe("what the confirmation must disclose", () => {

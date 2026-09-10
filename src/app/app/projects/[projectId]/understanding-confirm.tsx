@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Field, Input, inputClassName } from "@/components/ui/field";
+import { Field, Input, Textarea } from "@/components/ui/field";
 import { Surface } from "@/components/ui/surface";
 import { MAX_CORRECTION_LENGTH } from "@/modules/product-understanding/schema";
 import {
@@ -118,7 +118,7 @@ export function UnderstandingConfirm({
           </Button>
         </div>
         {saveState?.ok === false && (
-          <p className="text-amber text-sm">That couldn&apos;t be saved. Try again in a moment.</p>
+          <p className="text-amber text-body">That couldn&apos;t be saved. Try again in a moment.</p>
         )}
       </div>
     );
@@ -128,8 +128,8 @@ export function UnderstandingConfirm({
     <Surface level="section" padding="lg" className="w-full text-left">
       <form action={saveAction} className="flex flex-col gap-5">
         <div className="flex flex-col gap-1">
-          <h3 className="text-fg text-base font-semibold">Tell Vibe what it got wrong</h3>
-          <p className="text-fg-muted text-sm">
+          <h3 className="text-fg text-title font-semibold">Tell Vibe what it got wrong</h3>
+          <p className="text-fg-muted text-body">
             Anything you write here outranks what Vibe worked out on its own, and it stays that way
             the next time Vibe looks at your product.
           </p>
@@ -138,14 +138,13 @@ export function UnderstandingConfirm({
         {FIELDS.map((field) => (
           <Field key={field.name} id={field.name} label={field.label} hint={field.hint}>
             {field.long ? (
-              <textarea
+              <Textarea
                 id={field.name}
                 name={field.name}
                 defaultValue={values[field.name]}
                 maxLength={MAX_CORRECTION_LENGTH}
                 rows={3}
                 aria-describedby={`${field.name}-hint`}
-                className={inputClassName}
               />
             ) : (
               <Input
@@ -169,7 +168,7 @@ export function UnderstandingConfirm({
           </Button>
         </div>
 
-        <p className="text-fg-meta text-xs">
+        <p className="text-fg-meta text-caption">
           Leaving a field empty clears your correction and lets Vibe answer that one again.
         </p>
       </form>

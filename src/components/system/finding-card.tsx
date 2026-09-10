@@ -96,7 +96,7 @@ export function FindingCard({
       className={cn("flex flex-col gap-3", className)}
     >
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
-        <h3 className="text-fg flex min-w-0 items-baseline gap-2.5 text-[0.9375rem] leading-snug font-semibold">
+        <h3 className="text-fg flex min-w-0 items-baseline gap-2.5 text-card-title font-semibold">
           {rank !== undefined && (
             <span className="text-fg-meta shrink-0 font-mono text-meta tabular-nums">
               {String(rank).padStart(2, "0")}
@@ -117,14 +117,14 @@ export function FindingCard({
       {(() => {
         /* The prominent paragraph, then the quieter one. */
         const [first, second] =
-          lead === "why" && whyItMatters ? [whyItMatters, explanation] : [explanation, whyItMatters];
+          lead === "why" && whyItMatters
+            ? [whyItMatters, explanation]
+            : [explanation, whyItMatters];
         return (
           <>
-            {first && (
-              <p className="text-fg-prose max-w-[68ch] text-sm leading-relaxed">{first}</p>
-            )}
+            {first && <p className="text-fg-prose max-w-[68ch] text-body leading-relaxed">{first}</p>}
             {second && (
-              <p className="text-fg-secondary max-w-[68ch] text-sm leading-relaxed">{second}</p>
+              <p className="text-fg-secondary max-w-[68ch] text-body leading-relaxed">{second}</p>
             )}
           </>
         );

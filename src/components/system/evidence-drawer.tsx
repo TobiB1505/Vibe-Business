@@ -1,11 +1,11 @@
 "use client";
 
 import { useId, useState } from "react";
+import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
 import { Sheet } from "@/components/ui/sheet";
-import { TextAction } from "@/components/ui/button";
 import { RatingChip } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
-import { cn } from "@/lib/utils/cn";
 import { ConfidenceIndicator, type ConfidenceViewModel } from "./confidence";
 
 /**
@@ -82,14 +82,24 @@ export function EvidenceDrawer({
       <header className="border-line-2 flex flex-col gap-3 border-b p-6">
         <div className="flex items-start justify-between gap-4">
           <MonoLabel>Evidence</MonoLabel>
-          <TextAction type="button" onClick={onClose} className="text-ui">
-            Close
-          </TextAction>
+          {/*
+            A mark in a container rather than an underlined word. The word was
+            the least conventional answer available in a drawer header, and it
+            only ever read as a control because of a line under it — which on a
+            phone, where there is no hover to explain it, is all a founder gets.
+          */}
+          <Button
+            variant="ghost"
+            icon={<DismissIcon size={16} />}
+            label="Close"
+            onClick={onClose}
+            className="-me-1"
+          />
         </div>
         <h2 id={titleId} className="text-fg text-title font-bold">
           {title}
         </h2>
-        {conclusion && <p className="text-fg-prose max-w-[62ch] text-sm">{conclusion}</p>}
+        {conclusion && <p className="text-fg-prose max-w-[62ch] text-body">{conclusion}</p>}
         {confidence && <ConfidenceIndicator model={confidence} className="self-start" />}
       </header>
 
@@ -101,7 +111,7 @@ export function EvidenceDrawer({
            * opinion" — closing the drawer on an empty list would leave a
            * citation count the founder could press and learn nothing from.
            */
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             No evidence survived validation for this. Nothing here rests on it.
           </p>
         ) : (
@@ -111,7 +121,7 @@ export function EvidenceDrawer({
                 key={`${citation.source}:${citation.detail}:${index}`}
                 className="border-line-2 bg-well rounded-well flex flex-col gap-2 border p-4"
               >
-                <p className="text-fg-body text-sm leading-relaxed">{citation.detail}</p>
+                <p className="text-fg-body text-body leading-relaxed">{citation.detail}</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <MonoLabel>{citation.source}</MonoLabel>
                   {citation.certainty === "derived" && (
@@ -166,15 +176,21 @@ export function CitationCount({
 
   return (
     <>
-      <TextAction
-        type="button"
+      {/*
+        A container at rest rather than an underline. This is the disclosure
+        role: nothing around it says what it opens, so the word stays inside
+        the control and the chevron says the direction.
+      */}
+      <Button
+        variant="ghost"
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(true)}
-        className={cn("text-ui", className)}
+        icon={<ChevronDownIcon size={14} />}
+        className={className}
       >
         {total === 1 ? "1 source" : `${total} sources`}
-      </TextAction>
+      </Button>
       <EvidenceDrawer
         open={open}
         onClose={() => setOpen(false)}

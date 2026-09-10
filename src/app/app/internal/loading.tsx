@@ -20,7 +20,7 @@ export default function Loading() {
     <main className="mx-auto max-w-[1180px] px-8 py-10">
       <div className="border-b border-line-2 pb-4">
         <h1 className="text-[22px] font-semibold tracking-tight text-fg">Internal console</h1>
-        <p className="mt-1 text-[13px] text-fg-muted">Read-only. No action here writes anything.</p>
+        <p className="mt-1 text-ui text-fg-muted">Read-only. No action here writes anything.</p>
       </div>
 
       <div role="status" aria-label="Loading" className="mt-6 grid gap-4 lg:grid-cols-[1.35fr_1fr]">

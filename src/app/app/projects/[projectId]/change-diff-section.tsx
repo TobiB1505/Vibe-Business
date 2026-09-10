@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { DiffView } from "@/components/change/diff-view";
-import { TextAction } from "@/components/ui/button";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import {
   REVIEW_CLASSIFICATION_LABELS,
@@ -11,6 +10,9 @@ import {
   type ReviewClassificationResult,
 } from "@/modules/review/classification";
 import { getPreparedDiffAction } from "./prepare-change-action";
+import { ChevronDownIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils/cn";
 
 /**
  * What changed, on the card a person decides from (Sprint 0055 §2, ADR 0063).
@@ -103,35 +105,45 @@ export function ChangeDiffSection({
       {/* A direct child of the section, like every other panel's heading. The
           browser suite scopes each panel by exactly that relationship, so a
           heading nested inside a layout wrapper is a panel no test can name. */}
-      <h4 className="text-sm font-medium text-fg-body">What changed</h4>
+      <h4 className="text-card-title font-medium text-fg-body">What changed</h4>
 
       {classification && (
         <div className="space-y-1">
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             {REVIEW_CLASSIFICATION_LABELS[classification.classification]} ·{" "}
             {REVIEW_CLASSIFICATION_NOTES[classification.classification]}
           </p>
           {classification.routes.length > 0 && (
-            <p className="text-xs text-fg-muted">Pages affected: {classification.routes.join(", ")}</p>
+            <p className="text-caption text-fg-muted">Pages affected: {classification.routes.join(", ")}</p>
           )}
           {/* Why a page file did not earn a screenshot. Without this the reader
               has to guess whether the classifier missed it. */}
           {classification.downgradedPaths.length > 0 && (
-            <p className="text-xs text-fg-muted">{REVIEW_DOWNGRADE_NOTE}</p>
+            <p className="text-caption text-fg-muted">{REVIEW_DOWNGRADE_NOTE}</p>
           )}
         </div>
       )}
 
       {!isCodeReview && (
-        <TextAction type="button" className="text-xs" onClick={() => setOpen((was) => !was)}>
+        <Button
+          variant="ghost"
+          icon={
+            <ChevronDownIcon
+              size={14}
+              className={cn("transition-transform duration-150", open && "rotate-180")}
+            />
+          }
+          onClick={() => setOpen((was) => !was)}
+          aria-expanded={open}
+        >
           {open
             ? "Hide the diff"
             : `Show the diff — ${filesChanged} file${filesChanged === 1 ? "" : "s"}`}
-        </TextAction>
+        </Button>
       )}
 
-      {loading && <p className="text-sm text-fg-secondary">Reading the change…</p>}
-      {open && error && <p className="text-sm text-coral">{error}</p>}
+      {loading && <p className="text-body text-fg-secondary">Reading the change…</p>}
+      {open && error && <p className="text-body text-coral">{error}</p>}
       {open && diff && <DiffView diff={diff} />}
     </section>
   );

@@ -76,6 +76,35 @@ export default defineConfig({
     screenshot: "only-on-failure",
     video: "off",
     ...devices["Desktop Chrome"],
+    /*
+     * Every context starts as somebody who has already answered the cookie
+     * banner (UI-23).
+     *
+     * The banner is a card at the foot of every page until it is answered, so
+     * without this it covers whatever is at the bottom of the screen under
+     * test — measured: 15 specs failed on controls the card sat on top of, on
+     * screens that have nothing to do with cookies. Those failures were the
+     * banner working, not the screens breaking.
+     *
+     * The value refuses everything optional, so no test runs with a tracker
+     * loaded. `e2e/consent.spec.ts` clears this cookie and is the only place
+     * the banner itself is exercised.
+     */
+    storageState: {
+      cookies: [
+        {
+          name: "vibe-consent",
+          value: "v1.000.1757246400",
+          domain: "127.0.0.1",
+          path: "/",
+          expires: -1,
+          httpOnly: false,
+          secure: false,
+          sameSite: "Lax",
+        },
+      ],
+      origins: [],
+    },
   },
 
   projects: [

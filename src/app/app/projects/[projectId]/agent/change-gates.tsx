@@ -99,7 +99,7 @@ export function ChangeGates({
         visible text is simply replaced. Polite: it is a status, not an
         interruption.
       */}
-      <p role="status" className="text-fg text-sm font-medium">
+      <p role="status" className="text-fg text-body font-medium">
         {change.progress.headline}
       </p>
 
@@ -148,7 +148,7 @@ export function ChangeGates({
       />
 
       <details open={!change.progress.earlySettled} className="group space-y-3">
-        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-xs">
+        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-caption">
           {/* A code-only change was never previewed or photographed, and saying
               it was is the class of false status line UI-5 exists to remove. */}
           <span className="group-open:hidden">
@@ -232,7 +232,7 @@ export function ChangeGates({
       */}
       {chrome && (
         <details className="group border-line-2 space-y-2 border-t pt-3">
-        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-xs">
+        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-caption">
           <span className="group-open:hidden">
             How this was built — {change.filePaths.length} file
             {change.filePaths.length === 1 ? "" : "s"} changed
@@ -241,7 +241,7 @@ export function ChangeGates({
         </summary>
 
         <div className="rounded-well border-line-2 bg-well space-y-1 border p-3">
-          <p className="text-fg-muted font-mono text-xs">
+          <p className="text-fg-muted font-mono text-caption">
             {change.branchName}
             {" · "}
             {change.commitSha
@@ -252,7 +252,7 @@ export function ChangeGates({
           {/* Paths only. File contents live on the branch, never in our rows. */}
           <ul className="space-y-0.5">
             {change.filePaths.map((path) => (
-              <li key={path} className="text-fg-meta font-mono text-xs">
+              <li key={path} className="text-fg-meta font-mono text-caption">
                 {path}
               </li>
             ))}
