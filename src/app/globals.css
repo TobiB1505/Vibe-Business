@@ -479,6 +479,71 @@
 }
 
 /*
+ * A finger-sized hit area, without moving anything (UI-36).
+ *
+ * ## Why not simply make the controls bigger
+ *
+ * Because 40px was measured, not picked. `button.tsx` records both candidates
+ * being built and screenshotted: at 44px, 47 dense controls grew and broke the
+ * chrome they sit in — "Manage connection" and the wallet pill each wrapped to
+ * two lines. That decision is still right, and it is right on a phone too,
+ * where those same controls sit in less room rather than more.
+ *
+ * So the *visual* size is untouched and the *tappable* size is not. A
+ * transparent box, at least 44×44, centred on the control. Nothing reflows,
+ * nothing wraps, and a thumb hits what it is aiming at — which is what the
+ * target-size rule is actually about.
+ *
+ * ## Why `pointer: coarse` rather than a width
+ *
+ * Because the condition is a finger, not a narrow window. A phone in landscape
+ * is 844px wide and still a phone; a desktop window dragged narrow is still a
+ * mouse, and growing its hit areas would make controls swallow each other for
+ * a pointer that never needed it.
+ *
+ * ## What this does not fix
+ *
+ * A link inside a sentence. Those stay the height of their line, because a
+ * 44px target in running prose is a paragraph with holes in it — and the
+ * target-size rules exempt inline targets for exactly that reason.
+ */
+/*
+ * ## Why `@layer components` and not a bare rule
+ *
+ * `position: relative` here is a *fallback* — the pseudo-element needs a
+ * positioned box to measure against, and most controls have none. A control
+ * that positions itself already has one, and must keep it.
+ *
+ * Written unlayered this rule would win against `absolute`, because an
+ * unlayered declaration beats every layered one however specific. Nothing was
+ * broken by that yet — measured across 107 screens, no `vibe-tap` element had
+ * its own positioning overridden — which is exactly what makes it worth
+ * closing now: the first absolutely-positioned button to gain this class
+ * would have moved, silently, and the class is on every button in the
+ * product.
+ *
+ * In `components` it loses to the utilities layer, so a control that says
+ * where it sits keeps saying it.
+ */
+@layer components {
+  @media (pointer: coarse) {
+    .vibe-tap {
+      position: relative;
+    }
+
+    .vibe-tap::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      translate: -50% -50%;
+      height: max(100%, 44px);
+      width: max(100%, 44px);
+    }
+  }
+}
+
+/*
  * The phone's two bars are opaque, in every palette (UI-35).
  *
  * Both `--color-surface-1` here and `--glass-fill-chrome` in v2 are *films*:

@@ -93,42 +93,41 @@ export function ChangeGates({
     >
       {chrome && (
         <>
-      {/*
+          {/*
         A live region, because this sentence is the one thing here that changes
         as the change advances — and a screen reader announces nothing when
         visible text is simply replaced. Polite: it is a status, not an
         interruption.
       */}
-      <p role="status" className="text-fg text-body font-medium">
-        {change.progress.headline}
-      </p>
+          <p role="status" className="text-fg text-body font-medium">
+            {change.progress.headline}
+          </p>
 
-      {/*
+          {/*
         What it is and why, before anything asks for authorization. The written
         rationale wins when there is one — two answers to the same question
         would stack, and the written one is stronger.
       */}
-      <ChangeRationale rationale={change.rationale} />
+          <ChangeRationale rationale={change.rationale} />
 
-      {!change.rationale && (
-        <ChangeOrigin
-          origin={change.origin}
-          moveHref={change.opportunityId ? planMoveHref(planHref, change.opportunityId) : null}
-        />
-      )}
+          {!change.rationale && (
+            <ChangeOrigin
+              origin={change.origin}
+              moveHref={change.opportunityId ? planMoveHref(planHref, change.opportunityId) : null}
+            />
+          )}
 
-      {/*
+          {/*
         The way back, for a change whose rationale suppressed the origin block.
         Navigation rather than a second account of why the change exists —
         without it a deterministic change names its Move nowhere.
       */}
-      {change.rationale && change.origin && change.opportunityId && (
-        <MoveBacklink
-          title={change.origin.title}
-          href={planMoveHref(planHref, change.opportunityId)}
-        />
-      )}
-
+          {change.rationale && change.origin && change.opportunityId && (
+            <MoveBacklink
+              title={change.origin.title}
+              href={planMoveHref(planHref, change.opportunityId)}
+            />
+          )}
         </>
       )}
 
@@ -148,7 +147,7 @@ export function ChangeGates({
       />
 
       <details open={!change.progress.earlySettled} className="group space-y-3">
-        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-caption">
+        <summary className="text-fg-muted hover:text-fg-prose vibe-tap w-fit cursor-pointer list-none text-caption">
           {/* A code-only change was never previewed or photographed, and saying
               it was is the class of false status line UI-5 exists to remove. */}
           <span className="group-open:hidden">
@@ -232,31 +231,31 @@ export function ChangeGates({
       */}
       {chrome && (
         <details className="group border-line-2 space-y-2 border-t pt-3">
-        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-caption">
-          <span className="group-open:hidden">
-            How this was built — {change.filePaths.length} file
-            {change.filePaths.length === 1 ? "" : "s"} changed
-          </span>
-          <span className="hidden group-open:inline">How this was built</span>
-        </summary>
+          <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-caption">
+            <span className="group-open:hidden">
+              How this was built — {change.filePaths.length} file
+              {change.filePaths.length === 1 ? "" : "s"} changed
+            </span>
+            <span className="hidden group-open:inline">How this was built</span>
+          </summary>
 
-        <div className="rounded-well border-line-2 bg-well space-y-1 border p-3">
-          <p className="text-fg-muted font-mono text-caption">
-            {change.branchName}
-            {" · "}
-            {change.commitSha
-              ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}`
-              : change.baseBranch}
-          </p>
+          <div className="rounded-well border-line-2 bg-well space-y-1 border p-3">
+            <p className="text-fg-muted font-mono text-caption">
+              {change.branchName}
+              {" · "}
+              {change.commitSha
+                ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}`
+                : change.baseBranch}
+            </p>
 
-          {/* Paths only. File contents live on the branch, never in our rows. */}
-          <ul className="space-y-0.5">
-            {change.filePaths.map((path) => (
-              <li key={path} className="text-fg-meta font-mono text-caption">
-                {path}
-              </li>
-            ))}
-          </ul>
+            {/* Paths only. File contents live on the branch, never in our rows. */}
+            <ul className="space-y-0.5">
+              {change.filePaths.map((path) => (
+                <li key={path} className="text-fg-meta font-mono text-caption">
+                  {path}
+                </li>
+              ))}
+            </ul>
           </div>
         </details>
       )}
@@ -282,17 +281,17 @@ export function ChangeGates({
           whether to preview it. */}
       {show("review") && (
         <>
-      <OutcomePanel
-        projectId={projectId}
-        preparedChangeId={change.id}
-        card={change.outcome}
-        businessImpactLabel={change.businessImpact.ladderLabel}
-      />
-      <BusinessImpactPanel
-        projectId={projectId}
-        preparedChangeId={change.id}
-        card={change.businessImpact}
-      />
+          <OutcomePanel
+            projectId={projectId}
+            preparedChangeId={change.id}
+            card={change.outcome}
+            businessImpactLabel={change.businessImpact.ladderLabel}
+          />
+          <BusinessImpactPanel
+            projectId={projectId}
+            preparedChangeId={change.id}
+            card={change.businessImpact}
+          />
         </>
       )}
     </div>

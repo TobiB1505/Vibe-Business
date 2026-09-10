@@ -86,9 +86,9 @@ export function ConsentBanner() {
             Cookies, and who else sees this page
           </h2>
           <p className="text-fg-muted max-w-[68ch] text-caption leading-relaxed">
-            Vibe needs one cookie to keep you signed in. Everything else — remembering which
-            product you last opened, page-view counts, and the advertising tag that tells Meta
-            which advert worked — is off until you say otherwise.{" "}
+            Vibe needs one cookie to keep you signed in. Everything else — remembering which product
+            you last opened, page-view counts, and the advertising tag that tells Meta which advert
+            worked — is off until you say otherwise.{" "}
             <Link href="/privacy" className={proseLinkClasses()}>
               What Vibe stores
             </Link>
@@ -104,7 +104,21 @@ export function ConsentBanner() {
           />
         )}
 
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/*
+          A row on a phone too (UI-36).
+
+          Stacked, the three controls were 136px of a 390px screen and the
+          banner came to 330 — thirty-nine percent of the viewport, sitting on
+          the landing page's only call to action, which measured untappable
+          underneath it.
+
+          `flex-wrap` rather than a fixed row: the two equal choices fit side
+          by side at 390 and the third wraps under them, and at any width where
+          they do not, they stack exactly as before. Nothing is hidden and no
+          word of the copy moves — what this page says about cookies is not a
+          layout decision.
+        */}
+        <div className="flex flex-wrap items-center gap-2">
           {choosing ? (
             <>
               <Button onClick={() => save(draft)} data-testid="consent-save">

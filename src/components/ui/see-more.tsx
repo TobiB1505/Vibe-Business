@@ -140,7 +140,7 @@ export function SeeMore({
           aria-controls={id}
           onClick={() => setOpen((value) => !value)}
           className={cn(
-            "mt-1.5 inline-flex items-center gap-1 rounded-inline text-caption text-fg-muted",
+            "vibe-tap mt-1.5 inline-flex items-center gap-1 rounded-inline text-caption text-fg-muted",
             "transition-interactive hover:text-fg-body",
           )}
         >
