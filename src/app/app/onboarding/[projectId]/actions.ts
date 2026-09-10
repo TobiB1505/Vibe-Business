@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import { setFounderName } from "@/modules/auth/founder-profile";
 import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
 import type { InspectLiveFailureCode } from "@/modules/live-product-intelligence/service";
@@ -576,6 +577,61 @@ async function ownedProject(projectId: string, userId: string) {
     .eq("user_id", userId)
     .maybeSingle();
   return data ? supabase : null;
+}
+
+/**
+ * The founder's answer to the one question Nova asks about *them*.
+ *
+ * ## Why it is one action and not two
+ *
+ * Because it is one press. The founder types what they want to be called and
+ * continues; two actions would mean two round trips and a state where the name
+ * is saved but the introduction is not over, which is a screen nobody designed.
+ *
+ * ## Why the name is written through the same door as the profile form
+ *
+ * `setFounderName` normalises to one plain line, bounds the length and has a
+ * database CHECK behind it. A second write path here would be a second place
+ * for that to be true, and the first time they disagreed the disagreement
+ * would be a name in a model prompt that the front door would have refused.
+ *
+ * The account is `requireSession()`'s and row-level security checks it again;
+ * the browser says one string about itself and nothing else (rule 53's shape,
+ * with an ordinary authenticated client rather than the service-role one).
+ *
+ * ## Why an empty answer is not a failure
+ *
+ * Because declining to give a name is an answer. `normalizeFounderName` reads
+ * an empty box as null, the store deletes the row, and the introduction ends
+ * exactly as it does for somebody who typed one. Nova falls back to the
+ * greeting she already has for a founder she cannot name — which was never a
+ * degraded greeting.
+ */
+export async function introduceWithNameAction(
+  projectId: string,
+  displayName: string | null,
+): Promise<NovaFirstRunActionState> {
+  const session = await requireSession();
+  const supabase = await ownedProject(projectId, session.userId);
+  if (!supabase) return { ok: false, error: "not_found" };
+
+  /*
+   * A name that could not be saved must not cost the founder the press. The
+   * introduction still ends, and Settings → Profile is the other way in — the
+   * alternative is a screen that refuses to move on because a *label* did not
+   * store, which is out of all proportion to what was lost.
+   */
+  try {
+    await setFounderName(supabase, session.userId, displayName);
+  } catch (error) {
+    console.error("[nova] could not save the founder's name", {
+      message: error instanceof Error ? error.message : "unknown",
+    });
+  }
+
+  /* The rail prints the name on every signed-in screen. */
+  revalidatePath("/app", "layout");
+  return markNovaIntroducedAction(projectId);
 }
 
 export async function markNovaIntroducedAction(

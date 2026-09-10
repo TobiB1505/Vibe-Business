@@ -362,6 +362,16 @@ export const OPENING_WALKTHROUGH_SCENARIO = "study-opening-walkthrough";
 export const SHIPPED_OPENING_SCENARIO = "study-opening-shipped";
 
 /**
+ * The same opening for a founder Nova has no name for yet.
+ *
+ * A separate scenario rather than a flag on the one above, because the two are
+ * different screens: one greets and continues, the other greets, asks what to
+ * call somebody and continues on the answer. Reviewing them as one would mean
+ * only ever looking at whichever the flag happened to be set to.
+ */
+export const OPENING_ASKS_NAME_SCENARIO = "study-opening-asks-name";
+
+/**
  * The screen straight after it: the question, and the walkthrough behind it.
  *
  * Reachable in the product exactly once per project, by a founder who has just

@@ -24,7 +24,12 @@ import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import type { ActivityEntry } from "@/modules/audit-log/view";
 import type { OnboardingStep } from "@/modules/onboarding/state";
-import { markNovaIntroducedAction } from "@/app/app/onboarding/[projectId]/actions";
+import {
+  introduceWithNameAction,
+  markNovaIntroducedAction,
+} from "@/app/app/onboarding/[projectId]/actions";
+import { Field, Input } from "@/components/ui/field";
+import { MAX_FOUNDER_NAME_LENGTH } from "@/modules/auth/founder-name";
 
 /**
  * The first time a founder opens this project, and the room being built.
@@ -76,9 +81,9 @@ import { markNovaIntroducedAction } from "@/app/app/onboarding/[projectId]/actio
  * it. A module-level constant would have greeted every founder as the first
  * one this process happened to serve.
  */
-function introductionBubbles(name: string | null) {
+function introductionBubbles(name: string | null, askForName: boolean) {
   return speechBubbles(
-    buildNovaFirstRunFeed("introduce", name).filter(
+    buildNovaFirstRunFeed("introduce", name, askForName).filter(
       (entry): entry is Extract<typeof entry, { kind: "nova.message" }> =>
         entry.kind === "nova.message",
     ),
@@ -98,6 +103,15 @@ export function NovaOpeningScreen({
    * is an ordinary answer here rather than a missing one.
    */
   greetingName = null,
+  /**
+   * Whether Nova still has to ask what to call this founder.
+   *
+   * True exactly when `founder_profiles` holds no row for them. Separate from
+   * `greetingName`, because a founder with a GitHub login and no chosen name
+   * is greeted by the login *and* asked — a login is a name somebody picked
+   * for a code host, not what they are called.
+   */
+  askForName = false,
   /**
    * What has already happened, for the rail she lands in.
    *
@@ -121,6 +135,7 @@ export function NovaOpeningScreen({
   productName: string;
   connected: boolean;
   greetingName?: string | null;
+  askForName?: boolean;
   activity?: readonly ActivityEntry[];
   setup?: readonly OnboardingStep[];
   replay?: boolean;
@@ -136,7 +151,7 @@ export function NovaOpeningScreen({
    */
   const mark = novaPresenceState({ tier: "setup", phase: "idle" });
 
-  const bubbles = introductionBubbles(greetingName);
+  const bubbles = introductionBubbles(greetingName, askForName);
 
   const settled = atLeast(beat, "settling");
   const online = atLeast(beat, "online");
@@ -249,17 +264,65 @@ export function NovaOpeningScreen({
                       settles, the way a person finishes speaking before asking.
                     */}
                     <div className="flex max-w-[24rem] flex-col gap-2.5 pt-1">
-                      <NovaMoveButton
-                        label={NOVA_ACTION_META["nova.continue_introduction"].label}
-                        busy={pending}
-                        disabled={pending}
-                        onClick={() => {
-                          if (replay) return;
-                          startTransition(async () => {
-                            await markNovaIntroducedAction(projectId);
-                          });
-                        }}
-                      />
+                      {askForName ? (
+                        /*
+                          A form, so Enter submits it — the key a person
+                          actually presses after typing their name into a
+                          conversation. The control keeps its label: answering
+                          the question and getting on with setup are one press,
+                          and a separate "Save" would make the name a form to
+                          fill in rather than a thing she asked.
+
+                          Leaving it empty is a supported answer and submits
+                          the same way. `normalizeFounderName` reads an empty
+                          box as null, the row is deleted rather than written
+                          blank, and Nova keeps the greeting she already has
+                          for a founder she cannot name.
+                        */
+                        <form
+                          className="flex flex-col gap-2.5"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            if (replay) return;
+                            const typed = new FormData(event.currentTarget).get("displayName");
+                            startTransition(async () => {
+                              await introduceWithNameAction(
+                                projectId,
+                                typeof typed === "string" ? typed : null,
+                              );
+                            });
+                          }}
+                        >
+                          <Field id="nova-founder-name" label="What Nova calls you">
+                            <Input
+                              id="nova-founder-name"
+                              name="displayName"
+                              maxLength={MAX_FOUNDER_NAME_LENGTH}
+                              autoComplete="given-name"
+                              placeholder="Your first name"
+                              disabled={pending}
+                            />
+                          </Field>
+                          <NovaMoveButton
+                            type="submit"
+                            label={NOVA_ACTION_META["nova.continue_introduction"].label}
+                            busy={pending}
+                            disabled={pending}
+                          />
+                        </form>
+                      ) : (
+                        <NovaMoveButton
+                          label={NOVA_ACTION_META["nova.continue_introduction"].label}
+                          busy={pending}
+                          disabled={pending}
+                          onClick={() => {
+                            if (replay) return;
+                            startTransition(async () => {
+                              await markNovaIntroducedAction(projectId);
+                            });
+                          }}
+                        />
+                      )}
                       {replay && (
                         <p className="text-fg-meta text-caption">
                           Replaying the opening. Nothing is recorded, and reloading without{" "}

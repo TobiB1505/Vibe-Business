@@ -260,7 +260,18 @@ const THREAD_MOVES = [
 ];
 
 /** Who is signed in, through the product's own identity view. */
-const IDENTITY = buildAccountIdentity({ email: "founder@payflow.dev", github: null });
+/*
+  No GitHub and no chosen name, on purpose: this study reviews the rail for a
+  founder the product cannot name, where it prints the whole address rather
+  than a first name derived from one. `founderName` is stated rather than left
+  out, because an omission here reads the same as the bug it caused in the real
+  rail — an optional argument nobody passed.
+*/
+const IDENTITY = buildAccountIdentity({
+  email: "founder@payflow.dev",
+  github: null,
+  founderName: null,
+});
 
 /**
  * The audit the log says completed sixteen hours ago.
@@ -401,9 +412,7 @@ export function StudyWireframe({
         >
           <Header
             availability={
-              offline
-                ? { state: "offline", because: "maintenance until 11:00 UTC" }
-                : AVAILABILITY
+              offline ? { state: "offline", because: "maintenance until 11:00 UTC" } : AVAILABILITY
             }
             subject="Payflow"
             /* The ranking's own precondition, not a second reading of it. */

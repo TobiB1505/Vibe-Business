@@ -1,6 +1,7 @@
 import { RailFooter } from "@/components/layout/app-frame";
 import { createClient } from "@/lib/supabase/server";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
+import { getFounderName } from "@/modules/auth/founder-profile";
 import { requireSession } from "@/modules/auth/session";
 import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getGithubIdentity } from "@/modules/github/identity";
@@ -23,15 +24,30 @@ export async function RailAccountFooter() {
   const session = await requireSession();
   const supabase = await createClient();
 
-  const [github, balance] = await Promise.all([
+  const [github, balance, founderName] = await Promise.all([
     getGithubIdentity(supabase, session.userId),
     getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null),
+    /*
+      The name the founder gave, which `buildAccountIdentity` prefers over
+      everything else — and which this never read.
+
+      `founder_profiles` and the precedence rule both shipped, and Settings →
+      Profile passed the name in from the day it existed, so a founder could
+      type what they wanted to be called, see it on that page, and find their
+      GitHub login still in the rail on every other screen. One argument
+      missing at one call site, and nothing failed: the rail rendered a real
+      identity, just not theirs.
+
+      One row behind a primary key, and a failure is `null` rather than no
+      rail — the same rule the balance beside it follows.
+    */
+    getFounderName(supabase, session.userId).catch(() => null),
   ]);
 
   return (
     <RailFooter
       credits={balance?.availableCredits ?? null}
-      identity={buildAccountIdentity({ email: session.email, github })}
+      identity={buildAccountIdentity({ email: session.email, github, founderName })}
     />
   );
 }

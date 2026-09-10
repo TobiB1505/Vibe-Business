@@ -3,6 +3,8 @@ import { hasNovaIntroduced } from "@/modules/onboarding/store";
 import { NovaHome } from "./nova/nova-home";
 import { NovaOpeningScreen } from "./nova/nova-opening-screen";
 import { getGithubIdentity } from "@/modules/github/identity";
+import { getFounderName } from "@/modules/auth/founder-profile";
+import { greetableName } from "@/modules/auth/identity-view";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -50,15 +52,24 @@ export default async function ProjectHomePage({
      * and asks nobody's name — and null is an ordinary answer: `novaGreeting`
      * has a nameless form, because `identity-view.ts` forbids turning an email
      * address into a first name.
+     *
+     * The founder's own name comes first, and it is `greetableName` that says
+     * so rather than this file: the same question was being answered here and
+     * on the onboarding route, and both answered it with the GitHub login
+     * because that was all there was when they were written.
      */
-    const identity = await getGithubIdentity(supabase, userId);
+    const [github, founderName] = await Promise.all([
+      getGithubIdentity(supabase, userId),
+      getFounderName(supabase, userId).catch(() => null),
+    ]);
 
     return (
       <NovaOpeningScreen
         projectId={project.id}
         productName={project.name}
         connected={project.repository !== null}
-        greetingName={identity?.githubLogin ?? null}
+        greetingName={greetableName({ github, founderName })}
+        askForName={founderName === null}
         replay={replay}
       />
     );

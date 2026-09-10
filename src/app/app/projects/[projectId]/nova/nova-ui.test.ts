@@ -290,10 +290,49 @@ describe("Nova Home", () => {
      * screen inherits it rather than repeating it.
      */
 
+    /*
+     * Nova is not a chat box, and this is the claim rather than a style rule.
+     * There is nothing to type at her: she proposes one thing and a founder
+     * presses it or does not, which is what makes her a colleague rather than
+     * a prompt window — and `feed.test.ts` holds the other half, that she never
+     * describes herself as one.
+     *
+     * ## The one field, and why the exemption is narrow
+     *
+     * She asks what to call somebody, once, during her introduction. That is
+     * the only way to have a name without guessing — `identity-view.ts`
+     * refuses to turn an address into one — and it is a *label*, not an
+     * instruction: it is normalised to one plain line, bounded by a database
+     * CHECK, and fenced as untrusted data wherever it reaches a model (rule 42).
+     *
+     * So the sweep still runs over every file, and the exempt one has to prove
+     * it is that field: bounded by the shared limit and carrying the same name
+     * the profile form writes. A second text box anywhere, or this one losing
+     * its bound, fails here.
+     *
+     * `<textarea>` stays forbidden everywhere with no exemption at all. A
+     * multi-line box is a chat box whatever the label above it says.
+     */
+    const NAME_FIELD_FILE = "nova-opening-screen.tsx";
+
     it("has no chat input anywhere", () => {
       for (const { name, body } of FILES) {
-        expect(body, name).not.toMatch(/<textarea|type="text"|placeholder=/);
+        expect(body, name).not.toMatch(/<textarea/);
+        if (name === NAME_FIELD_FILE) continue;
+        expect(body, name).not.toMatch(/type="text"|placeholder=/);
       }
+    });
+
+    it("lets the one exempt file hold the name field and nothing else", () => {
+      const screen = component(NAME_FIELD_FILE);
+
+      // Exactly one box, and it is the founder's name.
+      expect(screen.match(/placeholder=/g) ?? []).toHaveLength(1);
+      expect(screen).toContain('name="displayName"');
+
+      // Bounded by the shared limit, never by a number typed in here.
+      expect(screen).toContain("maxLength={MAX_FOUNDER_NAME_LENGTH}");
+      expect(screen).not.toMatch(/maxLength=\{\d/);
     });
   });
 

@@ -52,6 +52,8 @@ import { operationPollPhase } from "@/modules/operations/view";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import { getGithubIdentity } from "@/modules/github/identity";
+import { getFounderName } from "@/modules/auth/founder-profile";
+import { greetableName } from "@/modules/auth/identity-view";
 import { NOVA_ONBOARDING_TIER } from "@/modules/nova/onboarding";
 import { NovaOnboardingThread } from "./nova-onboarding-thread";
 import { OnboardingAuditReveal } from "./audit-reveal";
@@ -163,10 +165,15 @@ export default async function ProjectOnboardingPage({
      * address is an address and is not shortened into a first name here.
      * `null` is an ordinary answer — `novaGreeting` has a nameless form that
      * is a greeting rather than a gap.
+     *
+     * The founder's own name comes before the login, and `greetableName` is
+     * where that precedence lives so this route and the project route cannot
+     * answer the same question two ways.
      */
-    const [introActivity, identity] = await Promise.all([
+    const [introActivity, github, founderName] = await Promise.all([
       listAuditEventsForProject(supabase, { projectId, userId: session.userId, limit: 4 }),
       getGithubIdentity(supabase, session.userId),
+      getFounderName(supabase, session.userId).catch(() => null),
     ]);
 
     return (
@@ -180,7 +187,8 @@ export default async function ProjectOnboardingPage({
           projectId={projectId}
           productName={onboarding.projectName}
           connected={onboarding.repository !== null}
-          greetingName={identity?.githubLogin ?? null}
+          greetingName={greetableName({ github, founderName })}
+          askForName={founderName === null}
           setup={onboardingSteps(onboarding.state)}
           activity={buildActivityFeed(introActivity.events).reverse()}
         />

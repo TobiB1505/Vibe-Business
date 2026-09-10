@@ -151,6 +151,28 @@ const INTRODUCTION = [
 ] as const;
 
 /**
+ * The one question Nova asks about the founder rather than about the product.
+ *
+ * ## Why she asks at all
+ *
+ * Because `identity-view.ts` refuses to invent a name, and asking is the only
+ * way to have one without guessing. Everything the product could otherwise
+ * call somebody is either a login they picked for a code host or an address:
+ * "tobivlog@outlook.de" does not become "Tobi" here, and it never will.
+ *
+ * ## Why she asks even when there is a GitHub login
+ *
+ * A login is a name in the sense that a person chose it, which is why the rail
+ * prints it. It is not what anybody is *called*. An assistant that opens with
+ * a handle is reading a database out loud, and the difference between that and
+ * a colleague is the whole of what this screen is for.
+ *
+ * So the question is asked once, when nothing has been given, and never again.
+ * A founder who has already said lands on the greeting instead.
+ */
+export const NAME_QUESTION = "One thing before we start — what should I call you?";
+
+/**
  * The question, and the only one asked before setup begins.
  *
  * Two real answers, and neither is a dismissal: getting on with it is a
@@ -221,6 +243,16 @@ export function buildNovaFirstRunFeed(
    * argument they would have to invent a value for.
    */
   name: string | null = null,
+  /**
+   * Whether she still has to ask what to call this founder.
+   *
+   * Separate from `name` because they answer different questions, and a
+   * greeting alone cannot tell them apart: a founder with a GitHub login and
+   * no chosen name gets greeted by the login *and* asked, which is the case
+   * this whole step exists for. Defaulted to false so the lab, the studies and
+   * the tests about ordering keep the introduction they already assert on.
+   */
+  askForName = false,
 ): NovaEntry[] {
   if (position === "introduce") {
     return [
@@ -236,6 +268,21 @@ export function buildNovaFirstRunFeed(
         text,
         emphasis: "primary" as const,
       })),
+      /*
+       * Last, and after everything she says about herself. A question asked
+       * before the introduction is a form; asked after it, it is the first
+       * thing two people do.
+       */
+      ...(askForName
+        ? [
+            {
+              kind: "nova.message" as const,
+              id: "first-run:introduce:name",
+              text: NAME_QUESTION,
+              emphasis: "primary" as const,
+            },
+          ]
+        : []),
       {
         kind: "nova.choice",
         id: "first-run:introduce:choice",

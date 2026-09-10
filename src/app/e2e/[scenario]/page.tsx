@@ -45,6 +45,7 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { OPENING_ASKS_NAME_SCENARIO } from "../design-studies/studies";
 import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
@@ -444,7 +445,7 @@ export default async function E2eScenarioPage({
     );
   }
 
-  if (scenario === SHIPPED_OPENING_SCENARIO) {
+  if (scenario === SHIPPED_OPENING_SCENARIO || scenario === OPENING_ASKS_NAME_SCENARIO) {
     const chosen = chosenStudy();
     return (
       <StudyShell study={chosen}>
@@ -474,9 +475,12 @@ export default async function E2eScenarioPage({
             projectId="fixture-project"
             productName="Vibe Business"
             connected={false}
-            /* A login, because that is the only kind of name this product
-               ever has — never a first name derived from an address. */
+            /* A login. It is a name a person chose, so it is one — but it is
+               not what anybody is *called*, which is why the second scenario
+               greets by it and then asks. Never a first name derived from an
+               address; `identity-view.ts` forbids that either way. */
             greetingName="ada-lovelace"
+            askForName={scenario === OPENING_ASKS_NAME_SCENARIO}
             setup={onboardingSteps("connect_source")}
             activity={[
               {
