@@ -7,6 +7,7 @@ import { LandingMove } from "@/components/marketing/landing-move";
 import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
+import { LandingObjections } from "@/components/marketing/landing-objections";
 import { LandingPrice } from "@/components/marketing/landing-price";
 import { LandingOutcome } from "@/components/marketing/landing-outcome";
 import { LandingProblem } from "@/components/marketing/landing-problem";
@@ -128,6 +129,13 @@ export default function HomePage() {
         and stays where it is.
       */}
       <LandingPrice />
+
+      {/*
+        Step nine, and the first block on this page where the loud type is the
+        reader's rather than Vibe's. Objections belong immediately after the
+        price: that is where a visitor stops reading and starts arguing.
+      */}
+      <LandingObjections />
 
       <Reveal className="pb-16 sm:pb-20">
         <div className="mt-12 flex flex-col items-center gap-3">

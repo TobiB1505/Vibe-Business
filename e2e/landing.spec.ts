@@ -1405,3 +1405,82 @@ test.describe("paying by the year", () => {
     await expect(link).not.toHaveAttribute("href", /interval=/);
   });
 });
+
+/*
+ * Step nine: the objections.
+ *
+ * The one block on this page whose large type is the reader's rather than
+ * Vibe's, which is also the one thing about it that a rewrite would undo — so
+ * the guards hold the inversion as geometry, not as intent, and they hold the
+ * sentence that makes the rest believable.
+ */
+test.describe("the objections", () => {
+  test("puts the doubt in the large type and the answer in the small", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const objections = page.locator("#objections");
+    await objections.scrollIntoViewIfNeeded();
+
+    const items = objections.locator("ol > li");
+    await expect(items).toHaveCount(5);
+
+    /*
+      Measured rather than asserted as a class name. Every other block on this
+      page puts Vibe's claim in the large type and the qualification underneath;
+      this one is the inversion, and an inversion that survives only in a
+      docblock is not one.
+    */
+    const sizes = await items.evaluateAll((rows) =>
+      rows.map((row) => ({
+        doubt: parseFloat(
+          getComputedStyle(row.querySelector("[data-objection]") as Element).fontSize,
+        ),
+        answer: parseFloat(
+          getComputedStyle(row.querySelector("[data-answer]") as Element).fontSize,
+        ),
+      })),
+    );
+
+    expect(sizes).toHaveLength(5);
+    for (const [index, size] of sizes.entries()) {
+      expect(size.doubt, `objection ${index + 1} is not the louder half`).toBeGreaterThan(
+        size.answer,
+      );
+    }
+  });
+
+  test("admits the thing a rewrite would delete first", async ({ page }) => {
+    await page.goto("/");
+    const objections = page.locator("#objections");
+    await objections.scrollIntoViewIfNeeded();
+
+    /*
+      "Sometimes it will" is the answer to "it is going to be wrong about my
+      business", and it is the sentence that makes the other four believable.
+      A page that answered that objection with a promise would have nothing
+      left to stand on.
+    */
+    await expect(objections).toContainText(/Sometimes it will/);
+    await expect(objections).toContainText(/stays unscored rather than scored zero/);
+
+    // And the repository answer keeps the exact promise the merge path enforces.
+    await expect(objections).toContainText(/by fast-forward to that commit, or not at all/);
+  });
+
+  test("quotes nobody, because nobody said these", async ({ page }) => {
+    await page.goto("/");
+    const objections = page.locator("#objections");
+    await objections.scrollIntoViewIfNeeded();
+
+    /*
+      The quotes are objections, not testimonials. An attribution would turn a
+      doubt this product meets into a person who does not exist — the
+      fabricated record the truthfulness rules forbid, and the same rule that
+      keeps invented metrics off this page.
+    */
+    await expect(objections.locator("cite")).toHaveCount(0);
+    await expect(objections.locator("img")).toHaveCount(0);
+    await expect(objections).not.toContainText(/—\s*[A-Z][a-z]+ [A-Z]/);
+  });
+});
