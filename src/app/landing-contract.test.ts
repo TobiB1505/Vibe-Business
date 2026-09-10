@@ -54,6 +54,16 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
  */
 const PROOF = read("src/components/marketing/landing-business-map.tsx");
 /*
+ * The plan cards, which are a component rather than a block of the page
+ * (UI-34).
+ *
+ * The pricing section dissolved into `LandingPrice` when the euros became a
+ * numbered step of the walk, and the destination assertion below went with it.
+ * The same lesson as the hero and the proof section: a contract that reads only
+ * `page.tsx` goes on passing against an empty search.
+ */
+const PLANS = read("src/components/marketing/landing-price.tsx");
+/*
  * The hero, which is now a component rather than a block of the page (UI-34).
  *
  * The headline moved into `LandingHeroDeck` when the hero became a card, and
@@ -129,9 +139,9 @@ describe("the landing page sends people the right way", () => {
    * claim about the page a stranger sees.
    */
   it("carries a chosen paid plan through signup to the billing surface", () => {
-    expect(LANDING).toContain('/signup?next=${encodeURIComponent("/app/settings/billing")}');
+    expect(PLANS).toContain('/signup?next=${encodeURIComponent("/app/settings/billing")}');
     // The free plan has nothing to pay for, so it keeps the plain destination.
-    expect(LANDING).toContain('plan.key === "free"');
+    expect(PLANS).toContain('plan.key === "free"');
   });
 
   it("still offers signing in, on every public page", () => {

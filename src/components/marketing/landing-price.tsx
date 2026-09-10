@@ -1,162 +1,272 @@
+import Link from "next/link";
 import { LandingStep } from "@/components/marketing/landing-step";
 import { Reveal } from "@/components/marketing/reveal";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { CostLine } from "@/components/system/cost-line";
+import { buttonClasses } from "@/components/ui/button";
+import { ArrowRightIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
-import { creditsToUnits } from "@/modules/credits/units";
-import type { RetailOperationKind } from "@/modules/credits/retail";
+import { cn } from "@/lib/utils/cn";
+import { listCreditPacks, listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
+import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
+import { creditsToUnits, formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
 /**
- * What it costs, before it is pressed (UI-34).
+ * What a month costs, in money (UI-34).
  *
- * ## The eighth shape
+ * ## The correction this block is
  *
- * Two tiles, a staircase, a narrowing, a passage, a thread, a ladder, a
- * boundary — and now a **ledger**. It is the one shape on this page that is
- * meant to be scanned down a column rather than read, because that is what a
- * price list is for, and no other block on the page is one.
+ * The first version was the Credit rate card — six operations, each price
+ * resolved from `launch-v1`. The founder: *"Nein, natürlich nicht die
+ * Credit-Preise, sondern die Monatsabos mit Echtgeld."*
  *
- * ## Why the numbers are not written here
+ * They are right, and the reason is worth writing down. A visitor who has not
+ * signed up does not have a Credit balance to reason about, so a page that
+ * leads with "35 Credits" is answering a question they cannot ask yet. The
+ * question they *do* have is what a month costs, and it has a two-digit euro
+ * answer.
  *
- * `CostDisclosure` resolves each one through `resolveRetailPrice` — the same
- * function the reservation calls when a founder actually presses the control.
- * There is no second copy of a price in this file to drift out of step with the
- * one charged, and a landing page cannot advertise a number the product has
- * stopped charging.
+ * So the euros lead. The Credit prices stay, underneath and quieter, because
+ * "1,000 Credits" is meaningless without them — and between the two sits the
+ * line that connects them: what a month's grant actually buys, divided out of
+ * the same rate card rather than estimated.
  *
- * That is also why the Product Scan row shows *Included* rather than a zero. A
- * free operation names itself; printing "0 Credits" beside a control invites
- * the question of when it might stop being zero, and BILLING CORE-2 §56 decided
- * that in the other direction. The page inherits the decision rather than
- * re-taking it.
+ * ## Nothing here is typed
  *
- * ## The half that comes after
+ * The plans come from `listPlans()`, the packs from `listCreditPacks()`, the
+ * Welcome grant from `WELCOME_CREDIT_UNITS`, and every per-action price from
+ * `resolveRetailPrice` — which is the function the reservation calls. A landing
+ * page cannot advertise a price the product has stopped charging, and the
+ * "five agent runs" line cannot drift from the rate card because it is a
+ * division performed on it.
  *
- * A price list answers "what will this cost" and says nothing about what
- * happens when a run fails, or when Vibe cannot tell whether a call went
- * through. Both are money questions and both have answers a founder would not
- * assume: a reserved-then-released run charges nothing, and an ambiguous
- * outcome resolves to a **failure** rather than to a second charge (rule 50).
- * `CostLine` is the product's own component for the first, so those sentences
- * are the ones the founder will read on their own screen.
+ * The free operation renders **Included** rather than a zero: a free operation
+ * names itself, because printing "0 Credits" beside a control invites the
+ * question of when it might stop being zero (BILLING CORE-2 §56). The page
+ * inherits that decision rather than re-taking it.
  *
- * Nothing here spends on a schedule either (rule 60): Vibe never starts a paid
- * refresh on somebody's behalf, and blocked work says what needs refreshing and
- * waits.
+ * ## The half a price list leaves out
+ *
+ * A run that reserved Credits and then failed **returned them**, and an
+ * ambiguous outcome resolves to a failure rather than to a second charge (rule
+ * 50). Nothing spends on a schedule either: Vibe never starts a paid refresh on
+ * somebody's behalf (rule 60). `CostLine` is the product's own component for
+ * the first, so a founder reads the same sentence here that they will read on
+ * their own screen.
  */
 
-/** The rate card in force, read through the product rather than transcribed. */
+/** Per-plan promises, in the words the billing module's own rules allow. */
+const PLAN_NOTES: Record<string, string[]> = {
+  free: ["No card to start", "The Product Scan, free", "One product"],
+  builder: ["A fresh grant each paid month", "One Credit ledger", "Top up when a month runs short"],
+  pro: ["A fresh grant each paid month", "One Credit ledger", "Top up when a month runs short"],
+};
+
+/** What each priced action costs, kept for after the euros. */
 const ACTIONS: {
   label: string;
-  detail: string;
   operation: RetailOperationKind;
   pricingClass?: ExecutionPricingClass;
 }[] = [
-  {
-    label: "Product Scan",
-    detail: "What you built, read from your code and your live product.",
-    operation: "product_understanding",
-  },
-  {
-    label: "Deep Scan",
-    detail: "The same read, behind your sign-in, in a browser Vibe runs itself.",
-    operation: "deep_scan",
-  },
-  {
-    label: "Business Brain audit",
-    detail: "Nine areas judged against the evidence, with the gaps left unscored.",
-    operation: "business_audit",
-  },
-  {
-    label: "The Moves",
-    detail: "Everything it found, ranked by what it costs you to leave alone.",
-    operation: "opportunity_generation",
-  },
-  {
-    label: "A plan for a Move",
-    detail: "The steps, and who does each one.",
-    operation: "action_plan",
-  },
-  {
-    label: "An agent run",
-    detail: "A change prepared, validated and left on its own branch for you.",
-    operation: "agent_execution",
-    pricingClass: "standard",
-  },
+  { label: "Product Scan", operation: "product_understanding" },
+  { label: "Deep Scan", operation: "deep_scan" },
+  { label: "Business Brain audit", operation: "business_audit" },
+  { label: "The Moves, ranked", operation: "opportunity_generation" },
+  { label: "A plan for a Move", operation: "action_plan" },
+  { label: "An agent run", operation: "agent_execution", pricingClass: "standard" },
 ];
 
+/** Euro cents as the price a card shows. Whole euros — every plan is one. */
+function euros(cents: number): string {
+  return cents === 0 ? "€0" : `€${cents / 100}`;
+}
+
+/**
+ * How many of one thing a grant buys.
+ *
+ * Divided out of the rate card rather than estimated, so the sentence cannot
+ * come to disagree with the prices printed under it. `null` where the operation
+ * has no single number — a free one buys no fixed count of anything, and
+ * Agentic Execution is priced per class.
+ */
+function buys(grant: CreditUnits, operation: RetailOperationKind, klass?: ExecutionPricingClass) {
+  const resolved = resolveRetailPrice(operation);
+  if (!resolved) return null;
+
+  const price =
+    resolved.price.kind === "fixed"
+      ? resolved.price.creditUnits
+      : resolved.price.kind === "by_execution_class" && klass
+        ? resolved.price.creditUnitsByClass[klass]
+        : null;
+
+  if (price === null || price <= 0) return null;
+  return Math.floor(grant / price);
+}
+
 export function LandingPrice() {
+  const plans = listPlans();
+  const packs = listCreditPacks();
+  const builder = plans.find((plan) => plan.key === "builder");
+
+  // The connecting line, computed rather than claimed.
+  const runs = builder ? buys(builder.monthlyCreditUnits, "agent_execution", "standard") : null;
+  const audits = builder ? buys(builder.monthlyCreditUnits, "business_audit") : null;
+
   return (
-    <LandingStep index="08" id="credits" labelledBy="credits-heading" className="py-20 sm:py-28">
+    <LandingStep index="08" id="pricing" labelledBy="pricing-heading" className="py-20 sm:py-28">
       <Reveal from="up">
         <div className="flex flex-col gap-5">
           <MonoLabel className="text-mint">What it costs</MonoLabel>
           <h2
-            id="credits-heading"
+            id="pricing-heading"
             className="text-fg max-w-[22ch] text-[clamp(2rem,3.6vw,3rem)] leading-[1.06] font-bold tracking-[-0.045em] text-balance"
           >
-            You see the number before you press it.
+            Start free. {euros(builder?.priceCents ?? 0)} a month when it earns it.
           </h2>
           <p className="text-fg-prose max-w-[58ch] leading-relaxed">
-            Vibe runs on Credits, and every paid action carries its price at the control that starts
-            it. The numbers below are the rate card in force — resolved by the same function that
-            charges you, not typed onto a marketing page.
+            The Product Scan is free, so you can see what Vibe makes of your product before spending
+            anything. A paid month is a grant of Credits, and every action that spends them shows
+            its price at the control that starts it.
           </p>
         </div>
       </Reveal>
 
-      {/*
-        The ledger. A price sits at the right of its own row, so the column can
-        be scanned; the sentence under each name is what the money buys, in the
-        words the rest of this page uses for it.
+      <div className="mt-14 grid gap-4 sm:mt-16 lg:grid-cols-3">
+        {plans.map((plan, index) => {
+          const featured = plan.key === "builder";
+          const grant = plan.key === "free" ? WELCOME_CREDIT_UNITS : plan.monthlyCreditUnits;
 
-        Held to a measure rather than to the section's full width. At 1440 the
-        row is 1,360px, and `justify-between` put "25 Credits" a thousand
-        pixels from "Deep Scan" — a price list nobody can read across is a
-        two-column table pretending to be a row.
-      */}
-      <ul className="mt-14 flex w-full max-w-3xl flex-col sm:mt-16">
-        {ACTIONS.map(({ label, detail, operation, pricingClass }, index) => (
-          <li key={operation} className="border-line-2 border-b last:border-b-0">
-            <Reveal from="up" delay={Math.min(index, 3) * 0.05}>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-1 py-5">
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-fg text-lead font-semibold">{label}</span>
-                  <span className="text-fg-muted max-w-[52ch] text-body leading-relaxed">
-                    {detail}
+          return (
+            <Reveal key={plan.key} from="up" delay={index * 0.06}>
+              <article
+                className={cn(
+                  "rounded-card flex h-full flex-col border p-6 sm:p-7",
+                  featured
+                    ? "border-mint-line bg-mint-tint/35 shadow-mint"
+                    : "border-line-2 bg-surface-2",
+                )}
+              >
+                <div className="flex items-center justify-between gap-4">
+                  <h3 className="text-fg text-title font-semibold">{plan.name}</h3>
+                  {featured && (
+                    <span className="text-mint border-mint-line bg-mint-tint rounded-full border px-3 py-1 text-caption font-semibold">
+                      Most products
+                    </span>
+                  )}
+                </div>
+
+                <p className="text-fg mt-7 text-display font-bold">
+                  {euros(plan.priceCents)}
+                  <span className="text-fg-muted ml-2 text-body font-normal tracking-normal">
+                    / month
                   </span>
-                </span>
+                </p>
+
+                <p className="text-fg-secondary mt-3 text-body">
+                  {formatCreditsForDisplay(grant)}{" "}
+                  {plan.key === "free" ? "Welcome Credits, once" : "Credits each paid month"}
+                </p>
+
+                <ul className="my-7 flex flex-col gap-3">
+                  {PLAN_NOTES[plan.key]?.map((note) => (
+                    <li key={note} className="text-fg-body flex items-start gap-3 text-body">
+                      <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
+                      {note}
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  /*
+                   * A paid plan's button carries where it was going. Every card
+                   * used to send a visitor to `/signup` and no further, so
+                   * somebody who had just chosen Builder arrived signed in with
+                   * nothing on screen about paying. `next` is read and
+                   * sanitized once, in `signup/page.tsx`.
+                   */
+                  href={
+                    plan.key === "free"
+                      ? "/signup"
+                      : `/signup?next=${encodeURIComponent("/app/settings/billing")}`
+                  }
+                  className={cn(
+                    buttonClasses({ variant: featured ? "primary" : "secondary" }),
+                    "mt-auto w-full",
+                  )}
+                >
+                  Start with {plan.name} <ArrowRightIcon size={15} />
+                </Link>
+              </article>
+            </Reveal>
+          );
+        })}
+      </div>
+
+      {/*
+        The line between the two halves: what a month's grant is, in work. A
+        division on the rate card below rather than a claim about it, so the
+        two cannot come to disagree.
+      */}
+      {builder && runs !== null && audits !== null && (
+        <Reveal from="up" delay={0.12} className="mt-10">
+          <p className="text-fg-prose mx-auto max-w-[62ch] text-center leading-relaxed">
+            {formatCreditsForDisplay(builder.monthlyCreditUnits)} Credits is{" "}
+            <span className="text-fg">{runs} agent runs</span> at the standard class, or{" "}
+            <span className="text-fg">{audits} Business Brain audits</span>, or any mix of the work
+            below.
+          </p>
+        </Reveal>
+      )}
+
+      <Reveal from="up" delay={0.16} className="mt-12">
+        <div className="border-line-2 rounded-card mx-auto w-full max-w-3xl border p-6">
+          <MonoLabel as="h3" className="text-fg-meta mb-5 block">
+            What each thing costs
+          </MonoLabel>
+
+          <ul className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
+            {ACTIONS.map(({ label, operation, pricingClass }) => (
+              <li
+                key={operation}
+                className="border-line-1 flex items-baseline justify-between gap-6 border-b pb-3 last:border-b-0"
+              >
+                <span className="text-fg-body text-body">{label}</span>
                 <CostDisclosure
                   operation={operation}
                   pricingClass={pricingClass ?? null}
                   className="shrink-0"
                 />
-              </div>
-            </Reveal>
-          </li>
-        ))}
-      </ul>
+              </li>
+            ))}
+          </ul>
 
-      <Reveal from="up" delay={0.1} className="mt-12">
-        <div className="border-line-2 bg-surface-1 rounded-card flex w-full max-w-3xl flex-col gap-4 border p-6">
-          <MonoLabel className="text-fg-meta">And after you press</MonoLabel>
+          <div className="border-line-2 mt-6 flex flex-col gap-3 border-t pt-5">
+            {/*
+              The product's own component, in the two states a founder does not
+              expect. The second is the one worth the block: a run that reserved
+              Credits and then failed returned them, and saying so is the
+              difference between a hold and a charge.
+            */}
+            <CostLine cost={{ kind: "settled", credits: creditsToUnits(200) }} />
+            <CostLine cost={{ kind: "released" }} />
 
-          {/*
-            The product's own component, in the two states a founder does not
-            expect. The second is the one worth the block: a run that reserved
-            Credits and then failed returned them, and saying so is the
-            difference between a hold and a charge.
-          */}
-          <CostLine cost={{ kind: "settled", credits: creditsToUnits(200) }} />
-          <CostLine cost={{ kind: "released" }} />
+            <p className="text-fg-muted max-w-[62ch] text-caption leading-relaxed">
+              And if Vibe cannot tell whether a paid call went through, it resolves that as a
+              failure rather than risking a second charge. Nothing spends on a schedule either —
+              Vibe never starts a paid refresh on your behalf; blocked work says what needs
+              refreshing and waits for you.
+            </p>
 
-          <p className="text-fg-muted max-w-[62ch] text-caption leading-relaxed">
-            And if Vibe cannot tell whether a paid call went through, it resolves that as a failure
-            rather than risking a second charge. Nothing spends on a schedule either — Vibe never
-            starts a paid refresh on your behalf; blocked work says what needs refreshing and waits
-            for you.
-          </p>
+            {packs[0] && (
+              <p className="text-fg-muted text-caption leading-relaxed">
+                A month running short is not a plan change: Credit packs start at{" "}
+                {packs[0].credits.toLocaleString("en-GB")} for {euros(packs[0].priceCents)}, and
+                bought Credits do not expire with the month.
+              </p>
+            )}
+          </div>
         </div>
       </Reveal>
     </LandingStep>
