@@ -1280,31 +1280,10 @@ test.describe("what a month costs", () => {
     await expect(pricing).not.toContainText("200 Credits");
     await expect(pricing).not.toContainText("Included");
   });
-
-  test("answers the money question a price list does not", async ({ page }) => {
-    await page.goto("/");
-    const pricing = page.locator("#pricing");
-    await pricing.scrollIntoViewIfNeeded();
-
-    /*
-      A reserved-then-failed run charged nothing, and the product's own
-      `CostLine` is what says so — rendered here in the state a founder would
-      otherwise assume the worst about.
-    */
-    const lines = pricing.getByTestId("cost-line");
-    await expect(lines).toHaveCount(1);
-    await expect(lines).toContainText(/nothing was charged/i);
-
-    // Rule 50 and rule 60, in the words a founder cares about.
-    await expect(pricing).toContainText(
-      /resolves that as a failure rather than risking a second charge/i,
-    );
-    await expect(pricing).toContainText(/never starts a paid refresh on your behalf/i);
-  });
 });
 
 /*
- * The year (ADR 0098).
+ * The year (ADR 0107).
  *
  * Ten months charged and twelve granted, and both halves of that have to reach
  * the card: a visitor who sees €190 without the allowance has been shown a

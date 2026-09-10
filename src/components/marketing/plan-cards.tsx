@@ -8,7 +8,7 @@ import { ArrowRightIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * The plan cards, and the one switch on this page (UI-34, ADR 0098).
+ * The plan cards, and the one switch on this page (UI-34, ADR 0107).
  *
  * ## Why this is a client component and the rest of the block is not
  *

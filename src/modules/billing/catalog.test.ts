@@ -188,7 +188,7 @@ describe("grant identities bind to real external payment facts (§28, §30)", ()
 });
 
 /**
- * A year of a plan (ADR 0098).
+ * A year of a plan (ADR 0107).
  *
  * The discount is one number — ten months charged for twelve — and both facts
  * below are derived from it rather than typed beside the monthly ones, so a
@@ -196,7 +196,7 @@ describe("grant identities bind to real external payment facts (§28, §30)", ()
  * tests pin the derivation, which is the part a reader of the catalogue cannot
  * check by eye.
  */
-describe("annual billing (ADR 0098)", () => {
+describe("annual billing (ADR 0107)", () => {
   it("charges ten months for a year, on every paid plan", () => {
     for (const key of PAID_PLAN_KEYS) {
       const plan = getPlan(key);

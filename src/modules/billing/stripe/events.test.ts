@@ -428,7 +428,7 @@ describe("a Checkout return is not a payment (§25, §102.16)", () => {
 });
 
 /**
- * A paid year (ADR 0098).
+ * A paid year (ADR 0107).
  *
  * The property worth the most here is the last one: the interval is read from
  * the **Price that was charged**, never from metadata. An annual grant is
@@ -436,7 +436,7 @@ describe("a Checkout return is not a payment (§25, §102.16)", () => {
  * them would be a field that could mint eleven months of Credits — and Stripe
  * dashboard access is not supposed to be that.
  */
-describe("annual subscriptions (ADR 0098)", () => {
+describe("annual subscriptions (ADR 0107)", () => {
   it("grants a year of Credits for a paid annual period", () => {
     expect(
       interpretStripeEvent(invoiceEvent({ priceIds: ["price_builder_annual"] }), PRICES),

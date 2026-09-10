@@ -1,14 +1,8 @@
 import { LandingStep } from "@/components/marketing/landing-step";
 import { PlanCards, type PlanCard } from "@/components/marketing/plan-cards";
 import { Reveal } from "@/components/marketing/reveal";
-import { CostLine } from "@/components/system/cost-line";
 import { MonoLabel } from "@/components/ui/typography";
-import {
-  ANNUAL_PAID_MONTHS,
-  listCreditPacks,
-  listPlans,
-  WELCOME_CREDIT_UNITS,
-} from "@/modules/billing/catalog";
+import { ANNUAL_PAID_MONTHS, listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
 import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
 import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
@@ -47,19 +41,23 @@ import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
  *
  * `PlanCards` switches between two sets of already-formatted figures, and the
  * annual set is derived rather than typed: ten months charged, twelve granted
- * (ADR 0098). So the "two months free" on the switch is a subtraction on the
+ * (ADR 0107). So the "two months free" on the switch is a subtraction on the
  * same constant the catalogue prices with, and the Credits on the annual card
  * are the year's whole allowance — one grant, at the start, with a year to
  * spend it.
  *
- * ## The half a price list leaves out
+ * ## What is deliberately not here
  *
- * A run that reserved Credits and then failed **returned them**, and an
- * ambiguous outcome resolves to a failure rather than to a second charge (rule
- * 50). Nothing spends on a schedule either: Vibe never starts a paid refresh on
- * somebody's behalf (rule 60). `CostLine` is the product's own component for
- * the first, so a founder reads the same sentence here that they will read on
- * their own screen.
+ * The rules around a charge — that a reserved-then-failed run returns its hold,
+ * that an ambiguous outcome resolves to a failure rather than to a second
+ * charge, that nothing spends on a schedule, that bought Credits outlive the
+ * month. All true, all enforced, and all **terms**. The founder, on the
+ * paragraph that used to sit under this block: *"sowas gehört in die Terms,
+ * nicht in eine Landingpage."*
+ *
+ * A landing page answers what this costs and what it gives. A page that
+ * answers the edge cases of a charge before anybody has one is a page reading
+ * its own small print aloud — and the small print has a route of its own.
  */
 
 /** Per-plan promises, in the words the billing module's own rules allow. */
@@ -116,7 +114,6 @@ function buys(grant: CreditUnits, operation: RetailOperationKind, klass?: Execut
 
 export function LandingPrice() {
   const plans = listPlans();
-  const packs = listCreditPacks();
   const builder = plans.find((plan) => plan.key === "builder");
 
   /*
@@ -200,37 +197,6 @@ export function LandingPrice() {
           </p>
         </Reveal>
       )}
-
-      <Reveal from="up" delay={0.16} className="mt-12">
-        <div className="border-line-2 rounded-card mx-auto flex w-full max-w-3xl flex-col gap-3 border p-6">
-          <MonoLabel as="h3" className="text-fg-meta mb-2 block">
-            What cannot happen to your balance
-          </MonoLabel>
-
-          {/*
-            The product's own component, in the state a founder does not expect.
-            It is the one worth the block: a run that reserved Credits and then
-            failed returned them, and saying so is the difference between a hold
-            and a charge.
-          */}
-          <CostLine cost={{ kind: "released" }} />
-
-          <p className="text-fg-muted max-w-[62ch] text-caption leading-relaxed">
-            And if Vibe cannot tell whether a paid call went through, it resolves that as a failure
-            rather than risking a second charge. Nothing spends on a schedule either — Vibe never
-            starts a paid refresh on your behalf; blocked work says what needs refreshing and waits
-            for you.
-          </p>
-
-          {packs[0] && (
-            <p className="text-fg-muted text-caption leading-relaxed">
-              A month running short is not a plan change: Credit packs start at{" "}
-              {packs[0].credits.toLocaleString("en-GB")} for {euros(packs[0].priceCents)}, and
-              bought Credits do not expire with the month.
-            </p>
-          )}
-        </div>
-      </Reveal>
     </LandingStep>
   );
 }
