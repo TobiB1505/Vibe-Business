@@ -248,7 +248,12 @@ export function FounderInputCard({
             </Button>
           )}
 
-          <div className="border-line-2 mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+          {/*
+            Stacked on a phone (UI-36). Side by side the disclosure's prose
+            came to 162px — twenty-seven characters a line — because the
+            submit beside it is `shrink-0` and takes what it needs first.
+          */}
+          <div className="border-line-2 mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-4 max-sm:flex-col max-sm:items-stretch">
             <Disclosure label="Why is Vibe asking?" className="max-w-xl">
               <p className="text-fg-muted text-caption leading-relaxed">{request.whyNeeded}</p>
             </Disclosure>
