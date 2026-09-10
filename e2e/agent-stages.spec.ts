@@ -731,25 +731,125 @@ test.describe("what the change cost", () => {
 });
 
 /*
- * Slice 4's last acceptance line. The workspace shows the newest run; a
- * product that had run the agent eleven times had ten it could no longer
- * reach, including the ones whose changes were merged.
+ * Slice 4's last acceptance line. The workspace shows one change; a product
+ * that had run the agent eleven times could reach none of the others,
+ * including the ones that were merged.
+ *
+ * [2026-09-10] The rows are changes now, not runs. A list of runs led every
+ * row with a timestamp and the word `Finished`, which is a fact about Vibe's
+ * machinery — two rows could be two attempts at the same Move, one could have
+ * produced nothing, and the one that actually changed the product looked like
+ * the rest. The question the screen answers is what Vibe has done to the
+ * product, so the row is the change and the outcome is what became of it.
  */
-test.describe("the runs before this one", () => {
-  test("lists them, and links only the ones that produced a change", async ({ page }) => {
-    await page.goto("/e2e/agent-run-history");
+test.describe("every change Vibe has written", () => {
+  test("leads with what each change was for", async ({ page }) => {
+    await page.goto("/e2e/agent-change-history");
 
-    const table = page.getByRole("table", { name: /agent runs for this product/i });
+    const table = page.getByRole("table", { name: /changes vibe has written/i });
     await expect(table).toBeVisible();
-    await expect(table.getByRole("row")).toHaveCount(4); // head + three runs
+    await expect(table.getByRole("row")).toHaveCount(7); // head + six changes
 
-    await expect(table).toContainText("Finished");
-    await expect(table).toContainText("Failed");
-    await expect(table).toContainText("Stopped");
+    /* The Move, not a branch name and not a timestamp. */
+    await expect(
+      table.getByRole("link", { name: "Give the landing page a proper social preview" }),
+    ).toBeVisible();
 
-    // A run that produced no change offers no link, and shows a dash rather
-    // than a zero — it changed nothing, which is not the same as zero files.
-    await expect(table.getByRole("link")).toHaveCount(1);
-    await expect(table).toContainText("—");
+    /* Every row leads to its own change: a founder scanning this is looking
+       for one they remember, and a row that led nowhere would be a record
+       they could read and not reach. */
+    await expect(table.getByRole("link")).toHaveCount(6);
+  });
+
+  test("does not make the six outcomes read alike", async ({ page }) => {
+    await page.goto("/e2e/agent-change-history");
+
+    const table = page.getByRole("table", { name: /changes vibe has written/i });
+
+    for (const outcome of [
+      "Merged",
+      "Merge stopped",
+      "Discarded",
+      "Checks failed",
+      "Waiting for you",
+      "Did not finish",
+    ]) {
+      await expect(table.getByText(outcome, { exact: true }), outcome).toBeVisible();
+    }
+  });
+
+  /*
+   * The two claims this table is most able to overstate.
+   *
+   * `Merged` means the default branch points at the approved commit and Vibe
+   * read it back — never deployed, released or live, because Vibe calls no
+   * deployment provider (rule 74). And an ambiguous write says it stopped
+   * rather than that it failed: a `merging` row means a write may already have
+   * taken effect and nobody has read the branch back, which rule 73 says a
+   * list must not resolve.
+   */
+  test("claims no deployment, and does not resolve an ambiguous write", async ({ page }) => {
+    await page.goto("/e2e/agent-change-history");
+
+    const body = await page.locator("main").innerText();
+    expect(body).not.toMatch(/deployed|shipped|released|is live/i);
+
+    /* On the DOM text, not on `innerText`: the pill uppercases its label in
+       CSS, so a rendered-text match would be asserting the stylesheet. */
+    await expect(page.getByText("Merge stopped", { exact: true })).toBeVisible();
+  });
+
+  /**
+   * The whole row, on a phone, without scrolling sideways.
+   *
+   * This is the defect the render found. The table had four columns on a
+   * 36rem floor, so at 430px the outcome sat off the right edge of its own
+   * scroll box — legal, because a table may scroll inside its own container,
+   * and still useless: a founder could read what each change was for or what
+   * became of it, never both, and scrolling back lost the titles.
+   *
+   * Asserted as a measurement rather than as a look, because "it fits" is a
+   * claim about a box: the scroll width equals the visible width, so there is
+   * nothing to the right to reach.
+   */
+  test("fits a phone, with no sideways scroll to reach the outcome", async ({ page }) => {
+    await page.setViewportSize({ width: 430, height: 900 });
+    await page.goto("/e2e/agent-change-history");
+
+    const table = page.getByRole("table", { name: /changes vibe has written/i });
+    await expect(table).toBeVisible();
+
+    const box = table.locator("..");
+    const width = await box.evaluate((element) => ({
+      visible: element.clientWidth,
+      total: element.scrollWidth,
+    }));
+    expect(width.total).toBeLessThanOrEqual(width.visible);
+
+    /* And both facts are on screen together. */
+    await expect(page.getByText("Merged", { exact: true })).toBeVisible();
+    await expect(
+      table.getByRole("link", { name: "Give the landing page a proper social preview" }),
+    ).toBeVisible();
+  });
+
+  /*
+   * A change whose Move left the latest opportunity set. The commit is still
+   * in the customer's repository, so the row stays and names itself by its
+   * branch — and the preparation that wrote nothing shows a dash, because
+   * nothing is not zero.
+   */
+  test("keeps a change whose Move is gone, and never prints a zero for nothing", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/agent-change-history");
+
+    const table = page.getByRole("table", { name: /changes vibe has written/i });
+    await expect(
+      table.getByRole("link", { name: "vibe/onboarding-empty-state" }),
+    ).toBeVisible();
+    /* "no files" rather than a zero standing in for a count nobody has. */
+    await expect(table.getByText(/no files/)).toBeVisible();
+    await expect(table.getByText("0 files", { exact: true })).toHaveCount(0);
   });
 });

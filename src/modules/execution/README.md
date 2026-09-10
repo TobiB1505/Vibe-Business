@@ -14,6 +14,7 @@ Deterministic change preparation: turns an approved Action Step into a commit on
 | Reading a change back as a diff, and identifying that diff | `diff.ts`, `diff-lines.ts`, `code-review-digest.ts` |
 | What a delivered change is expected to produce in production | `outcome-contract.ts`, `measurement-contract.ts` |
 | Persistence, service entry point, read models | `store.ts`, `service.ts`, `view.ts`, `change-progress.ts` |
+| What became of every change a product has had | `change-history.ts`, `change-history-view.ts` |
 
 ## The safety boundary, stated accurately
 

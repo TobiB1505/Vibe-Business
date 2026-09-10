@@ -33,6 +33,7 @@ import {
   agentCoreState,
   agentStageSteps,
 } from "@/modules/coding-agent/observability/agent-stages";
+import { listChangeHistory } from "@/modules/execution/change-history";
 import { AgentTrustPanel } from "./agent-header";
 import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
@@ -47,8 +48,7 @@ import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { CostLine } from "@/components/system/cost-line";
 import { MonoLabel } from "@/components/ui/typography";
-import { AgentRunHistory } from "./agent-run-history";
-import { listAgentRuns } from "@/modules/coding-agent/observability/run-view";
+import { ChangeHistoryTable } from "./change-history-table";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
@@ -302,7 +302,7 @@ async function AgentWorkspaceBody({
   /* The focus answer and start discoverability are independent. Keep them in
      one parallel read window so restoring the real start control does not
      reintroduce the old serial Agent-page latency. */
-  const [focusAction, agentRoutes, measuredRuns, pastRuns] = await Promise.all([
+  const [focusAction, agentRoutes, measuredRuns, changeHistory] = await Promise.all([
     focusedMove
       ? (async () => {
           const [summaries, activeOperation, failedOperation] = await Promise.all(
@@ -359,7 +359,10 @@ async function AgentWorkspaceBody({
      * latency, and bounded — a founder scanning for the run they mean does not
      * need the eleventh page of them.
      */
-    listAgentRuns(supabase, { projectId, limit: 20 }),
+    listChangeHistory(supabase, {
+      projectId,
+      repositoryFullName: project.repository?.fullName ?? null,
+    }),
   ]);
 
   const focus = requestedTaskMatchesRun
@@ -518,6 +521,19 @@ async function AgentWorkspaceBody({
             .map((entry) => ({ title: entry.title, kind: entry.kind })),
         }
       : readyTask;
+
+  /*
+   * The Move titles the history names its rows by, from the set this page has
+   * already read for the task panel. A second read would be the same strings
+   * fetched twice for one screen.
+   *
+   * A change whose Move is not in the latest set is absent here and the table
+   * falls back to the branch name — which is the honest answer: the commit
+   * exists whether or not the advice that motivated it survived.
+   */
+  const moveTitles = new Map(
+    (opportunities?.set.opportunities ?? []).map((move) => [move.id, move.title] as const),
+  );
 
   const creditEstimate = routeEconomics
     ? runCeilingLabel(routeEconomics.budget.maxCredits)
@@ -876,17 +892,25 @@ async function AgentWorkspaceBody({
           />
 
         {/*
-          The runs before this one (audit R29). The workspace shows the newest;
-          a product that has run the agent eleven times had ten it could no
-          longer reach, including the ones whose changes were merged.
+          Everything Vibe has written for this product (audit R29).
+
+          The workspace shows one change. A product that had run the agent
+          eleven times could reach none of the others — including the ones that
+          were merged, which is the half a founder is most likely to want back.
+
+          Sorted by change rather than by run, which is the decision behind the
+          whole section: a run is Vibe's unit of work and `Finished` is a fact
+          about the machinery, while a change is the thing that either reached
+          the default branch or did not. See `change-history.ts`.
         */}
-        {pastRuns.length > 1 && (
-          <section className="flex flex-col gap-3" aria-labelledby="agent-run-history-title">
-            <MonoLabel as="h2" id="agent-run-history-title">
-              Earlier runs
+        {changeHistory.length > 1 && (
+          <section className="flex flex-col gap-3" aria-labelledby="agent-change-history-title">
+            <MonoLabel as="h2" id="agent-change-history-title">
+              Every change Vibe has written
             </MonoLabel>
-            <AgentRunHistory
-              runs={pastRuns}
+            <ChangeHistoryTable
+              entries={changeHistory}
+              moveTitles={moveTitles}
               changeHref={(preparedChangeId) =>
                 `${projectSectionHref(project.id, "agent")}?change=${preparedChangeId}`
               }

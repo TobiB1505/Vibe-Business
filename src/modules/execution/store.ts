@@ -159,6 +159,40 @@ export async function listPreparedChangesForProject(
 }
 
 /**
+ * Every change a project has ever had, newest first, whatever became of it.
+ *
+ * ## Why this is a second list function
+ *
+ * `listPreparedChangesForProject` filters `status = "prepared"` because every
+ * surface that offers a founder something to *do* about a change wants the
+ * ones still in play. A history wants the opposite: the discarded ones are
+ * decisions somebody made, the failed ones are attempts that happened, and a
+ * list that hid them would answer "what has Vibe done to my product" with the
+ * subset that is still open.
+ *
+ * The status travels on the row, so the caller says what became of each rather
+ * than inferring it from presence in a list — see `changeHistoryOutcome`.
+ *
+ * The artifact-centric reasoning above applies here too, and more strongly: a
+ * branch that was merged eight weeks ago belongs in the history whether or not
+ * the Move that motivated it survived a regeneration.
+ */
+export async function listAllPreparedChangesForProject(
+  supabase: SupabaseClient,
+  params: { projectId: string; limit?: number },
+): Promise<StoredPreparedChange[]> {
+  const { data, error } = await supabase
+    .from("prepared_changes")
+    .select(COLUMNS)
+    .eq("project_id", params.projectId)
+    .order("created_at", { ascending: false })
+    .limit(params.limit ?? 50);
+
+  if (error) throw error;
+  return (data ?? []).map((row) => mapRow(row as Row));
+}
+
+/**
  * How many prepared changes a project has, without transferring any (UI-4).
  *
  * `head: true` with `count: "exact"` asks Postgres for the number and returns

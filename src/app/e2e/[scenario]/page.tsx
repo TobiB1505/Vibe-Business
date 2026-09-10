@@ -145,7 +145,7 @@ import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activi
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
-import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
+import { ChangeHistoryTable } from "@/app/app/projects/[projectId]/agent/change-history-table";
 import { WalletChip } from "@/components/system/wallet-chip";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
@@ -186,6 +186,10 @@ import {
   projectSectionHref,
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
+import {
+  E2E_CHANGE_HISTORY,
+  E2E_CHANGE_HISTORY_MOVES,
+} from "../change-history-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -2039,41 +2043,22 @@ export default async function E2eScenarioPage({
    * slow half is still resolving, which before this could not happen at all.
    */
   /*
-   * The run list on its own (audit R29). The Agent route needs a session and a
-   * project to reach, so without this the one screen that lets a founder find
-   * an earlier run would have no browser coverage.
+   * The change history on its own (audit R29). The Agent route needs a session
+   * and a project to reach, so without this the one screen that lets a founder
+   * find an earlier change would have no browser coverage.
+   *
+   * Six rows, one per outcome worth seeing side by side: a merge that landed,
+   * a write that stopped without an answer, a change somebody said no to, one
+   * whose checks failed, one still waiting, and one whose Move is gone from
+   * the latest set — which falls back to the branch name.
    */
-  if (scenario === "agent-run-history") {
+  if (scenario === "agent-change-history") {
     return (
       <main className="mx-auto max-w-[70rem] p-8">
         {label}
-        <AgentRunHistory
-          runs={[
-            {
-              id: "run_3",
-              status: "completed",
-              startedAt: "2026-08-27T10:44:00.000Z",
-              completedAt: "2026-08-27T10:51:00.000Z",
-              changedFileCount: 4,
-              preparedChangeId: "change_3",
-            },
-            {
-              id: "run_2",
-              status: "failed",
-              startedAt: "2026-08-24T09:12:00.000Z",
-              completedAt: "2026-08-24T09:14:00.000Z",
-              changedFileCount: null,
-              preparedChangeId: null,
-            },
-            {
-              id: "run_1",
-              status: "cancelled",
-              startedAt: "2026-08-20T16:03:00.000Z",
-              completedAt: "2026-08-20T16:05:00.000Z",
-              changedFileCount: null,
-              preparedChangeId: null,
-            },
-          ]}
+        <ChangeHistoryTable
+          entries={E2E_CHANGE_HISTORY}
+          moveTitles={E2E_CHANGE_HISTORY_MOVES}
           changeHref={(id) => `/app/projects/project_e2e/agent?change=${id}`}
         />
       </main>
