@@ -24,11 +24,26 @@ import { cn } from "@/lib/utils/cn";
  */
 export function AgentStartCta({
   children,
+  beneath,
   creditEstimate,
   forecastNotes,
   note = "You can stop Vibe at any time",
 }: {
   children: React.ReactNode;
+  /**
+   * What sits under the primary control, outside the sweep.
+   *
+   * The slot below clips to `rounded-full` and runs a highlight across
+   * whatever it holds, and that is only correct for **one** control. A chained
+   * offer is two — build the run, or build just this step — plus the sentence
+   * saying where the chain stops, and passing the group through the slot
+   * squeezed all three into a single pill and swept a white band across the
+   * boundary line, cutting it in half. That is the same defect this
+   * component's own docblock records for refusal notices, reached a second time
+   * by a different route: anything that is not the one primary action does not
+   * belong in the slot.
+   */
+  beneath?: React.ReactNode;
   /** Already-resolved run ceiling. Never derived in the client. */
   creditEstimate?: string | null;
   /**
@@ -110,6 +125,8 @@ export function AgentStartCta({
           />
         )}
       </div>
+
+      {beneath}
 
       <span className="text-fg-muted flex items-center gap-2 text-[0.8125rem]">
         <svg

@@ -18,6 +18,7 @@ export function AgentReadyStage({
   liveUrl,
   caption,
   startAction,
+  startBeneath,
   notice,
   creditEstimate,
   forecastNotes,
@@ -29,6 +30,14 @@ export function AgentReadyStage({
   caption: string;
   /** Canonical server-backed start, present only when policy exposes it. */
   startAction?: React.ReactNode;
+  /**
+   * The rest of the offer, under the primary control and outside its sweep.
+   *
+   * `AgentStartCta` clips its slot to a pill and runs a highlight across it,
+   * so only the one primary action may go there. A chained offer's decline and
+   * its boundary sentence come through here instead.
+   */
+  startBeneath?: React.ReactNode;
   /**
    * A refusal that is a question, rendered beside the hero rather than inside
    * the call to action.
@@ -101,6 +110,7 @@ export function AgentReadyStage({
           {notice}
           {(startAction !== undefined || task === null) && (
             <AgentStartCta
+              beneath={startAction ? startBeneath : null}
               creditEstimate={startAction ? creditEstimate : null}
               forecastNotes={startAction ? forecastNotes : undefined}
               note={

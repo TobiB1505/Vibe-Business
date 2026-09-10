@@ -1638,6 +1638,21 @@ export default async function E2eScenarioPage({
                  * not be able to soften.
                  */
                 forecastNotes={agentReadyForecastNotes()}
+                /*
+                  Stand-in buttons, deliberately: the real control binds a
+                  server action, and what these scenarios exist to show is what
+                  a founder is offered — two prices, both named, and the single
+                  step still reachable.
+
+                  Split across the two slots the way `agentStartControls`
+                  splits them. Only the primary control may go in `startAction`:
+                  that slot clips to a pill and sweeps a highlight across it,
+                  and passing the whole group through it squeezed the decline
+                  and the boundary sentence into the same pill and cut the
+                  sentence in half — which is what the scenarios drew until a
+                  phone-width render of the same offer in Nova's thread showed
+                  it.
+                */
                 startAction={
                   <div className="flex w-full flex-col gap-3">
                     {startRefusal && (
@@ -1646,28 +1661,24 @@ export default async function E2eScenarioPage({
                         repositoryReadHref="/app/projects/project_e2e/product"
                       />
                     )}
-                    {/*
-                      Stand-in buttons, deliberately: the real control binds a
-                      server action, and what these scenarios exist to show is
-                      what a founder is offered — two prices, both named, and
-                      the single step still reachable.
-                    */}
-                    {chainOffer && (
-                      <button type="button" className="w-full rounded-full px-5 py-3">
-                        {`Build all ${chainOffer.memberCount} steps — ${chainOffer.chainCredits}`}
-                      </button>
-                    )}
                     <button type="button" className="w-full rounded-full px-5 py-3">
                       {chainOffer
-                        ? `Build just this step — ${chainOffer.stepCredits}`
+                        ? `Build all ${chainOffer.memberCount} steps — ${chainOffer.chainCredits}`
                         : "Run with Vibe"}
                     </button>
-                    {chainOffer && (
+                  </div>
+                }
+                startBeneath={
+                  chainOffer ? (
+                    <div className="flex w-full flex-col gap-2">
+                      <button type="button" className="w-full rounded-full px-5 py-3">
+                        {`Build just this step — ${chainOffer.stepCredits}`}
+                      </button>
                       <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
                         {chainOffer.boundary}
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  ) : undefined
                 }
               />
             ),

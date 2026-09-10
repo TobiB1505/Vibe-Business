@@ -38,6 +38,7 @@ import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
 import { ValidationDepthNote } from "./validation-depth-note";
+import { AgentStartAction } from "./agent-start-action";
 import { AgentValidateAction } from "./agent-validate-action";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
@@ -57,7 +58,6 @@ import { AgentValidateStage } from "./agent-validate-stage";
 import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
-import { AgentStartAction } from "./agent-start-action";
 import { isFounderAttestable } from "@/modules/action-plans/completion";
 import { firstActionableStep } from "@/modules/action-plans/sequence";
 import { EXECUTION_REASON_LABELS, REFUSAL_SHAPES } from "@/modules/execution-contract/view";
@@ -67,11 +67,15 @@ import { AgentWorkspaceChoice } from "./agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
 import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import { resolveBuildChain } from "@/modules/execution-contract/chain";
-import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
-import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
-import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
+import {
+  BUILD_CHAIN_BOUNDARY_LABELS,
+  buildChainOfferLabel,
+  forecastDriverNotes,
+  forecastEvidenceNote,
+} from "@/modules/coding-agent/view";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -422,8 +426,6 @@ async function AgentWorkspaceBody({
           headRiskClass: agenticResolution.riskClass,
         })
       : null;
-  /* The sentence beside the offer. Null when the chain simply ran out of plan. */
-  const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
 
   /*
    * The two refusals that are questions rather than dead ends (Stufe 4).
@@ -522,6 +524,14 @@ async function AgentWorkspaceBody({
   const creditEstimate = routeEconomics
     ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
     : null;
+
+  /* Whether the offer may be made at all. Read once, because the primary
+     control and what sits under it are two slots and one condition. */
+  const offerable = agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0;
+
+  /* The chain is what is being offered when one resolved, so it is the control
+     that takes the sweep — see `startBeneath` for where the rest goes. */
+  const offersChain = buildChain !== null && chainEconomics != null;
 
   /*
    * What stands behind that ceiling (ADR 0072).
@@ -674,49 +684,42 @@ async function AgentWorkspaceBody({
                   ) : undefined
                 }
                 startAction={
-                  agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0 ? (
+                  offerable && agenticStep ? (
+                    <AgentStartAction
+                      projectId={project.id}
+                      stepKey={agenticStep.id}
+                      chain={offersChain ? true : undefined}
+                      label={
+                        offersChain && buildChain && chainEconomics
+                          ? `${buildChainOfferLabel(buildChain.members.length)} — ${formatCreditsForDisplay(chainEconomics.budget.maxCredits)}`
+                          : undefined
+                      }
+                      repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                    />
+                  ) : undefined
+                }
+                /*
+                  The decline and the boundary sentence, outside the sweep.
+                  They were inside it: `AgentStartCta` clips its slot to a pill
+                  and runs a highlight across whatever it holds, so the pair
+                  plus the paragraph were squeezed into one pill and the
+                  sentence was cut in half.
+                */
+                startBeneath={
+                  offerable && agenticStep && offersChain && buildChain ? (
                     <div className="flex w-full flex-col gap-2">
-                      {/*
-                        The chain is offered, never imposed. Two controls rather
-                        than a checkbox: a founder who wanted to stop after this
-                        step must be able to, and both figures come from one
-                        pricing function with different member sets, so the
-                        number on a button is the number that gets charged.
-
-                        When no chain resolved there is one control and this is
-                        the screen exactly as it was.
-                      */}
-                      {chainEconomics && buildChain && (
-                        <AgentStartAction
-                          projectId={project.id}
-                          stepKey={agenticStep.id}
-                          chain
-                          label={`${buildChainOfferLabel(buildChain.members.length)} — ${formatCreditsForDisplay(chainEconomics.budget.maxCredits)}`}
-                          repositoryReadHref={projectSectionHref(project.id, "my-product")}
-                        />
-                      )}
                       <AgentStartAction
                         projectId={project.id}
                         stepKey={agenticStep.id}
-                        variant={chainEconomics ? "secondary" : "primary"}
+                        variant="secondary"
                         label={
-                          chainEconomics && creditEstimate
-                            ? `Build just this step — ${creditEstimate}`
-                            : undefined
+                          creditEstimate ? `Build just this step — ${creditEstimate}` : undefined
                         }
-                        /* Where a stale-code refusal sends the founder. Built here,
-                           never in the panel — the panel does not know what the
-                           workspace's segments are called. */
                         repositoryReadHref={projectSectionHref(project.id, "my-product")}
                       />
-                      {chainEconomics && buildChain && chainBoundaryNote && (
-                        /* Why the chain stops where it does. Without it, a chain
-                           that ends at a Stripe step looks like a bug rather
-                           than the refusal it is. */
-                        <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
-                          {chainBoundaryNote}
-                        </p>
-                      )}
+                      <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                        {BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary]}
+                      </p>
                     </div>
                   ) : undefined
                 }
