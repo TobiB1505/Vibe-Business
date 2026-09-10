@@ -8,6 +8,7 @@ import {
 import { MonoLabel } from "@/components/ui/typography";
 import { RailNav, RailScroll } from "./app-frame";
 import { ProjectNav } from "./project-nav";
+import { MobileTabBar } from "./mobile-tab-bar";
 import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";
 import { cn } from "@/lib/utils/cn";
 
@@ -50,6 +51,14 @@ import { cn } from "@/lib/utils/cn";
  *                  impact model
  *   settings     — production URL, founder intent, the repository connection
  */
+/*
+ * `short` is the same destination said in one word, for the phone's tab bar
+ * (UI-35). A tab is a fifth of a 390px screen, and "Business Health" set to
+ * fit one is smaller than the label under it is worth reading.
+ *
+ * It lives here rather than in the tab bar because a section is one thing with
+ * two names, and a lookup table in a component is how the two names drift.
+ */
 export const PROJECT_SECTIONS = [
   /*
    * The project index is Nova (ADR 0085). It was Business Health, which
@@ -68,10 +77,11 @@ export const PROJECT_SECTIONS = [
    * item that names a *who* rather than a subject, and the mark beside it is
    * the same instrument the page itself carries.
    */
-  { id: "home", label: "Nova", icon: "nova", segment: "" },
+  { id: "home", label: "Nova", short: "Nova", icon: "nova", segment: "" },
   {
     id: "business-health",
     label: "Business Health",
+    short: "Health",
     icon: "business-health",
     segment: "health",
   },
@@ -81,13 +91,26 @@ export const PROJECT_SECTIONS = [
     // from what the product is (CORE-1 §33).
     id: "my-product",
     label: "My Product",
+    short: "Product",
     icon: "products",
     segment: "product",
   },
-  { id: "action-plan", label: "Action Plan", icon: "action-plan", segment: "plan" },
-  { id: "agent", label: "Agent", icon: "agent", segment: "agent" },
-  { id: "experiments", label: "Experiments", icon: "experiments", segment: "experiments" },
-  { id: "settings", label: "Project Settings", icon: "settings", segment: "settings" },
+  { id: "action-plan", label: "Action Plan", short: "Plan", icon: "action-plan", segment: "plan" },
+  { id: "agent", label: "Agent", short: "Agent", icon: "agent", segment: "agent" },
+  {
+    id: "experiments",
+    label: "Experiments",
+    short: "Results",
+    icon: "experiments",
+    segment: "experiments",
+  },
+  {
+    id: "settings",
+    label: "Project Settings",
+    short: "Settings",
+    icon: "settings",
+    segment: "settings",
+  },
 ] as const;
 
 /**
@@ -264,6 +287,14 @@ export function preparedChangeHref(preparedHref: string, preparedChangeId: strin
 export type ProjectNavItem = {
   id: ProjectSectionId;
   label: string;
+  /**
+   * The same destination in one word, for the phone's tab bar (UI-35).
+   *
+   * Required rather than optional: a tab with no short name would fall back to
+   * the long one and quietly set "Business Health" in a 78px column, which is
+   * the failure this field exists to make impossible.
+   */
+  short: string;
   icon: DashboardIconName;
   href: string;
   /**
@@ -318,27 +349,45 @@ export function ProjectRail({
     href: `/app/projects/${projectId}`,
   };
 
+  const switcher = (
+    <ProjectSwitcher
+      current={current}
+      connected={connected}
+      planName={planName}
+      items={switcherItems}
+    />
+  );
+
   return (
-    <RailNav direction="back" label="Project sections">
+    <>
       {/*
+        The phone's navigation, beside the rail's rather than instead of it in
+        the source (UI-35). `RailNav` is `max-lg:hidden` and this is
+        `lg:hidden`, so exactly one is ever drawn — two presentations of one
+        list of sections, from one array, which is what stops them drifting.
+
+        Project Settings is *not* filtered out here as it is below: on the
+        desktop rail it moved into the switcher, and on a phone the switcher is
+        inside this component's own sheet. Dropping it from both would leave
+        the section unreachable.
+      */}
+      <MobileTabBar items={items} context={switcher} />
+
+      <RailNav direction="back" label="Project sections">
+        {/*
         No eyebrow above the switcher. `PROJECT` labelled a control that
         already says what it is — the product's mark, its name and a selector
         glyph — and it cost a row in a rail whose section list was being cut
         off four items in.
       */}
-      <ProjectSwitcher
-        current={current}
-        connected={connected}
-        planName={planName}
-        items={switcherItems}
-      />
+        {switcher}
 
-      <div className="border-line-1 my-2 border-t" />
-      <RailScroll>
-        <ProjectNav items={items.filter((item) => item.id !== "settings")} />
-      </RailScroll>
+        <div className="border-line-1 my-2 border-t" />
+        <RailScroll>
+          <ProjectNav items={items.filter((item) => item.id !== "settings")} />
+        </RailScroll>
 
-      {/*
+        {/*
         The one row in this rail that is not about this product.
 
         `Project Settings` was here, one row above the account's own Settings,
@@ -356,27 +405,28 @@ export function ProjectRail({
         that swaps the whole rail, and an unwarmed swap is the difference
         between a fold and a wait.
       */}
-      <div className="border-line-1 mt-2 flex flex-col gap-1.5 border-t pt-2">
-        <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
-        <Link
-          href="/app/settings"
-          prefetch
-          className={cn(
-            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav group/settings",
-            "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
-            "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
-          )}
-        >
-          <SettingsIcon size={17} className="shrink-0" />
-          Settings
-          <ChevronRightIcon
-            size={15}
-            aria-hidden
-            className="text-fg-meta group-hover/settings:text-fg-secondary ml-auto shrink-0 transition-interactive"
-          />
-        </Link>
-      </div>
-    </RailNav>
+        <div className="border-line-1 mt-2 flex flex-col gap-1.5 border-t pt-2">
+          <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
+          <Link
+            href="/app/settings"
+            prefetch
+            className={cn(
+              "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav group/settings",
+              "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
+              "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+            )}
+          >
+            <SettingsIcon size={17} className="shrink-0" />
+            Settings
+            <ChevronRightIcon
+              size={15}
+              aria-hidden
+              className="text-fg-meta group-hover/settings:text-fg-secondary ml-auto shrink-0 transition-interactive"
+            />
+          </Link>
+        </div>
+      </RailNav>
+    </>
   );
 }
 

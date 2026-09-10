@@ -50,8 +50,21 @@ const SIDE_CLASSES: Record<SheetSide, string> = {
    * animation. A bottom sheet reads as what it is — more detail about the
    * thing you were just looking at — and leaves the page edge visible.
    */
+  /*
+   * Two things had to be said explicitly here, and both were silent (UI-35).
+   *
+   * `top-auto` because a modal `<dialog>` is given `inset-block: 0` by the
+   * browser, and a fixed box with top and bottom both pinned and `height:auto`
+   * *fills* — so `mt-auto` had nothing to push against and this variant was a
+   * full-screen panel with its content at the top, never a bottom sheet.
+   *
+   * And the height cap lives only here now. It used to be set here *and* as
+   * `max-h-dvh` in the shared list below; `cn` is a filtered join rather than
+   * `tailwind-merge`, so both shipped and stylesheet order picked the wrong
+   * one. Measured, the sheet was 844px tall in an 844px viewport.
+   */
   bottom:
-    "mt-auto mb-0 mx-auto h-auto max-h-[85dvh] w-full max-w-none rounded-t-card rounded-b-none",
+    "top-auto right-0 bottom-0 left-0 mx-auto h-auto max-h-[85dvh] w-full max-w-none rounded-t-card rounded-b-none",
 };
 
 export function Sheet({
@@ -111,7 +124,9 @@ export function Sheet({
         // palette is supposed to own, and `--glass-blur` then says something
         // the rendered page contradicts. It comes from the hook.
         "vibe-overlay",
-        "bg-surface-4 border-line-4 text-fg-body max-h-dvh border p-0 shadow-card",
+        /* No `max-h-*` here: each side sets its own, because two of them in
+           one list is a conflict `cn` cannot resolve. */
+        "bg-surface-4 border-line-4 text-fg-body border p-0 shadow-card",
         "backdrop:bg-ground/70 backdrop:backdrop-blur-sm",
         "motion-safe:transition-interactive open:motion-safe:animate-none",
         SIDE_CLASSES[side],

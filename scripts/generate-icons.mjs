@@ -69,6 +69,10 @@ const MANIFEST = {
      what the row names. A single chevron says "expand"; two say "pick". */
   ChevronsUpDownIcon: "chevrons-up-down",
   ArrowRightIcon: "arrow-right",
+  /* The phone tab bar's fifth tab (UI-35). An ellipsis is the one mark that
+     already means "the rest of this list" without a word under it — which is
+     the whole reason a bar of five can carry seven sections. */
+  MoreIcon: "ellipsis",
   /*
    * The rest of the generic set, migrated in one pass rather than one at a
    * time. Leaving eight hand-drawn marks beside seven generated ones is the

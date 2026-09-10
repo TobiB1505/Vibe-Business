@@ -384,6 +384,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0105](docs/decisions/0105-one-rail-that-unfolds.md) | One rail, unfolded by a parallel route | Web surface |
 | [0106](docs/decisions/0106-the-rail-is-a-layout-per-area.md) | One rail, a layout per area, and a first frame | Web surface |
 | [0107](docs/decisions/0107-a-year-is-ten-months.md) | A year is ten months charged and twelve granted | Billing |
+| [0108](docs/decisions/0108-a-phone-is-not-a-narrow-desktop.md) | A phone is not a narrow desktop | UI |
 | [0096](docs/decisions/0096-a-contradiction-is-not-a-measurement.md) | A contradiction is not a measurement: static and live consistency checks | Internal operator console |
 | [0099](docs/decisions/0099-the-refusal-becomes-a-handoff.md) | The refusal becomes a handoff | §3.5 |
 | [0100](docs/decisions/0100-the-founder-is-the-outside-witness.md) | The founder is the outside witness | §3.5 |

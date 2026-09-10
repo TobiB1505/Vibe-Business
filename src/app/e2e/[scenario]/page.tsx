@@ -1227,6 +1227,7 @@ export default async function E2eScenarioPage({
     const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
       id: section.id,
       label: section.label,
+      short: section.short,
       icon: section.icon,
       href:
         section.id === "my-product" ? currentHref : projectSectionHref("project_e2e", section.id),
@@ -2017,6 +2018,7 @@ export default async function E2eScenarioPage({
               items={PROJECT_SECTIONS.map((section) => ({
                 id: section.id,
                 label: section.label,
+                short: section.short,
                 icon: section.icon,
                 href:
                   section.id === "settings"

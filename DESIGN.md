@@ -80,7 +80,7 @@ Use the neutral native interface stack for product UI. Hierarchy comes from size
 
 ## Layout
 
-Account pages use one persistent rail on desktop and a top strip below the large breakpoint. Main content is a single readable column with wide comparison surfaces. Index pages establish hierarchy in this order: route heading and primary action, context/summary, searchable dataset, then supporting trust or explanation.
+Account pages use one persistent rail on desktop. Below the large breakpoint the rail is not a narrower rail and not a strip stacked above the page: it becomes a layer holding two bars — the product's sections along the bottom, in the thumb's reach, and the account behind one avatar in the corner. Two levels, two places. Both bars are opaque, which is the one place chrome is, because a film needs a ground behind it and these sit over scrolling content. See [ADR 0108](docs/decisions/0108-a-phone-is-not-a-narrow-desktop.md). Main content is a single readable column with wide comparison surfaces. Index pages establish hierarchy in this order: route heading and primary action, context/summary, searchable dataset, then supporting trust or explanation.
 
 Project pages use one 256px desktop rail that owns the current product, repository connection, project navigation and account footer. The project document is the only independent vertical scroll surface; its content is capped at 1440px with 32–40px page padding. No persistent project header repeats the product name above the page. Routes lead with a quiet `My Products / Product` breadcrumb, then one large page title, description and local action in normal document flow.
 

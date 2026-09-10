@@ -456,6 +456,73 @@
    */
   --frame-inset: 1.25rem;
   --rail-gap: 1.25rem;
+
+  /*
+   * The phone's frame (UI-35).
+   *
+   * Below `lg` the rail is not a narrower rail — it is a bar at the top and a
+   * bar at the bottom, and these two numbers are the only thing that knows how
+   * tall they are. The content column reserves exactly them as padding, so the
+   * chrome floats over nothing: a fixed bar whose height is guessed somewhere
+   * else is how a last paragraph ends up permanently under a tab bar.
+   *
+   * `--tabbar-h` is the bar itself and excludes the home indicator. The safe
+   * area is added where the bar is drawn, so a phone without one does not
+   * reserve space for it.
+   *
+   * 3.5rem and 4rem are both above the 44px touch minimum with room for a
+   * label under an icon, which is what makes the bottom bar readable at a
+   * glance rather than a row of unlabelled glyphs.
+   */
+  --topbar-h: 3.5rem;
+  --tabbar-h: 4rem;
+}
+
+/*
+ * The phone's two bars are opaque, in every palette (UI-35).
+ *
+ * Both `--color-surface-1` here and `--glass-fill-chrome` in v2 are *films*:
+ * translucent whites meant to sit on the page's ground. That is right for a
+ * rail, which has ground behind it, and wrong for a bar fixed over scrolling
+ * content — measured, `bg-surface-1` computed to `rgba(255,255,255,0.024)` and
+ * the product's own paragraphs read straight through the navigation.
+ *
+ * So the film is composited over the ground here rather than laid on top of
+ * whatever happens to be behind it. Same colour, no transparency. v2 restates
+ * this with its own film; both say the same thing in their own vocabulary.
+ *
+ * The components deliberately carry no background utility of their own: two
+ * places setting this is how one of them gets forgotten.
+ */
+@media (width < 64rem) {
+  [data-topbar],
+  [data-tabbar] {
+    background-color: var(--color-ground);
+    background-image: linear-gradient(var(--color-surface-1), var(--color-surface-1));
+  }
+}
+
+/*
+ * Anything pinned to the foot of a phone screen clears the tab bar (UI-35).
+ *
+ * The consent banner is `fixed bottom-0 z-50` and the tab bar is `z-40`, so
+ * the banner landed squarely on top of the navigation: measured in a browser,
+ * every tap on a section hit the banner's surface instead, and a founder who
+ * had not answered the cookie question could not navigate at all.
+ *
+ * Raising the bar above the banner would be the wrong fix — it would put
+ * navigation over a consent decision. The banner sits above the bar instead,
+ * which is what a bottom sheet does on a phone that has a tab bar.
+ *
+ * Written here rather than on the banner because the banner cannot know
+ * whether this screen has chrome: `/`, the auth pages and onboarding have no
+ * tab bar, and reserving 4rem there would float it off the bottom edge for no
+ * reason. `:has()` asks the question the component cannot.
+ */
+@media (width < 64rem) {
+  body:has([data-tabbar]) [data-testid="consent-banner"] {
+    padding-bottom: calc(1rem + var(--tabbar-h) + env(safe-area-inset-bottom));
+  }
 }
 
 /* The active step's ring, breathing outward and fading. Decorative: the step's
