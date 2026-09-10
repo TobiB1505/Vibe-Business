@@ -150,6 +150,14 @@ export type NovaWorkingEntry = {
 export type NovaHomeView = {
   primary: NovaHomeEntry;
   secondary: NovaHomeEntry[];
+  /**
+   * How many unfinished changes this view set aside behind the one it shows.
+   *
+   * Zero when there is one change or none. It exists so a surface can say
+   * there are others: showing one of nine in silence would be the same defect
+   * as the pile it replaced, wearing the opposite face.
+   */
+  changesWaiting: number;
   working: NovaWorkingEntry | null;
 };
 
@@ -330,10 +338,70 @@ export function novaWorkingEntry(working: NovaWorkingFact | null): NovaWorkingEn
  */
 export const NOVA_SECONDARY_LIMIT = 5;
 
+/**
+ * Whether a candidate is about a prepared change.
+ *
+ * Read off the candidate's own shape rather than a second list of kinds to
+ * keep in step with `ChangeCandidateKind`: every change candidate carries a
+ * `preparedChangeId` and nothing else does.
+ */
+function isChange(candidate: FocusCandidate): boolean {
+  return "preparedChangeId" in candidate;
+}
+
 export function buildNovaHomeView(focus: NovaFocus): NovaHomeView {
+  /*
+   * One change on screen, and a count of the rest.
+   *
+   * ## The pile this removes
+   *
+   * Nothing ages a change out of the ranking: `awaiting_approval` stays
+   * `review_change` until somebody acts on it, and `merged` stays
+   * `outcome_pending` until somebody runs the outcome check, which only a
+   * person starts. So a month of agent runs put a month of changes in
+   * `secondary`, and `secondary` renders as sentences with no controls — a
+   * founder read *"There is a change waiting for you to look at."* five times
+   * with nothing to say which change any of them meant. The cap at five did
+   * not help: it hid the rest while still showing four sentences nobody could
+   * tell apart.
+   *
+   * ## Why this is the view's decision and not the ranking's
+   *
+   * `focus.test.ts` holds a named invariant — *everything true is either
+   * primary or secondary* — and it is right: the ranking must not silently
+   * swallow something that is true. Collapsing there broke it. Here the same
+   * decision is presentation, which is what this function already does one
+   * line down by capping the list at five.
+   *
+   * ## What it keeps
+   *
+   * The domain's order, untouched: the changes arrive already sorted, so the
+   * first one through is the ranking's own answer to which change matters, and
+   * the non-change moments keep their positions around it. And a count, so a
+   * founder with nine changes is told there are nine rather than shown one and
+   * left to assume.
+   */
+  let changeShown = isChange(focus.primary);
+  let changesWaiting = 0;
+  const secondary: FocusCandidate[] = [];
+
+  for (const candidate of focus.secondary) {
+    if (!isChange(candidate)) {
+      secondary.push(candidate);
+      continue;
+    }
+    if (changeShown) {
+      changesWaiting += 1;
+      continue;
+    }
+    changeShown = true;
+    secondary.push(candidate);
+  }
+
   return {
     primary: entryFor(focus.primary),
-    secondary: focus.secondary.slice(0, NOVA_SECONDARY_LIMIT).map(entryFor),
+    secondary: secondary.slice(0, NOVA_SECONDARY_LIMIT).map(entryFor),
     working: novaWorkingEntry(focus.working),
+    changesWaiting,
   };
 }

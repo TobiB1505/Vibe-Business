@@ -17,6 +17,72 @@ const VIEWPORTS = [
   { name: "desktop", width: 1280, height: 900 },
 ] as const;
 
+/**
+ * The dead end a founder actually reached, and the rule that removes it.
+ *
+ * A change was waiting, the approval section said *"Start a preview and look
+ * at the change first"*, and there was nothing to press anywhere on the
+ * screen. `ChangeGates` matched its `stage` prop exactly, so Nova's
+ * `review_change` moment — which mounts it at `stage="review"` — rendered the
+ * refusal and filtered out the panel that answers it.
+ *
+ * Only a browser proves this one. Every unit test passed while it shipped:
+ * the copy was right, the block was mounted, the panels each worked. What was
+ * wrong was which of them reached the page together.
+ */
+test.describe("a refusal and its remedy", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("puts the preview control on the screen that asks for a preview", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const gate = page.locator('[data-testid="gate-needs-preview"]');
+    await expect(gate.getByText(/approval needs a preview of this exact commit/)).toBeVisible();
+
+    /*
+     * The remedy, pressable, in the same gate. Not a link away and not a
+     * sentence about it.
+     */
+    await expect(gate.getByRole("button", { name: "Start temporary preview" })).toBeEnabled();
+  });
+
+  /*
+   * And in the right order: the step comes before the decision that needs it.
+   * A control below its own refusal is a scroll a founder should not have to
+   * discover.
+   */
+  test("offers the step above the decision it unblocks", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const gate = page.locator('[data-testid="gate-needs-preview"]');
+    const preview = await gate
+      .getByRole("button", { name: "Start temporary preview" })
+      .boundingBox();
+    const refusal = await gate
+      .getByText(/approval needs a preview of this exact commit/)
+      .boundingBox();
+
+    expect(preview).not.toBeNull();
+    expect(refusal).not.toBeNull();
+    expect(preview!.y).toBeLessThan(refusal!.y);
+  });
+
+  /*
+   * The disclosure over the gate was open and held only the refusal, because
+   * the two panels that belong in it had been filtered out. Evidence a founder
+   * opens to read "how this change got here" must contain some.
+   */
+  test("fills the record of how the change got here", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const gate = page.locator('[data-testid="gate-needs-preview"]');
+    await expect(gate.getByRole("heading", { name: "Safety checks" })).toBeVisible();
+    await expect(gate.getByText("All safety checks passed")).toBeVisible();
+  });
+});
+
 test.describe("Nova Home", () => {
   test("leads with one dominant action and its price, before any click", async ({ page }) => {
     await page.goto(NOVA("nova-priced"));

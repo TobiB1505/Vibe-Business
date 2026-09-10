@@ -1,6 +1,6 @@
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { planMoveHref } from "@/modules/action-plans/source";
-import type { AgentStage } from "@/modules/coding-agent/observability/agent-stages";
+import { AGENT_STAGES, type AgentStage } from "@/modules/coding-agent/observability/agent-stages";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { ChangeDiffSection } from "../change-diff-section";
 import { ChangeOrigin, MoveBacklink } from "../change-origin";
@@ -71,7 +71,35 @@ export function ChangeGates({
    */
   chrome?: boolean;
 }) {
-  const show = (which: AgentStage) => stage === null || stage === which;
+  /**
+   * Which gates to draw: this one and everything it rests on.
+   *
+   * ## Why a floor and not an exact match
+   *
+   * It was `stage === which`, and that produced the one dead end this whole
+   * gate exists to prevent. Nova's `review_change` moment mounts this with
+   * `stage="review"`, so the approval panel rendered and said *"Start a
+   * preview and look at the change first"* — while the same prop had filtered
+   * the preview panel out one branch above it. A founder on a phone had a
+   * change waiting, a refusal naming its remedy, and nothing to press
+   * anywhere on the screen. The disclosure over it, *"How this change got
+   * here"*, was open and held only that refusal, because the validation panel
+   * had gone the same way.
+   *
+   * The narrowing itself was right and is kept: the comment on `GATE_STAGE`
+   * says a failed validation must not be shown an approval panel, because
+   * that is "offering a decision nobody has reached". A floor keeps that —
+   * `validate` still draws no approval and no merge — and refuses the inverse,
+   * which is hiding the step that unblocks the decision being offered.
+   *
+   * `AGENT_STAGES` is already in dependency order, and this component's own
+   * rule is that order read aloud: *a merge needs an approval, an approval
+   * needs a review, a review needs a preview, a preview needs a validation.*
+   * So the gate a founder is on is exactly the gate whose prerequisites they
+   * must be able to see and satisfy.
+   */
+  const show = (which: AgentStage) =>
+    stage === null || AGENT_STAGES.indexOf(which) <= AGENT_STAGES.indexOf(stage);
 
   /*
    * One question asked once for this change (ADR 0063).
@@ -93,42 +121,41 @@ export function ChangeGates({
     >
       {chrome && (
         <>
-      {/*
+          {/*
         A live region, because this sentence is the one thing here that changes
         as the change advances — and a screen reader announces nothing when
         visible text is simply replaced. Polite: it is a status, not an
         interruption.
       */}
-      <p role="status" className="text-fg text-sm font-medium">
-        {change.progress.headline}
-      </p>
+          <p role="status" className="text-fg text-sm font-medium">
+            {change.progress.headline}
+          </p>
 
-      {/*
+          {/*
         What it is and why, before anything asks for authorization. The written
         rationale wins when there is one — two answers to the same question
         would stack, and the written one is stronger.
       */}
-      <ChangeRationale rationale={change.rationale} />
+          <ChangeRationale rationale={change.rationale} />
 
-      {!change.rationale && (
-        <ChangeOrigin
-          origin={change.origin}
-          moveHref={change.opportunityId ? planMoveHref(planHref, change.opportunityId) : null}
-        />
-      )}
+          {!change.rationale && (
+            <ChangeOrigin
+              origin={change.origin}
+              moveHref={change.opportunityId ? planMoveHref(planHref, change.opportunityId) : null}
+            />
+          )}
 
-      {/*
+          {/*
         The way back, for a change whose rationale suppressed the origin block.
         Navigation rather than a second account of why the change exists —
         without it a deterministic change names its Move nowhere.
       */}
-      {change.rationale && change.origin && change.opportunityId && (
-        <MoveBacklink
-          title={change.origin.title}
-          href={planMoveHref(planHref, change.opportunityId)}
-        />
-      )}
-
+          {change.rationale && change.origin && change.opportunityId && (
+            <MoveBacklink
+              title={change.origin.title}
+              href={planMoveHref(planHref, change.opportunityId)}
+            />
+          )}
         </>
       )}
 
@@ -232,31 +259,31 @@ export function ChangeGates({
       */}
       {chrome && (
         <details className="group border-line-2 space-y-2 border-t pt-3">
-        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-xs">
-          <span className="group-open:hidden">
-            How this was built — {change.filePaths.length} file
-            {change.filePaths.length === 1 ? "" : "s"} changed
-          </span>
-          <span className="hidden group-open:inline">How this was built</span>
-        </summary>
+          <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-xs">
+            <span className="group-open:hidden">
+              How this was built — {change.filePaths.length} file
+              {change.filePaths.length === 1 ? "" : "s"} changed
+            </span>
+            <span className="hidden group-open:inline">How this was built</span>
+          </summary>
 
-        <div className="rounded-well border-line-2 bg-well space-y-1 border p-3">
-          <p className="text-fg-muted font-mono text-xs">
-            {change.branchName}
-            {" · "}
-            {change.commitSha
-              ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}`
-              : change.baseBranch}
-          </p>
+          <div className="rounded-well border-line-2 bg-well space-y-1 border p-3">
+            <p className="text-fg-muted font-mono text-xs">
+              {change.branchName}
+              {" · "}
+              {change.commitSha
+                ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}`
+                : change.baseBranch}
+            </p>
 
-          {/* Paths only. File contents live on the branch, never in our rows. */}
-          <ul className="space-y-0.5">
-            {change.filePaths.map((path) => (
-              <li key={path} className="text-fg-meta font-mono text-xs">
-                {path}
-              </li>
-            ))}
-          </ul>
+            {/* Paths only. File contents live on the branch, never in our rows. */}
+            <ul className="space-y-0.5">
+              {change.filePaths.map((path) => (
+                <li key={path} className="text-fg-meta font-mono text-xs">
+                  {path}
+                </li>
+              ))}
+            </ul>
           </div>
         </details>
       )}
@@ -282,17 +309,17 @@ export function ChangeGates({
           whether to preview it. */}
       {show("review") && (
         <>
-      <OutcomePanel
-        projectId={projectId}
-        preparedChangeId={change.id}
-        card={change.outcome}
-        businessImpactLabel={change.businessImpact.ladderLabel}
-      />
-      <BusinessImpactPanel
-        projectId={projectId}
-        preparedChangeId={change.id}
-        card={change.businessImpact}
-      />
+          <OutcomePanel
+            projectId={projectId}
+            preparedChangeId={change.id}
+            card={change.outcome}
+            businessImpactLabel={change.businessImpact.ladderLabel}
+          />
+          <BusinessImpactPanel
+            projectId={projectId}
+            preparedChangeId={change.id}
+            card={change.businessImpact}
+          />
         </>
       )}
     </div>

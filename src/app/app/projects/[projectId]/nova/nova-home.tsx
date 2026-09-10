@@ -244,8 +244,40 @@ function FocusSection({
      * The other moments, as sentences. `buildNovaHomeView` has ranked and
      * capped them since this route existed and nothing rendered them — so a
      * founder with three things pending saw one.
+     *
+     * Each carries its own subject where it has one, because it rendered the
+     * message alone and two moments of the same kind then read identically.
+     * Two open questions both said *"The agent stopped and needs an answer
+     * from you."* and neither said which question — while `detail` held the
+     * question text the whole time.
+     *
+     * A change's `detail` is deliberately not expected to distinguish
+     * anything: its `headline` names the *stage* ("This change did not pass
+     * its safety checks"), not the change. Two of those would still read
+     * alike, which is why the ranking now raises one change rather than
+     * every change, and this line is not the thing that fixed it.
      */
-    ...data.view.secondary.map((moment) => moment.message),
+    ...data.view.secondary.map((moment) =>
+      moment.detail === null ? moment.message : `${moment.message} ${moment.detail}`,
+    ),
+    /*
+     * And the queue behind the one change on screen.
+     *
+     * A founder with nine unfinished changes used to read five sentences about
+     * them and could not tell any apart; now they read one and would otherwise
+     * have no way to know the other eight exist. The count is composed here
+     * rather than written into a table because this is the only place it
+     * appears — there is no second copy for it to drift from — and the route
+     * to them is the Agent's run history, which lists every run and links to
+     * the change it produced.
+     */
+    ...(data.view.changesWaiting === 0
+      ? []
+      : [
+          data.view.changesWaiting === 1
+            ? "One more change is waiting behind this one. Both are listed under Agent, with every run this product has had."
+            : `${data.view.changesWaiting} more changes are waiting behind this one. They are listed under Agent, with every run this product has had.`,
+        ]),
   ];
 
   if (control.kind === "none") {

@@ -652,6 +652,28 @@ export function StudyBlock({ study }: { study: Study }) {
           </RenderBlock>
         </div>
         <Context>
+          And the state a founder actually reached on a phone: nothing previewed yet, so approval is
+          blocked on a preview and says so. The gate mounts at <code>stage=&quot;review&quot;</code>
+          , which used to filter the preview panel out — so the refusal named a step that had no
+          control anywhere on the screen. A stage is a floor now: this gate and everything it rests
+          on.
+        </Context>
+        <div
+          className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}
+          data-testid="gate-needs-preview"
+        >
+          <Bubble tone="waiting" index={0}>
+            <Line>There is a change waiting for you to look at.</Line>
+          </Bubble>
+          <RenderBlock label="The change" tone="waiting" at="4m" index={1}>
+            <ReviewBlock
+              projectId="project_e2e"
+              change={E2E_SCENARIOS.change_needs_preview()}
+              planHref="/app/projects/project_e2e/plan"
+            />
+          </RenderBlock>
+        </div>
+        <Context>
           I said last time I would not put a merge control in a thread, and the reason this is not
           that is that a <em>button</em> is not what arrives. The gate brings its own order —
           evidence, then approval, then merge, then outcome, each reachable only through the one
