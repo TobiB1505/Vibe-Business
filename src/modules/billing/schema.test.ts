@@ -44,7 +44,9 @@ describe("enums match their CHECK constraints", () => {
     // The kind CHECK was replaced by this migration to add `expiry`. A drift
     // here means either an expiry entry cannot be written, or a kind exists in
     // the database that no code knows how to render.
-    const match = /billing_credit_ledger_kind_check\s*\n\s*check \(kind in \(([^)]*)\)\)/m.exec(sql);
+    const match = /billing_credit_ledger_kind_check\s*\n\s*check \(kind in \(([^)]*)\)\)/m.exec(
+      sql,
+    );
     expect(match, "ledger kind CHECK not found").not.toBeNull();
 
     const permitted = match![1]
@@ -131,7 +133,10 @@ describe("no client-writable financial surface", () => {
     for (const table of OWNER_READABLE) {
       const policies = [
         ...sql.matchAll(
-          new RegExp(`create policy "[^"]+"\\s*\\n\\s*on public\\.${table}\\s*\\n\\s*for (\\w+)`, "gi"),
+          new RegExp(
+            `create policy "[^"]+"\\s*\\n\\s*on public\\.${table}\\s*\\n\\s*for (\\w+)`,
+            "gi",
+          ),
         ),
       ].map((match) => match[1].toLowerCase());
 

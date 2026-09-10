@@ -102,6 +102,7 @@ Nothing here needed to change:
 | `VIBE_AGENT_GATEWAY_SECRET` | as needed for local dogfooding | as needed | required alongside the origin above |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | required | required | required |
 | `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/settings/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/settings/billing` |
+| `STRIPE_PRICE_BUILDER_ANNUAL`, `STRIPE_PRICE_PRO_ANNUAL` | unset | unset | set to the annual Stripe Price ids once they exist — a deployment without them sells months and refuses a year with `sku_not_configured` ([ADR 0107](../decisions/0107-a-year-is-ten-months.md)) |
 | `PAID_OPERATIONS_DISABLED` | unset | unset | **unset** — set to exactly `1` only to stop paid work during an incident (VB-032) |
 | `VIBE_INTERNAL_OPERATOR_USER_IDS` | your own Supabase user id, if you want the console locally | **unset** | the operator user ids, comma-separated ([ADR 0088](../decisions/0088-the-internal-operator-console.md)) |
 | `VIBE_PALETTE` | `v2` while working on the design system | `v2` to look at the second palette on a branch | **unset** — set to exactly `v2` when it ships to customers ([ADR 0102](../decisions/0102-the-palette-ships-behind-one-switch.md)) |

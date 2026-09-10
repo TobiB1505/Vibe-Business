@@ -271,7 +271,10 @@ export function normalizeStripeEvent(
     case "invoice":
       return { ...base, invoice: normalizeInvoice(event.data.object as Stripe.Invoice) };
     case "subscription":
-      return { ...base, subscription: normalizeSubscription(event.data.object as Stripe.Subscription) };
+      return {
+        ...base,
+        subscription: normalizeSubscription(event.data.object as Stripe.Subscription),
+      };
     default:
       return base;
   }

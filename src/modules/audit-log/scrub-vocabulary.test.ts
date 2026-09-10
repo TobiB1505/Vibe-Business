@@ -65,9 +65,9 @@ function writtenKeys(): Set<string> {
         cursor += 1;
       }
 
-      for (const key of tail.slice(start.index + start[0].length, cursor - 1).matchAll(
-        /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[:,]/gm,
-      )) {
+      for (const key of tail
+        .slice(start.index + start[0].length, cursor - 1)
+        .matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*[:,]/gm)) {
         keys.add(key[1]);
       }
     }
@@ -181,6 +181,10 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "metric_direction",
     "metric_key",
     "mode",
+    // ADR 0107: "monthly" | "annual" — which billing interval a Checkout was
+    // started for. A closed vocabulary about Vibe's own catalogue, naming no
+    // amount and no person.
+    "interval",
     "operation",
     "operationType",
     "outcome",
@@ -308,7 +312,8 @@ describe("the audit metadata vocabulary is fully classified (ADR 0056 §8)", () 
     const retained = new Set(Object.values(RETAINED).flat());
     const unclassified = [...written]
       .filter(
-        (key) => !deleted.has(key) && !nulled.has(key) && !retained.has(key) && !PSEUDONYMIZED.has(key),
+        (key) =>
+          !deleted.has(key) && !nulled.has(key) && !retained.has(key) && !PSEUDONYMIZED.has(key),
       )
       .sort();
 

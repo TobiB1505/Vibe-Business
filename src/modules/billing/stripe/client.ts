@@ -100,7 +100,10 @@ export function resetStripeClientCache(): void {
 export async function verifyStripeWebhook(params: {
   payload: string;
   signature: string | null;
-}): Promise<{ ok: true; event: Stripe.Event } | { ok: false; reason: "missing_signature" | "invalid_signature" }> {
+}): Promise<
+  | { ok: true; event: Stripe.Event }
+  | { ok: false; reason: "missing_signature" | "invalid_signature" }
+> {
   if (!params.signature) return { ok: false, reason: "missing_signature" };
 
   const env = getStripeEnv();

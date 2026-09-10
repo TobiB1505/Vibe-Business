@@ -11,7 +11,12 @@ import {
   releaseStripeEventClaim,
   upsertSubscriptionSnapshot,
 } from "./store";
-import { interpretStripeEvent, type BillingIntent, type CatalogPriceIds, type NormalizedStripeEvent } from "./stripe/events";
+import {
+  interpretStripeEvent,
+  type BillingIntent,
+  type CatalogPriceIds,
+  type NormalizedStripeEvent,
+} from "./stripe/events";
 
 /**
  * Turning verified Stripe events into Credits (BILLING CORE-2 §18, §27–§34).
@@ -183,7 +188,10 @@ async function grantTopUp(
     externalReference: intent.externalReference,
   });
 
-  return { status: "processed", reason: granted.alreadyGranted ? "already_granted" : intent.packKey };
+  return {
+    status: "processed",
+    reason: granted.alreadyGranted ? "already_granted" : intent.packKey,
+  };
 }
 
 async function grantSubscriptionPeriod(
@@ -213,7 +221,10 @@ async function grantSubscriptionPeriod(
     periodEnd,
   });
 
-  return { status: "processed", reason: granted.alreadyGranted ? "already_granted" : intent.planKey };
+  return {
+    status: "processed",
+    reason: granted.alreadyGranted ? "already_granted" : intent.planKey,
+  };
 }
 
 async function syncSubscription(
@@ -249,11 +260,16 @@ async function syncSubscription(
     planKey: intent.planKey,
     status: intent.status,
     currentPeriodStart:
-      intent.currentPeriodStart === null ? null : new Date(intent.currentPeriodStart * 1000).toISOString(),
+      intent.currentPeriodStart === null
+        ? null
+        : new Date(intent.currentPeriodStart * 1000).toISOString(),
     currentPeriodEnd:
-      intent.currentPeriodEnd === null ? null : new Date(intent.currentPeriodEnd * 1000).toISOString(),
+      intent.currentPeriodEnd === null
+        ? null
+        : new Date(intent.currentPeriodEnd * 1000).toISOString(),
     cancelAtPeriodEnd: intent.cancelAtPeriodEnd,
-    canceledAt: intent.canceledAt === null ? null : new Date(intent.canceledAt * 1000).toISOString(),
+    canceledAt:
+      intent.canceledAt === null ? null : new Date(intent.canceledAt * 1000).toISOString(),
     livemode,
   });
 

@@ -91,7 +91,9 @@ describe("when there is nothing to cancel", () => {
     // second attempt after a partial erasure would fail forever at the same
     // point, on a subscription the first attempt had already cancelled.
     findActiveSubscription.mockResolvedValue({ stripeSubscriptionId: "sub_1" });
-    cancel.mockRejectedValue(Object.assign(new Error("No such subscription"), { code: "resource_missing" }));
+    cancel.mockRejectedValue(
+      Object.assign(new Error("No such subscription"), { code: "resource_missing" }),
+    );
 
     expect(await cancelSubscriptionsForErasure(supabase, USER)).toEqual({ ok: true, cancelled: 0 });
   });

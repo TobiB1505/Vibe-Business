@@ -4,7 +4,11 @@ import { redirect } from "next/navigation";
 import { hasStripeConfiguration } from "@/lib/env/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireSession } from "@/modules/auth/session";
-import { parseCreditPackKey, parsePaidPlanKey } from "@/modules/billing/catalog";
+import {
+  parseBillingInterval,
+  parseCreditPackKey,
+  parsePaidPlanKey,
+} from "@/modules/billing/catalog";
 import {
   startCreditPackCheckout,
   startCustomerPortal,
@@ -80,7 +84,10 @@ export async function startCreditPackCheckoutAction(
     });
 
     if (!result.ok) {
-      return { error: result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed };
+      return {
+        error:
+          result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed,
+      };
     }
     destination = result.url;
   } catch (error) {
@@ -114,6 +121,14 @@ export async function startPlanCheckoutAction(
   const planKey = parsePaidPlanKey(formData.get("plan"));
   if (!planKey) return { error: MESSAGES.unknown_sku };
 
+  /*
+   * Which button was pressed, narrowed to one of two words. Anything else is
+   * monthly rather than a refusal: a malformed field must never sign somebody
+   * up for a year, and the cheaper commitment is the safe reading of a value
+   * nobody can vouch for.
+   */
+  const interval = parseBillingInterval(formData.get("interval"));
+
   const supabase = createServiceClient();
 
   let destination: string;
@@ -122,16 +137,21 @@ export async function startPlanCheckoutAction(
       userId: session.userId,
       email: session.email ?? null,
       planKey,
+      interval,
     });
 
     if (!result.ok) {
-      return { error: result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed };
+      return {
+        error:
+          result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed,
+      };
     }
     destination = result.url;
   } catch (error) {
     console.error("[billing] plan checkout failed", {
       userId: session.userId,
       planKey,
+      interval,
       error: error instanceof Error ? error.name : "unknown",
     });
     return { error: MESSAGES.failed };

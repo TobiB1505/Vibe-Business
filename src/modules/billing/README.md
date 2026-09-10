@@ -2,6 +2,8 @@
 
 The payment rail — see [ARCHITECTURE.md §3 "Layers with no section above"](../../../ARCHITECTURE.md#layers-with-no-section-above), [ADR 0025](../../../docs/decisions/0025-stripe-payment-rail-and-credit-grants.md). Spending prices live in [ADR 0061](../../../docs/decisions/0061-launch-v1-operation-rate-card.md), re-derived by [ADR 0062](../../../docs/decisions/0062-sonnet-5-price-rise-cancelled.md); plans and packs are deliberately outside both.
 
+Plans can be paid for by the month or by the year — ten months charged, twelve granted ([ADR 0107](../../../docs/decisions/0107-a-year-is-ten-months.md)). An interval is a _price on a plan_ rather than another plan, so `PLAN_KEYS` is still three, and the allowance for a period comes from the **Price that was charged** rather than from metadata: an annual grant is twelve times a monthly one, and a metadata field that could choose between them would be a field that could mint eleven months of Credits.
+
 This module is not where money is _spent_. It is where money **arrives**. Spending is [`modules/credits`](../credits/README.md), which defines what a Vibe Credit is and how it is held, settled and released. Billing turns a Stripe payment into a Credit grant and stops there.
 
 ```

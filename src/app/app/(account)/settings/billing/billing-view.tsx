@@ -5,7 +5,12 @@ import { ArrowRightIcon, LockIcon, PlusIcon } from "@/components/ui/dashboard-ic
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
-import { getPlan, listCreditPacks, listPaidPlans } from "@/modules/billing/catalog";
+import {
+  ANNUAL_PAID_MONTHS,
+  getPlan,
+  listCreditPacks,
+  listPaidPlans,
+} from "@/modules/billing/catalog";
 import type { BillingOverview } from "@/modules/billing/overview";
 import { retailChargeFor } from "@/modules/credits/retail";
 import {
@@ -308,11 +313,7 @@ export function BillingView({
               <ArrowRightIcon size={15} />
             </Link>
           ) : (
-            <button
-              type="button"
-              disabled
-              className={buttonClasses({ variant: "secondary" })}
-            >
+            <button type="button" disabled className={buttonClasses({ variant: "secondary" })}>
               Management unavailable
             </button>
           )}
@@ -395,6 +396,14 @@ export function BillingView({
                 price={`${formatPrice(plan.priceCents)} / month`}
                 credits={formatCreditsForDisplay(plan.monthlyCreditUnits)}
                 buys={planPurchasingPower(plan.monthlyCreditUnits, at)}
+                annual={
+                  plan.annual
+                    ? {
+                        price: formatPrice(plan.annual.priceCents),
+                        saving: `A year is ${ANNUAL_PAID_MONTHS} months charged and 12 granted — ${formatCreditsForDisplay(plan.annual.creditUnits)} Credits, all at once, to spend across the year.`,
+                      }
+                    : null
+                }
                 disabled={!stripeReady}
                 current={overview.plan.key === plan.key}
               />

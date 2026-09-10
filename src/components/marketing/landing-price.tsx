@@ -1,13 +1,15 @@
-import Link from "next/link";
 import { LandingStep } from "@/components/marketing/landing-step";
+import { PlanCards, type PlanCard } from "@/components/marketing/plan-cards";
 import { Reveal } from "@/components/marketing/reveal";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { CostLine } from "@/components/system/cost-line";
-import { buttonClasses } from "@/components/ui/button";
-import { ArrowRightIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
-import { cn } from "@/lib/utils/cn";
-import { listCreditPacks, listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
+import {
+  ANNUAL_PAID_MONTHS,
+  listCreditPacks,
+  listPlans,
+  WELCOME_CREDIT_UNITS,
+} from "@/modules/billing/catalog";
 import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
 import { creditsToUnits, formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
@@ -46,6 +48,15 @@ import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
  * question of when it might stop being zero (BILLING CORE-2 §56). The page
  * inherits that decision rather than re-taking it.
  *
+ * ## The year
+ *
+ * `PlanCards` switches between two sets of already-formatted figures, and the
+ * annual set is derived rather than typed: ten months charged, twelve granted
+ * (ADR 0098). So the "two months free" on the switch is a subtraction on the
+ * same constant the catalogue prices with, and the Credits on the annual card
+ * are the year's whole allowance — one grant, at the start, with a year to
+ * spend it.
+ *
  * ## The half a price list leaves out
  *
  * A run that reserved Credits and then failed **returned them**, and an
@@ -63,6 +74,20 @@ const PLAN_NOTES: Record<string, string[]> = {
   pro: ["A fresh grant each paid month", "One Credit ledger", "Top up when a month runs short"],
 };
 
+/**
+ * What a paid year promises, which is not what a paid month promises.
+ *
+ * "A fresh grant each paid month" is false of an annual subscription — Stripe
+ * invoices it once and Vibe grants once, for the period that was paid. The
+ * first render of the switch said the monthly sentence under €190, which is
+ * the class of quietly-false line this whole page exists to not have.
+ */
+const ANNUAL_NOTES = [
+  "The whole year's Credits, at the start",
+  "One Credit ledger",
+  "Top up when a year runs short",
+];
+
 /** What each priced action costs, kept for after the euros. */
 const ACTIONS: {
   label: string;
@@ -76,6 +101,9 @@ const ACTIONS: {
   { label: "A plan for a Move", operation: "action_plan" },
   { label: "An agent run", operation: "agent_execution", pricingClass: "standard" },
 ];
+
+/** Twelve, so the saving on the switch is a subtraction rather than a claim. */
+const MONTHS_PER_YEAR = 12;
 
 /** Euro cents as the price a card shows. Whole euros — every plan is one. */
 function euros(cents: number): string {
@@ -110,6 +138,36 @@ export function LandingPrice() {
   const packs = listCreditPacks();
   const builder = plans.find((plan) => plan.key === "builder");
 
+  /*
+   * Every figure formatted here, on the server, from the catalogue. The switch
+   * in `PlanCards` chooses between two strings it was handed; nothing about
+   * money is computed in a browser.
+   */
+  const cards: PlanCard[] = plans.map((plan) => ({
+    key: plan.key,
+    name: plan.name,
+    featured: plan.key === "builder",
+    href:
+      plan.key === "free"
+        ? "/signup"
+        : `/signup?next=${encodeURIComponent("/app/settings/billing")}`,
+    monthly: {
+      price: euros(plan.priceCents),
+      grant:
+        plan.key === "free"
+          ? `${formatCreditsForDisplay(WELCOME_CREDIT_UNITS)} Welcome Credits, once`
+          : `${formatCreditsForDisplay(plan.monthlyCreditUnits)} Credits each paid month`,
+      notes: PLAN_NOTES[plan.key] ?? [],
+    },
+    annual: plan.annual
+      ? {
+          price: euros(plan.annual.priceCents),
+          grant: `${formatCreditsForDisplay(plan.annual.creditUnits)} Credits for the year`,
+          notes: ANNUAL_NOTES,
+        }
+      : null,
+  }));
+
   // The connecting line, computed rather than claimed.
   const runs = builder ? buys(builder.monthlyCreditUnits, "agent_execution", "standard") : null;
   const audits = builder ? buys(builder.monthlyCreditUnits, "business_audit") : null;
@@ -128,91 +186,33 @@ export function LandingPrice() {
           <p className="text-fg-prose max-w-[58ch] leading-relaxed">
             The Product Scan is free, so you can see what Vibe makes of your product before spending
             anything. A paid month is a grant of Credits, and every action that spends them shows
-            its price at the control that starts it.
+            its price at the control that starts it. Pay by the year and two of the twelve months
+            are not charged.
           </p>
         </div>
       </Reveal>
 
-      <div className="mt-14 grid gap-4 sm:mt-16 lg:grid-cols-3">
-        {plans.map((plan, index) => {
-          const featured = plan.key === "builder";
-          const grant = plan.key === "free" ? WELCOME_CREDIT_UNITS : plan.monthlyCreditUnits;
-
-          return (
-            <Reveal key={plan.key} from="up" delay={index * 0.06}>
-              <article
-                className={cn(
-                  "rounded-card flex h-full flex-col border p-6 sm:p-7",
-                  featured
-                    ? "border-mint-line bg-mint-tint/35 shadow-mint"
-                    : "border-line-2 bg-surface-2",
-                )}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <h3 className="text-fg text-title font-semibold">{plan.name}</h3>
-                  {featured && (
-                    <span className="text-mint border-mint-line bg-mint-tint rounded-full border px-3 py-1 text-caption font-semibold">
-                      Most products
-                    </span>
-                  )}
-                </div>
-
-                <p className="text-fg mt-7 text-display font-bold">
-                  {euros(plan.priceCents)}
-                  <span className="text-fg-muted ml-2 text-body font-normal tracking-normal">
-                    / month
-                  </span>
-                </p>
-
-                <p className="text-fg-secondary mt-3 text-body">
-                  {formatCreditsForDisplay(grant)}{" "}
-                  {plan.key === "free" ? "Welcome Credits, once" : "Credits each paid month"}
-                </p>
-
-                <ul className="my-7 flex flex-col gap-3">
-                  {PLAN_NOTES[plan.key]?.map((note) => (
-                    <li key={note} className="text-fg-body flex items-start gap-3 text-body">
-                      <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
-                      {note}
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  /*
-                   * A paid plan's button carries where it was going. Every card
-                   * used to send a visitor to `/signup` and no further, so
-                   * somebody who had just chosen Builder arrived signed in with
-                   * nothing on screen about paying. `next` is read and
-                   * sanitized once, in `signup/page.tsx`.
-                   */
-                  href={
-                    plan.key === "free"
-                      ? "/signup"
-                      : `/signup?next=${encodeURIComponent("/app/settings/billing")}`
-                  }
-                  className={cn(
-                    buttonClasses({ variant: featured ? "primary" : "secondary" }),
-                    "mt-auto w-full",
-                  )}
-                >
-                  Start with {plan.name} <ArrowRightIcon size={15} />
-                </Link>
-              </article>
-            </Reveal>
-          );
-        })}
-      </div>
+      <Reveal from="up" className="mt-14 sm:mt-16">
+        <PlanCards
+          plans={cards}
+          savingLabel={`${MONTHS_PER_YEAR - ANNUAL_PAID_MONTHS} months free`}
+        />
+      </Reveal>
 
       {/*
-        The line between the two halves: what a month's grant is, in work. A
-        division on the rate card below rather than a claim about it, so the
-        two cannot come to disagree.
+        The line between the two halves: what a grant is, in work. A division on
+        the rate card below rather than a claim about it, so the two cannot come
+        to disagree.
+
+        "Every 1,000 Credits" rather than "1,000 Credits is", because the cards
+        above it say 1,000 under a month and 12,000 under a year — a rate reads
+        correctly under both, where a total reads as the wrong one half the
+        time.
       */}
       {builder && runs !== null && audits !== null && (
         <Reveal from="up" delay={0.12} className="mt-10">
           <p className="text-fg-prose mx-auto max-w-[62ch] text-center leading-relaxed">
-            {formatCreditsForDisplay(builder.monthlyCreditUnits)} Credits is{" "}
+            Every {formatCreditsForDisplay(builder.monthlyCreditUnits)} Credits is{" "}
             <span className="text-fg">{runs} agent runs</span> at the standard class, or{" "}
             <span className="text-fg">{audits} Business Brain audits</span>, or any mix of the work
             below.

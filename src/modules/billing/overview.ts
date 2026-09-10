@@ -7,7 +7,12 @@ import {
   sumLotAllocationCapacity,
   reconcileAndRepairLotAllocations,
 } from "@/modules/credits/lot-store";
-import { remainingCapacity, spendableCapacity, spendableLots, type CreditLot } from "@/modules/credits/lots";
+import {
+  remainingCapacity,
+  spendableCapacity,
+  spendableLots,
+  type CreditLot,
+} from "@/modules/credits/lots";
 import { reconcileAndRepairBalance } from "@/modules/credits/service";
 import { findOrphanedHolds } from "@/modules/credits/orphaned-holds";
 import { listOperationRunsByIds } from "@/modules/operations/store";
@@ -325,20 +330,22 @@ export async function getBillingOverview(
 
   const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
 
-  const [lots, entries, postedFromLedger, expiry, reservations, welcomeGranted] = await Promise.all([
-    listActiveLots(supabase, account.id),
-    // What the page *shows*: the most recent movements, capped (VB-025).
-    listLedgerEntries(supabase, account.id),
-    // What reconciliation *needs*: one number over the whole ledger. Two reads
-    // now, because they were always two questions — and asking both of them
-    // with one unbounded transfer is what made this page degrade with age.
-    sumLedgerDeltas(supabase, account.id),
-    findNextExpiry(supabase, account.id, now),
-    listActiveReservations(supabase, account.id),
-    // Asked of the database rather than derived from `entries`, which is
-    // capped and newest-first while this row is the oldest one an account has.
-    hasLedgerEntryWithKey(supabase, account.id, welcomeKey),
-  ]);
+  const [lots, entries, postedFromLedger, expiry, reservations, welcomeGranted] = await Promise.all(
+    [
+      listActiveLots(supabase, account.id),
+      // What the page *shows*: the most recent movements, capped (VB-025).
+      listLedgerEntries(supabase, account.id),
+      // What reconciliation *needs*: one number over the whole ledger. Two reads
+      // now, because they were always two questions — and asking both of them
+      // with one unbounded transfer is what made this page degrade with age.
+      sumLedgerDeltas(supabase, account.id),
+      findNextExpiry(supabase, account.id, now),
+      listActiveReservations(supabase, account.id),
+      // Asked of the database rather than derived from `entries`, which is
+      // capped and newest-first while this row is the oldest one an account has.
+      hasLedgerEntryWithKey(supabase, account.id, welcomeKey),
+    ],
+  );
 
   /*
    * Reconciliation and, when enabled, repair — for both materialized caches
@@ -354,14 +361,19 @@ export async function getBillingOverview(
    * audit trail, the underlying row) rather than something this page's own
    * return value needs.
    */
-  const occupiedByGrant = await sumLotAllocationCapacity(supabase, lots.map((lot) => lot.id));
+  const occupiedByGrant = await sumLotAllocationCapacity(
+    supabase,
+    lots.map((lot) => lot.id),
+  );
 
   const [lotReconciliation] = await Promise.all([
     reconcileAndRepairLotAllocations(supabase, { lots, occupiedByGrant, userId: params.userId }),
     reconcileAndRepairBalance(supabase, {
       account,
       postedFromLedger,
-      reservations: reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
+      reservations: reservations.map((reservation) => ({
+        reservedCredits: reservation.reservedCredits,
+      })),
       userId: params.userId,
     }),
     reportOrphanedHolds(supabase, { account, reservations, userId: params.userId, now }),
@@ -540,12 +552,16 @@ function resolveLabel(
       return operationType ? (OPERATION_LABELS[operationType] ?? null) : null;
     }
 
-    const key = entry.reservationId ? records.reservationKeyById.get(entry.reservationId) : undefined;
+    const key = entry.reservationId
+      ? records.reservationKeyById.get(entry.reservationId)
+      : undefined;
     return key?.startsWith(DEEP_SCAN_RESERVATION_PREFIX) ? DEEP_SCAN_LABEL : null;
   }
 
   if (entry.kind === "grant" || entry.kind === "purchase") {
-    return GRANT_LABELS.find(({ prefix }) => entry.idempotencyKey.startsWith(prefix))?.label ?? null;
+    return (
+      GRANT_LABELS.find(({ prefix }) => entry.idempotencyKey.startsWith(prefix))?.label ?? null
+    );
   }
 
   return null;
@@ -641,7 +657,11 @@ async function reportOrphanedHolds(
   supabase: SupabaseClient,
   params: {
     account: { id: string };
-    reservations: readonly { id: string; operationRunId: string | null; reservedCredits: CreditUnits }[];
+    reservations: readonly {
+      id: string;
+      operationRunId: string | null;
+      reservedCredits: CreditUnits;
+    }[];
     userId: string;
     now: Date;
   },

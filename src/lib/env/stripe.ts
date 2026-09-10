@@ -48,6 +48,12 @@ const stripeEnvSchema = z.object({
   // cannot be purchased yet", not "billing is completely broken".
   STRIPE_PRICE_BUILDER_MONTHLY: z.string().min(1).optional(),
   STRIPE_PRICE_PRO_MONTHLY: z.string().min(1).optional(),
+  // The annual Prices. Separate Stripe Price objects on the same Products, as
+  // Stripe models a second billing interval — so a deployment may sell monthly
+  // before an annual Price exists, and the honest failure for the second is
+  // "a year of Builder cannot be purchased yet".
+  STRIPE_PRICE_BUILDER_ANNUAL: z.string().min(1).optional(),
+  STRIPE_PRICE_PRO_ANNUAL: z.string().min(1).optional(),
   STRIPE_PRICE_PACK_500: z.string().min(1).optional(),
   STRIPE_PRICE_PACK_1500: z.string().min(1).optional(),
   STRIPE_PRICE_PACK_5000: z.string().min(1).optional(),

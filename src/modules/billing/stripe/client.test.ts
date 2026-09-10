@@ -66,14 +66,18 @@ describe("valid signatures", () => {
 
 describe("invalid signatures are refused (§66, §102.6)", () => {
   it("refuses a payload with no signature header at all", async () => {
-    expect(await verifyStripeWebhook({ payload: payloadFor("invoice.paid"), signature: null })).toEqual({
+    expect(
+      await verifyStripeWebhook({ payload: payloadFor("invoice.paid"), signature: null }),
+    ).toEqual({
       ok: false,
       reason: "missing_signature",
     });
   });
 
   it("refuses an empty signature header", async () => {
-    expect(await verifyStripeWebhook({ payload: payloadFor("invoice.paid"), signature: "" })).toEqual({
+    expect(
+      await verifyStripeWebhook({ payload: payloadFor("invoice.paid"), signature: "" }),
+    ).toEqual({
       ok: false,
       reason: "missing_signature",
     });
@@ -99,7 +103,9 @@ describe("invalid signatures are refused (§66, §102.6)", () => {
       object: "event",
       type: "checkout.session.completed",
       livemode: false,
-      data: { object: { id: "cs_test_1", object: "checkout.session", metadata: { vibe_sku: "pack_500" } } },
+      data: {
+        object: { id: "cs_test_1", object: "checkout.session", metadata: { vibe_sku: "pack_500" } },
+      },
     });
     const signature = sign(original);
     const tampered = original.replace("pack_500", "pack_5000");

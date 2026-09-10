@@ -1295,3 +1295,141 @@ test.describe("what a month costs", () => {
     await expect(pricing).toContainText(/never starts a paid refresh on your behalf/i);
   });
 });
+
+/*
+ * The year (ADR 0098).
+ *
+ * Ten months charged and twelve granted, and both halves of that have to reach
+ * the card: a visitor who sees €190 without the allowance has been shown a
+ * bigger number for no reason. The switch is the only piece of state on this
+ * page, so it is also the only place a pricing table can jump under somebody
+ * mid-comparison.
+ */
+test.describe("paying by the year", () => {
+  /**
+   * Press *Yearly* the way a reader does — on the label.
+   *
+   * The radio itself is `sr-only`, which is a 1px box: Playwright's `check()`
+   * aims at the input and, at the top of the block, lands on the sticky header
+   * instead. A reader never clicks a 1px target, and asserting through the
+   * label is both the faithful action and the one that proves the label is
+   * wired to its input at all.
+   */
+  async function yearly(pricing: ReturnType<import("@playwright/test").Page["locator"]>) {
+    await pricing.locator("label").filter({ hasText: "Yearly" }).click();
+    await expect(pricing.getByRole("radio", { name: /yearly/i })).toBeChecked();
+  }
+
+  test("switches both the price and the allowance", async ({ page }) => {
+    await page.goto("/");
+    const pricing = page.locator("#pricing");
+    await pricing.scrollIntoViewIfNeeded();
+
+    const builder = pricing.locator("[data-plan='builder']");
+    await expect(builder).toContainText("€19");
+    await expect(builder).toContainText("1,000 Credits each paid month");
+
+    await yearly(pricing);
+
+    /*
+      €190 is ten months, and 12,000 Credits is twelve — the discount and the
+      allowance are two halves of one offer, and a card showing only the first
+      would be advertising a bigger number for nothing.
+    */
+    await expect(builder).toContainText("€190");
+    await expect(builder).toContainText("/ year");
+    await expect(builder).toContainText("12,000 Credits for the year");
+    await expect(pricing).toContainText(/2 months free/i);
+
+    /*
+      And what the plan promises follows the interval. "A fresh grant each paid
+      month" is false of a year — Stripe invoices once and Vibe grants once, for
+      the period that was paid — and the first render of this switch said it
+      under €190.
+    */
+    await expect(builder).toContainText("The whole year's Credits, at the start");
+    await expect(builder).not.toContainText("A fresh grant each paid month");
+  });
+
+  test("leaves Free on its own terms, because there is no year to commit to", async ({ page }) => {
+    await page.goto("/");
+    const pricing = page.locator("#pricing");
+    await pricing.scrollIntoViewIfNeeded();
+    await yearly(pricing);
+
+    // Not emptied out and not hidden: a plan with nothing to buy keeps the
+    // figures it has under either setting.
+    const free = pricing.locator("[data-plan='free']");
+    await expect(free).toContainText("€0");
+    await expect(free).toContainText("/ month");
+  });
+
+  test("does not move the table under somebody comparing two numbers", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+    const pricing = page.locator("#pricing");
+
+    /*
+      The switch itself is scrolled to, not the section. Playwright scrolls an
+      element into view before clicking it, and with only the section in view
+      that scroll moved the page under the measurement — which made the test
+      report the harness's own scrolling as the product's.
+
+      Located as a `group`, because `SegmentedControl` is a `fieldset` with an
+      `sr-only` legend rather than a hand-written `role="radiogroup"`. That is
+      the point of using it: the grouping, the arrow keys and the announcement
+      come from the platform.
+    */
+    await pricing.getByRole("group", { name: "Billing interval" }).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(700);
+
+    /*
+      Measured in *document* coordinates, not viewport ones. The first version
+      compared `boundingBox().y` either side of the click and reported a 772px
+      move on a layout that had not changed by a pixel — because the click can
+      scroll, and a viewport coordinate is a fact about the scroll position as
+      much as about the box. The scroll is asserted separately below, which is
+      the other half of the same promise.
+    */
+    const grid = pricing.getByTestId("plan-cards");
+    const place = () =>
+      grid.evaluate((el) => {
+        const box = el.getBoundingClientRect();
+        return { top: box.top + window.scrollY, height: box.height, scrollY: window.scrollY };
+      });
+
+    const before = await place();
+    await yearly(pricing);
+    await expect(pricing.locator("[data-plan='builder']")).toContainText("€190");
+    const after = await place();
+
+    expect(Math.abs(before.height - after.height)).toBeLessThanOrEqual(2);
+    expect(Math.abs(before.top - after.top)).toBeLessThanOrEqual(2);
+    // And the reader stays where they were reading.
+    expect(after.scrollY).toBe(before.scrollY);
+  });
+
+  test("sends a paid choice to the surface that can sell either commitment", async ({ page }) => {
+    await page.goto("/");
+    const pricing = page.locator("#pricing");
+    await pricing.scrollIntoViewIfNeeded();
+
+    /*
+      The link does not carry the interval, and the assertion says so rather
+      than pretending otherwise. An earlier version appended `interval=annual`
+      and nothing downstream read it — `signup/page.tsx` sanitizes `next` and
+      ignores the rest — which would have been a parameter promising something
+      the product does not do.
+
+      What is promised and true: a paid plan lands on the billing screen, where
+      both commitments are offered side by side.
+    */
+    const link = pricing.locator("[data-plan='builder']").getByRole("link");
+    await expect(link).toHaveAttribute("href", /next=.*settings.*billing/);
+
+    await yearly(pricing);
+    await expect(link).toHaveAttribute("href", /next=.*settings.*billing/);
+    await expect(link).not.toHaveAttribute("href", /interval=/);
+  });
+});

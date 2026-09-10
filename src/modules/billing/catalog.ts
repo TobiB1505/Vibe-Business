@@ -37,8 +37,13 @@ import { creditsToUnits, type CreditUnits } from "@/modules/credits/units";
 /**
  * The subscription plans.
  *
- * Exactly three: Free, Builder, Pro. No Enterprise, no Team, no annual, no
- * seats, no usage overage — V1 stays small on purpose (§8).
+ * Exactly three: Free, Builder, Pro. No Enterprise, no Team, no seats, no
+ * usage overage — V1 stays small on purpose (§8).
+ *
+ * Two of them can be paid for by the month or by the year, which is a *price*
+ * on the same plan rather than a fourth and fifth plan: a customer on annual
+ * Builder is on Builder, with the same allowance and the same one ledger. See
+ * ADR 0098.
  */
 export const PLAN_KEYS = ["free", "builder", "pro"] as const;
 export type PlanKey = (typeof PLAN_KEYS)[number];
@@ -46,6 +51,44 @@ export type PlanKey = (typeof PLAN_KEYS)[number];
 /** The paid plans — the only ones with a Stripe Price and a monthly grant. */
 export const PAID_PLAN_KEYS = ["builder", "pro"] as const;
 export type PaidPlanKey = (typeof PAID_PLAN_KEYS)[number];
+
+export const BILLING_INTERVALS = ["monthly", "annual"] as const;
+export type BillingInterval = (typeof BILLING_INTERVALS)[number];
+
+/**
+ * Months charged for a year of a plan. The other two are the discount.
+ *
+ * A number rather than a second euro amount typed underneath the first: the
+ * annual price *is* ten monthly ones, so writing €190 beside €19 would be two
+ * facts that can come to disagree, and the one a customer notices is the one
+ * that is wrong.
+ */
+export const ANNUAL_PAID_MONTHS = 10;
+
+/** Months of allowance a paid year grants. */
+const MONTHS_PER_YEAR = 12;
+
+/**
+ * What one billing interval of a plan costs, and what it grants.
+ *
+ * `creditUnits` is per **paid period** rather than per month, because that is
+ * what the grant path means by it: one paid invoice, one Credit lot, expiring
+ * at the period end. An annual invoice buys a year, so it grants a year — in
+ * one lot, with a year to spend it.
+ *
+ * A monthly drip would need a clock, and this repository has one admitted use
+ * of one (ADR 0069, the retention sweep). Inventing a second is a decision with
+ * its own record, not something a pricing change does on the way past.
+ */
+export type PlanPricing = {
+  interval: BillingInterval;
+  /** Display price in euro cents for one period. */
+  priceCents: number;
+  /** Credits granted for each successfully paid period. */
+  creditUnits: CreditUnits;
+  /** The environment variable holding this interval's Stripe Price id. */
+  stripePriceEnvVar: string;
+};
 
 export type PlanDefinition = {
   key: PlanKey;
@@ -63,7 +106,28 @@ export type PlanDefinition = {
   monthlyCreditUnits: CreditUnits;
   /** The environment variable holding this plan's Stripe Price id. */
   stripePriceEnvVar: string | null;
+  /**
+   * The same plan bought by the year, or null where there is nothing to buy.
+   *
+   * Derived from the monthly facts above rather than typed beside them, so the
+   * discount stays one number and the allowance stays one multiplication.
+   */
+  annual: PlanPricing | null;
 };
+
+/** A paid plan's annual price, derived from its monthly one. */
+function annualPricing(
+  monthlyCents: number,
+  monthlyCredits: CreditUnits,
+  stripePriceEnvVar: string,
+): PlanPricing {
+  return {
+    interval: "annual",
+    priceCents: monthlyCents * ANNUAL_PAID_MONTHS,
+    creditUnits: (monthlyCredits * MONTHS_PER_YEAR) as CreditUnits,
+    stripePriceEnvVar,
+  };
+}
 
 const PLAN_DEFINITIONS: Readonly<Record<PlanKey, PlanDefinition>> = {
   free: {
@@ -73,6 +137,8 @@ const PLAN_DEFINITIONS: Readonly<Record<PlanKey, PlanDefinition>> = {
     currency: "eur",
     monthlyCreditUnits: creditsToUnits(0),
     stripePriceEnvVar: null,
+    // Nothing to buy by the month, and nothing to discount by the year.
+    annual: null,
   },
   builder: {
     key: "builder",
@@ -81,6 +147,7 @@ const PLAN_DEFINITIONS: Readonly<Record<PlanKey, PlanDefinition>> = {
     currency: "eur",
     monthlyCreditUnits: creditsToUnits(1_000),
     stripePriceEnvVar: "STRIPE_PRICE_BUILDER_MONTHLY",
+    annual: annualPricing(1_900, creditsToUnits(1_000), "STRIPE_PRICE_BUILDER_ANNUAL"),
   },
   pro: {
     key: "pro",
@@ -89,6 +156,7 @@ const PLAN_DEFINITIONS: Readonly<Record<PlanKey, PlanDefinition>> = {
     currency: "eur",
     monthlyCreditUnits: creditsToUnits(3_000),
     stripePriceEnvVar: "STRIPE_PRICE_PRO_MONTHLY",
+    annual: annualPricing(4_900, creditsToUnits(3_000), "STRIPE_PRICE_PRO_ANNUAL"),
   },
 };
 
@@ -98,6 +166,33 @@ export function getPlan(key: PlanKey): PlanDefinition {
 
 export function listPlans(): PlanDefinition[] {
   return PLAN_KEYS.map((key) => PLAN_DEFINITIONS[key]);
+}
+
+/**
+ * What one interval of a plan costs and grants, or null where it cannot be
+ * bought at all.
+ *
+ * Free has no Stripe Price and no Checkout in either interval, which is why it
+ * answers null rather than a zero-priced entry: a zero would flow through
+ * reservation and settlement like any other number (§56).
+ */
+export function planPricing(key: PlanKey, interval: BillingInterval): PlanPricing | null {
+  const plan = PLAN_DEFINITIONS[key];
+  if (plan.stripePriceEnvVar === null) return null;
+
+  return interval === "annual"
+    ? plan.annual
+    : {
+        interval: "monthly",
+        priceCents: plan.priceCents,
+        creditUnits: plan.monthlyCreditUnits,
+        stripePriceEnvVar: plan.stripePriceEnvVar,
+      };
+}
+
+/** Narrows an untrusted string to a billing interval. Anything else is monthly. */
+export function parseBillingInterval(value: unknown): BillingInterval {
+  return value === "annual" ? "annual" : "monthly";
 }
 
 export function listPaidPlans(): PlanDefinition[] {
