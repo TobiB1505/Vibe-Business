@@ -1,6 +1,7 @@
-# 0166 — The ranking the screen threw away
+# 0213 — The ranking the screen threw away
 
 **Date:** 2026-09-07
+**Renumbered:** written as 0166 on 2026-09-07, moved to 0213 on 2026-09-10 — `main` had meanwhile numbered its own sprint 0166 ([THE PART SHE HAS NOT SEEN](0166-the-part-she-has-not-seen.md)), and two records cannot share a number. The work and its date are unchanged.
 **Decision:** [ADR 0103](../decisions/0103-glass-is-the-material.md) (material); this record covers the dashboard composition, which needed no new decision.
 
 ## The founder's instruction

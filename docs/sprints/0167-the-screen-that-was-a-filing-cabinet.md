@@ -29,7 +29,7 @@ What that cost, measured on the three-product fixture: Payflow raises a **blocke
 
 **Motion, with the three obligations in the mechanism.** The desk arrives as one staggered sequence through `vibe-reveal`, which carries reduced motion and the hidden-tab pause structurally. The score ring draws its arc — admissible where a count-up is not, because an arc carries no label and no frame of it can be read as a score the audit did not produce. The number is present and correct at frame one.
 
-**Deleted:** `signal-card.tsx`, `product-card.tsx`, and the attention panel added four hours earlier in Sprint 0166. **Extracted:** `ScoreRing` and `ProductMark`, which were private to the deleted files and are now used at two sizes each.
+**Deleted:** `signal-card.tsx`, `product-card.tsx`, and the attention panel added four hours earlier in Sprint 0166. [2026-09-10: that sprint is now 0213 — `main` had its own 0166.] **Extracted:** `ScoreRing` and `ProductMark`, which were private to the deleted files and are now used at two sizes each.
 
 ## Two measurements that changed a decision mid-build
 

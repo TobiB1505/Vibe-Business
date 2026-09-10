@@ -11,7 +11,7 @@ Two decisions were put back before anything was deleted, because getting either 
 
 ## What was removed, one sprint after building it
 
-The account dashboard, in every form it had. CORE-6 removed its attention list and activity feed; Sprint 0166 put the attention model back beside the hero; Sprint 0167 rebuilt the whole screen as a ranked desk. Each pass made it a better answer to a question a founder was not asking.
+The account dashboard, in every form it had. CORE-6 removed its attention list and activity feed; Sprint 0166 put the attention model back beside the hero; [2026-09-10: that sprint is now 0213 — `main` had its own 0166.] Sprint 0167 rebuilt the whole screen as a ranked desk. Each pass made it a better answer to a question a founder was not asking.
 
 Vibe works on **a product**. The account level had one job — pick which — and a full screen to do it in, which put a page between a founder and the thing they came for on every visit. `account-home.tsx`, `desk.ts`, `desk-head.tsx`, `desk-row.tsx`, `dashboard-contract.test.ts`, `account-dashboard.spec.ts` and three fixtures are gone.
 
