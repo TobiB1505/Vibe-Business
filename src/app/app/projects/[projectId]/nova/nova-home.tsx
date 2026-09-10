@@ -38,6 +38,7 @@ import {
   WorkspaceAskBlock,
 } from "@/components/nova/blocks";
 import { NovaAgentStage } from "./nova-agent-stage";
+import { NovaReadyStage } from "./nova-ready-stage";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
@@ -287,7 +288,7 @@ function FocusSection({
         voice={data.momentVoice}
         running={running}
         asides={asides}
-        block={blockFor(data, entry)}
+        block={blockFor(data, entry, projectId)}
       />
     );
   }
@@ -417,6 +418,32 @@ function FocusSection({
     );
   }
 
+  if (control.kind === "offer") {
+    /*
+     * The offer is the block, so there is no `control` beside it.
+     *
+     * `NovaReadyStage` mounts `AgentReadyStage` with `AgentStartControls` in
+     * it, which is both prices and both buttons; a link under that would be a
+     * third way to start the same run, and it is the one this moment used to
+     * be — "Go to the plan", which sent a founder off Home to press a button
+     * Home could now hold.
+     *
+     * A step that stopped resolving between the ranking and this render draws
+     * nothing, and the stage decides that for itself rather than being asked
+     * here: it re-resolves behind its own boundary, which is the same read the
+     * plan page makes.
+     */
+    return (
+      <NovaFocusThread
+        entry={entry}
+        voice={data.momentVoice}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry, projectId)}
+      />
+    );
+  }
+
   if (control.kind === "elsewhere") {
     return (
       <NovaFocusThread
@@ -455,7 +482,7 @@ function FocusSection({
         voice={data.momentVoice}
         running={running}
         asides={asides}
-        block={blockFor(data, entry)}
+        block={blockFor(data, entry, projectId)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
       />
@@ -471,7 +498,7 @@ function FocusSection({
         voice={data.momentVoice}
         running={running}
         asides={asides}
-        block={blockFor(data, entry)}
+        block={blockFor(data, entry, projectId)}
       />
     );
   }
@@ -490,7 +517,7 @@ function FocusSection({
       voice={data.momentVoice}
       running={running}
       asides={asides}
-      block={blockFor(data, entry)}
+      block={blockFor(data, entry, projectId)}
       controlLabel={control.option.label}
       /*
        * `ActionBlock` for the consequence, and no longer for the price.
@@ -649,11 +676,14 @@ function runningBlockFor(
  * hand for. A kind whose subject was not read draws nothing — a frame around
  * an absence is worse than no frame, and the sentence above it still stands.
  *
- * The two branches with their own control paths — a question's card, a
- * change's gates, the workspace choice — are built where their arguments are,
- * beside the control that answers them. These two are pure views.
+ * The branches with their own control paths — a question's card, a change's
+ * gates, the workspace choice — are built where their arguments are, beside
+ * the control that answers them. The audit and the Move are pure views over
+ * readings Home already made; the offer to start a run resolves its own,
+ * streamed, which is why it takes the project id rather than a slice of
+ * `data`.
  */
-function blockFor(data: NovaHomeData, entry: NovaHomeEntry) {
+function blockFor(data: NovaHomeData, entry: NovaHomeEntry, projectId: string) {
   switch (BLOCK_FOR_MOMENT[entry.kind]) {
     case "audit":
       return data.audit ? <AuditBlock view={data.audit} /> : undefined;
@@ -661,6 +691,14 @@ function blockFor(data: NovaHomeData, entry: NovaHomeEntry) {
       return data.move ? (
         <MoveBlock opportunity={data.move.opportunity} execution={data.move.execution} />
       ) : undefined;
+    /*
+      The offer to start a run, streamed. It resolves its own reading — see
+      `nova-ready-stage.tsx` for why a second resolution behind a boundary is
+      the right shape, and why it draws nothing for a step the agent is not
+      the path for.
+    */
+    case "ready":
+      return <NovaReadyStage projectId={projectId} />;
     default:
       return undefined;
   }

@@ -38,7 +38,6 @@ import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
 import { ValidationDepthNote } from "./validation-depth-note";
-import { AgentStartAction } from "./agent-start-action";
 import { AgentValidateAction } from "./agent-validate-action";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
@@ -58,6 +57,7 @@ import { AgentValidateStage } from "./agent-validate-stage";
 import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
+import { agentStartControls } from "./agent-start-controls";
 import { isFounderAttestable } from "@/modules/action-plans/completion";
 import { firstActionableStep } from "@/modules/action-plans/sequence";
 import { EXECUTION_REASON_LABELS, REFUSAL_SHAPES } from "@/modules/execution-contract/view";
@@ -70,12 +70,10 @@ import { resolveBuildChain } from "@/modules/execution-contract/chain";
 import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import {
-  BUILD_CHAIN_BOUNDARY_LABELS,
-  buildChainOfferLabel,
   forecastDriverNotes,
   forecastEvidenceNote,
+  runCeilingLabel,
 } from "@/modules/coding-agent/view";
-import { formatCreditsForDisplay } from "@/modules/credits/units";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -522,16 +520,29 @@ async function AgentWorkspaceBody({
       : readyTask;
 
   const creditEstimate = routeEconomics
-    ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
+    ? runCeilingLabel(routeEconomics.budget.maxCredits)
     : null;
 
-  /* Whether the offer may be made at all. Read once, because the primary
-     control and what sits under it are two slots and one condition. */
-  const offerable = agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0;
-
-  /* The chain is what is being offered when one resolved, so it is the control
-     that takes the sweep — see `startBeneath` for where the rest goes. */
-  const offersChain = buildChain !== null && chainEconomics != null;
+  /*
+   * One offer, two prices, shared with Nova's thread. It was written out in
+   * the JSX below; the reason it is built in one place now is that the thread
+   * shows the same offer, and two hand-built pairs of controls are two places
+   * where one can come to print a figure the other does not.
+   *
+   * Two nodes rather than one, because only the primary control may go inside
+   * `AgentStartCta`'s swept pill — `agentStartControls` says why.
+   */
+  const startControls =
+    agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0
+      ? agentStartControls({
+          projectId: project.id,
+          step: agenticStep,
+          chain: buildChain,
+          chainMaxCredits: chainEconomics?.budget.maxCredits ?? null,
+          creditEstimate,
+          repositoryReadHref: projectSectionHref(project.id, "my-product"),
+        })
+      : null;
 
   /*
    * What stands behind that ceiling (ADR 0072).
@@ -683,46 +694,8 @@ async function AgentWorkspaceBody({
                     />
                   ) : undefined
                 }
-                startAction={
-                  offerable && agenticStep ? (
-                    <AgentStartAction
-                      projectId={project.id}
-                      stepKey={agenticStep.id}
-                      chain={offersChain ? true : undefined}
-                      label={
-                        offersChain && buildChain && chainEconomics
-                          ? `${buildChainOfferLabel(buildChain.members.length)} — ${formatCreditsForDisplay(chainEconomics.budget.maxCredits)}`
-                          : undefined
-                      }
-                      repositoryReadHref={projectSectionHref(project.id, "my-product")}
-                    />
-                  ) : undefined
-                }
-                /*
-                  The decline and the boundary sentence, outside the sweep.
-                  They were inside it: `AgentStartCta` clips its slot to a pill
-                  and runs a highlight across whatever it holds, so the pair
-                  plus the paragraph were squeezed into one pill and the
-                  sentence was cut in half.
-                */
-                startBeneath={
-                  offerable && agenticStep && offersChain && buildChain ? (
-                    <div className="flex w-full flex-col gap-2">
-                      <AgentStartAction
-                        projectId={project.id}
-                        stepKey={agenticStep.id}
-                        variant="secondary"
-                        label={
-                          creditEstimate ? `Build just this step — ${creditEstimate}` : undefined
-                        }
-                        repositoryReadHref={projectSectionHref(project.id, "my-product")}
-                      />
-                      <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
-                        {BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary]}
-                      </p>
-                    </div>
-                  ) : undefined
-                }
+                startAction={startControls?.primary ?? undefined}
+                startBeneath={startControls?.beneath ?? undefined}
                 creditEstimate={creditEstimate}
                 forecastNotes={
                   runForecast

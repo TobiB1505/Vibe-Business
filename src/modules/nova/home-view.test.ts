@@ -363,19 +363,23 @@ describe("Nova Home view", () => {
     });
 
     /*
-     * The one that is still genuinely missing an argument, and the only entry
-     * left in ELSEWHERE. `read.ts` fixes `executableStep` at null until the
-     * execution resolver is wired, so this state cannot presently arise at all
-     * — the routing is asserted here so it stays honest the day it can.
+     * The last entry in ELSEWHERE, and the argument that held it there is the
+     * thing this now asserts the other way round.
+     *
+     * It was `elsewhere` because a build is two pieces of work at two prices
+     * and Home was offering neither. It is `offer` because `AgentReadyStage`
+     * shows both — so the requirement is met rather than routed around, and
+     * `novaControlLabel` returns null because the block carries the buttons.
+     *
+     * A label here would be the regression: it would mean a link off Home
+     * came back, beside an offer Home is already holding.
      */
-    it("still sends a build to the plan, which holds the step", () => {
+    it("offers the build here, with the block carrying both prices", () => {
       const view = viewOf({ executableStep: { order: 2, title: "Add the pricing page" } });
 
       expect(view.primary.kind).toBe("execution_offered");
-      expect(view.primary.control.kind).toBe("elsewhere");
-      if (view.primary.control.kind === "elsewhere") {
-        expect(view.primary.control.section).toBe("action-plan");
-      }
+      expect(view.primary.control.kind).toBe("offer");
+      expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
     it("gives a label to every control that has one, and none to a card", () => {

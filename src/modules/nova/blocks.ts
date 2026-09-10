@@ -47,6 +47,8 @@ export type BlockKind =
   | "scan"
   /** The agent at work: its stages, and the files it has touched. */
   | "agent"
+  /** The offer to start a run: the step, and both prices for it. */
+  | "ready"
   /** A prepared change and its whole review gate. */
   | "review"
   /** A Move, read before it is paid for. */
@@ -136,13 +138,24 @@ export const BLOCK_FOR_MOMENT: Record<FocusCandidateKind, BlockKind> = {
   next_move_available: "move",
 
   /*
-   * Not a Move: a plan *step*, and there is no Move behind it to draw. The
-   * sentence names the step and the candidate carries its title, which is the
-   * whole of what Home can honestly show — what it cannot show is the build
-   * chain and the two prices that go with it, and that is why this moment is
-   * still routed to the plan.
+   * A plan *step*, offered — and the objection that kept this at `none` is
+   * answered rather than overridden.
+   *
+   * It read: "what it cannot show is the build chain and the two prices that go
+   * with it, and that is why this moment is still routed to the plan." Right on
+   * the requirement. `AgentReadyStage` is the screen that shows both, and
+   * `AgentStartControls` is now one component rather than a pair of controls
+   * written out on the Agent page — so the thread cannot print a figure the
+   * page would not.
+   *
+   * The route to the plan stays alongside it. `ELSEWHERE` still carries it,
+   * because the plan is where the whole sequence is read, and because the block
+   * draws nothing for a `deterministic` step: `VIBE_EXECUTABLE_MODES` is
+   * `deterministic` and `agentic`, an agent run is what the second one means,
+   * and offering one for the first would be an offer to do the work by a path
+   * it does not take.
    */
-  execution_offered: "none",
+  execution_offered: "ready",
 
   /* The audit is stale, so the reading it produced is what to show. */
   audit_outdated: "audit",

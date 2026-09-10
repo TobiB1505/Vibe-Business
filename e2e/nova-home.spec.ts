@@ -124,6 +124,63 @@ test.describe("the agent at work in the thread", () => {
   });
 });
 
+/**
+ * The offer, in the thread.
+ *
+ * The last moment that sent a founder away: Nova said *there is a step here I
+ * can build* and handed over a link to the plan. The reason was written down
+ * and it was good — a build is two pieces of work at two prices, and offering
+ * one of them in a thread is half a decision. So the block shows both, and
+ * these are the assertions that say it does.
+ *
+ * The stand-in buttons carry the real labels; the real control binds a server
+ * action and cannot be mounted in a lab with no session, which is what the
+ * stage scenarios already say.
+ */
+test.describe("the offer in the thread", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("shows both prices and leaves the single step reachable", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const block = page.locator('[data-testid="stage-ready-block"]');
+    await expect(block.getByText("Build all 2 steps — 350")).toBeVisible();
+    await expect(block.getByText("Build just this step — 200")).toBeVisible();
+    /* And why the chain stops, so an offer that ends short is not read as a bug. */
+    await expect(block.locator('[data-testid="agent-chain-boundary"]')).toBeVisible();
+  });
+
+  /*
+   * The defect this catches shipped on the Agent page the day chains did.
+   *
+   * `AgentStartCta`'s slot clips to `rounded-full` and sweeps a highlight
+   * across whatever it holds, which is right for one control and wrong for
+   * three. Passing the pair plus the boundary sentence through it squeezed all
+   * of them into a single pill and cut the sentence in half. Height is the
+   * measurable form of that: two buttons and a paragraph inside one pill
+   * collapse to roughly a button's worth.
+   */
+  test("does not clip the offer into a single pill", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const block = page.locator('[data-testid="stage-ready-block"]');
+    const boundary = block.locator('[data-testid="agent-chain-boundary"]');
+
+    /* The sentence is whole: a clipped one lost its second half. */
+    await expect(boundary).toHaveText(/it stays yours/);
+
+    const swept = block.locator('[data-testid="agent-start"] .rounded-full.overflow-hidden');
+    const pill = await swept.first().boundingBox();
+    const decline = await block.getByText("Build just this step — 200").boundingBox();
+    /* The decline sits below the swept pill, not inside it. */
+    expect(pill).not.toBeNull();
+    expect(decline).not.toBeNull();
+    expect(decline!.y).toBeGreaterThanOrEqual(pill!.y + pill!.height - 1);
+  });
+});
+
 test.describe("Nova Home", () => {
   test("leads with one dominant action and its price, before any click", async ({ page }) => {
     await page.goto(NOVA("nova-priced"));

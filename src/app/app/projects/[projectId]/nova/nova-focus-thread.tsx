@@ -257,6 +257,7 @@ const BLOCK_LABEL: Record<BlockKind, string> = {
   audit: "Business audit",
   scan: "Product scan",
   agent: "Building",
+  ready: "The step to build",
   review: "The change",
   move: "Next move",
   ask: "Needs your answer",
@@ -287,6 +288,9 @@ const BLOCK_NAMES_ITSELF: Record<BlockKind, boolean> = {
   audit: false,
   scan: true,
   agent: false,
+  /* The task panel names the step and the offer names the price; neither says
+     what the block is, which is the step being offered. */
+  ready: false,
   review: false,
   move: false,
   ask: false,

@@ -75,7 +75,8 @@ export type NovaControlKind =
   | "elsewhere"
   | "answer"
   | "gate"
-  | "choose";
+  | "choose"
+  | "offer";
 
 export type NovaHomeControl =
   | { kind: "server_action"; option: NovaChoiceOption }
@@ -91,8 +92,10 @@ export type NovaHomeControl =
    * Like `answer`, this carries an identity rather than a label: the gate is
    * the control, and it brings its own sequence — validation, preview, review,
    * approval, merge, outcome — each reachable only through the one above it.
-   * `stage` narrows that sequence to the decision this moment is actually
-   * about, which is the same narrowing the Agent route does.
+   * Which of those a founder lands on is read from the change's own stage, not
+   * narrowed here: a candidate kind cannot tell `review_required` from
+   * `awaiting_approval`, and narrowing on it is what produced a screen with no
+   * control on it.
    */
   | { kind: "gate"; preparedChangeId: string }
   /**
@@ -104,6 +107,21 @@ export type NovaHomeControl =
    * an argument the view model was withholding.
    */
   | { kind: "choose" }
+  /**
+   * Started here, from the offer the block draws.
+   *
+   * Carries nothing, for the reason `choose` carries nothing: what a founder
+   * presses is two controls at two prices, and neither the step key nor either
+   * ceiling is on the candidate. `AgentReadyStage` resolves them — the chain,
+   * both economics, the forecast behind the figure — and `AgentStartControls`
+   * is the one component that renders the pair, so the thread cannot come to
+   * show a price the plan page would not.
+   *
+   * This is the variant that replaced `elsewhere` for `execution_offered`, and
+   * the objection that put it there is answered rather than overruled: both
+   * prices are on screen, in the thread, above the button that charges them.
+   */
+  | { kind: "offer" }
   /** Go and decide where the decision lives. Carries its own honest label. */
   | { kind: "elsewhere"; label: string; section: NovaHomeSection }
   /** Nothing to press. `nothing_to_do` has no control, and inventing one would be work Nova made up. */
@@ -164,21 +182,30 @@ export type NovaHomeView = {
 /**
  * The decisions Home genuinely cannot hold.
  *
- * One.
+ * None.
  *
- * `execution_offered`, and the reason changed under it. The old one was that
+ * It was one until this commit, and the entry is worth reading rather than
+ * deleting, because the argument that put it there was correct and is now
+ * satisfied instead of overruled.
+ *
+ * `execution_offered` was routed to the Action Plan. The first reason was that
  * `read.ts` fixed `executableStep` at null, so the candidate could not arise;
- * the resolver is read now and it can.
+ * the resolver is read now and it can. The second reason was the *decision*:
+ * `startAgentRunAction` takes a step key and a `chain` boolean — build this
+ * step, or build the run of steps it heads — and those are two pieces of work
+ * at two prices, so *"offering one of them here would be offering half a
+ * decision at a price the founder was not shown the alternative to."*
  *
- * What Home still cannot hold is the *decision*. `startAgentRunAction` takes a
- * step key and a `chain` boolean — build this step, or build the run of steps
- * it heads — and those are two different pieces of work at two different
- * prices. The Agent workspace resolves the chain, forecasts both, and shows
- * them side by side. Offering one of them here would be offering half a
- * decision at a price the founder was not shown the alternative to.
+ * That is a requirement about what the surface must show, and the answer to it
+ * is to show both. `AgentReadyStage` is the screen that does, `presentation`
+ * drops its front door, and `AgentStartControls` is now one component rather
+ * than a pair of call sites — which is what makes "the same two prices" a
+ * property of the code instead of a thing two files agree about. The control
+ * is `offer`.
  *
- * The five that left did so for three different reasons, and they are worth
- * keeping straight, because each is a different kind of "Home cannot".
+ * The five that left before it did so for three different reasons, and they
+ * are worth keeping straight, because each is a different kind of "Home
+ * cannot".
  *
  * The questions carry the id of what is being asked, which is the whole of
  * what answering needs. The merge does not carry an approval id — and that
@@ -188,11 +215,14 @@ export type NovaHomeView = {
  * The workspace choice was the last, and its reason was the weakest of the
  * three. The candidate names no application — true — but the list was never an
  * argument the ranking was withholding. It is a read, and Home can make it.
+ *
+ * The table stays. Emptiness here is a claim about today's moments, not about
+ * the mechanism: the next moment whose decision genuinely lives on another
+ * screen should say so honestly with a label rather than grow a control Home
+ * cannot honour.
  */
 const ELSEWHERE: Partial<Record<FocusCandidateKind, { label: string; section: NovaHomeSection }>> =
-  {
-    execution_offered: { label: "Go to the plan", section: "action-plan" },
-  };
+  {};
 
 /**
  * Which moments are about a prepared change, and therefore decided in its gate.
@@ -257,6 +287,11 @@ function controlFor(candidate: FocusCandidate): NovaHomeControl {
   /* The choice is made from a list the surface reads, not from the candidate. */
   if (candidate.kind === "workspace_choice_required") return { kind: "choose" };
 
+  /* The offer is two controls at two prices, and the block draws both. Falling
+     through to `novaCandidateOption` would reach `nova.start_agent`, which is
+     one of them — the half decision `ELSEWHERE` refused to make. */
+  if (candidate.kind === "execution_offered") return { kind: "offer" };
+
   /* A change is decided through its own gates, and the candidate names it. */
   if (isGateCandidate(candidate.kind) && "preparedChangeId" in candidate) {
     return { kind: "gate", preparedChangeId: candidate.preparedChangeId };
@@ -292,6 +327,7 @@ export function novaControlLabel(control: NovaHomeControl): string | null {
     case "answer":
     case "gate":
     case "choose":
+    case "offer":
     case "none":
       return null;
   }

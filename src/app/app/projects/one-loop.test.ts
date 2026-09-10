@@ -545,9 +545,14 @@ describe("the plan hands off to the agent, and the agent points back", () => {
      * and since `launch-v1` it is resolved for the *step* that would run,
      * because the Agent price is per execution pricing class (Sprint 0111).
      * The route set can no longer answer it plan-wide.
+     *
+     * `runCeilingLabel` rather than the formatter it wraps: three surfaces say
+     * this figure now — this page, the start controls, and Nova's thread — and
+     * Nova may not format Credits at all (`nova-ui.test.ts`), so the sentence
+     * lives beside the domain that computes it.
      */
     expect(AGENT_PAGE).toContain("resolveRouteAgentEconomics");
-    expect(AGENT_PAGE).toContain("formatCreditsForDisplay(routeEconomics.budget.maxCredits)");
+    expect(AGENT_PAGE).toContain("runCeilingLabel(routeEconomics.budget.maxCredits)");
     expect(AGENT_READY).toContain("creditEstimate={startAction ? creditEstimate : null}");
     expect(AGENT_PAGE).toContain("agentRoutes.plan.opportunityId === taskOpportunityId");
     expect(AGENT_PAGE).toContain("!agentWorking");
