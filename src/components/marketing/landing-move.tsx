@@ -69,6 +69,24 @@ const RUNNERS_UP: { lens: BusinessLens; finding: string; why: string }[] = [
   },
 ];
 
+/**
+ * What a Move becomes, and who does each part.
+ *
+ * The second half a ranking needs: a founder told what matters most still has
+ * to know whether it is theirs to do. `Needs your input` is not a limitation
+ * being admitted, it is the honest division of a plan — and it is why these
+ * carry an owner rather than a percentage or a due date, neither of which this
+ * product has.
+ *
+ * Came out of `LandingFlow`'s *Plan* tab, the last thing that block held which
+ * no other module said.
+ */
+const PLAN_STEPS = [
+  { title: "Add a pricing section people can reach", actor: "Vibe can do this", tone: "active" },
+  { title: "Decide what the three tiers cost", actor: "Needs your input", tone: "waiting" },
+  { title: "Link it from the navigation", actor: "Vibe can do this", tone: "active" },
+] as const;
+
 export function LandingMove() {
   return (
     <LandingStep index="03" id="move" labelledBy="move-heading" className="py-20 sm:py-28">
@@ -162,7 +180,39 @@ export function LandingMove() {
           </div>
         </Reveal>
 
-        <Reveal from="up" delay={0.3} className="mt-6">
+        {/*
+          And what a Move becomes: steps, each naming who does it.
+
+          Came out of `LandingFlow`'s *Plan* tab when the tab bar was taken
+          apart, and it is the one thing that block held which no other module
+          says — that a Move is not all Vibe's to do. Ownership, never a
+          percentage or a due date: the product has neither.
+        */}
+        <Reveal from="up" delay={0.3} className="mt-10">
+          <div className="flex flex-col gap-4">
+            <MonoLabel className="text-fg-meta">And what it becomes</MonoLabel>
+            <ul className="flex flex-col gap-2">
+              {PLAN_STEPS.map((step, index) => (
+                <li
+                  key={step.title}
+                  className="border-line-1 bg-surface-3 rounded-well flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border p-4"
+                >
+                  <span className="flex min-w-0 items-baseline gap-3">
+                    <span className="text-fg-meta shrink-0 font-mono text-meta tabular-nums">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <span className="text-fg-body text-body">{step.title}</span>
+                  </span>
+                  <StatusPill tone={step.tone === "waiting" ? "waiting" : "active"}>
+                    {step.actor}
+                  </StatusPill>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+
+        <Reveal from="up" delay={0.36} className="mt-8">
           <p className="text-fg-muted mx-auto max-w-[56ch] text-center text-caption leading-relaxed">
             A Move is a proposal. Vibe does not start it, touch a branch or spend anything until you
             say so — and it tells you what it would cost before you do.

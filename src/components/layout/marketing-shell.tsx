@@ -88,10 +88,20 @@ export function MarketingShell({ children }: { children: ReactNode }) {
             <VibeLockup size={22} />
           </Link>
           <div className="ml-8 hidden items-center gap-7 lg:flex">
+            {/*
+              Five destinations, and every one of them is a section this page
+              actually has (UI-34).
+
+              *Product* pointed at the trust bento and *How it works* at the
+              tab bar; both were taken apart when the walk absorbed what they
+              said, and a link into a deleted id scrolls nowhere and reports
+              nothing. `landing.spec.ts` walks these and fails on the first one
+              that lands on no section.
+            */}
             {[
               ["Nova", "/#nova"],
-              ["Product", "/#product"],
-              ["How it works", "/#how"],
+              ["Product", "/#scan"],
+              ["How it works", "/#agent"],
               ["Business Brain", "/#brain"],
               ["Pricing", "/#pricing"],
             ].map(([label, href]) => (

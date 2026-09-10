@@ -5,12 +5,13 @@ import type { SourceCoverage } from "@/modules/provenance/source-coverage";
  *
  * ## Why they live here rather than in a block
  *
- * Three blocks read them — the Scan block, the trust bento, and the flow
- * section while it still exists — and they were exported from whichever block
+ * Three blocks read them when this file was made — the Scan block, the trust
+ * bento, and the flow section — and they were exported from whichever block
  * happened to define them first, so the trust page imported its evidence from
- * `landing-flow`. As the flow section is taken apart that import would have
- * moved with it, and a shared constant that travels between the files using it
- * is one an edit eventually forks.
+ * `landing-flow`. Both of those blocks have since been deleted (UI-34), which
+ * is the point: had the constant still lived in one of them, the deletion
+ * would have taken the Scan block's evidence with it. One reader today, and
+ * the file stays here.
  *
  * ## What makes them safe to show
  *

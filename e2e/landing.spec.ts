@@ -1632,3 +1632,66 @@ test.describe("the close", () => {
     expect(gap).toBeGreaterThan(80);
   });
 });
+
+/*
+ * The navigation, after the clean-up.
+ *
+ * Two of the five links pointed at sections that no longer exist: *Product* at
+ * the trust bento and *How it works* at the tab bar, both absorbed into the
+ * walk. A link into a deleted id scrolls nowhere and reports nothing, which is
+ * the quietest way for a page to break — so this walks every one of them.
+ */
+test.describe("the navigation", () => {
+  test("every link lands on a section this page has", async ({ page }) => {
+    await page.goto("/");
+
+    const nav = page.getByRole("navigation").first();
+    const targets = await nav.getByRole("link").evaluateAll((links) =>
+      links
+        .map((link) => (link as HTMLAnchorElement).getAttribute("href") ?? "")
+        .filter((href) => href.includes("#"))
+        .map((href) => href.slice(href.indexOf("#") + 1)),
+    );
+
+    expect(targets.length).toBeGreaterThan(3);
+    for (const id of targets) {
+      await expect(
+        page.locator(`#${id}`),
+        `nav points at #${id}, which is not on the page`,
+      ).toHaveCount(1);
+    }
+  });
+});
+
+/*
+ * What the walk absorbed.
+ *
+ * Three blocks came off the page once the ten numbered steps said everything
+ * they had said — a tab bar, a trust bento and a stack strip. This is the guard
+ * against the page quietly regrowing them, and against the one thing that came
+ * with the tab bar being lost on the way.
+ */
+test.describe("the page after the clean-up", () => {
+  test("keeps what a Move becomes, which only the tab bar used to say", async ({ page }) => {
+    await page.goto("/");
+    const move = page.locator("#move");
+    await move.scrollIntoViewIfNeeded();
+
+    // Ownership, never a percentage or a due date — the product has neither.
+    await expect(move.getByText("Needs your input")).toBeVisible();
+    await expect(move.getByText("Decide what the three tiers cost")).toBeVisible();
+    await expect(move).not.toContainText(/%|due |deadline/i);
+  });
+
+  test("has no tab bar left on it", async ({ page }) => {
+    await page.goto("/");
+
+    /*
+      A tab bar asks a reader to stop and choose inside a page whose whole shape
+      is a scroll. Six tabs went one at a time into the blocks that could show
+      what each of them claimed; this is what stops a seventh appearing.
+    */
+    await expect(page.getByRole("tab")).toHaveCount(0);
+    await expect(page.getByTestId("landing-flow")).toHaveCount(0);
+  });
+});

@@ -4,7 +4,6 @@ import { LandingBoundary } from "@/components/marketing/landing-boundary";
 import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
 import { LandingClose } from "@/components/marketing/landing-close";
 import { LandingMove } from "@/components/marketing/landing-move";
-import { LandingFlow } from "@/components/marketing/landing-flow";
 import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
 import { LandingNova } from "@/components/marketing/landing-nova";
 import { LandingObjections } from "@/components/marketing/landing-objections";
@@ -12,9 +11,6 @@ import { LandingPrice } from "@/components/marketing/landing-price";
 import { LandingOutcome } from "@/components/marketing/landing-outcome";
 import { LandingProblem } from "@/components/marketing/landing-problem";
 import { LandingScan } from "@/components/marketing/landing-scan";
-import { LandingTrust } from "@/components/marketing/landing-trust";
-import { Reveal } from "@/components/marketing/reveal";
-import { MonoLabel } from "@/components/ui/typography";
 
 export default function HomePage() {
   return (
@@ -134,33 +130,6 @@ export default function HomePage() {
         price: that is where a visitor stops reading and starts arguing.
       */}
       <LandingObjections />
-
-      <Reveal>
-        <div className="border-line-1 flex flex-col items-center gap-5 border-y py-7">
-          <MonoLabel>Works with your stack</MonoLabel>
-          <div className="flex flex-wrap justify-center gap-2.5">
-            {["GitHub", "Next.js", "Stripe", "Vercel", "Supabase"].map((tool) => (
-              <span
-                key={tool}
-                className="border-line-2 bg-surface-2 text-fg-secondary rounded-nav border px-4 py-2 text-body font-medium"
-              >
-                {tool}
-              </span>
-            ))}
-            <span className="border-line-1 text-fg-muted rounded-nav border px-4 py-2 text-body">
-              + more
-            </span>
-          </div>
-        </div>
-      </Reveal>
-
-      <Reveal>
-        <LandingFlow />
-      </Reveal>
-
-      <Reveal>
-        <LandingTrust />
-      </Reveal>
 
       <LandingClose />
     </MarketingShell>
