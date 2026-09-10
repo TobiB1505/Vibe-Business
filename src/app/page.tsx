@@ -137,17 +137,6 @@ export default function HomePage() {
       */}
       <LandingObjections />
 
-      <Reveal className="pb-16 sm:pb-20">
-        <div className="mt-12 flex flex-col items-center gap-3">
-          <MonoLabel>Built for products made with</MonoLabel>
-          <div className="text-fg-secondary flex flex-wrap justify-center gap-x-6 gap-y-2 text-body font-semibold">
-            {["Cursor", "Replit", "Lovable", "Bolt", "Claude Code", "Codex"].map((tool) => (
-              <span key={tool}>{tool}</span>
-            ))}
-          </div>
-        </div>
-      </Reveal>
-
       <Reveal>
         <div className="border-line-1 flex flex-col items-center gap-5 border-y py-7">
           <MonoLabel>Works with your stack</MonoLabel>

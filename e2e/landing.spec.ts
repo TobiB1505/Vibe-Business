@@ -1415,39 +1415,40 @@ test.describe("paying by the year", () => {
  * sentence that makes the rest believable.
  */
 test.describe("the objections", () => {
-  test("puts the doubt in the large type and the answer in the small", async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 1000 });
+  test("is five questions a reader can scan, with the answers folded behind them", async ({
+    page,
+  }) => {
     await page.goto("/");
-    await page.evaluate(() => document.fonts.ready);
     const objections = page.locator("#objections");
     await objections.scrollIntoViewIfNeeded();
 
-    const items = objections.locator("ol > li");
-    await expect(items).toHaveCount(5);
+    const rows = objections.locator("details");
+    await expect(rows).toHaveCount(5);
 
     /*
-      Measured rather than asserted as a class name. Every other block on this
-      page puts Vibe's claim in the large type and the qualification underneath;
-      this one is the inversion, and an inversion that survives only in a
-      docblock is not one.
+      Closed at first paint, every one. An FAQ whose answers are all open is a
+      list of paragraphs with chevrons on it — the reader is meant to find
+      their own question and open that.
     */
-    const sizes = await items.evaluateAll((rows) =>
-      rows.map((row) => ({
-        doubt: parseFloat(
-          getComputedStyle(row.querySelector("[data-objection]") as Element).fontSize,
-        ),
-        answer: parseFloat(
-          getComputedStyle(row.querySelector("[data-answer]") as Element).fontSize,
-        ),
-      })),
+    const open = await rows.evaluateAll(
+      (items) => items.filter((item) => item.hasAttribute("open")).length,
     );
+    expect(open).toBe(0);
 
-    expect(sizes).toHaveLength(5);
-    for (const [index, size] of sizes.entries()) {
-      expect(size.doubt, `objection ${index + 1} is not the louder half`).toBeGreaterThan(
-        size.answer,
-      );
+    // The questions are readable without opening anything.
+    for (const doubt of [
+      "It is going to be wrong about my business.",
+      "I am not letting an AI near the repository I ship from.",
+      "Setting this up will eat an afternoon.",
+    ]) {
+      await expect(objections.getByText(`\u201C${doubt}\u201D`)).toBeVisible();
     }
+
+    // And opening one shows its answer and no other.
+    const first = rows.first();
+    await first.locator("summary").click();
+    await expect(first.locator("[data-answer]")).toBeVisible();
+    await expect(objections.locator("[data-answer]:visible")).toHaveCount(1);
   });
 
   test("admits the thing a rewrite would delete first", async ({ page }) => {
@@ -1461,11 +1462,36 @@ test.describe("the objections", () => {
       A page that answered that objection with a promise would have nothing
       left to stand on.
     */
-    await expect(objections).toContainText(/Sometimes it will/);
-    await expect(objections).toContainText(/stays unscored rather than scored zero/);
+    await objections.locator("details").first().locator("summary").click();
+    await expect(objections.locator("details").first()).toContainText(/Sometimes it will/);
+    await expect(objections.locator("details").first()).toContainText(
+      /stays unscored rather than scored zero/,
+    );
 
     // And the repository answer keeps the exact promise the merge path enforces.
-    await expect(objections).toContainText(/by fast-forward to that commit, or not at all/);
+    await objections.locator("details").nth(1).locator("summary").click();
+    await expect(objections.locator("details").nth(1)).toContainText(
+      /by fast-forward to that commit, or not at all/,
+    );
+  });
+
+  test.describe("without JavaScript", () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("still opens, because the accordion is the platform's", async ({ page }) => {
+      await page.goto("/");
+      const objections = page.locator("#objections");
+
+      /*
+        `<details>` rather than a client component, for the reason `Disclosure`
+        already records: a reader with JavaScript off gets a working accordion
+        and no hydration is involved in it. The `<noscript>` style is what makes
+        the block visible at all here; the platform is what makes it work.
+      */
+      const first = objections.locator("details").first();
+      await first.locator("summary").click();
+      await expect(first.locator("[data-answer]")).toBeVisible();
+    });
   });
 
   test("quotes nobody, because nobody said these", async ({ page }) => {
@@ -1482,5 +1508,59 @@ test.describe("the objections", () => {
     await expect(objections.locator("cite")).toHaveCount(0);
     await expect(objections.locator("img")).toHaveCount(0);
     await expect(objections).not.toContainText(/—\s*[A-Z][a-z]+ [A-Z]/);
+  });
+});
+
+/*
+ * The builders, under the button.
+ *
+ * The first question a visitor has is whether this is for what *they* built,
+ * and the answer is a list of the places they built it. It used to sit four
+ * blocks down the page, where they had already decided.
+ */
+test.describe("who this is for", () => {
+  test("names the builders on the hero's own screen", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+    await page.evaluate(() => document.fonts.ready);
+
+    const strip = page.locator("[data-builders]");
+    for (const builder of ["Lovable", "Emergent", "v0", "Bolt", "Base44", "Replit"]) {
+      await expect(strip.getByText(builder, { exact: true })).toBeVisible();
+    }
+
+    /*
+      Under the call to action and above the fold, both measured. "Directly
+      under the CTA" is a position on a screen, not a position in a document —
+      at 1440×900 the strip's foot has to be inside the viewport or it is four
+      blocks down the page again, just closer.
+    */
+    const geometry = await page.evaluate(() => {
+      const cta = document.querySelector('a[href="/signup"]') as HTMLElement;
+      const list = document.querySelector("[data-builders]") as HTMLElement;
+      return {
+        ctaBottom: cta.getBoundingClientRect().bottom,
+        stripTop: list.getBoundingClientRect().top,
+        stripBottom: list.getBoundingClientRect().bottom,
+        viewport: window.innerHeight,
+      };
+    });
+
+    expect(geometry.stripTop).toBeGreaterThan(geometry.ctaBottom);
+    expect(geometry.stripBottom).toBeLessThanOrEqual(geometry.viewport);
+  });
+
+  test("names products without claiming any of them", async ({ page }) => {
+    await page.goto("/");
+    const strip = page.locator("[data-builders]");
+
+    /*
+      A list of where a product might have been built is a fact about Vibe. A
+      logo wall, a "trusted by", or a customer count is a claim about somebody
+      else — and this page has none, here or anywhere.
+    */
+    await expect(strip.locator("img")).toHaveCount(0);
+    await expect(strip).not.toContainText(/trusted by|used by|customers|partners/i);
+    await expect(strip).toContainText(/whatever else you built it in/i);
   });
 });

@@ -1,21 +1,34 @@
 import { LandingStep } from "@/components/marketing/landing-step";
 import { Reveal } from "@/components/marketing/reveal";
+import { ChevronDownIcon } from "@/components/ui/icons.generated";
 import { MonoLabel } from "@/components/ui/typography";
 
 /**
  * The objections, in the reader's voice (UI-34).
  *
- * ## The ninth shape, which is an inversion
+ * ## The ninth shape: the reader's words are the surface
  *
  * Two tiles, a staircase, a narrowing, a passage, a thread, a ladder, a
- * boundary, a price table — and every one of them puts Vibe's claim in the
- * large type and the qualification in the small type. This block does the
- * opposite: the **doubt** is the loud thing and the answer is quiet under it.
+ * boundary, a price table — and this one is a **list of questions in somebody
+ * else's voice**, each opening onto an answer.
  *
- * That inversion is the whole design. A page that has spent eight blocks
- * explaining itself has to prove it can hear the objection before it asks for
- * anything, and the way to prove that is to let the objection be the biggest
- * text on the screen and not soften it on the way in.
+ * A first version set the doubts in display type with the answers permanently
+ * under them, on the argument that a page which has spent eight blocks
+ * explaining itself should let the objection be the loudest thing on screen.
+ * The founder asked for an FAQ, and an FAQ is the better form of the same
+ * argument: five sentences a reader can scan for *theirs*, and only that one
+ * has to be opened. Nothing is hidden — every answer is in the document and in
+ * the page's text — it is ordered behind the question it answers.
+ *
+ * ## Why `<details>` and not a client component
+ *
+ * The same reason `Disclosure` gives: it is keyboard operable, exposes
+ * `aria-expanded` to assistive technology, survives with JavaScript disabled,
+ * and needs no hydration. A hand-rolled accordion would be a client component
+ * on a server-rendered page, reproducing behaviour the platform already has —
+ * and one more place to get the ARIA wrong. `Disclosure` itself is not reused
+ * here because its trigger is a ghost pill sized to its label; an FAQ row is
+ * the full width of the list, and the whole row is the control.
  *
  * ## The rule the copy is held to
  *
@@ -84,26 +97,39 @@ export function LandingObjections() {
       </Reveal>
 
       {/*
-        The doubt is the large type and the answer is the small type, which is
-        the reverse of every other block on this page. A hairline between items
-        rather than a card around each: these are five turns of one
+        One row per question, and the row is the control. A hairline between
+        them rather than a card around each: these are five turns of one
         conversation, not five features.
       */}
       <ol className="mx-auto mt-14 flex w-full max-w-3xl flex-col sm:mt-16">
         {OBJECTIONS.map(({ doubt, answer }, index) => (
-          <li key={doubt} className="border-line-2 border-b py-8 last:border-b-0 last:pb-0">
+          <li key={doubt} className="border-line-2 border-b last:border-b-0">
             <Reveal from="up" delay={Math.min(index, 3) * 0.05}>
-              <div className="flex flex-col gap-4">
-                <p
-                  data-objection
-                  className="text-fg-secondary max-w-[26ch] text-[clamp(1.35rem,2.2vw,1.75rem)] leading-[1.2] font-semibold tracking-[-0.02em] text-balance"
+              <details className="group">
+                <summary
+                  className={[
+                    "rounded-inline flex w-full cursor-pointer list-none items-center justify-between gap-6 py-6",
+                    "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
+                    // Safari and Chrome each add their own marker; the chevron
+                    // below is the only one this list draws.
+                    "[&::-webkit-details-marker]:hidden",
+                  ].join(" ")}
                 >
-                  &ldquo;{doubt}&rdquo;
-                </p>
-                <p data-answer className="text-fg-body max-w-[62ch] leading-relaxed">
+                  <span
+                    data-objection
+                    className="text-fg text-lead font-semibold tracking-[-0.01em] text-balance"
+                  >
+                    &ldquo;{doubt}&rdquo;
+                  </span>
+                  <ChevronDownIcon
+                    size={16}
+                    className="text-fg-muted shrink-0 transition-transform duration-150 group-open:rotate-180"
+                  />
+                </summary>
+                <p data-answer className="text-fg-body max-w-[62ch] pb-6 leading-relaxed">
                   {answer}
                 </p>
-              </div>
+              </details>
             </Reveal>
           </li>
         ))}

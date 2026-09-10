@@ -59,6 +59,15 @@ const DECK = [
 /** How far each card behind the front one peeks out, in pixels. */
 const PEEK = 40;
 
+/**
+ * The places a product gets built now.
+ *
+ * The founder's list, and it is a category rather than a roster: these are the
+ * builder sites somebody arrives from, and the line after them says the list is
+ * not exhaustive rather than pretending it is.
+ */
+const BUILDERS = ["Lovable", "Emergent", "v0", "Bolt", "Base44", "Replit"];
+
 export function LandingHeroDeck() {
   const reduced = useReducedMotion();
 
@@ -69,7 +78,7 @@ export function LandingHeroDeck() {
     rather than an accident of where the content happened to end.
   */
   return (
-    <div className="relative isolate flex min-h-[calc(100dvh-4.5rem)] flex-col justify-center py-10 sm:py-14">
+    <div className="relative isolate flex min-h-[calc(100dvh-4.5rem)] flex-col justify-center py-8 sm:py-10">
       <div aria-hidden className="landing-hero-field pointer-events-none absolute inset-0 -z-10" />
 
       <div className="relative mx-auto w-full max-w-3xl" style={{ paddingTop: PEEK * 2 + 24 }}>
@@ -160,6 +169,41 @@ export function LandingHeroDeck() {
             </li>
           </ul>
         </motion.div>
+      </div>
+
+      {/*
+        Who this is for, directly under the button.
+
+        It used to sit four blocks down the page, where somebody had already
+        decided whether the product was for them. Under the call to action it
+        answers the first question a visitor has — *is this for what I built?*
+        — and the answer is a list of the places they built it.
+
+        Inside the hero's own screen rather than below it, so it is read at the
+        same moment as the button. The hero is `justify-center`, so this pushes
+        the deck up rather than off, and a browser guard measures both against
+        the viewport.
+
+        Named products, and nothing more: no logos, no "trusted by", no claim
+        of a partnership. It says what kind of thing Vibe reads, which is a
+        fact about Vibe.
+      */}
+      <div
+        data-builders
+        className="mt-7 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 sm:mt-9"
+      >
+        {/*
+          Label and names on one line, not stacked. The stacked version cost
+          32px of the hero's own screen, which at 1280×800 was the difference
+          between the strip being under the button and being under the fold.
+        */}
+        <MonoLabel className="text-fg-meta">Built for products made with</MonoLabel>
+        <ul className="text-fg-secondary flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-body font-semibold">
+          {BUILDERS.map((builder) => (
+            <li key={builder}>{builder}</li>
+          ))}
+          <li className="text-fg-muted font-normal">and whatever else you built it in</li>
+        </ul>
       </div>
     </div>
   );
