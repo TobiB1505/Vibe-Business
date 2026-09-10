@@ -8,7 +8,7 @@ import type { NovaEntry } from "./feed";
  * ## Why this is not in `deriveOnboardingState`
  *
  * Because nothing about setup changed. `deriveOnboardingState` still owns the
- * ten states, their reconciliation and their tests, and this reads its answer
+ * eleven states, their reconciliation and their tests, and this reads its answer
  * rather than replacing it — §O.1's two lanes, and the invariant §L Slice 3
  * states outright: `deriveOnboardingState` untouched.
  *

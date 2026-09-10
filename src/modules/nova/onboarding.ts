@@ -53,15 +53,28 @@ export function deriveNovaOnboarding(state: OnboardingState): NovaOnboardingPosi
  * everywhere else in the product, and `not_applicable` is exactly "nothing is
  * owed" — the included first audit, or an audit Vibe owes as a refresh.
  */
-export function novaRevealControls(gate: AuditCreditGate): NovaActionId[] {
-  return gate.kind === "not_applicable"
+export function novaRevealControls(
+  gate: AuditCreditGate,
+  signedInStepNext = false,
+): NovaActionId[] {
+  return novaRevealBundlesAudit(gate, signedInStepNext)
     ? ["nova.confirm_product_and_audit"]
     : ["nova.confirm_product"];
 }
 
-/** Whether the audit rides along with the confirmation, for the copy above it. */
-export function novaRevealBundlesAudit(gate: AuditCreditGate): boolean {
-  return gate.kind === "not_applicable";
+/**
+ * Whether the audit rides along with the confirmation, for the copy above it.
+ *
+ * `signedInStepNext` is the second reason not to bundle, and it is the
+ * argument above read the other way round. Bundling is right when confirming
+ * and auditing are one decision with two presses; it is wrong the moment
+ * something real stands between them. The signed-in read does: a control
+ * saying *yes, and audit it* would start the audit over the founder's answer
+ * to a question they had not been asked yet — and an audit that runs before
+ * the signed-in read is the one thing this whole step exists to avoid.
+ */
+export function novaRevealBundlesAudit(gate: AuditCreditGate, signedInStepNext = false): boolean {
+  return gate.kind === "not_applicable" && !signedInStepNext;
 }
 
 /**
@@ -107,6 +120,10 @@ export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
     "I'm getting to know your product now. I'll read through the code and the live experience — you don't need to stay here while I do it.",
   product_reveal:
     "I've got a good picture of what you built. Here's how I understand it — take a look, and if I've misunderstood anything important, tell me before I go further.",
+  add_signed_in_product:
+    "I've read your code and the pages anyone can reach. What I haven't seen is your product from the inside, signed in — and for most products that's where nearly all of it is.",
+  signed_in_reveal:
+    "I've been through your product signed in. This is what's in there — the part I'd have had to guess at otherwise.",
   audit_preparing:
     "Good. Now I'm going to look at the business around the product — what's working for it, what's in its way, and what deserves attention first.",
   audit_needs_user:
@@ -131,12 +148,14 @@ export const NOVA_ONBOARDING_MESSAGE: Record<OnboardingState, string> = {
  * — and Nova adding a line about any of them would be the caption problem this
  * surface keeps removing.
  *
- * The two that are not null are the two where something is true that no
- * component on screen can state: what GitHub is about to ask for, and what a
- * live product buys that the code alone cannot. Both were already written on
- * the page, in its own prose, above the control. They move here rather than
- * being rewritten, because the sentence was reviewed once and the point of
- * this table is that there is one copy of it.
+ * The ones that are not null are where something is true that no component on
+ * screen can state: what GitHub is about to ask for, what a live product buys
+ * that the code alone cannot, what the audit is left judging without a
+ * signed-in read, and that setup is behind us either way at the first move.
+ * The first two were already written on the page, in its own prose, above the
+ * control. They moved here rather than being rewritten, because the sentence
+ * was reviewed once and the point of this table is that there is one copy
+ * of it.
  *
  * Held to the same five rules as the messages, and swept with them.
  */
@@ -145,6 +164,34 @@ export const NOVA_ONBOARDING_DETAIL: Record<OnboardingState, string | null> = {
     "GitHub will ask which repositories I can access. You stay in control of that — I only ever get the ones you pick.",
   add_live_product:
     "It tells me not just how the product is built, but what people actually run into.",
+
+  /*
+    What the audit does without it, which is the one thing on this screen no
+    component can state. The block says what a signed-in read is and what it
+    costs; the panel says Vibe stores neither the password nor the session.
+    Neither of them knows what happens next if the founder says no — and that
+    is the fact the decision actually turns on.
+
+    It is `evidence-v3.ts`'s own absent-source line, in her voice: an audit
+    that runs with no authenticated read records that anything only visible to
+    signed-in users is unobserved. She is describing a consequence Vibe
+    actually writes, not arguing for the feature.
+  */
+  add_signed_in_product:
+    "If we go into the audit without it, I have to judge the business with everything behind your login unread — and I'd rather not guess at that part.",
+
+  /*
+    Why anyone put two minutes into signing in, said at the moment it pays off
+    rather than before it. The block above is the reading itself; what it
+    cannot say is where the reading goes next, and that is the whole reason the
+    step exists.
+
+    Deliberately not a claim about coverage. A signed-in read is bounded — a
+    page budget, a partial result where it runs out — so "nothing behind your
+    login has to be guessed at now" would be a completeness Vibe never
+    measured.
+  */
+  signed_in_reveal: "What I read in there goes into the audit with everything else.",
 
   /* The scan reports its own stages, from rows it writes as it goes. */
   product_scanning: null,
@@ -204,6 +251,8 @@ export const NOVA_ONBOARDING_TIER: Record<OnboardingState, NovaFocusTier> = {
 
   /* The founder's turn, and the mark listens. */
   product_reveal: "decision",
+  add_signed_in_product: "decision",
+  signed_in_reveal: "decision",
   audit_needs_user: "decision",
   audit_reveal: "decision",
   first_move: "decision",

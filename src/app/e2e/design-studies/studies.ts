@@ -395,7 +395,7 @@ export const SHIPPED_FIRST_RUN_SCENARIO = "study-first-run-shipped";
 export const ONBOARDING_BLOCKS_SCENARIO = "study-onboarding-blocks";
 
 /**
- * Setup, all ten states at once.
+ * Setup, all eleven states at once.
  *
  * Same argument as `RAIL_SCENARIO` and the shipped opening: a state of
  * `deriveOnboardingState` is reachable only by a project that happens to be in

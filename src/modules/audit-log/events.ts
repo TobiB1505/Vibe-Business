@@ -270,6 +270,16 @@ export type AuditEventType =
   | "onboarding.product_understanding_started"
   | "onboarding.product_understanding_completed"
   | "onboarding.product_confirmed"
+  /**
+   * The signed-in read, offered during setup and answered.
+   *
+   * Two events because "not now" and "yes" are different answers to the same
+   * question and activation wants to know which one stalls a founder. Only the
+   * decline is recorded here: a scan that runs records itself, through the Deep
+   * Scan's own session and snapshot rows, and a second event saying the same
+   * thing from setup's side would be a copy that can disagree.
+   */
+  | "onboarding.signed_in_product_declined"
   | "onboarding.audit_started"
   | "onboarding.audit_needs_user"
   | "onboarding.audit_completed"

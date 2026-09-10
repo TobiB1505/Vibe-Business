@@ -25,7 +25,7 @@ import type { StatusTone } from "@/components/ui/status-pill";
  *
  * They are the same shape and deliberately not the same component, because
  * they read different rankings. Home's is `deriveNovaFocus` over twenty-one
- * moments; this is `deriveOnboardingState` over ten states, and the two answer
+ * moments; this is `deriveOnboardingState` over eleven states, and the two answer
  * different questions — *what needs deciding* against *how far through setup
  * are we*. A component taking either would have to take a union of both, which
  * is two screens' worth of props on one object.
@@ -87,7 +87,7 @@ export function NovaOnboardingThread({
       {/*
         The quieter register, for the thing that is also true. Never a caption
         on the block below — `NOVA_ONBOARDING_DETAIL` is null wherever the block
-        says it better, which is eight of the ten states.
+        says it better, which is seven of the eleven states.
       */}
       {detail && (
         <NovaBubble aside tail={false} index={1}>
