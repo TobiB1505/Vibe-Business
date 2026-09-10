@@ -86,7 +86,9 @@ export function BuyCreditPackForm({
       <input type="hidden" name="pack" value={packKey} />
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-fg font-semibold tabular-nums">{credits} Credits</p>
+          <p className="text-fg font-semibold tabular-nums">
+            {credits} Credits
+          </p>
           {/*
             The price moved into the button (UI-29, treatment B). It was here
             *and* two hundred pixels to the right; a price printed twice is a
@@ -95,7 +97,11 @@ export function BuyCreditPackForm({
           <p className="text-fg-muted mt-1 text-body">one time</p>
         </div>
         {disabled ? (
-          <button type="button" disabled className={buttonClasses({ variant: "secondary" })}>
+          <button
+            type="button"
+            disabled
+            className={buttonClasses({ variant: "secondary" })}
+          >
             Unavailable
           </button>
         ) : (
@@ -169,7 +175,11 @@ export function StartPlanForm({
             Current<span className="sr-only"> plan</span>
           </StatusPill>
         ) : disabled ? (
-          <button type="button" disabled className={buttonClasses({ variant: "secondary" })}>
+          <button
+            type="button"
+            disabled
+            className={buttonClasses({ variant: "secondary" })}
+          >
             Unavailable
           </button>
         ) : (

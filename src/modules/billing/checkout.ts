@@ -13,11 +13,7 @@ import {
 } from "./catalog";
 import { findStripeCustomerByUser, linkStripeCustomer } from "./store";
 import { getStripeClient } from "./stripe/client";
-import {
-  VIBE_SKU_METADATA_KEY,
-  VIBE_USER_METADATA_KEY,
-  type CatalogPriceIds,
-} from "./stripe/events";
+import { VIBE_SKU_METADATA_KEY, VIBE_USER_METADATA_KEY, type CatalogPriceIds } from "./stripe/events";
 
 /**
  * Starting a Stripe Checkout (BILLING CORE-2 §22, §23, §25, §26, §65).
@@ -287,7 +283,5 @@ export async function startCustomerPortal(
     return_url: billingReturnBase(),
   });
 
-  return session.url
-    ? { ok: true, url: session.url }
-    : { ok: false, refusal: "stripe_not_configured" };
+  return session.url ? { ok: true, url: session.url } : { ok: false, refusal: "stripe_not_configured" };
 }

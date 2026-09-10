@@ -167,9 +167,7 @@ describe("getBillingOverview repairs lot drift within the same call (ADR 0042 §
       .filter((row) => String(row.event_type).startsWith("credit_drift."));
     // One pair for the lot, one pair for the account.
     expect(driftEvents).toHaveLength(4);
-    expect(
-      driftEvents.filter((event) => event.event_type === "credit_drift.repaired"),
-    ).toHaveLength(2);
+    expect(driftEvents.filter((event) => event.event_type === "credit_drift.repaired")).toHaveLength(2);
   });
 });
 
@@ -359,9 +357,7 @@ describe("recent activity is named from the record, never guessed", () => {
   /** Only what was spent — `fund()` posts a purchase of its own. */
   async function chargeLabels(): Promise<string[]> {
     const overview = await getBillingOverview(supabase(), { userId: USER });
-    return overview.recentActivity
-      .filter((entry) => entry.creditDelta < 0)
-      .map((entry) => entry.label);
+    return overview.recentActivity.filter((entry) => entry.creditDelta < 0).map((entry) => entry.label);
   }
 
   it("calls a charge what the customer bought", async () => {
@@ -439,12 +435,7 @@ describe("recent activity is named from the record, never guessed", () => {
    */
   it("falls back rather than naming an operation the customer never bought", async () => {
     const { accountId } = await fund();
-    await charge({
-      accountId,
-      operationType: "change_validation",
-      credits: 5,
-      key: "c:validation",
-    });
+    await charge({ accountId, operationType: "change_validation", credits: 5, key: "c:validation" });
 
     expect(await chargeLabels()).toEqual(["Credits used"]);
   });

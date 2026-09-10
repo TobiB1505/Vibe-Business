@@ -64,11 +64,7 @@ describe("normalizeSubscription", () => {
    */
   it("reads a cancel_at timestamp as ending, even though cancel_at_period_end stays false", () => {
     const normalized = normalizeSubscription(
-      fakeSubscription({
-        cancel_at: 1789728524,
-        cancel_at_period_end: false,
-        canceled_at: 1787052081,
-      }),
+      fakeSubscription({ cancel_at: 1789728524, cancel_at_period_end: false, canceled_at: 1787052081 }),
     );
     expect(normalized.cancelAtPeriodEnd).toBe(true);
   });

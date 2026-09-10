@@ -35,6 +35,21 @@ The grant path itself is unchanged, and it already said the right thing: one pai
 
 **A plan promising the wrong thing.** The first render of the switch showed *"A fresh grant each paid month"* under €190. It is false of a year — Stripe invoices once and Vibe grants once — and it was visible only in the picture. The notes belong to the interval now, not to the card.
 
+## And a rule I broke on the way past
+
+`pnpm format` takes a path and I gave it a **directory**. Prettier then rewrote
+nine files this change never touched — `overview.ts`, `webhook-service.ts`,
+`normalize.ts`, four test files — plus 109 lines of `ARCHITECTURE.md` for a
+one-row table addition, and mixed that churn into six files it did edit. Rule 84
+exists for exactly this: *no change reformats code it is not already editing*,
+because the repository is not written to one width and a repo-wide pass would
+rewrite 719 of 1,214 source files.
+
+It was committed and pushed before I looked at the file list. The correction
+restores every file to its pre-format state and re-applies only the edits, which
+takes the commit from 312 deleted lines to 26 — and those 26 are lines the
+change genuinely replaces.
+
 ## And two measurement mistakes of my own
 
 **A viewport coordinate is not a layout fact.** The reserved-geometry guard compared `boundingBox().y` either side of the switch and reported a 772px move on a layout that had not changed by a pixel — because Playwright scrolls an element into view before clicking it. It measures document coordinates now, and asserts the scroll position separately, which is the other half of the same promise.

@@ -110,7 +110,7 @@ type PriceRefusal = "price_not_in_catalog" | "price_mismatch";
 export type CatalogPriceIds = {
   builder: string | undefined;
   pro: string | undefined;
-  /** The same plans bought by the year — separate Stripe Prices (ADR 0098). */
+  /** The same plans bought by the year — separate Stripe Prices (ADR 0107). */
   builder_annual: string | undefined;
   pro_annual: string | undefined;
   pack_500: string | undefined;
@@ -352,9 +352,7 @@ function interpretInvoice(
     return { kind: "ignored", reason: "proration_or_plan_change" };
   }
 
-  const planKey = parsePaidPlanKey(
-    readMetadata(invoice.subscriptionMetadata, VIBE_SKU_METADATA_KEY),
-  );
+  const planKey = parsePaidPlanKey(readMetadata(invoice.subscriptionMetadata, VIBE_SKU_METADATA_KEY));
   if (!planKey) return { kind: "ignored", reason: "unknown_sku" };
 
   const charged = chargedInterval(planKey, catalogPriceIds, invoice.priceIds);

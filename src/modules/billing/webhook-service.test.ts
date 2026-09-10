@@ -5,12 +5,7 @@ import { getBillingBalance } from "@/modules/credits/service";
 import { ensureCreditAccount, listLedgerEntries } from "@/modules/credits/store";
 import { creditsToUnits } from "@/modules/credits/units";
 import { findActiveSubscription, linkStripeCustomer } from "./store";
-import {
-  VIBE_SKU_METADATA_KEY,
-  VIBE_USER_METADATA_KEY,
-  type CatalogPriceIds,
-  type NormalizedStripeEvent,
-} from "./stripe/events";
+import { VIBE_SKU_METADATA_KEY, VIBE_USER_METADATA_KEY, type CatalogPriceIds, type NormalizedStripeEvent } from "./stripe/events";
 import { processStripeEvent } from "./webhook-service";
 
 /**
@@ -150,10 +145,7 @@ describe("top-up purchases (§72)", () => {
     const event = topUpEvent();
     event.checkoutSession!.paymentStatus = "unpaid";
 
-    expect(await process(event)).toMatchObject({
-      status: "ignored",
-      reason: "payment_not_completed",
-    });
+    expect(await process(event)).toMatchObject({ status: "ignored", reason: "payment_not_completed" });
     expect(await listAllLots(supabase(), await accountId())).toHaveLength(0);
   });
 

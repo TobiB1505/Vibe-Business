@@ -84,10 +84,7 @@ export async function startCreditPackCheckoutAction(
     });
 
     if (!result.ok) {
-      return {
-        error:
-          result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed,
-      };
+      return { error: result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed };
     }
     destination = result.url;
   } catch (error) {
@@ -141,10 +138,7 @@ export async function startPlanCheckoutAction(
     });
 
     if (!result.ok) {
-      return {
-        error:
-          result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed,
-      };
+      return { error: result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed };
     }
     destination = result.url;
   } catch (error) {

@@ -29,9 +29,7 @@ const PRICES: CatalogPriceIds = {
   pack_5000: "price_pack_5000",
 };
 
-function checkoutEvent(
-  overrides: Partial<NonNullable<NormalizedStripeEvent["checkoutSession"]>> = {},
-): NormalizedStripeEvent {
+function checkoutEvent(overrides: Partial<NonNullable<NormalizedStripeEvent["checkoutSession"]>> = {}): NormalizedStripeEvent {
   return {
     id: "evt_1",
     type: "checkout.session.completed",
@@ -49,9 +47,7 @@ function checkoutEvent(
   };
 }
 
-function invoiceEvent(
-  overrides: Partial<NonNullable<NormalizedStripeEvent["invoice"]>> = {},
-): NormalizedStripeEvent {
+function invoiceEvent(overrides: Partial<NonNullable<NormalizedStripeEvent["invoice"]>> = {}): NormalizedStripeEvent {
   return {
     id: "evt_2",
     type: "invoice.payment_succeeded",
@@ -65,10 +61,7 @@ function invoiceEvent(
       periodStart: 1_756_684_800,
       periodEnd: 1_759_276_800,
       priceIds: ["price_builder_monthly"],
-      subscriptionMetadata: {
-        [VIBE_SKU_METADATA_KEY]: "builder",
-        [VIBE_USER_METADATA_KEY]: "user-1",
-      },
+      subscriptionMetadata: { [VIBE_SKU_METADATA_KEY]: "builder", [VIBE_USER_METADATA_KEY]: "user-1" },
       ...overrides,
     },
   };
@@ -90,8 +83,8 @@ describe("top-up purchases (§26, §72)", () => {
   it("produces the same identity every time, so five deliveries grant once", () => {
     // The §72 gate. Replaying the same purchase must resolve to one key; the
     // ledger's unique index does the rest.
-    const keys = Array.from({ length: 5 }, () => interpretStripeEvent(checkoutEvent(), PRICES)).map(
-      (intent) => (intent.kind === "grant_top_up" ? intent.idempotencyKey : null),
+    const keys = Array.from({ length: 5 }, () => interpretStripeEvent(checkoutEvent(), PRICES)).map((intent) =>
+      intent.kind === "grant_top_up" ? intent.idempotencyKey : null,
     );
 
     expect(new Set(keys).size).toBe(1);
@@ -115,9 +108,7 @@ describe("top-up purchases (§26, §72)", () => {
   });
 
   it("grants nothing for a session with no payment required", () => {
-    expect(
-      interpretStripeEvent(checkoutEvent({ paymentStatus: "no_payment_required" }), PRICES),
-    ).toEqual({
+    expect(interpretStripeEvent(checkoutEvent({ paymentStatus: "no_payment_required" }), PRICES)).toEqual({
       kind: "ignored",
       reason: "payment_not_completed",
     });
@@ -178,10 +169,9 @@ describe("a payload cannot decide how many Credits are granted (§23, §102.4, �
 
   it("refuses a forged Price id that does not match the SKU's configured Price", () => {
     // Claims pack_500 but was actually charged the 5,000-Credit Price.
-    expect(interpretStripeEvent(checkoutEvent({ priceIds: ["price_pack_5000"] }), PRICES)).toEqual({
-      kind: "ignored",
-      reason: "price_mismatch",
-    });
+    expect(
+      interpretStripeEvent(checkoutEvent({ priceIds: ["price_pack_5000"] }), PRICES),
+    ).toEqual({ kind: "ignored", reason: "price_mismatch" });
   });
 
   it("refuses an entirely unknown Price id", () => {
@@ -208,10 +198,9 @@ describe("a payload cannot decide how many Credits are granted (§23, §102.4, �
 
   it("fails closed when a SKU has no configured Price", () => {
     // "We never set up that SKU" must never read as "any Price is acceptable".
-    expect(interpretStripeEvent(checkoutEvent(), { ...PRICES, pack_500: undefined })).toEqual({
-      kind: "ignored",
-      reason: "price_not_in_catalog",
-    });
+    expect(
+      interpretStripeEvent(checkoutEvent(), { ...PRICES, pack_500: undefined }),
+    ).toEqual({ kind: "ignored", reason: "price_not_in_catalog" });
   });
 });
 
@@ -230,24 +219,15 @@ describe("subscription period grants (§30, §31, §71)", () => {
       interpretStripeEvent(
         invoiceEvent({
           priceIds: ["price_pro_monthly"],
-          subscriptionMetadata: {
-            [VIBE_SKU_METADATA_KEY]: "pro",
-            [VIBE_USER_METADATA_KEY]: "user-1",
-          },
+          subscriptionMetadata: { [VIBE_SKU_METADATA_KEY]: "pro", [VIBE_USER_METADATA_KEY]: "user-1" },
         }),
         PRICES,
       ),
-    ).toMatchObject({
-      kind: "grant_subscription_period",
-      planKey: "pro",
-      creditUnits: creditsToUnits(3_000),
-    });
+    ).toMatchObject({ kind: "grant_subscription_period", planKey: "pro", creditUnits: creditsToUnits(3_000) });
   });
 
   it("grants the first period from subscription_create, not from the Checkout (§31)", () => {
-    expect(
-      interpretStripeEvent(invoiceEvent({ billingReason: "subscription_create" }), PRICES),
-    ).toMatchObject({
+    expect(interpretStripeEvent(invoiceEvent({ billingReason: "subscription_create" }), PRICES)).toMatchObject({
       kind: "grant_subscription_period",
       planKey: "builder",
     });
@@ -255,8 +235,8 @@ describe("subscription period grants (§30, §31, §71)", () => {
 
   it("never grants twice for one paid period, however many times it is delivered (§71)", () => {
     // The §71 gate: five deliveries of the same paid period.
-    const keys = Array.from({ length: 5 }, () => interpretStripeEvent(invoiceEvent(), PRICES)).map(
-      (intent) => (intent.kind === "grant_subscription_period" ? intent.idempotencyKey : null),
+    const keys = Array.from({ length: 5 }, () => interpretStripeEvent(invoiceEvent(), PRICES)).map((intent) =>
+      intent.kind === "grant_subscription_period" ? intent.idempotencyKey : null,
     );
 
     expect(new Set(keys).size).toBe(1);
@@ -266,10 +246,7 @@ describe("subscription period grants (§30, §31, §71)", () => {
     // Both events fire for one paid invoice. Handling both is safe only because
     // they collapse to one key.
     const succeeded = interpretStripeEvent(invoiceEvent(), PRICES);
-    const paid = interpretStripeEvent(
-      { ...invoiceEvent(), id: "evt_3", type: "invoice.paid" },
-      PRICES,
-    );
+    const paid = interpretStripeEvent({ ...invoiceEvent(), id: "evt_3", type: "invoice.paid" }, PRICES);
 
     expect(succeeded.kind === "grant_subscription_period" && succeeded.idempotencyKey).toBe(
       paid.kind === "grant_subscription_period" && paid.idempotencyKey,
@@ -290,12 +267,10 @@ describe("subscription period grants (§30, §31, §71)", () => {
   });
 
   it("refuses a plan whose charged Price does not match the catalog", () => {
-    expect(interpretStripeEvent(invoiceEvent({ priceIds: ["price_pro_monthly"] }), PRICES)).toEqual(
-      {
-        kind: "ignored",
-        reason: "price_mismatch",
-      },
-    );
+    expect(interpretStripeEvent(invoiceEvent({ priceIds: ["price_pro_monthly"] }), PRICES)).toEqual({
+      kind: "ignored",
+      reason: "price_mismatch",
+    });
   });
 });
 
@@ -327,9 +302,7 @@ describe("plan changes cannot mint Credits (§34)", () => {
     // The §34 gate. A `subscription_update` invoice is a proration, not a paid
     // period — granting on it would invent proportional Credit economics
     // nobody approved.
-    expect(
-      interpretStripeEvent(invoiceEvent({ billingReason: "subscription_update" }), PRICES),
-    ).toEqual({
+    expect(interpretStripeEvent(invoiceEvent({ billingReason: "subscription_update" }), PRICES)).toEqual({
       kind: "ignored",
       reason: "proration_or_plan_change",
     });
@@ -343,9 +316,7 @@ describe("plan changes cannot mint Credits (§34)", () => {
   });
 
   it("ignores a threshold invoice", () => {
-    expect(
-      interpretStripeEvent(invoiceEvent({ billingReason: "subscription_threshold" }), PRICES),
-    ).toEqual({
+    expect(interpretStripeEvent(invoiceEvent({ billingReason: "subscription_threshold" }), PRICES)).toEqual({
       kind: "ignored",
       reason: "proration_or_plan_change",
     });
@@ -386,11 +357,7 @@ describe("subscription status is never a reason to grant (§29)", () => {
         {
           ...subscriptionEvent,
           type: "customer.subscription.deleted",
-          subscription: {
-            ...subscriptionEvent.subscription!,
-            status: "canceled",
-            canceledAt: 1_759_276_800,
-          },
+          subscription: { ...subscriptionEvent.subscription!, status: "canceled", canceledAt: 1_759_276_800 },
         },
         PRICES,
       ),
@@ -427,10 +394,7 @@ describe("a Checkout return is not a payment (§25, §102.16)", () => {
     // Granting here as well as on the invoice is the classic double-grant: one
     // signup, two allowances.
     expect(
-      interpretStripeEvent(
-        checkoutEvent({ mode: "subscription", subscriptionId: "sub_1" }),
-        PRICES,
-      ),
+      interpretStripeEvent(checkoutEvent({ mode: "subscription", subscriptionId: "sub_1" }), PRICES),
     ).toEqual({ kind: "ignored", reason: "checkout_subscription_handled_by_invoice" });
   });
 
@@ -458,10 +422,7 @@ describe("a Checkout return is not a payment (§25, §102.16)", () => {
 
   it("ignores a handled event type whose object is missing", () => {
     expect(
-      interpretStripeEvent(
-        { id: "evt_x", type: "invoice.payment_succeeded", livemode: false },
-        PRICES,
-      ),
+      interpretStripeEvent({ id: "evt_x", type: "invoice.payment_succeeded", livemode: false }, PRICES),
     ).toEqual({ kind: "ignored", reason: "unhandled_event_type" });
   });
 });

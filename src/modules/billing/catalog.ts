@@ -43,7 +43,7 @@ import { creditsToUnits, type CreditUnits } from "@/modules/credits/units";
  * Two of them can be paid for by the month or by the year, which is a *price*
  * on the same plan rather than a fourth and fifth plan: a customer on annual
  * Builder is on Builder, with the same allowance and the same one ledger. See
- * ADR 0098.
+ * ADR 0107.
  */
 export const PLAN_KEYS = ["free", "builder", "pro"] as const;
 export type PlanKey = (typeof PLAN_KEYS)[number];

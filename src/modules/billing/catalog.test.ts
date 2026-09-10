@@ -87,11 +87,7 @@ describe("top-up packs (§9)", () => {
 
   it("offers exactly three packs", () => {
     expect(CREDIT_PACK_KEYS).toHaveLength(3);
-    expect(listCreditPacks().map((pack) => pack.key)).toEqual([
-      "pack_500",
-      "pack_1500",
-      "pack_5000",
-    ]);
+    expect(listCreditPacks().map((pack) => pack.key)).toEqual(["pack_500", "pack_1500", "pack_5000"]);
   });
 
   it("declares each pack's displayed Credits and internal units consistently", () => {
@@ -170,12 +166,8 @@ describe("grant identities bind to real external payment facts (§28, §30)", ()
     // A subscription stays `active` for a month. Keying on it would grant
     // repeatedly; keying on the invoice grants once per paid period.
     expect(subscriptionGrantIdempotencyKey("in_123")).toBe("subscription-period-v1:in_123");
-    expect(subscriptionGrantIdempotencyKey("in_123")).toBe(
-      subscriptionGrantIdempotencyKey("in_123"),
-    );
-    expect(subscriptionGrantIdempotencyKey("in_123")).not.toBe(
-      subscriptionGrantIdempotencyKey("in_124"),
-    );
+    expect(subscriptionGrantIdempotencyKey("in_123")).toBe(subscriptionGrantIdempotencyKey("in_123"));
+    expect(subscriptionGrantIdempotencyKey("in_123")).not.toBe(subscriptionGrantIdempotencyKey("in_124"));
   });
 
   it("binds a top-up grant to the Checkout Session", () => {

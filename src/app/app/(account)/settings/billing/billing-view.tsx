@@ -313,7 +313,11 @@ export function BillingView({
               <ArrowRightIcon size={15} />
             </Link>
           ) : (
-            <button type="button" disabled className={buttonClasses({ variant: "secondary" })}>
+            <button
+              type="button"
+              disabled
+              className={buttonClasses({ variant: "secondary" })}
+            >
               Management unavailable
             </button>
           )}
