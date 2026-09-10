@@ -80,6 +80,50 @@ test.describe("a change that still needs a preview", () => {
   });
 });
 
+/**
+ * The run, watched from the thread.
+ *
+ * The block was the polling file list and nothing else — a real piece of the
+ * Agent's build stage, and the only piece, so a founder who had just spent
+ * Credits saw filenames appear and could not see the run.
+ *
+ * What a fixture can prove is the composition: the Agent's own stage, in block
+ * presentation, with the task and the core in it. What it cannot prove is the
+ * seam — in the product the stage arrives behind a `Suspense` boundary whose
+ * fallback is that same file list, and a fixture has the whole reading in hand.
+ */
+test.describe("the agent at work in the thread", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+  });
+
+  test("shows the run, not only the files it touched", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const block = page.locator('[data-testid="stage-build-block"]');
+    await expect(block.locator('[data-testid="agent-build"]')).toBeVisible();
+    /* The task that was asked for, which no other surface in the thread says. */
+    await expect(block.getByText("Add a clear pricing section to your website")).toBeVisible();
+    /* And the list, still there, as the stage's activity column. */
+    await expect(block.getByText("src/lib/checkout.ts")).toBeVisible();
+  });
+
+  /*
+   * Three assurances in a row on a page become three stacked rows in a thread
+   * column — three hundred pixels that partly repeat each other. The claim is
+   * kept; the bar is not.
+   */
+  test("makes its isolation claim once", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const block = page.locator('[data-testid="stage-build-block"]');
+    await expect(block.locator('[data-testid="agent-assurance"]')).toHaveCount(0);
+    await expect(
+      block.getByText(/Nothing reaches your default branch without your approval/),
+    ).toBeVisible();
+  });
+});
+
 test.describe("Nova Home", () => {
   test("leads with one dominant action and its price, before any click", async ({ page }) => {
     await page.goto(NOVA("nova-priced"));

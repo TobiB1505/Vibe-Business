@@ -318,7 +318,23 @@ export function AgentPreviewStage({
             looking at two preview frames. The step it moves the run to is stage
             five, so it puts them on stage five.
           */}
-          {reviewReady && (
+          {/*
+            Absent in a thread, not disabled in one.
+
+            `useStageNavigation` returns a null `go` where no provider sits
+            above it, and Nova's block is exactly that place — so this rendered
+            a permanently disabled primary control, which is the shape of dead
+            end this block was rebuilt to remove.
+
+            And there is nothing for it to do there. On the Agent route the
+            founder navigates between stages; in the thread the *change* picks
+            the stage, and once a preview has run the approval stops being
+            blocked, so `deriveChangeProgress` reports `awaiting_approval` and
+            the block draws the decision by itself. The conversation moves them
+            on; a button asking to be moved on is a second mechanism for one
+            thing.
+          */}
+          {reviewReady && presentation === "page" && (
             <button
               type="button"
               onClick={() => go?.("review")}

@@ -11,6 +11,9 @@ import { WorkspaceAskBlock } from "@/components/nova/blocks/workspace";
 import { MoveBlock } from "@/components/nova/blocks/move";
 import { ProgressBlock } from "@/components/nova/blocks/progress";
 import { ReviewBlock } from "@/components/nova/blocks/review";
+import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
+import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
+import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "@/components/nova/blocks/audit";
 import { ScanBlock } from "@/components/nova/blocks/scan";
@@ -343,6 +346,9 @@ function Eyebrow({ children }: { children: ReactNode }) {
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
   );
 }
+
+/** A run mid-flight, from the Agent stages' own fixtures. */
+const BUILDING = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
 
 export function StudyBlock({ study }: { study: Study }) {
   const panel =
@@ -697,6 +703,50 @@ export function StudyBlock({ study }: { study: Study }) {
           to the sign-in page and takes the study with it. The fixture here is a change awaiting
           approval, which fetches on the click. Worth knowing before Nova&rsquo;s route mounts this
           for real: the blocks inherit the components&rsquo; data appetite along with their looks.
+        </Context>
+      </section>
+
+      {/* ── The agent at work, in the thread ─────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Watch it work</Eyebrow>
+        <Context>
+          The block used to be the polling file list and nothing else — a real piece of the build
+          stage, and the only piece, so somebody who had just spent Credits watched filenames appear
+          and could not see the run. This is the Agent&rsquo;s own build stage in block
+          presentation: the task, the core, the activity. The narrative column is gone, because
+          Nova&rsquo;s bubble says <em>Vibe is writing the change</em> one line above it and the
+          assurance bar at the foot says the rest of what that paragraph said.
+        </Context>
+        <div
+          className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}
+          data-testid="stage-build-block"
+        >
+          <Bubble open index={0}>
+            <Line>I am writing the change now. You can watch it happen.</Line>
+          </Bubble>
+          <RenderBlock label="The agent" at="now" index={1}>
+            <AgentBuildStage
+              presentation="block"
+              task={BUILDING.task}
+              live
+              core={<AgentCore state={BUILDING.core} caption={BUILDING.caption} size="compact" />}
+              activity={
+                <AgentFileActivity
+                  events={BUILDING.fileEvents}
+                  limit={4}
+                  title="Files touched"
+                  live
+                  variant="block"
+                />
+              }
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          What this study cannot show is the seam. In the product the stage arrives behind a
+          <code> Suspense</code> boundary whose fallback is the file list, so a founder sees the
+          list immediately and the run assembles around it. A fixture has the whole reading in hand,
+          so the boundary never suspends here.
         </Context>
       </section>
 

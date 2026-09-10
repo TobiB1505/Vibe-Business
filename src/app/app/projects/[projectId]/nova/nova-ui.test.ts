@@ -397,7 +397,18 @@ describe("Nova Home", () => {
       expect(home).toContain("BLOCK_FOR_OPERATION");
       expect(home).toContain("<ProgressBlock");
       expect(home).toContain("<ScanBlock");
-      expect(home).toContain("<NovaAgentLive");
+      /* The agent's block is the Agent's own build stage now, streamed. The
+         polling file list is still in it — as the boundary's fallback and as
+         its activity column — and it is mounted by `nova-agent-stage.tsx`
+         rather than here. */
+      expect(home).toContain("<NovaAgentStage");
+      expect(component("nova-agent-stage.tsx")).toContain("<AgentBuildStage");
+      expect(component("nova-agent-stage.tsx")).toContain("<NovaAgentLive");
+      /* Cheap by construction: naming a change is what makes the workspace
+         read sign images and preflight a merge against GitHub. */
+      expect(component("nova-agent-stage.tsx")).toContain("selectedPreparedChangeId: null");
+      /* And never in front of Home's first paint. */
+      expect(component("nova-agent-stage.tsx")).toContain("<Suspense");
     });
 
     /*

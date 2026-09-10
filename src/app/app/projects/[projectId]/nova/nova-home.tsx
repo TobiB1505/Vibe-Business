@@ -37,7 +37,7 @@ import {
   ScanBlock,
   WorkspaceAskBlock,
 } from "@/components/nova/blocks";
-import { NovaAgentLive } from "./nova-agent-live";
+import { NovaAgentStage } from "./nova-agent-stage";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
@@ -612,7 +612,14 @@ function runningBlockFor(
       return {
         kind,
         node: (
-          <NovaAgentLive
+          /*
+            The Agent's own build stage, streamed. `NovaAgentLive` is still
+            here — as this component's fallback and as its activity column, so
+            the file list is on screen immediately and the run assembles
+            around it. See `nova-agent-stage.tsx` for why the read behind it
+            does not reverse Home's no-network-call reading.
+          */
+          <NovaAgentStage
             projectId={context.projectId}
             operationId={working.operationId}
             initialEvents={data.agentEvents}
