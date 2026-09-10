@@ -8,6 +8,7 @@ import { OutcomePanel } from "../outcome-panel";
 import { PreviewPanel } from "../preview-panel";
 import { ReviewPanel } from "../review-panel";
 import { ChangeDiffSection } from "../change-diff-section";
+import { AgentChangeMeaning } from "./change-meaning";
 import { WithheldPaths } from "./withheld-paths";
 
 /**
@@ -20,10 +21,13 @@ import { WithheldPaths } from "./withheld-paths";
 export function AgentPreviewActions({
   projectId,
   change,
+  planHref,
   withheldPaths = [],
 }: {
   projectId: string;
   change: PreparedChangeWorkspaceItem;
+  /** The Action Plan, for the Move this change answers. */
+  planHref: string;
   /**
    * Paths the run tried to write and policy refused.
    *
@@ -33,6 +37,23 @@ export function AgentPreviewActions({
    */
   withheldPaths?: readonly string[];
 }) {
+  /*
+   * A change that alters no rendered page (ADR 0063).
+   *
+   * The preview and the comparison are **absent** for one, not disabled: an
+   * offer to serve a page that did not change is an offer to spend a founder's
+   * money on a sandbox nobody needs to open, and the classification line in
+   * "What changed" above says so in Vibe's own words — so the absence is
+   * explained rather than noticed.
+   *
+   * `ChangeGates` had this and the workspace that replaced it did not, so from
+   * the day this component shipped a code-only change was offered a paid
+   * preview it had no use for. Nobody saw it because the suite that asserts
+   * the absence was pointed at `ChangeGates`, which by then only the fixture
+   * route mounted.
+   */
+  const codeOnly = change.reviewClassification?.classification === "code";
+
   return (
     <section
       className="rounded-panel border-line-3 bg-surface-3 flex min-w-0 flex-col gap-5 border p-5"
@@ -48,6 +69,16 @@ export function AgentPreviewActions({
               what a visual approval binds to. */}
           Start the isolated preview and look at the change running.
         </p>
+      </div>
+
+      {/*
+        What this change is for, above what it contains — the same order and
+        the same precedence `ChangeGates` had, ported here when that component
+        was deleted. See `AgentChangeMeaning`: for an agent change this is the
+        only place the product says what was asked for.
+      */}
+      <div className="border-line-2 flex flex-col gap-4 border-t pt-5">
+        <AgentChangeMeaning change={change} planHref={planHref} />
       </div>
 
       {/*
@@ -68,36 +99,38 @@ export function AgentPreviewActions({
       </div>
 
       <div className="border-line-2 flex flex-col gap-5 border-t pt-5">
-        <PreviewPanel
-          projectId={projectId}
-          preparedChangeId={change.id}
-          card={change.preview}
-          serverOrigin={change.previewOrigin}
-          productionUrl={change.productionUrl}
-          approved={change.progress.approved}
-          merged={change.progress.merged}
-          presentation="workspace"
-        />
-
-        {/* History only (ADR 0065). Nothing captures a comparison any more; a
-            change that has one from before still shows what an approval rested
-            on. */}
-        {change.review.state !== "not_generated" && (
-        <div className="border-line-2 border-t pt-5">
-          <ReviewPanel
+        {!codeOnly && (
+          <PreviewPanel
             projectId={projectId}
             preparedChangeId={change.id}
-            card={change.review}
-            images={change.reviewImages}
-            previewOrigin={change.previewOrigin}
-            branchUrl={change.branchUrl}
-            commitSha={change.commitSha}
-            filesChanged={change.filePaths.length}
+            card={change.preview}
+            serverOrigin={change.previewOrigin}
+            productionUrl={change.productionUrl}
             approved={change.progress.approved}
             merged={change.progress.merged}
             presentation="workspace"
           />
-        </div>
+        )}
+
+        {/* History only (ADR 0065). Nothing captures a comparison any more; a
+            change that has one from before still shows what an approval rested
+            on. */}
+        {!codeOnly && change.review.state !== "not_generated" && (
+          <div className="border-line-2 border-t pt-5">
+            <ReviewPanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.review}
+              images={change.reviewImages}
+              previewOrigin={change.previewOrigin}
+              branchUrl={change.branchUrl}
+              commitSha={change.commitSha}
+              filesChanged={change.filePaths.length}
+              approved={change.progress.approved}
+              merged={change.progress.merged}
+              presentation="workspace"
+            />
+          </div>
         )}
       </div>
     </section>
@@ -114,12 +147,24 @@ export function AgentPreviewActions({
 export function AgentReviewDecision({
   projectId,
   change,
+  planHref,
 }: {
   projectId: string;
   change: PreparedChangeWorkspaceItem;
+  /** The Action Plan, for the Move this change answers. */
+  planHref: string;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-4" data-testid="agent-review-decision">
+      {/*
+        Why, before the authorization — which is the whole of rule 67's shape
+        in a screen: a person says yes to one specific change, so what that
+        change was for has to be on the surface they say it on. A founder who
+        reached this stage without passing the preview stage would otherwise
+        approve a branch name and a file count.
+      */}
+      <AgentChangeMeaning change={change} planHref={planHref} />
+
       <section
         className="rounded-panel border-mint-line bg-mint-tint/25 grid min-w-0 gap-6 border p-5 sm:p-6 lg:grid-cols-2"
         aria-labelledby="agent-review-decision-title"

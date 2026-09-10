@@ -33,6 +33,7 @@ import {
   agentCoreState,
   agentStageSteps,
 } from "@/modules/coding-agent/observability/agent-stages";
+import { listChangeHistory } from "@/modules/execution/change-history";
 import { AgentTrustPanel } from "./agent-header";
 import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
@@ -47,8 +48,7 @@ import { AgentRunFiles } from "./agent-run-files";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { CostLine } from "@/components/system/cost-line";
 import { MonoLabel } from "@/components/ui/typography";
-import { AgentRunHistory } from "./agent-run-history";
-import { listAgentRuns } from "@/modules/coding-agent/observability/run-view";
+import { ChangeHistoryTable } from "./change-history-table";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
@@ -57,7 +57,7 @@ import { AgentValidateStage } from "./agent-validate-stage";
 import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
-import { AgentStartAction } from "./agent-start-action";
+import { agentStartControls } from "./agent-start-controls";
 import { isFounderAttestable } from "@/modules/action-plans/completion";
 import { firstActionableStep } from "@/modules/action-plans/sequence";
 import { EXECUTION_REASON_LABELS, REFUSAL_SHAPES } from "@/modules/execution-contract/view";
@@ -67,11 +67,13 @@ import { AgentWorkspaceChoice } from "./agent-workspace-choice";
 import { AgentWorkspaceChoiceAction } from "./agent-workspace-choice-action";
 import { resolveProjectValidationTarget } from "@/modules/validation/workspace-store";
 import { resolveBuildChain } from "@/modules/execution-contract/chain";
-import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
-import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
-import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
+import {
+  forecastDriverNotes,
+  forecastEvidenceNote,
+  runCeilingLabel,
+} from "@/modules/coding-agent/view";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -300,7 +302,7 @@ async function AgentWorkspaceBody({
   /* The focus answer and start discoverability are independent. Keep them in
      one parallel read window so restoring the real start control does not
      reintroduce the old serial Agent-page latency. */
-  const [focusAction, agentRoutes, measuredRuns, pastRuns] = await Promise.all([
+  const [focusAction, agentRoutes, measuredRuns, changeHistory] = await Promise.all([
     focusedMove
       ? (async () => {
           const [summaries, activeOperation, failedOperation] = await Promise.all(
@@ -357,7 +359,10 @@ async function AgentWorkspaceBody({
      * latency, and bounded — a founder scanning for the run they mean does not
      * need the eleventh page of them.
      */
-    listAgentRuns(supabase, { projectId, limit: 20 }),
+    listChangeHistory(supabase, {
+      projectId,
+      repositoryFullName: project.repository?.fullName ?? null,
+    }),
   ]);
 
   const focus = requestedTaskMatchesRun
@@ -422,8 +427,6 @@ async function AgentWorkspaceBody({
           headRiskClass: agenticResolution.riskClass,
         })
       : null;
-  /* The sentence beside the offer. Null when the chain simply ran out of plan. */
-  const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
 
   /*
    * The two refusals that are questions rather than dead ends (Stufe 4).
@@ -519,9 +522,43 @@ async function AgentWorkspaceBody({
         }
       : readyTask;
 
+  /*
+   * The Move titles the history names its rows by, from the set this page has
+   * already read for the task panel. A second read would be the same strings
+   * fetched twice for one screen.
+   *
+   * A change whose Move is not in the latest set is absent here and the table
+   * falls back to the branch name — which is the honest answer: the commit
+   * exists whether or not the advice that motivated it survived.
+   */
+  const moveTitles = new Map(
+    (opportunities?.set.opportunities ?? []).map((move) => [move.id, move.title] as const),
+  );
+
   const creditEstimate = routeEconomics
-    ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
+    ? runCeilingLabel(routeEconomics.budget.maxCredits)
     : null;
+
+  /*
+   * One offer, two prices, shared with Nova's thread. It was written out in
+   * the JSX below; the reason it is built in one place now is that the thread
+   * shows the same offer, and two hand-built pairs of controls are two places
+   * where one can come to print a figure the other does not.
+   *
+   * Two nodes rather than one, because only the primary control may go inside
+   * `AgentStartCta`'s swept pill — `agentStartControls` says why.
+   */
+  const startControls =
+    agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0
+      ? agentStartControls({
+          projectId: project.id,
+          step: agenticStep,
+          chain: buildChain,
+          chainMaxCredits: chainEconomics?.budget.maxCredits ?? null,
+          creditEstimate,
+          repositoryReadHref: projectSectionHref(project.id, "my-product"),
+        })
+      : null;
 
   /*
    * What stands behind that ceiling (ADR 0072).
@@ -673,53 +710,8 @@ async function AgentWorkspaceBody({
                     />
                   ) : undefined
                 }
-                startAction={
-                  agenticStep && !staleRepositoryRead && workspaceCandidates.length === 0 ? (
-                    <div className="flex w-full flex-col gap-2">
-                      {/*
-                        The chain is offered, never imposed. Two controls rather
-                        than a checkbox: a founder who wanted to stop after this
-                        step must be able to, and both figures come from one
-                        pricing function with different member sets, so the
-                        number on a button is the number that gets charged.
-
-                        When no chain resolved there is one control and this is
-                        the screen exactly as it was.
-                      */}
-                      {chainEconomics && buildChain && (
-                        <AgentStartAction
-                          projectId={project.id}
-                          stepKey={agenticStep.id}
-                          chain
-                          label={`${buildChainOfferLabel(buildChain.members.length)} — ${formatCreditsForDisplay(chainEconomics.budget.maxCredits)}`}
-                          repositoryReadHref={projectSectionHref(project.id, "my-product")}
-                        />
-                      )}
-                      <AgentStartAction
-                        projectId={project.id}
-                        stepKey={agenticStep.id}
-                        variant={chainEconomics ? "secondary" : "primary"}
-                        label={
-                          chainEconomics && creditEstimate
-                            ? `Build just this step — ${creditEstimate}`
-                            : undefined
-                        }
-                        /* Where a stale-code refusal sends the founder. Built here,
-                           never in the panel — the panel does not know what the
-                           workspace's segments are called. */
-                        repositoryReadHref={projectSectionHref(project.id, "my-product")}
-                      />
-                      {chainEconomics && buildChain && chainBoundaryNote && (
-                        /* Why the chain stops where it does. Without it, a chain
-                           that ends at a Stripe step looks like a bug rather
-                           than the refusal it is. */
-                        <p className="text-fg-meta text-caption" data-testid="agent-chain-boundary">
-                          {chainBoundaryNote}
-                        </p>
-                      )}
-                    </div>
-                  ) : undefined
-                }
+                startAction={startControls?.primary ?? undefined}
+                startBeneath={startControls?.beneath ?? undefined}
                 creditEstimate={creditEstimate}
                 forecastNotes={
                   runForecast
@@ -846,6 +838,11 @@ async function AgentWorkspaceBody({
                       <AgentPreviewActions
                         projectId={project.id}
                         change={change}
+                        /* The plan, not this task's Move-scoped link:
+                           `AgentChangeMeaning` resolves the change's own Move
+                           against it, and a change need not answer the Move
+                           the workspace is currently focused on. */
+                        planHref={basePlanHref}
                         withheldPaths={displayedWorkspace.files
                           .filter((file) => file.withheldBy !== null)
                           .map((file) => file.path)}
@@ -873,7 +870,11 @@ async function AgentWorkspaceBody({
                     backHref={planHref}
                     decision={
                       <div className="flex flex-col gap-3">
-                        <AgentReviewDecision projectId={project.id} change={change} />
+                        <AgentReviewDecision
+                          projectId={project.id}
+                          change={change}
+                          planHref={basePlanHref}
+                        />
                         {/*
                           What it cost, from the hold it ran against (audit
                           R23). Beside the decision rather than after it: a
@@ -891,17 +892,25 @@ async function AgentWorkspaceBody({
           />
 
         {/*
-          The runs before this one (audit R29). The workspace shows the newest;
-          a product that has run the agent eleven times had ten it could no
-          longer reach, including the ones whose changes were merged.
+          Everything Vibe has written for this product (audit R29).
+
+          The workspace shows one change. A product that had run the agent
+          eleven times could reach none of the others — including the ones that
+          were merged, which is the half a founder is most likely to want back.
+
+          Sorted by change rather than by run, which is the decision behind the
+          whole section: a run is Vibe's unit of work and `Finished` is a fact
+          about the machinery, while a change is the thing that either reached
+          the default branch or did not. See `change-history.ts`.
         */}
-        {pastRuns.length > 1 && (
-          <section className="flex flex-col gap-3" aria-labelledby="agent-run-history-title">
-            <MonoLabel as="h2" id="agent-run-history-title">
-              Earlier runs
+        {changeHistory.length > 1 && (
+          <section className="flex flex-col gap-3" aria-labelledby="agent-change-history-title">
+            <MonoLabel as="h2" id="agent-change-history-title">
+              Every change Vibe has written
             </MonoLabel>
-            <AgentRunHistory
-              runs={pastRuns}
+            <ChangeHistoryTable
+              entries={changeHistory}
+              moveTitles={moveTitles}
               changeHref={(preparedChangeId) =>
                 `${projectSectionHref(project.id, "agent")}?change=${preparedChangeId}`
               }

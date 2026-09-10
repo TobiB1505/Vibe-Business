@@ -10,10 +10,14 @@ import { WorkspaceAskBlock } from "@/components/nova/blocks/workspace";
 import { MoveBlock } from "@/components/nova/blocks/move";
 import { ProgressBlock } from "@/components/nova/blocks/progress";
 import { ReviewBlock } from "@/components/nova/blocks/review";
+import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
+import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-ready-stage";
+import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
+import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { labResolveAction } from "./lab-resolve-action";
 import { AuditBlock } from "@/components/nova/blocks/audit";
 import { ScanBlock } from "@/components/nova/blocks/scan";
-import { E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
+import { agentReadyForecastNotes, E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
 import { E2E_MOVES_SCENARIOS } from "../moves-scenarios";
 import { E2E_SCENARIOS } from "../scenarios";
 import { E2E_PRODUCT_SCAN_SCENARIOS } from "../product-scan-scenarios";
@@ -337,6 +341,12 @@ function Eyebrow({ children }: { children: ReactNode }) {
   );
 }
 
+/** A run mid-flight, from the Agent stages' own fixtures. */
+const BUILDING = E2E_AGENT_STAGE_SCENARIOS["agent-stages-building"]();
+
+/** The offer, with two steps in the chain and both prices on it. */
+const OFFERED = E2E_AGENT_STAGE_SCENARIOS["agent-stages-chain-offered"]();
+
 export function StudyBlock({ study }: { study: Study }) {
   const panel =
     study.skin === "glass"
@@ -626,8 +636,9 @@ export function StudyBlock({ study }: { study: Study }) {
         <Context>
           The last of the send-you-away controls, and the only one that was
           <em> honest</em> as a link: there was genuinely nothing here to look at. A block changes
-          that. ChangeGates is the component the Agent route mounts, and it renders the whole review
-          gate from one card — so the change is read where it was announced.
+          that. <code>ReviewBlock</code> mounts the Agent&rsquo;s own stage for the stage the change
+          is on — so the change is read where it was announced, on the screen the route would have
+          given it.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble tone="waiting" index={0}>
@@ -640,6 +651,28 @@ export function StudyBlock({ study }: { study: Study }) {
             <ReviewBlock
               projectId="project_e2e"
               change={E2E_SCENARIOS.change_awaiting_approval()}
+              planHref="/app/projects/project_e2e/plan"
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          And the state a founder actually reached on a phone: nothing previewed yet, so approval is
+          blocked on a preview and says so. The gate mounts at <code>stage=&quot;review&quot;</code>
+          , which used to filter the preview panel out — so the refusal named a step that had no
+          control anywhere on the screen. A stage is a floor now: this gate and everything it rests
+          on.
+        </Context>
+        <div
+          className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}
+          data-testid="gate-needs-preview"
+        >
+          <Bubble tone="waiting" index={0}>
+            <Line>There is a change waiting for you to look at.</Line>
+          </Bubble>
+          <RenderBlock label="The change" tone="waiting" at="4m" index={1}>
+            <ReviewBlock
+              projectId="project_e2e"
+              change={E2E_SCENARIOS.change_needs_preview()}
               planHref="/app/projects/project_e2e/plan"
             />
           </RenderBlock>
@@ -668,6 +701,126 @@ export function StudyBlock({ study }: { study: Study }) {
           to the sign-in page and takes the study with it. The fixture here is a change awaiting
           approval, which fetches on the click. Worth knowing before Nova&rsquo;s route mounts this
           for real: the blocks inherit the components&rsquo; data appetite along with their looks.
+        </Context>
+      </section>
+
+      {/* ── The offer, in the thread ─────────────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Start it here</Eyebrow>
+        <Context>
+          The last moment that sent a founder away. Nova would say <em>there is a step here I can
+          build</em> and then hand over a link to the plan — off the thread, onto a page, to press a
+          button and come back. The reason was good and it was written down: a build is two pieces
+          of work at two prices, and offering one of them in a thread would be half a decision at a
+          price nobody was shown the alternative to.
+        </Context>
+        <Context>
+          So the answer is to show both. This is the Agent&rsquo;s own ready stage in block
+          presentation, and the offer inside it is one component — the same one the plan page mounts
+          — which is what makes &ldquo;the same two prices&rdquo; a property of the code rather than
+          a thing two files agree about.
+        </Context>
+        <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`} data-testid="stage-ready-block">
+          <Bubble tone="waiting" index={0}>
+            <Line>There is a step here I can build.</Line>
+          </Bubble>
+          {/*
+            No aside naming the step. The task panel below opens with that
+            exact string as its headline — `BLOCK_SAYS_THE_DETAIL` — and the
+            thread drew both until this render put them three lines apart.
+          */}
+          <Bubble tone="waiting" tail={false} index={1}>
+            <Line>Want me to build it?</Line>
+          </Bubble>
+          <RenderBlock label="The step to build" tone="waiting" at="now" index={2}>
+            <AgentReadyStage
+              presentation="block"
+              task={OFFERED.task}
+              planHref="/e2e/action-plan-ranked"
+              repository={null}
+              liveUrl={null}
+              caption=""
+              creditEstimate={OFFERED.chainOffer?.stepCredits ?? null}
+              forecastNotes={agentReadyForecastNotes()}
+              /*
+                Stand-in buttons, for the reason the stage scenarios give: the
+                real control binds a server action and cannot be mounted in a
+                lab with no session. What a study can show is what a founder is
+                offered — two figures, both named, and the single step still
+                reachable.
+
+                Split across the two slots exactly as `agentStartControls`
+                splits them, because the split is the thing worth looking at
+                here: only the chain button belongs inside the swept pill.
+              */
+              startAction={
+                <button type="button" className="w-full rounded-full px-5 py-3">
+                  {`Build all ${OFFERED.chainOffer?.memberCount ?? 1} steps — ${OFFERED.chainOffer?.chainCredits ?? ""}`}
+                </button>
+              }
+              startBeneath={
+                <div className="flex w-full flex-col gap-2">
+                  <button type="button" className="w-full rounded-full px-5 py-3">
+                    {`Build just this step — ${OFFERED.chainOffer?.stepCredits ?? ""}`}
+                  </button>
+                  <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                    {OFFERED.chainOffer?.boundary}
+                  </p>
+                </div>
+              }
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          What the page keeps and the block drops: a radial glow, a thirty-two point heading, the
+          Agent core at hero size introducing itself, and a facts row naming the repository and the
+          live address. In a thread Nova&rsquo;s mark is already in the rail and the status row
+          above already carries the project — all of it would be said twice, larger. What survives
+          is the decision.
+        </Context>
+      </section>
+
+      {/* ── The agent at work, in the thread ─────────────────────────── */}
+      <section className="flex flex-col gap-3">
+        <Eyebrow>Watch it work</Eyebrow>
+        <Context>
+          The block used to be the polling file list and nothing else — a real piece of the build
+          stage, and the only piece, so somebody who had just spent Credits watched filenames appear
+          and could not see the run. This is the Agent&rsquo;s own build stage in block
+          presentation: the task, the core, the activity. The narrative column is gone, because
+          Nova&rsquo;s bubble says <em>Vibe is writing the change</em> one line above it and the
+          assurance bar at the foot says the rest of what that paragraph said.
+        </Context>
+        <div
+          className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}
+          data-testid="stage-build-block"
+        >
+          <Bubble open index={0}>
+            <Line>I am writing the change now. You can watch it happen.</Line>
+          </Bubble>
+          <RenderBlock label="The agent" at="now" index={1}>
+            <AgentBuildStage
+              presentation="block"
+              task={BUILDING.task}
+              live
+              core={<AgentCore state={BUILDING.core} caption={BUILDING.caption} size="compact" />}
+              activity={
+                <AgentFileActivity
+                  events={BUILDING.fileEvents}
+                  limit={4}
+                  title="Files touched"
+                  live
+                  variant="block"
+                />
+              }
+            />
+          </RenderBlock>
+        </div>
+        <Context>
+          What this study cannot show is the seam. In the product the stage arrives behind a
+          <code> Suspense</code> boundary whose fallback is the file list, so a founder sees the
+          list immediately and the run assembles around it. A fixture has the whole reading in hand,
+          so the boundary never suspends here.
         </Context>
       </section>
 

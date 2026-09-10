@@ -4,7 +4,11 @@ import { notFound } from "next/navigation";
 import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
-import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
+import {
+  AgentPreviewActions,
+  AgentReviewDecision,
+} from "@/app/app/projects/[projectId]/agent/agent-stage-actions";
+import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { novaControlLabel } from "@/modules/nova/home-view";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
@@ -162,7 +166,7 @@ import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activi
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
-import { AgentRunHistory } from "@/app/app/projects/[projectId]/agent/agent-run-history";
+import { ChangeHistoryTable } from "@/app/app/projects/[projectId]/agent/change-history-table";
 import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
 import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
@@ -220,6 +224,10 @@ import {
   projectSectionHref,
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
+import {
+  E2E_CHANGE_HISTORY,
+  E2E_CHANGE_HISTORY_MOVES,
+} from "../change-history-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -1717,6 +1725,21 @@ export default async function E2eScenarioPage({
                  * not be able to soften.
                  */
                 forecastNotes={agentReadyForecastNotes()}
+                /*
+                  Stand-in buttons, deliberately: the real control binds a
+                  server action, and what these scenarios exist to show is what
+                  a founder is offered — two prices, both named, and the single
+                  step still reachable.
+
+                  Split across the two slots the way `agentStartControls`
+                  splits them. Only the primary control may go in `startAction`:
+                  that slot clips to a pill and sweeps a highlight across it,
+                  and passing the whole group through it squeezed the decline
+                  and the boundary sentence into the same pill and cut the
+                  sentence in half — which is what the scenarios drew until a
+                  phone-width render of the same offer in Nova's thread showed
+                  it.
+                */
                 startAction={
                   <div className="flex w-full flex-col gap-3">
                     {startRefusal && (
@@ -1725,28 +1748,24 @@ export default async function E2eScenarioPage({
                         repositoryReadHref="/app/projects/project_e2e/product"
                       />
                     )}
-                    {/*
-                      Stand-in buttons, deliberately: the real control binds a
-                      server action, and what these scenarios exist to show is
-                      what a founder is offered — two prices, both named, and
-                      the single step still reachable.
-                    */}
-                    {chainOffer && (
-                      <button type="button" className="w-full rounded-full px-5 py-3">
-                        {`Build all ${chainOffer.memberCount} steps — ${chainOffer.chainCredits}`}
-                      </button>
-                    )}
                     <button type="button" className="w-full rounded-full px-5 py-3">
                       {chainOffer
-                        ? `Build just this step — ${chainOffer.stepCredits}`
+                        ? `Build all ${chainOffer.memberCount} steps — ${chainOffer.chainCredits}`
                         : "Run with Vibe"}
                     </button>
-                    {chainOffer && (
+                  </div>
+                }
+                startBeneath={
+                  chainOffer ? (
+                    <div className="flex w-full flex-col gap-2">
+                      <button type="button" className="w-full rounded-full px-5 py-3">
+                        {`Build just this step — ${chainOffer.stepCredits}`}
+                      </button>
                       <p className="text-fg-meta text-caption" data-testid="agent-chain-boundary">
                         {chainOffer.boundary}
                       </p>
-                    )}
-                  </div>
+                    </div>
+                  ) : undefined
                 }
               />
             ),
@@ -2127,41 +2146,22 @@ export default async function E2eScenarioPage({
    * slow half is still resolving, which before this could not happen at all.
    */
   /*
-   * The run list on its own (audit R29). The Agent route needs a session and a
-   * project to reach, so without this the one screen that lets a founder find
-   * an earlier run would have no browser coverage.
+   * The change history on its own (audit R29). The Agent route needs a session
+   * and a project to reach, so without this the one screen that lets a founder
+   * find an earlier change would have no browser coverage.
+   *
+   * Six rows, one per outcome worth seeing side by side: a merge that landed,
+   * a write that stopped without an answer, a change somebody said no to, one
+   * whose checks failed, one still waiting, and one whose Move is gone from
+   * the latest set — which falls back to the branch name.
    */
-  if (scenario === "agent-run-history") {
+  if (scenario === "agent-change-history") {
     return (
       <main className="mx-auto max-w-[70rem] p-8">
         {label}
-        <AgentRunHistory
-          runs={[
-            {
-              id: "run_3",
-              status: "completed",
-              startedAt: "2026-08-27T10:44:00.000Z",
-              completedAt: "2026-08-27T10:51:00.000Z",
-              changedFileCount: 4,
-              preparedChangeId: "change_3",
-            },
-            {
-              id: "run_2",
-              status: "failed",
-              startedAt: "2026-08-24T09:12:00.000Z",
-              completedAt: "2026-08-24T09:14:00.000Z",
-              changedFileCount: null,
-              preparedChangeId: null,
-            },
-            {
-              id: "run_1",
-              status: "cancelled",
-              startedAt: "2026-08-20T16:03:00.000Z",
-              completedAt: "2026-08-20T16:05:00.000Z",
-              changedFileCount: null,
-              preparedChangeId: null,
-            },
-          ]}
+        <ChangeHistoryTable
+          entries={E2E_CHANGE_HISTORY}
+          moveTitles={E2E_CHANGE_HISTORY_MOVES}
           changeHref={(id) => `/app/projects/project_e2e/agent?change=${id}`}
         />
       </main>
@@ -2433,15 +2433,63 @@ export default async function E2eScenarioPage({
     <main className="mx-auto max-w-4xl p-8">
       {label}
       {/*
-        The component the Agent route mounts, given the same card. A fixture
-        that assembled the panels itself would drift from the route the moment
-        either changed, and these scenarios exist to catch exactly that.
+        Every gate for this card, from the two compositions the product mounts.
+
+        It was `ChangeGates`, which drew all of them itself and was deleted:
+        the Agent workspace had replaced every gate in it, and the file kept
+        compiling only because this route mounted it. So every panel guarantee
+        in the suites below was being asserted against a screen no founder
+        could reach.
+
+        `AgentPreviewActions` and `AgentReviewDecision` are those screens'
+        actual contents — the same components `agent/page.tsx` puts in its
+        stage bodies and `ReviewBlock` puts in the thread. Both are mounted
+        here, with the same card, because a panel suite needs the panel on
+        screen and the product shows one stage at a time behind a rail. Which
+        stage a founder lands on is a different question and belongs to
+        `agent-stages.spec.ts`; what these scenarios pin is what each panel
+        says once it is there.
+
+        Not an assembly of panels: change either component and this route
+        changes with it, which is the drift the old comment was worried about.
       */}
-      <ChangeGates
-        projectId="project_e2e"
-        change={change}
-        planHref="/app/projects/project_e2e/plan"
-      />
+      <div
+        id={preparedChangeAnchorId(change.id)}
+        data-prepared-change-id={change.id}
+        data-testid="prepared-change"
+        className="scroll-mt-24"
+      >
+        {/*
+          The change's own sentence, as the thread carries it.
+
+          `deriveChangeProgress` writes it and `NovaFocusThread` draws it as the
+          aside beside the block — `home-view.ts` takes it straight from the
+          candidate's `headline`. It is rendered here rather than left out
+          because the surface is not the block alone: a founder meets the
+          sentence and the block together, and a fixture that dropped it would
+          make the block answer a question nobody asked.
+
+          A live region for the same reason it was one on `ChangeGates`: this
+          is the one line that changes as the change advances, and replacing
+          visible text announces nothing.
+        */}
+        <p role="status" className="text-fg mb-4 text-body font-medium">
+          {change.progress.headline}
+        </p>
+
+        <div className="flex flex-col gap-6">
+          <AgentPreviewActions
+            projectId="project_e2e"
+            change={change}
+            planHref="/app/projects/project_e2e/plan"
+          />
+          <AgentReviewDecision
+            projectId="project_e2e"
+            change={change}
+            planHref="/app/projects/project_e2e/plan"
+          />
+        </div>
+      </div>
     </main>
   );
 }
@@ -2451,11 +2499,13 @@ async function SlowPreparedChanges() {
   await new Promise((resolve) => setTimeout(resolve, 1_000));
 
   return (
-    <ChangeGates
-      projectId="project_e2e"
-      change={E2E_SCENARIOS.change_awaiting_approval()}
-      planHref="/app/projects/project_e2e/plan"
-    />
+    <div data-testid="prepared-change">
+      <AgentReviewDecision
+        projectId="project_e2e"
+        change={E2E_SCENARIOS.change_awaiting_approval()}
+        planHref="/app/projects/project_e2e/plan"
+      />
+    </div>
   );
 }
 

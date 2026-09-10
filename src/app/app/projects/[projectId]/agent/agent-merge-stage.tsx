@@ -4,6 +4,7 @@ import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
+import type { AgentStagePresentation } from "./agent-validate-stage";
 import { cn } from "@/lib/utils/cn";
 import { StandaloneLink } from "@/components/ui/text-link";
 import { MonoChip, StatusPill } from "@/components/ui/status-pill";
@@ -86,6 +87,7 @@ export function AgentMergeStage({
   backHref,
   decision,
   canMerge,
+  presentation = "page",
 }: {
   summary: MergeSummary;
   files: readonly MergeFile[];
@@ -98,6 +100,8 @@ export function AgentMergeStage({
   backHref: string;
   /** Canonical approval and merge controls for this exact artifact. */
   decision?: React.ReactNode;
+  /** See `AgentStagePresentation`. `block` drops what Nova already said. */
+  presentation?: AgentStagePresentation;
   canMerge: boolean;
 }) {
   const reduceMotion = useReducedMotion();
@@ -113,15 +117,23 @@ export function AgentMergeStage({
   return (
     <div className="flex min-w-0 flex-col gap-7" data-testid="agent-merge">
       <div className="flex flex-wrap items-start justify-between gap-5">
-        <div className="flex min-w-0 flex-col gap-2">
-          <MonoLabel className="text-mint">Stage 5 of 5</MonoLabel>
-          <h3 className="text-fg text-moment font-bold">
-            Review and merge with your GitHub repository
-          </h3>
-          <p className="text-fg-muted max-w-[52ch] text-lead leading-relaxed">
-            Review the changes and merge when you&rsquo;re ready.
-          </p>
-        </div>
+        {/*
+          Dropped in the thread: Nova's bubble says a change is waiting on a
+          decision, and *"Review the changes and merge when you're ready"* is
+          the same sentence with fewer facts in it. The mint pill beside it
+          stays either way — "Ready to merge" is state, not narration.
+        */}
+        {presentation === "page" && (
+          <div className="flex min-w-0 flex-col gap-2">
+            <MonoLabel className="text-mint">Stage 5 of 5</MonoLabel>
+            <h3 className="text-fg text-moment font-bold">
+              Review and merge with your GitHub repository
+            </h3>
+            <p className="text-fg-muted max-w-[52ch] text-lead leading-relaxed">
+              Review the changes and merge when you&rsquo;re ready.
+            </p>
+          </div>
+        )}
         {canMerge && (
           <StatusPill tone="success" className="flex-none">
             Ready to merge
@@ -343,10 +355,7 @@ export function AgentMergeStage({
               href={compareUrl}
               target="_blank"
               rel="noreferrer"
-              className={cn(
-                buttonClasses({ variant: "secondary" }),
-                "justify-center",
-              )}
+              className={cn(buttonClasses({ variant: "secondary" }), "justify-center")}
             >
               Open the comparison on GitHub
             </Link>

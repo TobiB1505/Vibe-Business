@@ -85,10 +85,8 @@ function baseChange(): Omit<
      */
     origin: {
       title: "Fix missing technical SEO foundations",
-      problem:
-        "The live site is missing canonical URL, robots.txt, a sitemap and structured data.",
-      whyNow:
-        "These are low-effort fixes that do not depend on positioning or monetization.",
+      problem: "The live site is missing canonical URL, robots.txt, a sitemap and structured data.",
+      whyNow: "These are low-effort fixes that do not depend on positioning or monetization.",
     },
     opportunityId: "3-seo-fix-missing-technical-seo-foundations",
     /** The "before" half, labelled as the live site now (ADR 0065). */
@@ -252,9 +250,7 @@ const SEO_SCOPE_NOTE = OUTCOME_PROFILE_SCOPE_NOTES.nextjs_seo_foundations_outcom
 const AGENTIC_SCOPE_NOTE = OUTCOME_PROFILE_SCOPE_NOTES.agentic_public_routes_outcome_v1;
 
 /** The check lines the agentic profile produces: one page, one line. */
-function routeCheckLines(
-  paths: Array<[string, OutcomeCheckLine["status"]]>,
-): OutcomeCheckLine[] {
+function routeCheckLines(paths: Array<[string, OutcomeCheckLine["status"]]>): OutcomeCheckLine[] {
   return paths.map(([path, status]) => ({
     checkId: `public_route_serves_page:${path}`,
     label: `${path} answers`,
@@ -292,7 +288,6 @@ function outcomeChange(outcome: OutcomeCard): PreparedChangeCard {
     businessImpact: businessImpactCard(),
   });
 }
-
 
 /**
  * Business impact fixtures (Sprint 12B §40).
@@ -388,6 +383,49 @@ export const E2E_SCENARIOS = {
    * written: without it the open form of the card would ship untested in a
    * browser, proven only by unit tests over the derivation.
    */
+  /**
+   * The state that dead-ended on a phone.
+   *
+   * `visual_and_code`, so a preview is the review; no preview started, so
+   * approval is blocked on one; and the block message names the remedy —
+   * *"Start a preview and look at the change first."* Nova's `review_change`
+   * moment mounts `ChangeGates` with `stage="review"`, which used to filter
+   * the preview panel out, so the founder read a refusal naming a step and had
+   * nothing to press anywhere on the screen.
+   *
+   * No fixture held this combination, which is why nobody saw it. It is here
+   * so `agent-stages.spec.ts` can assert the remedy is reachable from the gate
+   * that asks for it.
+   */
+  change_needs_preview: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      preview: { ...baseChange().preview, state: "ready_to_start" },
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: "approval_preview_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_preview_required,
+        canApprove: false,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      /* And the gate below it, refusing for the reason above it. */
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
   change_awaiting_approval: (): PreparedChangeCard =>
     withProgress({
       ...baseChange(),
@@ -616,7 +654,7 @@ export const E2E_SCENARIOS = {
         failureMessage: null,
         expiresAt: null,
         readyAt: null,
-        },
+      },
       review: {
         state: "not_generated",
         reviewArtifactId: null,

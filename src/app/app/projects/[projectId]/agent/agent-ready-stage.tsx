@@ -3,6 +3,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { AgentCore } from "./agent-core";
 import { AgentReadyFacts, AgentStartCta } from "./agent-start-cta";
 import { AgentTaskPanel, type AgentTask } from "./agent-task-panel";
+import type { AgentStagePresentation } from "./agent-validate-stage";
 
 /**
  * Stage one is the signature hero from the implementation target: the task is
@@ -18,9 +19,11 @@ export function AgentReadyStage({
   liveUrl,
   caption,
   startAction,
+  startBeneath,
   notice,
   creditEstimate,
   forecastNotes,
+  presentation = "page",
 }: {
   task: AgentTask | null;
   planHref: string;
@@ -29,6 +32,15 @@ export function AgentReadyStage({
   caption: string;
   /** Canonical server-backed start, present only when policy exposes it. */
   startAction?: React.ReactNode;
+  /**
+   * The rest of the offer, under the primary control and outside its sweep.
+   *
+   * `AgentStartCta` clips its slot to a pill and runs a highlight across it,
+   * so only the one primary action may go there. A chained offer's decline and
+   * its boundary sentence come through here instead — see
+   * `agentStartControls`, which is what splits them.
+   */
+  startBeneath?: React.ReactNode;
   /**
    * A refusal that is a question, rendered beside the hero rather than inside
    * the call to action.
@@ -52,7 +64,46 @@ export function AgentReadyStage({
    * client component that could reach the estimator could reach its money.
    */
   forecastNotes?: readonly string[];
+  /** See `AgentStagePresentation`. `block` drops what Nova already said. */
+  presentation?: AgentStagePresentation;
 }) {
+  if (presentation === "block") {
+    /*
+     * The offer, without the front door.
+     *
+     * Almost everything above is a page's entrance: a radial glow, a
+     * thirty-two point heading, `AgentCore` at hero size with the eyebrow
+     * *"Vibe is ready to work"* and the headline *"Vibe understands your
+     * product, code and goals"*, and a facts row naming the repository and
+     * the live address. In the thread Nova's mark is already in the rail, her
+     * bubble says the sentence, and the status row above the thread carries
+     * the project and its connection — so all of it is said twice, larger.
+     *
+     * The `task === null` branch goes too, and not for room: it cannot be
+     * reached here. This block is drawn for `execution_offered`, and that
+     * moment exists only when the resolver named a step Vibe can build.
+     *
+     * What survives is the decision: the step, and the offer with both prices
+     * on it.
+     */
+    return (
+      <div className="flex min-w-0 flex-col gap-5" data-testid="agent-ready-stage">
+        {task !== null && <AgentTaskPanel task={task} />}
+        {notice}
+        {startAction !== undefined && (
+          <AgentStartCta
+            beneath={startBeneath}
+            creditEstimate={creditEstimate}
+            forecastNotes={forecastNotes}
+            note="Vibe re-checks the current code and every safety limit before starting"
+          >
+            {startAction}
+          </AgentStartCta>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       className="relative min-w-0 overflow-visible"
@@ -101,6 +152,7 @@ export function AgentReadyStage({
           {notice}
           {(startAction !== undefined || task === null) && (
             <AgentStartCta
+              beneath={startAction ? startBeneath : null}
               creditEstimate={startAction ? creditEstimate : null}
               forecastNotes={startAction ? forecastNotes : undefined}
               note={

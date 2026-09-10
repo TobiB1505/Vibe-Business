@@ -284,19 +284,22 @@ test.describe("the merge confirmation is operable by keyboard", () => {
 
 test.describe("approval is shown beside the merge it authorizes", () => {
   /**
-   * The approval is one of the four gates a person has already been through,
-   * so on a change that is ready to merge it is folded away (UI-5 §3). Folded
-   * is not gone: the assertion opens the summary and checks the same three
-   * sentences it always did.
+   * The approval names the commit it applies to, and claims nothing beyond it.
    *
-   * What this test protects is the copy, not the fold. If the approval ever
-   * stops saying which commit it applies to, or starts claiming a merge that
-   * has not happened, this fails — which is the point.
+   * What this test protects is the copy. If the approval ever stops saying
+   * which commit it applies to, or starts claiming a merge that has not
+   * happened, this fails — which is the point.
+   *
+   * [2026-09-10] It used to open a summary first. The fold it opened —
+   * *"Checked, previewed and approved"* — lived only in `ChangeGates`, and
+   * that component was deleted: the Agent workspace had replaced every gate in
+   * it and this route was the only place still mounting it. The settled gates
+   * are not folded on the workspace, they are a stage behind the rail, so the
+   * copy is simply on screen and the click is gone. The reachability the fold
+   * was protecting is `agent-stages.spec.ts`'s subject now.
    */
   test("renders the approved commit and the boundary copy", async ({ page }) => {
     await page.goto("/e2e/merge_ready");
-
-    await page.getByText("Checked, previewed and approved").click();
 
     await expect(page.getByText("Change approved")).toBeVisible();
     await expect(page.getByText("This approval applies only to commit")).toBeVisible();
@@ -304,18 +307,29 @@ test.describe("approval is shown beside the merge it authorizes", () => {
   });
 
   /**
-   * The fold itself, asserted once so it is a decision rather than an
-   * accident: the gates behind a person are reachable, and the answers they
-   * came for — merge, outcome, business impact — never fold at all.
+   * The gates behind a person stay on screen, and the answers they came for —
+   * merge, outcome, business impact — are all reachable from here.
+   *
+   * [2026-09-10] This asserted the fold: settled gates collapsed, one click to
+   * open. The fold was `ChangeGates`' and went with it. What replaced it is
+   * stronger rather than weaker — the approval is not hidden at all — so what
+   * is asserted now is that nothing about a settled gate requires a click, and
+   * that the post-merge record is the only thing this surface folds.
    */
-  test("folds the settled gates without hiding them", async ({ page }) => {
+  test("keeps the settled gates on screen and folds only the post-merge record", async ({
+    page,
+  }) => {
     await page.goto("/e2e/merge_ready");
 
-    await expect(page.getByText("Change approved")).not.toBeVisible();
+    await expect(page.getByText("Change approved")).toBeVisible();
     await expect(mergeSection(page).getByText("Ready to merge")).toBeVisible();
 
-    await page.getByText("Checked, previewed and approved").click();
-    await expect(page.getByText("Change approved")).toBeVisible();
+    /* The one disclosure left, and it is about what happened after the merge
+       rather than about a gate somebody has to pass. */
+    const summaries = page.locator("summary");
+    for (const text of await summaries.allInnerTexts()) {
+      expect(text).toMatch(/after the merge|hide post-merge record/i);
+    }
   });
 });
 
@@ -333,9 +347,15 @@ test.describe("a change still moving shows its gates", () => {
 
     await expect(page.getByText("Ready for you to review and approve.")).toBeVisible();
 
-    // Open, not folded away — these gates are the work, not the history.
-    await expect(page.getByText("How this change got here")).toBeVisible();
-    await expect(page.getByText("Checked, previewed and approved")).not.toBeVisible();
+    /*
+     * The work, not the history.
+     *
+     * [2026-09-10] The two fold labels that used to be checked here — *"How
+     * this change got here"* and *"Checked, previewed and approved"* — existed
+     * only in `ChangeGates`, which is deleted. What the pair was asserting is
+     * that a change still moving does not bury its own gates, and the decision
+     * being on screen with no click is the direct form of that claim.
+     */
     await expect(page.getByRole("button", { name: "Approve change" })).toBeVisible();
 
     // And the disclaimers are true here, which is the case they were written
@@ -359,9 +379,12 @@ test.describe("a change still moving shows its gates", () => {
     await expect(page.getByText("Ready for you to open a preview and look.")).toBeVisible();
     await expect(page.getByText("Vibe is preparing what you need to review.")).toHaveCount(0);
 
-    // And it leads with meaning rather than with a branch name.
-    await expect(page.getByText("What this change was for")).toBeVisible();
-    await expect(page.getByText("It does not describe what the change did")).toBeVisible();
+    /* And it leads with meaning rather than with a branch name — asserted on
+       the decision surface, because this route mounts both of the product's
+       change compositions and each one carries the meaning. */
+    const decision = page.getByTestId("agent-review-decision");
+    await expect(decision.getByText("What this change was for")).toBeVisible();
+    await expect(decision.getByText("It does not describe what the change did")).toBeVisible();
 
     // The rationale heading belongs to a written, capability-owned sentence.
     // An agentic change has none, and must not borrow the stronger claim.
@@ -379,26 +402,31 @@ test.describe("a change still moving shows its gates", () => {
    * Checkability is the point of this product: a founder who wants to know
    * precisely which files moved must always be able to find out.
    */
-  test("folds the branch and changed paths away, and gives them all back on a click", async ({
-    page,
-  }) => {
+  /**
+   * Machine detail is reachable, and it is not behind a fold any more.
+   *
+   * [2026-09-10] This asserted `ChangeGates`' *"How this was built"* summary:
+   * closed by default, every path back on a click. Both halves moved. The
+   * component is deleted, and the workspace's merge stage lists the changed
+   * paths outright — `agent-stages.spec.ts` holds that assertion, together
+   * with the one that says the old built-from fold is gone from the stage that
+   * already lists files.
+   *
+   * What is left for this surface is the claim the fold was subordinating:
+   * a change still deciding shows how many files moved, and does not make a
+   * person open anything to learn that.
+   */
+  test("says how much moved without making anyone open something", async ({ page }) => {
     await page.goto("/e2e/change_agentic_review_required");
 
     const card = page.getByTestId("prepared-change").first();
-    const summary = card.locator("summary").filter({ hasText: /how this was built/i });
-    const paths = card.getByText("src/app/page.tsx", { exact: true });
+    /* The count is on the diff control itself — "Show the diff — 3 files" —
+       so a founder reads how much moved before deciding whether to read it. */
+    await expect(card).toContainText("3 files");
 
-    // Closed by default: the count is visible, the paths are not.
-    await expect(summary).toBeVisible();
-    await expect(summary).toContainText("3 files changed");
-    await expect(paths).toBeHidden();
-
-    await summary.click();
-
-    // Every path, exactly as stored. Nothing was summarised or truncated.
-    for (const path of ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"]) {
-      await expect(card.getByText(path, { exact: true })).toBeVisible();
-    }
+    /* And no fold claiming to hold the build record: the one disclosure on
+       this surface is the post-merge one. */
+    await expect(card.locator("summary").filter({ hasText: /how this was built/i })).toHaveCount(0);
   });
 
   test("an unchecked change says so and offers nothing downstream", async ({ page }) => {

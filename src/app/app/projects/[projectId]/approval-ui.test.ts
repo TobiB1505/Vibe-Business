@@ -125,9 +125,9 @@ describe("the approval panel offers approval and nothing more", () => {
 
 describe("no deploy affordance exists anywhere in the project page", () => {
   /*
-   * The panels, and only the panels. `agent/change-gates.tsx` mounts them and
-   * renders no control of its own, so `actionLabels` finds nothing there and
-   * says so rather than passing vacuously.
+   * The panels, and only the panels. `agent/agent-stage-actions.tsx` mounts
+   * them and renders no control of its own, so `actionLabels` finds nothing
+   * there and says so rather than passing vacuously.
    */
   const files = [
     "approval-panel.tsx",
@@ -158,11 +158,23 @@ describe("no deploy affordance exists anywhere in the project page", () => {
   });
 
   it("renders the gates in the order they must be passed", () => {
-    // Validation → preview → review → approval → merge. The order on screen is
-    // the order of the gates, and merge is last because it is the only one that
-    // writes somewhere a user's product runs from.
-    const section = source("agent/change-gates.tsx");
+    /*
+     * Preview → review → approval → merge → outcome. The order on screen is
+     * the order of the gates, and merge is last of the writes because it is the
+     * only one that writes somewhere a user's product runs from.
+     *
+     * [2026-09-10] Asserted against `agent/agent-stage-actions.tsx`, which is
+     * where the panels are mounted now. It was `agent/change-gates.tsx` until
+     * that component was deleted — the Agent workspace had replaced every gate
+     * in it, and the file survived only because the fixture route still
+     * mounted it. The order still travels: `AgentPreviewActions` holds the
+     * first two and `AgentReviewDecision` the rest, in this order, in this
+     * file.
+     */
+    const section = source("agent/agent-stage-actions.tsx");
+    expect(section.indexOf("<PreviewPanel")).toBeLessThan(section.indexOf("<ReviewPanel"));
     expect(section.indexOf("<ReviewPanel")).toBeLessThan(section.indexOf("<ApprovalPanel"));
     expect(section.indexOf("<ApprovalPanel")).toBeLessThan(section.indexOf("<MergePanel"));
+    expect(section.indexOf("<MergePanel")).toBeLessThan(section.indexOf("<OutcomePanel"));
   });
 });
