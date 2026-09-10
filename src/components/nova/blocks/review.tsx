@@ -1,71 +1,135 @@
-import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
+import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+import { AgentValidateStage } from "@/app/app/projects/[projectId]/agent/agent-validate-stage";
+import {
+  AgentPreviewActions,
+  AgentReviewDecision,
+} from "@/app/app/projects/[projectId]/agent/agent-stage-actions";
+import { AgentValidateAction } from "@/app/app/projects/[projectId]/agent/agent-validate-action";
+import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import { Notice } from "@/components/ui/states";
+import {
+  agentStageForChange,
+  mergeSummaryFor,
+  validationChecks,
+} from "@/modules/coding-agent/change-stage-view";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 
 /**
- * The change, reviewed in the thread.
+ * The change, on the Agent's own screen for the stage it is on.
  *
- * ## Why this one is not an ask, and not a link either
+ * ## What this replaced, and why it had to
  *
- * "Look at the change" was a navigation — the honest kind, because there was
- * genuinely nothing here to look at. A block changes that: `ChangeGates` is
- * the component the Agent route mounts, and it renders the whole review gate
- * from one card. So the change can be read where it was announced.
+ * `ChangeGates`. That component was the review surface before the Agent
+ * workspace was built, and the workspace replaced it — `agent-stage-actions.tsx`
+ * says so in its own comment. It survived in one place: here. So the thread,
+ * which is meant to be the primary surface, was the only screen in the product
+ * still rendering the superseded one, and a founder on a phone met all five
+ * gates stacked into a single column of prose.
  *
- * ## What travels, and why the whole gate has to
+ * The registry's reason for one block over five was written about that
+ * component and was true of it: *"the gate shows all of it, and it shows the
+ * same thing whichever step is currently running — so one block, not five that
+ * differ by a heading."* `AgentValidateStage`, `AgentPreviewStage` and
+ * `AgentMergeStage` do not differ by a heading. They are three screens with
+ * three different jobs, and which one a founder needs is decided by the
+ * change, not by a preference.
  *
- * I would not have put a merge control in a thread, and the reason it is
- * acceptable here is that a *button* is not what arrives. `ChangeGates` brings
- * the sequence: the status sentence, the rationale or the origin, the evidence,
- * then `ApprovalPanel`, then `MergePanel`, then the outcome — in that order,
- * each reachable only through the one above it. Its own comment says it plainly:
- * *a merge needs an approval, an approval needs a review, a review needs a
- * preview, a preview needs a validation.*
+ * ## Composition, not a second implementation
  *
- * That ordering is the rule (67–71) in component form. An approval binds to one
- * immutable identity — this change, this commit, this base, this validation
- * run — and the panels carry `preparedChangeId` and the change's own approval
- * and merge cards rather than a "latest" lookup. Lifting a merge button out of
- * that sequence would be the failure the rules describe: a yes to commit A
- * applied to commit B. Lifting the sequence itself is not.
+ * Every one of them is the component the Agent route mounts, given the same
+ * card, with the same canonical panels in its slots — `AgentPreviewActions`
+ * and `AgentReviewDecision` own the confirmations and the server actions, as
+ * they do there. `presentation="block"` drops only the narrative column: the
+ * stage number, the display heading and the paragraph restating what Nova's
+ * bubble said one line above. Change any of these components and the thread
+ * changes with them, because the thread holds no copy of them.
  *
- * So the block adds nothing and removes nothing. It is the frame, and the gate
- * is what the route already trusts.
+ * ## What it costs to read
  *
- * ## What it still does not do
- *
- * Deploy, ship or publish. There is no control after the merge, here or
- * anywhere, and `merged` means one sentence: the default branch points at the
- * approved commit and Vibe read it back (rule 74).
+ * Nothing. `validationChecks` and `mergeSummaryFor` are pure functions of the
+ * card this block already receives, and `previewChanges` is `[]` at every
+ * production call site — so the three stages need no read Nova was not already
+ * making. The two stages this block cannot render, `understand` and `build`,
+ * are about the *run* rather than the change, and their data comes from
+ * `readAgentWorkspace`, which signs review images and preflights a merge
+ * against GitHub. Those belong behind a streamed boundary, as they are on the
+ * Agent route, and they are not here yet.
  */
 export function ReviewBlock({
   projectId,
   change,
   planHref,
-  /**
-   * Which gate this moment is about.
-   *
-   * `BLOCK_FOR_MOMENT` says a change gets a review block; `GATE_STAGE` in
-   * `home-view.ts` says which gate, because a failed validation and a change
-   * ready to merge are the same object at different points and showing the
-   * approval panel for the first would be offering a decision nobody has
-   * reached.
-   */
-  stage = "review",
 }: {
   projectId: string;
   change: PreparedChangeWorkspaceItem;
   planHref: string;
-  stage?: "validate" | "review";
 }) {
+  const stage = agentStageForChange(change.progress.stage);
+  const checks = validationChecks(change);
+
+  if (stage === "validate") {
+    return (
+      <AgentValidateStage
+        presentation="block"
+        running={change.progress.stage === "validating"}
+        checks={
+          checks.length > 0 ? (
+            <AgentValidationChecks checks={checks} />
+          ) : (
+            <Notice tone="info" label="Validation checks">
+              Checks appear here when a prepared change reaches validation.
+            </Notice>
+          )
+        }
+        action={
+          <AgentValidateAction
+            projectId={projectId}
+            preparedChangeId={change.id}
+            rerun={change.validation !== null}
+            label={change.validation === null ? "Run the checks" : "Validate again"}
+          />
+        }
+      />
+    );
+  }
+
+  if (stage === "preview") {
+    return (
+      <AgentPreviewStage
+        presentation="block"
+        images={change.reviewImages}
+        /* `[]` at every production call site: the shipped stage reads the
+           frames above, and this list is a fixture-only affordance. */
+        changes={[]}
+        filesChanged={change.filePaths.length}
+        linesAdded={change.lineStats?.added}
+        linesRemoved={change.lineStats?.removed}
+        filesHref={change.compareUrl ?? undefined}
+        reviewReady={change.review.state === "ready"}
+        actions={<AgentPreviewActions projectId={projectId} change={change} />}
+      />
+    );
+  }
+
   return (
-    <ChangeGates
-      projectId={projectId}
-      change={change}
-      planHref={planHref}
-      stage={stage}
-      /* The thread says the status sentence above the block. `chrome` would
-         say it again, under it. */
-      chrome={false}
+    <AgentMergeStage
+      presentation="block"
+      summary={mergeSummaryFor(change)}
+      files={change.files.map((file) => ({
+        path: file.path,
+        ...(file.linesAdded !== null && file.linesRemoved !== null
+          ? { added: file.linesAdded, removed: file.linesRemoved }
+          : {}),
+      }))}
+      allChecksPassed={change.validation?.status === "passed"}
+      branchName={change.branchName}
+      baseBranch={change.baseBranch}
+      commitSha={change.commitSha}
+      compareUrl={change.compareUrl}
+      backHref={planHref}
+      canMerge={change.merge.canMerge}
+      decision={<AgentReviewDecision projectId={projectId} change={change} />}
     />
   );
 }

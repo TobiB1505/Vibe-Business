@@ -1,4 +1,5 @@
 import "server-only";
+import { mergeSummaryFor, validationChecks } from "./change-stage-view";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getExecutionSpecById } from "@/modules/execution-contract/store";
@@ -29,7 +30,7 @@ import { getFounderInputRequestForInterrupt } from "@/modules/founder-input/stor
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { type TimelineStep } from "./observability/timeline";
 import { runObservationFrom, type LiveFile } from "./observability/live-view";
-import type { ValidationPhaseView, ValidationSummary } from "@/modules/validation/view";
+import type { ValidationSummary } from "@/modules/validation/view";
 import { findReservationForOperation } from "@/modules/credits/store";
 import type { ChangeCost } from "@/components/system/cost-line";
 import { getAgentExecutionStatus } from "./service";
@@ -141,8 +142,7 @@ export async function readAgentWorkspace(
     selectedPreparedChangeId: string | null;
   },
 ): Promise<AgentWorkspaceView> {
-  const { projectId, userId, repositoryFullName, selectedPreparedChangeId } =
-    params;
+  const { projectId, userId, repositoryFullName, selectedPreparedChangeId } = params;
 
   const [stored, selectedChange] = await Promise.all([
     findLatestOperation(supabase, {
@@ -424,9 +424,7 @@ function stageForWorkspace(
   stages: AgentStageStep[],
   change: PreparedChangeWorkspaceItem | null,
 ): AgentStage | null {
-  const live = stages.find(
-    (step) => step.state === "active" || step.state === "paused",
-  )?.stage;
+  const live = stages.find((step) => step.state === "active" || step.state === "paused")?.stage;
   if (live) return live;
   if (change === null) return null;
 
@@ -442,21 +440,6 @@ function stageForWorkspace(
     default:
       return "review";
   }
-}
-
-function mergeSummaryFor(change: PreparedChangeWorkspaceItem | null): MergeSummary {
-  return {
-    filesChanged: change?.filePaths.length ?? 0,
-    /* Absent when preparation could not measure every file; never fake zero. */
-    ...(change?.lineStats
-      ? {
-          linesAdded: change.lineStats.added,
-          linesRemoved: change.lineStats.removed,
-        }
-      : {}),
-    tests: testVerdict(change),
-    build: buildVerdict(change),
-  };
 }
 
 /** Impact and effort are already closed enums; this only narrows their type. */
@@ -531,93 +514,6 @@ async function resolveTask(
       steps: planned.map((entry) => ({ title: entry.title, kind: entry.kind })),
     },
   };
-}
-
-
-/**
- * The sandbox's steps, as rows the screen can draw.
- *
- * `install`, `typecheck`, `test`, `build` are the steps the validator plans and
- * runs. The reference composition also drew "Linting" and "Security scan";
- * neither exists, and a tick beside a check nobody ran is the one thing a
- * safety screen must never show.
- */
-/**
- * The validation's own phases, as the founder reads them (audit R32).
- *
- * ## What was here before
- *
- * Four fixed rows — dependencies, types, tests, build — every one of them
- * reporting the run's *overall* verdict, because the card was thought to carry
- * nothing finer. Its comment said so and was honest about being coarse.
- *
- * It was not true. `change.validation` is already a `ValidationSummary` — the
- * workspace builds one for the card's own progress — and it has carried
- * per-phase results, durations, skip reasons and the source-integrity check
- * all along. The agent workspace was the only surface not reading them, so a
- * founder on the stage that decides saw four rows repeating one verdict where
- * the validation panel two clicks away showed which steps ran, which were
- * skipped, and why.
- *
- * ## The vocabularies
- *
- * A phase is `active` while it runs and `not_run` when the validation never
- * reached it. The check rows say `running` and `pending` for the same two
- * things — a difference in copy, not in meaning, so it is mapped rather than
- * reconciled. `skipped` stays `skipped`: a step that did not need to run is
- * not a step that has not run yet.
- */
-const PHASE_STATE: Record<ValidationPhaseView["state"], ValidationCheck["state"]> = {
-  passed: "passed",
-  failed: "failed",
-  active: "running",
-  pending: "pending",
-  skipped: "skipped",
-  not_run: "pending",
-  /* A step the sandbox cut off produced no verdict, which is a failure. */
-  timed_out: "failed",
-};
-
-const SKIP_REASONS: Record<string, string> = {
-  outside_depth: "not needed for this change",
-  not_configured: "your project defines no such step",
-  unsupported: "Vibe cannot run this here",
-};
-
-function validationChecks(change: PreparedChangeWorkspaceItem | null): ValidationCheck[] {
-  const run = change?.validation ?? null;
-  if (run === null) return [];
-
-  return run.phases.map((phase) => ({
-    name: phase.label,
-    detail:
-      phase.state === "skipped"
-        ? `Skipped — ${phase.skipReason ? (SKIP_REASONS[phase.skipReason] ?? "not needed here") : "not needed here"}`
-        : phase.state === "active"
-          ? phase.activeLabel
-          : phase.label,
-    state: PHASE_STATE[phase.state],
-  }));
-}
-
-/**
- * The card carries the validation run's overall status, not per-step results,
- * so tests and build report the same verdict in their own vocabulary. Claiming
- * a step-level outcome nothing can see would be worse than being honestly
- * coarse.
- */
-function testVerdict(change: PreparedChangeWorkspaceItem | null): MergeSummary["tests"] {
-  const status = change?.validation?.status ?? null;
-  if (status === "passed") return "passing";
-  if (status === "failed") return "failing";
-  return "not_run";
-}
-
-function buildVerdict(change: PreparedChangeWorkspaceItem | null): MergeSummary["build"] {
-  const status = change?.validation?.status ?? null;
-  if (status === "passed") return "successful";
-  if (status === "failed") return "failed";
-  return "not_run";
 }
 
 /**

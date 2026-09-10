@@ -358,11 +358,18 @@ function FocusSection({
         running={running}
         asides={asides}
         block={
+          /*
+            No `stage` prop any more. It carried `GATE_STAGE`'s answer, which
+            was derived from the candidate *kind* — and `review_required` and
+            `awaiting_approval` are both `review_change` to the ranking while
+            being opposite states: one needs a preview started, the other is
+            the decision itself. The block reads `change.progress.stage`, which
+            never lost the difference.
+          */
           <ReviewBlock
             projectId={projectId}
             change={data.change}
             planHref={sectionHref["action-plan"]}
-            stage={control.stage}
           />
         }
       />

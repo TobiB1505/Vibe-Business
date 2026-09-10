@@ -7,6 +7,7 @@ import { useStageNavigation } from "./agent-stage-navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
+import type { AgentStagePresentation } from "./agent-validate-stage";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -138,6 +139,7 @@ export function AgentPreviewStage({
   filesHref,
   actions,
   reviewReady = false,
+  presentation = "page",
 }: {
   images: PreviewImages | null;
   changes: readonly PreviewChange[];
@@ -149,6 +151,8 @@ export function AgentPreviewStage({
   actions?: React.ReactNode;
   /** A stored comparison exists, so the decision stage has evidence to show. */
   reviewReady?: boolean;
+  /** See `AgentStagePresentation`. `block` drops what Nova already said. */
+  presentation?: AgentStagePresentation;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -161,49 +165,78 @@ export function AgentPreviewStage({
       data-testid="agent-preview"
     >
       <div className="flex min-w-0 flex-col gap-5">
-        <div className="flex flex-col gap-2">
-          <MonoLabel className="text-mint">Stage 4 of 5</MonoLabel>
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
-            Your change is ready to preview
-          </h3>
-          <p className="text-fg-muted max-w-[46ch] text-[0.9375rem] leading-relaxed">
-            Vibe has prepared the changes below. Review what&rsquo;s new before deciding.
-          </p>
-        </div>
+        {/*
+          The narrative half, and the one Nova's thread does not need: her
+          bubble above the block already says a change is ready to look at, and
+          the block's frame names it. What survives below is the evidence — the
+          two frames, what moved, and the control that opens a preview.
+        */}
+        {presentation === "page" && (
+          <div className="flex flex-col gap-2">
+            <MonoLabel className="text-mint">Stage 4 of 5</MonoLabel>
+            <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
+              Your change is ready to preview
+            </h3>
+            <p className="text-fg-muted max-w-[46ch] text-[0.9375rem] leading-relaxed">
+              Vibe has prepared the changes below. Review what&rsquo;s new before deciding.
+            </p>
+          </div>
+        )}
 
-        <div className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-          <Frame
-            label="Before"
-            src={images?.beforeUrl ?? null}
-            route={images?.route ?? ""}
-            animate={animate}
-          />
-          <span
-            aria-hidden="true"
-            className="border-line-3 text-fg-secondary mt-9 hidden size-8 items-center justify-center self-center rounded-full border sm:flex"
-          >
-            <svg
-              viewBox="0 0 24 24"
-              width="15"
-              height="15"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={animate ? { animation: "vibe-arrow-nudge 2.2s var(--ease-vibe) infinite" } : undefined}
+        {/*
+          The comparison, and only once there is one.
+
+          On the page the two frames stand where a comparison will appear, and
+          an empty pair reads as a placeholder beside a narrative column. In
+          Nova's block there is no such column and the thread is one column
+          wide, so on a phone two empty frames were the first eight hundred
+          pixels of the block — "No capture available for this change", twice,
+          above the control that would go and capture it.
+
+          They are also premature there. The frames *are* the comparison, and a
+          comparison exists after a preview has run; drawing their outline
+          first is a picture of an absence, which is the defect this surface
+          keeps removing rather than one to add.
+        */}
+        {(presentation === "page" || images !== null) && (
+          <div className="grid items-start gap-4 sm:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+            <Frame
+              label="Before"
+              src={images?.beforeUrl ?? null}
+              route={images?.route ?? ""}
+              animate={animate}
+            />
+            <span
+              aria-hidden="true"
+              className="border-line-3 text-fg-secondary mt-9 hidden size-8 items-center justify-center self-center rounded-full border sm:flex"
             >
-              <path d="M4 12h16m-6-6 6 6-6 6" />
-            </svg>
-          </span>
-          <Frame
-            label="After (preview)"
-            src={images?.afterUrl ?? null}
-            route={images?.route ?? ""}
-            highlight
-            animate={animate}
-          />
-        </div>
+              <svg
+                viewBox="0 0 24 24"
+                width="15"
+                height="15"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                style={
+                  animate
+                    ? { animation: "vibe-arrow-nudge 2.2s var(--ease-vibe) infinite" }
+                    : undefined
+                }
+              >
+                <path d="M4 12h16m-6-6 6 6-6 6" />
+              </svg>
+            </span>
+            <Frame
+              label="After (preview)"
+              src={images?.afterUrl ?? null}
+              route={images?.route ?? ""}
+              highlight
+              animate={animate}
+            />
+          </div>
+        )}
       </div>
 
       <aside className="flex min-w-0 flex-col gap-6">

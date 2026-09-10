@@ -94,7 +94,7 @@ export type NovaHomeControl =
    * `stage` narrows that sequence to the decision this moment is actually
    * about, which is the same narrowing the Agent route does.
    */
-  | { kind: "gate"; preparedChangeId: string; stage: "validate" | "review" }
+  | { kind: "gate"; preparedChangeId: string }
   /**
    * Chosen here, from the applications Vibe found.
    *
@@ -195,25 +195,37 @@ const ELSEWHERE: Partial<Record<FocusCandidateKind, { label: string; section: No
   };
 
 /**
- * Which gate a change moment is about.
+ * Which moments are about a prepared change, and therefore decided in its gate.
  *
  * Total over the change candidates, so a sixth one fails to compile here
- * rather than quietly falling through to a link. Only two stages appear
- * because only two carry a decision: a failed validation is decided at
- * `validate`, and everything from reading the diff to verifying the outcome
- * happens under `review` — which is the same narrowing `ChangeGates` applies
- * on the Agent route, asked for by the moment instead of by the run.
+ * rather than quietly falling through to a link.
+ *
+ * ## Why this no longer carries a stage
+ *
+ * It used to: `validation_failed` mapped to `validate` and the other four to
+ * `review`, and the block was mounted with that answer. But a candidate kind
+ * cannot carry it. `review_required` and `awaiting_approval` are both
+ * `review_change` here while being opposite states — the first is blocked with
+ * `approval_preview_required`, meaning a preview is the founder's next move;
+ * the second means everything needed in order to decide is already on screen.
+ * Mapping the kind sent the first of those to the decision screen, which
+ * refused and named a step that had no control on it. That is the dead end a
+ * founder reached on a phone.
+ *
+ * `ReviewBlock` reads `change.progress.stage` instead, which is the derivation
+ * that knew the difference all along. What is left here is the only question a
+ * candidate kind can answer: whether this moment is about a change at all.
  */
-const GATE_STAGE = {
-  validation_failed: "validate",
-  merge_blocked: "review",
-  review_change: "review",
-  merge_ready: "review",
-  outcome_pending: "review",
-} as const satisfies Partial<Record<FocusCandidateKind, "validate" | "review">>;
+const GATE_CANDIDATES = {
+  validation_failed: true,
+  merge_blocked: true,
+  review_change: true,
+  merge_ready: true,
+  outcome_pending: true,
+} as const satisfies Partial<Record<FocusCandidateKind, true>>;
 
-function gateStage(kind: FocusCandidateKind): "validate" | "review" | null {
-  return kind in GATE_STAGE ? GATE_STAGE[kind as keyof typeof GATE_STAGE] : null;
+function isGateCandidate(kind: FocusCandidateKind): boolean {
+  return kind in GATE_CANDIDATES;
 }
 
 function detailFor(candidate: FocusCandidate): string | null {
@@ -246,9 +258,8 @@ function controlFor(candidate: FocusCandidate): NovaHomeControl {
   if (candidate.kind === "workspace_choice_required") return { kind: "choose" };
 
   /* A change is decided through its own gates, and the candidate names it. */
-  const stage = gateStage(candidate.kind);
-  if (stage !== null && "preparedChangeId" in candidate) {
-    return { kind: "gate", preparedChangeId: candidate.preparedChangeId, stage };
+  if (isGateCandidate(candidate.kind) && "preparedChangeId" in candidate) {
+    return { kind: "gate", preparedChangeId: candidate.preparedChangeId };
   }
 
   const option = novaCandidateOption(candidate);

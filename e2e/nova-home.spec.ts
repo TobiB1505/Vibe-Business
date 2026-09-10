@@ -22,64 +22,61 @@ const VIEWPORTS = [
  *
  * A change was waiting, the approval section said *"Start a preview and look
  * at the change first"*, and there was nothing to press anywhere on the
- * screen. `ChangeGates` matched its `stage` prop exactly, so Nova's
- * `review_change` moment — which mounts it at `stage="review"` — rendered the
- * refusal and filtered out the panel that answers it.
+ * screen. Two things were wrong and the second one subsumed the first.
  *
- * Only a browser proves this one. Every unit test passed while it shipped:
- * the copy was right, the block was mounted, the panels each worked. What was
- * wrong was which of them reached the page together.
+ * `ChangeGates` matched its `stage` prop exactly, so the moment that mounted
+ * it at `stage="review"` rendered the refusal and filtered out the panel that
+ * answers it. That is fixed — a stage is a floor there now.
+ *
+ * But the gate was also the *wrong component*: the Agent workspace replaced it,
+ * and the thread was the last surface still drawing it. Nova's block mounts the
+ * Agent's own stage screens now, chosen by `AGENT_STAGE_FOR_CHANGE` from the
+ * change's own stage — so a change whose next step is a preview is shown the
+ * preview screen and never the decision. The refusal cannot appear without its
+ * remedy because the screen that refuses is not the screen it is on.
+ *
+ * Only a browser proves this. Every unit test passed while the dead end
+ * shipped: the copy was right, the block was mounted, each panel worked. What
+ * was wrong was which of them reached the page together.
  */
-test.describe("a refusal and its remedy", () => {
+test.describe("a change that still needs a preview", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
   });
 
-  test("puts the preview control on the screen that asks for a preview", async ({ page }) => {
+  test("is shown the preview screen, with its control", async ({ page }) => {
     await page.goto("/e2e/study-block");
 
     const gate = page.locator('[data-testid="gate-needs-preview"]');
-    await expect(gate.getByText(/approval needs a preview of this exact commit/)).toBeVisible();
-
-    /*
-     * The remedy, pressable, in the same gate. Not a link away and not a
-     * sentence about it.
-     */
+    await expect(gate.locator('[data-testid="agent-preview"]')).toBeVisible();
     await expect(gate.getByRole("button", { name: "Start temporary preview" })).toBeEnabled();
   });
 
   /*
-   * And in the right order: the step comes before the decision that needs it.
-   * A control below its own refusal is a scroll a founder should not have to
-   * discover.
+   * And not the decision it cannot take. This is the assertion the dead end
+   * would fail: the approval refusal naming a step is only reachable on a
+   * screen that also carries the step, and this change is not on that screen
+   * at all.
    */
-  test("offers the step above the decision it unblocks", async ({ page }) => {
+  test("is not shown an approval it cannot give", async ({ page }) => {
     await page.goto("/e2e/study-block");
 
     const gate = page.locator('[data-testid="gate-needs-preview"]');
-    const preview = await gate
-      .getByRole("button", { name: "Start temporary preview" })
-      .boundingBox();
-    const refusal = await gate
-      .getByText(/approval needs a preview of this exact commit/)
-      .boundingBox();
-
-    expect(preview).not.toBeNull();
-    expect(refusal).not.toBeNull();
-    expect(preview!.y).toBeLessThan(refusal!.y);
+    await expect(gate.getByText(/approval needs a preview of this exact commit/)).toHaveCount(0);
+    await expect(gate.locator('[data-testid="agent-merge"]')).toHaveCount(0);
   });
 
   /*
-   * The disclosure over the gate was open and held only the refusal, because
-   * the two panels that belong in it had been filtered out. Evidence a founder
-   * opens to read "how this change got here" must contain some.
+   * The comparison *is* the two frames, and a comparison exists after a
+   * preview has run. Before one, an empty pair was the first eight hundred
+   * pixels of the block on a phone — "No capture available for this change",
+   * twice, above the control that would go and capture it.
    */
-  test("fills the record of how the change got here", async ({ page }) => {
+  test("draws no comparison before there is one", async ({ page }) => {
     await page.goto("/e2e/study-block");
 
     const gate = page.locator('[data-testid="gate-needs-preview"]');
-    await expect(gate.getByRole("heading", { name: "Safety checks" })).toBeVisible();
-    await expect(gate.getByText("All safety checks passed")).toBeVisible();
+    await expect(gate.getByText("No capture available for this change.")).toHaveCount(0);
   });
 });
 

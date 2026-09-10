@@ -286,18 +286,21 @@ describe("Nova Home view", () => {
       expect(view.primary.control.kind).toBe("gate");
       if (view.primary.control.kind === "gate") {
         expect(view.primary.control.preparedChangeId).toBe("change-1");
-        expect(view.primary.control.stage).toBe("review");
       }
       // No verb of its own. The gates carry every control this moment has.
       expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
     /*
-     * A failed validation is the one change moment decided at a different
-     * gate, and getting it wrong would show a founder the approval and merge
-     * panels for a change that has not passed its checks.
+     * A failed validation is still decided in the change's gate — the control
+     * kind says so — and *which* screen that gate draws is no longer decided
+     * here. It cannot be: `review_required` and `awaiting_approval` are one
+     * candidate kind and opposite states. `change-stage-view.test.ts` holds
+     * that mapping and the guarantee that used to live in this assertion:
+     * a change that failed its checks is never shown the approval and merge
+     * panels.
      */
-    it("opens the validation gate for a change that failed its checks", () => {
+    it("decides a failed validation through the change's own gate too", () => {
       const view = viewOf({
         changes: [
           { preparedChangeId: "change-2", stage: "validation_failed", headline: "Checks failed" },
@@ -306,7 +309,8 @@ describe("Nova Home view", () => {
 
       expect(view.primary.kind).toBe("validation_failed");
       if (view.primary.control.kind !== "gate") throw new Error("expected a gate");
-      expect(view.primary.control.stage).toBe("validate");
+      expect(view.primary.control.preparedChangeId).toBe("change-2");
+      expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
     /*
