@@ -730,13 +730,15 @@ export function StudyBlock({ study }: { study: Study }) {
           <Bubble tone="waiting" index={0}>
             <Line>There is a step here I can build.</Line>
           </Bubble>
-          <Bubble aside tail={false} index={1}>
-            <Context>Add a clear pricing section to your website</Context>
-          </Bubble>
-          <Bubble tone="waiting" tail={false} index={2}>
+          {/*
+            No aside naming the step. The task panel below opens with that
+            exact string as its headline — `BLOCK_SAYS_THE_DETAIL` — and the
+            thread drew both until this render put them three lines apart.
+          */}
+          <Bubble tone="waiting" tail={false} index={1}>
             <Line>Want me to build it?</Line>
           </Bubble>
-          <RenderBlock label="The step to build" tone="waiting" at="now" index={3}>
+          <RenderBlock label="The step to build" tone="waiting" at="now" index={2}>
             <AgentReadyStage
               presentation="block"
               task={OFFERED.task}

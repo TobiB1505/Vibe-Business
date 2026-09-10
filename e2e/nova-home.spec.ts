@@ -137,6 +137,8 @@ test.describe("the agent at work in the thread", () => {
  * action and cannot be mounted in a lab with no session, which is what the
  * stage scenarios already say.
  */
+const STEP_TITLE = "Add a clear pricing section to your website";
+
 test.describe("the offer in the thread", () => {
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -178,6 +180,29 @@ test.describe("the offer in the thread", () => {
     expect(pill).not.toBeNull();
     expect(decline).not.toBeNull();
     expect(decline!.y).toBeGreaterThanOrEqual(pill!.y + pill!.height - 1);
+  });
+
+  /*
+   * The thread said the step title three times: a grey aside from Nova, then
+   * the task panel's headline in thirty-two point type three lines below it,
+   * then the same string again as the first row of what Vibe will do.
+   *
+   * Two survive and they are different claims — this is the step, and this is
+   * one of the two things the run delivers. The aside is the one that went, by
+   * `BLOCK_SAYS_THE_DETAIL`. Three means it came back.
+   */
+  test("does not open with the sentence the panel is about to print", async ({ page }) => {
+    await page.goto("/e2e/study-block");
+
+    const block = page.locator('[data-testid="stage-ready-block"]');
+
+    /* Said inside the composed stage, where the two claims are different. */
+    await expect(
+      block.locator('[data-testid="agent-ready-stage"]').getByText(STEP_TITLE).first(),
+    ).toBeVisible();
+
+    /* And said by no bubble above it, which is where the third copy was. */
+    await expect(block.locator(`.bubble:has-text("${STEP_TITLE}")`)).toHaveCount(0);
   });
 });
 
