@@ -1,7 +1,6 @@
 import { LandingStep } from "@/components/marketing/landing-step";
 import { PlanCards, type PlanCard } from "@/components/marketing/plan-cards";
 import { Reveal } from "@/components/marketing/reveal";
-import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { CostLine } from "@/components/system/cost-line";
 import { MonoLabel } from "@/components/ui/typography";
 import {
@@ -11,7 +10,7 @@ import {
   WELCOME_CREDIT_UNITS,
 } from "@/modules/billing/catalog";
 import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
-import { creditsToUnits, formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
+import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
 import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
 /**
@@ -29,10 +28,11 @@ import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
  * question they *do* have is what a month costs, and it has a two-digit euro
  * answer.
  *
- * So the euros lead. The Credit prices stay, underneath and quieter, because
- * "1,000 Credits" is meaningless without them — and between the two sits the
- * line that connects them: what a month's grant actually buys, divided out of
- * the same rate card rather than estimated.
+ * So the euros lead, and the per-action Credit prices are not on this page at
+ * all — a visitor weighing €19 does not need a second currency to learn first.
+ * What a grant is worth still has to be sayable, so one line says it in *work*
+ * rather than in Credits: five agent runs, or twenty-eight audits, divided out
+ * of the same rate card the reservation uses rather than estimated.
  *
  * ## Nothing here is typed
  *
@@ -42,11 +42,6 @@ import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
  * page cannot advertise a price the product has stopped charging, and the
  * "five agent runs" line cannot drift from the rate card because it is a
  * division performed on it.
- *
- * The free operation renders **Included** rather than a zero: a free operation
- * names itself, because printing "0 Credits" beside a control invites the
- * question of when it might stop being zero (BILLING CORE-2 §56). The page
- * inherits that decision rather than re-taking it.
  *
  * ## The year
  *
@@ -86,20 +81,6 @@ const ANNUAL_NOTES = [
   "The whole year's Credits, at the start",
   "One Credit ledger",
   "Top up when a year runs short",
-];
-
-/** What each priced action costs, kept for after the euros. */
-const ACTIONS: {
-  label: string;
-  operation: RetailOperationKind;
-  pricingClass?: ExecutionPricingClass;
-}[] = [
-  { label: "Product Scan", operation: "product_understanding" },
-  { label: "Deep Scan", operation: "deep_scan" },
-  { label: "Business Brain audit", operation: "business_audit" },
-  { label: "The Moves, ranked", operation: "opportunity_generation" },
-  { label: "A plan for a Move", operation: "action_plan" },
-  { label: "An agent run", operation: "agent_execution", pricingClass: "standard" },
 ];
 
 /** Twelve, so the saving on the switch is a subtraction rather than a claim. */
@@ -200,9 +181,10 @@ export function LandingPrice() {
       </Reveal>
 
       {/*
-        The line between the two halves: what a grant is, in work. A division on
-        the rate card below rather than a claim about it, so the two cannot come
-        to disagree.
+        What a grant is, in work. A division on the rate card rather than a
+        claim about it, so the sentence cannot come to disagree with what the
+        product actually charges — and it is what makes "1,000 Credits" mean
+        something now that the per-action prices are not printed underneath it.
 
         "Every 1,000 Credits" rather than "1,000 Credits is", because the cards
         above it say 1,000 under a month and 12,000 under a year — a rate reads
@@ -214,59 +196,39 @@ export function LandingPrice() {
           <p className="text-fg-prose mx-auto max-w-[62ch] text-center leading-relaxed">
             Every {formatCreditsForDisplay(builder.monthlyCreditUnits)} Credits is{" "}
             <span className="text-fg">{runs} agent runs</span> at the standard class, or{" "}
-            <span className="text-fg">{audits} Business Brain audits</span>, or any mix of the work
-            below.
+            <span className="text-fg">{audits} Business Brain audits</span>, or any mix of the two.
           </p>
         </Reveal>
       )}
 
       <Reveal from="up" delay={0.16} className="mt-12">
-        <div className="border-line-2 rounded-card mx-auto w-full max-w-3xl border p-6">
-          <MonoLabel as="h3" className="text-fg-meta mb-5 block">
-            What each thing costs
+        <div className="border-line-2 rounded-card mx-auto flex w-full max-w-3xl flex-col gap-3 border p-6">
+          <MonoLabel as="h3" className="text-fg-meta mb-2 block">
+            What cannot happen to your balance
           </MonoLabel>
 
-          <ul className="grid gap-x-10 gap-y-3 sm:grid-cols-2">
-            {ACTIONS.map(({ label, operation, pricingClass }) => (
-              <li
-                key={operation}
-                className="border-line-1 flex items-baseline justify-between gap-6 border-b pb-3 last:border-b-0"
-              >
-                <span className="text-fg-body text-body">{label}</span>
-                <CostDisclosure
-                  operation={operation}
-                  pricingClass={pricingClass ?? null}
-                  className="shrink-0"
-                />
-              </li>
-            ))}
-          </ul>
+          {/*
+            The product's own component, in the state a founder does not expect.
+            It is the one worth the block: a run that reserved Credits and then
+            failed returned them, and saying so is the difference between a hold
+            and a charge.
+          */}
+          <CostLine cost={{ kind: "released" }} />
 
-          <div className="border-line-2 mt-6 flex flex-col gap-3 border-t pt-5">
-            {/*
-              The product's own component, in the two states a founder does not
-              expect. The second is the one worth the block: a run that reserved
-              Credits and then failed returned them, and saying so is the
-              difference between a hold and a charge.
-            */}
-            <CostLine cost={{ kind: "settled", credits: creditsToUnits(200) }} />
-            <CostLine cost={{ kind: "released" }} />
+          <p className="text-fg-muted max-w-[62ch] text-caption leading-relaxed">
+            And if Vibe cannot tell whether a paid call went through, it resolves that as a failure
+            rather than risking a second charge. Nothing spends on a schedule either — Vibe never
+            starts a paid refresh on your behalf; blocked work says what needs refreshing and waits
+            for you.
+          </p>
 
-            <p className="text-fg-muted max-w-[62ch] text-caption leading-relaxed">
-              And if Vibe cannot tell whether a paid call went through, it resolves that as a
-              failure rather than risking a second charge. Nothing spends on a schedule either —
-              Vibe never starts a paid refresh on your behalf; blocked work says what needs
-              refreshing and waits for you.
+          {packs[0] && (
+            <p className="text-fg-muted text-caption leading-relaxed">
+              A month running short is not a plan change: Credit packs start at{" "}
+              {packs[0].credits.toLocaleString("en-GB")} for {euros(packs[0].priceCents)}, and
+              bought Credits do not expire with the month.
             </p>
-
-            {packs[0] && (
-              <p className="text-fg-muted text-caption leading-relaxed">
-                A month running short is not a plan change: Credit packs start at{" "}
-                {packs[0].credits.toLocaleString("en-GB")} for {euros(packs[0].priceCents)}, and
-                bought Credits do not expire with the month.
-              </p>
-            )}
-          </div>
+          )}
         </div>
       </Reveal>
     </LandingStep>

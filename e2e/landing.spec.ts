@@ -1257,21 +1257,28 @@ test.describe("what a month costs", () => {
     await expect(pricing).toContainText("28 Business Brain audits");
   });
 
-  test("keeps the Credit prices, resolved rather than typed", async ({ page }) => {
+  test("keeps the per-action Credit prices off the page", async ({ page }) => {
     await page.goto("/");
     const pricing = page.locator("#pricing");
     await pricing.scrollIntoViewIfNeeded();
 
-    const rows = pricing.locator("ul > li").filter({ hasText: /Credits|Included/ });
-    await expect(rows.filter({ hasText: /\d+ Credits/ })).toHaveCount(5);
-    await expect(rows.filter({ hasText: "Included" })).toHaveCount(1);
-
     /*
-      `\b` and not a bare `0`: this block carries 20-, 200- and 25-Credit
-      prices, and `/0 Credits/` matches inside "200 Credits" — measured, as a
-      failing test on a page with nothing wrong with it.
+      A visitor weighing €19 does not need a second currency to learn first, so
+      the rate card is not printed here — no "35 Credits" beside an audit, no
+      "Included" beside the scan. What a grant is worth is said in work instead,
+      one line, and that line is the only place a Credit figure and a number of
+      runs appear together.
     */
-    await expect(pricing).not.toContainText(/\b0 Credits/);
+    const text = await pricing.innerText();
+    const creditFigures = text.match(/\b[\d,]+ Credits\b/g) ?? [];
+
+    // The plan grants, and the one line that translates them. Nothing priced.
+    expect(creditFigures.length).toBeGreaterThan(0);
+    expect(pricing).not.toBeNull();
+    await expect(pricing).not.toContainText("35 Credits");
+    await expect(pricing).not.toContainText("25 Credits");
+    await expect(pricing).not.toContainText("200 Credits");
+    await expect(pricing).not.toContainText("Included");
   });
 
   test("answers the money question a price list does not", async ({ page }) => {
@@ -1285,8 +1292,8 @@ test.describe("what a month costs", () => {
       otherwise assume the worst about.
     */
     const lines = pricing.getByTestId("cost-line");
-    await expect(lines).toHaveCount(2);
-    await expect(lines.filter({ hasText: /nothing was charged/i })).toHaveCount(1);
+    await expect(lines).toHaveCount(1);
+    await expect(lines).toContainText(/nothing was charged/i);
 
     // Rule 50 and rule 60, in the words a founder cares about.
     await expect(pricing).toContainText(
