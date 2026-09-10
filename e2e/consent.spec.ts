@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { expectNoHorizontalOverflow } from "./support/overflow";
+import { OPTIONAL_CATEGORIES } from "../src/modules/consent/categories";
+import { CONSENT_VERSION } from "../src/modules/consent/record";
 
 /**
  * Cookies: what is asked, and what is actually loaded (UI-23).
@@ -230,5 +232,43 @@ test.describe("changing your mind, in Settings", () => {
     await page.evaluate(() => document.fonts.ready);
 
     await expectNoHorizontalOverflow(page);
+  });
+});
+
+/**
+ * And the banner is not in the way of the other eight hundred tests.
+ *
+ * `playwright.config.ts` ships a refusing consent record in `storageState`, so
+ * every spec but this one starts with the question already answered. That is
+ * deliberate — a banner fixed to the bottom of the screen is not a fixture
+ * every unrelated test should have to reason about — but it used to be a
+ * *literal string*, `"v1.000.1757246400"`, and that string is only an answer
+ * while `CONSENT_VERSION` is 1 and there are exactly three optional
+ * categories.
+ *
+ * `record.ts` says outright to raise the version when the list gains something
+ * loaded. The first person to do that would have handed the whole suite a
+ * banner back, and on a phone that banner lands on the tab bar and intercepts
+ * every tap on the navigation (UI-35). The config builds the value with
+ * `encodeConsent` now; this is what says so out loud rather than trusting it.
+ */
+test.describe("the banner stays out of every other spec", () => {
+  test("is already answered on an ordinary screen", async ({ page }) => {
+    // No `clearCookies` — this is the state the rest of the suite runs in.
+    await page.goto("/e2e/account-repositories");
+    await page.evaluate(() => document.fonts.ready);
+
+    await expect(page.getByTestId("consent-banner")).toHaveCount(0);
+
+    /*
+      And it is answered for *this* version of the list. A record from an
+      older version is not a decision — the product asks again — so a cookie
+      that parses but is stale would put the banner back on every screen.
+    */
+    const cookie = await consentCookie(page);
+    expect(cookie, "the suite's consent record is missing").toBeDefined();
+    expect(cookie!.startsWith(`v${CONSENT_VERSION}.`)).toBe(true);
+    // One digit per optional category, all refused.
+    expect(cookie!.split(".")[1]).toBe("0".repeat(OPTIONAL_CATEGORIES.length));
   });
 });

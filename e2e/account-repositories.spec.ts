@@ -49,12 +49,24 @@ test.describe("Repositories", () => {
     await expect(page.getByRole("radio", { name: "Private" })).toBeChecked();
     await expect(page).toHaveURL(/visibility=private/);
 
-    // And the focus is drawn on something a sighted keyboard user can see —
-    // the input itself is 1px and clipped, so the ring has to be on the pill.
-    const ring = await page
-      .getByRole("radio", { name: "Private" })
-      .evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow);
-    expect(ring).toMatch(/rgba?\(0, 229, 160/);
+    /*
+      And the focus is drawn on something a sighted keyboard user can see —
+      the input itself is 1px and clipped, so the ring has to be on the pill.
+
+      Polled, not sampled. The pill carries `transition-interactive`, which
+      animates `box-shadow` over 150ms, so a single read immediately after the
+      keypress can catch the ring at its transparent start. That read passed
+      for as long as the suite ran v1 and began failing when it moved to v2
+      (UI-37) — not because the ring broke, but because the same race landed on
+      the other side. The claim is about where the ring ends up.
+    */
+    await expect
+      .poll(() =>
+        page
+          .getByRole("radio", { name: "Private" })
+          .evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow),
+      )
+      .toMatch(/rgba?\(0, 229, 160/);
   });
 
   test("paginates the bounded repository ledger", async ({ page }) => {

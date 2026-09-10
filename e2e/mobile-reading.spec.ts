@@ -31,36 +31,20 @@ const FIXED = [
 const FLOOR = 200;
 
 /**
- * The palette the design work is being done in, forced per test.
+ * A note about the palette, because this file is where it was found.
  *
- * This matters more than it looks. The suite's server sets no `VIBE_PALETTE`,
- * so every spec runs **v1** — and the five-pixel column that started this work
- * only happens in **v2**: measured on the same screen, at the same width, on
- * the same build, v1 gives that paragraph 256px and v2 gives it five.
+ * The suite's server now runs `VIBE_PALETTE=v2` — the design being shipped.
+ * It did not, and that is why the first version of this guard passed its own
+ * mutation: the five-pixel column only happens in v2, and measured on the same
+ * screen at the same width on the same build, v1 gives that paragraph 256px.
  *
- * So a guard written the obvious way would have run in the palette where the
- * defect does not exist, passed forever, and been useless. It is the same
- * shape as the consent cookie in UI-35: a fixture that makes the suite
- * deterministic also makes one surface invisible to it.
- *
- * `localStorage` rather than an environment variable, because that is the
- * override the product already has — the blocking script in `layout.tsx` reads
- * this key before first paint.
+ * There is no per-test override here any more. Each test asserts the palette
+ * instead, so a server config that drifts back to v1 fails loudly rather than
+ * quietly measuring the product that is being replaced.
  */
-const usePaletteV2 = () =>
-  test.beforeEach(async ({ page }) => {
-    await page.addInitScript(() => {
-      try {
-        localStorage.setItem("vibe-palette", "v2");
-      } catch {
-        /* A private window throws; the deployment palette is then the test. */
-      }
-    });
-  });
 
 test.describe("prose has room to be read", () => {
   test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
-  usePaletteV2();
 
   for (const screen of FIXED) {
     test(`no sentence is squeezed on ${screen}`, async ({ page }) => {
@@ -68,8 +52,8 @@ test.describe("prose has room to be read", () => {
       await page.evaluate(() => document.fonts.ready);
 
       /*
-        The palette has to have taken, or this test is measuring the one place
-        the defect is not.
+        The server has to be serving v2, or this test is measuring the one
+        palette the defect is not in.
       */
       await expect
         .poll(() => page.evaluate(() => document.documentElement.dataset.vibe))
@@ -111,7 +95,6 @@ test.describe("prose has room to be read", () => {
 
 test.describe("and the desktop is not paying for it", () => {
   test.use({ viewport: { width: 1440, height: 900 } });
-  usePaletteV2();
 
   /*
    * Every one of these was changed with a `max-sm:` and nothing else, and this
