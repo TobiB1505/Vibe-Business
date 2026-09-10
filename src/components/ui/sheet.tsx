@@ -105,7 +105,13 @@ export function Sheet({
         if (event.target === ref.current) onClose();
       }}
       className={cn(
-        "bg-surface-4 border-line-4 text-fg-body max-h-dvh border p-0 shadow-card backdrop-blur-xl",
+        // `vibe-overlay` is inert in v1 and is where `theme-v2.css` gives the
+        // sheet its material. The blur is not written here for the same reason
+        // the card no longer writes one: a utility hard-codes a number the
+        // palette is supposed to own, and `--glass-blur` then says something
+        // the rendered page contradicts. It comes from the hook.
+        "vibe-overlay",
+        "bg-surface-4 border-line-4 text-fg-body max-h-dvh border p-0 shadow-card",
         "backdrop:bg-ground/70 backdrop:backdrop-blur-sm",
         "motion-safe:transition-interactive open:motion-safe:animate-none",
         SIDE_CLASSES[side],

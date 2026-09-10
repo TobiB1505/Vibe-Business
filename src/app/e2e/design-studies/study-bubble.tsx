@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { statusForCandidate } from "@/components/system/status-vocabulary";
-import { creditsToUnits } from "@/modules/credits/units";
 import { deriveNovaFocus, type FocusCandidateKind, type NovaFocusFacts } from "@/modules/nova/focus";
 import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
 import { buildNovaHomeView } from "@/modules/nova/home-view";
@@ -40,9 +39,6 @@ import type { Study } from "./studies";
  *   same column, because a container that looks right at one length and wrong
  *   at another is not finished.
  */
-
-/** The credits shown against a Move here. A fixture, like every other value. */
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 function moment(kind: FocusCandidateKind) {
   const entry = buildNovaHomeView(deriveNovaFocus(MOMENT_FACTS[kind])).primary;
@@ -217,7 +213,6 @@ function Thread() {
                 key={option.actionId}
                 label={option.label}
                 operation={option.price}
-                balance={STUDY_BALANCE}
               />
             ))}
           </div>
@@ -382,7 +377,7 @@ export function StudyBubble({ study }: { study: Study }) {
             <Line>Re-run the audit against what changed?</Line>
           </Bubble>
           <div className="max-w-[26rem]">
-            <Move label="Run the audit" operation="business_audit" balance={STUDY_BALANCE} />
+            <Move label="Run the audit" operation="business_audit" />
           </div>
         </div>
       </section>

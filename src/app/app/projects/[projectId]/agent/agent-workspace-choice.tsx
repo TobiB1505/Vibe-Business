@@ -54,11 +54,11 @@ export function AgentWorkspaceChoice({
             key={candidate.workspaceRoot}
             data-testid="agent-workspace-candidate"
             data-chosen={candidate.workspaceRoot === chosen ? "true" : undefined}
-            className="border-edge flex items-center justify-between gap-4 rounded-md border px-3 py-2"
+            className="border-edge flex items-center justify-between gap-4 rounded-inset border px-3 py-2"
           >
             <div className="min-w-0">
-              <p className="text-fg font-mono text-sm">{candidate.workspaceRoot}</p>
-              <p className="text-fg-prose text-xs">
+              <p className="text-fg font-mono text-body">{candidate.workspaceRoot}</p>
+              <p className="text-fg-prose text-caption">
                 {[candidate.packageManager, ...candidate.frameworks].join(" · ")}
               </p>
             </div>

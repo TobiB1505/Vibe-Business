@@ -59,8 +59,9 @@ async function waitForHydration(page: Page, testId: string): Promise<void> {
     const key = Object.keys(form).find((candidate) => candidate.startsWith("__reactProps$"));
     if (!key) return false;
 
-    return typeof (form as unknown as Record<string, { action?: unknown }>)[key].action ===
-      "function";
+    return (
+      typeof (form as unknown as Record<string, { action?: unknown }>)[key].action === "function"
+    );
   }, testId);
 }
 
@@ -108,8 +109,8 @@ test.describe("the login screen at rest", () => {
     await expect(email).toBeEnabled();
 
     await expect(page.getByLabel("Email address")).toBeEnabled();
-    await expect(page.getByLabel("Password")).toBeEnabled();
-    await expect(page.getByRole("link", { name: "Forgot password?" })).toBeVisible();
+    await expect(page.getByLabel("Password", { exact: true })).toBeEnabled();
+    await expect(page.getByRole("link", { name: "Forgot it?" })).toBeVisible();
   });
 
   test("shows no error before anything has been attempted", async ({ page }) => {
@@ -127,7 +128,7 @@ test.describe("submitting the email form", () => {
     await holdSubmission(page);
 
     await page.getByLabel("Email address").fill("user@example.com");
-    await page.getByLabel("Password").fill("hunter22");
+    await page.getByLabel("Password", { exact: true }).fill("hunter22");
     await waitForHydration(page, "email-signin");
     await page.getByTestId("email-signin").click();
 
@@ -141,12 +142,12 @@ test.describe("submitting the email form", () => {
     await page.goto("/login");
 
     await page.getByLabel("Email address").fill("user@example.com");
-    await page.getByLabel("Password").fill("hunter22");
+    await page.getByLabel("Password", { exact: true }).fill("hunter22");
     await page.getByTestId("email-signin").click();
 
-    await expect(
-      page.getByText("We couldn't reach the server. Please try again."),
-    ).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByText("We couldn't reach the server. Please try again.")).toBeVisible({
+      timeout: 12_000,
+    });
 
     // Never the provider's own wording.
     await expect(page.getByText(/AuthRetryableFetchError|ENOTFOUND|fetch failed/)).toHaveCount(0);
@@ -156,12 +157,12 @@ test.describe("submitting the email form", () => {
     await page.goto("/login");
 
     await page.getByLabel("Email address").fill("user@example.com");
-    await page.getByLabel("Password").fill("hunter22");
+    await page.getByLabel("Password", { exact: true }).fill("hunter22");
     await page.getByTestId("email-signin").click();
 
-    await expect(
-      page.getByText("We couldn't reach the server. Please try again."),
-    ).toBeVisible({ timeout: 12_000 });
+    await expect(page.getByText("We couldn't reach the server. Please try again.")).toBeVisible({
+      timeout: 12_000,
+    });
 
     await expect(page.getByTestId("email-signin")).toBeEnabled();
     await expect(page.getByTestId("google-signin")).toBeEnabled();
@@ -226,9 +227,7 @@ test.describe("starting Google sign-in", () => {
       page.getByTestId("google-signin").click(),
     ]);
 
-    const returnTo = new URL(
-      new URL(request.url()).searchParams.get("redirect_to") as string,
-    );
+    const returnTo = new URL(new URL(request.url()).searchParams.get("redirect_to") as string);
     expect(returnTo.searchParams.get("next")).toBe("/app/action-plan/123");
   });
 
@@ -290,9 +289,7 @@ test.describe("the guard on /app", () => {
     await page.goto("/app/action-plan/123");
 
     await expect(page).toHaveURL("/login?next=%2Fapp%2Faction-plan%2F123");
-    await expect(page.locator('input[name="next"]').first()).toHaveValue(
-      "/app/action-plan/123",
-    );
+    await expect(page.locator('input[name="next"]').first()).toHaveValue("/app/action-plan/123");
   });
 
   test("never shows a frame of the protected page first", async ({ page }) => {
@@ -314,15 +311,13 @@ test.describe("the guard on /app", () => {
 test.describe("password recovery", () => {
   test("offers a way to ask for a link", async ({ page }) => {
     await page.goto("/login");
-    await page.getByRole("link", { name: "Forgot password?" }).click();
+    await page.getByRole("link", { name: "Forgot it?" }).click();
 
     await expect(page).toHaveURL("/forgot-password");
     await expect(page.getByTestId("send-reset-link")).toBeEnabled();
   });
 
-  test("disables the button while sending, so it cannot be double-submitted", async ({
-    page,
-  }) => {
+  test("disables the button while sending, so it cannot be double-submitted", async ({ page }) => {
     await page.goto("/forgot-password");
 
     /*
@@ -388,12 +383,199 @@ test.describe("public pages stay public", () => {
     // well. What is being asserted is that an unauthenticated visitor reaches
     // the page at all — not how many ways in it offers.
     await expect(
-      page.getByRole("main").getByRole("link", { name: "Start with your GitHub repo" }).first(),
+      page.getByRole("main").getByRole("link", { name: "Start with GitHub" }).first(),
     ).toBeVisible();
   });
 
   test("signup does not require a session", async ({ page }) => {
     await page.goto("/signup");
     await expect(page.getByRole("button", { name: "Create account" })).toBeVisible();
+  });
+});
+
+test.describe("the four screens are pages", () => {
+  const SCREENS = ["/login", "/signup", "/forgot-password"] as const;
+
+  /**
+   * Measured before the fix: `document.querySelector("main")` was null on all
+   * four auth routes. `AuthShell` rendered two `div`s, so a reader skipping to
+   * the content had nowhere to skip to — on the four screens a stranger meets
+   * first.
+   */
+  for (const screen of SCREENS) {
+    test(`${screen} has one main landmark`, async ({ page }) => {
+      await page.goto(screen);
+      await expect(page.getByRole("main")).toHaveCount(1);
+      // The decorative half disappears below `lg`; the form is the page.
+      await expect(page.getByRole("main")).toContainText(/Sign in|Create account|Reset your/);
+    });
+  }
+
+  /**
+   * The browser's own check and the server's refusal are one number.
+   *
+   * The hint said eight, the input said six, and the server refused under
+   * eight — so a seven-character password passed the field that then reported
+   * it as the problem. This reads the attribute the browser actually enforces.
+   */
+  test("asks for the password length the server will accept", async ({ page }) => {
+    await page.goto("/signup");
+
+    const password = page.getByLabel("Password", { exact: true });
+    await expect(password).toHaveAttribute("minlength", "8");
+    await expect(page.getByText("At least 8 characters")).toBeVisible();
+  });
+
+  /**
+   * The disagreement is gone end to end.
+   *
+   * A seven-character password used to pass the browser, reach the server, and
+   * come back rejected by the field the browser had just approved. Now the
+   * browser refuses it — which is why there is no server error left to
+   * assert here, and why `field.test.ts` is where the announcement is guarded.
+   */
+  test("refuses a short password in the browser, before anything is sent", async ({ page }) => {
+    await page.goto("/signup");
+    await page.getByLabel("Email address").fill("someone@example.com");
+    await page.getByLabel("Password", { exact: true }).fill("hunter7");
+    await waitForHydration(page, "email-signup");
+    await page.getByTestId("email-signup").click();
+
+    const state = await page
+      .getByLabel("Password", { exact: true })
+      .evaluate((node: HTMLInputElement) => ({
+        valid: node.validity.valid,
+        tooShort: node.validity.tooShort,
+      }));
+
+    expect(state.tooShort, "seven characters reached the server again").toBe(true);
+    expect(state.valid).toBe(false);
+    // And the page did not navigate or report anything of its own.
+    await expect(page).toHaveURL(/\/signup$/);
+  });
+});
+
+test.describe("the screen a stranger meets", () => {
+  /**
+   * The form is not in a card (UI-19).
+   *
+   * It sat in a raised `VibeCard`, in a column that is already the only thing
+   * on its half of the screen. A card says "this part, not the rest"; where
+   * there is no rest it is a box drawn around the only content.
+   */
+  test("puts the form on the ground rather than in a box", async ({ page }) => {
+    await page.goto("/login");
+
+    const raised = await page
+      .getByTestId("email-signin")
+      .evaluate((node) => !!node.closest(".vibe-surface-card"));
+    expect(raised, "the form is back inside a card").toBe(false);
+  });
+
+  /**
+   * "Am I on the right screen" is asked before the first field, not after the
+   * last. This link used to sit below the submit button, so somebody who meant
+   * to create an account filled in an email and a password first.
+   */
+  test("offers the other screen above the first field", async ({ page }) => {
+    await page.goto("/login");
+
+    const other = (await page.getByRole("link", { name: "Create one" }).boundingBox())!;
+    const email = (await page.getByLabel("Email address").boundingBox())!;
+    expect(other.y).toBeLessThan(email.y);
+  });
+
+  /**
+   * Somebody who cannot remember their password knows it while looking at the
+   * field, not after failing. It used to be the last thing under the form.
+   */
+  test("puts the recovery link beside the password label", async ({ page }) => {
+    await page.goto("/login");
+
+    const forgot = (await page.getByRole("link", { name: "Forgot it?" }).boundingBox())!;
+    const field = (await page.getByLabel("Password", { exact: true }).boundingBox())!;
+
+    // Above the input, on the label's own line rather than below the form.
+    expect(forgot.y).toBeLessThan(field.y);
+    expect(field.y - forgot.y).toBeLessThan(40);
+  });
+
+  /**
+   * A password you can check (UI-19).
+   *
+   * Eight characters minimum and no way to see what was typed is a real
+   * failure rate on a phone, and on sign-in a typo is indistinguishable from
+   * the wrong password. It must never start revealed: a password on screen at
+   * first paint is a password in a screenshot and in a screen share.
+   */
+  test("reveals the password only when asked", async ({ page }) => {
+    await page.goto("/signup");
+
+    const password = page.getByLabel("Password", { exact: true });
+    await password.fill("correcthorse");
+    await expect(password).toHaveAttribute("type", "password");
+
+    const toggle = page.getByTestId("password-reveal");
+    await expect(toggle).toHaveAttribute("aria-label", "Show password");
+
+    await toggle.click();
+    await expect(password).toHaveAttribute("type", "text");
+    await expect(toggle).toHaveAttribute("aria-label", "Hide password");
+    // The value survives the switch, or the reveal is a reset.
+    await expect(password).toHaveValue("correcthorse");
+
+    await toggle.click();
+    await expect(password).toHaveAttribute("type", "password");
+  });
+
+  /**
+   * Both providers, each carrying its own mark (UI-20).
+   *
+   * GitHub was behind `VIBE_GITHUB_AUTH` while the Supabase provider was not
+   * enabled. It is enabled, and Vibe runs on one Supabase project, so there is
+   * no deployment where the offer differs — and the flag is gone rather than
+   * pinned to one value.
+   */
+  test("offers both providers, each with its own mark", async ({ page }) => {
+    await page.goto("/login");
+
+    for (const id of ["google-signin", "github-signin"]) {
+      const button = page.getByTestId(id);
+      await expect(button).toBeVisible();
+      await expect(button).toBeEnabled();
+      // The mark is drawn, not described: the button already names the
+      // provider, so a second accessible name would say it twice.
+      expect(await button.locator("svg").count(), `${id} has no mark`).toBe(1);
+    }
+
+    // Google's is the published four-colour "G". A monochrome stand-in is a
+    // different mark, and its own branding guidance forbids one.
+    const fills = await page
+      .getByTestId("google-signin")
+      .locator("svg path")
+      .evaluateAll((nodes) => nodes.map((n) => n.getAttribute("fill")));
+    expect(new Set(fills).size).toBe(4);
+  });
+
+  /**
+   * One centred column, not a form beside an empty half (UI-20).
+   *
+   * The split screen carried two short lines at the foot of a panel that was
+   * otherwise empty — about 700px of nothing at 1440, which reads as a hole
+   * rather than as material.
+   */
+  test("centres one column instead of leaving half the screen empty", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto("/login");
+
+    const main = (await page.locator("main").boundingBox())!;
+    const form = (await page.getByTestId("email-signin").boundingBox())!;
+
+    // The column sits on the page's centre line, within a few pixels.
+    const formCentre = form.x + form.width / 2;
+    expect(Math.abs(formCentre - 720)).toBeLessThan(8);
+
+    // And it is a column, not a half: `main` spans the page.
+    expect(main.width).toBeGreaterThan(1400);
   });
 });

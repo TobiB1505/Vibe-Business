@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { Avatar } from "@/components/ui/avatar";
-import { WalletChip } from "@/components/system/wallet-chip";
+import { Wallet } from "@/components/system/wallet";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
@@ -115,8 +115,6 @@ function Label({ children }: { children: ReactNode }) {
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
   );
 }
-
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 /** Where "now" is, so every relative time on this page is stable in a screenshot. */
 const NOW = Date.parse("2026-09-06T09:10:00.000Z");
@@ -370,13 +368,13 @@ export function StudyWireframe({
             sentence that explains it; a balance belongs in one fixed place a
             founder can find without reading anything.
 
-            The shipped chip, not a second one. It already decides what a null
+            The shipped wallet, not a second one. It already decides what a null
             balance renders (nothing, because unread is not zero) and when a low
             balance is worth colouring — and it does not offer to sell anything,
             which is the thing a redraw would have added.
           */}
           <div className={`flex flex-col gap-2.5 p-4 ${panel}`}>
-            <WalletChip balance={STUDY_BALANCE} href="/app/billing" />
+            <Wallet credits={creditsToUnits(420)} href="/app/settings/billing" />
 
             <Link
               href="/app/account"
@@ -477,7 +475,7 @@ export function StudyWireframe({
                     decision is actually available to make.
                   */
                   <div className="pt-1">
-                    <Moves moves={THREAD_MOVES} balance={STUDY_BALANCE} />
+                    <Moves moves={THREAD_MOVES} />
                   </div>
                 )}
               </Arriving>

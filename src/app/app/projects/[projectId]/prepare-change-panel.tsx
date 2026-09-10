@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, TextAction, buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -31,6 +31,8 @@ import {
   prepareChangeAction,
   type PrepareChangeActionState,
 } from "./prepare-change-action";
+import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * The execution affordance on an opportunity card (Sprint 9C §2, §3, §11, §14).
@@ -61,9 +63,9 @@ function ConfirmDialog({
   formAction: (formData: FormData) => void;
 }) {
   return (
-    <div className="space-y-3 rounded-md border border-line-4 bg-surface-2 p-4">
-      <h4 className="text-sm font-medium text-fg">Prepare {capabilityLabel}?</h4>
-      <div className="space-y-2 text-sm text-fg-secondary">
+    <div className="space-y-3 rounded-inset border border-line-4 bg-surface-2 p-4">
+      <h4 className="text-card-title font-medium text-fg">Prepare {capabilityLabel}?</h4>
+      <div className="space-y-2 text-body text-fg-secondary">
         <p>Vibe will create an isolated GitHub branch and commit the proposed change.</p>
         <p>Your default branch and production site will not be changed.</p>
         {/* Deliberately not "nothing external can happen": creating a branch
@@ -81,9 +83,9 @@ function ConfirmDialog({
             {pending ? "Starting…" : "Prepare change"}
           </Button>
         </form>
-        <TextAction type="button" onClick={onCancel} className="text-sm">
+        <Button variant="ghost" icon={<DismissIcon size={14} />} onClick={onCancel}>
           Cancel
-        </TextAction>
+        </Button>
       </div>
     </div>
   );
@@ -201,12 +203,12 @@ export function PrepareChangePanel({
   if (operationPollPhase(operation) === "stalled") {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-fg-prose">This is taking much longer than expected.</p>
-        <p className="text-sm text-fg-muted">
+        <p className="text-body text-fg-prose">This is taking much longer than expected.</p>
+        <p className="text-body text-fg-muted">
           Vibe has not written anything to your repository. You can start again.
         </p>
         <form action={formAction}>
-          <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
+          <Button type="submit" variant="secondary" disabled={pending} busy={pending}>
             {pending ? "Starting…" : "Try again"}
           </Button>
         </form>
@@ -217,8 +219,8 @@ export function PrepareChangePanel({
   if (running && operation) {
     return (
       <div className="flex flex-col gap-1">
-        <p className="text-sm text-fg-prose">{OPERATION_STAGE_LABELS[operation.stage]}…</p>
-        <p className="text-sm text-fg-muted">
+        <p className="text-body text-fg-prose">{OPERATION_STAGE_LABELS[operation.stage]}…</p>
+        <p className="text-body text-fg-muted">
           You can leave this page. Vibe will continue preparing the change.
         </p>
       </div>
@@ -228,10 +230,10 @@ export function PrepareChangePanel({
   if (preparedChangeId !== null) {
     return (
       <div className="flex flex-col gap-3">
-        <p className="text-sm text-fg-prose">Change prepared</p>
+        <p className="text-body text-fg-prose">Change prepared</p>
         {/* Stated plainly, because Vibe has not executed the customer's code
             and must not imply otherwise (§11, §27). */}
-        <p className="text-sm text-fg-muted">Not merged · Not deployed · Not runtime-tested</p>
+        <p className="text-body text-fg-muted">Not merged · Not deployed · Not runtime-tested</p>
 
         {/*
           Where preparing leads (UI-S2 §26, §27).
@@ -253,22 +255,21 @@ export function PrepareChangePanel({
           >
             Review prepared change
           </Link>
-          <TextAction type="button" onClick={() => loadDiff(preparedChangeId)} className="text-sm">
+          <Button
+            variant="ghost"
+            icon={<ChevronDownIcon size={14} />}
+            onClick={() => loadDiff(preparedChangeId)}
+          >
             Preview the diff here
-          </TextAction>
+          </Button>
           {branchUrl && (
-            <a
-              href={branchUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-            >
+            <StandaloneLink href={branchUrl} external>
               Open branch on GitHub
-            </a>
+            </StandaloneLink>
           )}
         </div>
 
-        {diffError && <p className="text-sm text-amber">{diffError}</p>}
+        {diffError && <p className="text-body text-amber">{diffError}</p>}
         {diff && <DiffView diff={diff} />}
 
       </div>
@@ -278,7 +279,7 @@ export function PrepareChangePanel({
   if (actionState.kind === "failed") {
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-amber">
+        <p className="text-body text-amber">
           Vibe couldn&apos;t prepare this change.{" "}
           {actionState.operation.failureCode
             ? OPERATION_FAILURE_MESSAGES[actionState.operation.failureCode]
@@ -301,7 +302,7 @@ export function PrepareChangePanel({
     const blockedHref = blockedActionHref(action, blockedDestinations);
     return (
       <div className="flex flex-col gap-2">
-        <p className="text-sm text-fg-secondary">{BLOCKED_MESSAGES[actionState.reason]}</p>
+        <p className="text-body text-fg-secondary">{BLOCKED_MESSAGES[actionState.reason]}</p>
         {/*
           A route, resolved by the domain from the destinations this route
           supplied. It used to be one of two bare fragments — `#github-access`,
@@ -310,12 +311,7 @@ export function PrepareChangePanel({
           blocked state has scrolled nowhere since the workspace was split.
         */}
         {action.kind !== "none" && blockedHref && (
-          <Link
-            href={blockedHref}
-            className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-          >
-            {BLOCKED_ACTION_LABELS[action.kind]}
-          </Link>
+          <StandaloneLink href={blockedHref}>{BLOCKED_ACTION_LABELS[action.kind]}</StandaloneLink>
         )}
       </div>
     );
@@ -338,7 +334,7 @@ export function PrepareChangePanel({
         )}
 
         {state && !state.ok && (
-          <p className="text-sm text-amber">{OPERATION_FAILURE_MESSAGES[state.error]}</p>
+          <p className="text-body text-amber">{OPERATION_FAILURE_MESSAGES[state.error]}</p>
         )}
       </div>
     );

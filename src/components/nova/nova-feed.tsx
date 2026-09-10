@@ -70,7 +70,7 @@ export function NovaFeed({
                 className="flex flex-col gap-4"
                 data-testid="nova-question"
               >
-                <p className="text-fg text-ui-lg font-medium">{entry.question}</p>
+                <p className="text-fg text-card-title font-medium">{entry.question}</p>
                 {renderQuestion?.(entry)}
               </Surface>
             );

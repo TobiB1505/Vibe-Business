@@ -91,8 +91,8 @@ export function AgentTrustPanel() {
             {fact.icon}
           </svg>
           <span className="flex flex-col gap-1">
-            <span className="text-fg-body text-[0.8125rem] font-semibold">{fact.title}</span>
-            <span className="text-fg-muted text-xs leading-relaxed">{fact.detail}</span>
+            <span className="text-fg-body text-ui font-semibold">{fact.title}</span>
+            <span className="text-fg-muted text-caption leading-relaxed">{fact.detail}</span>
           </span>
         </div>
       ))}

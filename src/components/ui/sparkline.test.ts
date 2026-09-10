@@ -87,4 +87,42 @@ describe("the chart is a shape, not a diagram", () => {
     expect(code).toContain('variant === "chart"');
     expect(code).toContain("business-signal-area");
   });
+
+  /**
+   * The axis beside the chart labels the *edges* of the plot box, so the data
+   * has to reach them.
+   *
+   * It did not. `yFor` inset the band by 3 of 56 at each end and the element
+   * was `h-40` inside an `h-36` frame, which on the dashboard put a reading of
+   * 0 seven pixels below the line marked `0` and hung 16px of chart below the
+   * axis entirely. Both are invisible in a screenshot unless you know the
+   * numbers, and both make the drawing say something the data does not.
+   */
+  it("maps 0 and 100 to the edges of the box the axis labels", () => {
+    expect(code, "a vertical inset puts the data off the lines beside it").toContain(
+      "return HEIGHT - (clamped / 100) * HEIGHT;",
+    );
+    // Reaching the edge means a stroke half outside it. That is the trade,
+    // and it only works if nothing clips.
+    expect(code).toContain("overflow-visible");
+  });
+
+  it("fills the plot box it was given rather than naming its own height", () => {
+    // `h-40` inside an `h-36` frame is how the chart came to overhang its own
+    // axis. The frame owns the height; the chart owns the shape.
+    expect(code).toContain('variant === "chart" ? "h-full"');
+    expect(code, "a fixed chart height cannot agree with an axis it does not own").not.toContain(
+      "h-40",
+    );
+  });
+
+  /**
+   * `preserveAspectRatio="none"` stretches the viewBox horizontally, so a
+   * `<circle>` renders as an ellipse and its roundness depends on how wide the
+   * column happens to be. Every round thing here is a capped zero-length line.
+   */
+  it("draws no circle, because the viewBox is stretched", () => {
+    expect(code).not.toContain("<circle");
+    expect(code).toContain('preserveAspectRatio="none"');
+  });
 });

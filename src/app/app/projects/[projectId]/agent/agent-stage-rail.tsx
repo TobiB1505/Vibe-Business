@@ -183,7 +183,7 @@ export function AgentStageRail({
               >
                 <span
                   className={cn(
-                    "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-sm",
+                    "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-body",
                     RING[step.state],
                   )}
                   style={
@@ -201,7 +201,7 @@ export function AgentStageRail({
                       /* Wrapping, not truncating. "Product understo…" tells a
                          founder less than two short lines do, and the rail has
                          the height for them. */
-                      "text-[0.9375rem] leading-snug",
+                      "text-card-title leading-snug",
                       step.state === "active" ? "text-fg font-bold" : "font-semibold",
                       step.state === "pending" ? "text-fg-secondary" : "text-fg",
                     )}
@@ -215,7 +215,7 @@ export function AgentStageRail({
                     The numbers are in the activity list, at the width they
                     were written for.
                   */}
-                  <span className={cn("text-[0.8125rem]", STATUS_TONE[step.state])}>
+                  <span className={cn("text-ui", STATUS_TONE[step.state])}>
                     {STATE_WORDS[step.state]}
                   </span>
                 </span>

@@ -64,7 +64,7 @@ export function VibeLockup({
   return (
     <span className={cn("flex items-center gap-2.5", className)}>
       <VibeMark size={size} variant={variant} />
-      <span className="text-fg text-[0.9375rem] font-bold tracking-[-0.02em]">Vibe Business</span>
+      <span className="text-fg text-lead font-bold tracking-[-0.02em]">Vibe Business</span>
     </span>
   );
 }

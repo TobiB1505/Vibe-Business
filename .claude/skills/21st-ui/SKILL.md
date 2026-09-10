@@ -44,7 +44,8 @@ Then [adaptation.md](../component-sourcing/adaptation.md), every item. Catalogue
 components are the worst offenders for fabricated data: revenue figures, customer
 logos, "5,000+ users", star ratings. **None of that may ship here**, and it is
 often the thing making the preview look good. The replacement is real product
-surfaces on stated example data — see `src/components/marketing/landing-flow.tsx`.
+surfaces on stated example data — see `src/components/marketing/landing-scan.tsx`,
+which renders `SourceCoverage` values the product itself can produce.
 
 ## Do not
 

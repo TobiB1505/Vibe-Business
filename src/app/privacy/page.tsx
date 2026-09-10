@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
+import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {
   title: "Privacy",
@@ -48,7 +49,6 @@ export default function PrivacyPage() {
         "An automatic deletion of billing records at the end of the statutory period — today they are kept, and nothing removes them when it ends",
         "The legal basis for processing, and the transfer mechanism for data handled outside your region",
         "A reviewed list of subprocessors and the agreements covering them",
-        "Consent for advertising cookies where the law requires asking first, and a way to decline",
       ]}
     >
       <LegalSection heading="What Vibe collects about you">
@@ -142,6 +142,45 @@ export default function PrivacyPage() {
           of what Meta sees. It also runs only on the live product, never on development or preview
           builds.
         </p>
+        <p>
+          And it does not load at all unless you have switched marketing on. Not loaded and asked
+          not to fire: the tag is absent from the page.
+        </p>
+      </LegalSection>
+
+      {/*
+        Added UI-23, when consent stopped being a pending item and became a
+        thing the product does. Every line here names something a reader can
+        find in their own cookie jar or in the page source.
+      */}
+      <LegalSection heading="Cookies, and what you decide">
+        <p>
+          Two cookies are necessary and are not a choice: the one that keeps you signed in, and the
+          one that records the decision you make below, so you are not asked again on every visit.
+          Neither is shared with anyone.
+        </p>
+        <p>Everything else is off until you switch it on:</p>
+        <ul>
+          <li>
+            <strong className="text-fg-body">Preferences.</strong> Which product you last opened,
+            so your dashboard goes there instead of asking. It stays in your browser.
+          </li>
+          <li>
+            <strong className="text-fg-body">Analytics.</strong> Vercel Web Analytics and Speed
+            Insights — how many people reach a page and how quickly it loads. Vibe sees totals, not
+            people.
+          </li>
+          <li>
+            <strong className="text-fg-body">Marketing.</strong> Meta&apos;s pixel, described in the
+            section above.
+          </li>
+        </ul>
+        <p>
+          Refusing is one click, in the same row and the same weight as accepting, and it is what
+          happens if you close the banner without answering — nothing optional loads until you say
+          so. You can change any of it later under Settings → General, where withdrawing is the same
+          single click as giving.
+        </p>
       </LegalSection>
 
       <LegalSection heading="How long Vibe keeps things">
@@ -196,9 +235,13 @@ export default function PrivacyPage() {
           optional — Vibe can work from your code alone.
         </p>
         <p>
-          For anything else, including deleting your account and what Vibe holds about it, the
-          contact address is one of the items still to be added above. Until it exists, ask through
-          whichever channel you are already in touch with us on.
+          Cookies and the two measurement tags are decided in the banner on your first visit and
+          changed at any time under Settings &rarr; General. Deleting your account and everything
+          Vibe holds about it is a control on that same page.
+        </p>
+        <p>
+          For anything else, the contact address is one of the items still to be added above. Until
+          it exists, ask through whichever channel you are already in touch with us on.
         </p>
       </LegalSection>
 
@@ -206,7 +249,7 @@ export default function PrivacyPage() {
         <p>
           This notice will change as the product does. The date at the top is when it last changed.
           See also the{" "}
-          <Link href="/terms" className="text-mint hover:text-mint-hover">
+          <Link href="/terms" className={proseLinkClasses()}>
             terms
           </Link>
           .

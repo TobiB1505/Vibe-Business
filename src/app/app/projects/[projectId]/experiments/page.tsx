@@ -77,13 +77,13 @@ export default async function ProjectExperimentsPage({
               business measurement are rendered in full on each prepared change,
               and duplicating those panels here would mean two places claiming
               the same result. */}
-          <p className="text-fg-muted text-sm">
+          <p className="text-fg-muted text-body">
             The full production outcome and business measurement are shown on each change, beside
             the merge that produced them.
           </p>
 
           {impact.unmergedCount > 0 && (
-            <p className="text-fg-meta text-xs">
+            <p className="text-fg-meta text-caption">
               {impact.unmergedCount} prepared{" "}
               {impact.unmergedCount === 1 ? "change has" : "changes have"} not merged, so{" "}
               {impact.unmergedCount === 1 ? "it has" : "they have"} no outcome to measure.

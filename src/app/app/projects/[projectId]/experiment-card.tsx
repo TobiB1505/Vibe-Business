@@ -1,10 +1,10 @@
-import Link from "next/link";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import type { ProjectImpactEntry } from "@/modules/business-measurement/project-impact";
 import type { OutcomeCardState } from "@/modules/outcome-verification/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * One change Vibe made, and what became true afterwards (CORE-5).
@@ -91,7 +91,7 @@ export function ExperimentCard({
             the change and a founder still has to recognise it. The commit and
             base branch below it are machine output and stay mono.
           */}
-          <p className="text-fg-body truncate text-sm font-medium">{entry.branchName}</p>
+          <p className="text-fg-body truncate text-body font-medium">{entry.branchName}</p>
         </div>
         <StatusPill tone={OUTCOME_TONE[entry.outcome.state]}>
           {OUTCOME_LABELS[entry.outcome.state]}
@@ -124,16 +124,13 @@ export function ExperimentCard({
       */}
       <div className="border-line-1 flex flex-col gap-1 border-t pt-3">
         <MonoLabel>What the business did</MonoLabel>
-        <p className="text-fg-prose text-sm leading-relaxed">{entry.businessImpact.headline}</p>
+        <p className="text-fg-prose text-body leading-relaxed">{entry.businessImpact.headline}</p>
       </div>
 
       <div>
-        <Link
-          href={agentHref}
-          className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-interactive"
-        >
+        <StandaloneLink href={agentHref}>
           See this change and everything checked about it
-        </Link>
+        </StandaloneLink>
       </div>
     </Surface>
   );

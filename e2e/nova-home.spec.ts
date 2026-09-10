@@ -217,7 +217,11 @@ test.describe("Nova Home", () => {
 
     // The price is on screen with nothing expanded and nothing pressed.
     await expect(page.getByText(/\d+ Credits/)).toBeVisible();
-    await expect(page.getByText(/of 420 available/)).toBeVisible();
+    // And the balance is not. Vibe states what a thing costs and never what
+    // is left: the balance lives once in the chrome, not under every control,
+    // and a refusal carries the way out. This assertion used to require the
+    // opposite, and is the only place the old sentence was covered.
+    await expect(page.getByText(/available|Not enough/i)).toHaveCount(0);
 
     // Exactly one primary control. The stack below carries none.
     await expect(page.getByRole("button", { name: "Run the audit again" })).toBeVisible();

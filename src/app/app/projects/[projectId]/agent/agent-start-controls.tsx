@@ -113,7 +113,7 @@ export function agentStartControls({
           label={creditEstimate ? `Build just this step — ${creditEstimate}` : undefined}
           repositoryReadHref={repositoryReadHref}
         />
-        <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+        <p className="text-fg-meta text-caption" data-testid="agent-chain-boundary">
           {BUILD_CHAIN_BOUNDARY_LABELS[chain.boundary]}
         </p>
       </div>

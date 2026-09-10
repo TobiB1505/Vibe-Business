@@ -3,6 +3,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { MonoLabel } from "@/components/ui/typography";
 import { Well } from "@/components/ui/surface";
+import { RatingChip } from "@/components/ui/status-pill";
 import { cn } from "@/lib/utils/cn";
 import { LENS_LABELS } from "@/modules/business-audit/map-view";
 import { buildChainCompletionNote } from "@/modules/coding-agent/view";
@@ -112,15 +113,15 @@ export function AgentTaskPanel({
         is being approved matters most.
       */}
       {task.step !== null && (
-        <p className="text-fg-muted text-sm" data-testid="agent-task-move">
+        <p className="text-fg-muted text-body" data-testid="agent-task-move">
           Step {String(task.step.order).padStart(2, "0")} · {task.title}
         </p>
       )}
 
       <h2
         className={cn(
-          "text-fg leading-tight font-bold tracking-[-0.03em] text-balance",
-          summary ? "text-[1.625rem]" : compact ? "text-2xl" : "text-[2rem]",
+          "text-fg font-bold text-balance",
+          compact || summary ? "text-moment" : "text-headline",
         )}
         data-testid="agent-task-headline"
       >
@@ -129,7 +130,7 @@ export function AgentTaskPanel({
 
       <div className="flex flex-wrap items-center gap-3">
         {task.lens !== null && (
-          <span className="text-fg-body flex items-center gap-2.5 text-[0.9375rem] font-medium">
+          <span className="text-fg-body flex items-center gap-2.5 text-card-title font-medium">
             <svg
               viewBox="0 0 24 24"
               width="18"
@@ -149,24 +150,16 @@ export function AgentTaskPanel({
         )}
         {/* Ratings are the Move's own. A task recovered from a stored origin
             has none, and guessing "medium" would be an assessment nobody made. */}
-        {task.impact !== null && (
-          <span className="rounded-full border-mint-line bg-mint-tint text-mint border px-3 py-1 text-xs font-semibold">
-            {IMPACT_LABELS[task.impact]}
-          </span>
-        )}
-        {task.effort !== null && (
-          <span className="rounded-full border-amber-line bg-amber-tint text-amber border px-3 py-1 text-xs font-semibold">
-            {EFFORT_LABELS[task.effort]}
-          </span>
-        )}
+        {task.impact !== null && <RatingChip>{IMPACT_LABELS[task.impact]}</RatingChip>}
+        {task.effort !== null && <RatingChip>{EFFORT_LABELS[task.effort]}</RatingChip>}
       </div>
 
       <p
         className={cn(
           "text-fg-prose text-pretty",
           summary
-            ? "max-w-[56ch] text-[0.9375rem] leading-relaxed"
-            : "max-w-[46ch] text-base leading-relaxed",
+            ? "max-w-[56ch] text-lead leading-relaxed"
+            : "max-w-[46ch] text-lead leading-relaxed",
         )}
       >
         {task.problem}
@@ -180,7 +173,7 @@ export function AgentTaskPanel({
               <motion.li
                 key={`${step.kind}:${step.title}`}
                 data-testid={`agent-task-step-${step.kind}`}
-                className="text-fg-body flex items-center gap-3 text-[0.9375rem]"
+                className="text-fg-body flex items-center gap-3 text-card-title"
                 initial={reduceMotion ? false : { opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{
@@ -192,7 +185,7 @@ export function AgentTaskPanel({
                 <span
                   aria-hidden="true"
                   className={cn(
-                    "flex size-5 flex-none items-center justify-center rounded-full border text-[11px]",
+                    "flex size-5 flex-none items-center justify-center rounded-full border text-meta",
                     step.kind === "delivery"
                       ? "border-mint-line bg-mint-tint text-mint"
                       : "border-line-3 text-fg-meta",
@@ -205,7 +198,7 @@ export function AgentTaskPanel({
                   /* Named rather than left to the marker alone. A founder
                      reading three bullets is deciding what they are paying
                      for, and colour is not a word. */
-                  <span className="text-fg-meta text-xs">groundwork</span>
+                  <span className="text-fg-meta text-caption">groundwork</span>
                 )}
               </motion.li>
             ))}
@@ -217,7 +210,7 @@ export function AgentTaskPanel({
               verdicts; there is one of each, and rule 66 is the standard for
               not letting a screen imply a stronger claim than was made.
             */
-            <p className="text-fg-meta text-xs" data-testid="agent-task-chain-note">
+            <p className="text-fg-meta text-caption" data-testid="agent-task-chain-note">
               {buildChainCompletionNote(
                 task.steps.filter((step) => step.kind === "delivery").length,
               )}
@@ -244,8 +237,8 @@ export function AgentTaskPanel({
             <path d="M18.5 15.5c.25 1.6 1.1 2.45 2.5 2.75-1.4.3-2.25 1.15-2.5 2.75-.25-1.6-1.1-2.45-2.5-2.75 1.4-.3 2.25-1.15 2.5-2.75Z" />
           </svg>
           <span className="flex flex-col gap-1.5">
-            <span className="text-fg-body text-[0.9375rem] font-semibold">Why this task?</span>
-            <span className="text-fg-muted max-w-[48ch] text-sm leading-relaxed">
+            <span className="text-fg-body text-card-title font-semibold">Why this task?</span>
+            <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">
               {task.whyNow}
             </span>
           </span>

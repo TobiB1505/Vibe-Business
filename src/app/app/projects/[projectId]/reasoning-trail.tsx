@@ -54,7 +54,7 @@ function SignalRow({ evidenceId }: { evidenceId: string }) {
       <span className="text-fg-meta shrink-0 font-mono text-[0.625rem] tracking-[0.08em] uppercase sm:w-[8.5rem]">
         {source ?? described.source}
       </span>
-      <span className="text-fg-secondary text-sm">{described.detail}</span>
+      <span className="text-fg-secondary text-body">{described.detail}</span>
     </li>
   );
 }
@@ -103,19 +103,19 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
           terminus of the arrow, and the whole section exists to show that these
           many observations resolve into this one sentence.
         */}
-        <p className="text-fg max-w-[62ch] text-[0.9375rem] leading-relaxed">
+        <p className="text-fg max-w-[62ch] text-lead leading-relaxed">
           {conclusion.headline}
         </p>
 
         {conclusion.whyItMatters && (
-          <p className="text-fg-muted max-w-[62ch] text-sm">
+          <p className="text-fg-muted max-w-[62ch] text-body">
             <span className="text-fg-secondary">Why it matters:</span> {conclusion.whyItMatters}
           </p>
         )}
 
         <div className="text-fg-meta flex flex-wrap items-center gap-2 font-mono text-[0.625rem] tracking-[0.08em] uppercase">
           {conclusion.lenses.map((lens) => (
-            <span key={lens} className="border-line-2 rounded-sm border px-1.5 py-0.5">
+            <span key={lens} className="border-line-2 rounded-inline border px-1.5 py-0.5">
               {LENS_LABELS[lens]}
             </span>
           ))}
@@ -131,7 +131,7 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
         does not make. What is true is narrower and still the point: the
         evidence survives, and the grouping is what changed.
       */}
-      <p className="text-fg-meta max-w-[62ch] text-xs">
+      <p className="text-fg-meta max-w-[62ch] text-caption">
         No supporting evidence was lost. Related signals were grouped into one business
         conclusion, and every one of them is still cited in the full breakdown.
       </p>

@@ -79,8 +79,7 @@ export function AgentValidateAction({
       <div>
         <Button
           type="button"
-          variant="accent"
-          size="md"
+          variant="primary"
           disabled={running}
           busy={running}
           className="min-w-[11.5rem]"
@@ -132,7 +131,7 @@ export function AgentValidateAction({
       </div>
 
       {running && (
-        <p role="status" className="text-fg-muted text-xs">
+        <p role="status" className="text-fg-muted text-caption">
           Vibe is validating this exact change in an isolated environment. You can leave this page.
         </p>
       )}

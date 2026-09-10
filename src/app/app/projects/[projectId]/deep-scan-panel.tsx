@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { LiveBrowserCanvas } from "./live-browser-canvas";
 import { ScanHandoff } from "./scan-handoff";
-import { Button, TextAction, buttonClasses } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { ProgressSteps } from "@/components/system/operation-progress";
 import type { OperationProgressStep } from "@/modules/operations/view";
@@ -173,7 +173,7 @@ function Section({
   if (presentation === "block") return <div className="space-y-3">{children}</div>;
 
   return (
-    <section id="deep-scan" className="space-y-3 rounded-md border border-line-2 p-4">
+    <section id="deep-scan" className="space-y-3 rounded-inset border border-line-2 p-4">
       {children}
     </section>
   );
@@ -185,8 +185,8 @@ function Heading({ title, status }: { title: string; status?: string }) {
       {/* `h3`: the workspace section that wraps this panel owns the `h2`
           (UI-1), so this is a level below it. Two `h2`s with the same text
           inside one section made the outline claim two Deep Scans. */}
-      <h3 className="text-fg-body text-sm font-medium">{title}</h3>
-      {status && <span className="text-fg-muted text-xs">{status}</span>}
+      <h3 className="text-fg-body text-body font-medium">{title}</h3>
+      {status && <span className="text-fg-muted text-caption">{status}</span>}
     </div>
   );
 }
@@ -358,13 +358,13 @@ export function LiveViewDialog({
         aria-labelledby="deep-scan-dialog-title"
         aria-describedby="deep-scan-dialog-description"
         tabIndex={-1}
-        className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-line-2 bg-app p-4 focus:outline-none"
+        className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-inset border border-line-2 bg-app p-4 focus:outline-none"
       >
         <div className="space-y-1.5">
-          <h3 id="deep-scan-dialog-title" className="text-sm font-medium text-fg">
+          <h3 id="deep-scan-dialog-title" className="text-body font-medium text-fg">
             Sign in to your product
           </h3>
-          <p id="deep-scan-dialog-description" className="text-xs text-fg-secondary">
+          <p id="deep-scan-dialog-description" className="text-caption text-fg-secondary">
             Sign in normally inside this temporary browser. Vibe does not store your password or a
             reusable login session.
           </p>
@@ -400,9 +400,9 @@ export function LiveViewDialog({
         <div
           style={{ aspectRatio: frame ? `${frame.w} / ${frame.h}` : "16 / 10" }}
           /*
-           * `rounded-card`, the largest radius the design system defines, and
-           * the one the surfaces this frame sits between already use. At
-           * `rounded-md` the picture read as a raw embed dropped into the
+           * `rounded-card`, the radius the surfaces this frame sits between
+           * already use. At
+           * `rounded-inset` the picture read as a raw embed dropped into the
            * dialog rather than as part of it.
            *
            * `overflow-hidden` is what makes the radius real: the canvas is a
@@ -437,7 +437,7 @@ export function LiveViewDialog({
             />
           )}
           {error && (
-            <p role="alert" className="absolute inset-0 bg-app p-4 text-sm text-amber">
+            <p role="alert" className="absolute inset-0 bg-app p-4 text-body text-amber">
               {error}
             </p>
           )}
@@ -459,10 +459,10 @@ export function LiveViewDialog({
               className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
-                <p className="text-sm font-medium text-fg-body">
+                <p className="text-body font-medium text-fg-body">
                   Vibe cannot reach the temporary browser
                 </p>
-                <p className="text-xs text-fg-muted">
+                <p className="text-caption text-fg-muted">
                   The browser is running, but its picture is not getting through. This is usually
                   the connection between this device and it. Trying again costs nothing — the
                   browser is already open.
@@ -509,19 +509,19 @@ export function LiveViewDialog({
               className="bg-app absolute inset-0 flex flex-col justify-center gap-4 p-5 sm:p-8"
             >
               <div className="space-y-1">
-                <p className="text-fg-body text-sm font-medium">
+                <p className="text-fg-body text-body font-medium">
                   Sign-in took longer than two minutes
                 </p>
-                <p className="max-w-[54ch] text-xs text-fg-muted">
+                <p className="max-w-[54ch] text-caption text-fg-muted">
                   Vibe is closing the temporary browser rather than leaving it running. Nothing was
                   charged. You can start again — Vibe waits two minutes between attempts, and
                   closing this shows when.
                 </p>
               </div>
               <div>
-                <TextAction type="button" onClick={onCancel} className="text-sm">
+                <Button variant="ghost" type="button" onClick={onCancel} className="text-body">
                   Close
-                </TextAction>
+                </Button>
               </div>
             </div>
           )}
@@ -532,13 +532,13 @@ export function LiveViewDialog({
               className="absolute inset-0 flex flex-col justify-center gap-4 bg-app p-5 sm:p-8"
             >
               <div className="space-y-1">
-                <p className="text-sm font-medium text-fg-body">Opening a temporary browser</p>
+                <p className="text-body font-medium text-fg-body">Opening a temporary browser</p>
                 {/*
                   The honest expectation, and the reason for the slow case.
                   Vibe builds its browser image about once a week; a person who
                   is told that waits differently than one who is not.
                 */}
-                <p className="text-xs text-fg-muted">
+                <p className="text-caption text-fg-muted">
                   Usually about twenty seconds. Occasionally a couple of minutes, when Vibe has to
                   build its browser first — that happens roughly once a week.
                 </p>
@@ -557,7 +557,7 @@ export function LiveViewDialog({
           screen is genuinely easier, and that is all this says.
         */}
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             Tap or click to interact. A larger screen makes signing in easier.
           </p>
           {loginSecondsLeft !== null && (
@@ -579,7 +579,7 @@ export function LiveViewDialog({
             <p
               role="timer"
               aria-live="off"
-              className={`rounded-nav border px-3 py-1.5 font-mono text-sm ${
+              className={`rounded-nav border px-3 py-1.5 font-mono text-body ${
                 loginSecondsLeft * 1000 <= LOGIN_URGENT_MS
                   ? "border-amber text-amber"
                   : "border-line-2 text-fg-body"
@@ -598,9 +598,14 @@ export function LiveViewDialog({
            * until it is done, and inventing steps to fill the silence would be
            * the same lie as a progress bar that sits at 60%.
            */
-          <div role="status" className="space-y-1 rounded-md border border-line-2 bg-surface-2 p-3">
-            <p className="text-sm text-fg-prose">Vibe is looking around your signed-in product.</p>
-            <p className="text-xs text-fg-muted">
+          <div
+            role="status"
+            className="space-y-1 rounded-inset border border-line-2 bg-surface-2 p-3"
+          >
+            <p className="text-body text-fg-prose">
+              Vibe is looking around your signed-in product.
+            </p>
+            <p className="text-caption text-fg-muted">
               This usually takes up to about 90 seconds. Keep this window open — the scan runs while
               it is here, and closing it stops the browser Vibe is signed in to.
             </p>
@@ -619,13 +624,16 @@ export function LiveViewDialog({
            * and the founder who is not actually finished needs somewhere to
            * say so.
            */
-          <div role="status" className="space-y-2 rounded-md border border-line-2 bg-surface-2 p-3">
-            <p className="text-sm text-fg-prose">
+          <div
+            role="status"
+            className="space-y-2 rounded-inset border border-line-2 bg-surface-2 p-3"
+          >
+            <p className="text-body text-fg-prose">
               You look signed in. Vibe starts looking around in {signIn.startsInSeconds}s.
             </p>
-            <TextAction type="button" onClick={signIn.postpone} className="text-sm">
+            <Button variant="ghost" type="button" onClick={signIn.postpone} className="text-body">
               Not yet — I&apos;ll start it myself
-            </TextAction>
+            </Button>
           </div>
         )}
 
@@ -639,9 +647,15 @@ export function LiveViewDialog({
           >
             {busy ? "Looking around…" : signIn.signedIn ? "Analyze now" : "I'm logged in — Analyze"}
           </Button>
-          <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
+          <Button
+            variant="ghost"
+            type="button"
+            onClick={onCancel}
+            disabled={busy}
+            className="text-body"
+          >
             Cancel
-          </TextAction>
+          </Button>
         </div>
       </div>
     </div>
@@ -698,7 +712,7 @@ function ResultNotes({ notes }: { notes: DeepScanNote[] }) {
                 {group.map((note) => (
                   <li
                     key={`${note.path ?? ""}${note.message}`}
-                    className="text-fg-prose max-w-[62ch] text-sm leading-relaxed"
+                    className="text-fg-prose max-w-[62ch] text-body leading-relaxed"
                   >
                     {note.path && (
                       // The path first, because it is what distinguishes two
@@ -1118,7 +1132,7 @@ function NextScan({
             customer deciding whether to spend deserves to know that while they
             are deciding.
           */}
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             You&apos;re only charged if Vibe comes back with a result.
           </p>
           <Button type="button" onClick={onStart} disabled={disabled} busy={disabled}>
@@ -1132,11 +1146,11 @@ function NextScan({
     case "insufficient_credits":
       return (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-secondary">
             Another Deep Scan costs {formatCreditsForDisplay(next.price)} Credits, and your balance
             doesn&apos;t cover it yet.
           </p>
-          <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+          <Link href="/app/settings/billing" className={buttonClasses({ variant: "secondary" })}>
             Top up Credits
           </Link>
         </div>
@@ -1146,21 +1160,21 @@ function NextScan({
       // No policy prices another scan. The honest terminal answer, and not a
       // route into a checkout that cannot help.
       return (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           Additional Deep Scans aren&apos;t available right now.
         </p>
       );
 
     case "blocked":
       return (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           {waitHint(next.retryAvailableAt, now) ?? messageFor(next.reason)}
         </p>
       );
 
     case "unavailable":
       return (
-        <p className="text-xs text-fg-muted">
+        <p className="text-caption text-fg-muted">
           {next.reason === "provider_not_configured"
             ? "Deep Scan is not switched on here yet. That is a gap on Vibe's side — it says nothing about your product."
             : "Add your production website URL above to run another Deep Scan."}
@@ -1206,7 +1220,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
                 key={surface.id}
                 className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border px-3 py-2"
               >
-                <span className="text-fg-body text-sm">{surface.name}</span>
+                <span className="text-fg-body text-body">{surface.name}</span>
                 <CitationCount
                   citations={surface.evidence}
                   title={surface.name}
@@ -1226,13 +1240,13 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
       ) : (
         // Never a heading with nothing under it: a scan that recognised no
         // surface is a real answer, and it has to read as one.
-        <p className="text-fg-prose max-w-[62ch] text-sm">
+        <p className="text-fg-prose max-w-[62ch] text-body">
           Vibe read your signed-in pages but did not recognise any of the surfaces it looks for. The
           notes below say what it saw.
         </p>
       )}
 
-      <dl className="space-y-1 text-sm">
+      <dl className="space-y-1 text-body">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-fg-muted">Last checked</dt>
           <dd className="text-fg-prose">
@@ -1264,7 +1278,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
         not a setting anyone is going to change.
       */}
       {(result.completion.policyLimited || result.completion.budgetLimited) && (
-        <p className="max-w-[62ch] text-xs text-fg-muted leading-relaxed">
+        <p className="max-w-[62ch] text-caption text-fg-muted leading-relaxed">
           {result.completion.policyLimited && (
             <>
               Vibe only ever reads. It refuses anything that could change your data, and anything
@@ -1300,7 +1314,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
                 key={screen.template}
                 className="flex flex-wrap items-baseline justify-between gap-x-4"
               >
-                <span className="text-fg-prose text-sm">{screen.heading ?? screen.template}</span>
+                <span className="text-fg-prose text-body">{screen.heading ?? screen.template}</span>
                 <span className="text-fg-meta font-mono text-meta">
                   {screen.template}
                   {screen.pages.length > 1 ? ` · ${screen.pages.length} of them` : ""}
@@ -1324,7 +1338,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
             because it is the second question, not the first.
           */}
           <div className="space-y-3">
-            <dl className="space-y-1 text-sm">
+            <dl className="space-y-1 text-body">
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-fg-muted">Signed in on</dt>
                 <dd className="text-fg-prose font-mono text-meta">{result.shape.landingPath}</dd>
@@ -1355,7 +1369,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
                   {result.shape.navigation.map((label) => (
                     <li
                       key={label}
-                      className="border-line-2 text-fg-muted rounded-nav border px-2 py-0.5 text-xs"
+                      className="border-line-2 text-fg-muted rounded-nav border px-2 py-0.5 text-caption"
                     >
                       {label}
                     </li>
@@ -1387,7 +1401,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
       {result.notes.length > 0 && <ResultNotes notes={result.notes} />}
 
       {result.accessMode === "included_first_scan" && (
-        <p className="text-xs text-fg-muted">Included Deep Scan used.</p>
+        <p className="text-caption text-fg-muted">Included Deep Scan used.</p>
       )}
     </div>
   );
@@ -1705,7 +1719,7 @@ export function DeepScanPanel({
         ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
           <>
             <Heading title="Additional Deep Scan" />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               Your included Deep Scan for this project has been used. Another one costs{" "}
               {formatCreditsForDisplay(model.additionalScanPrice)} Credits.
             </p>
@@ -1715,7 +1729,7 @@ export function DeepScanPanel({
               and a customer deciding whether to spend deserves to know that
               while they are deciding.
             */}
-            <p className="text-xs text-fg-muted">
+            <p className="text-caption text-fg-muted">
               You&apos;re only charged if Vibe comes back with a result.
             </p>
             <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
@@ -1727,11 +1741,11 @@ export function DeepScanPanel({
         ) : model.state === "insufficient_credits" && model.additionalScanPrice !== null ? (
           <>
             <Heading title="Additional Deep Scan" />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               Another Deep Scan costs {formatCreditsForDisplay(model.additionalScanPrice)} Credits,
               and your balance doesn&apos;t cover it yet.
             </p>
-            <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+            <Link href="/app/settings/billing" className={buttonClasses({ variant: "secondary" })}>
               Top up Credits
             </Link>
           </>
@@ -1743,7 +1757,7 @@ export function DeepScanPanel({
               the honest terminal answer, not a route into a checkout that
               cannot help — the same reason this state has always existed.
             */}
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               Your included Deep Scan for this project has been used. Additional Deep Scans
               aren&apos;t available right now.
             </p>
@@ -1752,12 +1766,12 @@ export function DeepScanPanel({
           <>
             <Heading title="Deep Scan" status="Unavailable" />
             {model.unavailableReason === "provider_not_configured" ? (
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 Deep Scan is not switched on here yet. That is a gap on Vibe&apos;s side — it says
                 nothing about your product, and nothing else about your project is affected.
               </p>
             ) : (
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 Add your production website URL above to enable Deep Scan.
               </p>
             )}
@@ -1765,7 +1779,7 @@ export function DeepScanPanel({
         ) : model.state === "analyzing" ? (
           <>
             <Heading title="Look inside your signed-in product" status="Vibe is looking around" />
-            <p role="status" className="text-sm text-fg-secondary">
+            <p role="status" className="text-body text-fg-secondary">
               Analyzing your signed-in product…
             </p>
             <Button type="button" disabled>
@@ -1778,7 +1792,7 @@ export function DeepScanPanel({
               title="Look inside your signed-in product"
               status="Waiting for you to sign in"
             />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               A temporary browser is open. Sign in to continue.
             </p>
             <Button type="button" onClick={handleReopen} disabled={disabled}>
@@ -1788,7 +1802,7 @@ export function DeepScanPanel({
         ) : model.state === "blocked" ? (
           <>
             <Heading title="Deep Scan" />
-            <p className="text-sm text-amber">
+            <p className="text-body text-amber">
               {messageFor(model.blockedReason ?? "analysis_failed")}
             </p>
           </>
@@ -1804,7 +1818,7 @@ export function DeepScanPanel({
                     : "Didn't finish"
               }
             />
-            <p className="text-sm text-fg-secondary">
+            <p className="text-body text-fg-secondary">
               {model.lastFailure?.failureCode
                 ? messageFor(model.lastFailure.failureCode)
                 : model.lastFailure?.status === "expired"
@@ -1812,7 +1826,7 @@ export function DeepScanPanel({
                   : "The last Deep Scan didn't finish."}
             </p>
             {model.includedScanAvailable && (
-              <p className="text-xs text-fg-muted">
+              <p className="text-caption text-fg-muted">
                 Your included Deep Scan for this project is still available.
               </p>
             )}
@@ -1824,7 +1838,7 @@ export function DeepScanPanel({
               // Retrying is blocked by policy (usually the short cooldown after
               // an abandoned attempt). Saying nothing here reads as "retry is
               // broken", which is exactly how it was reported.
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 {waitHint(model.retryAvailableAt, browserNow) ??
                   (model.blockedReason
                     ? messageFor(model.blockedReason)
@@ -1835,7 +1849,7 @@ export function DeepScanPanel({
         ) : model.state === "recommended" ? (
           <>
             <Heading title="Look inside your signed-in product" />
-            <div className="space-y-1 text-sm text-fg-secondary">
+            <div className="space-y-1 text-body text-fg-secondary">
               {/*
                 In setup, Nova's bubble two inches above says both of these in
                 her own words — that the code and the public pages are read and
@@ -1867,7 +1881,9 @@ export function DeepScanPanel({
               {model.recommendationReason && (
                 <p
                   className={
-                    presentation === "block" ? "text-sm text-fg-secondary" : "text-xs text-fg-muted"
+                    presentation === "block"
+                      ? "text-body text-fg-secondary"
+                      : "text-caption text-fg-muted"
                   }
                 >
                   {model.recommendationReason}
@@ -1886,13 +1902,13 @@ export function DeepScanPanel({
                 block — two "Not now"s, one of them inert, and the inert one
                 first.
               */}
-              {presentation === "panel" && <span className="text-sm text-fg-muted">Not now</span>}
+              {presentation === "panel" && <span className="text-body text-fg-muted">Not now</span>}
             </div>
           </>
         ) : (
           <>
             <Heading title="Deep Scan" />
-            <p className="text-sm text-fg-muted">
+            <p className="text-body text-fg-muted">
               Optional deeper analysis of what users experience after signing in.
             </p>
             {model.canStart ? (
@@ -1918,7 +1934,7 @@ export function DeepScanPanel({
             ) : (
               // Never a heading and a sentence with no action and no reason:
               // that state is indistinguishable from a broken page.
-              <p className="text-sm text-fg-muted">
+              <p className="text-body text-fg-muted">
                 {model.blockedReason
                   ? messageFor(model.blockedReason)
                   : "Deep Scan isn't available on this deployment yet."}
@@ -1928,7 +1944,7 @@ export function DeepScanPanel({
         )}
 
         {error && !dialogOpen && (
-          <p role="alert" className="text-sm text-amber">
+          <p role="alert" className="text-body text-amber">
             {error}
           </p>
         )}

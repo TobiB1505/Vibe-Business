@@ -2,7 +2,6 @@ import type { CSSProperties, ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { statusForCandidate, novaPresenceState } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
@@ -89,8 +88,6 @@ function Label({ children }: { children: ReactNode }) {
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
   );
 }
-
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 function retailKindOf(entry: NovaHomeEntry): RetailOperationKind | null {
   const control = entry.control;
@@ -280,7 +277,7 @@ export function StudyVoice({
                 >
                   {action}
                 </button>
-                <CostDisclosure operation={retailKindOf(primary)} balance={STUDY_BALANCE} />
+                <CostDisclosure operation={retailKindOf(primary)} />
               </div>
             )}
           </div>

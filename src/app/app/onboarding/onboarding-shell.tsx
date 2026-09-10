@@ -1,9 +1,9 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { signOut } from "@/modules/auth/actions";
 import type { OnboardingState } from "@/modules/onboarding/state";
+import { Button } from "@/components/ui/button";
 
 export function OnboardingShell({
   children,
@@ -40,11 +40,11 @@ export function OnboardingShell({
     <div className="bg-app text-fg-body min-h-dvh">
       <header className="border-line-1 border-b">
         <div className="mx-auto flex max-w-[76rem] items-center gap-4 px-5 py-4 sm:px-8">
-          <Link href="/app" aria-label="Vibe Business" className="rounded-sm">
+          <Link href="/app" aria-label="Vibe Business" className="rounded-inline">
             <VibeLockup />
           </Link>
           {projectName && (
-            <span className="text-fg-muted border-line-2 hidden border-l pl-4 text-sm sm:inline">
+            <span className="text-fg-muted border-line-2 hidden border-l pl-4 text-body sm:inline">
               {projectName}
             </span>
           )}
@@ -52,14 +52,14 @@ export function OnboardingShell({
             {canLeave && (
               <Link
                 href="/app"
-                className="text-fg-muted hover:text-fg-body text-xs underline underline-offset-4"
+                className="text-fg-muted hover:text-fg-body text-caption underline underline-offset-4"
               >
                 Back to your projects
               </Link>
             )}
-            {email && <span className="text-fg-meta hidden text-xs sm:inline">{email}</span>}
+            {email && <span className="text-fg-meta hidden text-caption sm:inline">{email}</span>}
             <form action={signOut}>
-              <TextAction className="text-xs">Sign out</TextAction>
+              <Button variant="ghost" className="text-caption">Sign out</Button>
             </form>
           </div>
         </div>

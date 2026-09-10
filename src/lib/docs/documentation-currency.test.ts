@@ -281,6 +281,15 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
   },
   {
     path: "DESIGN.md",
+    claim: "glass spent on chrome and signature moments rather than on dense data",
+    retiredBy:
+      "ADR 0099 — the panel is a pane too, at a shallower blur. Measured on the dashboard, " +
+      "the old rule left one surface a pane and four fills, and the four were the product " +
+      "grid. A card floating over flat tiles is not a lighter version of the direction that " +
+      "was chosen; it is a different one. A `section` is still opaque, and that is structural.",
+  },
+  {
+    path: "DESIGN.md",
     claim: "There is no `components.json`",
     retiredBy:
       "ADR 0095 — one exists, and it exists to make the rule that sentence introduced " +
@@ -349,9 +358,11 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
     retiredBy: "Sprint 0056 — as src/app/login/page.tsx.",
   },
   {
-    path: "src/app/app/(account)/page.tsx",
+    path: "src/app/app/page.tsx",
     claim: "Read-only access to start",
-    retiredBy: "Sprint 0056 — as src/app/login/page.tsx.",
+    retiredBy:
+      "Sprint 0056 — as src/app/login/page.tsx. The file moved out of the (account) group in " +
+      "Sprint 0147, when /app stopped being a screen and became the redirect that picks a product.",
   },
   {
     path: "docs/setup/github-app.md",

@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { formatTime } from "@/lib/utils/format-datetime";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
+import { MonoChip } from "@/components/ui/status-pill";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 
 /**
@@ -147,18 +148,12 @@ export function AgentFileActivity({
 
               <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                 <span className="flex items-baseline justify-between gap-3">
-                  <span className="text-fg-body text-sm font-medium">{event.summary}</span>
+                  <span className="text-fg-body text-body font-medium">{event.summary}</span>
                   {clock !== null && (
-                    <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
-                      {clock}
-                    </span>
+                    <span className="text-fg-meta flex-none font-mono text-meta">{clock}</span>
                   )}
                 </span>
-                {path !== null && (
-                  <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-[0.6875rem]">
-                    {path}
-                  </span>
-                )}
+                {path !== null && <MonoChip className="self-start">{path}</MonoChip>}
               </span>
             </motion.li>
           );
@@ -172,7 +167,7 @@ export function AgentFileActivity({
           it. Every event is here; the list simply opens.
         */
         <details className="group border-line-2 border-t pt-3.5">
-          <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-[0.8125rem]">
+          <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-ui">
             <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
             <span className="group-open:hidden">
               Show {remaining} more {remaining === 1 ? "change" : "changes"}
@@ -192,18 +187,14 @@ export function AgentFileActivity({
                     <span className="w-[18px] flex-none" aria-hidden="true" />
                     <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                       <span className="flex items-baseline justify-between gap-3">
-                        <span className="text-fg-body text-sm font-medium">{event.summary}</span>
+                        <span className="text-fg-body text-body font-medium">{event.summary}</span>
                         {clock !== null && (
-                          <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
+                          <span className="text-fg-meta flex-none font-mono text-meta">
                             {clock}
                           </span>
                         )}
                       </span>
-                      {path !== null && (
-                        <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-[0.6875rem]">
-                          {path}
-                        </span>
-                      )}
+                      {path !== null && <MonoChip className="self-start">{path}</MonoChip>}
                     </span>
                   </li>
                 );

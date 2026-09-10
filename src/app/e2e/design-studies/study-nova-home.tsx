@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { statusForCandidate } from "@/components/system/status-vocabulary";
-import { creditsToUnits } from "@/modules/credits/units";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { RetailOperationKind } from "@/modules/credits/retail";
 import {
@@ -83,13 +82,6 @@ function retailKindOf(entry: NovaHomeEntry): RetailOperationKind | null {
   if (entry.control.kind !== "server_action") return null;
   return NOVA_ACTION_META[entry.control.option.actionId].price ?? null;
 }
-
-/**
- * The fixture balance, built through `creditsToUnits` rather than cast — the
- * same reason the Nova fixture gives. A raw `420` is 420 internal units, which
- * is 0.42 Credits, and would render an affordable price as unaffordable.
- */
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 function controlLabel(entry: NovaHomeEntry): string | null {
   return novaControlLabel(entry.control);
@@ -210,7 +202,7 @@ export function StudyNovaHome({ study }: { study: Study }) {
                   Absent means free-or-unpriced, and renders nothing rather
                   than the word "free" — the billing decision this product
                   already made. */}
-              <CostDisclosure operation={priceKind} balance={STUDY_BALANCE} />
+              <CostDisclosure operation={priceKind} />
             </div>
           )}
         </section>
@@ -231,7 +223,7 @@ export function StudyNovaHome({ study }: { study: Study }) {
                   >
                     <Pill tone={entryStatus.tone}>{entryStatus.word}</Pill>
                     <span className="min-w-0 flex-1 text-ui text-fg-body">{entry.message}</span>
-                    <CostDisclosure operation={entryKind} balance={STUDY_BALANCE} />
+                    <CostDisclosure operation={entryKind} />
                     {entryAction && (
                       <span className="text-caption font-semibold text-mint">{entryAction} →</span>
                     )}

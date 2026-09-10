@@ -31,6 +31,8 @@ const CUSTOMER = "cus_test_1";
 const PRICES: CatalogPriceIds = {
   builder: "price_builder_monthly",
   pro: "price_pro_monthly",
+  builder_annual: "price_builder_annual",
+  pro_annual: "price_pro_annual",
   pack_500: "price_pack_500",
   pack_1500: "price_pack_1500",
   pack_5000: "price_pack_5000",

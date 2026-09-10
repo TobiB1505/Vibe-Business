@@ -139,6 +139,69 @@ export const LABELS_SCENARIO = "study-labels";
 /** The identifier-face comparison, rendered in the chosen direction. */
 export const MONO_SCENARIO = "study-mono";
 
+/** The inline-action comparison, rendered in the chosen direction. */
+export const ACTIONS_SCENARIO = "study-actions";
+
+/** The icon-led follow-up to it. */
+export const ICON_ACTIONS_SCENARIO = "study-icon-actions";
+
+/** Why the dismiss mark reads as drawn — weight and cut, at real sizes. */
+export const MARK_SCENARIO = "study-mark";
+
+/** The container around the mark, which is what makes it read as a control. */
+export const DISMISS_SCENARIO = "study-dismiss";
+
+/** The same principles for the controls that live inside text. */
+export const INLINE_SCENARIO = "study-inline";
+
+/** The block that opens — "see more", "More context", "Technical details". */
+export const DISCLOSURE_SCENARIO = "study-disclosure";
+
+/** What the action work left open: the links, and how loud a delete is. */
+export const LINKS_SCENARIO = "study-links";
+
+/** Which button, and how many of it — four systems against the six real jobs. */
+export const BUTTON_SCENARIO = "study-button";
+
+/** How the button looks, once how many of it is settled. */
+export const BUTTON_LOOK_SCENARIO = "study-button-look";
+
+/** What Button does not cover: the links, the Credits, and how loud money is. */
+export const CTA_SCENARIO = "study-cta";
+
+/** Whether the repositories page wants to be a table at all. */
+export const REPOSITORIES_SCENARIO = "study-repositories";
+
+/** What shape a page holds two facts in — the Profile page, four ways. */
+export const PROFILE_SCENARIO = "study-profile";
+
+/** Whether the products page is a list or a wall of cards. */
+export const PRODUCTS_SCENARIO = "study-products";
+
+/** What the front door shows, when the honest answer is "nothing yet". */
+export const LANDING_SCENARIO = "study-landing";
+
+/** One card in the middle, and the four grounds it could stand on. */
+export const HERO_CARD_SCENARIO = "study-hero-card";
+
+/** Four hero cards built from scratch — the ground held constant, the shape varying. */
+export const HERO_SHAPE_SCENARIO = "study-hero-shape";
+
+/** What lies behind the glass — the ground the product does not yet have. */
+export const BACKGROUND_SCENARIO = "study-background";
+
+/** The Credit: a mark for it, and a price that looks like money. */
+export const CREDITS_SCENARIO = "study-credits";
+
+/** The form controls: the well that converged, and the two that are not fields. */
+export const FORMS_SCENARIO = "study-forms";
+
+/** The heading scale, and the three ways to close the hole in it. */
+export const TYPE_SCENARIO = "study-type";
+
+/** The figure: a number that is the subject of a screen, at eight sizes. */
+export const FIGURE_SCENARIO = "study-figure";
+
 export function studyByScenario(scenario: string): Study | null {
   return STUDIES.find((study) => study.scenario === scenario) ?? null;
 }

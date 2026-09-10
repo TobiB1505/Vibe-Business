@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The signed-in error boundary, in a real browser.
@@ -116,10 +117,7 @@ test.describe("375px", () => {
     await page.setViewportSize({ width: 375, height: 780 });
     await page.goto(WITH_DIGEST);
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
   });
 
   test("keeps both controls reachable without scrolling sideways", async ({ page }) => {

@@ -37,10 +37,10 @@ export function AgentBuildStage({
             {task === null ? (
               <div className="flex flex-col gap-4">
                 <MonoLabel className="text-mint">Current task</MonoLabel>
-                <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em]">
+                <h3 className="text-fg text-moment font-bold">
                   {live ? "Vibe is writing the change" : "Vibe wrote the change"}
                 </h3>
-                <p className="text-fg-prose max-w-[46ch] text-base leading-relaxed">
+                <p className="text-fg-prose max-w-[46ch] text-lead leading-relaxed">
                   Work happens in an isolated environment on a branch of its own. Nothing reaches
                   your default branch without your approval.
                 </p>
@@ -65,7 +65,7 @@ export function AgentBuildStage({
       {presentation === "page" ? (
         <AgentAssuranceBar showGuidance={false} />
       ) : (
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           Work happens in an isolated copy of your code, on a branch of its own. Nothing reaches
           your default branch without your approval.
         </p>

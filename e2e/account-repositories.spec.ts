@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 const REPOSITORIES = "/e2e/account-repositories";
 
@@ -23,9 +24,37 @@ test.describe("Repositories", () => {
     await expect(page.getByRole("link", { name: "Team Monitor", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Clear repository search" }).click();
-    await page.getByRole("combobox", { name: "Filter repository visibility" }).selectOption("public");
+    // The filter is a segmented control, not a popup: the options are on
+    // screen, so this clicks the pill the way a reader does. The input behind
+    // it is `sr-only` — 1px and clipped — which is exactly why the label is
+    // the target here and in the product.
+    await page
+      .getByRole("group", { name: "Filter repository visibility" })
+      .getByText("Public")
+      .click();
+    await expect(page.getByRole("radio", { name: "Public" })).toBeChecked();
     await expect(page).toHaveURL(/visibility=public/);
     await expect(page.getByText("Showing 1–3 of 3 repositories")).toBeVisible();
+  });
+
+  test("filters from the keyboard, because the segment is a real radio group", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    // The whole reason the pills are labels over inputs rather than buttons
+    // with `aria-pressed`: arrow keys, grouping and the announcement come
+    // from the browser. If this stops working the control has been rebuilt
+    // out of divs and the keyboard has been dropped with it.
+    await page.getByRole("radio", { name: "All" }).focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("radio", { name: "Private" })).toBeChecked();
+    await expect(page).toHaveURL(/visibility=private/);
+
+    // And the focus is drawn on something a sighted keyboard user can see —
+    // the input itself is 1px and clipped, so the ring has to be on the pill.
+    const ring = await page
+      .getByRole("radio", { name: "Private" })
+      .evaluate((input) => getComputedStyle(input.closest("label")!).boxShadow);
+    expect(ring).toMatch(/rgba?\(0, 229, 160/);
   });
 
   test("paginates the bounded repository ledger", async ({ page }) => {
@@ -50,12 +79,90 @@ for (const width of [1440, 1024, 768, 375]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(REPOSITORIES);
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    // Measure on the real faces. This assertion failed once at 768px by 4px
+    // under a full parallel run and passed three times in isolation: a
+    // fallback face is wider, and nothing here waited for the web fonts.
+    await page.evaluate(() => document.fonts.ready);
+
+    await expectNoHorizontalOverflow(page);
   });
 }
+
+/**
+ * The audit's findings, as assertions (UI-31).
+ *
+ * Each of these was measured on the rendered page and none of them is visible
+ * in the source: a number that is true today and false after one click, a
+ * focus ring that exists as a 26%-alpha border, and a control that is 61px
+ * tall because its own words wrapped.
+ */
+test.describe("what the audit found", () => {
+  test("prints no number it cannot compute", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    /*
+     * The header printed `repositories.length` twice, once labelled Products.
+     * A project whose repository was disconnected still exists and produces no
+     * row here — so the count was the repositories, said twice, and it goes
+     * wrong on the first Disconnect.
+     */
+    // Scoped to `main`: the settings rail has a *navigation* item called
+    // Products, which is a different thing in a different place and is correct.
+    const labels = await page.evaluate(() => {
+      const heading = [...document.querySelectorAll("main h2")].find((n) =>
+        (n.textContent || "").includes("GitHub"),
+      );
+      const card = heading?.closest("[class*='vibe-surface']");
+      return [...(card?.querySelectorAll("span") ?? [])]
+        .map((n) => (n.textContent || "").trim())
+        .filter((text) => /^[A-Z][a-z]+$/.test(text));
+    });
+
+    expect(labels, "the header counts something it cannot compute").not.toContain("Products");
+    expect(labels, "the header says one fact twice").toEqual(["Repositories", "Private"]);
+  });
+
+  test("draws a focus ring on the two controls that had none", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    // Real Tab presses, because `:focus-visible` is the browser's judgement
+    // and `.focus()` does not always earn it.
+    await page.getByRole("searchbox", { name: "Search repositories" }).press("Tab");
+    for (const name of ["Search repositories", "Sort repositories"] as const) {
+      const ring = await page
+        .getByRole(name === "Sort repositories" ? "combobox" : "searchbox", { name })
+        .evaluate((node) => {
+          (node as HTMLElement).focus();
+          const label = node.closest("label")!;
+          return getComputedStyle(label).boxShadow;
+        });
+      expect(ring, `${name} has no ring of its own`).toMatch(/rgba?\(0, 229, 160/);
+    }
+  });
+
+  test("keeps every control on one line at 1440", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(REPOSITORIES);
+    await page.evaluate(() => document.fonts.ready);
+
+    // "Manage connection" rendered 61px tall beside 40px controls, because its
+    // two words wrapped in a column the metric strip had squeezed.
+    const wrapped = await page.evaluate(() =>
+      [...document.querySelectorAll("main a, main button")]
+        .filter((n) => n.getBoundingClientRect().height > 46 && (n.textContent || "").trim())
+        .map((n) => (n.textContent || "").trim().slice(0, 30)),
+    );
+    expect(wrapped, "a control wrapped to two lines").toEqual([]);
+  });
+
+  test("renders the list once", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    // A table above `md` and a card list below is two implementations that
+    // drift, and they had. One row serves every width now.
+    await expect(page.locator("main table")).toHaveCount(0);
+  });
+});
 
 test.describe("a repository Vibe can no longer read (VB-041)", () => {
   /**
@@ -103,15 +210,15 @@ test.describe("a repository Vibe can no longer read (VB-041)", () => {
      * One revoked installation in the fixture. A notice on every row would
      * mean the state is being derived from the wrong thing.
      *
-     * Filtered to what is *visible*: this page renders a table and a card list
-     * and hides one of them by breakpoint, so both notices exist in the DOM
-     * and only one is on screen. Counting DOM nodes here would assert the
-     * layout rather than the state.
+     * This used to filter to `visible=true`, because the page rendered a table
+     * *and* a card list and hid one by breakpoint — so both notices existed in
+     * the DOM and counting nodes would have asserted the layout rather than
+     * the state. UI-31 left one renderer, so the honest count is the DOM
+     * count, and it is now also the thing that fails if the second renderer
+     * ever comes back.
      */
     await expect(
-      page
-        .getByText("Vibe can no longer read this repository — the GitHub App was removed.")
-        .locator("visible=true"),
+      page.getByText("Vibe can no longer read this repository — the GitHub App was removed."),
     ).toHaveCount(1);
   });
 });

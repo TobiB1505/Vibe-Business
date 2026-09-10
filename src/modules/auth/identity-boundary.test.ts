@@ -15,9 +15,13 @@ describe("the client-safe initials boundary", () => {
   });
 
   it("keeps the interactive product list off the account identity module", () => {
-    const card = source("src/app/app/(account)/products/product-list-card.tsx");
+    // The card became a row in UI-33. The boundary is the same one: a list of
+    // the customer's products draws initials, and pulling
+    // `identity-view` in for them would drag server-only GitHub access into a
+    // client bundle to spell two letters.
+    const row = source("src/app/app/(account)/settings/products/product-list-row.tsx");
 
-    expect(card).toContain('from "@/modules/auth/initials"');
-    expect(card).not.toContain('from "@/modules/auth/identity-view"');
+    expect(row).toContain('from "@/modules/auth/initials"');
+    expect(row).not.toContain('from "@/modules/auth/identity-view"');
   });
 });

@@ -36,6 +36,22 @@ export const RETIRED_WORKSPACE_ADDRESSES: readonly { from: string; to: string }[
   { from: "understanding", to: "product" },
 ];
 
+/**
+ * The account sections that moved under Settings.
+ *
+ * `/app` stopped being a screen: it resolves to a product now, and everything
+ * that was account-level chrome — the product list, the connected
+ * repositories, billing, the profile — became sections of one Settings area
+ * with its own rail. The URLs moved with them, because an address bar that
+ * does not say you are in Settings is a nested area pretending to be four
+ * top-level ones.
+ *
+ * These have real traffic behind them: they are the destinations of the old
+ * account rail, of `requireSession` redirects people have bookmarked after a
+ * login, and of links in the project workspace.
+ */
+export const MOVED_ACCOUNT_SECTIONS = ["products", "repositories", "billing", "profile"] as const;
+
 export type RouteRedirect = { source: string; destination: string; permanent: boolean };
 
 /**
@@ -47,9 +63,21 @@ export type RouteRedirect = { source: string; destination: string; permanent: bo
 export function retiredAddressRedirects(): RouteRedirect[] {
   const base = "/app/projects/:projectId";
 
-  return RETIRED_WORKSPACE_ADDRESSES.map(({ from, to }) => ({
-    source: `${base}/${from}`,
-    destination: to === "" ? base : `${base}/${to}`,
-    permanent: false,
-  }));
+  return [
+    ...RETIRED_WORKSPACE_ADDRESSES.map(({ from, to }) => ({
+      source: `${base}/${from}`,
+      destination: to === "" ? base : `${base}/${to}`,
+      permanent: false,
+    })),
+    ...MOVED_ACCOUNT_SECTIONS.flatMap((segment) => [
+      { source: `/app/${segment}`, destination: `/app/settings/${segment}`, permanent: false },
+      // The sections have pages below them today and will have more; a bookmark
+      // deeper than the index should not be the one that 404s.
+      {
+        source: `/app/${segment}/:path*`,
+        destination: `/app/settings/${segment}/:path*`,
+        permanent: false,
+      },
+    ]),
+  ];
 }

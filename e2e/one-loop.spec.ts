@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Audit → Move → Prepare → Prepared, in a real browser (UI-S2 §41, §42).
@@ -48,25 +49,6 @@ async function settledBox(locator: Locator) {
   }
 
   return previous;
-}
-
-async function expectNoHorizontalOverflow(page: Page) {
-  /*
-   * Polled, because a carousel that is mid-slide is wider than the one that
-   * comes to rest. A single sample taken the instant a swipe ends measures the
-   * transition, not the layout — and "the page does not scroll sideways" is a
-   * claim about where it settles. A layout that genuinely overflows still fails
-   * here, at the timeout.
-   */
-  await expect
-    .poll(
-      async () =>
-        page.evaluate(
-          () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-        ),
-      { message: "horizontal overflow in px" },
-    )
-    .toBeLessThanOrEqual(1);
 }
 
 test.describe("the audit hands off to the moves that answer it", () => {
@@ -207,7 +189,9 @@ test.describe("the single-Move priority navigator", () => {
     await page.getByRole("tab", { name: /Add a pricing surface people can reach/ }).click();
 
     await expect(page.getByTestId("move-card")).toHaveCount(1);
-    await expect(page.getByRole("heading", { name: "Add a pricing surface people can reach" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
+    ).toBeVisible();
     await expect(page).toHaveURL(/\?plan=move-pricing-page$/);
     await expect(page.getByText("A decision nobody can see", { exact: false })).toBeVisible();
     expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(
@@ -221,10 +205,14 @@ test.describe("the single-Move priority navigator", () => {
     const first = page.getByRole("tab", { name: /Decide how customers pay/ });
     await first.focus();
     await page.keyboard.press("ArrowRight");
-    await expect(page.getByRole("heading", { name: "Add a pricing surface people can reach" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
+    ).toBeVisible();
     await page.getByRole("tab", { name: /Say who the product is for/ }).click();
     await page.goBack();
-    await expect(page.getByRole("heading", { name: "Add a pricing surface people can reach" })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
+    ).toBeVisible();
   });
 
   test("changes selection immediately when reduced motion is requested", async ({ page }) => {
@@ -239,9 +227,8 @@ test.describe("the single-Move priority navigator", () => {
       .poll(() =>
         page.evaluate(
           () =>
-            document
-              .getAnimations()
-              .filter((animation) => animation.playState === "running").length,
+            document.getAnimations().filter((animation) => animation.playState === "running")
+              .length,
         ),
       )
       .toBe(0);
@@ -418,9 +405,17 @@ test.describe("the plan forms before the first move exists", () => {
       await page.emulateMedia({ reducedMotion: "reduce" });
       await page.goto("/e2e/moves_generating");
 
-      await expect(page.getByRole("heading", { name: "Generating your Action Plan" })).toBeVisible();
+      await expect(
+        page.getByRole("heading", { name: "Generating your Action Plan" }),
+      ).toBeVisible();
       await expect
-        .poll(() => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length))
+        .poll(() =>
+          page.evaluate(
+            () =>
+              document.getAnimations().filter((animation) => animation.playState === "running")
+                .length,
+          ),
+        )
         .toBe(0);
     });
   });
@@ -491,6 +486,13 @@ test.describe("the loop survives a phone", () => {
       page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
     ).toBeVisible();
     await expect(page.getByText("A decision nobody can see", { exact: false })).toBeVisible();
+
+    // The carousel is still travelling when the new heading appears, and a
+    // sliding track is momentarily wider than its viewport. Measured: 7px
+    // under a full parallel run, 0 in isolation three times. `settledBox`
+    // exists in this file for exactly this — waiting for the movement to stop
+    // rather than for the assertion to be lucky.
+    await settledBox(page.getByTestId("active-move"));
     await expectNoHorizontalOverflow(page);
   });
 
@@ -502,6 +504,56 @@ test.describe("the loop survives a phone", () => {
       page.getByTestId("current-priorities").getByRole("link", { name: "View 2 next moves" }),
     ).toBeVisible();
     await expectNoHorizontalOverflow(page);
+  });
+});
+
+/**
+ * "Why this move" continues rather than opening.
+ *
+ * The reason is prose, so it gets the continuation treatment: the first lines
+ * stay visible under a fade and the control ends the sentence. The thing worth
+ * a test is the *measurement* — whether the control is offered at all depends
+ * on the container's width, and a "See more" over a sentence that already ends
+ * on screen is a control that lies. jsdom cannot answer that, because it has
+ * no layout; only a browser can.
+ */
+test.describe("the reason continues only when there is more of it", () => {
+  const REASON = "Everything downstream";
+
+  async function openTheMove(page: Page) {
+    await page.goto(RANKED);
+    await page.getByRole("tab", { name: /Say who the product is for/ }).click();
+    return page.locator("section[aria-labelledby='why-this-move']");
+  }
+
+  test("offers nothing when the reason already fits", async ({ page }) => {
+    await page.setViewportSize(DESKTOP);
+    const section = await openTheMove(page);
+
+    await expect(section).toContainText(REASON);
+    await expect(section.getByRole("button", { name: /See more|Show less/ })).toHaveCount(0);
+  });
+
+  test("offers the rest when the reason is clamped, and keeps the whole of it", async ({
+    page,
+  }) => {
+    // Narrow enough that the reason runs past two lines. The width is the
+    // input to this behaviour, so it is the thing the test varies.
+    await page.setViewportSize({ width: 330, height: 844 });
+    const section = await openTheMove(page);
+
+    const more = section.getByRole("button", { name: "See more" });
+    await expect(more).toBeVisible();
+    await expect(more).toHaveAttribute("aria-expanded", "false");
+
+    // Clamping is visual: the full string is in the DOM in both states, so a
+    // screen reader never depends on the toggle.
+    await expect(section).toContainText("depends on that answer");
+
+    await more.click();
+    const less = section.getByRole("button", { name: "Show less" });
+    await expect(less).toHaveAttribute("aria-expanded", "true");
+    await expect(section).toContainText("depends on that answer");
   });
 });
 
@@ -570,10 +622,7 @@ test.describe("the agent knows which Move the founder arrived with", () => {
        compositions, and each carries the way back to the Move. */
     const card = page.getByTestId("agent-review-decision");
     const back = card.getByRole("link", { name: "Give the landing page a proper social preview" });
-    await expect(back).toHaveAttribute(
-      "href",
-      /\/plan\?plan=[^"]+#planned-work$/,
-    );
+    await expect(back).toHaveAttribute("href", /\/plan\?plan=[^"]+#planned-work$/);
   });
 
   test("a deterministic change keeps its rationale and still links to its Move", async ({
@@ -584,7 +633,9 @@ test.describe("the agent knows which Move the founder arrived with", () => {
     const card = page.getByTestId("agent-review-decision");
     // One account of why, not two: the written rationale, plus a link.
     await expect(card).toContainText("Answers your move");
-    await expect(card.getByRole("link", { name: "Fix missing technical SEO foundations" })).toHaveAttribute(
+    await expect(
+      card.getByRole("link", { name: "Fix missing technical SEO foundations" }),
+    ).toHaveAttribute(
       "href",
       "/app/projects/project_e2e/plan?plan=3-seo-fix-missing-technical-seo-foundations#planned-work",
     );

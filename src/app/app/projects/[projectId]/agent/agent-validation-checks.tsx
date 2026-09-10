@@ -92,7 +92,7 @@ export function AgentValidationChecks({ checks }: { checks: readonly ValidationC
           >
             <span
               className={cn(
-                "flex size-[34px] flex-none items-center justify-center rounded-[10px] border",
+                "flex size-[34px] flex-none items-center justify-center rounded-nav border",
                 ICON[check.state],
               )}
             >
@@ -114,7 +114,7 @@ export function AgentValidationChecks({ checks }: { checks: readonly ValidationC
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span
                 className={cn(
-                  "text-[0.9375rem] font-semibold",
+                  "text-card-title font-semibold",
                   check.state === "pending" || check.state === "skipped"
                     ? "text-fg-muted"
                     : "text-fg",
@@ -122,13 +122,13 @@ export function AgentValidationChecks({ checks }: { checks: readonly ValidationC
               >
                 {check.name}
               </span>
-              <span className="text-fg-muted text-[0.8125rem]">{check.detail}</span>
+              <span className="text-fg-muted text-ui">{check.detail}</span>
             </span>
 
             <span
               aria-hidden="true"
               className={cn(
-                "flex size-[22px] flex-none items-center justify-center rounded-full border-[1.5px] text-[11px]",
+                "flex size-[22px] flex-none items-center justify-center rounded-full border-[1.5px] text-meta",
                 mark.ring,
               )}
               style={

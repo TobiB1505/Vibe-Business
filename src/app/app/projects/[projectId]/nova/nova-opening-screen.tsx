@@ -168,7 +168,7 @@ export function NovaOpeningScreen({
                   connected={connected}
                   /* Her line arrives a beat after the row it sits in. */
                   availabilityPending={!online}
-                  mark={<NovaPresence state={mark} size="md" seed={projectId} />}
+                  mark={<NovaPresence state={mark} seed={projectId} />}
                   now={<NovaClock />}
                 />
               </OpeningFade>

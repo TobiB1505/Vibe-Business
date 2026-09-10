@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { Field, Textarea } from "@/components/ui/field";
 import { MonoLabel } from "@/components/ui/typography";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { HandoffPurpose } from "@/modules/handoff/schema";
@@ -58,36 +59,37 @@ export function AttestationForm({
       {prompt.criterion && (
         <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
           <MonoLabel className="text-amber tracking-[0.12em]">{prompt.criterion.label}</MonoLabel>
-          <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
+          <p className="text-fg-body mt-1.5 text-body leading-relaxed">{step.completionCriteria}</p>
         </div>
       )}
 
       <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
         {prompt.finding && (
-          <div className="flex w-full flex-col gap-1.5">
-            <label htmlFor={`finding-${step.id}`} className="text-fg-secondary text-sm font-medium">
-              {prompt.finding.label}
-            </label>
-            <textarea
+          <Field
+            id={`finding-${step.id}`}
+            label={prompt.finding.label}
+            hint={prompt.finding.help}
+            className="w-full"
+          >
+            <Textarea
               id={`finding-${step.id}`}
               name="finding"
               required
               rows={4}
               maxLength={1200}
-              className="border-line-2 bg-surface-2 text-fg-body rounded-well w-full resize-y border px-3 py-2 text-sm leading-relaxed"
+              aria-describedby={`finding-${step.id}-hint`}
               data-testid="attestation-finding"
             />
-            <p className="text-fg-muted text-xs">{prompt.finding.help}</p>
-          </div>
+          </Field>
         )}
         <Button type="submit" disabled={pending || state?.ok === true} busy={pending}>
           {pending ? "Saving…" : state?.ok ? "Recorded" : prompt.submitLabel}
         </Button>
-        <p className="text-fg-muted text-xs">{prompt.footnote}</p>
+        <p className="text-fg-muted text-caption">{prompt.footnote}</p>
       </form>
 
       {state && !state.ok && (
-        <p role="alert" className="text-coral text-sm">
+        <p role="alert" className="text-coral text-body">
           {state.message}
         </p>
       )}

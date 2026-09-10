@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { creditsToUnits } from "@/modules/credits/units";
 import { CostDisclosure } from "@/components/system/cost-disclosure";
 import { priceDisplayFor } from "@/components/ui/credit-price";
 import type { RetailOperationKind } from "@/modules/credits/retail";
@@ -83,8 +82,6 @@ import type { Study } from "./studies";
  * product presses, not a picture of it.
  */
 
-const BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
-
 /** The four states, as the kinds the product resolves them from. */
 type MoveState =
   | { kind: "priced"; operation: RetailOperationKind }
@@ -125,7 +122,7 @@ function Cost({ state }: { state: MoveState }) {
   if (state.kind === "away") {
     return <span className="text-caption text-fg-meta">{state.where}</span>;
   }
-  return <CostDisclosure operation={state.operation} balance={BALANCE} />;
+  return <CostDisclosure operation={state.operation} />;
 }
 
 /* ── A — The line ─────────────────────────────────────────────────────── */
@@ -160,7 +157,7 @@ function MoveLine({ state, label }: { state: MoveState; label: string }) {
  */
 function MoveLit({ state, label }: { state: MoveState; label: string }) {
   if (state.kind === "away") return <Move label={label} leavesTo={state.where} />;
-  return <Move label={label} operation={state.operation} balance={BALANCE} />;
+  return <Move label={label} operation={state.operation} />;
 }
 
 /* ── C — The switch ───────────────────────────────────────────────────── */
@@ -331,7 +328,6 @@ function ShippedStates({ panel }: { panel: string }) {
         <NovaMoveButton
           label="Run the audit again"
           operation="business_audit"
-          balance={BALANCE}
           busy
         />
       ),
@@ -343,7 +339,6 @@ function ShippedStates({ panel }: { panel: string }) {
         <NovaMoveButton
           label="Run the audit again"
           operation="business_audit"
-          balance={BALANCE}
           disabled
         />
       ),

@@ -1,13 +1,14 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { TextAction } from "@/components/ui/button";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import {
   deleteProjectAction,
   type DeleteProjectActionState,
   type DeleteProjectFailure,
 } from "./actions";
+import { DeleteIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
 
 /**
  * Deleting a project (ADR 0056 §1).
@@ -47,7 +48,20 @@ const FAILURE_MESSAGES: Record<DeleteProjectFailure, string> = {
 
 const initialState: DeleteProjectActionState = null;
 
-export function DeleteProjectButton({ projectId }: { projectId: string }) {
+export function DeleteProjectButton({
+  projectId,
+  projectName,
+}: {
+  projectId: string;
+  /**
+   * Typed back before this can run (UI-24).
+   *
+   * The name rather than a fixed phrase, because the mistake this prevents is
+   * not "I did not mean to delete anything" — it is "I deleted the wrong one".
+   * Somebody with four products reaches this page from a switcher.
+   */
+  projectName: string;
+}) {
   const [confirming, setConfirming] = useState(false);
   const openerRef = useReturnFocus<HTMLButtonElement>(confirming);
   const action = deleteProjectAction.bind(null, projectId);
@@ -65,6 +79,8 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
           tone="caution"
           confirmLabel="Delete project"
           confirmType="submit"
+          confirmPhrase={projectName}
+          confirmPhraseLabel={`Type ${projectName} to confirm`}
           // Disables both buttons and shows the busy state, so a second click
           // cannot submit a second delete while the first is in flight.
           pending={pending}
@@ -80,7 +96,7 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
           </>
         </ConfirmPanel>
         {failure && (
-          <p role="alert" className="mt-3 text-sm text-amber">
+          <p role="alert" className="mt-3 text-body text-amber">
             {FAILURE_MESSAGES[failure]}
           </p>
         )}
@@ -89,21 +105,28 @@ export function DeleteProjectButton({ projectId }: { projectId: string }) {
   }
 
   return (
-    // Not `w-full`: this sits in a `justify-between` flex line, and a
-    // full-width child would wrap the control onto its own line. The column
-    // keeps the failure directly under the control that caused it.
-    <div className="flex flex-col items-end gap-2">
-      <TextAction
+    /*
+      `items-start`, not `items-end`, since UI-21: this used to sit at the right
+      of a `justify-between` line inside the Repository card, beside a caption.
+      It has its own section now, under the paragraph that explains it, and a
+      control that drifts to the far edge of a card is a control separated from
+      its own sentence.
+
+      Still not `w-full`: the column keeps the failure directly under the
+      control that caused it, and a stretched child would put a one-line
+      refusal across the whole card.
+    */
+    <div className="flex flex-col items-start gap-2">
+      <Button
+        variant="danger"
         ref={openerRef}
-        type="button"
-        tone="danger"
-        className="text-sm"
+        icon={<DeleteIcon size={14} />}
         onClick={() => setConfirming(true)}
       >
         Delete project
-      </TextAction>
+      </Button>
       {failure && (
-        <p role="alert" className="text-sm text-amber">
+        <p role="alert" className="text-body text-amber">
           {FAILURE_MESSAGES[failure]}
         </p>
       )}

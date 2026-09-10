@@ -1,7 +1,6 @@
 import type { CSSProperties, ReactNode } from "react";
 import { novaPresenceState, statusForOperationPhase } from "@/components/system/status-vocabulary";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { creditsToUnits } from "@/modules/credits/units";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import type { AuditEventRecord } from "@/modules/audit-log/queries";
 import { buildNovaFeed, type NovaEntry } from "@/modules/nova/feed";
@@ -64,8 +63,6 @@ function Label({ children }: { children: ReactNode }) {
     <p className="text-label font-mono tracking-[0.16em] text-fg-meta uppercase">{children}</p>
   );
 }
-
-const STUDY_BALANCE = { availableCredits: creditsToUnits(420), display: "420" };
 
 const ACTIVITY_RECORDS: AuditEventRecord[] = [
   {
@@ -369,7 +366,6 @@ export function StudyConsole({ study, idle }: { study: Study; idle?: boolean }) 
                     key={option.actionId}
                     label={option.label}
                     operation={option.price}
-                    balance={STUDY_BALANCE}
                   />
                 ))}
               </div>

@@ -4,7 +4,8 @@ import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import type { SourceCoverage, SourceCoverageState } from "@/modules/provenance/source-coverage";
 import { firstCoverageGap } from "@/modules/provenance/source-coverage";
-import { CostDisclosure, type CostBalance } from "./cost-disclosure";
+import { CostDisclosure } from "./cost-disclosure";
+import { StandaloneLink, proseLinkClasses } from "@/components/ui/text-link";
 
 /**
  * What Vibe's understanding rests on (audit R6, sourcing spec S8).
@@ -66,11 +67,9 @@ function measuredPhrase(measured: SourceCoverage["measured"]): string | null {
 
 export function SourceCoverageList({
   sources,
-  balance,
   className,
 }: {
   sources: readonly SourceCoverage[];
-  balance?: CostBalance | null;
   className?: string;
 }) {
   return (
@@ -91,7 +90,7 @@ export function SourceCoverageList({
               <StatusPill tone={STATE_TONE[source.state]}>{STATE_WORD[source.state]}</StatusPill>
             </div>
 
-            <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{source.detail}</p>
+            <p className="text-fg-prose max-w-[62ch] text-body leading-relaxed">{source.detail}</p>
 
             {/*
               Why it stopped short. Already worded by the module that owns the
@@ -116,13 +115,8 @@ export function SourceCoverageList({
 
             {source.remedy && (
               <div className="flex flex-col gap-1">
-                <Link
-                  href={source.remedy.href}
-                  className="text-fg-secondary hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                >
-                  {source.remedy.label}
-                </Link>
-                <CostDisclosure operation={source.remedy.operation} balance={balance} />
+                <StandaloneLink href={source.remedy.href}>{source.remedy.label}</StandaloneLink>
+                <CostDisclosure operation={source.remedy.operation} />
               </div>
             )}
           </li>
@@ -177,10 +171,7 @@ export function SourceCoverageStrip({
         </span>
       ))}
       {gap?.remedy && (
-        <Link
-          href={gap.remedy.href}
-          className="text-fg-secondary hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
-        >
+        <Link href={gap.remedy.href} className={proseLinkClasses()}>
           {gap.remedy.label}
         </Link>
       )}

@@ -1,6 +1,6 @@
 # 0025 - Stripe as Payment Rail, and Credit Grants as Provenance
 
-Status: Accepted
+Status: Accepted — its "no annual" clause is superseded by [0107](0107-a-year-is-ten-months.md); plans can be paid for by the year
 Date: 2026-08-18
 Builds on [0008](0008-secrets-management.md), [0013](0013-durable-operation-execution.md), [0024](0024-vibe-credits-economic-layer.md)
 

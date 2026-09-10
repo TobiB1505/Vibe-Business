@@ -66,7 +66,7 @@ export function MovesRefreshBar({
       {!blocked && (
       <form action={formAction} className="flex flex-wrap items-center gap-3">
         <input type="hidden" name="force" value={hasOpportunities ? "true" : "false"} />
-        <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
+        <Button type="submit" variant="secondary" disabled={pending} busy={pending}>
           {!pending && <RefreshIcon size={15} />}
           {pending ? "Starting…" : hasOpportunities ? "Re-scan business" : "Find my next moves"}
         </Button>

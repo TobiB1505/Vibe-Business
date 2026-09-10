@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  ANNUAL_PAID_MONTHS,
+  BILLING_INTERVALS,
   CREDIT_PACK_KEYS,
   PAID_PLAN_KEYS,
   PLAN_KEYS,
@@ -8,8 +10,10 @@ import {
   getCreditPack,
   getPlan,
   listCreditPacks,
+  parseBillingInterval,
   parseCreditPackKey,
   parsePaidPlanKey,
+  planPricing,
   subscriptionGrantIdempotencyKey,
   topUpGrantIdempotencyKey,
   welcomeGrantIdempotencyKey,
@@ -180,5 +184,61 @@ describe("grant identities bind to real external payment facts (§28, §30)", ()
       topUpGrantIdempotencyKey("x"),
     ];
     expect(new Set(keys).size).toBe(3);
+  });
+});
+
+/**
+ * A year of a plan (ADR 0107).
+ *
+ * The discount is one number — ten months charged for twelve — and both facts
+ * below are derived from it rather than typed beside the monthly ones, so a
+ * price change cannot leave the annual card advertising an old ratio. These
+ * tests pin the derivation, which is the part a reader of the catalogue cannot
+ * check by eye.
+ */
+describe("annual billing (ADR 0107)", () => {
+  it("charges ten months for a year, on every paid plan", () => {
+    for (const key of PAID_PLAN_KEYS) {
+      const plan = getPlan(key);
+      expect(plan.annual, key).not.toBeNull();
+      expect(plan.annual?.priceCents, key).toBe(plan.priceCents * ANNUAL_PAID_MONTHS);
+    }
+
+    // The discount itself, stated once so a silent change to it fails here.
+    expect(ANNUAL_PAID_MONTHS).toBe(10);
+  });
+
+  it("grants twelve months of Credits for the ten that were paid", () => {
+    for (const key of PAID_PLAN_KEYS) {
+      const plan = getPlan(key);
+      expect(plan.annual?.creditUnits, key).toBe(plan.monthlyCreditUnits * 12);
+    }
+  });
+
+  it("gives each interval its own Stripe Price, and Free neither", () => {
+    for (const key of PAID_PLAN_KEYS) {
+      const monthly = planPricing(key, "monthly");
+      const annual = planPricing(key, "annual");
+      expect(monthly?.stripePriceEnvVar, key).toMatch(/_MONTHLY$/);
+      expect(annual?.stripePriceEnvVar, key).toMatch(/_ANNUAL$/);
+      expect(monthly?.stripePriceEnvVar).not.toBe(annual?.stripePriceEnvVar);
+    }
+
+    // Free has no Checkout in either direction, and answers null rather than a
+    // zero-priced entry — a zero would flow through reservation like any other.
+    for (const interval of BILLING_INTERVALS) {
+      expect(planPricing("free", interval), interval).toBeNull();
+    }
+  });
+
+  it("narrows an untrusted interval to monthly", () => {
+    expect(parseBillingInterval("annual")).toBe("annual");
+    expect(parseBillingInterval("monthly")).toBe("monthly");
+
+    // Everything else is the cheaper commitment, never the longer one: a
+    // malformed field must not sign somebody up for a year.
+    for (const value of ["yearly", "ANNUAL", "", null, undefined, 12, {}]) {
+      expect(parseBillingInterval(value)).toBe("monthly");
+    }
   });
 });

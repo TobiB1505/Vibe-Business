@@ -175,7 +175,7 @@ describe("the name a card leads with", () => {
    * The card shows the product's own name, and the founder's correction
    * outranks the derived one — the same authority order every other profile
    * field has. Getting it wrong here is invisible until a founder corrects a
-   * name, sees /app/products obey and the dashboard ignore it.
+   * name, sees /app/settings/products obey and the dashboard ignore it.
    */
   function seedIdentity(
     projectId: string,

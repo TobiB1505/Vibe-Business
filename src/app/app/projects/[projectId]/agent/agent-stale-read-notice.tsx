@@ -1,7 +1,7 @@
-import Link from "next/link";
 import { Notice } from "@/components/ui/states";
 import { EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
 import { startRefusalRecovery } from "@/modules/coding-agent/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * "Vibe's read of your code is older than this check" — said where it blocks.
@@ -45,13 +45,9 @@ export function AgentStaleReadNotice({ productHref }: { productHref: string }) {
         label="code read out of date"
         action={
           recovery ? (
-            <Link
-              href={productHref}
-              className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-              data-testid="agent-stale-read-scan"
-            >
+            <StandaloneLink href={productHref} data-testid="agent-stale-read-scan">
               Scan my product
-            </Link>
+            </StandaloneLink>
           ) : undefined
         }
         footnote={

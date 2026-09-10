@@ -95,7 +95,7 @@ export function ChangeHistoryTable({
                 */}
                 <Link
                   href={changeHref(entry.preparedChangeId)}
-                  className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
+                  className="text-fg-body hover:text-fg rounded-inline underline underline-offset-4 transition-interactive"
                 >
                   {title}
                 </Link>
@@ -106,7 +106,7 @@ export function ChangeHistoryTable({
                   found the row, and giving them the width to sit beside the
                   outcome is what pushed the outcome off a phone.
                 */}
-                <p className="text-fg-meta text-xs">
+                <p className="text-fg-meta text-caption">
                   {[
                     formatTimestamp(entry.createdAt),
                     /* A preparation that wrote nothing wrote nothing — no

@@ -138,7 +138,7 @@ describe("resolving a requirement into repository evidence (PART C)", () => {
     const paths = resolve().publicPages.map((route) => route.path);
 
     expect(paths).not.toContain("/app");
-    expect(paths).not.toContain("/app/billing");
+    expect(paths).not.toContain("/app/settings/billing");
   });
 
   it("derives the private area from the analyzer's own evidence, not a path rule", () => {

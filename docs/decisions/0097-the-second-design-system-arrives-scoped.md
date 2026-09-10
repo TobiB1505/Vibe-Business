@@ -1,6 +1,6 @@
 # 0097 - The second design system arrives as a scope, not as a rewrite
 
-Status: Accepted
+Status: Accepted; its **rollout clause** — "a route opts in by carrying the attribute on a layout wrapper" — is superseded by [0102](0102-the-palette-ships-behind-one-switch.md) on 2026-09-07. Everything this ADR decided about the *shape* of the second system — same token names, new values, one scoped attribute, no compatibility layer at the end — stands unchanged and is what 0098 switches on. What did not survive is the assumption that a route could opt in alone: `.vibe-atmosphere` turned out to be a fixed full-viewport layer, so a half-migrated product changes its own background between screens. Its **material clause** — "glass is spent on the card and nowhere else" — is superseded by [0103](0103-glass-is-the-material.md) on 2026-09-07: a panel and the chrome are panes too, and the shells had been painting over the ground that made any of them one.
 Date: 2026-09-06
 
 Introduces `src/app/theme-v2.css` and five self-hosted Geist subsets. Redefines the whole colour, type and shape vocabulary under `[data-vibe="v2"]`, which nothing in the product carries yet, so production renders byte-identically. Adds no runtime dependency and changes no component.
@@ -71,6 +71,16 @@ The control hook is emitted from `buttonClasses()` rather than from `<Button>`, 
 `DESIGN.md` asks three things of every animation, and asked them of each component individually: honour reduced motion, pause on a hidden tab, reserve geometry. Twenty-two components import `motion` and each had to remember all three; one that forgets is not a compile error and not a test failure. S2 moved them into the mechanism. Reduced motion is a media query on the class. The hidden-tab pause is one attribute stamped on `<html>` by `MotionProvider` and one rule in `globals.css` — a component subscribes to nothing. Reserved geometry is the keyframes themselves: `vibe-reveal` interpolates opacity and transform and has no layout property to animate, which a test enforces by set-equality rather than by absence of a blocklist. The primitives are CSS and server-rendered, so an entrance does not drag a `"use client"` boundary over a subtree; the `motion` dependency stays for orchestration and layout animation.
 
 **Two defects the rendered page found and the files did not.** The card's blur was a Tailwind utility hard-coded in the primitive, so `--glass-blur` could say 14px while the card rendered 24 — a token that lies. The blur now comes from the palette, which is the one `vibe-*` rule outside the scope, narrowed by tests to that property and to token-only values. And writing `-webkit-backdrop-filter` beside the standard property made Lightning CSS keep the prefix and drop the standard declaration, so the card computed `backdrop-filter: none` in *both* palettes; the build prefixes from its own targets, and a hand-written twin fights it. Neither was visible in a diff, in a type check or in a passing test.
+
+### The semantic components needed less than expected, and one token that did not exist
+
+S3 found the semantic layer already composing primitives rather than drawing its own material — `FindingCard` renders through `Surface level="panel"`, and none of the nine writes its own `rounded-card`. So S2's hooks reached them for free, and S3 is two findings rather than nine rewrites.
+
+**The sheet had the card's bug.** `Sheet` hard-coded a blur utility exactly as the card had, so `--glass-blur` would have said one thing while the evidence drawer rendered another. It now carries `vibe-overlay` and takes the blur from the same rule the card does — one rule for both, asserted, because two glass surfaces that disagree about what glass looks like is how a product acquires a second material without deciding to. In v2 the drawer takes the card's fill, line and sheen: `DESIGN.md` and the chosen direction both spend glass on overlays, and an evidence drawer is literally one.
+
+**Decision D5's token did not exist and eleven headings were working around it.** `--text-lead` is already 15px but carries prose leading (1.7), so eleven card headings write `text-[0.9375rem] leading-snug` by hand. The size was never the problem; the leading was, and one token cannot serve both. `--text-card-title` is declared at **1.375 in v1 rather than the 1.35 the spec proposed** — 1.375 is `leading-snug`, which is what those eleven already render, so naming what ships makes this a rename instead of moving every card heading in the product by a third of a pixel to match a number nobody had looked at. v2 takes 1.35, which is what a second palette is for. Measured: v1 renders 15px/20.625px, v2 15px/20.25px.
+
+The remaining ten conversions are route work and belong to S4, where each screen is looked at rather than swept.
 
 ### The palette is measured, not trusted
 

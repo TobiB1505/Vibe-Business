@@ -73,13 +73,14 @@ const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx")
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
 const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
 /*
- * The dashboard's Next move zone. It was its own panel beside the Business
- * signal one; both are now `SignalCard`, because two full-width cards with a
- * control each asked an unanalysed product's owner the same question twice.
- * The regression below is unchanged and still lives in that code — only the
- * file it lives in moved.
+ * Where a surface names a Move and offers the way into it.
+ *
+ * It was a panel on the account dashboard, then that dashboard's card, then
+ * the desk's open decision — and there is no account dashboard at all now.
+ * Nova is the surface that names a Move today, so the regression is asserted
+ * where it can actually happen.
  */
-const NEXT_MOVE_CARD = read("src/app/app/signal-card.tsx");
+const NOVA_HOME = read("src/app/app/projects/[projectId]/nova/nova-home.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {
@@ -409,7 +410,16 @@ describe("a refused run says which gate stopped it", () => {
       "src/app/app/projects/[projectId]/agent/agent-start-refusal-notice.tsx",
     );
 
-    expect(notice).toContain("<Link");
+    // `StandaloneLink` since the underline work: it renders a `Link`, so this
+    // is still navigation and still costs nothing until the user arrives.
+    expect(notice).toContain("<StandaloneLink");
+    // The half that actually enforces rule 60 — no control here starts the
+    // re-read, so a button or a form action in this file is the regression.
+    expect(notice).not.toContain("<button");
+    // `<Button` since UI-26: one component makes everything pressable, so this
+    // is the whole of "no control here starts the re-read" rather than one
+    // family of it.
+    expect(notice).not.toContain("<Button");
     expect(notice).not.toContain("startUnderstandingAction");
     expect(notice).not.toContain("useActionState");
   });
@@ -656,6 +666,8 @@ describe("the plan hands off to the agent, and the agent points back", () => {
    */
   it("opens the Move a card names, not the plan's current first", () => {
     expect(HOME_STATUS).toContain("planMoveHref(planHref, nextMove.id)");
-    expect(NEXT_MOVE_CARD).toContain("planMoveHref(planHref, move.id)");
+    // The subject the moment carries, read off the candidate's own control —
+    // never a lookup that would resolve to whatever is rank 1 at click time.
+    expect(NOVA_HOME).toContain('planMoveHref(sectionHref["action-plan"], subject.opportunityId)');
   });
 });

@@ -92,6 +92,10 @@
   --color-surface-3: rgb(255 255 255 / 0.04);
   --color-surface-4: rgb(255 255 255 / 0.05);
   --color-surface-hover: rgb(255 255 255 / 0.06);
+  /* Held down. Touch has no hover, so press is the only feedback a phone
+     gets — and it has to be a visible step past hover rather than the same
+     fill, or the control answers a finger with nothing. */
+  --color-surface-pressed: rgb(255 255 255 / 0.11);
   --color-well: rgb(0 0 0 / 0.3);
   --color-field: rgb(0 0 0 / 0.4);
 
@@ -114,6 +118,45 @@
   --color-coral-tint: rgb(255 122 92 / 0.13);
   --color-coral-tint-soft: rgb(255 122 92 / 0.07);
   --color-coral-line: rgb(255 122 92 / 0.26);
+  /* ── Gold ────────────────────────────────────────────────────────────
+     The Credit, and nothing else. Gold sits near amber in hue, and amber is
+     already spoken for — DESIGN.md reserves it for incomplete and waiting
+     states, and `StatusPill` paints `waiting` with it. What keeps the two
+     apart is not the hue, it is the material: **a status is always a flat
+     fill, and metal always has a ramp and a rim.** A flat gold disc would be
+     a warning dot; a struck coin cannot be mistaken for one.
+
+     Identical in both palettes on purpose. A surface re-tints when the
+     palette changes because a surface is part of the room; a coin is an
+     object in it. */
+  --color-gold-light: #ffdd8f;
+  --color-gold: #d9a13a;
+  --color-gold-deep: #8a5f1c;
+  --color-gold-rim: #6b4712;
+  /* What the V is struck into: the shadow at the bottom of the recess. */
+  --color-gold-ink: #3d270a;
+  /* The press step for a destructive control, answering
+     `--color-surface-pressed` for the neutral one. A destructive pill is
+     tinted at rest and deepens on hover, so the press needs a third value
+     above both or the last state a finger reaches says nothing. */
+  --color-coral-pressed: rgb(255 122 92 / 0.22);
+
+  /* ── The sheen (UI-27) ───────────────────────────────────────────────
+     A control has a surface, not a colour. Founder's pick from
+     `study-button-look`: a wash down the face, a lit top edge, and the
+     glow underneath — one mechanism, applied at three intensities because
+     what reads as "lit" on a saturated fill would bleach a neutral one.
+
+     A wash rather than a pair of hand-mixed hexes, so the same two stops
+     work over mint, over coral and over a 4%-white surface. `-strong` is
+     the hover step: the light rises, the button does not change colour. */
+  --color-sheen-lift: rgb(255 255 255 / 0.36);
+  --color-sheen-lift-strong: rgb(255 255 255 / 0.46);
+  --color-sheen-sink: rgb(0 0 0 / 0.12);
+  --color-sheen-soft: rgb(255 255 255 / 0.05);
+  --color-sheen-soft-strong: rgb(255 255 255 / 0.1);
+  --color-sheen-warn: rgb(255 122 92 / 0.13);
+  --color-sheen-warn-strong: rgb(255 122 92 / 0.22);
 
   /* ── Type ────────────────────────────────────────────────────────────
      Product UI uses the operating system's native interface family. On
@@ -143,13 +186,111 @@
   --text-headline: 1.75rem;
   --text-headline--line-height: 1.14;
   --text-headline--letter-spacing: -0.035em;
+  /*
+   * The line that speaks to the founder (UI-8).
+   *
+   * Vibe's scale had nothing between `title` (19px) and `headline` (28px), and
+   * the product needs that step twenty times: "Vibe needs your input", "Vibe
+   * knows your product.", "Your product is still connected.", every agent
+   * stage heading. With no name for it, twelve of those were written
+   * `text-xl` and eight `text-2xl` — two sizes for one job, both from
+   * Tailwind's scale, which means nothing here.
+   *
+   * 1.5rem because that is `text-2xl`, the larger of the two the product
+   * already writes. Rounding up rather than down for the same reason every
+   * other move in this sweep goes up: a heading that shrinks can rewrap into
+   * a line count it did not have before, and a heading that grows cannot.
+   *
+   * It is distinct from `headline` by four pixels, which is tight. They are
+   * kept apart by where they live rather than by size — a moment sits inside
+   * a panel and a headline names the page — and the alternative was to fold
+   * them, which puts a heading nested two levels deep at the page name's
+   * size.
+   */
+  --text-moment: 1.5rem;
+  --text-moment--line-height: 1.2;
+  --text-moment--letter-spacing: -0.028em;
   --text-title: 1.1875rem;
   --text-title--line-height: 1.3;
   --text-title--letter-spacing: -0.02em;
   --text-lead: 0.9375rem;
   --text-lead--line-height: 1.7;
-  --text-caption: 0.78125rem;
-  --text-caption--line-height: 1.55;
+  /* The same size, a heading's leading (UI Sourcing Spec, decision D5).
+     Eleven card headings write `text-[0.9375rem] leading-snug` by hand
+     because `--text-lead` is this size with prose leading and cannot serve
+     both. The size was never the problem; the leading was.
+
+     1.375 rather than the 1.35 the spec proposed, because 1.375 is
+     `leading-snug` and is what those eleven already render. Naming what
+     ships makes this a rename; naming 1.35 would have moved every card
+     heading in the product by a third of a pixel to match a number nobody
+     had looked at. v2 takes the spec's value, which is what a second
+     palette is for. */
+  --text-card-title: 0.9375rem;
+  --text-card-title--line-height: 1.375;
+  /*
+   * The size the product actually writes prose at (UI-7).
+   *
+   * Measured before it was named: 455 elements carried `text-sm`, 292 of them
+   * a `<p>`, across the whole foreground range. It is the product's body size
+   * and the scale had no name for it — which is why two thirds of the type in
+   * this repository was written in Tailwind's vocabulary rather than Vibe's.
+   *
+   * 0.875rem exactly, because that is what `text-sm` is. Naming what ships
+   * makes the sweep a rename and moves nothing; naming 0.8125rem would have
+   * shrunk 455 elements by a pixel to match a number nobody had looked at —
+   * the same argument `--text-card-title` above records for its leading.
+   */
+  --text-body: 0.875rem;
+  /* 20/14, which is what `text-sm` renders. 378 of the 465 sites take
+     Tailwind's default leading rather than setting their own, so any other
+     number here turns a rename into a re-typesetting of the product. Loosening
+     it is a real decision and v2 takes it; v1 names what ships. */
+  --text-body--line-height: 1.25rem;
+  --text-caption: 0.75rem;
+  /* 16/12, for the same reason: 251 of 293 take the default. */
+  --text-caption--line-height: 1rem;
+  /*
+   * Figures: a number that is the subject, not a number in a sentence (UI-8).
+   *
+   * ## Why numerals get their own steps
+   *
+   * A digit has no ascender and no descender. Every value on the type scale
+   * above is tuned for words that do — `--text-hero` reserves 1.04 line-height
+   * for parts of a letterform a numeral never reaches — so a figure set from
+   * it sits low in a box that is taller than anything in it. Measured: an
+   * 18px figure in a 22.5px line box, four times over in the product.
+   *
+   * These carry `line-height: 1` so that cannot happen, and their own
+   * tracking, because tracking a numeral is a different problem from tracking
+   * a word and the product proved it: three people independently wrote -0.06em
+   * or tighter where `hero` gives -0.04em.
+   *
+   * ## Why the sizes are these
+   *
+   * Ten call sites had eight sizes between them — 18, 20, 20, 20, 21.6, 30,
+   * 36, 50.4, 52, 62.4 — and the same object (a business-map node score) was
+   * two of them. 20 is the size four of the ten already write; 52 is the
+   * signal number exactly. 36 is `--text-display`'s size on purpose: same
+   * size, different object, the way `--text-lead` and `--text-card-title` are
+   * both 0.9375rem and differ only in leading.
+   *
+   * ## Why the tracking scales and the hand-written values did not
+   *
+   * -0.04em appeared at 21.6px, at 30px and at 50.4px, and then 52px took
+   * -0.06em. Optical tracking is a function of size — bigger needs tighter —
+   * which a scale can express and a value typed per call site cannot.
+   */
+  --text-figure-sm: 1.25rem;
+  --text-figure-sm--line-height: 1;
+  --text-figure-sm--letter-spacing: -0.02em;
+  --text-figure: 2.25rem;
+  --text-figure--line-height: 1;
+  --text-figure--letter-spacing: -0.045em;
+  --text-figure-lg: 3.25rem;
+  --text-figure-lg--line-height: 1;
+  --text-figure-lg--letter-spacing: -0.06em;
+
   --text-label: 0.65625rem;
   --text-label--line-height: 1.4;
   --text-label--letter-spacing: 0.16em;
@@ -198,17 +339,53 @@
   /* ── Shape ───────────────────────────────────────────────────────────
      Radii scale with the element. Controls and navigation use a precise
      ten-pixel corner; pills are reserved for statuses and compact filters. */
+  /*
+   * The corner scale (UI-8).
+   *
+   * Five names existed and the product wrote seventeen. `rounded-xl` is 12px,
+   * which is `--radius-field`; `rounded-2xl` is 16px, which is
+   * `--radius-card`. Same corner, two names, and nothing in a class string
+   * says which was meant. Below `nav` there was no Vibe name at all, so
+   * fifty-nine places reached into Tailwind's scale and chose between 4, 6 and
+   * 8px with nothing to guide them.
+   *
+   * `inline` and `inset` name the two that were actually needed, and `stage`
+   * names the one above `card` — five places wanted "bigger than a card" and
+   * wrote 18.4px, 19.2px and 20px between them.
+   *
+   * Every value here is one the product already writes. The names are objects,
+   * like the five that were here first, because a corner is a property of a
+   * thing rather than a step in an abstract ramp.
+   */
+
+  /** A focus ring on inline text: a link, a text button, a small chip. */
+  --radius-inline: 4px;
+  /** A small bordered block nested inside a surface. */
+  --radius-inset: 6px;
   --radius-nav: 10px;
   --radius-well: 14px;
   --radius-field: 12px;
   --radius-panel: 14px;
   --radius-card: 16px;
+  /** A feature surface above a card: the business-brain stage, a reveal. */
+  --radius-stage: 20px;
 
   /* ── Elevation ───────────────────────────────────────────────────────
      The inset highlight belongs to the primary card only. */
   --shadow-panel: 0 24px 60px -30px rgb(0 0 0 / 0.8);
   --shadow-card: 0 1px 0 rgb(255 255 255 / 0.08) inset, 0 30px 70px -30px rgb(0 0 0 / 0.8);
   --shadow-mint: 0 14px 34px -12px rgb(0 229 160 / 0.6);
+  /* The lit top edge, and the glow it sits above (UI-27). The inset is
+     what makes a fill read as a face rather than as a rectangle of colour;
+     it is brighter on the accent because a saturated fill swallows it. */
+  --shadow-sheen: inset 0 1px 0 rgb(255 255 255 / 0.09);
+  --shadow-sheen-strong: inset 0 1px 0 rgb(255 255 255 / 0.14);
+  --shadow-mint-sheen:
+    inset 0 1px 0 rgb(255 255 255 / 0.45), 0 12px 30px -12px rgb(0 229 160 / 0.75);
+  --shadow-mint-sheen-strong:
+    inset 0 1px 0 rgb(255 255 255 / 0.6), 0 16px 38px -10px rgb(0 229 160 / 0.95);
+  --shadow-coral-sheen: inset 0 1px 0 rgb(255 122 92 / 0.2);
+  --shadow-coral-sheen-strong: inset 0 1px 0 rgb(255 122 92 / 0.3);
   --shadow-dot-mint: 0 0 8px 1px rgb(0 229 160 / 0.6);
   --shadow-dot-amber: 0 0 8px 1px rgb(232 181 74 / 0.5);
 
@@ -233,6 +410,52 @@
   /* One row after the next on an entrance. Below the count where the last
      item starts to feel like it was forgotten. */
   --stagger-row: 80ms;
+}
+
+/*
+ * The shell's top rhythm, in one place.
+ *
+ * ## Why this is a variable and not two paddings
+ *
+ * Because it was two paddings and they drifted. The account rail opened at
+ * 28px while the content column opened at 44px, so the brand lockup sat 16px
+ * above the page heading beside it; that was fixed by writing 44 in both
+ * places, and the next change to one of them will separate them again. A rail
+ * and the column beside it are one rhythm, so they read one number.
+ *
+ * ## And why a heading's line box is a token too
+ *
+ * Matching the *boxes* is not matching what a reader sees. A 15px lockup and a
+ * 34px heading whose boxes start on the same pixel do not look aligned: the
+ * heading's glyphs sit far down its own line box and the lockup's sit near the
+ * top of its much shorter one. Centring the lockup inside a box the height of
+ * the heading's first line is the correction, and it is computed from the type
+ * scale rather than nudged — so it stays right when the scale moves, and it is
+ * already right in the second palette, where `--text-display` is 34px rather
+ * than 36.
+ */
+:root {
+  /*
+   * The frame's rhythm (UI-15, UI-16).
+   *
+   * Two numbers, and every column of the signed-in app reads one of them.
+   * `--frame-inset` is where each column starts: the rail's lockup and the
+   * content column's first line, at the same height, so the top of the screen
+   * is one line rather than two. `--rail-gap` is the space between the rail's
+   * three regions.
+   *
+   * They exist because this spacing had been set element by element —
+   * `pt-[--shell-top]` here, a heading-line box there, `gap-7`, `pt-8`, `my-3`
+   * — which is how a navigation ends up with 44px of nothing above its logo
+   * and its first section below the fold on a laptop.
+   *
+   * The lockup is no longer centred against the heading beside it; the column
+   * beside it comes up to meet it instead. A mark at the top of its surface
+   * reads as the top of the product, and the alignment now costs nothing
+   * because both sides read the same number.
+   */
+  --frame-inset: 1.25rem;
+  --rail-gap: 1.25rem;
 }
 
 /* The active step's ring, breathing outward and fading. Decorative: the step's
@@ -732,7 +955,8 @@
  * rendered page, not by reading this file. The build adds prefixes from the
  * configured targets; hand-writing them fights it.
  */
-.vibe-surface-card {
+.vibe-surface-card,
+.vibe-overlay {
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
 }
 
@@ -771,11 +995,62 @@
   animation-delay: calc(var(--vibe-index, 0) * var(--stagger-row));
 }
 
+/*
+ * The rail unfolding into a different navigation.
+ *
+ * The `<aside>` itself never moves — it is one element for the life of the
+ * session (`app-frame.tsx`), and that is the point. What slides is the list
+ * inside it, from the side it conceptually came from: the Settings navigation
+ * arrives from the right, the product's own navigation from the left. The
+ * distance is deliberately short; this reports a change of context, it does
+ * not perform one.
+ *
+ * `--vibe-rail-from` is handed in by `RailNav` because only the incoming rail
+ * knows which direction it is travelling.
+ */
+@keyframes vibe-rail-unfold {
+  from {
+    opacity: 0;
+    transform: translate3d(var(--vibe-rail-from, 0.75rem), 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@utility vibe-rail-unfold {
+  animation: vibe-rail-unfold var(--duration-reveal) var(--ease-vibe) both;
+}
+
+/*
+ * A score ring drawing itself to its true length.
+ *
+ * Admissible where a count-up is not: the arc carries no label, so no frame of
+ * it can be read as a score the audit did not produce. The number inside is
+ * present and correct at frame one — see `score-ring.tsx`.
+ *
+ * `--vibe-ring-length` is the circle's circumference, handed in by the
+ * component because only it knows the radius. The rule owns the timing so
+ * every ring in the product draws at one speed.
+ */
+@keyframes vibe-ring-draw {
+  from {
+    stroke-dashoffset: var(--vibe-ring-length);
+  }
+}
+
+@utility vibe-ring-draw {
+  animation: vibe-ring-draw var(--duration-reveal) var(--ease-vibe) both;
+}
+
 /* Obligation 2, the hidden tab. `MotionProvider` stamps the root, so one
    listener covers every animation in the product rather than one per
    component. Paused, not stopped: it resumes where it left off, so nothing
    jumps when somebody comes back to the tab. */
 :root[data-motion="paused"] .vibe-reveal,
+:root[data-motion="paused"] .vibe-rail-unfold,
+:root[data-motion="paused"] .vibe-ring-draw,
 :root[data-motion="paused"] .vibe-breathe {
   animation-play-state: paused;
 }
@@ -784,10 +1059,17 @@
    never a hidden element, which is how a reduced-motion user ends up with a
    blank page instead of a still one. */
 @media (prefers-reduced-motion: reduce) {
-  .vibe-reveal {
+  .vibe-reveal,
+  .vibe-rail-unfold {
     animation: none;
     opacity: 1;
     transform: none;
+  }
+
+  /* The settled arc, immediately. `animation: none` leaves the inline
+     `stroke-dashoffset` in place, which is already the true value. */
+  .vibe-ring-draw {
+    animation: none;
   }
 }
 
@@ -1151,4 +1433,219 @@
     opacity: 1;
     transform: none;
   }
+}
+
+/*
+ * The landing hero's ground, and the deck that stands on it (UI-34).
+ *
+ * The field is a grid masked to a soft ellipse, so it is dense under the deck
+ * and gone by the edges of the section — a lit patch rather than wallpaper.
+ * `MarketingShell` already draws a faint 80px grid behind the whole page; this
+ * is a second, tighter one that exists only where the hero is.
+ */
+.landing-hero-field {
+  /*
+    Measured, twice, off the rendered page rather than argued about.
+
+    The first version put a 46%×42% mint pool at dead centre — 626px wide,
+    behind a 768px card that is opaque by design. Sampled pixels: the light
+    beside the card read `6,12,13` against a `7,10,12` ground, so the
+    atmosphere was painted entirely underneath the thing covering it, and the
+    only place it escaped was a thin band above the card at `8,21,19`. Widening
+    the *mask* did not help, because the mask was never what was hiding it.
+
+    So the light frames the card instead of sitting under it: two pools at the
+    shoulders, plus a broad low wash that reaches the section's edges. And the
+    grid went from 8.5% white to 13%, because 8.5% composites to about +8 per
+    channel over this ground — enough on a good monitor at full brightness, and
+    nothing at all on a phone, which is where it was reported missing.
+  */
+  --hero-field-mark: rgb(255 255 255 / 0.13);
+  background-image:
+    radial-gradient(ellipse 34% 46% at 16% 46%, rgb(0 229 160 / 0.2), transparent 70%),
+    radial-gradient(ellipse 34% 46% at 84% 46%, rgb(0 229 160 / 0.16), transparent 70%),
+    radial-gradient(ellipse 90% 62% at 50% 40%, rgb(0 229 160 / 0.08), transparent 72%),
+    linear-gradient(var(--hero-field-mark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hero-field-mark) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    100% 100%,
+    100% 100%,
+    46px 46px,
+    46px 46px;
+  /*
+    Wide enough that the grid reaches most of the section's width. A tighter
+    mask put the whole lit patch behind the deck, where an opaque card covers
+    it — so the ground was measurably there and visible only as two slivers
+    either side of the card.
+  */
+  mask-image: radial-gradient(ellipse 92% 78% at 50% 50%, black 30%, transparent 86%);
+}
+
+/*
+ * The deck's cards, opaque.
+ *
+ * The v2 surfaces are translucent films — `--color-surface-2` is white at 3.4%
+ * — built to sit on the app's opaque ground and pick its atmosphere up. Over a
+ * lit field they do exactly that and let the grid through, so a `bg-surface-2`
+ * hero card reads as a ghost with grid lines running across its own text. Both
+ * classes composite the same film over `--color-ground` as one opaque colour;
+ * the back cards use a thinner film because they are further away.
+ */
+.landing-hero-card {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.034), rgb(255 255 255 / 0.034)), var(--color-ground);
+}
+
+.landing-hero-card-back {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.02), rgb(255 255 255 / 0.02)), var(--color-ground);
+}
+
+/*
+ * The scroll-reveal backstop for `Reveal` (UI-34).
+ *
+ * `useReducedMotion` returns `null` during the server render, so the server
+ * ships the hidden state to everybody. These two rules are what make that safe:
+ * a reader who asked for no movement, and a reader with no JavaScript at all,
+ * both get every block at full opacity in its final position — which for the
+ * second one is the difference between a landing page and a blank page.
+ */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+
+  /*
+   * The Agent block's gates (UI-34). Three of the four are drawn open, and the
+   * fourth is drawn shut because nothing inside the product opens it — so a
+   * reader who asked for no movement cannot be shown four shut gates while the
+   * text beside them says three are open. Each leaf carries its own end
+   * position, and a shut one carries `0%`.
+   */
+  [data-gate-leaf] {
+    transform: translateX(var(--gate-part, 0%)) !important;
+  }
+}
+
+/*
+ * The tile the landing page's Product Scan preview is seen through (UI-34).
+ *
+ * Same argument as `.landing-hero-card`: the scan draws its own translucent
+ * surfaces, which are built to sit on the app's opaque ground. On the marketing
+ * page they sit on the shell's grid instead, so the constellation's own panels
+ * let it through. This gives them a ground to sit on, one shade above the page
+ * so the tile reads as an object rather than a hole.
+ */
+.landing-scan-preview {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.022), rgb(255 255 255 / 0.022)), var(--color-ground);
+}
+
+/*
+ * The crop, and the scale that makes it a preview rather than a screen.
+ *
+ * The scanner needs a desktop measure to look like itself — above `md` it
+ * positions its facet cards absolutely against a fixed drawing — so it is
+ * rendered wide and shrunk to whatever the tile is.
+ *
+ * The arithmetic runs the other way round from the obvious one. A scale of
+ * `100cqw / 880` looks right and is not even valid: dividing a length by a
+ * number yields a **length**, so `--scan-scale` came out as `0.69px`, the
+ * height calc that multiplied by it was dropped, and the tile grew to its
+ * content — 1,139px of preview. So the *scale* is the fixed number and the
+ * render width is derived from it: `100% / 0.62` is a percentage divided by a
+ * number, which is a length, and the scaled result is exactly the tile's width
+ * at every viewport. The scale then only decides how much detail the preview
+ * carries — not which layout the scan draws, because the scanner's own
+ * breakpoints are *viewport* queries: on a phone the preview shows the phone
+ * arrangement however wide the element it is rendered into.
+ *
+ * The box is an aspect ratio rather than a height, so the crop stays the same
+ * shape as the tile narrows. The transform does not shrink the element's
+ * layout box, which is why the crop needs a definite width and the grid cell
+ * needs `min-w-0`: without both, a 350px phone column measured 906.
+ *
+ * The fade is a mask on the wrapper, not an overlay: a gradient painted *over*
+ * the preview would need the page's own ground colour to blend into, and this
+ * block sits on the shell's grid.
+ */
+.landing-scan-preview-crop {
+  --scan-scale: 0.42;
+  width: 100%;
+  aspect-ratio: 8 / 5;
+  overflow: hidden;
+  mask-image: linear-gradient(180deg, black 76%, transparent 100%);
+}
+
+.landing-scan-preview-crop > * {
+  width: calc(100% / var(--scan-scale));
+  transform: scale(var(--scan-scale));
+  transform-origin: top left;
+}
+
+@media (min-width: 640px) {
+  .landing-scan-preview-crop {
+    --scan-scale: 0.55;
+  }
+}
+
+@media (min-width: 1024px) {
+  .landing-scan-preview-crop {
+    --scan-scale: 0.5;
+  }
+}
+
+@media (min-width: 1280px) {
+  .landing-scan-preview-crop {
+    --scan-scale: 0.62;
+  }
+}
+
+/*
+ * The ground the walk happens on (UI-34).
+ *
+ * ## Why the modules needed one
+ *
+ * The hero stands on a lit field and everything below it stood on nothing:
+ * sampled at the Product Scan block, the ground read `12,14,16` at both edges
+ * against the hero's `9,45,35` beside its card. The page went from an
+ * atmosphere to a flat black rectangle at exactly the point where the walk
+ * starts, which is the opposite of a scroll that flows.
+ *
+ * ## Flowing rather than stamped
+ *
+ * Two things stop this reading as the same patch repeated. The pool sits at one
+ * side and `--step-side` alternates it down the page, so consecutive modules
+ * are lit from opposite edges; and the whole field is masked to fade in at the
+ * top and out at the bottom, so where two steps meet there is no seam — the
+ * light travels rather than restarting.
+ *
+ * It is deliberately quieter than the hero: a 13% pool against the hero's 20%,
+ * and a 7.5% grid against its 13%. The hero is the lit stage and the walk is
+ * the room it is in; if every block were as bright, none of them would be.
+ */
+.landing-step-field {
+  --step-field-mark: rgb(255 255 255 / 0.075);
+  --step-side: 14%;
+  background-image:
+    radial-gradient(
+      ellipse 40% 52% at var(--step-side) 50%,
+      rgb(0 229 160 / 0.13),
+      transparent 72%
+    ),
+    linear-gradient(var(--step-field-mark) 1px, transparent 1px),
+    linear-gradient(90deg, var(--step-field-mark) 1px, transparent 1px);
+  background-size:
+    100% 100%,
+    46px 46px,
+    46px 46px;
+  /*
+    A gentle fade rather than a long one. At 22% the fields of two consecutive
+    steps did not reach each other and the seam between them read as a band;
+    combined with the bleed the component gives this element, 8% is enough to
+    stop a hard edge without leaving a gap.
+  */
+  mask-image: linear-gradient(180deg, transparent 0%, black 8%, black 92%, transparent 100%);
 }

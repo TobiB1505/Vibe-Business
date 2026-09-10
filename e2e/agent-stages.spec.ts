@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The Agent rail, in a real browser (UI-19).
@@ -35,9 +36,7 @@ test.describe("the workspace follows the target composition", () => {
     await expect(page.getByTestId("agent-ready-stage")).toBeVisible();
     await expect(page.getByTestId("agent-stage-rail")).toHaveCount(0);
     await expect(page.getByTestId("agent-core")).toHaveAttribute("data-state", "idle");
-    await expect(page.getByTestId("agent-credit-estimate")).toContainText(
-      "Up to 100 Credits",
-    );
+    await expect(page.getByTestId("agent-credit-estimate")).toContainText("Up to 100 Credits");
 
     /*
      * And what stands behind that ceiling (ADR 0072).
@@ -147,11 +146,12 @@ test.describe("motion", () => {
     const animated = await page
       .getByTestId("agent-stage-rail")
       .locator("*")
-      .evaluateAll((nodes) =>
-        nodes.filter((node) => {
-          const name = getComputedStyle(node).animationName;
-          return name !== "none" && name !== "";
-        }).length,
+      .evaluateAll(
+        (nodes) =>
+          nodes.filter((node) => {
+            const name = getComputedStyle(node).animationName;
+            return name !== "none" && name !== "";
+          }).length,
       );
     expect(animated).toBe(0);
 
@@ -194,24 +194,18 @@ test.describe("375px", () => {
   test("does not scroll sideways and keeps every stage readable", async ({ page }) => {
     await page.goto(BUILDING);
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(0);
+    await expectNoHorizontalOverflow(page);
 
     await expect(page.getByTestId("agent-stage-rail").locator("[data-stage]")).toHaveCount(5);
     await expect(stage(page, "review")).toContainText(/pending/i);
   });
 });
 
-
 test.describe("agent activity and independent validation stay distinct", () => {
   test("keeps the Agent's live event record in Build", async ({ page }) => {
     await page.goto(BUILDING);
 
-    await expect(page.getByTestId("agent-file-activity")).toContainText(
-      "src/app/pricing/page.tsx",
-    );
+    await expect(page.getByTestId("agent-file-activity")).toContainText("src/app/pricing/page.tsx");
     await expect(page.getByTestId("agent-file-activity")).toContainText("Live activity");
   });
 
@@ -348,7 +342,6 @@ test.describe("stage five tells the truth about merging", () => {
   });
 });
 
-
 test.describe("the ready state promises nothing it cannot measure", () => {
   /**
    * The reference draws "Estimated time ~1-2 hours" and "Expected changes 8-15
@@ -368,7 +361,6 @@ test.describe("the ready state promises nothing it cannot measure", () => {
     expect(await facts.innerText()).not.toMatch(/~\s*\d|\d+\s*[–-]\s*\d+/);
   });
 });
-
 
 test.describe("the rail opens what it can open", () => {
   /**
@@ -433,14 +425,12 @@ test.describe("the rail stays one line per stage", () => {
      * about the rail's own lines.
      */
     const rail = page.getByTestId("agent-stage-rail");
-    const visible = await rail
-      .locator("[data-stage] span:not(.sr-only)")
-      .evaluateAll((nodes) =>
-        nodes
-          .filter((node) => !node.closest(".sr-only"))
-          .map((node) => node.textContent ?? "")
-          .join(" "),
-      );
+    const visible = await rail.locator("[data-stage] span:not(.sr-only)").evaluateAll((nodes) =>
+      nodes
+        .filter((node) => !node.closest(".sr-only"))
+        .map((node) => node.textContent ?? "")
+        .join(" "),
+    );
     expect(visible).not.toMatch(/files inspected|files changed/i);
 
     // And every cell is the same height, which is what "clean" means here.
@@ -450,7 +440,6 @@ test.describe("the rail stays one line per stage", () => {
     expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
   });
 });
-
 
 test.describe("the new stage replaces the old panel, it does not sit above it", () => {
   /**

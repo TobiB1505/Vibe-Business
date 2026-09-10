@@ -62,7 +62,6 @@ import { OnboardingOperationFailure, OnboardingStalled } from "./operation-state
 import { ProductConfirmation } from "./product-confirmation";
 import { ProductRevealFacts } from "./reveal-facts";
 import { FirstMoveDecision } from "./first-move-decision";
-import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { isUuid } from "@/lib/validation/uuid";
 import type { Metadata } from "next";
@@ -291,7 +290,6 @@ export default async function ProjectOnboardingPage({
     firstMovePlan,
     understandingFailure,
     auditAccess,
-    balance,
     auditEvents,
     deepScan,
   ] = await Promise.all([
@@ -325,16 +323,6 @@ export default async function ProjectOnboardingPage({
      */
     onboarding.state === "product_reveal"
       ? getAuditAccessStatus(supabase, { projectId, userId: session.userId })
-      : null,
-    /*
-     * The balance, only on the screen that offers a priced decision.
-     *
-     * A missing balance never suppresses a price — `CostDisclosure` states one
-     * either way — so a failure here costs the affordability sentence and
-     * nothing else.
-     */
-    onboarding.state === "first_move"
-      ? getHeaderCreditBalance(supabase, { userId: session.userId }).catch(() => null)
       : null,
     /*
      * What has already happened, for the rail (§O.4).
@@ -584,10 +572,10 @@ export default async function ProjectOnboardingPage({
               */}
                   {onboarding.repository && (
                     <div className="border-line-2 bg-surface-2 rounded-nav flex flex-wrap items-center justify-between gap-3 border px-3 py-2">
-                      <span className="text-fg-body text-sm font-medium">
+                      <span className="text-fg-body text-body font-medium">
                         {onboarding.repository.fullName}
                       </span>
-                      <span className="text-fg-meta font-mono text-xs">
+                      <span className="text-fg-meta font-mono text-caption">
                         {onboarding.repository.defaultBranch} · connected
                       </span>
                     </div>
@@ -644,7 +632,7 @@ export default async function ProjectOnboardingPage({
                 about the repository rather than about Nova.
               */
                   <div className="flex flex-col gap-4">
-                    <p className="text-fg-body text-sm">
+                    <p className="text-fg-body text-body">
                       Your repository stays connected. Nothing else needs repeating.
                     </p>
                     <RetryProductScan projectId={projectId} />
@@ -682,7 +670,7 @@ export default async function ProjectOnboardingPage({
                       and those stay.
                     */}
                     {understanding.headline.productName && (
-                      <p className="text-fg-body text-xl font-semibold">
+                      <p className="text-fg-body text-moment font-semibold">
                         {understanding.headline.productName}
                       </p>
                     )}
@@ -750,7 +738,7 @@ export default async function ProjectOnboardingPage({
                     below is still the way on, so this states the gap and
                     stops.
                   */
-                  <p className="text-fg-muted text-sm">
+                  <p className="text-fg-muted text-body">
                     Vibe can&apos;t open a browser for this project right now. That is a gap on
                     Vibe&apos;s side, and nothing else about your setup is affected.
                   </p>
@@ -894,20 +882,20 @@ export default async function ProjectOnboardingPage({
                         {onboarding.opportunities.set.opportunities[0].problem}
                       </p>
                       <div className="border-line-2 border-t pt-4">
-                        <p className="text-fg-meta mb-1 text-xs">Why this comes first</p>
-                        <p className="text-fg-secondary text-sm leading-relaxed">
+                        <p className="text-fg-meta mb-1 text-caption">Why this comes first</p>
+                        <p className="text-fg-secondary text-body leading-relaxed">
                           {onboarding.opportunities.set.opportunities[0].whyNow}
                         </p>
                       </div>
                       {firstMovePlan?.firstActionableStep && (
                         <div className="border-line-2 border-t pt-4">
-                          <p className="text-fg-meta mb-1 text-xs">
+                          <p className="text-fg-meta mb-1 text-caption">
                             Vibe already has a plan — starting with
                           </p>
-                          <p className="text-fg-body text-sm font-medium">
+                          <p className="text-fg-body text-body font-medium">
                             {firstMovePlan.firstActionableStep.title}
                           </p>
-                          <p className="text-fg-muted mt-1 text-xs">
+                          <p className="text-fg-muted mt-1 text-caption">
                             {ACTOR_LABELS[firstMovePlan.firstActionableStep.actor]} ·{" "}
                             {
                               EXECUTION_SUPPORT_LABELS[
@@ -920,7 +908,7 @@ export default async function ProjectOnboardingPage({
                     </div>
                   ) : opportunityOperation ? (
                     <div className="flex flex-col gap-3" role="status">
-                      <p className="text-fg-body text-sm">
+                      <p className="text-fg-body text-body">
                         You can leave and come back. No Move will be invented while this runs.
                       </p>
                     </div>
@@ -951,12 +939,11 @@ export default async function ProjectOnboardingPage({
                         <FirstMoveDecision
                           projectId={projectId}
                           opportunityId={firstOpportunity.id}
-                          balance={balance}
                           skip={
                             <button
                               type="submit"
                               formAction={completeOnboardingAction.bind(null, projectId)}
-                              className="text-fg-secondary hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                              className="text-fg-secondary hover:text-fg rounded-inline text-body underline underline-offset-4 transition-interactive"
                             >
                               Go to my workspace
                             </button>

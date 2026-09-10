@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Profile.
@@ -96,16 +97,71 @@ test.describe("what Vibe does not keep is true on the screen it is printed on", 
   });
 });
 
+/**
+ * One object, one primary (UI-32).
+ *
+ * The page was four surfaces at four densities for two facts, with a mint
+ * `Save` on the name field and a mint `Connect GitHub` beside it — the page
+ * spending its emphasis twice, and the smaller decision winning. Both are
+ * browser facts: a unit test reading the source sees `variant="primary"` and
+ * has no idea how many of them end up on one screen.
+ */
+test.describe("the page is one object with one primary", () => {
+  test("draws every fact inside a single card", async ({ page }) => {
+    await page.goto(CONNECTED);
+
+    // The rows are divided by a hairline inside one surface, so a second
+    // raised surface means the four-object shape has come back.
+    await expect(page.locator("main .vibe-surface-card")).toHaveCount(1);
+  });
+
+  /*
+   * The accent is read from `--color-mint` rather than written into the test.
+   * Both palettes declare that token and they declare it differently, so a
+   * hard-coded `rgb(0, 229, 160)` would quietly stop measuring anything the
+   * day this page is looked at under v2.
+   *
+   * A function, not a string. `page.evaluate` given `"() => {…}"` evaluates it
+   * as an expression and hands back the function itself, which serialises to
+   * `undefined` — a green test measuring nothing, in the first draft of this.
+   */
+  const mintControls = () => {
+    const probe = document.createElement("span");
+    probe.style.color = "var(--color-mint)";
+    document.body.append(probe);
+    const accent = getComputedStyle(probe).color;
+    probe.remove();
+
+    return [...document.querySelectorAll("main button, main a")]
+      .filter((el) => {
+        const style = getComputedStyle(el);
+        return `${style.backgroundImage} ${style.backgroundColor}`.includes(accent);
+      })
+      .map((el) => el.textContent?.trim() ?? "");
+  };
+
+  test("spends mint on the connection and nowhere else", async ({ page }) => {
+    await page.goto(NO_GITHUB);
+
+    expect(await page.evaluate(mintControls)).toEqual(["Connect GitHub"]);
+  });
+
+  test("leaves no mint at all once there is nothing to connect", async ({ page }) => {
+    // Connected is the common state, and it offers no consequential action —
+    // so the accent is absent rather than moved onto the next loudest thing.
+    await page.goto(CONNECTED);
+
+    expect(await page.evaluate(mintControls)).toEqual([]);
+  });
+});
+
 test.describe("it fits", () => {
   for (const width of [1440, 1024, 768, 390]) {
     test(`does not scroll sideways at ${width}px`, async ({ page }) => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(CONNECTED);
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
+      await expectNoHorizontalOverflow(page);
     });
   }
 });

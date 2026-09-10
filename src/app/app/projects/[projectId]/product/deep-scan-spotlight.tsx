@@ -78,7 +78,7 @@ export function DeepScanSpotlight({ spotlight, href }: { spotlight: Spotlight; h
           {spotlight.surfaces.map((surface) => (
             <li
               key={surface}
-              className="border-line-2 bg-surface-2 rounded-nav text-fg-body border px-3 py-1 text-sm"
+              className="border-line-2 bg-surface-2 rounded-nav text-fg-body border px-3 py-1 text-body"
             >
               {surface}
             </li>

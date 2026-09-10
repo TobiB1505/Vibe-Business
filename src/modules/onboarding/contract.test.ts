@@ -22,14 +22,19 @@ const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
  * about *code* keep using `PAGE` itself.
  */
 const PAGE_COPY = PAGE.replace(/\s+/g, " ");
-const APP_HOME = readFileSync(join(ROOT, "src/app/app/(account)/page.tsx"), "utf8");
+const APP_HOME = readFileSync(join(ROOT, "src/app/app/page.tsx"), "utf8");
 /*
- * The dashboard's composition. CORE-6 split `/app` in two: the page owns the
- * session, the reads and the redirects, and this owns everything that reaches
- * the screen. The routing assertions below stay on the page; the *offer* to
- * resume is rendered, so it is asserted here.
+ * Where the *offer* to resume is rendered.
+ *
+ * `/app` was a dashboard and is a redirect now, so the routing assertions
+ * below stay on the entry point while the offer moved to the list of every
+ * product — the only surface left that shows a founder a product they have not
+ * finished setting up.
  */
-const APP_HOME_VIEW = readFileSync(join(ROOT, "src/app/app/account-home.tsx"), "utf8");
+const APP_HOME_VIEW = readFileSync(
+  join(ROOT, "src/app/app/(account)/settings/products/page.tsx"),
+  "utf8",
+);
 const ONBOARDING_SHELL = readFileSync(join(ONBOARDING_APP, "onboarding-shell.tsx"), "utf8");
 const PROJECT_ONBOARDING_PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
 const REPOSITORY_ACTION = readFileSync(
@@ -97,7 +102,7 @@ describe("onboarding orchestrates canonical domains", () => {
    */
   it("stops redirecting into onboarding once any project has finished setup", () => {
     expect(APP_HOME).toContain("!routing.hasCompleted");
-    expect(APP_HOME).toContain("routing.hasCompleted ? routing.resumableProjectId : null");
+    expect(APP_HOME_VIEW).toContain("routing.hasCompleted ? routing.resumableProjectId : null");
     expect(APP_HOME_VIEW).toContain("Continue setup");
   });
 

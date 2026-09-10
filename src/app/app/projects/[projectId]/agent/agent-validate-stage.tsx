@@ -56,7 +56,7 @@ export function AgentValidateStage({
           nowhere near the founder's product is a fact about what Vibe did,
           and it is the one sentence here that Nova's own line does not carry.
         */}
-        <p className="text-fg-muted text-sm">
+        <p className="text-fg-muted text-body">
           Validation runs in an isolated environment. Nothing is live.
         </p>
       </div>
@@ -69,11 +69,11 @@ export function AgentValidateStage({
         <div className="flex min-w-0 flex-col gap-4">
           <MonoLabel className="text-mint">Stage 3 of 5</MonoLabel>
 
-          <h3 className="text-fg text-2xl leading-tight font-bold tracking-[-0.03em] text-balance">
+          <h3 className="text-fg text-moment font-bold text-balance">
             {running ? "Validating your changes" : "The checks Vibe ran"}
           </h3>
 
-          <p className="text-fg-prose max-w-[46ch] text-base leading-relaxed text-pretty">
+          <p className="text-fg-prose max-w-[46ch] text-lead leading-relaxed text-pretty">
             {running
               ? "Vibe is running checks in an isolated environment before showing you a preview."
               : "Each check ran in an isolated environment on this exact change, before any preview existed."}
@@ -95,13 +95,12 @@ export function AgentValidateStage({
               <path d="M13.2 2.5 4.8 13.2h6L10 21.5l8.4-10.7h-6l.8-8.3Z" />
             </svg>
             <span className="flex flex-col gap-1.5">
-              <span className="text-fg-body text-[0.9375rem] font-semibold">
+              <span className="text-fg-body text-card-title font-semibold">
                 What happens next?
               </span>
-              <span className="text-fg-muted max-w-[48ch] text-sm leading-relaxed">
-                Once the checks are done you can preview the change and compare it against your live
-                product, before deciding anything.
-              </span>
+              <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">
+                Once the checks are done you can preview the change and compare it against your
+                live product, before deciding anything.              </span>
             </span>
           </Well>
         </div>
@@ -113,7 +112,7 @@ export function AgentValidateStage({
       </div>
 
       <div className="border-line-2 mt-2 flex min-h-[5.25rem] flex-wrap items-center justify-between gap-4 border-t px-1 py-7">
-        <span className="text-fg-muted flex items-center gap-3 text-sm">
+        <span className="text-fg-muted flex items-center gap-3 text-body">
           <svg
             viewBox="0 0 24 24"
             width="18"
@@ -131,7 +130,7 @@ export function AgentValidateStage({
           </svg>
           Validation runs in an isolated environment. Nothing is live.
         </span>
-        <span className="text-fg-meta font-mono text-xs">
+        <span className="text-fg-meta font-mono text-caption">
           {running ? "Checks in progress" : "Checks recorded"}
         </span>
       </div>

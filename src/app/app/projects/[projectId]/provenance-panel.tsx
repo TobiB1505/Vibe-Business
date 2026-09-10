@@ -1,5 +1,3 @@
-import Link from "next/link";
-
 import { projectSectionHref, type WorkspaceSectionId } from "@/components/layout/project-shell";
 import { formatDate } from "@/lib/utils/format-datetime";
 import type { ActionProvenance } from "@/modules/provenance/actions";
@@ -10,6 +8,7 @@ import {
   PROVENANCE_REASONS,
   PROVENANCE_REMEDY_LABELS,
 } from "@/modules/provenance/view";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * What a paid action will be built on, before a founder buys it.
@@ -51,8 +50,8 @@ function LinkRow({ link }: { link: ActionProvenance["links"][number] }) {
       data-provenance-state={link.state}
     >
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
-        <span className="text-fg-prose text-sm">{PROVENANCE_LINK_LABELS[link.kind]}</span>
-        <span className="text-fg-meta text-xs tabular-nums">{produced ?? "—"}</span>
+        <span className="text-fg-prose text-body">{PROVENANCE_LINK_LABELS[link.kind]}</span>
+        <span className="text-fg-meta text-caption tabular-nums">{produced ?? "—"}</span>
       </div>
 
       {/*
@@ -73,7 +72,7 @@ function LinkRow({ link }: { link: ActionProvenance["links"][number] }) {
       )}
 
       {link.reason !== null && (
-        <p className="text-fg-muted mt-1 text-xs leading-relaxed">
+        <p className="text-fg-muted mt-1 text-caption leading-relaxed">
           {PROVENANCE_REASONS[link.reason]}
         </p>
       )}
@@ -94,7 +93,7 @@ export function ProvenancePanel({
 
   return (
     <section
-      className="border-line-2 rounded-md border px-3 py-2"
+      className="border-line-2 rounded-inset border px-3 py-2"
       data-testid="provenance-panel"
       data-provenance-current={provenance.firstGap === null}
     >
@@ -110,13 +109,12 @@ export function ProvenancePanel({
 
       {remedy !== null && (
         <div className="border-line-2 mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-2">
-          <Link
+          <StandaloneLink
             href={projectSectionHref(projectId, REMEDY_SECTION[remedy])}
-            className="text-fg-prose hover:text-fg text-sm underline underline-offset-2"
             data-testid="provenance-remedy"
           >
             {PROVENANCE_REMEDY_LABELS[remedy]}
-          </Link>
+          </StandaloneLink>
           {FREE_REMEDIES.includes(remedy) && (
             <span className="text-fg-meta text-[0.65rem] tracking-[0.12em] uppercase">Free</span>
           )}

@@ -143,7 +143,6 @@ export function NovaHeaderLive({
       mark={
         <NovaPresence
           state={novaPresenceState({ tier, phase: live?.phase ?? "idle" })}
-          size="md"
           seed={seed}
         />
       }

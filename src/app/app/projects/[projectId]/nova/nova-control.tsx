@@ -4,7 +4,6 @@ import { useActionState, useState } from "react";
 import { NovaMoveButton, NovaMoveLink } from "@/components/nova/nova-move";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Notice } from "@/components/ui/states";
-import type { CostBalance } from "@/components/system/cost-disclosure";
 import type { RetailOperationKind } from "@/modules/credits/retail";
 import { runNovaHomeAction, type NovaHomeActionState } from "./nova-home-actions";
 import type { DispatchableNovaActionId } from "./nova-dispatch";
@@ -53,7 +52,6 @@ export function NovaServerActionControl({
   confirmationNote,
   /** The retail kind this charges under, shown inside the control. */
   operation = null,
-  balance,
 }: {
   projectId: string;
   actionId: DispatchableNovaActionId;
@@ -63,7 +61,6 @@ export function NovaServerActionControl({
   requiresConfirmation: boolean;
   confirmationNote: string | null;
   operation?: RetailOperationKind | null;
-  balance?: CostBalance | null;
 }) {
   const [state, formAction, pending] = useActionState<NovaHomeActionState, FormData>(
     runNovaHomeAction.bind(null, projectId, actionId, subjectId),
@@ -90,7 +87,6 @@ export function NovaServerActionControl({
           ref={openerRef}
           label={label}
           operation={operation}
-          balance={balance}
           onClick={() => setConfirming(true)}
         />
       ) : (
@@ -98,7 +94,6 @@ export function NovaServerActionControl({
           type="submit"
           label={label}
           operation={operation}
-          balance={balance}
           busy={pending}
           disabled={pending}
         />

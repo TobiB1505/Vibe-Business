@@ -77,7 +77,6 @@ export function NovaOnboardingHeader({
       mark={
         <NovaPresence
           state={novaPresenceState({ tier: NOVA_ONBOARDING_TIER[state], phase })}
-          size="md"
           /* The project, so one product always draws the same mark — including
              across the seam from setup into Home. */
           seed={projectId}

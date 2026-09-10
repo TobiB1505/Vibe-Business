@@ -105,7 +105,7 @@ function CheckList({ checks }: { checks: OutcomeCheckLine[] }) {
   return (
     <ul className="space-y-0.5" data-testid="outcome-checks">
       {checks.map((check) => (
-        <li key={check.checkId} className={`text-sm ${CHECK_TONE[check.status]}`}>
+        <li key={check.checkId} className={`text-body ${CHECK_TONE[check.status]}`}>
           <span aria-hidden="true">{CHECK_MARK[check.status]}</span>{" "}
           {check.label}
           {CHECK_SUFFIX[check.status]}
@@ -134,7 +134,7 @@ function CheckList({ checks }: { checks: OutcomeCheckLine[] }) {
  */
 function ScopeNote({ note }: { note: string | null }) {
   if (note === null) return null;
-  return <p className="text-xs text-fg-muted">{note}</p>;
+  return <p className="text-caption text-fg-muted">{note}</p>;
 }
 
 function OutcomeLadder({
@@ -153,21 +153,21 @@ function OutcomeLadder({
   businessImpact?: string;
 }) {
   return (
-    <dl className="space-y-1 rounded-md border border-line-2 p-3" data-testid="outcome-ladder">
+    <dl className="space-y-1 rounded-inset border border-line-2 p-3" data-testid="outcome-ladder">
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-fg-muted">Merged</dt>
-        <dd className="text-xs text-mint">Yes</dd>
+        <dt className="text-caption text-fg-muted">Merged</dt>
+        <dd className="text-caption text-mint">Yes</dd>
       </div>
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-fg-muted">Production outcome</dt>
-        <dd className="text-xs text-fg-prose">{productOutcome}</dd>
+        <dt className="text-caption text-fg-muted">Production outcome</dt>
+        <dd className="text-caption text-fg-prose">{productOutcome}</dd>
       </div>
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-fg-muted">Business impact</dt>
+        <dt className="text-caption text-fg-muted">Business impact</dt>
         {/* Not "pending" and not "0%". When nothing has been measured this
             says so plainly; when something has, it says what was observed —
             never a claim that the change caused it (Sprint 12B §33, §43). */}
-        <dd className="text-xs text-fg-muted">{businessImpact ?? "Not measured"}</dd>
+        <dd className="text-caption text-fg-muted">{businessImpact ?? "Not measured"}</dd>
       </div>
     </dl>
   );
@@ -176,7 +176,7 @@ function OutcomeLadder({
 /** Restated wherever an outcome is visible, for the same reason the merge panel restates its own. */
 function NotDeployed() {
   return (
-    <p className="text-xs text-fg-muted">
+    <p className="text-caption text-fg-muted">
       This checks the intended public product behavior. It does not measure business impact, and
       Vibe never deploys — whether a new build has reached your users is your host&apos;s answer,
       not Vibe&apos;s.
@@ -219,7 +219,7 @@ function WindowClosed({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs text-fg-muted">
+      <p className="text-caption text-fg-muted">
         Your change is still in your repository — this says only what Vibe could see on your public
         product. The checking window {endsAt ? `closed at ${localTime(endsAt)}` : "is closed"}, and
         Vibe is no longer looking.
@@ -228,7 +228,6 @@ function WindowClosed({
         <Button
           type="button"
           variant="secondary"
-          size="sm"
           onClick={onCheckAgain}
           disabled={pending}
           busy={pending}
@@ -308,13 +307,13 @@ export function OutcomePanel({
           : "space-y-3 border-t border-line-2 pt-4"
       }
     >
-      <h4 className="text-sm font-medium text-fg-body">Outcome</h4>
+      <h4 className="text-card-title font-medium text-fg-body">Outcome</h4>
 
       {current.state === "not_started" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Merged</p>
-          <p className="text-sm text-fg-secondary">Not yet verified in production</p>
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-fg-prose">Merged</p>
+          <p className="text-body text-fg-secondary">Not yet verified in production</p>
+          <p className="text-caption text-fg-muted">
             Vibe can check your public product
             {current.publicOrigin ? (
               <>
@@ -328,7 +327,6 @@ export function OutcomePanel({
           <Button
             type="button"
             variant="primary"
-            size="sm"
             onClick={check}
             disabled={pending || !current.canVerify}
           >
@@ -337,11 +335,11 @@ export function OutcomePanel({
         </div>
       ) : current.state === "observing" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Checking production…</p>
+          <p className="text-body text-fg-prose">Checking production…</p>
           <ScopeNote note={current.profileNote} />
           {/* No percentage. Nobody knows how long somebody else's deployment
               takes, and a bar sitting at 60% would teach people to distrust it. */}
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             Production may take a few minutes to update. Vibe will keep looking
             {current.windowEndsAt ? ` until ${localTime(current.windowEndsAt)}` : " for a short while"}.
             You can leave this page.
@@ -350,32 +348,32 @@ export function OutcomePanel({
         </div>
       ) : current.state === "verified" ? (
         <div className="space-y-2">
-          <p className="text-sm text-mint">Production outcome verified</p>
+          <p className="text-body text-mint">Production outcome verified</p>
           <ScopeNote note={current.profileNote} />
           <CheckList checks={current.checks} />
           {current.observedAt && (
-            <p className="text-xs text-fg-muted">Observed at {localTime(current.observedAt)}</p>
+            <p className="text-caption text-fg-muted">Observed at {localTime(current.observedAt)}</p>
           )}
           <OutcomeLadder productOutcome="Verified" businessImpact={businessImpactLabel} />
           <NotDeployed />
         </div>
       ) : current.state === "partial" ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber">Partially observed</p>
+          <p className="text-body text-amber">Partially observed</p>
           <ScopeNote note={current.profileNote} />
           {/* Every check, passing and not. Hiding the failures is how a partial
               outcome quietly becomes a verified one (§31). */}
           <CheckList checks={current.checks} />
           {current.observedAt && (
-            <p className="text-xs text-fg-muted">Observed at {localTime(current.observedAt)}</p>
+            <p className="text-caption text-fg-muted">Observed at {localTime(current.observedAt)}</p>
           )}
           <OutcomeLadder productOutcome="Partially observed" businessImpact={businessImpactLabel} />
           <NotDeployed />
         </div>
       ) : current.state === "not_observed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-prose">Not observed within verification window</p>
-          <p className="text-sm text-fg-secondary">
+          <p className="text-body text-fg-prose">Not observed within verification window</p>
+          <p className="text-body text-fg-secondary">
             Vibe did not observe the expected production behavior within 15 minutes.
           </p>
           <ScopeNote note={current.profileNote} />
@@ -384,7 +382,7 @@ export function OutcomePanel({
               deployment API and does not know why (§22, §32). And it offers no
               remerge, revalidate, rebuild or redeploy — there is no hidden
               recovery here (§32, CLAUDE.md rule 60). */}
-          <p className="text-xs text-fg-muted">
+          <p className="text-caption text-fg-muted">
             This does not mean a deployment failed. Vibe does not read your hosting provider, so it
             cannot say why the behavior was not visible.
           </p>
@@ -395,9 +393,9 @@ export function OutcomePanel({
         <div className="space-y-2">
           {/* "Vibe could not check" — a statement about Vibe, never about the
               customer's product (§23). */}
-          <p className="text-sm text-amber">Vibe could not check the production outcome</p>
-          {current.failureMessage && <p className="text-sm text-fg-secondary">{current.failureMessage}</p>}
-          <p className="text-xs text-fg-muted">
+          <p className="text-body text-amber">Vibe could not check the production outcome</p>
+          {current.failureMessage && <p className="text-body text-fg-secondary">{current.failureMessage}</p>}
+          <p className="text-caption text-fg-muted">
             This says nothing about whether your product behaves as intended — only that Vibe could
             not observe it.
           </p>
@@ -409,12 +407,12 @@ export function OutcomePanel({
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Not available</p>
-          {current.failureMessage && <p className="text-xs text-fg-muted">{current.failureMessage}</p>}
+          <p className="text-body text-fg-secondary">Not available</p>
+          {current.failureMessage && <p className="text-caption text-fg-muted">{current.failureMessage}</p>}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
+      {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
     </section>
   );
 }

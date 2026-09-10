@@ -99,7 +99,7 @@ export function TableCell({
   return (
     <td
       className={cn(
-        "text-fg-body py-2.5 pr-4 text-sm last:pr-0",
+        "text-fg-body py-2.5 pr-4 text-body last:pr-0",
         numeric && "text-right tabular-nums",
         className,
       )}

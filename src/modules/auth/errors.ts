@@ -53,21 +53,23 @@ type SupabaseishError = {
  * and it was: `?error=constructor` put `function Object() { [native code] }`
  * into a user-visible redirect. A Map has no prototype keys to inherit.
  */
-const CODE_TO_FAILURE = new Map<string, AuthFailure>(Object.entries({
-  invalid_credentials: "invalid_credentials",
-  email_not_confirmed: "email_not_confirmed",
-  phone_not_confirmed: "email_not_confirmed",
-  user_already_exists: "user_already_exists",
-  email_exists: "user_already_exists",
-  weak_password: "weak_password",
-  over_request_rate_limit: "rate_limited",
-  over_email_send_rate_limit: "rate_limited",
-  otp_expired: "expired_link",
-  flow_state_expired: "expired_link",
-  flow_state_not_found: "expired_link",
-  bad_code_verifier: "expired_link",
-  validation_failed: "invalid_credentials",
-}));
+const CODE_TO_FAILURE = new Map<string, AuthFailure>(
+  Object.entries({
+    invalid_credentials: "invalid_credentials",
+    email_not_confirmed: "email_not_confirmed",
+    phone_not_confirmed: "email_not_confirmed",
+    user_already_exists: "user_already_exists",
+    email_exists: "user_already_exists",
+    weak_password: "weak_password",
+    over_request_rate_limit: "rate_limited",
+    over_email_send_rate_limit: "rate_limited",
+    otp_expired: "expired_link",
+    flow_state_expired: "expired_link",
+    flow_state_not_found: "expired_link",
+    bad_code_verifier: "expired_link",
+    validation_failed: "invalid_credentials",
+  }),
+);
 
 /**
  * OAuth `error` values a provider can put on the callback URL.
@@ -76,16 +78,18 @@ const CODE_TO_FAILURE = new Map<string, AuthFailure>(Object.entries({
  * screen, so it gets its own non-alarming message rather than being folded
  * into a generic failure.
  */
-const OAUTH_ERROR_TO_FAILURE = new Map<string, AuthFailure>(Object.entries({
-  access_denied: "oauth_cancelled",
-  user_cancelled: "oauth_cancelled",
-  consent_required: "oauth_cancelled",
-  server_error: "oauth_failed",
-  temporarily_unavailable: "oauth_failed",
-  invalid_request: "oauth_failed",
-  unauthorized_client: "oauth_failed",
-  invalid_scope: "oauth_failed",
-}));
+const OAUTH_ERROR_TO_FAILURE = new Map<string, AuthFailure>(
+  Object.entries({
+    access_denied: "oauth_cancelled",
+    user_cancelled: "oauth_cancelled",
+    consent_required: "oauth_cancelled",
+    server_error: "oauth_failed",
+    temporarily_unavailable: "oauth_failed",
+    invalid_request: "oauth_failed",
+    unauthorized_client: "oauth_failed",
+    invalid_scope: "oauth_failed",
+  }),
+);
 
 /** Classifies a Supabase auth error without ever reading its message as copy. */
 export function classifyAuthError(error: unknown): AuthFailure {
@@ -184,10 +188,7 @@ export function authFailureMessage(
 }
 
 /** Convenience for the common path: classify a Supabase error and render it. */
-export function messageForAuthError(
-  error: unknown,
-  context: AuthCopyContext = "sign_in",
-): string {
+export function messageForAuthError(error: unknown, context: AuthCopyContext = "sign_in"): string {
   return authFailureMessage(classifyAuthError(error), context);
 }
 

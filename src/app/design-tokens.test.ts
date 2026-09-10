@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { activePalette } from "./palette";
 
 /**
  * The colour tokens, measured rather than trusted (UI-6 §7).
@@ -173,20 +174,43 @@ describe("v2 redefines the whole colour vocabulary", () => {
     expect(extra, `v2-only colour tokens: ${extra.join(", ")}`).toEqual([]);
   });
 
-  it("changes nothing until something opts in", () => {
+  it("is switched in exactly one place, and that place reads configuration", () => {
     /*
-     * Every v2 declaration is scoped to `[data-vibe="v2"]`. Nothing in the
-     * product sets that attribute yet, which is what makes S1 a foundation
-     * rather than a redesign — and what makes it reversible by deleting one
-     * attribute rather than by reverting 162 files.
+     * S1 shipped the tokens unswitched and this asserted that nothing in the
+     * product carried the attribute. S4 switches it on, so the claim changes
+     * shape rather than disappearing: **one** element sets `data-vibe`, it is
+     * the root, and the value comes from `activePalette()` rather than being
+     * written in.
+     *
+     * A literal `data-vibe="v2"` anywhere would be a second switch — a route
+     * that is v2 whatever the deployment says, which is the half-migrated
+     * state ADR 0098 rejected because the fixed ground would flicker between
+     * screens.
      */
+    const setters: string[] = [];
+    const literals: string[] = [];
     for (const file of walk(join(process.cwd(), "src"))) {
       if (!file.endsWith(".tsx")) continue;
-      expect(
-        withoutComments(readFileSync(file, "utf8")),
-        `${file.slice(process.cwd().length + 1)} opts into v2; S1 ships the tokens unswitched`,
-      ).not.toContain('data-vibe="v2"');
+      const path = file.slice(process.cwd().length + 1);
+      const source = withoutComments(readFileSync(file, "utf8"));
+      if (/data-vibe=/.test(source)) setters.push(path);
+      if (/data-vibe="v[12]"/.test(source)) literals.push(path);
     }
+    expect(setters, "the palette is chosen once, in the root layout").toEqual([
+      "src/app/layout.tsx",
+    ]);
+    expect(literals, "a written-in palette is a route that ignores the switch").toEqual([]);
+    expect(readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8")).toContain(
+      "data-vibe={activePalette()}",
+    );
+  });
+
+  it("defaults to the palette customers already have", () => {
+    // The switch exists so v2 can be looked at, not so it arrives by accident.
+    // An unset variable, a typo and an empty string all mean v1.
+    expect(activePalette({})).toBe("v1");
+    expect(activePalette({ VIBE_PALETTE: "V2" })).toBe("v1");
+    expect(activePalette({ VIBE_PALETTE: "v2" })).toBe("v2");
   });
 });
 
@@ -211,8 +235,13 @@ describe("every colour a class name asks for exists", () => {
    * so a name with no token is not a compile error and not a runtime error:
    * it is a silent no-op on exactly the text that most needed to be seen.
    */
+  /*
+   * `from|to|via` are here because UI-27 made gradient stops carry tokens, and
+   * a stop with no token fails exactly the way `text-danger` did: Tailwind
+   * emits nothing, the wash silently disappears, and no build says so.
+   */
   const COLOUR_UTILITIES =
-    /\b(?:text|bg|border)-((?:fg|mint|amber|coral|surface|line|danger|success|warning|error)(?:-[a-z0-9]+)*)\b/g;
+    /\b(?:text|bg|border|from|to|via)-((?:fg|mint|amber|coral|surface|line|sheen|danger|success|warning|error)(?:-[a-z0-9]+)*)\b/g;
 
   it("resolves every colour utility used in the app to a token", () => {
     const sources = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
@@ -313,6 +342,14 @@ describe("a button that is working says so", () => {
   });
 });
 
+/**
+ * Prose is not a class list.
+ *
+ * A docblock explaining why `text-base` is gone contains `text-base`, and a
+ * test that counts it fails on an edit to a comment — which teaches people not
+ * to write the explanation down. `button.tsx` names it three times while
+ * recording that half of it never applied.
+ */
 function withoutComments(src: string): string {
   return src
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")
@@ -327,3 +364,360 @@ function* walk(dir: string): Generator<string> {
     else yield path;
   }
 }
+
+/**
+ * A `text-*` class that names no token renders nothing and says so to nobody.
+ *
+ * `text-ui-lg` was written on Nova's question and Nova's prompt — two of the
+ * most prominent sentences in the product — and is declared in neither
+ * palette. Measured in a browser it computed to 16px, which is exactly what no
+ * class at all computes to. It survived because 16px happens to be larger than
+ * body text, so it looked approximately intentional.
+ *
+ * Tailwind cannot warn about this: an unknown utility is simply not emitted.
+ * Only a comparison of what is written against what is declared can catch it.
+ */
+describe("every type class names a token that exists", () => {
+  const declared = new Set(
+    [...CSS.matchAll(/--text-([a-z0-9-]+):/g)]
+      .map((match) => match[1])
+      // `--text-x--line-height` and friends are modifiers of a size, not sizes.
+      .filter((name) => !name.includes("--")),
+  );
+
+  /**
+   * Tailwind's own scale still *resolves*, so a class naming it is not an
+   * unresolvable name — which is all this particular test asks. Whether it is
+   * allowed at all is a different question, answered by "headings come from
+   * Vibe's scale, not Tailwind's" below.
+   */
+  const TAILWIND = new Set([
+    "xs",
+    "sm",
+    "base",
+    "lg",
+    "xl",
+    "2xl",
+    "3xl",
+    "4xl",
+    "5xl",
+    "6xl",
+    "7xl",
+    "8xl",
+    "9xl",
+  ]);
+
+  it("finds the declared sizes at all", () => {
+    expect(declared.size).toBeGreaterThan(6);
+    expect(declared).toContain("caption");
+  });
+
+  it("writes no size the theme cannot resolve", () => {
+    // Colour tokens share the `text-` prefix, so a name is fine if the theme
+    // declares it as either a size or a colour.
+    const colours = new Set([...CSS.matchAll(/--color-([a-z0-9-]+):/g)].map((m) => m[1]));
+    const KEYWORDS = new Set([
+      "balance",
+      "pretty",
+      "wrap",
+      "nowrap",
+      "clip",
+      "ellipsis",
+      "left",
+      "right",
+      "center",
+      "justify",
+      "start",
+      "end",
+      "white",
+      "black",
+      "transparent",
+      "current",
+      "inherit",
+    ]);
+
+    const unknown = new Map<string, string>();
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const source = readFileSync(file, "utf8");
+      // Only inside a className, so an import path like `ui/text-link` is not
+      // mistaken for a utility.
+      for (const [, attribute] of source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g)) {
+        for (const [, name] of (attribute ?? "").matchAll(/\btext-([a-z][a-z0-9-]*)\b/g)) {
+          if (declared.has(name) || TAILWIND.has(name)) continue;
+          if (colours.has(name) || KEYWORDS.has(name)) continue;
+          if (!unknown.has(name)) unknown.set(name, file.replace(process.cwd() + "/", ""));
+        }
+      }
+    }
+
+    expect(
+      [...unknown.keys()],
+      [...unknown].map(([name, file]) => `text-${name} in ${file}`).join("; "),
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The two steps the sweep created must keep rendering what they replaced.
+ *
+ * `text-sm` and `text-xs` were written 809 times against a scale that had no
+ * name for either. `--text-body` and `--text-caption` name them, and the whole
+ * argument for the sweep was that it moves nothing — so these values are not
+ * free to drift. Changing one is re-typesetting most of the product, which is
+ * a decision and belongs in a commit that says so.
+ *
+ * v2 is deliberately different and is not pinned here: loosening prose is one
+ * of the things a second palette is for.
+ */
+describe("the body and caption steps name what they replaced", () => {
+  const value = (name: string) => CSS.match(new RegExp(`--text-${name}:\\s*([^;]+);`))?.[1].trim();
+  const leading = (name: string) =>
+    CSS.match(new RegExp(`--text-${name}--line-height:\\s*([^;]+);`))?.[1].trim();
+
+  it("is Tailwind's text-sm, exactly", () => {
+    expect(value("body")).toBe("0.875rem");
+    expect(leading("body")).toBe("1.25rem");
+  });
+
+  it("is Tailwind's text-xs, exactly", () => {
+    expect(value("caption")).toBe("0.75rem");
+    expect(leading("caption")).toBe("1rem");
+  });
+
+  it("leaves no raw size behind in the product", () => {
+    const stragglers: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx") || file.includes("design-studies")) continue;
+      if (/\btext-(sm|xs)\b/.test(readFileSync(file, "utf8"))) {
+        stragglers.push(file.replace(process.cwd() + "/", ""));
+      }
+    }
+    expect(
+      stragglers,
+      "`text-sm` and `text-xs` are Tailwind's names for steps Vibe now owns.",
+    ).toEqual([]);
+  });
+});
+
+/**
+ * The heading scale is closed, and it has to stay closed.
+ *
+ * ## What was measured before this
+ *
+ * 1381 type-size decisions, of which 1134 named a Vibe token. The other 247
+ * were not call sites drifting. They were two specific holes:
+ *
+ * - **One job, three sizes.** A panel's own name — "Connected repositories",
+ *   "What you told Vibe", "Delete your account" — was written at 16px twenty
+ *   times, 18px five times and 19px eleven times.
+ * - **A job with no size.** The line that speaks to the founder — "Vibe needs
+ *   your input", "Vibe knows your product." — was written at 20px twelve
+ *   times and 24px eight. The scale had nothing between `title` (19) and
+ *   `headline` (28), so both numbers came from Tailwind's, which means
+ *   nothing here.
+ *
+ * `--text-moment` closes the second and the sweep closed the first. The rule
+ * that let it happen is the one this replaces: the earlier version of this
+ * file allowed Tailwind's whole scale as "legitimate even where Vibe has its
+ * own", and 98 sizes walked through that door.
+ *
+ * ## Why exceptions are counted rather than described
+ *
+ * Nine uses remain and they are not type. They are a glyph sized as an icon
+ * (a `×`, a `!`, an avatar initial), a mono rank, and one price sized
+ * together with its coin. None of them is a heading, and folding them into
+ * the type scale to make a test pass would be the wrong fix.
+ *
+ * Two groups that used to be on this list are gone. The metrics were figures
+ * and `--text-figure-*` names them now. The marketing CTAs were a third
+ * button size written by hand — and half of it never applied, because `cn`
+ * joins rather than merges and `text-body` won over the appended
+ * `text-base`. `buttonClasses({ size: "marketing" })` owns it.
+ *
+ * So they are named by file *with a count*. A file may keep exactly what it
+ * has; one more makes this fail. That is what stops the allowlist from
+ * becoming a licence — which is the failure mode of every allowlist that
+ * records only a path.
+ */
+const SCALE = /\btext-(base|lg|xl|2xl|3xl|4xl)\b/g;
+
+function uses(): Map<string, number> {
+  const found = new Map<string, number>();
+  for (const file of walk(join(process.cwd(), "src"))) {
+    if (!file.endsWith(".tsx")) continue;
+    const path = file.replace(process.cwd() + "/", "");
+    // A study renders the replaced thing beside the replacement on purpose.
+    if (path.startsWith("src/app/e2e/design-studies/")) continue;
+    const count = (withoutComments(readFileSync(file, "utf8")).match(SCALE) ?? []).length;
+    if (count > 0) found.set(path, count);
+  }
+  return found;
+}
+
+describe("headings come from Vibe's scale, not Tailwind's", () => {
+  /**
+   * The remaining uses, and what each file is doing with them.
+   *
+   * glyph — a character sized as an icon: `×`, `!`, an avatar initial
+   */
+  const NOT_TYPE: [string, number][] = [
+    ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 3], // glyph ×3
+    ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // a mono rank, "01"
+    ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
+    ["src/components/ui/credit-amount.tsx", 1], // the price, sized with its coin
+  ];
+
+  it("writes no Tailwind display size outside the counted exceptions", () => {
+    const allowed = new Map(NOT_TYPE);
+    const wrong: string[] = [];
+    for (const [path, count] of uses()) {
+      const budget = allowed.get(path);
+      if (budget === undefined) wrong.push(`${path} (${count})`);
+      else if (count !== budget) wrong.push(`${path} has ${count}, allowed ${budget}`);
+    }
+    expect(
+      wrong,
+      "Tailwind's display scale means nothing in Vibe. A heading takes " +
+        "text-title, text-moment or text-headline; prose takes text-lead.",
+    ).toEqual([]);
+  });
+
+  it("keeps every counted exception honest", () => {
+    // An allowance for a file that no longer needs it is an allowance nobody
+    // notices has become a licence.
+    const found = uses();
+    const stale = NOT_TYPE.filter(([path]) => !found.has(path)).map(([path]) => path);
+    expect(stale, "listed as an exception and no longer uses one — drop it").toEqual([]);
+  });
+
+  it("declares the step that was missing", () => {
+    // The whole sweep rests on this token existing. Without it the twenty
+    // moment headings have nowhere on the scale to be.
+    expect(CSS).toContain("--text-moment:");
+    expect(V2).toContain("--text-moment:");
+  });
+});
+
+/**
+ * A size that has a name is written with the name.
+ *
+ * Sixty-one `text-[…]` values were exact duplicates of a declared token —
+ * `text-[0.9375rem]` thirteen times for `lead`, `text-[0.6875rem]` twelve for
+ * `meta`, `text-[3rem]` six for `hero`. Not one of them was a decision; each
+ * was a number typed where a name existed, and together they made the scale
+ * look far less adopted than it was.
+ *
+ * This forbids only the exact duplicates. A near-miss — 0.65rem, 0.7rem — is a
+ * judgement about which rung it belongs on, not a rename, and belongs in a
+ * change that argues for it.
+ */
+describe("no arbitrary size restates a token", () => {
+  it("finds no text-[…] that a declared token already names", () => {
+    const declared = new Map<string, string>();
+    for (const [, name, value] of CSS.matchAll(/--text-([a-z-]+):\s*([0-9.]+rem);/g)) {
+      if (name.includes("--")) continue;
+      // A figure step is not merely a size: it carries `line-height: 1` and
+      // tracking chosen for numerals. Prose that happens to be 20px is not
+      // "text-figure-sm written as a number", and telling somebody to rename
+      // it would put a numeral's leading on a sentence.
+      if (name.startsWith("figure")) continue;
+      declared.set(value, name);
+      // The same size written in pixels, which is how eleven of them appeared.
+      declared.set(`${Number.parseFloat(value) * 16}px`, name);
+    }
+
+    const restated: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      for (const [, value] of readFileSync(file, "utf8").matchAll(
+        /text-\[([0-9.]+(?:rem|px))\]/g,
+      )) {
+        const name = declared.get(value);
+        if (name) restated.push(`${path}: text-[${value}] is text-${name}`);
+      }
+    }
+
+    expect(restated, "Write the name. A number that has one is not a decision.").toEqual([]);
+  });
+});
+
+/**
+ * The corner scale is closed too.
+ *
+ * ## What was measured before this
+ *
+ * Five names, and the product wrote seventeen corners. Three of them were
+ * exact duplicates under two names — `rounded-xl` is 12px, which is
+ * `--radius-field`; `rounded-2xl` is 16px, which is `--radius-card`;
+ * `rounded-[10px]` is `--radius-nav` verbatim — so nothing in a class string
+ * said which was meant.
+ *
+ * Below `nav` (10px) there was no Vibe name at all, and fifty-nine places
+ * reached into Tailwind's scale to choose between 4, 6 and 8px with nothing
+ * to guide them. Above `card` (16px) there was none either, and five places
+ * wanting "bigger than a card" wrote 18.4px, 19.2px and 20px between them —
+ * three values within two pixels, none of them chosen.
+ *
+ * `--radius-inline`, `--radius-inset` and `--radius-stage` name what was
+ * missing. The rest was a rename and moved nothing.
+ *
+ * ## Why `rounded-full` is not on trial
+ *
+ * A pill is not a step on this scale — it is a shape, and 160 uses of it are
+ * a status, an avatar or a dot rather than a corner choice somebody made.
+ */
+describe("corners come from Vibe's scale, not Tailwind's", () => {
+  const TAILWIND_RADII = /\brounded-(?:[trblxyse]{1,2}-)?(xs|sm|md|lg|xl|2xl|3xl|4xl)\b/g;
+
+  it("declares a name for every corner the product needs", () => {
+    for (const token of ["inline", "inset", "nav", "field", "well", "panel", "card", "stage"]) {
+      expect(CSS, `--radius-${token} is missing`).toContain(`--radius-${token}:`);
+      expect(V2, `--radius-${token} is missing from the second palette`).toContain(
+        `--radius-${token}:`,
+      );
+    }
+  });
+
+  it("writes no Tailwind corner anywhere", () => {
+    // No exceptions, unlike the type scale: every corner in the product is a
+    // corner on something, and every one of those things now has a name.
+    const wrong: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      const found = withoutComments(readFileSync(file, "utf8")).match(TAILWIND_RADII);
+      if (found) wrong.push(`${path}: ${[...new Set(found)].join(", ")}`);
+    }
+    expect(
+      wrong,
+      "Tailwind's radius scale means nothing in Vibe, and two of its steps are " +
+        "Vibe steps under another name. Use rounded-inline, inset, nav, field, " +
+        "well, panel, card or stage.",
+    ).toEqual([]);
+  });
+
+  it("writes no arbitrary corner that a token already names", () => {
+    const declared = new Map<string, string>();
+    for (const [, name, value] of CSS.matchAll(/--radius-([a-z-]+):\s*([0-9.]+px);/g)) {
+      declared.set(value, name);
+    }
+    const restated: string[] = [];
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const path = file.replace(process.cwd() + "/", "");
+      if (path.startsWith("src/app/e2e/design-studies/")) continue;
+      for (const [, raw] of withoutComments(readFileSync(file, "utf8")).matchAll(
+        /rounded-\[([0-9.]+(?:px|rem))\]/g,
+      )) {
+        const px = raw.endsWith("rem") ? `${Number.parseFloat(raw) * 16}px` : raw;
+        const name = declared.get(px);
+        if (name) restated.push(`${path}: rounded-[${raw}] is rounded-${name}`);
+      }
+    }
+    expect(restated, "Write the name.").toEqual([]);
+  });
+});

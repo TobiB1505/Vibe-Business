@@ -113,13 +113,13 @@ export function HandoffCard({
         <StatusPill tone="waiting" dot>
           {copy.pill}
         </StatusPill>
-        <span className="text-fg-muted text-xs">Step {step.order}</span>
+        <span className="text-fg-muted text-caption">Step {step.order}</span>
       </div>
 
       <div className="flex flex-col gap-1.5">
-        <h3 className="text-fg text-base leading-snug font-semibold">{step.title}</h3>
-        <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
-        <p className="text-fg-muted text-sm leading-relaxed">{copy.lead}</p>
+        <h3 className="text-fg text-title leading-snug font-semibold">{step.title}</h3>
+        <p className="text-fg-prose text-body leading-relaxed">{step.description}</p>
+        <p className="text-fg-muted text-body leading-relaxed">{copy.lead}</p>
       </div>
 
       {tool === null ? (
@@ -139,9 +139,9 @@ export function HandoffCard({
               </Button>
             ))}
           </div>
-          <p className="text-fg-muted text-xs">{copy.toolFootnote}</p>
+          <p className="text-fg-muted text-caption">{copy.toolFootnote}</p>
           {state && !state.ok && (
-            <p role="alert" className="text-coral text-sm">
+            <p role="alert" className="text-coral text-body">
               {state.message}
             </p>
           )}
@@ -194,14 +194,14 @@ function HandoffPrompt({ prompt, toolLabel }: { prompt: string; toolLabel: strin
           }}
           aria-label={copied ? "Prompt copied" : "Copy prompt"}
           data-testid="handoff-copy"
-          className="border-line-2 bg-surface-2 text-fg-muted hover:text-fg hover:border-line-3 absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-nav border px-2 py-1 text-xs transition-interactive"
+          className="border-line-2 bg-surface-2 text-fg-muted hover:text-fg hover:border-line-3 absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-nav border px-2 py-1 text-caption transition-interactive"
         >
           {copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
           {copied ? "Copied" : "Copy"}
         </button>
         <pre
           data-testid="handoff-prompt"
-          className="border-line-2 bg-surface-2 text-fg-body rounded-well max-h-72 overflow-auto border py-2 pr-20 pl-3 text-xs leading-relaxed whitespace-pre-wrap"
+          className="border-line-2 bg-surface-2 text-fg-body rounded-well max-h-72 overflow-auto border py-2 pr-20 pl-3 text-caption leading-relaxed whitespace-pre-wrap"
         >
           {prompt}
         </pre>

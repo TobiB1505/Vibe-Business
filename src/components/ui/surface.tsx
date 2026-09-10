@@ -16,9 +16,13 @@ import { cn } from "@/lib/utils/cn";
  * - **No card inside a card inside a card.** Nesting goes *down* the levels,
  *   never sideways at the same level, and content that needs to recede inside
  *   a surface uses `<Well>` (black) rather than a fifth white layer.
- * - **Glass is emphasis, not a default.** Only `card` blurs. A panel that
- *   genuinely needs to sit over moving background can opt in with `glass`,
- *   and that should be rare enough to notice in review.
+ * - **Glass is the material, and a section is where it stops.** In the second
+ *   palette `card` and `panel` are both panes — a deeper blur for the card,
+ *   a shallow one for the panel, because there can be a dozen panels on a
+ *   screen. `section` stays a fill on purpose: glass behind glass gives the
+ *   inner pane another pane to sample instead of the ground, and neither
+ *   reads as glass then. See [ADR 0103](../../../docs/decisions/0103-glass-is-the-material.md).
+ *   v1 is unchanged — there, only `card` blurs.
  *
  * ## The `vibe-surface-*` hooks (S2)
  *
@@ -97,7 +101,12 @@ export type SurfaceProps = Omit<HTMLAttributes<HTMLElement>, "color"> & {
   level?: SurfaceLevel;
   tone?: SurfaceTone;
   padding?: keyof typeof PADDING_CLASSES;
-  /** Opt a non-card surface into the blur. Emphasis only — see above. */
+  /**
+   * Blur a `section`, which is the one level the palette leaves opaque.
+   *
+   * Unused at HEAD, and it should stay rare: the reason a section is a fill
+   * is structural, not a default someone forgot to change.
+   */
   glass?: boolean;
   as?: ElementType;
 };

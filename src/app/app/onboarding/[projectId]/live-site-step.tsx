@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
+import { ChoiceCard } from "@/components/ui/choice-card";
 import { beginUnderstandingAction, continueWithoutLiveSiteAction, type BeginUnderstandingState } from "./actions";
 
 const URL_ERRORS: Record<string, string> = {
@@ -53,20 +54,14 @@ export function LiveSiteStep({
       )}
 
       <form action={action} className="flex flex-col gap-5" noValidate>
-        <label className="border-line-3 has-checked:border-mint/60 bg-surface-2 flex cursor-pointer gap-3 rounded-xl border p-4">
-          <input
-            type="radio"
-            name="liveSiteChoice"
-            value="provided"
-            checked={choice === "provided"}
-            onChange={() => setChoice("provided")}
-            className="mt-1 accent-mint"
-          />
-          <span className="flex flex-1 flex-col gap-1">
-            <span className="text-fg-body font-medium">My product is live</span>
-            <span className="text-fg-muted text-sm">Vibe will compare what is built with what customers can reach.</span>
-          </span>
-        </label>
+        <ChoiceCard
+          name="liveSiteChoice"
+          value="provided"
+          checked={choice === "provided"}
+          onChange={() => setChoice("provided")}
+          label="My product is live"
+          detail="Vibe will compare what is built with what customers can reach."
+        />
 
         {choice === "provided" && (
           <Field
@@ -87,20 +82,14 @@ export function LiveSiteStep({
           </Field>
         )}
 
-        <label className="border-line-3 has-checked:border-mint/60 bg-surface-2 flex cursor-pointer gap-3 rounded-xl border p-4">
-          <input
-            type="radio"
-            name="liveSiteChoice"
-            value="no_live_site_yet"
-            checked={choice === "no_live_site_yet"}
-            onChange={() => setChoice("no_live_site_yet")}
-            className="mt-1 accent-mint"
-          />
-          <span className="flex flex-1 flex-col gap-1">
-            <span className="text-fg-body font-medium">I don&apos;t have a live site yet</span>
-            <span className="text-fg-muted text-sm">That is useful context. Vibe will get to know the product from your code.</span>
-          </span>
-        </label>
+        <ChoiceCard
+          name="liveSiteChoice"
+          value="no_live_site_yet"
+          checked={choice === "no_live_site_yet"}
+          onChange={() => setChoice("no_live_site_yet")}
+          label={<>I don&apos;t have a live site yet</>}
+          detail="That is useful context. Vibe will get to know the product from your code."
+        />
 
         {error?.step === "repository" && (
           <Notice tone="problem" label="Vibe couldn't read the connected product">
@@ -126,6 +115,11 @@ export function LiveSiteStep({
           </Button>
           {(liveScanFailed || error?.step === "live") && (
             <Button
+              // A `formAction` button is a submit button; it worked on the
+              // browser's implicit default until `Button` stopped relying on
+              // one (UI-26), and "Continue without live product" would have
+              // gone quiet.
+              type="submit"
               formAction={withoutLiveAction}
               variant="secondary"
               disabled={pending || continuing}

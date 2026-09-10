@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * The audit's lifecycle states, in a real browser (AUDIT UI-1 §28–§37).
@@ -127,9 +128,7 @@ test.describe("waiting is paused, not running (§33, §34)", () => {
   test("puts the question inside the audit, with its own heading above it", async ({ page }) => {
     await page.goto(WAITING);
 
-    const waiting = await page
-      .getByRole("heading", { name: /waiting for you/i })
-      .boundingBox();
+    const waiting = await page.getByRole("heading", { name: /waiting for you/i }).boundingBox();
     const question = await page.getByRole("heading", { level: 3 }).first().boundingBox();
 
     expect(waiting!.y).toBeLessThan(question!.y);
@@ -167,10 +166,7 @@ test.describe("375px", () => {
   test("every lifecycle state fits a phone", async ({ page }) => {
     for (const url of [PREPARING, ANALYZING, WAITING]) {
       await page.goto(url);
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow, `${url} scrolls sideways`).toBeLessThanOrEqual(0);
+      await expectNoHorizontalOverflow(page, `${url} scrolls sideways`);
     }
   });
 });

@@ -35,7 +35,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
 
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <span className="text-fg-body text-sm">{entry.title}</span>
+          <span className="text-fg-body text-body">{entry.title}</span>
           <time
             dateTime={entry.at}
             className="text-fg-meta shrink-0 font-mono text-meta"
@@ -89,7 +89,7 @@ export function ActivityFeed({
         // read and a place to keep the offset, and this sprint's read path is
         // deliberately page-shaped. Saying the history is longer is honest;
         // implying this is all of it would not be.
-        <p className="text-fg-muted text-xs">
+        <p className="text-fg-muted text-caption">
           Older entries exist beyond the {entries.length} shown here.
         </p>
       )}

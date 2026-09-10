@@ -58,7 +58,7 @@ export function PlanCompleteCard({
         <StatusPill tone="success">Plan complete</StatusPill>
       </div>
 
-      <p className="text-fg-body text-sm leading-relaxed">Every step of this Move is done.</p>
+      <p className="text-fg-body text-body leading-relaxed">Every step of this Move is done.</p>
 
       {/* Absent rather than empty when the plan produced no written outcome —
           a heading over nothing reads as something lost. */}
@@ -71,14 +71,14 @@ export function PlanCompleteCard({
                 key={entry.stepKey}
                 className="border-line-3 bg-surface-2 rounded-well border px-3 py-2.5"
               >
-                <p className="text-fg-muted text-xs">
+                <p className="text-fg-muted text-caption">
                   Step {entry.order} · {entry.title}
                 </p>
-                <p className="text-fg-body mt-1 text-sm leading-relaxed">{entry.outcome}</p>
+                <p className="text-fg-body mt-1 text-body leading-relaxed">{entry.outcome}</p>
               </li>
             ))}
           </ul>
-          <p className="text-fg-muted text-xs">
+          <p className="text-fg-muted text-caption">
             The next plan is written with these in front of it.
           </p>
         </div>
@@ -89,7 +89,7 @@ export function PlanCompleteCard({
           <MonoLabel className="tracking-[0.14em]">Next move</MonoLabel>
           <Link
             href={nextMove.href}
-            className="text-fg-secondary hover:text-fg-body text-sm leading-relaxed underline underline-offset-4"
+            className="text-fg-secondary hover:text-fg-body text-body leading-relaxed underline underline-offset-4"
             data-testid="plan-complete-next-move"
           >
             {nextMove.title}

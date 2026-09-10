@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { expectNoHorizontalOverflow } from "./support/overflow";
 
 /**
  * Product understanding, in a real browser (CORE-1 §51–§54).
@@ -61,17 +62,24 @@ test.describe("the project shell owns project context", () => {
     await page.goto(READY);
 
     await expect(page.getByTestId("project-switcher")).toContainText("Acme");
-    await expect(page.getByRole("link", { name: "All products", exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "My Product", exact: true })).toBeVisible();
     await expect(page.getByText("Here's how Vibe understands your product.")).toBeVisible();
     await expect(page.getByRole("button", { name: "Check my product again" })).toBeVisible();
 
-    const main = page.locator("main");
-    await expect(main).toHaveCSS("overflow-y", "auto");
+    /*
+     * The rail stays while the document scrolls, rather than the document
+     * standing still while a column inside it scrolls. Both look the same at
+     * rest; only the first leaves anchors, `scroll-mt` and browser scroll
+     * restoration working — and it is the model Settings already used, which
+     * is what lets one rail serve both (UI-13).
+     */
+    const rail = page.getByTestId("app-rail");
+    await expect(rail).toHaveCSS("position", "sticky");
+    await expect(page.locator("main")).not.toHaveCSS("overflow-y", "auto");
     await expect(page.locator("header.sticky")).toHaveCount(0);
   });
 
-  test("switches products and keeps account actions in the footer disclosure", async ({ page }) => {
+  test("switches products, and the identity is a row that becomes a field", async ({ page }) => {
     await forbidExternalCalls(page);
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(READY);
@@ -79,13 +87,77 @@ test.describe("the project shell owns project context", () => {
     const switcher = page.getByTestId("project-switcher");
     await switcher.locator("summary").click();
     await expect(switcher.getByRole("link", { name: "Planner Agent" })).toBeVisible();
-    await expect(switcher.getByRole("link", { name: "View all products" })).toBeVisible();
+    await expect(switcher.getByRole("link", { name: "Project Settings" })).toBeVisible();
+    /*
+     * And nothing offering to go and look at the products, from inside the
+     * panel that is the products. It was a row here and a row in the rail, and
+     * both pointed at a list the founder had already opened.
+     */
+    await expect(switcher.getByRole("link", { name: "View all products" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "All products", exact: true })).toHaveCount(0);
 
-    const account = page.getByTestId("account-menu");
-    await account.locator("summary").click();
-    await expect(account.getByRole("link", { name: /account settings/i })).toBeVisible();
-    await expect(account.getByRole("link", { name: /billing/i })).toBeVisible();
-    await expect(account.getByRole("button", { name: /sign out/i })).toBeVisible();
+    /*
+     * The identity is a link to the page about it, not a menu.
+     *
+     * The menu held Profile, Account settings and Billing, all three of which
+     * are rows in the Settings rail — a disclosure whose contents are the
+     * navigation standing next to it. Sign out was the one thing with no other
+     * home and moved to Settings → General.
+     */
+    const account = page.getByTestId("account-card");
+    await expect(account.locator("summary")).toHaveCount(0);
+    await expect(account.getByRole("link")).toHaveAttribute("href", "/app/settings/profile");
+
+    /*
+     * And it is a pill, at rest, the same one the balance above it wears.
+     *
+     * It has been a bordered card, then a row with nothing until you hovered
+     * it, and now this — so the resting paint is worth a browser rather than a
+     * class list. The two controls at the foot of the rail are a pair, and a
+     * pair is only a pair if it reads as one at rest.
+     */
+    const identity = account.getByRole("link");
+    const paint = (locator: typeof identity) =>
+      locator.evaluate((node) => {
+        const style = getComputedStyle(node);
+        return {
+          /*
+           * Colour *and* image. Since UI-29 the pill's ground is a colour with
+           * a wash over it, and hover moves the wash rather than the colour —
+           * so a check that read `backgroundColor` alone reported "the hover
+           * does nothing" about a hover that plainly does something. What is
+           * being asserted is that the paint changes; the paint is both.
+           */
+          fill: `${style.backgroundColor} ${style.backgroundImage}`,
+          edge: style.borderTopColor,
+          radius: style.borderTopLeftRadius,
+          height: Math.round(node.getBoundingClientRect().height),
+        };
+      });
+
+    const rest = await paint(identity);
+    expect(rest.fill, "the identity has no resting fill").not.toMatch(/rgba\(.*, 0\)$/);
+    expect(rest.edge, "the identity has no resting border").not.toMatch(/rgba\(.*, 0\)$/);
+    // Fully round rather than merely rounded: half its own height or more.
+    expect(Number.parseFloat(rest.radius)).toBeGreaterThanOrEqual(rest.height / 2);
+
+    const balance = await paint(page.getByTestId("wallet-balance"));
+    expect(rest.height, "the pair is two sizes").toBe(balance.height);
+    expect(rest.fill).toBe(balance.fill);
+    expect(rest.edge).toBe(balance.edge);
+
+    const box = await identity.boundingBox();
+    await identity.hover();
+    await expect.poll(async () => (await paint(identity)).fill).not.toBe(rest.fill);
+
+    const hovered = await identity.boundingBox();
+    expect(Math.abs(hovered!.height - box!.height)).toBeLessThan(0.5);
+    expect(Math.abs(hovered!.y - box!.y)).toBeLessThan(0.5);
+
+    // And the pill is around the identity rather than around the rail: full
+    // width would leave half of it empty.
+    const rail = await account.boundingBox();
+    expect(box!.width, "the pill spans the rail").toBeLessThan(rail!.width - 24);
   });
 });
 
@@ -303,7 +375,9 @@ test.describe("state is never carried by colour alone", () => {
     // is on the row's own text rather than on an exact-match string.
     const sources = page.getByRole("listitem").filter({ hasText: "Your code" });
     await expect(sources.first()).toBeVisible();
-    await expect(page.getByRole("listitem").filter({ hasText: "Your public product" }).first()).toBeVisible();
+    await expect(
+      page.getByRole("listitem").filter({ hasText: "Your public product" }).first(),
+    ).toBeVisible();
     await expect(page.getByText("Your signed-in product has not been checked yet")).toBeVisible();
   });
 });
@@ -330,12 +404,9 @@ test.describe("responsive", () => {
       await page.setViewportSize({ width, height: 900 });
       await page.goto(READY);
 
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
       // One pixel of tolerance for sub-pixel layout rounding; anything more is
       // a real horizontal scrollbar.
-      expect(overflow).toBeLessThanOrEqual(1);
+      await expectNoHorizontalOverflow(page, undefined, 1);
     });
   }
 
@@ -348,10 +419,7 @@ test.describe("responsive", () => {
     await page.getByRole("button", { name: "Let me fix it" }).click();
     await expect(page.getByLabel("Product name")).toBeVisible();
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow).toBeLessThanOrEqual(1);
+    await expectNoHorizontalOverflow(page);
   });
 });
 
@@ -488,14 +556,71 @@ test.describe("what the account can spend", () => {
   test("carries the balance in the project rail, as a link to Billing", async ({ page }) => {
     await page.goto(READY);
 
-    const chip = page.getByTestId("wallet-chip");
-    await expect(chip).toBeVisible();
-    await expect(chip).toContainText("Credits");
-    await expect(chip).toContainText("35");
-    await expect(chip).toHaveAttribute("href", "/app/billing");
+    const wallet = page.getByTestId("wallet");
+    await expect(wallet).toBeVisible();
+    await expect(wallet).toContainText("Credits");
+    await expect(wallet).toContainText("35");
+    await expect(page.getByTestId("wallet-balance")).toHaveAttribute(
+      "href",
+      "/app/settings/billing",
+    );
 
-    // 35 is below the threshold, so it is worth noticing rather than selling.
-    await expect(chip).toHaveAttribute("data-low", "true");
-    await expect(chip).not.toContainText(/top up|buy|upgrade/i);
+    // 35 is below the threshold, so it is worth noticing.
+    await expect(wallet).toHaveAttribute("data-low", "true");
+  });
+
+  /*
+   * The number stays a number.
+   *
+   * This component used to refuse a top-up outright, and the reason was right
+   * about the balance and wrong about where the action lives: a founder who
+   * reads a low balance has one next move. So there is exactly one way to add
+   * Credits from here, it is a 28px mark with no words, and the *reading*
+   * still says nothing about buying — no banner, no sentence, no "upgrade".
+   */
+  test("offers one way to add Credits, and does not become a sales pitch", async ({ page }) => {
+    await page.goto(READY);
+
+    const wallet = page.getByTestId("wallet");
+    const topUp = wallet.getByRole("link", { name: "Top up Credits" });
+    await expect(topUp).toHaveAttribute("href", "/app/settings/billing#credit-packs");
+    await expect(wallet.getByRole("link")).toHaveCount(2);
+
+    // The visible text of the whole block is the label and the balance.
+    await expect(wallet).not.toContainText(/top up|buy|upgrade|out of credits/i);
+  });
+
+  /*
+   * Reading a balance and buying more of it are two acts with two
+   * destinations. They used to be one pill with an inset hairline through it,
+   * which is a shape that makes the seam the thing you notice — you can see it
+   * is two elements pretending to be one.
+   */
+  test("draws the balance and the top-up as two round controls, not one seam", async ({ page }) => {
+    await page.goto(READY);
+
+    const balance = (await page.getByTestId("wallet-balance").boundingBox())!;
+    const topUp = (await page
+      .getByTestId("wallet")
+      .getByRole("link", { name: "Top up Credits" })
+      .boundingBox())!;
+
+    // A real gap between them, not a shared edge.
+    expect(topUp.x - (balance.x + balance.width)).toBeGreaterThan(4);
+
+    // Both fully round, and the same height.
+    for (const control of [
+      page.getByTestId("wallet-balance"),
+      page.getByRole("link", { name: "Top up Credits" }),
+    ]) {
+      const shape = await control.evaluate((node) => ({
+        radius: Number.parseFloat(getComputedStyle(node).borderTopLeftRadius),
+        height: node.getBoundingClientRect().height,
+      }));
+      expect(shape.radius).toBeGreaterThanOrEqual(shape.height / 2);
+    }
+    expect(Math.round(topUp.height)).toBe(Math.round(balance.height));
+    // Square: a round control with an oblong body is a pill with one item in it.
+    expect(Math.round(topUp.width)).toBe(Math.round(topUp.height));
   });
 });

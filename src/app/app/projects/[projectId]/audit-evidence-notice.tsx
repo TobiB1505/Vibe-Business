@@ -1,5 +1,5 @@
-import Link from "next/link";
 import type { AuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
+import { StandaloneLink } from "@/components/ui/text-link";
 
 /**
  * The Deep Scan evidence notice above the Business Audit (Sprint 6 §11).
@@ -27,9 +27,9 @@ export function AuditEvidenceNotice({
 
   if (notice.kind === "deep_scan_stale") {
     return (
-      <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
-        <p className="text-sm text-fg-prose">New product evidence available</p>
-        <p className="text-sm text-fg-muted">
+      <div className="space-y-2 rounded-inset border border-line-2 px-3 py-2">
+        <p className="text-body text-fg-prose">New product evidence available</p>
+        <p className="text-body text-fg-muted">
           A Deep Scan has run since this audit was produced. Re-running the audit spends another AI
           call and may change the result in either direction.
         </p>
@@ -38,20 +38,15 @@ export function AuditEvidenceNotice({
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
-      <p className="text-sm text-fg-prose">
+    <div className="space-y-2 rounded-inset border border-line-2 px-3 py-2">
+      <p className="text-body text-fg-prose">
         Vibe has not analyzed your signed-in product experience yet.
       </p>
-      <p className="text-sm text-fg-muted">
+      <p className="text-body text-fg-muted">
         Your audit can still run, but a Deep Scan may provide additional product evidence.
       </p>
       {notice.canStartDeepScan && (
-        <Link
-          href={deepScanHref}
-          className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-        >
-          Run included Deep Scan
-        </Link>
+        <StandaloneLink href={deepScanHref}>Run included Deep Scan</StandaloneLink>
       )}
     </div>
   );

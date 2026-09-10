@@ -22,6 +22,7 @@ rounded:
 components:
   button:
     radius: "nav"
+    inlineRadius: "9999px"
   panel:
     radius: "panel"
   status:
@@ -59,7 +60,7 @@ The runtime source of truth is [src/app/globals.css](src/app/globals.css). This 
 
 Since [ADR 0097](docs/decisions/0097-the-second-design-system-arrives-scoped.md) there is a second palette, in [src/app/theme-v2.css](src/app/theme-v2.css), scoped to `[data-vibe="v2"]`. **Nothing carries that attribute**, so everything the rest of this document describes is what renders. A test asserts the attribute is unused, so this sentence stays true until somebody decides otherwise.
 
-v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, opaque panels with bright hairlines and tight corners, glass spent on chrome and signature moments rather than on dense data, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
+v2 is the direction chosen from three full-fidelity Nova Home studies: edge-driven and dark, panes with bright hairlines and tight corners, glass as the material rather than an accent, light used as a focus tool. Geist replaces the platform-native stack. **Mint stays** — two of the three studies put it genuinely at risk, and the answer came back that it keeps its job. It also carries names this system has never had: `--glass-*`, `--atmos-*` and a shared easing set.
 
 v2 also moves the eyebrow into the interface family, which is what this document asked for and what 289 uses of `MonoLabel` were contradicting, and sets identifiers in DM Mono rather than JetBrains Mono — with the JetBrains subsets kept behind it in the stack for the scripts DM Mono does not ship.
 

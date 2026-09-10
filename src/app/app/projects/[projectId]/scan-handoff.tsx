@@ -434,7 +434,7 @@ export function ScanHandoff({
                */
               className="absolute inset-x-6 bottom-6 space-y-2 text-center sm:inset-x-10"
             >
-              <p className="text-fg-body font-mono text-sm">
+              <p className="text-fg-body font-mono text-body">
                 {progress.pagesInspected === 0
                   ? "Opening the first page"
                   : `${progress.pagesInspected} ${progress.pagesInspected === 1 ? "page" : "pages"} read`}
