@@ -566,7 +566,9 @@ test.describe("the agent knows which Move the founder arrived with", () => {
   test("a prepared change links back to the Move it answers", async ({ page }) => {
     await page.goto("/e2e/change_agentic_review_required");
 
-    const card = page.getByTestId("prepared-change");
+    /* The decision surface: this route mounts both of the product's change
+       compositions, and each carries the way back to the Move. */
+    const card = page.getByTestId("agent-review-decision");
     const back = card.getByRole("link", { name: "Give the landing page a proper social preview" });
     await expect(back).toHaveAttribute(
       "href",
@@ -579,7 +581,7 @@ test.describe("the agent knows which Move the founder arrived with", () => {
   }) => {
     await page.goto("/e2e/merge_ready");
 
-    const card = page.getByTestId("prepared-change");
+    const card = page.getByTestId("agent-review-decision");
     // One account of why, not two: the written rationale, plus a link.
     await expect(card).toContainText("Answers your move");
     await expect(card.getByRole("link", { name: "Fix missing technical SEO foundations" })).toHaveAttribute(

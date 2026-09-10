@@ -4,7 +4,11 @@ import { notFound } from "next/navigation";
 import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
-import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
+import {
+  AgentPreviewActions,
+  AgentReviewDecision,
+} from "@/app/app/projects/[projectId]/agent/agent-stage-actions";
+import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { novaControlLabel } from "@/modules/nova/home-view";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
@@ -2341,15 +2345,63 @@ export default async function E2eScenarioPage({
     <main className="mx-auto max-w-4xl p-8">
       {label}
       {/*
-        The component the Agent route mounts, given the same card. A fixture
-        that assembled the panels itself would drift from the route the moment
-        either changed, and these scenarios exist to catch exactly that.
+        Every gate for this card, from the two compositions the product mounts.
+
+        It was `ChangeGates`, which drew all of them itself and was deleted:
+        the Agent workspace had replaced every gate in it, and the file kept
+        compiling only because this route mounted it. So every panel guarantee
+        in the suites below was being asserted against a screen no founder
+        could reach.
+
+        `AgentPreviewActions` and `AgentReviewDecision` are those screens'
+        actual contents — the same components `agent/page.tsx` puts in its
+        stage bodies and `ReviewBlock` puts in the thread. Both are mounted
+        here, with the same card, because a panel suite needs the panel on
+        screen and the product shows one stage at a time behind a rail. Which
+        stage a founder lands on is a different question and belongs to
+        `agent-stages.spec.ts`; what these scenarios pin is what each panel
+        says once it is there.
+
+        Not an assembly of panels: change either component and this route
+        changes with it, which is the drift the old comment was worried about.
       */}
-      <ChangeGates
-        projectId="project_e2e"
-        change={change}
-        planHref="/app/projects/project_e2e/plan"
-      />
+      <div
+        id={preparedChangeAnchorId(change.id)}
+        data-prepared-change-id={change.id}
+        data-testid="prepared-change"
+        className="scroll-mt-24"
+      >
+        {/*
+          The change's own sentence, as the thread carries it.
+
+          `deriveChangeProgress` writes it and `NovaFocusThread` draws it as the
+          aside beside the block — `home-view.ts` takes it straight from the
+          candidate's `headline`. It is rendered here rather than left out
+          because the surface is not the block alone: a founder meets the
+          sentence and the block together, and a fixture that dropped it would
+          make the block answer a question nobody asked.
+
+          A live region for the same reason it was one on `ChangeGates`: this
+          is the one line that changes as the change advances, and replacing
+          visible text announces nothing.
+        */}
+        <p role="status" className="text-fg mb-4 text-sm font-medium">
+          {change.progress.headline}
+        </p>
+
+        <div className="flex flex-col gap-6">
+          <AgentPreviewActions
+            projectId="project_e2e"
+            change={change}
+            planHref="/app/projects/project_e2e/plan"
+          />
+          <AgentReviewDecision
+            projectId="project_e2e"
+            change={change}
+            planHref="/app/projects/project_e2e/plan"
+          />
+        </div>
+      </div>
     </main>
   );
 }
@@ -2359,11 +2411,13 @@ async function SlowPreparedChanges() {
   await new Promise((resolve) => setTimeout(resolve, 1_000));
 
   return (
-    <ChangeGates
-      projectId="project_e2e"
-      change={E2E_SCENARIOS.change_awaiting_approval()}
-      planHref="/app/projects/project_e2e/plan"
-    />
+    <div data-testid="prepared-change">
+      <AgentReviewDecision
+        projectId="project_e2e"
+        change={E2E_SCENARIOS.change_awaiting_approval()}
+        planHref="/app/projects/project_e2e/plan"
+      />
+    </div>
   );
 }
 

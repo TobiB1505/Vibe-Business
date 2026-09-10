@@ -589,7 +589,20 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(AGENT_STAGE_ACTIONS).toContain("ApprovalPanel");
     expect(AGENT_STAGE_ACTIONS).toContain("MergePanel");
     expect(AGENT_PAGE).not.toContain("AgentPanel");
-    expect(AGENT_PAGE).not.toContain("ChangeGates");
+    /*
+     * And no second review surface anywhere. `ChangeGates` was the one before
+     * this workspace; it kept compiling because the fixture route still
+     * mounted it, so every guarantee asserted against it was being checked on
+     * a screen no founder could reach. The file is gone, and its absence is
+     * the assertion — a path check rather than a substring, because a
+     * reintroduction would not have to reuse the name to be the same mistake.
+     */
+    expect(
+      existsSync(
+        join(process.cwd(), "src/app/app/projects/[projectId]/agent/change-gates.tsx"),
+      ),
+      "a second review surface exists again",
+    ).toBe(false);
   });
 
   it("leaves no legacy Agent run screen at all", () => {

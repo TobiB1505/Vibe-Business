@@ -90,10 +90,10 @@ describe("the origin says what was asked for, never what was achieved", () => {
 });
 
 describe("the card shows one answer to why, not two", () => {
-  const section = source("agent/change-gates.tsx");
+  const section = source("agent/change-meaning.tsx");
 
   it("renders the origin only when no written rationale exists", () => {
-    expect(section).toContain("{!change.rationale && (");
+    expect(section).toContain("{!change.rationale && <ChangeOrigin");
     expect(section).toContain("<ChangeOrigin");
   });
 
@@ -106,9 +106,13 @@ describe("the card shows one answer to why, not two", () => {
    * `change.rationale`, so a card can never carry both accounts at once.
    */
   it("offers the Move as a link where the rationale replaced the origin", () => {
-    expect(section).toContain("{change.rationale && change.origin && change.opportunityId && (");
+    expect(section).toContain("{change.rationale && change.origin && moveHref && (");
     expect(section).toContain("<MoveBacklink");
-    expect(section).toContain("planMoveHref(planHref, change.opportunityId)");
+    /* Resolved once, above both branches, so the guard and the href cannot
+       come to disagree about whether a Move exists. */
+    expect(section).toContain(
+      "change.opportunityId ? planMoveHref(planHref, change.opportunityId) : null",
+    );
   });
 
   it("links to the Move rather than restating it", () => {

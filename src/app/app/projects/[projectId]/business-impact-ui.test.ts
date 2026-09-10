@@ -280,7 +280,12 @@ describe("opening a project page measures nothing (§36, §45)", () => {
 });
 
 describe("the three levels stay separate, and business impact is last (§33)", () => {
-  const src = source("agent/change-gates.tsx");
+  /*
+   * [2026-09-10] Read from `agent/agent-stage-actions.tsx` rather than the
+   * deleted `agent/change-gates.tsx`. Same panels, same order, on the surface
+   * the workspace actually renders.
+   */
+  const src = source("agent/agent-stage-actions.tsx");
 
   it("renders business impact after the production outcome", () => {
     expect(src.indexOf("<BusinessImpactPanel")).toBeGreaterThan(src.indexOf("<OutcomePanel"));

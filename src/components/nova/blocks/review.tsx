@@ -27,6 +27,12 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
  * still rendering the superseded one, and a founder on a phone met all five
  * gates stacked into a single column of prose.
  *
+ * The file is deleted now, and this is what the fixture route mounts too. What
+ * had to happen first was the part the workspace never took: the written
+ * rationale, the origin block and the Move backlink sat above those gates and
+ * had no second call site, so they were reachable on the fixture route alone.
+ * `AgentChangeMeaning` carries them, and the stage actions mount it.
+ *
  * The registry's reason for one block over five was written about that
  * component and was true of it: *"the gate shows all of it, and it shows the
  * same thing whichever step is currently running — so one block, not five that
@@ -107,7 +113,9 @@ export function ReviewBlock({
         linesRemoved={change.lineStats?.removed}
         filesHref={change.compareUrl ?? undefined}
         reviewReady={change.review.state === "ready"}
-        actions={<AgentPreviewActions projectId={projectId} change={change} />}
+        actions={
+          <AgentPreviewActions projectId={projectId} change={change} planHref={planHref} />
+        }
       />
     );
   }
@@ -129,7 +137,9 @@ export function ReviewBlock({
       compareUrl={change.compareUrl}
       backHref={planHref}
       canMerge={change.merge.canMerge}
-      decision={<AgentReviewDecision projectId={projectId} change={change} />}
+      decision={
+        <AgentReviewDecision projectId={projectId} change={change} planHref={planHref} />
+      }
     />
   );
 }

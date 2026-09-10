@@ -822,6 +822,11 @@ async function AgentWorkspaceBody({
                       <AgentPreviewActions
                         projectId={project.id}
                         change={change}
+                        /* The plan, not this task's Move-scoped link:
+                           `AgentChangeMeaning` resolves the change's own Move
+                           against it, and a change need not answer the Move
+                           the workspace is currently focused on. */
+                        planHref={basePlanHref}
                         withheldPaths={displayedWorkspace.files
                           .filter((file) => file.withheldBy !== null)
                           .map((file) => file.path)}
@@ -849,7 +854,11 @@ async function AgentWorkspaceBody({
                     backHref={planHref}
                     decision={
                       <div className="flex flex-col gap-3">
-                        <AgentReviewDecision projectId={project.id} change={change} />
+                        <AgentReviewDecision
+                          projectId={project.id}
+                          change={change}
+                          planHref={basePlanHref}
+                        />
                         {/*
                           What it cost, from the hold it ran against (audit
                           R23). Beside the decision rather than after it: a

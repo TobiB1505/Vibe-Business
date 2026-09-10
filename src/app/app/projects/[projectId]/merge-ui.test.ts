@@ -196,3 +196,43 @@ describe("the refusal copy is safe (§28, §29, §30)", () => {
     expect(messages).toMatch(/merge_repository_changed:[\s\S]*did not modify the repository/);
   });
 });
+
+/**
+ * A code-only change is never offered a paid preview (ADR 0063).
+ *
+ * Absent rather than disabled, and the reason is money: serving a page that
+ * did not change runs a sandbox nobody needs to open, and rule 60 says Vibe
+ * does not spend a founder's Credits on their behalf. The classification line
+ * in "What changed" already says why there is nothing to look at, so the
+ * absence is explained rather than noticed.
+ *
+ * ## Why this test is here now
+ *
+ * Because the guarantee was real, asserted, and false in the product for the
+ * life of this component.
+ *
+ * `ChangeGates` had the gate. The Agent workspace replaced every panel in that
+ * file but not this condition, so `AgentPreviewActions` offered the preview to
+ * every change from the day it shipped. The browser suite that asserts the
+ * absence was pointed at `ChangeGates` — which by then only the fixture route
+ * mounted — so it kept passing against a screen no founder could reach.
+ *
+ * The browser assertion is the stronger one and lives in
+ * `e2e/review-classification.spec.ts`, against the live composition. This is
+ * the cheap guard that the condition itself does not quietly go away again.
+ */
+describe("the preview is absent for a change with nothing to look at", () => {
+  const actions = source("agent/agent-stage-actions.tsx");
+
+  it("derives the classification rather than taking it as a prop", () => {
+    expect(actions).toContain('change.reviewClassification?.classification === "code"');
+  });
+
+  it("gates the preview and the comparison on it, and nothing else", () => {
+    expect(actions).toContain("{!codeOnly && (");
+    expect(actions).toContain('{!codeOnly && change.review.state !== "not_generated" && (');
+    /* The diff is the review for such a change, so it is never gated away. */
+    const diff = actions.slice(0, actions.indexOf("<ChangeDiffSection"));
+    expect(diff.slice(diff.lastIndexOf("{!codeOnly"))).not.toContain("<ChangeDiffSection");
+  });
+});

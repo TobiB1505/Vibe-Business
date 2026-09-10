@@ -318,7 +318,13 @@ describe("opening a project page starts nothing (§43)", () => {
 });
 
 describe("the outcome panel sits after merge and offers no gate beyond it", () => {
-  const src = source("agent/change-gates.tsx");
+  /*
+   * [2026-09-10] `agent/change-gates.tsx` was deleted — the Agent workspace
+   * had replaced every gate in it, and the file survived only because the
+   * fixture route still mounted it. These panels are mounted by
+   * `agent/agent-stage-actions.tsx`, and the ordering claim is unchanged.
+   */
+  const src = source("agent/agent-stage-actions.tsx");
 
   it("renders the outcome panel last", () => {
     expect(src.indexOf("<OutcomePanel")).toBeGreaterThan(src.indexOf("<MergePanel"));

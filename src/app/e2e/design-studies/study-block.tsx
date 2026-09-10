@@ -643,8 +643,9 @@ export function StudyBlock({ study }: { study: Study }) {
         <Context>
           The last of the send-you-away controls, and the only one that was
           <em> honest</em> as a link: there was genuinely nothing here to look at. A block changes
-          that. ChangeGates is the component the Agent route mounts, and it renders the whole review
-          gate from one card — so the change is read where it was announced.
+          that. <code>ReviewBlock</code> mounts the Agent&rsquo;s own stage for the stage the change
+          is on — so the change is read where it was announced, on the screen the route would have
+          given it.
         </Context>
         <div className={`flex flex-col gap-4 p-6 max-sm:p-4 ${panel}`}>
           <Bubble tone="waiting" index={0}>
