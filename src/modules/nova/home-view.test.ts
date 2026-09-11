@@ -6,6 +6,12 @@ import type { OperationView } from "../operations/view";
 
 const NO_FLAGS = { agent: false, scan: false, audit: false } as const;
 
+/* One instant for every change these tests build. The ranking orders two
+   changes by recency, and nothing in this file is about that ordering — the
+   tests that are live in `focus.test.ts`. Equal timestamps keep these
+   assertions about what they say they are about. */
+const AT = "2026-09-11T09:00:00.000Z";
+
 function facts(overrides: Partial<NovaFocusFacts> = {}): NovaFocusFacts {
   return {
     sourceDisconnected: false,
@@ -51,7 +57,12 @@ describe("Nova Home view", () => {
       facts({
         auditOutdated: true,
         changes: [
-          { preparedChangeId: "change-1", stage: "ready_to_merge", headline: "Ready to merge" },
+          {
+            preparedChangeId: "change-1",
+            stage: "ready_to_merge",
+            headline: "Ready to merge",
+            createdAt: AT,
+          },
         ],
       }),
     );
@@ -67,7 +78,12 @@ describe("Nova Home view", () => {
     const view = viewOf({
       auditOutdated: true,
       changes: [
-        { preparedChangeId: "change-1", stage: "review_required", headline: "Look at this" },
+        {
+          preparedChangeId: "change-1",
+          stage: "review_required",
+          headline: "Look at this",
+          createdAt: AT,
+        },
       ],
     });
 
@@ -109,7 +125,12 @@ describe("Nova Home view", () => {
   it("carries the subject's own sentence rather than writing one", () => {
     const view = viewOf({
       changes: [
-        { preparedChangeId: "change-1", stage: "review_required", headline: "Two files changed" },
+        {
+          preparedChangeId: "change-1",
+          stage: "review_required",
+          headline: "Two files changed",
+          createdAt: AT,
+        },
       ],
     });
 
@@ -130,7 +151,12 @@ describe("Nova Home view", () => {
    */
   describe("the change queue", () => {
     function change(stage: "awaiting_approval" | "merged" | "validation_failed", id: string) {
-      return { preparedChangeId: id, stage, headline: `headline for ${id}` } as const;
+      return {
+        preparedChangeId: id,
+        stage,
+        headline: `headline for ${id}`,
+        createdAt: AT,
+      } as const;
     }
 
     it("raises one change and counts the others", () => {
@@ -279,7 +305,14 @@ describe("Nova Home view", () => {
      */
     it("decides a merge through the change's own gates", () => {
       const view = viewOf({
-        changes: [{ preparedChangeId: "change-1", stage: "ready_to_merge", headline: "Approved" }],
+        changes: [
+          {
+            preparedChangeId: "change-1",
+            stage: "ready_to_merge",
+            headline: "Approved",
+            createdAt: AT,
+          },
+        ],
       });
 
       expect(view.primary.kind).toBe("merge_ready");
@@ -303,7 +336,12 @@ describe("Nova Home view", () => {
     it("decides a failed validation through the change's own gate too", () => {
       const view = viewOf({
         changes: [
-          { preparedChangeId: "change-2", stage: "validation_failed", headline: "Checks failed" },
+          {
+            preparedChangeId: "change-2",
+            stage: "validation_failed",
+            headline: "Checks failed",
+            createdAt: AT,
+          },
         ],
       });
 
@@ -450,6 +488,7 @@ describe("Nova Home view", () => {
       preparedChangeId: "change-1",
       stage: "review_required" as const,
       headline: "Look",
+      createdAt: AT,
     };
 
     expect(viewOf({ changes: [change] }).primary.id).toBe(viewOf({ changes: [change] }).primary.id);

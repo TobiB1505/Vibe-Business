@@ -132,6 +132,7 @@ function facts(working: OperationView | null): NovaFocusFacts {
         preparedChangeId: "change_console",
         stage: "review_required",
         headline: "Two files changed on a branch of their own",
+        createdAt: "2026-09-11T09:00:00.000Z",
       },
     ],
     questions: [],

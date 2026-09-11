@@ -84,6 +84,7 @@ const REVIEW_CHANGE = {
   preparedChangeId: "change_e2e",
   stage: "review_required" as const,
   headline: "Two files changed on a branch of their own",
+  createdAt: "2026-09-11T09:00:00.000Z",
 };
 
 const FACTS_BY_SCENARIO: Record<E2eNovaScenario, NovaFocusFacts> = {

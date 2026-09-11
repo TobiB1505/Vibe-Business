@@ -265,6 +265,33 @@ describe("the stage of one change", () => {
   });
 });
 
+/**
+ * The clock the ranking orders changes by, actually arriving.
+ *
+ * Not a formality. The field existing on `NovaChangeFact` and nobody filling
+ * it is the exact shape of the defect that put an empty bordered band above
+ * the diff on a founder's phone: a type that promised something the read
+ * never supplied. `focus.ts` orders two changes by this value and falls back
+ * to a uuid when they tie, so an unfilled field would tie every change in the
+ * project and restore the coin toss without failing anything.
+ */
+describe("what a change fact carries", () => {
+  it("carries the instant each change was prepared", async () => {
+    reset();
+    seedChanges(3);
+
+    const facts = await readNovaFocusFacts(client(), PROJECT, USER);
+
+    expect(facts.changes).toHaveLength(3);
+    for (const change of facts.changes) {
+      expect(change.createdAt, change.preparedChangeId).toEqual(expect.any(String));
+    }
+    /* Distinct, because the seed staggers them by a day — a read that handed
+       every change one timestamp would satisfy the loop above. */
+    expect(new Set(facts.changes.map((change) => change.createdAt)).size).toBe(3);
+  });
+});
+
 describe("what a render costs", () => {
   async function readWith(changes: number): Promise<QueryRecorder> {
     reset();
