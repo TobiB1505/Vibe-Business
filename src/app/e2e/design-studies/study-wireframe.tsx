@@ -174,6 +174,7 @@ const FACTS: NovaFocusFacts = {
       preparedChangeId: "change_wireframe",
       stage: "review_required",
       headline: "Two files changed on a branch of their own",
+      createdAt: "2026-09-11T09:00:00.000Z",
     },
   ],
   moves: [{ id: "move_wireframe", rank: 1, title: "Add a pricing page" }],

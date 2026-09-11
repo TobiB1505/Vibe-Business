@@ -46,12 +46,16 @@ function quiet(): NovaFocusFacts {
   };
 }
 
+/* One instant for every change here: recency ordering is `focus.test.ts`'s
+   subject, not this file's. */
+const AT = "2026-09-11T09:00:00.000Z";
+
 function focusWith(overrides: Partial<NovaFocusFacts>): NovaFocus {
   return deriveNovaFocus({ ...quiet(), ...overrides });
 }
 
 function change(stage: "validation_failed" | "awaiting_approval" | "ready_to_merge" | "merged") {
-  return [{ preparedChangeId: "change-1", stage, headline: "A change" }];
+  return [{ preparedChangeId: "change-1", stage, headline: "A change", createdAt: AT }];
 }
 
 const RUNNING: OperationView = {
@@ -76,11 +80,11 @@ const EVERY_CANDIDATE: FocusCandidate[] = [
   { kind: "agent_stalled" },
   { kind: "scan_stalled" },
   { kind: "audit_stalled" },
-  { kind: "validation_failed", preparedChangeId: "c1", headline: "h" },
-  { kind: "merge_blocked", preparedChangeId: "c1", headline: "h" },
-  { kind: "review_change", preparedChangeId: "c1", headline: "h" },
-  { kind: "merge_ready", preparedChangeId: "c1", headline: "h" },
-  { kind: "outcome_pending", preparedChangeId: "c1", headline: "h" },
+  { kind: "validation_failed", preparedChangeId: "c1", headline: "h", createdAt: AT },
+  { kind: "merge_blocked", preparedChangeId: "c1", headline: "h", createdAt: AT },
+  { kind: "review_change", preparedChangeId: "c1", headline: "h", createdAt: AT },
+  { kind: "merge_ready", preparedChangeId: "c1", headline: "h", createdAt: AT },
+  { kind: "outcome_pending", preparedChangeId: "c1", headline: "h", createdAt: AT },
   { kind: "agent_question", founderInputRequestId: "r1", question: "Which?", stepOrder: 1 },
   { kind: "founder_input_required", founderInputRequestId: "r1", question: "Which?", stepOrder: 1 },
   { kind: "execution_offered", stepOrder: 1, stepTitle: "Show the price" },
@@ -167,8 +171,18 @@ describe("what a feed is made of", () => {
     const entries = buildNovaFeed(
       focusWith({
         changes: [
-          { preparedChangeId: "change-a", stage: "validation_failed", headline: "h" },
-          { preparedChangeId: "change-b", stage: "awaiting_approval", headline: "h" },
+          {
+            preparedChangeId: "change-a",
+            stage: "validation_failed",
+            headline: "h",
+            createdAt: AT,
+          },
+          {
+            preparedChangeId: "change-b",
+            stage: "awaiting_approval",
+            headline: "h",
+            createdAt: AT,
+          },
         ],
         auditOutdated: true,
         working: { type: "business_audit", view: RUNNING },
@@ -230,7 +244,12 @@ describe("what a control may be offered for", () => {
   });
 
   it("binds each control to the thing it acts on", () => {
-    const merge = feedFor({ kind: "merge_ready", preparedChangeId: "change-9", headline: "h" });
+    const merge = feedFor({
+      kind: "merge_ready",
+      preparedChangeId: "change-9",
+      headline: "h",
+      createdAt: AT,
+    });
     const move = feedFor({ kind: "plan_offered", move: { id: "move-9", rank: 1, title: "t" } });
     const step = feedFor({ kind: "execution_offered", stepOrder: 4, stepTitle: "t" });
 

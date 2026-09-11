@@ -1338,6 +1338,24 @@ test.describe("paying by the year", () => {
 
   test("does not move the table under somebody comparing two numbers", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
+
+    /*
+      No entrance motion, because this test measures geometry twice and asks
+      whether it changed.
+
+      The landing page is twenty thousand pixels of `Reveal` blocks that enter
+      as they are scrolled past, so the document is still moving while this
+      reads it. It flaked twice under a full-suite load — once reporting a
+      510px scroll the click never caused, and once, with a longer wait in
+      front of it, a 12.7px drift in the table itself. Both were the page
+      still arriving, not the control being measured.
+
+      `emulateMedia` rather than `test.use({ reducedMotion })`, which does not
+      reach the page. Nothing about the subject depends on the entrance: the
+      question is whether switching the interval moves the table, and a block
+      that has finished appearing answers it better than one that has not.
+    */
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/");
     await page.evaluate(() => document.fonts.ready);
     const pricing = page.locator("#pricing");
@@ -1354,7 +1372,8 @@ test.describe("paying by the year", () => {
       come from the platform.
     */
     await pricing.getByRole("group", { name: "Billing interval" }).scrollIntoViewIfNeeded();
-    await page.waitForTimeout(700);
+
+    await page.waitForTimeout(400);
 
     /*
       Measured in *document* coordinates, not viewport ones. The first version
