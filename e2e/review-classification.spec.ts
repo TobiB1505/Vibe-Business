@@ -132,23 +132,29 @@ test.describe("an agent change with nothing to say about itself", () => {
    * between them. Measured, because "it looks like one line" is exactly the
    * judgement a screenshot at one width gets wrong.
    */
-  test("never draws two separators in a row", async ({ page }) => {
-    await page.goto("/e2e/change_agentic_no_origin");
+  /* Both shapes: the one with nothing to say, and the one that says it. The
+     second is where the rule came back — a wrapper's border only doubles up
+     once its contents exist. `test.for` is not in this Playwright version's
+     types, so the loop is written out. */
+  for (const scenario of ["change_agentic_no_origin", "change_agentic_review_required"]) {
+    test(`never draws two separators in a row (${scenario})`, async ({ page }) => {
+      await page.goto(`/e2e/${scenario}`);
 
-    const tops = await page.getByTestId("agent-preview-actions").evaluate((panel) =>
-      [...panel.querySelectorAll("*")]
-        .filter((el) => parseFloat(getComputedStyle(el).borderTopWidth) > 0)
-        .map((el) => Math.round(el.getBoundingClientRect().top))
-        .sort((a, b) => a - b),
-    );
+      const tops = await page.getByTestId("agent-preview-actions").evaluate((panel) =>
+        [...panel.querySelectorAll("*")]
+          .filter((el) => parseFloat(getComputedStyle(el).borderTopWidth) > 0)
+          .map((el) => Math.round(el.getBoundingClientRect().top))
+          .sort((a, b) => a - b),
+      );
 
-    for (let i = 1; i < tops.length; i += 1) {
-      expect(
-        tops[i]! - tops[i - 1]!,
-        `two separators ${tops[i]! - tops[i - 1]!}px apart`,
-      ).toBeGreaterThan(48);
-    }
-  });
+      for (let i = 1; i < tops.length; i += 1) {
+        expect(
+          tops[i]! - tops[i - 1]!,
+          `two separators ${tops[i]! - tops[i - 1]!}px apart`,
+        ).toBeGreaterThan(48);
+      }
+    });
+  }
 
   /* The deterministic path is untouched: a change with an origin still shows it. */
   test("still shows the origin on a change that has one", async ({ page }) => {

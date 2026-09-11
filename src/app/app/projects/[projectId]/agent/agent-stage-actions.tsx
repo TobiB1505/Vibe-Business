@@ -83,7 +83,13 @@ export function AgentPreviewActions({
         `AgentChangeMeaning` for why, and for what is still missing.
       */}
       {hasChangeMeaning(change) && (
-        <div className="border-line-2 flex flex-col gap-4 border-t pt-5">
+        /* No rule of its own, for the reason the diff below has none: both
+           `ChangeRationale` and `ChangeOrigin` open with `border-t` and their
+           own padding. The wrapper drew a second one, and it only became
+           visible when the origin started rendering at all — the same defect
+           twice, the second time hidden behind the absence that caused the
+           first. */
+        <div className="flex flex-col gap-4">
           <AgentChangeMeaning change={change} planHref={planHref} />
         </div>
       )}
