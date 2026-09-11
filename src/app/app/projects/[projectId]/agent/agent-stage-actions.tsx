@@ -8,7 +8,7 @@ import { OutcomePanel } from "../outcome-panel";
 import { PreviewPanel } from "../preview-panel";
 import { ReviewPanel } from "../review-panel";
 import { ChangeDiffSection } from "../change-diff-section";
-import { AgentChangeMeaning } from "./change-meaning";
+import { AgentChangeMeaning, hasChangeMeaning } from "./change-meaning";
 import { WithheldPaths } from "./withheld-paths";
 
 /**
@@ -74,12 +74,25 @@ export function AgentPreviewActions({
       {/*
         What this change is for, above what it contains — the same order and
         the same precedence `ChangeGates` had, ported here when that component
-        was deleted. See `AgentChangeMeaning`: for an agent change this is the
-        only place the product says what was asked for.
+        was deleted.
+
+        Asked before it is framed. A separator and a padded block around
+        nothing is worse than the absence it decorates, and that is what a
+        founder's phone showed: two rules with an empty band between them,
+        because an agent change has neither a rationale nor an origin. See
+        `AgentChangeMeaning` for why, and for what is still missing.
       */}
-      <div className="border-line-2 flex flex-col gap-4 border-t pt-5">
-        <AgentChangeMeaning change={change} planHref={planHref} />
-      </div>
+      {hasChangeMeaning(change) && (
+        /* No rule of its own, for the reason the diff below has none: both
+           `ChangeRationale` and `ChangeOrigin` open with `border-t` and their
+           own padding. The wrapper drew a second one, and it only became
+           visible when the origin started rendering at all — the same defect
+           twice, the second time hidden behind the absence that caused the
+           first. */
+        <div className="flex flex-col gap-4">
+          <AgentChangeMeaning change={change} planHref={planHref} />
+        </div>
+      )}
 
       {/*
         What changed, inline, on the stage the decision is made on (audit R30).
@@ -87,7 +100,14 @@ export function AgentPreviewActions({
         so the founder approved a change whose contents were one click away on
         another surface, or on GitHub.
       */}
-      <div className="border-line-2 flex flex-col gap-4 border-t pt-5">
+      {/*
+        No rule of its own: `ChangeDiffSection` opens with `border-t` and its
+        own padding, so a bordered wrapper drew a separator immediately above
+        the separator — two rules with thirty-two pixels of nothing between
+        them, which is what a founder's phone showed once the empty meaning
+        frame above it was gone and stopped hiding the pair.
+      */}
+      <div className="flex flex-col gap-4">
         <ChangeDiffSection
           projectId={projectId}
           preparedChangeId={change.id}

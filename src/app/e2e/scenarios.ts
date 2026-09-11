@@ -635,8 +635,27 @@ export const E2E_SCENARIOS = {
       branchName: "vibe/agent-07d2308c197d",
       commitSha: "94c3165",
       filePaths: ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"],
-      // No written rationale, which is true of every agentic change there will
-      // ever be — and the reason the origin below has to exist.
+      /*
+       * No written rationale, which is true of every agentic change there will
+       * ever be — and an origin, which is true of every one prepared from
+       * today.
+       *
+       * [2026-09-11, morning] This used to add *"— and the reason the origin
+       * below has to exist"*, which was false about the product and is why a
+       * defect shipped. The branch step wrote both opportunity ids as null, so
+       * the origin below was a shape the agent path could not produce, and
+       * every real agent change reached a founder naming nothing it was for.
+       *
+       * [2026-09-11, after] It produces it now. The lineage was never unknown
+       * — the spec carries the Move so that it survives into execution — so
+       * `resolveSpecLineage` stores it at preparation and a backfill fills the
+       * changes already written. This fixture went from wrong to accurate
+       * without moving.
+       *
+       * `change_agentic_no_origin` is still its sibling and still real: a
+       * benchmark step has no plan, and a change whose run or set cannot be
+       * resolved keeps its nulls.
+       */
       rationale: null,
       origin: {
         title: "Give the landing page a proper social preview",
@@ -703,6 +722,29 @@ export const E2E_SCENARIOS = {
    * gap is real and recorded in the sprint doc; what this scenario proves is
    * the state the section can actually produce coherently.
    */
+  /**
+   * An agent change whose lineage could not be resolved.
+   *
+   * No rationale and **no origin**. This was every agent change until the
+   * branch step started storing the Move its spec carries; it is now the
+   * narrower set that genuinely has none — an internal benchmark step, which
+   * has no plan row and never will, and a change whose run, spec, plan or set
+   * cannot be reached.
+   *
+   * It is what caught the defect it was written for: a bordered, padded band
+   * around nothing, above the diff, on a founder's phone. It stays because
+   * that state stays reachable, and because a surface that only ever meets
+   * cards with something to say is how the band got there.
+   */
+  change_agentic_no_origin: (): PreparedChangeCard =>
+    withProgress({
+      ...E2E_SCENARIOS.change_agentic_review_required(),
+      branchName: "vibe/agent-07346b413581",
+      rationale: null,
+      origin: null,
+      opportunityId: null,
+    }),
+
   change_not_validated: (): PreparedChangeCard =>
     withProgress({
       ...baseChange(),

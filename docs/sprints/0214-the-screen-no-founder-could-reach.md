@@ -100,13 +100,73 @@ Both were missing from the *product*, not from the deleted file, and both had
 been missing since the day the workspace shipped.
 
 **The change's meaning.** The written rationale, the origin block and the Move
-backlink sat above the gates and had no second call site. `ChangeOrigin` is the
-one that renders for an agent change — *every* one, because
-`agentic_execution_v1` has no written rationale, and its own docblock says so —
-and [rule 78](../../CLAUDE.md) says the agent is the product now. So the sentence
-a founder most needs before approving, *what was this for*, was on no screen in
+backlink sat above the gates and had no second call site. So the sentence a
+founder most needs before approving, *what was this for*, was on no screen in
 the product. `AgentChangeMeaning` carries it, on the preview surface and the
 decision surface, with the precedence unchanged.
+
+> **[2026-09-11] This paragraph said one thing more than it could, and the
+> founder's phone found it.**
+>
+> It read: *"`ChangeOrigin` is the one that renders for an agent change — every
+> one, because `agentic_execution_v1` has no written rationale."* The premise is
+> right and the conclusion is backwards. `changeOriginFrom` needs the
+> opportunity, and the opportunity needs `opportunity_set_id` and
+> `opportunity_id` on the prepared change; the agent's branch step writes both
+> as null on purpose, and says so where it does it — *"an agentic change traces
+> to a plan step, not to an opportunity set."* So for an agent change the
+> rationale is null **and** the origin is null, and the ported component has
+> nothing to draw.
+>
+> What shipped for the product's one live path was therefore a bordered, padded
+> band with nothing in it, above the diff. Two things were behind that. The
+> frame did not ask whether its contents existed — fixed, `hasChangeMeaning` is
+> what a caller asks now. And removing it exposed a second, older one: the
+> wrapper drew `border-t` around `ChangeDiffSection`, which opens with a
+> `border-t` of its own, so two rules sat thirty-two pixels apart with nothing
+> between them. That one pre-dates this sprint and was simply never looked at.
+>
+> **[later the same day] The gap is closed, and it needed no new read on the
+> card.** The lineage was never unknown: `ExecutionSpec` carries `opportunityId`
+> — its own field comment says *"so lineage survives into execution"* — and the
+> action plan the spec names carries the set. The branch step now resolves both
+> before it claims the change, so the existing card path fills the origin block
+> and the Move link with nothing new to look up, and a backfill gives the
+> changes already written the same value.
+>
+> Two things had to be got right, and PostgreSQL found both on the first run.
+> The columns are **different types**: a spec's opportunity id is text and may
+> name no stored Move at all (a benchmark's is a fixture key), while a prepared
+> change's is a uuid with a foreign key. Copying it through would have failed
+> that key inside `claimPreparedChange` — a run that had already written a
+> branch ending as `change_preparation_failed`. So the Move is *read* before it
+> is stored, which also checks the condition that matters: that it belongs to
+> the plan's own set. And the backfill matches through `business_opportunities`
+> rather than casting, because a cast aborts the migration on the first fixture
+> key while a join simply does not match it.
+>
+> A second surface came with it, unasked: the change history named every agent
+> change by its branch, because it resolves titles from the same id.
+>
+> And the origin rendering is what exposed the **second** duplicated rule.
+> `ChangeRationale` and `ChangeOrigin` open with a `border-t` of their own, so
+> the wrapper above them drew a pair — invisible while the meaning was empty,
+> because the wrapper was then the only rule there. Removing the empty frame is
+> what let it appear. Two separators, twice, and the fix for the first uncovered
+> the second.
+>
+> Worth naming for what it says about looking: the render of that surface looked
+> **correct** to the eye, and the geometry assertion is what failed — two rules
+> 21px apart. The browser test that catches it reads both shapes now, the change
+> with nothing to say and the change that says it, because only the second has
+> the pair and a test pointed at the first would have gone on passing.
+>
+> **The mechanism is the one this record already names, one layer further in.**
+> `change_agentic_review_required` gives an agentic change an `origin`, and its
+> own comment called that *"the reason the origin below has to exist"* — a
+> fixture asserting a shape the agent path cannot produce. Every test passed
+> against a card the product never builds. `change_agentic_no_origin` is the
+> truthful sibling, and it is what the new browser tests read.
 
 **The code-only preview gate** ([ADR 0063](../decisions/0063-review-classification-as-a-gate.md)).
 A change that alters no rendered page must not be offered a preview: serving a
