@@ -127,3 +127,74 @@ test.describe("and the desktop is not paying for it", () => {
     });
   }
 });
+
+test.describe("a block fills the column it sits in", () => {
+  /*
+   * Found by a founder on their own phone, not by any sweep here — because
+   * the Agent's trust panel sits in `WorkspaceSection`'s `actions` slot on a
+   * route that needs a session, so **no fixture had ever rendered it**. There
+   * is one now (`agent-trust-panel`), which is the part of this fix that keeps
+   * mattering after the CSS stops being interesting.
+   *
+   * Three facts sit side by side above `sm`, each capped at 230px. Below it
+   * they stack and kept the cap, so the panel came to about 62% of the page
+   * while the heading and prose above it ran full width — a card that reads as
+   * having failed to load the rest of itself.
+   */
+  const PANEL = "/e2e/agent-trust-panel";
+
+  test.describe("on a phone", () => {
+    test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
+
+    test("is as wide as the text above it", async ({ page }) => {
+      await page.goto(PANEL);
+      await page.evaluate(() => document.fonts.ready);
+
+      const { rows, column, direction } = await page.evaluate(() => {
+        const element = document.querySelector("[data-testid='agent-trust']")!;
+        const heading = document.querySelector("h1")!;
+        return {
+          /*
+            The *rows*, not the panel. The panel is a block-level flex column
+            and fills its parent whatever its children do — measured against
+            it, this test passed with the cap still on. The capped thing is
+            each fact, so each fact is what has to be asked.
+          */
+          rows: [...element.children].map((row) => Math.round(row.getBoundingClientRect().width)),
+          column: Math.round(heading.getBoundingClientRect().width),
+          direction: getComputedStyle(element).flexDirection,
+        };
+      });
+
+      // Stacked, and filling. A cap that survives the stack is the defect.
+      expect(direction).toBe("column");
+      expect(column).toBeGreaterThan(0);
+      expect(rows.length).toBeGreaterThan(1);
+      expect(rows.filter((width) => width < column - 4)).toEqual([]);
+    });
+  });
+
+  test.describe("on a wide screen", () => {
+    test.use({ viewport: { width: 1440, height: 900 } });
+
+    test("is still three columns, each at its measured width", async ({ page }) => {
+      await page.goto(PANEL);
+      await page.evaluate(() => document.fonts.ready);
+
+      /*
+        The cap is right where there are three columns to cap, and this is
+        what stops the mobile fix being applied one breakpoint too far.
+      */
+      const { direction, first } = await page.evaluate(() => {
+        const element = document.querySelector("[data-testid='agent-trust']")!;
+        return {
+          direction: getComputedStyle(element).flexDirection,
+          first: Math.round(element.firstElementChild!.getBoundingClientRect().width),
+        };
+      });
+
+      expect(direction).toBe("row");
+      expect(first).toBeLessThanOrEqual(230);
+    });
+  });
+});

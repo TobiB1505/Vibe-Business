@@ -45,6 +45,7 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { AgentTrustPanel } from "@/app/app/projects/[projectId]/agent/agent-header";
 import { OPENING_ASKS_NAME_SCENARIO } from "../design-studies/studies";
 import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
@@ -1965,6 +1966,36 @@ export default async function E2eScenarioPage({
           <DeleteAccountSection state={E2E_ERASURE_SCENARIOS[scenario]()} />
         </AccountShell>
       </AppFrame>
+    );
+  }
+
+  /*
+   * The Agent's trust panel, which lived in no fixture at all.
+   *
+   * It sits in `WorkspaceSection`'s `actions` slot on the real Agent route,
+   * which needs a session and a project — so nothing in this suite had ever
+   * rendered it, and a founder found on their own phone what no sweep of mine
+   * could see: three facts side by side above `sm`, each capped at 230px, and
+   * below `sm` they stack and *keep* the cap. The panel came to about 62% of
+   * the page it sits on.
+   *
+   * The component takes no props, so the fixture is the component. Rendered
+   * inside the same column width the real page gives it, because the defect is
+   * a width and a fixture that let it float free would not show it.
+   */
+  if (scenario === "agent-trust-panel") {
+    return (
+      <main className="mx-auto w-full max-w-[70rem] px-5 py-10 sm:px-8">
+        <div className="sr-only">{label}</div>
+        <h1 className="text-fg text-display font-bold">Agent</h1>
+        <p className="text-fg-prose mt-3">
+          Each change moves through validation, preview, review and your approval before anything
+          can be merged.
+        </p>
+        <div className="mt-6">
+          <AgentTrustPanel />
+        </div>
+      </main>
     );
   }
 
