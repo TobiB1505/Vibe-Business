@@ -100,6 +100,46 @@ export function Sheet({
     }
   }, [open]);
 
+  /*
+   * A tap outside the sheet closes it, and this has to be a document listener
+   * rather than the dialog's own `onClick` (UI-39).
+   *
+   * The handler below checks `event.target === ref.current`, on the reasoning
+   * that a click on the backdrop is a click on the dialog element since the
+   * backdrop is not a node. That is true only while the dialog *covers* the
+   * point. It used to cover every point — the bottom variant filled the
+   * viewport, which was the bug UI-35 fixed — so backdrop-close worked by
+   * accident, and making it a real bottom sheet silently removed the only way
+   * out of it. Measured: a tap above the sheet lands on `<html>`, the dialog's
+   * listener never runs, and on a phone there is no Escape key.
+   *
+   * `showModal()` makes the rest of the document inert, so a click out there
+   * does nothing else — dismissing is the only thing it could reasonably mean.
+   * The listener is added in an effect, which runs after the click that opened
+   * the sheet has finished propagating, so it cannot close itself on arrival.
+   */
+  useEffect(() => {
+    if (!open) return;
+
+    const dismiss = (event: MouseEvent) => {
+      const dialog = ref.current;
+      if (!dialog) return;
+      // Inside the panel is never a dismissal, whatever the coordinates say.
+      if (event.target instanceof Node && dialog.contains(event.target)) return;
+
+      const box = dialog.getBoundingClientRect();
+      const inside =
+        event.clientX >= box.left &&
+        event.clientX <= box.right &&
+        event.clientY >= box.top &&
+        event.clientY <= box.bottom;
+      if (!inside) onClose();
+    };
+
+    document.addEventListener("click", dismiss);
+    return () => document.removeEventListener("click", dismiss);
+  }, [open, onClose]);
+
   return (
     <dialog
       ref={ref}
@@ -123,6 +163,23 @@ export function Sheet({
         // the card no longer writes one: a utility hard-codes a number the
         // palette is supposed to own, and `--glass-blur` then says something
         // the rendered page contradicts. It comes from the hook.
+        /*
+          A modal dialog receives events whatever its DOM ancestor says
+          (UI-39).
+          
+          `pointer-events` inherits, and the phone's chrome layer is
+          `pointer-events-none` so that a transparent box over the whole
+          viewport does not swallow taps meant for the page. Both mobile sheets
+          are rendered *inside* that layer, so they inherited it: the dialog
+          painted in the top layer and every control in it was dead. Measured,
+          `elementFromPoint` over the Close button returned `<html>`.
+
+          This belongs here rather than on the two callers because it is true
+          of every sheet: a thing opened with `showModal()` is the only
+          interactive thing on the screen, and inheriting its way out of that
+          is never what anybody meant.
+        */
+        "pointer-events-auto",
         "vibe-overlay",
         /* No `max-h-*` here: each side sets its own, because two of them in
            one list is a conflict `cn` cannot resolve. */

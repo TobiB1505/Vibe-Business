@@ -165,7 +165,23 @@ test.describe("the two levels of the phone's navigation", () => {
       phone. That is the whole reason this assertion names it.
     */
     await expect(sheet.getByRole("link", { name: "Project Settings" })).toBeVisible();
-    await expect(sheet.getByRole("link", { name: "Agent" })).toBeVisible();
+
+    /*
+      Clicked, not just seen. `pointer-events` inherits, and both sheets are
+      rendered inside the chrome layer, which is `pointer-events-none` so a
+      transparent box over the viewport does not swallow taps meant for the
+      page. They inherited it: every control in both sheets painted and none of
+      them worked, for as long as they have existed. The tests at the time
+      asserted visibility — the exact failure `consent-banner` had already
+      taught this file about, applied to everything except its own sheets.
+    */
+    await sheet.getByRole("link", { name: "Agent" }).click();
+    /*
+      The fixture holds no session, so the guard redirects — and `next` is
+      where the link was actually followed to. Asserting the landing URL would
+      assert the auth guard; this asserts the tap.
+    */
+    await expect(page).toHaveURL(/[?&]next=[^&]*agent/);
   });
 
   test("keeps the account out of the sections, and reachable", async ({ page }) => {
@@ -181,7 +197,10 @@ test.describe("the two levels of the phone's navigation", () => {
     await page.getByTestId("mobile-account-trigger").click();
     const sheet = page.getByRole("dialog");
     await expect(sheet.getByTestId("wallet")).toBeVisible();
-    await expect(sheet.getByRole("link", { name: /Profile and account/ })).toBeVisible();
+
+    // And the identity row goes where it says it goes, rather than only saying so.
+    await sheet.getByRole("link", { name: /Profile and account/ }).click();
+    await expect(page).toHaveURL(/[?&]next=[^&]*settings%2Fprofile/);
   });
 
   test("rests the sheet on the bottom edge instead of filling the screen", async ({ page }) => {
@@ -243,4 +262,75 @@ test.describe("the desktop rail is untouched", () => {
     await expect(page.getByTestId("mobile-tab-bar")).toBeHidden();
     await expect(page.getByTestId("mobile-account-trigger")).toBeHidden();
   });
+});
+
+test.describe("a sheet you can get out of", () => {
+  test.use({ viewport: PHONE, hasTouch: true, isMobile: true });
+
+  /*
+   * A modal dialog with no exit is a trap, and this product shipped two.
+   *
+   * `Sheet` closed on a backdrop click by checking `event.target === the
+   * dialog`, which is true only while the dialog *covers* the point. It used
+   * to cover every point — the bottom variant filled the viewport, which was
+   * the bug UI-35 fixed — so that worked by accident. Making it a real bottom
+   * sheet silently removed the only way out, and the guard written at the time
+   * measured the geometry and nothing else.
+   *
+   * Measured on the shipped build: a tap above the sheet lands on `<html>`,
+   * the dialog's listener never runs, there is no Escape key on a phone, and
+   * neither sheet drew a single button. The only exit was the browser's back
+   * button.
+   */
+  const SHEETS = [
+    [
+      "the sections sheet",
+      async (page: import("@playwright/test").Page) =>
+        page.getByTestId("mobile-tab-bar").getByRole("button", { name: "More" }).click(),
+    ],
+    [
+      "the account sheet",
+      async (page: import("@playwright/test").Page) =>
+        page.getByTestId("mobile-account-trigger").click(),
+    ],
+  ] as const;
+
+  for (const [name, open] of SHEETS) {
+    test(`${name} draws a way out`, async ({ page }) => {
+      await page.goto(SHELL);
+      await open(page);
+
+      const sheet = page.getByRole("dialog");
+      await expect(sheet).toBeVisible();
+
+      /*
+        Visible and named. A scrim is not a control anybody has been told
+        about, so the exit has to be something a founder can see.
+      */
+      const close = sheet.getByRole("button", { name: "Close" });
+      await expect(close).toBeVisible();
+
+      await close.click();
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+    });
+
+    test(`${name} closes on a tap outside it`, async ({ page }) => {
+      await page.goto(SHELL);
+      await open(page);
+
+      const sheet = page.getByRole("dialog");
+      await expect(sheet).toBeVisible();
+
+      /*
+        Tapped well above the panel, which is where the regression lived: the
+        dialog no longer reaches that far, so this is the point its own click
+        handler never hears about.
+      */
+      const box = (await sheet.boundingBox())!;
+      expect(box.y).toBeGreaterThan(160);
+      await page.mouse.click(195, Math.round(box.y) - 120);
+
+      await expect(page.locator("dialog[open]")).toHaveCount(0);
+    });
+  }
 });

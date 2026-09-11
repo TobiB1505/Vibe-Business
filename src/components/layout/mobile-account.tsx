@@ -5,7 +5,8 @@ import { useId, useState } from "react";
 import { PaletteSwitch } from "@/components/layout/palette-switch";
 import { Wallet } from "@/components/system/wallet";
 import { Avatar } from "@/components/ui/avatar";
-import { ChevronRightIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
+import { ChevronRightIcon, DismissIcon } from "@/components/ui/icons.generated";
 import { Sheet } from "@/components/ui/sheet";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import type { CreditUnits } from "@/modules/credits/units";
@@ -99,6 +100,26 @@ export function MobileAccount({
       */}
         {open && (
           <div className="flex flex-col gap-3 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            {/*
+              The way out, said rather than implied (UI-39). A tap outside
+              dismisses and Escape does too, but a phone has no Escape key and
+              a scrim is not a control anybody has been told about — measured,
+              the only exit a founder could see here was the browser's back
+              button.
+
+              Its own row, because the identity below is this sheet's heading
+              and a control in that row would compete with the destination it
+              links to.
+            */}
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                icon={<DismissIcon size={16} />}
+                label="Close"
+                onClick={() => setOpen(false)}
+                className="-me-1"
+              />
+            </div>
             {/*
             The identity is the sheet's own heading — it names the dialog and
             it is the row that goes to the page about it, which is one thing

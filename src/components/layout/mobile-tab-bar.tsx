@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { DashboardIcon } from "@/components/ui/dashboard-icons";
-import { MoreIcon } from "@/components/ui/icons.generated";
+import { Button } from "@/components/ui/button";
+import { DismissIcon, MoreIcon } from "@/components/ui/icons.generated";
 import { Sheet } from "@/components/ui/sheet";
 import { agentMoveHref, PLAN_OPPORTUNITY_PARAM } from "@/modules/action-plans/source";
 import { cn } from "@/lib/utils/cn";
@@ -221,7 +222,36 @@ export function MobileTabBar({
           <div className="flex flex-col gap-1 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {/* Mounted only while open — the switcher inside is the rail's, and
               two of it in one document is two of everything it contains. */}
+            {/*
+              Its own row at the top, not beside the heading below it (UI-39).
+              Next to `More sections` the mark read as belonging to that label
+              rather than to the sheet, and the product context above it made
+              that reading worse — a control has to sit where the thing it acts
+              on begins. Same row and same mark as the account sheet's, because
+              two sheets on one phone that close differently are two things to
+              learn.
+            */}
+            <div className="flex justify-end">
+              <Button
+                variant="ghost"
+                icon={<DismissIcon size={16} />}
+                label="Close"
+                onClick={() => setMoreOpen(false)}
+                className="-me-1"
+              />
+            </div>
             {context && <div className="pb-3">{context}</div>}
+            {/*
+              The way out, said rather than implied (UI-39). A tap outside
+              dismisses and Escape does too, but a phone has no Escape key and
+              a scrim is not a control anybody has been told about — measured,
+              the only exit a founder could see here was the browser's back
+              button.
+
+              It joins the heading's row rather than floating: the same mark
+              and the same label as the evidence drawer's, which is the one
+              sheet in this product that already had one.
+            */}
             <h2 id={moreTitleId} className="text-fg-meta px-2 pb-2 font-mono text-label uppercase">
               More sections
             </h2>
