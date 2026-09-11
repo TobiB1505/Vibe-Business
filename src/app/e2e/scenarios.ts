@@ -637,18 +637,24 @@ export const E2E_SCENARIOS = {
       filePaths: ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"],
       /*
        * No written rationale, which is true of every agentic change there will
-       * ever be.
+       * ever be — and an origin, which is true of every one prepared from
+       * today.
        *
-       * [2026-09-11] This used to add *"— and the reason the origin below has
-       * to exist"*, which was false about the product and is why a defect
-       * shipped. An agent change has no origin either: the branch step writes
-       * `opportunitySetId` and `opportunityId` as null on purpose, because
-       * *"an agentic change traces to a plan step, not to an opportunity
-       * set"*. The origin below is a shape the agent path cannot produce.
+       * [2026-09-11, morning] This used to add *"— and the reason the origin
+       * below has to exist"*, which was false about the product and is why a
+       * defect shipped. The branch step wrote both opportunity ids as null, so
+       * the origin below was a shape the agent path could not produce, and
+       * every real agent change reached a founder naming nothing it was for.
        *
-       * It is kept, because the panels that read an origin still need a
-       * fixture carrying one and this one has browser tests on it. What was
-       * missing is the truthful sibling — `change_agentic_no_origin`.
+       * [2026-09-11, after] It produces it now. The lineage was never unknown
+       * — the spec carries the Move so that it survives into execution — so
+       * `resolveSpecLineage` stores it at preparation and a backfill fills the
+       * changes already written. This fixture went from wrong to accurate
+       * without moving.
+       *
+       * `change_agentic_no_origin` is still its sibling and still real: a
+       * benchmark step has no plan, and a change whose run or set cannot be
+       * resolved keeps its nulls.
        */
       rationale: null,
       origin: {
@@ -717,16 +723,18 @@ export const E2E_SCENARIOS = {
    * the state the section can actually produce coherently.
    */
   /**
-   * An agent change exactly as the agent writes one.
+   * An agent change whose lineage could not be resolved.
    *
-   * No rationale, and **no origin** — the two nulls the branch step stores by
-   * construction. Every change the product makes today has this shape, and no
-   * fixture had it, so the surface that draws the change's meaning was only
-   * ever rendered against a card that had some.
+   * No rationale and **no origin**. This was every agent change until the
+   * branch step started storing the Move its spec carries; it is now the
+   * narrower set that genuinely has none — an internal benchmark step, which
+   * has no plan row and never will, and a change whose run, spec, plan or set
+   * cannot be reached.
    *
-   * What it caught: a bordered, padded band around nothing, above the diff, on
-   * a founder's phone. What it still shows is the gap under that — this change
-   * names what it was for nowhere.
+   * It is what caught the defect it was written for: a bordered, padded band
+   * around nothing, above the diff, on a founder's phone. It stays because
+   * that state stays reachable, and because a surface that only ever meets
+   * cards with something to say is how the band got there.
    */
   change_agentic_no_origin: (): PreparedChangeCard =>
     withProgress({

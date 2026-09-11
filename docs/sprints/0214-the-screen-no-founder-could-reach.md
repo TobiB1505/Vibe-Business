@@ -126,10 +126,27 @@ decision surface, with the precedence unchanged.
 > `border-t` of its own, so two rules sat thirty-two pixels apart with nothing
 > between them. That one pre-dates this sprint and was simply never looked at.
 >
-> **The gap this sprint claimed to close is still open.** An agent change names
-> what it was for nowhere in the thread. Closing it needs the plan step the
-> execution spec carries, which is a read the card does not make — a decision,
-> not a patch.
+> **[later the same day] The gap is closed, and it needed no new read on the
+> card.** The lineage was never unknown: `ExecutionSpec` carries `opportunityId`
+> — its own field comment says *"so lineage survives into execution"* — and the
+> action plan the spec names carries the set. The branch step now resolves both
+> before it claims the change, so the existing card path fills the origin block
+> and the Move link with nothing new to look up, and a backfill gives the
+> changes already written the same value.
+>
+> Two things had to be got right, and PostgreSQL found both on the first run.
+> The columns are **different types**: a spec's opportunity id is text and may
+> name no stored Move at all (a benchmark's is a fixture key), while a prepared
+> change's is a uuid with a foreign key. Copying it through would have failed
+> that key inside `claimPreparedChange` — a run that had already written a
+> branch ending as `change_preparation_failed`. So the Move is *read* before it
+> is stored, which also checks the condition that matters: that it belongs to
+> the plan's own set. And the backfill matches through `business_opportunities`
+> rather than casting, because a cast aborts the migration on the first fixture
+> key while a join simply does not match it.
+>
+> A second surface came with it, unasked: the change history named every agent
+> change by its branch, because it resolves titles from the same id.
 >
 > **The mechanism is the one this record already names, one layer further in.**
 > `change_agentic_review_required` gives an agentic change an `origin`, and its
