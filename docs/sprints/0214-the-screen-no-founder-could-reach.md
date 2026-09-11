@@ -148,6 +148,19 @@ decision surface, with the precedence unchanged.
 > A second surface came with it, unasked: the change history named every agent
 > change by its branch, because it resolves titles from the same id.
 >
+> And the origin rendering is what exposed the **second** duplicated rule.
+> `ChangeRationale` and `ChangeOrigin` open with a `border-t` of their own, so
+> the wrapper above them drew a pair — invisible while the meaning was empty,
+> because the wrapper was then the only rule there. Removing the empty frame is
+> what let it appear. Two separators, twice, and the fix for the first uncovered
+> the second.
+>
+> Worth naming for what it says about looking: the render of that surface looked
+> **correct** to the eye, and the geometry assertion is what failed — two rules
+> 21px apart. The browser test that catches it reads both shapes now, the change
+> with nothing to say and the change that says it, because only the second has
+> the pair and a test pointed at the first would have gone on passing.
+>
 > **The mechanism is the one this record already names, one layer further in.**
 > `change_agentic_review_required` gives an agentic change an `origin`, and its
 > own comment called that *"the reason the origin below has to exist"* — a
