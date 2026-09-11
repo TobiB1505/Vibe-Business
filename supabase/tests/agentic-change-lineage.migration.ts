@@ -26,7 +26,7 @@ const BACKFILL = join(
   REPO_ROOT,
   "supabase",
   "migrations",
-  "20260911120000_agentic_change_lineage_backfill.sql",
+  "20260911102101_agentic_change_lineage_backfill.sql",
 );
 
 let db: Cluster;
