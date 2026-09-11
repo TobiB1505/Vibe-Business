@@ -159,6 +159,13 @@ export function NovaFocusThread({
   const prompt = footnoteFor(entry.prompt, controlLabel);
 
   /*
+   * Whether the block is about to repeat the aside. Only when there *is* a
+   * block: without one the subject's sentence is the only place a founder
+   * learns which step, which Move or which question this is.
+   */
+  const saysTheDetail = block !== undefined && kind !== "none" && BLOCK_SAYS_THE_DETAIL[kind];
+
+  /*
    * One register, so `speechBubbles` has one run to group. It splits by
    * register first and these are all asides, which is why the sentences can be
    * handed over flat.
@@ -192,8 +199,12 @@ export function NovaFocusThread({
         The subject's own sentence, in the quieter register. A change's headline
         and a question's text are written by the thing they are about, never by
         Nova — so they are an aside rather than a second claim of hers.
+
+        Unless the block below is about to say the same words. Three of them do
+        — see `BLOCK_SAYS_THE_DETAIL` — and there the aside was the sentence
+        immediately above a heading repeating it in thirty-two point type.
       */}
-      {entry.detail && (
+      {entry.detail && !saysTheDetail && (
         <NovaBubble aside tail={false} index={2}>
           <NovaAside>{entry.detail}</NovaAside>
         </NovaBubble>
@@ -257,6 +268,7 @@ const BLOCK_LABEL: Record<BlockKind, string> = {
   audit: "Business audit",
   scan: "Product scan",
   agent: "Building",
+  ready: "The step to build",
   review: "The change",
   move: "Next move",
   ask: "Needs your answer",
@@ -283,10 +295,48 @@ const BLOCK_LABEL: Record<BlockKind, string> = {
  *
  * The label still travels: it is the region's accessible name either way.
  */
+/**
+ * Which blocks print the subject's own sentence, so the aside does not.
+ *
+ * `entry.detail` is written by the thing the moment is about — a step's title,
+ * a Move's title, a question's text — and three of the composed surfaces open
+ * by printing exactly that string as their heading. A thread that drew both
+ * said the same words twice, three lines apart, the second time at four times
+ * the size. The offer was the worst of them: *"Add a clear pricing section to
+ * your website"* as a grey aside, then again as the task panel's headline.
+ *
+ * It is decided here rather than at the call sites for the reason the label
+ * table above is: total over the kinds, so a new block has to answer the
+ * question, and one place to look when a block's heading changes.
+ *
+ * False is the safe answer and the common one. A block that merely *mentions*
+ * the subject is not repeating the sentence — the review gates carry a
+ * change's stage sentence, which is a different claim from its headline — and
+ * dropping the aside there would remove the only line naming what this is
+ * about.
+ */
+const BLOCK_SAYS_THE_DETAIL: Record<BlockKind, boolean> = {
+  audit: false,
+  scan: false,
+  agent: false,
+  /* `AgentTaskPanel` opens with the step title, which is the detail exactly. */
+  ready: true,
+  review: false,
+  /* `MoveCard` prints `opportunity.title`; the detail is that title. */
+  move: true,
+  /* `FounderInputCard` prints `request.question`; the detail is the question. */
+  ask: true,
+  progress: false,
+  none: false,
+};
+
 const BLOCK_NAMES_ITSELF: Record<BlockKind, boolean> = {
   audit: false,
   scan: true,
   agent: false,
+  /* The task panel names the step and the offer names the price; neither says
+     what the block is, which is the step being offered. */
+  ready: false,
   review: false,
   move: false,
   ask: false,

@@ -85,10 +85,8 @@ function baseChange(): Omit<
      */
     origin: {
       title: "Fix missing technical SEO foundations",
-      problem:
-        "The live site is missing canonical URL, robots.txt, a sitemap and structured data.",
-      whyNow:
-        "These are low-effort fixes that do not depend on positioning or monetization.",
+      problem: "The live site is missing canonical URL, robots.txt, a sitemap and structured data.",
+      whyNow: "These are low-effort fixes that do not depend on positioning or monetization.",
     },
     opportunityId: "3-seo-fix-missing-technical-seo-foundations",
     /** The "before" half, labelled as the live site now (ADR 0065). */
@@ -252,9 +250,7 @@ const SEO_SCOPE_NOTE = OUTCOME_PROFILE_SCOPE_NOTES.nextjs_seo_foundations_outcom
 const AGENTIC_SCOPE_NOTE = OUTCOME_PROFILE_SCOPE_NOTES.agentic_public_routes_outcome_v1;
 
 /** The check lines the agentic profile produces: one page, one line. */
-function routeCheckLines(
-  paths: Array<[string, OutcomeCheckLine["status"]]>,
-): OutcomeCheckLine[] {
+function routeCheckLines(paths: Array<[string, OutcomeCheckLine["status"]]>): OutcomeCheckLine[] {
   return paths.map(([path, status]) => ({
     checkId: `public_route_serves_page:${path}`,
     label: `${path} answers`,
@@ -292,7 +288,6 @@ function outcomeChange(outcome: OutcomeCard): PreparedChangeCard {
     businessImpact: businessImpactCard(),
   });
 }
-
 
 /**
  * Business impact fixtures (Sprint 12B §40).
@@ -388,6 +383,49 @@ export const E2E_SCENARIOS = {
    * written: without it the open form of the card would ship untested in a
    * browser, proven only by unit tests over the derivation.
    */
+  /**
+   * The state that dead-ended on a phone.
+   *
+   * `visual_and_code`, so a preview is the review; no preview started, so
+   * approval is blocked on one; and the block message names the remedy —
+   * *"Start a preview and look at the change first."* Nova's `review_change`
+   * moment mounts `ChangeGates` with `stage="review"`, which used to filter
+   * the preview panel out, so the founder read a refusal naming a step and had
+   * nothing to press anywhere on the screen.
+   *
+   * No fixture held this combination, which is why nobody saw it. It is here
+   * so `agent-stages.spec.ts` can assert the remedy is reachable from the gate
+   * that asks for it.
+   */
+  change_needs_preview: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      preview: { ...baseChange().preview, state: "ready_to_start" },
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: "approval_preview_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_preview_required,
+        canApprove: false,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      /* And the gate below it, refusing for the reason above it. */
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
   change_awaiting_approval: (): PreparedChangeCard =>
     withProgress({
       ...baseChange(),
@@ -597,8 +635,27 @@ export const E2E_SCENARIOS = {
       branchName: "vibe/agent-07d2308c197d",
       commitSha: "94c3165",
       filePaths: ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"],
-      // No written rationale, which is true of every agentic change there will
-      // ever be — and the reason the origin below has to exist.
+      /*
+       * No written rationale, which is true of every agentic change there will
+       * ever be — and an origin, which is true of every one prepared from
+       * today.
+       *
+       * [2026-09-11, morning] This used to add *"— and the reason the origin
+       * below has to exist"*, which was false about the product and is why a
+       * defect shipped. The branch step wrote both opportunity ids as null, so
+       * the origin below was a shape the agent path could not produce, and
+       * every real agent change reached a founder naming nothing it was for.
+       *
+       * [2026-09-11, after] It produces it now. The lineage was never unknown
+       * — the spec carries the Move so that it survives into execution — so
+       * `resolveSpecLineage` stores it at preparation and a backfill fills the
+       * changes already written. This fixture went from wrong to accurate
+       * without moving.
+       *
+       * `change_agentic_no_origin` is still its sibling and still real: a
+       * benchmark step has no plan, and a change whose run or set cannot be
+       * resolved keeps its nulls.
+       */
       rationale: null,
       origin: {
         title: "Give the landing page a proper social preview",
@@ -616,7 +673,7 @@ export const E2E_SCENARIOS = {
         failureMessage: null,
         expiresAt: null,
         readyAt: null,
-        },
+      },
       review: {
         state: "not_generated",
         reviewArtifactId: null,
@@ -665,6 +722,29 @@ export const E2E_SCENARIOS = {
    * gap is real and recorded in the sprint doc; what this scenario proves is
    * the state the section can actually produce coherently.
    */
+  /**
+   * An agent change whose lineage could not be resolved.
+   *
+   * No rationale and **no origin**. This was every agent change until the
+   * branch step started storing the Move its spec carries; it is now the
+   * narrower set that genuinely has none — an internal benchmark step, which
+   * has no plan row and never will, and a change whose run, spec, plan or set
+   * cannot be reached.
+   *
+   * It is what caught the defect it was written for: a bordered, padded band
+   * around nothing, above the diff, on a founder's phone. It stays because
+   * that state stays reachable, and because a surface that only ever meets
+   * cards with something to say is how the band got there.
+   */
+  change_agentic_no_origin: (): PreparedChangeCard =>
+    withProgress({
+      ...E2E_SCENARIOS.change_agentic_review_required(),
+      branchName: "vibe/agent-07346b413581",
+      rationale: null,
+      origin: null,
+      opportunityId: null,
+    }),
+
   change_not_validated: (): PreparedChangeCard =>
     withProgress({
       ...baseChange(),

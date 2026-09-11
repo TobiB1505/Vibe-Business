@@ -7,6 +7,7 @@ import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
 import type { AgentStartRefusalDetail, AgentStepReason } from "./start-refusal";
 import type { BuildChainBoundaryReason } from "@/modules/execution-contract/chain";
+import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
 import type { RunForecast, RunForecastDriver } from "./run-forecast";
 
 /**
@@ -252,6 +253,24 @@ export function forecastDriverNotes(forecast: RunForecast): readonly string[] {
     .map((driver) => FORECAST_DRIVER_COPY[driver.driver][driver.effect])
     .filter((copy): copy is string => copy !== undefined)
     .slice(0, 2);
+}
+
+/**
+ * A run's ceiling, in words.
+ *
+ * One place, because three surfaces say it: the Agent's ready hero, the start
+ * controls, and Nova's thread. `nova-ui.test.ts` holds the rule that no Nova
+ * screen formats Credits by hand — `CostDisclosure` resolves a *retail kind*
+ * and is the only thing that may — and a run ceiling is not a retail kind:
+ * `resolveRouteAgentEconomics` computes it per execution pricing class over
+ * the exact steps a run would deliver.
+ *
+ * So the figure keeps the rule's intent rather than its letter. The vocabulary
+ * lives beside the domain that owns it, and a screen asks for the sentence
+ * instead of assembling one.
+ */
+export function runCeilingLabel(units: CreditUnits): string {
+  return formatCreditsForDisplay(units);
 }
 
 /**

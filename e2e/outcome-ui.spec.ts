@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openPostMergeRecord } from "./change-surface";
 
 /**
  * The Outcome panel, in a real browser (Sprint 12A §44).
@@ -24,6 +25,19 @@ import { expect, test, type Page } from "@playwright/test";
  * isolated database available here, so the states come from fixtures — the same
  * gap Sprint 11C.1 documented, and it is still real.
  */
+
+/**
+ * One navigation, with the post-merge record open.
+ *
+ * The panels this suite asserts live behind *After the merge* on the surface
+ * the product draws — see `openPostMergeRecord`. They were unfolded until
+ * `ChangeGates` was deleted, and that component was reachable on the fixture
+ * route alone.
+ */
+async function openChange(page: Page, scenario: string): Promise<void> {
+  await page.goto(`/e2e/${scenario}`);
+  await openPostMergeRecord(page);
+}
 
 /**
  * The panel's headline state, as distinct from the ladder row beneath it.
@@ -72,7 +86,7 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
 test.describe("merged but not yet measured", () => {
   test("offers the check, and does not claim anything was measured", async ({ page }) => {
     const external = await forbidExternalCalls(page);
-    await page.goto("/e2e/outcome_not_started");
+    await openChange(page, "outcome_not_started");
 
     const outcome = outcomeSection(page);
 
@@ -85,7 +99,7 @@ test.describe("merged but not yet measured", () => {
   });
 
   test("says what the check will do before it is clicked", async ({ page }) => {
-    await page.goto("/e2e/outcome_not_started");
+    await openChange(page, "outcome_not_started");
     const outcome = outcomeSection(page);
 
     await expect(outcome).toContainText("This reads public pages only, and changes nothing.");
@@ -94,7 +108,7 @@ test.describe("merged but not yet measured", () => {
 
 test.describe("observing", () => {
   test("shows a running state with no invented percentage", async ({ page }) => {
-    await page.goto("/e2e/outcome_observing");
+    await openChange(page, "outcome_observing");
     const outcome = outcomeSection(page);
 
     await expect(outcome.getByText("Checking production…")).toBeVisible();
@@ -107,13 +121,13 @@ test.describe("observing", () => {
   });
 
   test("tells the user the request does not have to stay open", async ({ page }) => {
-    await page.goto("/e2e/outcome_observing");
+    await openChange(page, "outcome_observing");
 
     await expect(outcomeSection(page)).toContainText("You can leave this page.");
   });
 
   test("does not offer the action again while a window is open", async ({ page }) => {
-    await page.goto("/e2e/outcome_observing");
+    await openChange(page, "outcome_observing");
 
     await expect(page.getByRole("button", { name: "Check production outcome" })).toHaveCount(0);
   });
@@ -122,7 +136,7 @@ test.describe("observing", () => {
 test.describe("verified", () => {
   test("shows each observed behaviour", async ({ page }) => {
     const external = await forbidExternalCalls(page);
-    await page.goto("/e2e/outcome_verified");
+    await openChange(page, "outcome_verified");
     const outcome = outcomeSection(page);
 
     await expect(outcome.getByText("Production outcome verified")).toBeVisible();
@@ -141,7 +155,7 @@ test.describe("verified", () => {
   });
 
   test("says explicitly that this is not business impact", async ({ page }) => {
-    await page.goto("/e2e/outcome_verified");
+    await openChange(page, "outcome_verified");
     const outcome = outcomeSection(page);
 
     // The distinction §30 requires to be visible, not merely true.
@@ -149,7 +163,7 @@ test.describe("verified", () => {
   });
 
   test("shows delivery, product outcome and business impact side by side", async ({ page }) => {
-    await page.goto("/e2e/outcome_verified");
+    await openChange(page, "outcome_verified");
     const ladder = outcomeSection(page).getByTestId("outcome-ladder");
 
     await expect(ladder).toContainText("Merged");
@@ -161,7 +175,7 @@ test.describe("verified", () => {
 
 test.describe("partial", () => {
   test("shows the failing check rather than hiding it", async ({ page }) => {
-    await page.goto("/e2e/outcome_partial");
+    await openChange(page, "outcome_partial");
     const outcome = outcomeSection(page);
 
     await expect(outcomeHeadline(page, "Partially observed")).toBeVisible();
@@ -177,7 +191,7 @@ test.describe("partial", () => {
   });
 
   test("still says business impact is unmeasured", async ({ page }) => {
-    await page.goto("/e2e/outcome_partial");
+    await openChange(page, "outcome_partial");
     const ladder = outcomeSection(page).getByTestId("outcome-ladder");
 
     await expect(ladder).toContainText("Partially observed");
@@ -187,7 +201,7 @@ test.describe("partial", () => {
 
 test.describe("not observed", () => {
   test("uses honest timeout copy and claims nothing about deployment", async ({ page }) => {
-    await page.goto("/e2e/outcome_not_observed");
+    await openChange(page, "outcome_not_observed");
     const outcome = outcomeSection(page);
 
     await expect(outcome.getByText("Not observed within verification window")).toBeVisible();
@@ -198,7 +212,7 @@ test.describe("not observed", () => {
   });
 
   test("offers no hidden recovery", async ({ page }) => {
-    await page.goto("/e2e/outcome_not_observed");
+    await openChange(page, "outcome_not_observed");
 
     // §32: no remerge, revalidate, rebuild or redeploy — none of which exist
     // anywhere in the product.
@@ -219,7 +233,7 @@ test.describe("not observed", () => {
    * forbidden verbs above rather than joining them.
    */
   test("offers one way to look again, and says the window is still closed", async ({ page }) => {
-    await page.goto("/e2e/outcome_not_observed");
+    await openChange(page, "outcome_not_observed");
     const outcome = outcomeSection(page);
 
     const again = outcome.getByTestId("outcome-check-again");
@@ -233,7 +247,7 @@ test.describe("not observed", () => {
 
 test.describe("Vibe could not check", () => {
   test("reads as Vibe's limitation, not as the product misbehaving", async ({ page }) => {
-    await page.goto("/e2e/outcome_failed");
+    await openChange(page, "outcome_failed");
     const outcome = outcomeSection(page);
 
     await expect(outcome.getByText("Vibe could not check the production outcome")).toBeVisible();
@@ -259,7 +273,7 @@ test.describe("Vibe could not check", () => {
 test.describe("an agentic change's outcome", () => {
   test("names the pages it looked at, one line each", async ({ page }) => {
     const external = await forbidExternalCalls(page);
-    await page.goto("/e2e/outcome_verified_agentic");
+    await openChange(page, "outcome_verified_agentic");
     const outcome = outcomeSection(page);
 
     await expect(outcome.getByText("Production outcome verified")).toBeVisible();
@@ -270,7 +284,7 @@ test.describe("an agentic change's outcome", () => {
   });
 
   test("says what a green tick does not mean, beside the green tick", async ({ page }) => {
-    await page.goto("/e2e/outcome_verified_agentic");
+    await openChange(page, "outcome_verified_agentic");
     const outcome = outcomeSection(page);
 
     // The moment a founder is most likely to read more than happened. A 200 is
@@ -283,7 +297,7 @@ test.describe("an agentic change's outcome", () => {
   });
 
   test("shows a page that stopped answering rather than summarising it away", async ({ page }) => {
-    await page.goto("/e2e/outcome_partial_agentic");
+    await openChange(page, "outcome_partial_agentic");
     const outcome = outcomeSection(page);
 
     // The failure direction this profile exists for. Under the old mapping the
@@ -325,7 +339,7 @@ test.describe("nothing anywhere claims a deployment", () => {
   }
 
   test("a verified outcome never renders as a business result", async ({ page }) => {
-    await page.goto("/e2e/outcome_verified");
+    await openChange(page, "outcome_verified");
     const body = page.locator("body");
 
     for (const forbidden of ["Revenue", "Conversion", "Traffic increased", "Growth"]) {
@@ -341,22 +355,30 @@ test.describe("reload recovery", () => {
    * way to ask whether what is on screen came from the server or from memory.
    */
   test("a verified outcome is still verified after a full reload", async ({ page }) => {
-    await page.goto("/e2e/outcome_verified");
+    await openChange(page, "outcome_verified");
     const outcome = outcomeSection(page);
     await expect(outcome.getByText("Production outcome verified")).toBeVisible();
 
     await page.reload();
+    /* A native `details` resets on reload, which is the point rather than a
+       nuisance: what has to survive is the server's answer, not the panel's
+       open state. */
+    await openPostMergeRecord(page);
 
     await expect(outcome.getByText("Production outcome verified")).toBeVisible();
     await expect(outcome).toContainText("It does not measure business impact");
   });
 
   test("a partial outcome is still partial after a full reload", async ({ page }) => {
-    await page.goto("/e2e/outcome_partial");
+    await openChange(page, "outcome_partial");
     const outcome = outcomeSection(page);
     await expect(outcomeHeadline(page, "Partially observed")).toBeVisible();
 
     await page.reload();
+    /* A native `details` resets on reload, which is the point rather than a
+       nuisance: what has to survive is the server's answer, not the panel's
+       open state. */
+    await openPostMergeRecord(page);
 
     await expect(outcomeHeadline(page, "Partially observed")).toBeVisible();
     await expect(outcome.getByText("/signup excluded from sitemap")).toBeVisible();
@@ -365,7 +387,7 @@ test.describe("reload recovery", () => {
 
 test.describe("the outcome section is absent until something is merged", () => {
   test("an unmerged prepared change shows no Outcome panel at all", async ({ page }) => {
-    await page.goto("/e2e/merge_ready");
+    await openChange(page, "merge_ready");
 
     // The merge panel above already explains the gate; a second component
     // narrating it would be noise (§29).

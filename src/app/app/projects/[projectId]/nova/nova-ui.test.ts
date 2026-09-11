@@ -436,7 +436,18 @@ describe("Nova Home", () => {
       expect(home).toContain("BLOCK_FOR_OPERATION");
       expect(home).toContain("<ProgressBlock");
       expect(home).toContain("<ScanBlock");
-      expect(home).toContain("<NovaAgentLive");
+      /* The agent's block is the Agent's own build stage now, streamed. The
+         polling file list is still in it — as the boundary's fallback and as
+         its activity column — and it is mounted by `nova-agent-stage.tsx`
+         rather than here. */
+      expect(home).toContain("<NovaAgentStage");
+      expect(component("nova-agent-stage.tsx")).toContain("<AgentBuildStage");
+      expect(component("nova-agent-stage.tsx")).toContain("<NovaAgentLive");
+      /* Cheap by construction: naming a change is what makes the workspace
+         read sign images and preflight a merge against GitHub. */
+      expect(component("nova-agent-stage.tsx")).toContain("selectedPreparedChangeId: null");
+      /* And never in front of Home's first paint. */
+      expect(component("nova-agent-stage.tsx")).toContain("<Suspense");
     });
 
     /*
@@ -511,24 +522,41 @@ describe("Nova Home", () => {
   });
 
   /**
-   * The gates travel whole, or not at all.
+   * The decision travels whole, or not at all.
    *
    * A merge button on Home would be the failure rules 67-71 describe: a yes
-   * bound to one commit, pressed against whatever is current. What makes
-   * mounting the gates here safe is that `ChangeGates` brings the sequence —
-   * validation, preview, review, approval, merge, outcome, each reachable only
-   * through the one above it. Reaching past it for the merge panel, or for the
-   * merge action, is how that guarantee would be lost one import at a time.
+   * bound to one commit, pressed against whatever is current.
+   *
+   * ## What changed under this, and what did not
+   *
+   * It used to be `ChangeGates` that made mounting safe, by bringing the whole
+   * sequence — validation, preview, review, approval, merge, outcome — each
+   * reachable only through the one above it. The block mounts the Agent's own
+   * three stage screens now, because `ChangeGates` is the surface the Agent
+   * workspace replaced and the thread was the last place still drawing it.
+   *
+   * The guarantee did not change and is if anything sharper: which screen a
+   * change gets is `AGENT_STAGE_FOR_CHANGE`, total over `ChangeStage`, so a
+   * change that has not passed its checks cannot be shown a decision — and the
+   * decision itself arrives as `AgentReviewDecision`, the canonical pair the
+   * Agent route mounts. Reaching past that for the merge panel, or for the
+   * merge action, is still how it would be lost one import at a time.
    */
   describe("the change gates", () => {
-    it("mounts the shipped gates rather than a panel out of the middle", () => {
+    it("mounts the Agent's own stages rather than a panel out of the middle", () => {
       const review = block("review.tsx");
 
-      expect(review).toContain("<ChangeGates");
-      /* The thread says the change's status sentence above the block, so the
-         gate drops its own. That decision lives in the block now rather than
-         being written out at the call site. */
-      expect(review).toContain("chrome={false}");
+      for (const stage of ["<AgentValidateStage", "<AgentPreviewStage", "<AgentMergeStage"]) {
+        expect(review, stage).toContain(stage);
+      }
+      /* The thread says the change's status sentence above the block, so each
+         stage drops its own narrative column. */
+      expect(review).toContain('presentation="block"');
+      /* And the stage is read from the change, never from the moment: the
+         candidate kind cannot tell `review_required` from `awaiting_approval`. */
+      expect(review).toContain("agentStageForChange(change.progress.stage)");
+      /* The canonical pair, not its halves. */
+      expect(review).toContain("<AgentReviewDecision");
 
       for (const body of [review, component("nova-home.tsx")]) {
         expect(body).not.toMatch(/<MergePanel|<ApprovalPanel|merge-panel|approval-panel/);

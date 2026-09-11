@@ -38,7 +38,8 @@ import {
   ScanBlock,
   WorkspaceAskBlock,
 } from "@/components/nova/blocks";
-import { NovaAgentLive } from "./nova-agent-live";
+import { NovaAgentStage } from "./nova-agent-stage";
+import { NovaReadyStage } from "./nova-ready-stage";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";
 import { isDispatchableNovaAction } from "./nova-dispatch";
 import { readNovaHomeData, type NovaHomeData } from "./nova-home-data";
@@ -252,8 +253,40 @@ function FocusSection({
      * The other moments, as sentences. `buildNovaHomeView` has ranked and
      * capped them since this route existed and nothing rendered them — so a
      * founder with three things pending saw one.
+     *
+     * Each carries its own subject where it has one, because it rendered the
+     * message alone and two moments of the same kind then read identically.
+     * Two open questions both said *"The agent stopped and needs an answer
+     * from you."* and neither said which question — while `detail` held the
+     * question text the whole time.
+     *
+     * A change's `detail` is deliberately not expected to distinguish
+     * anything: its `headline` names the *stage* ("This change did not pass
+     * its safety checks"), not the change. Two of those would still read
+     * alike, which is why the ranking now raises one change rather than
+     * every change, and this line is not the thing that fixed it.
      */
-    ...data.view.secondary.map((moment) => moment.message),
+    ...data.view.secondary.map((moment) =>
+      moment.detail === null ? moment.message : `${moment.message} ${moment.detail}`,
+    ),
+    /*
+     * And the queue behind the one change on screen.
+     *
+     * A founder with nine unfinished changes used to read five sentences about
+     * them and could not tell any apart; now they read one and would otherwise
+     * have no way to know the other eight exist. The count is composed here
+     * rather than written into a table because this is the only place it
+     * appears — there is no second copy for it to drift from — and the route
+     * to them is the Agent's run history, which lists every run and links to
+     * the change it produced.
+     */
+    ...(data.view.changesWaiting === 0
+      ? []
+      : [
+          data.view.changesWaiting === 1
+            ? "One more change is waiting behind this one. Both are listed under Agent, with every run this product has had."
+            : `${data.view.changesWaiting} more changes are waiting behind this one. They are listed under Agent, with every run this product has had.`,
+        ]),
   ];
 
   if (control.kind === "none") {
@@ -263,7 +296,7 @@ function FocusSection({
         voice={data.momentVoice}
         running={running}
         asides={asides}
-        block={blockFor(data, entry)}
+        block={blockFor(data, entry, projectId)}
       />
     );
   }
@@ -334,11 +367,18 @@ function FocusSection({
         running={running}
         asides={asides}
         block={
+          /*
+            No `stage` prop any more. It carried `GATE_STAGE`'s answer, which
+            was derived from the candidate *kind* — and `review_required` and
+            `awaiting_approval` are both `review_change` to the ranking while
+            being opposite states: one needs a preview started, the other is
+            the decision itself. The block reads `change.progress.stage`, which
+            never lost the difference.
+          */
           <ReviewBlock
             projectId={projectId}
             change={data.change}
             planHref={sectionHref["action-plan"]}
-            stage={control.stage}
           />
         }
       />
@@ -386,6 +426,32 @@ function FocusSection({
     );
   }
 
+  if (control.kind === "offer") {
+    /*
+     * The offer is the block, so there is no `control` beside it.
+     *
+     * `NovaReadyStage` mounts `AgentReadyStage` with `AgentStartControls` in
+     * it, which is both prices and both buttons; a link under that would be a
+     * third way to start the same run, and it is the one this moment used to
+     * be — "Go to the plan", which sent a founder off Home to press a button
+     * Home could now hold.
+     *
+     * A step that stopped resolving between the ranking and this render draws
+     * nothing, and the stage decides that for itself rather than being asked
+     * here: it re-resolves behind its own boundary, which is the same read the
+     * plan page makes.
+     */
+    return (
+      <NovaFocusThread
+        entry={entry}
+        voice={data.momentVoice}
+        running={running}
+        asides={asides}
+        block={blockFor(data, entry, projectId)}
+      />
+    );
+  }
+
   if (control.kind === "elsewhere") {
     return (
       <NovaFocusThread
@@ -424,7 +490,7 @@ function FocusSection({
         voice={data.momentVoice}
         running={running}
         asides={asides}
-        block={blockFor(data, entry)}
+        block={blockFor(data, entry, projectId)}
         controlLabel={control.option.label}
         control={<NovaLinkControl href={target} label={control.option.label} />}
       />
@@ -440,7 +506,7 @@ function FocusSection({
         voice={data.momentVoice}
         running={running}
         asides={asides}
-        block={blockFor(data, entry)}
+        block={blockFor(data, entry, projectId)}
       />
     );
   }
@@ -459,7 +525,7 @@ function FocusSection({
       voice={data.momentVoice}
       running={running}
       asides={asides}
-      block={blockFor(data, entry)}
+      block={blockFor(data, entry, projectId)}
       controlLabel={control.option.label}
       /*
        * `ActionBlock` for the consequence, and no longer for the price.
@@ -580,7 +646,14 @@ function runningBlockFor(
       return {
         kind,
         node: (
-          <NovaAgentLive
+          /*
+            The Agent's own build stage, streamed. `NovaAgentLive` is still
+            here — as this component's fallback and as its activity column, so
+            the file list is on screen immediately and the run assembles
+            around it. See `nova-agent-stage.tsx` for why the read behind it
+            does not reverse Home's no-network-call reading.
+          */
+          <NovaAgentStage
             projectId={context.projectId}
             operationId={working.operationId}
             initialEvents={data.agentEvents}
@@ -610,11 +683,14 @@ function runningBlockFor(
  * hand for. A kind whose subject was not read draws nothing — a frame around
  * an absence is worse than no frame, and the sentence above it still stands.
  *
- * The two branches with their own control paths — a question's card, a
- * change's gates, the workspace choice — are built where their arguments are,
- * beside the control that answers them. These two are pure views.
+ * The branches with their own control paths — a question's card, a change's
+ * gates, the workspace choice — are built where their arguments are, beside
+ * the control that answers them. The audit and the Move are pure views over
+ * readings Home already made; the offer to start a run resolves its own,
+ * streamed, which is why it takes the project id rather than a slice of
+ * `data`.
  */
-function blockFor(data: NovaHomeData, entry: NovaHomeEntry) {
+function blockFor(data: NovaHomeData, entry: NovaHomeEntry, projectId: string) {
   switch (BLOCK_FOR_MOMENT[entry.kind]) {
     case "audit":
       return data.audit ? <AuditBlock view={data.audit} /> : undefined;
@@ -622,6 +698,14 @@ function blockFor(data: NovaHomeData, entry: NovaHomeEntry) {
       return data.move ? (
         <MoveBlock opportunity={data.move.opportunity} execution={data.move.execution} />
       ) : undefined;
+    /*
+      The offer to start a run, streamed. It resolves its own reading — see
+      `nova-ready-stage.tsx` for why a second resolution behind a boundary is
+      the right shape, and why it draws nothing for a step the agent is not
+      the path for.
+    */
+    case "ready":
+      return <NovaReadyStage projectId={projectId} />;
     default:
       return undefined;
   }

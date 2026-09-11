@@ -16,15 +16,53 @@ import { Well } from "@/components/ui/surface";
  * commands exited zero in an isolated VM — never that a change is safe, correct
  * or ready (rule 66) — so this says a preview comes next and stops there.
  */
+/**
+ * Where this stage is drawn, and what that costs it.
+ *
+ * `page` is the Agent workspace: a narrative left column — the stage number,
+ * a display heading, a paragraph and a "what happens next" well — beside the
+ * evidence and the controls.
+ *
+ * `block` is Nova's thread, where every one of those is already said. Her
+ * bubble above the block says what is happening and why, the block's own frame
+ * names it, and the thread is the sequence, so a stage number inside it is a
+ * second count of the same position. What is left is the half a page cannot
+ * say twice: the checks, the control, and the line about isolation.
+ *
+ * A prop and not a second component, for the reason the Deep Scan panel took
+ * one: two components rendering one stage is two places for a founder's screen
+ * to drift, and the drift is invisible until somebody opens both.
+ */
+export type AgentStagePresentation = "page" | "block";
+
 export function AgentValidateStage({
   running,
   checks,
   action,
+  presentation = "page",
 }: {
   running: boolean;
   checks?: React.ReactNode;
   action?: React.ReactNode;
+  presentation?: AgentStagePresentation;
 }) {
+  if (presentation === "block") {
+    return (
+      <div className="flex min-w-0 flex-col gap-5" data-testid="agent-validate-intro">
+        {checks}
+        {action}
+        {/*
+          Kept, where the heading and the prose are not: that validation ran
+          nowhere near the founder's product is a fact about what Vibe did,
+          and it is the one sentence here that Nova's own line does not carry.
+        */}
+        <p className="text-fg-muted text-body">
+          Validation runs in an isolated environment. Nothing is live.
+        </p>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-7" data-testid="agent-validate-intro">
       <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.18fr)] lg:items-start lg:gap-12">
@@ -62,8 +100,7 @@ export function AgentValidateStage({
               </span>
               <span className="text-fg-muted max-w-[48ch] text-body leading-relaxed">
                 Once the checks are done you can preview the change and compare it against your
-                live product, before deciding anything.
-              </span>
+                live product, before deciding anything.              </span>
             </span>
           </Well>
         </div>
@@ -72,7 +109,6 @@ export function AgentValidateStage({
           {checks}
           {action}
         </div>
-
       </div>
 
       <div className="border-line-2 mt-2 flex min-h-[5.25rem] flex-wrap items-center justify-between gap-4 border-t px-1 py-7">

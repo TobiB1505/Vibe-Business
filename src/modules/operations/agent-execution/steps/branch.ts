@@ -6,6 +6,7 @@ import {
   computeAgentChangeIdentity,
   computeCandidateDigest,
 } from "@/modules/coding-agent/identity";
+import { resolveSpecLineage } from "@/modules/execution-contract/lineage";
 import { loadPlanStep } from "@/modules/execution-context/service";
 import { agentBranchNameFor } from "@/modules/execution/identity";
 import { prepareChangeOnBranch } from "@/modules/execution/github-writer";
@@ -111,15 +112,33 @@ export async function writeAgentBranchStep(
   const prepared =
     existing ??
     (await (async () => {
+      /*
+       * The Move this change descends from, stored on the row.
+       *
+       * [2026-09-11] This wrote two nulls, with the reason *"an agentic change
+       * traces to a plan step, not to an opportunity set."* That is true about
+       * where an agentic run's **authority** comes from, and it was read as
+       * though the Move were unknown. It is not — the spec carries
+       * `opportunityId` precisely so lineage survives into execution.
+       *
+       * The cost of throwing it away was on a founder's phone: a change
+       * naming nothing it was for, because the card builder resolves the
+       * origin block from exactly these two columns. One read, only on a
+       * genuine claim, and null stays a legitimate answer — a benchmark step
+       * has no plan row, and neither does a change written before this.
+       *
+       * It touches no idempotency: the unique index is on
+       * `(project_id, execution_identity)`, and an agent's identity is
+       * computed from the run and the candidate digest.
+       */
+      const lineage = await resolveSpecLineage(deps.supabase, spec.spec);
+
       const claim = await claimPreparedChange(deps.supabase, {
         projectId: run.projectId,
         userId: run.userId,
         operationRunId: operationId,
-        // An agentic change traces to a plan step, not to an opportunity set.
-        // The spec carries the Move it descends from, and the columns are
-        // nullable for exactly this case.
-        opportunitySetId: null,
-        opportunityId: null,
+        opportunitySetId: lineage?.opportunitySetId ?? null,
+        opportunityId: lineage?.opportunityId ?? null,
         capability: AGENTIC_EXECUTION_CAPABILITY,
         capabilityVersion: capabilityVersionFor(AGENTIC_EXECUTION_CAPABILITY),
         repositorySnapshotId: spec.spec.repository.repositorySnapshotId,

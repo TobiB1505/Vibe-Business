@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { openPostMergeRecord } from "./change-surface";
 
 /**
  * The Business impact panel, in a real browser (Sprint 12B §40).
@@ -25,6 +26,19 @@ import { expect, test, type Page } from "@playwright/test";
  * states come from fixtures — the same gap Sprint 11C.1 documented, still real.
  */
 
+/**
+ * One navigation, with the post-merge record open.
+ *
+ * The panels this suite asserts live behind *After the merge* on the surface
+ * the product draws — see `openPostMergeRecord`. They were unfolded until
+ * `ChangeGates` was deleted, and that component was reachable on the fixture
+ * route alone.
+ */
+async function openChange(page: Page, scenario: string): Promise<void> {
+  await page.goto(`/e2e/${scenario}`);
+  await openPostMergeRecord(page);
+}
+
 function impactSection(page: Page) {
   // The direct-child heading disambiguates: the panels are nested `<section>`s,
   // so "a section containing a Business impact heading" would match the wrapper.
@@ -42,7 +56,17 @@ function impactTrackingSection(page: Page) {
 }
 
 function rationaleSection(page: Page) {
-  return page.locator('section:has(> div > h4:text-is("What Vibe changed"))');
+  /*
+   * Scoped to the decision surface. This route mounts both compositions the
+   * product mounts — `AgentPreviewActions` and `AgentReviewDecision`, see
+   * `[scenario]/page.tsx` — because a panel suite needs every gate for a card
+   * and the product shows one stage at a time. Both carry the change's
+   * meaning, so an unscoped lookup finds two; the one that matters is the one
+   * above the approval.
+   */
+  return page
+    .getByTestId("agent-review-decision")
+    .locator('section:has(> div > h4:text-is("What Vibe changed"))');
 }
 
 /**
@@ -71,7 +95,7 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
 test.describe("no source connected — the real state today", () => {
   test("shows a quiet tracking note, never a prominent failure state", async ({ page }) => {
     const external = await forbidExternalCalls(page);
-    await page.goto("/e2e/business_impact_source_required");
+    await openChange(page, "business_impact_source_required");
 
     // The 12C cleanup: measurement is infrastructure and must not dominate.
     // Every project in existence is in this state, and it is not news.
@@ -96,7 +120,7 @@ test.describe("no source connected — the real state today", () => {
   test("explains the change instead, without any measurement", async ({ page }) => {
     // §11's target: what changed → why it matters → what was verified. None of
     // it needs an analytics connection to exist.
-    await page.goto("/e2e/business_impact_source_required");
+    await openChange(page, "business_impact_source_required");
 
     const rationale = rationaleSection(page);
     await expect(rationale).toContainText("sitemap");
@@ -111,7 +135,7 @@ test.describe("no source connected — the real state today", () => {
   });
 
   test("never asks the user to connect a provider to finish a change", async ({ page }) => {
-    await page.goto("/e2e/business_impact_source_required");
+    await openChange(page, "business_impact_source_required");
 
     for (const cta of ["Connect Search Console", "Connect analytics", "Set up analytics"]) {
       await expect(page.getByRole("button", { name: cta })).toHaveCount(0);
@@ -119,7 +143,7 @@ test.describe("no source connected — the real state today", () => {
   });
 
   test("offers no connect button, because no connector exists", async ({ page }) => {
-    await page.goto("/e2e/business_impact_source_required");
+    await openChange(page, "business_impact_source_required");
 
     await expect(page.getByRole("button", { name: "Connect analytics" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Start measuring" })).toHaveCount(0);
@@ -128,7 +152,7 @@ test.describe("no source connected — the real state today", () => {
 
 test.describe("waiting for the window", () => {
   test("shows both windows and when a result becomes available", async ({ page }) => {
-    await page.goto("/e2e/business_impact_scheduled");
+    await openChange(page, "business_impact_scheduled");
     const impact = impactSection(page);
 
     await expect(impact.getByText("Measurement scheduled")).toBeVisible();
@@ -142,7 +166,7 @@ test.describe("waiting for the window", () => {
   });
 
   test("states no result while waiting", async ({ page }) => {
-    await page.goto("/e2e/business_impact_scheduled");
+    await openChange(page, "business_impact_scheduled");
     const impact = impactSection(page);
 
     await expect(impact.getByTestId("business-impact-values")).toHaveCount(0);
@@ -153,7 +177,7 @@ test.describe("waiting for the window", () => {
 
 test.describe("measuring", () => {
   test("reports complete days, never a percentage or a verdict", async ({ page }) => {
-    await page.goto("/e2e/business_impact_measuring");
+    await openChange(page, "business_impact_measuring");
     const impact = impactSection(page);
 
     await expect(impact.getByText("Collecting post-change data")).toBeVisible();
@@ -166,7 +190,7 @@ test.describe("measuring", () => {
 test.describe("improved", () => {
   test("shows before, after and the observed change", async ({ page }) => {
     const external = await forbidExternalCalls(page);
-    await page.goto("/e2e/business_impact_improved");
+    await openChange(page, "business_impact_improved");
     const impact = impactSection(page);
 
     await expect(impact.locator('p:text-is("Improved")')).toBeVisible();
@@ -182,7 +206,7 @@ test.describe("improved", () => {
   });
 
   test("carries the disclaimer that denies causation", async ({ page }) => {
-    await page.goto("/e2e/business_impact_improved");
+    await openChange(page, "business_impact_improved");
     const impact = impactSection(page);
 
     await expect(impact).toContainText(
@@ -191,7 +215,7 @@ test.describe("improved", () => {
   });
 
   test("never claims the change caused the movement", async ({ page }) => {
-    await page.goto("/e2e/business_impact_improved");
+    await openChange(page, "business_impact_improved");
     const body = page.locator("body");
 
     for (const forbidden of [
@@ -209,7 +233,7 @@ test.describe("improved", () => {
 
 test.describe("degraded", () => {
   test("shows the negative result as fully as a positive one", async ({ page }) => {
-    await page.goto("/e2e/business_impact_degraded");
+    await openChange(page, "business_impact_degraded");
     const impact = impactSection(page);
 
     await expect(impact.locator('p:text-is("Degraded")')).toBeVisible();
@@ -222,7 +246,7 @@ test.describe("degraded", () => {
   });
 
   test("offers no revert, rollback or redeploy (§28)", async ({ page }) => {
-    await page.goto("/e2e/business_impact_degraded");
+    await openChange(page, "business_impact_degraded");
 
     for (const forbidden of ["Revert", "Roll back", "Undo", "Redeploy", "Deploy", "Re-merge"]) {
       await expect(page.getByRole("button", { name: forbidden })).toHaveCount(0);
@@ -232,7 +256,7 @@ test.describe("degraded", () => {
   test("does not rewrite the merge or the production outcome (§27)", async ({ page }) => {
     // All three coexist. A bad business result does not unmake what was
     // historically true about delivery or the product.
-    await page.goto("/e2e/business_impact_degraded");
+    await openChange(page, "business_impact_degraded");
 
     const merge = page.locator('section:has(> h4:text-is("Merge"))');
     const outcome = page.locator('section:has(> h4:text-is("Outcome"))');
@@ -244,7 +268,7 @@ test.describe("degraded", () => {
 
 test.describe("insufficient data", () => {
   test("says what was needed and what was seen, and is not a result", async ({ page }) => {
-    await page.goto("/e2e/business_impact_insufficient");
+    await openChange(page, "business_impact_insufficient");
     const impact = impactSection(page);
 
     await expect(impact.getByText("Insufficient data")).toBeVisible();
@@ -265,7 +289,7 @@ test.describe("insufficient data", () => {
 
 test.describe("the three levels stay separate on screen (§33)", () => {
   test("the ladder reflects the real business state, not a constant", async ({ page }) => {
-    await page.goto("/e2e/business_impact_improved");
+    await openChange(page, "business_impact_improved");
     const ladder = page.getByTestId("outcome-ladder");
 
     await expect(ladder).toContainText("Merged");
@@ -275,7 +299,7 @@ test.describe("the three levels stay separate on screen (§33)", () => {
   });
 
   test("the ladder says not measured when nothing is connected", async ({ page }) => {
-    await page.goto("/e2e/business_impact_source_required");
+    await openChange(page, "business_impact_source_required");
     const ladder = page.getByTestId("outcome-ladder");
 
     await expect(ladder).toContainText("Not measured — no source");
@@ -307,21 +331,29 @@ test.describe("nothing anywhere claims a deployment or an automatic action", () 
 
 test.describe("reload recovery", () => {
   test("a degraded result is still degraded after a full reload", async ({ page }) => {
-    await page.goto("/e2e/business_impact_degraded");
+    await openChange(page, "business_impact_degraded");
     const impact = impactSection(page);
     await expect(impact.locator('p:text-is("Degraded")')).toBeVisible();
 
     await page.reload();
+    /* A native `details` resets on reload, which is the point rather than a
+       nuisance: what has to survive is the server's answer, not the panel's
+       open state. */
+    await openPostMergeRecord(page);
 
     await expect(impact.locator('p:text-is("Degraded")')).toBeVisible();
     await expect(impact.getByTestId("business-impact-values")).toContainText("−11.5%");
   });
 
   test("an unmeasured change still explains itself after a reload", async ({ page }) => {
-    await page.goto("/e2e/business_impact_source_required");
+    await openChange(page, "business_impact_source_required");
     await expect(rationaleSection(page)).toContainText("Why this matters");
 
     await page.reload();
+    /* A native `details` resets on reload, which is the point rather than a
+       nuisance: what has to survive is the server's answer, not the panel's
+       open state. */
+    await openPostMergeRecord(page);
 
     await expect(rationaleSection(page)).toContainText("Why this matters");
     await expect(impactTrackingSection(page)).toContainText("has not been measured");
@@ -331,7 +363,7 @@ test.describe("reload recovery", () => {
 
 test.describe("the section is absent until something is merged", () => {
   test("an unmerged prepared change shows no Business impact panel", async ({ page }) => {
-    await page.goto("/e2e/merge_ready");
+    await openChange(page, "merge_ready");
 
     await expect(impactSection(page)).toHaveCount(0);
   });

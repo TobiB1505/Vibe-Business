@@ -555,9 +555,14 @@ describe("the plan hands off to the agent, and the agent points back", () => {
      * and since `launch-v1` it is resolved for the *step* that would run,
      * because the Agent price is per execution pricing class (Sprint 0111).
      * The route set can no longer answer it plan-wide.
+     *
+     * `runCeilingLabel` rather than the formatter it wraps: three surfaces say
+     * this figure now — this page, the start controls, and Nova's thread — and
+     * Nova may not format Credits at all (`nova-ui.test.ts`), so the sentence
+     * lives beside the domain that computes it.
      */
     expect(AGENT_PAGE).toContain("resolveRouteAgentEconomics");
-    expect(AGENT_PAGE).toContain("formatCreditsForDisplay(routeEconomics.budget.maxCredits)");
+    expect(AGENT_PAGE).toContain("runCeilingLabel(routeEconomics.budget.maxCredits)");
     expect(AGENT_READY).toContain("creditEstimate={startAction ? creditEstimate : null}");
     expect(AGENT_PAGE).toContain("agentRoutes.plan.opportunityId === taskOpportunityId");
     expect(AGENT_PAGE).toContain("!agentWorking");
@@ -594,7 +599,20 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(AGENT_STAGE_ACTIONS).toContain("ApprovalPanel");
     expect(AGENT_STAGE_ACTIONS).toContain("MergePanel");
     expect(AGENT_PAGE).not.toContain("AgentPanel");
-    expect(AGENT_PAGE).not.toContain("ChangeGates");
+    /*
+     * And no second review surface anywhere. `ChangeGates` was the one before
+     * this workspace; it kept compiling because the fixture route still
+     * mounted it, so every guarantee asserted against it was being checked on
+     * a screen no founder could reach. The file is gone, and its absence is
+     * the assertion — a path check rather than a substring, because a
+     * reintroduction would not have to reuse the name to be the same mistake.
+     */
+    expect(
+      existsSync(
+        join(process.cwd(), "src/app/app/projects/[projectId]/agent/change-gates.tsx"),
+      ),
+      "a second review surface exists again",
+    ).toBe(false);
   });
 
   it("leaves no legacy Agent run screen at all", () => {

@@ -1,5 +1,6 @@
-# Sprint 0214 — A phone is not a narrow desktop
+# Sprint 0220 — A phone is not a narrow desktop
 
+**Renumbered:** written as 0214 on 2026-09-10, moved to 0220 on 2026-09-11 — `main` had meanwhile numbered its own sprint 0214 ([THE SCREEN NO FOUNDER COULD REACH](0214-the-screen-no-founder-could-reach.md)), and two records cannot share a number. The work and its date are unchanged; this is the second such collision on this branch, after 0166.
 **Date:** 2026-09-10
 **Decision:** [ADR 0108](../decisions/0108-a-phone-is-not-a-narrow-desktop.md). The shell only; the screens follow.
 

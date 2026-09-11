@@ -116,6 +116,95 @@ describe("Nova Home view", () => {
     expect(view.primary.detail).toBe("Two files changed");
   });
 
+  /**
+   * One change on screen, and the rest counted.
+   *
+   * A founder's phone showed the pile this removes: nothing ages a change out
+   * of the ranking, so a month of agent runs is a month of moments, and the
+   * secondary ones render as sentences with no controls. Five of them said
+   * *"There is a change waiting for you to look at."* and not one said which.
+   *
+   * The ranking is deliberately not where this happens — `focus.test.ts` holds
+   * the invariant that everything true is either primary or secondary, and it
+   * is right. These assert the view's side of that line.
+   */
+  describe("the change queue", () => {
+    function change(stage: "awaiting_approval" | "merged" | "validation_failed", id: string) {
+      return { preparedChangeId: id, stage, headline: `headline for ${id}` } as const;
+    }
+
+    it("raises one change and counts the others", () => {
+      const view = viewOf({
+        changes: [
+          change("awaiting_approval", "change-a"),
+          change("awaiting_approval", "change-b"),
+          change("merged", "change-c"),
+        ],
+      });
+
+      expect(view.primary.kind).toBe("review_change");
+      expect(view.secondary.filter((entry) => "preparedChangeId" in entry.candidate)).toEqual([]);
+      expect(view.changesWaiting).toBe(2);
+    });
+
+    /*
+     * The count is not a substitute for the ranking's ordering: the change
+     * raised is the first one the domain sorted, and a failed validation
+     * outranks a change awaiting review.
+     */
+    it("raises the change the ranking put first", () => {
+      const view = viewOf({
+        changes: [change("awaiting_approval", "change-a"), change("validation_failed", "change-b")],
+      });
+
+      expect(view.primary.kind).toBe("validation_failed");
+      expect(view.primary.candidate).toMatchObject({ preparedChangeId: "change-b" });
+      expect(view.changesWaiting).toBe(1);
+    });
+
+    /*
+     * When something else leads, the top change is still shown — it moves into
+     * the secondary list rather than being counted away. Collapsing to a count
+     * whenever the primary was not a change would hide the only change a
+     * founder has.
+     */
+    it("still shows the top change when another moment leads", () => {
+      const view = viewOf({
+        sourceDisconnected: true,
+        changes: [change("awaiting_approval", "change-a"), change("awaiting_approval", "change-b")],
+      });
+
+      expect(view.primary.kind).toBe("source_disconnected");
+      expect(
+        view.secondary.filter((entry) => "preparedChangeId" in entry.candidate).map((e) => e.kind),
+      ).toEqual(["review_change"]);
+      expect(view.changesWaiting).toBe(1);
+    });
+
+    it("counts nothing when there is one change or none", () => {
+      expect(viewOf({ changes: [change("awaiting_approval", "change-a")] }).changesWaiting).toBe(0);
+      expect(viewOf().changesWaiting).toBe(0);
+    });
+
+    /* Non-change moments are never collapsed: they are different sentences
+       about different things, and each one is somebody's next step. The change
+       that survives keeps the position the ranking gave it, between them. */
+    it("leaves every other moment where the ranking put it", () => {
+      const view = viewOf({
+        changes: [change("awaiting_approval", "change-a"), change("awaiting_approval", "change-b")],
+        auditOutdated: true,
+        workspaceChoiceRequired: true,
+      });
+
+      expect(view.primary.kind).toBe("workspace_choice_required");
+      expect(view.secondary.map((entry) => entry.kind)).toEqual([
+        "review_change",
+        "audit_outdated",
+      ]);
+      expect(view.changesWaiting).toBe(1);
+    });
+  });
+
   describe("waiting is never working", () => {
     it("reports a paused operation as waiting on the founder", () => {
       const view = viewOf({
@@ -197,18 +286,21 @@ describe("Nova Home view", () => {
       expect(view.primary.control.kind).toBe("gate");
       if (view.primary.control.kind === "gate") {
         expect(view.primary.control.preparedChangeId).toBe("change-1");
-        expect(view.primary.control.stage).toBe("review");
       }
       // No verb of its own. The gates carry every control this moment has.
       expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
     /*
-     * A failed validation is the one change moment decided at a different
-     * gate, and getting it wrong would show a founder the approval and merge
-     * panels for a change that has not passed its checks.
+     * A failed validation is still decided in the change's gate — the control
+     * kind says so — and *which* screen that gate draws is no longer decided
+     * here. It cannot be: `review_required` and `awaiting_approval` are one
+     * candidate kind and opposite states. `change-stage-view.test.ts` holds
+     * that mapping and the guarantee that used to live in this assertion:
+     * a change that failed its checks is never shown the approval and merge
+     * panels.
      */
-    it("opens the validation gate for a change that failed its checks", () => {
+    it("decides a failed validation through the change's own gate too", () => {
       const view = viewOf({
         changes: [
           { preparedChangeId: "change-2", stage: "validation_failed", headline: "Checks failed" },
@@ -217,7 +309,8 @@ describe("Nova Home view", () => {
 
       expect(view.primary.kind).toBe("validation_failed");
       if (view.primary.control.kind !== "gate") throw new Error("expected a gate");
-      expect(view.primary.control.stage).toBe("validate");
+      expect(view.primary.control.preparedChangeId).toBe("change-2");
+      expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
     /*
@@ -270,19 +363,23 @@ describe("Nova Home view", () => {
     });
 
     /*
-     * The one that is still genuinely missing an argument, and the only entry
-     * left in ELSEWHERE. `read.ts` fixes `executableStep` at null until the
-     * execution resolver is wired, so this state cannot presently arise at all
-     * — the routing is asserted here so it stays honest the day it can.
+     * The last entry in ELSEWHERE, and the argument that held it there is the
+     * thing this now asserts the other way round.
+     *
+     * It was `elsewhere` because a build is two pieces of work at two prices
+     * and Home was offering neither. It is `offer` because `AgentReadyStage`
+     * shows both — so the requirement is met rather than routed around, and
+     * `novaControlLabel` returns null because the block carries the buttons.
+     *
+     * A label here would be the regression: it would mean a link off Home
+     * came back, beside an offer Home is already holding.
      */
-    it("still sends a build to the plan, which holds the step", () => {
+    it("offers the build here, with the block carrying both prices", () => {
       const view = viewOf({ executableStep: { order: 2, title: "Add the pricing page" } });
 
       expect(view.primary.kind).toBe("execution_offered");
-      expect(view.primary.control.kind).toBe("elsewhere");
-      if (view.primary.control.kind === "elsewhere") {
-        expect(view.primary.control.section).toBe("action-plan");
-      }
+      expect(view.primary.control.kind).toBe("offer");
+      expect(novaControlLabel(view.primary.control)).toBeNull();
     });
 
     it("gives a label to every control that has one, and none to a card", () => {
@@ -355,9 +452,7 @@ describe("Nova Home view", () => {
       headline: "Look",
     };
 
-    expect(viewOf({ changes: [change] }).primary.id).toBe(
-      viewOf({ changes: [change] }).primary.id,
-    );
+    expect(viewOf({ changes: [change] }).primary.id).toBe(viewOf({ changes: [change] }).primary.id);
     expect(viewOf({ changes: [change] }).primary.id).toContain("change-1");
   });
 });

@@ -167,7 +167,7 @@ export function AgentFileActivity({
           it. Every event is here; the list simply opens.
         */
         <details className="group border-line-2 border-t pt-3.5">
-          <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-ui">
+          <summary className="text-fg-muted hover:text-fg-body vibe-tap marker:content-none flex w-fit cursor-pointer items-center gap-2 text-ui">
             <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
             <span className="group-open:hidden">
               Show {remaining} more {remaining === 1 ? "change" : "changes"}

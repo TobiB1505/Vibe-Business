@@ -87,3 +87,80 @@ test.describe("a change that alters a page", () => {
     await expect(panel(page, "What changed")).toContainText("Preview and code diff");
   });
 });
+
+/**
+ * An agent change, exactly as the agent writes one.
+ *
+ * The state a founder reached on a phone, which no fixture held: no written
+ * rationale and no origin, because the branch step stores both ids as null —
+ * *"an agentic change traces to a plan step, not to an opportunity set"*.
+ * Every change the product makes today has this shape.
+ *
+ * What shipped for it was a bordered, padded band with nothing in it, between
+ * the preview controls and the diff. A separator around an absence is worse
+ * than the absence, and it is the kind of thing only a render finds: the
+ * component returned nothing and the frame around it did not know.
+ */
+test.describe("an agent change with nothing to say about itself", () => {
+  test("draws no frame around the absence", async ({ page }) => {
+    await page.goto("/e2e/change_agentic_no_origin");
+
+    const actions = page.getByTestId("agent-preview-actions");
+    await expect(actions).toBeVisible();
+
+    /* The two headings the meaning would have carried, and neither is here. */
+    await expect(actions.getByText("What Vibe changed")).toHaveCount(0);
+    await expect(actions.getByText("What this change was for")).toHaveCount(0);
+
+    /*
+     * And no empty box between the controls and the diff. Measured rather than
+     * looked at: every direct child of the actions panel has content, so there
+     * is no bordered band standing for nothing.
+     */
+    const empty = await actions.evaluate((panel) =>
+      [...panel.children].filter((child) => (child.textContent ?? "").trim() === "").length,
+    );
+    expect(empty).toBe(0);
+  });
+
+  /**
+   * And no rule immediately above another rule.
+   *
+   * Removing the empty frame left the pair it had been hiding:
+   * `ChangeDiffSection` opens with its own `border-t`, and the wrapper around
+   * it drew one too — two separators thirty-two pixels apart with nothing
+   * between them. Measured, because "it looks like one line" is exactly the
+   * judgement a screenshot at one width gets wrong.
+   */
+  /* Both shapes: the one with nothing to say, and the one that says it. The
+     second is where the rule came back — a wrapper's border only doubles up
+     once its contents exist. `test.for` is not in this Playwright version's
+     types, so the loop is written out. */
+  for (const scenario of ["change_agentic_no_origin", "change_agentic_review_required"]) {
+    test(`never draws two separators in a row (${scenario})`, async ({ page }) => {
+      await page.goto(`/e2e/${scenario}`);
+
+      const tops = await page.getByTestId("agent-preview-actions").evaluate((panel) =>
+        [...panel.querySelectorAll("*")]
+          .filter((el) => parseFloat(getComputedStyle(el).borderTopWidth) > 0)
+          .map((el) => Math.round(el.getBoundingClientRect().top))
+          .sort((a, b) => a - b),
+      );
+
+      for (let i = 1; i < tops.length; i += 1) {
+        expect(
+          tops[i]! - tops[i - 1]!,
+          `two separators ${tops[i]! - tops[i - 1]!}px apart`,
+        ).toBeGreaterThan(48);
+      }
+    });
+  }
+
+  /* The deterministic path is untouched: a change with an origin still shows it. */
+  test("still shows the origin on a change that has one", async ({ page }) => {
+    await page.goto("/e2e/change_agentic_review_required");
+
+    const actions = page.getByTestId("agent-preview-actions");
+    await expect(actions.getByText("What this change was for")).toBeVisible();
+  });
+});

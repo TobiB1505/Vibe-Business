@@ -35,7 +35,8 @@ describe("a completed change needs no analytics connection", () => {
       "change-rationale.tsx",
       "business-impact-panel.tsx",
       "outcome-panel.tsx",
-      "agent/change-gates.tsx",
+      "agent/change-meaning.tsx",
+      "agent/agent-stage-actions.tsx",
     ]) {
       const src = source(file);
       for (const forbidden of ["Search Console", "searchConsole", "Connect analytics", "OAuth"]) {
@@ -109,9 +110,24 @@ describe("the three concepts stay separate (§7)", () => {
   });
 
   it("orders them what changed → why → verified", () => {
-    const section = source("agent/change-gates.tsx");
+    /*
+     * [2026-09-10] Asserted across two files instead of one, because
+     * `agent/change-gates.tsx` was deleted. The rationale now sits in
+     * `agent/change-meaning.tsx` and is mounted by the stage actions, which
+     * hold the outcome and the impact — so the ordering claim is the same and
+     * the surface it is made on is the one a founder reaches.
+     *
+     * The last mount rather than the first: the rationale is drawn on the
+     * preview surface and again on the decision surface (a change reaches one
+     * or the other, never both), and both must precede the post-merge record.
+     */
+    const meaning = source("agent/change-meaning.tsx");
+    expect(meaning).toContain("<ChangeRationale");
 
-    expect(section.indexOf("<ChangeRationale")).toBeLessThan(section.indexOf("<OutcomePanel"));
+    const section = source("agent/agent-stage-actions.tsx");
+    expect(section.lastIndexOf("<AgentChangeMeaning")).toBeLessThan(
+      section.indexOf("<OutcomePanel"),
+    );
     expect(section.indexOf("<OutcomePanel")).toBeLessThan(section.indexOf("<BusinessImpactPanel"));
   });
 });
