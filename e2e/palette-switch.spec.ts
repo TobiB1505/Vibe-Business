@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * The switch that makes the redesign checkable.
@@ -26,24 +26,45 @@ import { expect, test } from "@playwright/test";
 
 const SCREEN = "/e2e/account-repositories";
 
+/**
+ * The palette this build renders, read from the page rather than assumed.
+ *
+ * These tests used to name `v1` outright, on the reasoning that the suite's
+ * server set no `VIBE_PALETTE`. It sets `v2` now (UI-37), and the honest
+ * reading is that naming either was always the wrong shape: what this file is
+ * about is the *switch* — that it moves the product away from whatever is
+ * deployed, says so, and lets you back. Which palette is deployed is a
+ * deployment's business.
+ */
+async function deployed(page: Page): Promise<"v1" | "v2"> {
+  const value = await page.locator("html").getAttribute("data-vibe");
+  expect(value, "the deployment writes its palette in both states").toMatch(/^v[12]$/);
+  return value as "v1" | "v2";
+}
+
+/** The one this build does *not* render, which is what the switch reaches. */
+const other = (palette: "v1" | "v2") => (palette === "v1" ? "v2" : "v1");
+
 test.describe("the palette can be flipped without a redeploy", () => {
   test("starts on what the deployment renders", async ({ page }) => {
     await page.goto(SCREEN);
-    // Playwright's server sets no VIBE_PALETTE, so this is the customer's
-    // palette — and the attribute is written in both states on purpose.
-    await expect(page.locator("html")).toHaveAttribute("data-vibe", "v1");
-    await expect(page.getByRole("radio", { name: "v1" })).toBeChecked();
+
+    // Whatever it is, the control agrees with the document about it.
+    const current = await deployed(page);
+    await expect(page.getByRole("radio", { name: current })).toBeChecked();
+    await expect(page.getByText("local override")).toHaveCount(0);
   });
 
   test("changes the product, and says the view is a local override", async ({ page }) => {
     await page.goto(SCREEN);
+    const away = other(await deployed(page));
 
     const before = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--radius-card").trim(),
     );
-    await page.getByRole("group", { name: "Design system" }).getByText("v2").click();
+    await page.getByRole("group", { name: "Design system" }).getByText(away).click();
 
-    await expect(page.locator("html")).toHaveAttribute("data-vibe", "v2");
+    await expect(page.locator("html")).toHaveAttribute("data-vibe", away);
     const after = await page.evaluate(() =>
       getComputedStyle(document.documentElement).getPropertyValue("--radius-card").trim(),
     );
@@ -57,24 +78,26 @@ test.describe("the palette can be flipped without a redeploy", () => {
 
   test("survives a reload, and the first paint is already right", async ({ page }) => {
     await page.goto(SCREEN);
-    await page.getByRole("group", { name: "Design system" }).getByText("v2").click();
-    await expect(page.locator("html")).toHaveAttribute("data-vibe", "v2");
+    const away = other(await deployed(page));
+    await page.getByRole("group", { name: "Design system" }).getByText(away).click();
+    await expect(page.locator("html")).toHaveAttribute("data-vibe", away);
 
     // `domcontentloaded`, not `load`: the claim is that the blocking script in
     // <head> has already applied the override by the time the document is
     // parsed. Waiting for the page to settle would let a late effect pass.
     await page.reload({ waitUntil: "domcontentloaded" });
-    await expect(page.locator("html")).toHaveAttribute("data-vibe", "v2");
+    await expect(page.locator("html")).toHaveAttribute("data-vibe", away);
   });
 
   test("flips back, and stops being an override", async ({ page }) => {
     await page.goto(SCREEN);
+    const home = await deployed(page);
     const group = page.getByRole("group", { name: "Design system" });
-    await group.getByText("v2").click();
+    await group.getByText(other(home)).click();
     await expect(page.getByText("local override")).toBeVisible();
 
-    await group.getByText("v1").click();
-    await expect(page.locator("html")).toHaveAttribute("data-vibe", "v1");
+    await group.getByText(home).click();
+    await expect(page.locator("html")).toHaveAttribute("data-vibe", home);
     // Back on the deployment's own palette, so there is nothing to warn about.
     await expect(page.getByText("local override")).toHaveCount(0);
   });

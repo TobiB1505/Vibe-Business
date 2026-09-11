@@ -84,11 +84,15 @@ export function BuyCreditPackForm({
   return (
     <form action={action} noValidate className="px-5 py-4 sm:px-6">
       <input type="hidden" name="pack" value={packKey} />
-      <div className="flex items-center justify-between gap-4">
+      {/*
+        Stacked on a phone (UI-36). `justify-between` with a `shrink-0`
+        right column left the plan's description 147px wide at 390 — the
+        right column takes what it needs and this one takes what is left,
+        which on a phone is not enough to read a sentence in.
+      */}
+      <div className="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch">
         <div className="min-w-0">
-          <p className="text-fg font-semibold tabular-nums">
-            {credits} Credits
-          </p>
+          <p className="text-fg font-semibold tabular-nums">{credits} Credits</p>
           {/*
             The price moved into the button (UI-29, treatment B). It was here
             *and* two hundred pixels to the right; a price printed twice is a
@@ -97,11 +101,7 @@ export function BuyCreditPackForm({
           <p className="text-fg-muted mt-1 text-body">one time</p>
         </div>
         {disabled ? (
-          <button
-            type="button"
-            disabled
-            className={buttonClasses({ variant: "secondary" })}
-          >
+          <button type="button" disabled className={buttonClasses({ variant: "secondary" })}>
             Unavailable
           </button>
         ) : (
@@ -161,7 +161,13 @@ export function StartPlanForm({
   return (
     <form action={action} noValidate className="px-5 py-4 sm:px-6">
       <input type="hidden" name="plan" value={planKey} />
-      <div className="flex items-center justify-between gap-4">
+      {/*
+        Stacked on a phone (UI-36). `justify-between` with a `shrink-0`
+        right column left the plan's description 147px wide at 390 — the
+        right column takes what it needs and this one takes what is left,
+        which on a phone is not enough to read a sentence in.
+      */}
+      <div className="flex items-center justify-between gap-4 max-sm:flex-col max-sm:items-stretch">
         <div className="min-w-0">
           <p className="text-fg font-semibold">{planName}</p>
           <p className="text-fg-muted mt-1 text-body">{price}</p>
@@ -175,18 +181,14 @@ export function StartPlanForm({
             Current<span className="sr-only"> plan</span>
           </StatusPill>
         ) : disabled ? (
-          <button
-            type="button"
-            disabled
-            className={buttonClasses({ variant: "secondary" })}
-          >
+          <button type="button" disabled className={buttonClasses({ variant: "secondary" })}>
             Unavailable
           </button>
         ) : (
           // `whitespace-nowrap`: "Choose Builder" wrapped to two lines in the
           // narrow plans column, giving each plan a two-line button beside a
           // one-line price.
-          <div className="flex shrink-0 flex-col items-end gap-2">
+          <div className="flex shrink-0 flex-col items-end gap-2 max-sm:items-stretch">
             <SubmitButton
               variant="secondary"
               pendingLabel="Opening…"

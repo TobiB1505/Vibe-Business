@@ -3,6 +3,8 @@ import { existsSync } from "node:fs";
 import { chromium, defineConfig, devices } from "@playwright/test";
 
 import { resolveChromiumExecutable } from "./src/lib/test/playwright-browser";
+import { OPTIONAL_CATEGORIES } from "./src/modules/consent/categories";
+import { CONSENT_VERSION, encodeConsent } from "./src/modules/consent/record";
 
 /**
  * Thrown rather than returned is the same answer: the registry cannot say
@@ -94,7 +96,27 @@ export default defineConfig({
       cookies: [
         {
           name: "vibe-consent",
-          value: "v1.000.1757246400",
+          /*
+            Built by the product, not typed out here (UI-37).
+            
+            It was the literal `"v1.000.1757246400"`, and that string is only
+            an answer while `CONSENT_VERSION` is 1 and there are exactly three
+            optional categories. Raise the version — which `record.ts` tells
+            you to do whenever the list gains something loaded — and every spec
+            in this suite silently gets the banner back.
+
+            That is not a cosmetic failure. The banner is `fixed bottom-0
+            z-50`; on a phone it lands on the tab bar and intercepts every tap
+            on the navigation (UI-35). A drifted constant here would have
+            turned one forgotten increment into a suite-wide mystery.
+          */
+          value: encodeConsent({
+            version: CONSENT_VERSION,
+            choices: Object.fromEntries(
+              OPTIONAL_CATEGORIES.map((category) => [category, false]),
+            ) as Parameters<typeof encodeConsent>[0]["choices"],
+            decidedAt: 1_757_246_400,
+          }),
           domain: "127.0.0.1",
           path: "/",
           expires: -1,
@@ -134,8 +156,17 @@ export default defineConfig({
     // neutral password-reset confirmation. Those are covered by unit tests and
     // must be dogfooded against a real project; see
     // docs/setup/supabase-auth.md.
+    //
+    // `VIBE_PALETTE=v2` is the palette the product is being designed in, and
+    // the suite ran without it — so every browser test in this repository was
+    // checking v1 (UI-37). That is not a small difference: measured on one
+    // screen at one width on one build, a paragraph is 256px in v1 and **five
+    // pixels** in v2, because the two palettes give a flex row different
+    // intrinsic widths. A guard written against the shipping design ran
+    // against the one being replaced, and passed its own mutation.
     command:
       "VIBE_E2E_FIXTURES=1 " +
+      "VIBE_PALETTE=v2 " +
       "NEXT_PUBLIC_SUPABASE_URL=https://e2e-placeholder.supabase.co " +
       "NEXT_PUBLIC_SUPABASE_ANON_KEY=e2e-placeholder-anon-key " +
       "pnpm exec next start --port 3311",

@@ -2,11 +2,13 @@ import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { AccountCard } from "@/components/layout/account-card";
+import { MobileAccount } from "@/components/layout/mobile-account";
 import { Wallet } from "@/components/system/wallet";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import type { CreditUnits } from "@/modules/credits/units";
 import { cn } from "@/lib/utils/cn";
+import { activePalette, paletteSwitchable } from "@/app/palette";
 
 /**
  * One rail, for the whole signed-in product (UI-13).
@@ -47,12 +49,53 @@ import { cn } from "@/lib/utils/cn";
  */
 export function AppFrame({ rail, children }: { rail: ReactNode; children: ReactNode }) {
   return (
-    <div className="text-fg-body flex min-h-dvh flex-col lg:flex-row">
+    <div
+      className={cn(
+        "text-fg-body flex min-h-dvh flex-col lg:flex-row",
+        /*
+         * The phone reserves the two bars, and only where there are two bars
+         * to reserve (UI-35).
+         *
+         * `:has()` rather than a prop, for the same reason `empty:hidden`
+         * below is CSS: this layout cannot ask what its slot rendered. A
+         * focused flow with no rail — onboarding, the GitHub connect — draws
+         * no chrome and must not be padded away from the top of the screen as
+         * if it had.
+         */
+        "max-lg:has-[>aside:not(:empty)]:pt-[var(--topbar-h)]",
+        "max-lg:has-[>aside:not(:empty)]:pb-[calc(var(--tabbar-h)+env(safe-area-inset-bottom))]",
+      )}
+    >
       <aside
         data-testid="app-rail"
+        /*
+          The hook `theme-v2.css` needs to take the glass off this element
+          below `lg`. `.vibe-chrome` paints from a stylesheet rule, so a
+          `max-lg:bg-transparent` utility loses to it on specificity — a
+          silent loss, which is why the override is written where the paint is
+          rather than argued with here.
+        */
+        data-rail-layer=""
         className={cn(
           "vibe-chrome border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
           "gap-[var(--rail-gap)]",
+          /*
+           * Below `lg` this stops being a box and becomes a *layer*. Its
+           * children place themselves — a bar at the top, a bar at the bottom,
+           * a control in the corner — so the element itself carries no
+           * surface, no border and no padding, and passes taps straight
+           * through to the page it covers. Each child turns pointer events
+           * back on for itself.
+           *
+           * A layer rather than three separately-mounted fixed elements
+           * because `empty:hidden` is the one thing that decides whether this
+           * product has chrome at all, and it can only decide that about one
+           * element. Everything mobile lives inside it, so a rail-less route
+           * loses the whole of it in one rule, exactly as it always did.
+           */
+          "max-lg:pointer-events-none max-lg:fixed max-lg:inset-0 max-lg:z-40",
+          "max-lg:border-0 max-lg:bg-transparent max-lg:p-0 max-lg:gap-0",
+          "max-lg:backdrop-blur-none",
           /*
            * Sticky rather than a nested scroller. The account surface already
            * scrolled the document and the workspace scrolled a column inside
@@ -94,8 +137,37 @@ export function AppFrame({ rail, children }: { rail: ReactNode; children: ReactN
  */
 export function RailBrand() {
   return (
-    <div className="flex shrink-0 items-center px-1">
-      <Link href="/app" className="rounded-nav" aria-label="Vibe Business — your product">
+    <div
+      /* Paired with `theme-v2.css`: glass below `lg`, nothing above it, where
+         this sits inside the rail's own frosted surface. */
+      data-topbar=""
+      className={cn(
+        "vibe-chrome flex shrink-0 items-center px-1",
+        /*
+          Below `lg` the lockup is the top bar (UI-35). It is the only thing in
+          it: the product's own name is already the page's breadcrumb and its
+          heading, so repeating it here would spend a phone's scarcest measure
+          saying something the screen says twice below.
+
+          The safe-area inset is padding rather than height, so `--topbar-h` is
+          the bar a founder sees and the notch is not counted as chrome.
+        */
+        "max-lg:pointer-events-auto max-lg:fixed max-lg:inset-x-0 max-lg:top-0",
+        "max-lg:border-line-1 max-lg:border-b",
+        "max-lg:h-[calc(var(--topbar-h)+env(safe-area-inset-top))]",
+        "max-lg:pt-[env(safe-area-inset-top)] max-lg:px-4",
+      )}
+    >
+      <Link
+        href="/app"
+        aria-label="Vibe Business — your product"
+        /*
+          The lockup is 26px of artwork and this is a link people tap. Below
+          `lg` the target is the bar's full height, which is the difference
+          between a mark you can hit with a thumb and one you have to aim at.
+        */
+        className="rounded-nav flex items-center max-lg:h-full max-lg:pr-3"
+      >
         <VibeLockup />
       </Link>
     </div>
@@ -129,7 +201,12 @@ export function RailNav({
       style={
         { "--vibe-rail-from": direction === "forward" ? "1.25rem" : "-1.25rem" } as CSSProperties
       }
-      className="vibe-rail-unfold flex min-w-0 flex-col lg:min-h-0 lg:flex-1"
+      /*
+        The list itself is desktop-only now (UI-35): on a phone these sections
+        are the tab bar at the foot of the screen, and drawing both would be
+        two navigations for one set of destinations.
+      */
+      className="vibe-rail-unfold flex min-w-0 flex-col max-lg:hidden lg:min-h-0 lg:flex-1"
     >
       {children}
     </nav>
@@ -236,9 +313,23 @@ export function RailFooter({
   identity: AccountIdentity;
 }) {
   return (
-    <div className="flex shrink-0 flex-col gap-3 lg:pt-[var(--rail-gap)]">
-      <Wallet credits={credits} href="/app/settings/billing" />
-      <AccountCard identity={identity} />
-    </div>
+    <>
+      {/*
+        The rail's foot, desktop only. On a phone both of these are behind the
+        avatar in the corner (UI-35) — not because they matter less, but
+        because they are the *account* and the bar at the bottom is the
+        product. Stacked into one strip they read as one list, and the balance
+        ended up above the founder's own screen.
+      */}
+      <div className="flex shrink-0 flex-col gap-3 max-lg:hidden lg:pt-[var(--rail-gap)]">
+        <Wallet credits={credits} href="/app/settings/billing" />
+        <AccountCard identity={identity} />
+      </div>
+      <MobileAccount
+        credits={credits}
+        identity={identity}
+        palette={paletteSwitchable() ? activePalette() : null}
+      />
+    </>
   );
 }

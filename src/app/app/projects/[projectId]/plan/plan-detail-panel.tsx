@@ -27,10 +27,7 @@ import { isFounderAttestable } from "@/modules/action-plans/completion";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import { agentMoveHref, PLANNED_WORK_ANCHOR } from "@/modules/action-plans/source";
-import type {
-  BlockedActionDestinations,
-  OpportunityActionState,
-} from "@/modules/execution/view";
+import type { BlockedActionDestinations, OpportunityActionState } from "@/modules/execution/view";
 import {
   attestationPrompt,
   PLAN_PROGRESS_LABELS,
@@ -149,10 +146,7 @@ function PlanStepRow({
   return (
     <li
       data-testid="plan-step"
-      className={cn(
-        "border-b last:border-b-0",
-        isCurrent ? "border-mint-line" : "border-line-2",
-      )}
+      className={cn("border-b last:border-b-0", isCurrent ? "border-mint-line" : "border-line-2")}
     >
       <details className="group/step">
         <summary
@@ -202,7 +196,18 @@ function PlanStepRow({
           />
         </summary>
 
-        <div className="flex flex-col gap-4 px-2 pt-1 pb-5 pl-12">
+        {/*
+          The hanging indent is `pl-12` so an opened step's body lines up under
+          its title rather than under its number. That is right where there is
+          room for it, and on a phone it is a third of the line: measured at
+          390, this text ran 202px — twenty-nine characters — inside a well
+          that already starts 57px in.
+
+          `max-sm:pl-4` keeps enough indent to say the body belongs to the step
+          above it and gives the sentence back its measure. Alignment is worth
+          less than being able to read the thing that is aligned.
+        */}
+        <div className="flex flex-col gap-4 px-2 pt-1 pb-5 pl-12 max-sm:pl-4">
           <p className="text-fg-muted text-body leading-relaxed">{step.description}</p>
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -230,7 +235,9 @@ function PlanStepRow({
             </div>
             <div className="flex flex-col gap-1">
               <MonoLabel className="tracking-[0.14em]">Done when</MonoLabel>
-              <p className="text-fg-secondary text-body leading-relaxed">{step.completionCriteria}</p>
+              <p className="text-fg-secondary text-body leading-relaxed">
+                {step.completionCriteria}
+              </p>
             </div>
           </div>
 
@@ -244,7 +251,9 @@ function PlanStepRow({
           )}
 
           {step.requiresApproval && (
-            <p className="text-fg-muted text-caption">Approval required before Vibe acts on this.</p>
+            <p className="text-fg-muted text-caption">
+              Approval required before Vibe acts on this.
+            </p>
           )}
         </div>
       </details>
@@ -285,7 +294,8 @@ function PlanBody({
   onFounderResolved: () => void;
 }) {
   const reduceMotion = useReducedMotion();
-  const { plan, firstActionableStep, completedStepOrders, founderInputRequest, progress } = planView;
+  const { plan, firstActionableStep, completedStepOrders, founderInputRequest, progress } =
+    planView;
   const steps = [...plan.steps].sort((a, b) => a.order - b.order);
   const completed = new Set(completedStepOrders);
   /* Serialized as an object across the server boundary; a Map here because the
@@ -363,7 +373,9 @@ function PlanBody({
             {moveEyebrow && (
               <MonoLabel className="text-amber tracking-[0.14em]">{moveEyebrow}</MonoLabel>
             )}
-            <h3 className="text-fg text-moment leading-tight font-semibold">Vibe needs your input</h3>
+            <h3 className="text-fg text-moment leading-tight font-semibold">
+              Vibe needs your input
+            </h3>
             <p className="text-fg-muted text-body leading-relaxed">
               Answer the current question so Vibe can finish planning{" "}
               {moveTitle ? `“${moveTitle}”` : "this move"}.
@@ -376,9 +388,7 @@ function PlanBody({
               animate={{ opacity: 1, x: 0 }}
               exit={reduceMotion ? undefined : { opacity: 0, x: -10 }}
               transition={
-                reduceMotion
-                  ? { duration: 0 }
-                  : { duration: 0.36, ease: [0.22, 0.72, 0.18, 1] }
+                reduceMotion ? { duration: 0 } : { duration: 0.36, ease: [0.22, 0.72, 0.18, 1] }
               }
             >
               <FounderInputCard
@@ -758,7 +768,8 @@ export function PlanDetailPanel({
 
   const operation = freshestOperation(polled ?? activeOperation, startedOperation);
 
-  const running = operation !== null && (operation.status === "queued" || operation.status === "running");
+  const running =
+    operation !== null && (operation.status === "queued" || operation.status === "running");
   const blockNotice = buildActionPlanBlockNotice(readiness.blockedReason);
   const blockHref =
     blockNotice?.target === "business_audit"
@@ -829,12 +840,18 @@ export function PlanDetailPanel({
       )}
 
       {whyThisMove ? (
-        <section className="border-line-2 flex flex-col gap-2 border-b pb-6" aria-labelledby="why-this-move">
-          <h3 id="why-this-move" className="text-fg text-title font-semibold">Why this move</h3>
+        <section
+          className="border-line-2 flex flex-col gap-2 border-b pb-6"
+          aria-labelledby="why-this-move"
+        >
+          <h3 id="why-this-move" className="text-fg text-title font-semibold">
+            Why this move
+          </h3>
           <ExpandableText text={whyThisMove} />
           {lineageHeadline ? (
             <p className="text-fg-muted text-caption leading-relaxed" data-testid="move-lineage">
-              <span className="text-fg-meta">From your audit: </span>{lineageHeadline}
+              <span className="text-fg-meta">From your audit: </span>
+              {lineageHeadline}
             </p>
           ) : null}
         </section>
@@ -888,8 +905,8 @@ export function PlanDetailPanel({
             <div className="flex flex-col gap-1.5">
               <h3 className="text-fg text-moment font-semibold">Ready for the next step</h3>
               <p className="text-fg-prose text-body leading-relaxed">
-                Vibe has enough grounded context to act on this Move. Review the action below
-                before anything is prepared.
+                Vibe has enough grounded context to act on this Move. Review the action below before
+                anything is prepared.
               </p>
             </div>
           ) : (
@@ -914,7 +931,11 @@ export function PlanDetailPanel({
         </motion.div>
       </AnimatePresence>
 
-      {!running && !planView?.founderInputRequest && executionOwnsPrimary && execution && executionOpportunityId ? (
+      {!running &&
+      !planView?.founderInputRequest &&
+      executionOwnsPrimary &&
+      execution &&
+      executionOpportunityId ? (
         <div className="border-line-2 flex flex-col gap-3 border-t pt-5">
           <MonoLabel className="tracking-[0.14em]">Start</MonoLabel>
           <PrepareChangePanel

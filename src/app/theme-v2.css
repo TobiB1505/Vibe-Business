@@ -450,6 +450,24 @@
   position: relative;
 }
 
+/*
+ * Except on a `<dialog>`, which is already positioned by being open (UI-35).
+ *
+ * `position: relative` above exists to anchor the `::before` sheen, and on a
+ * panel that is exactly right. On a modal dialog it *replaces* the positioning
+ * the platform gives a top-layer element, so the element lays out in normal
+ * flow inside whatever contains it. Measured: the phone's More sheet became an
+ * 844px-tall box filling the viewport with its three rows at the top, instead
+ * of a sheet resting on the bottom edge.
+ *
+ * `fixed` restores it and still anchors the sheen — a fixed box is a
+ * positioned box. This is where the bug was, so this is where the fix is;
+ * `sheet.tsx` should not have to know that a palette moved its element.
+ */
+[data-vibe="v2"] dialog.vibe-overlay {
+  position: fixed;
+}
+
 [data-vibe="v2"] .vibe-overlay::before {
   content: "";
   position: absolute;
@@ -529,6 +547,68 @@
   background: var(--glass-fill-chrome);
   border-color: var(--glass-line-panel);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-sat));
+}
+
+/*
+ * Except on a phone, where the rail is not a surface (UI-35).
+ *
+ * Below `lg` the `<aside>` stops being the navigation's box and becomes a
+ * transparent layer covering the viewport, with a bar fixed at each edge
+ * inside it. Glass on the layer itself would frost the whole screen.
+ *
+ * The bars carry `.vibe-chrome` themselves and keep it — they are the surfaces
+ * now — so this takes the paint off the container and nothing else.
+ */
+@media (width < 64rem) {
+  [data-vibe="v2"] .vibe-chrome[data-rail-layer] {
+    background: none;
+    border-color: transparent;
+    backdrop-filter: none;
+  }
+}
+
+/*
+ * And the mirror of it: the phone's top bar is glass only where it is a bar.
+ *
+ * Above `lg` the same element is the lockup sitting inside the rail, which is
+ * already frosted — a second `.vibe-chrome` there is glass on glass, which
+ * reads as a lighter rectangle around the mark.
+ */
+@media (width >= 64rem) {
+  [data-vibe="v2"] .vibe-chrome[data-topbar] {
+    background: none;
+    border-color: transparent;
+    backdrop-filter: none;
+  }
+}
+
+/*
+ * The phone's two bars are opaque, and this is the one place chrome is (UI-35).
+ *
+ * Everywhere else in v2 a chrome surface is a film with the page blurred
+ * behind it, and it works because what is behind it is the ground. These two
+ * are fixed over *arbitrary scrolling content* — a heading, a scanner ring, a
+ * paragraph — and measured in a browser the page read straight through the tab
+ * bar: the section labels sat on top of a sentence about the product, both
+ * legible, neither readable.
+ *
+ * The fix is the one `.landing-hero-card` already uses: composite the same
+ * film over `--color-ground` so the colour is identical and the surface is
+ * solid. The blur goes with it, because a blur behind an opaque fill is
+ * spending GPU on something nobody can see.
+ *
+ * This is not glass being abandoned. It is glass used where it is true: a
+ * surface you can see through has to have something worth seeing behind it,
+ * and behind a navigation bar there is only text it is covering.
+ */
+@media (width < 64rem) {
+  [data-vibe="v2"] .vibe-chrome[data-topbar],
+  [data-vibe="v2"] .vibe-chrome[data-tabbar] {
+    background-color: var(--color-ground);
+    background-image: linear-gradient(var(--glass-fill-chrome), var(--glass-fill-chrome));
+    border-color: var(--glass-line-panel);
+    backdrop-filter: none;
+  }
 }
 
 /* The one opaque step. Edge-carried: the line does the work the fill used to

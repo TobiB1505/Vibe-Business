@@ -194,7 +194,7 @@ function HandoffPrompt({ prompt, toolLabel }: { prompt: string; toolLabel: strin
           }}
           aria-label={copied ? "Prompt copied" : "Copy prompt"}
           data-testid="handoff-copy"
-          className="border-line-2 bg-surface-2 text-fg-muted hover:text-fg hover:border-line-3 absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-nav border px-2 py-1 text-caption transition-interactive"
+          className="border-line-2 bg-surface-2 text-fg-muted hover:text-fg hover:border-line-3 vibe-tap absolute top-2 right-2 z-10 flex items-center gap-1.5 rounded-nav border px-2 py-1 text-caption transition-interactive"
         >
           {copied ? <CheckIcon size={13} /> : <CopyIcon size={13} />}
           {copied ? "Copied" : "Copy"}

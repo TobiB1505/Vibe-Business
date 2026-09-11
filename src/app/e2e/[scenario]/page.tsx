@@ -49,6 +49,8 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
+import { AgentTrustPanel } from "@/app/app/projects/[projectId]/agent/agent-header";
+import { OPENING_ASKS_NAME_SCENARIO } from "../design-studies/studies";
 import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
@@ -452,7 +454,7 @@ export default async function E2eScenarioPage({
     );
   }
 
-  if (scenario === SHIPPED_OPENING_SCENARIO) {
+  if (scenario === SHIPPED_OPENING_SCENARIO || scenario === OPENING_ASKS_NAME_SCENARIO) {
     const chosen = chosenStudy();
     return (
       <StudyShell study={chosen}>
@@ -482,9 +484,12 @@ export default async function E2eScenarioPage({
             projectId="fixture-project"
             productName="Vibe Business"
             connected={false}
-            /* A login, because that is the only kind of name this product
-               ever has — never a first name derived from an address. */
+            /* A login. It is a name a person chose, so it is one — but it is
+               not what anybody is *called*, which is why the second scenario
+               greets by it and then asks. Never a first name derived from an
+               address; `identity-view.ts` forbids that either way. */
             greetingName="ada-lovelace"
+            askForName={scenario === OPENING_ASKS_NAME_SCENARIO}
             setup={onboardingSteps("connect_source")}
             activity={[
               {
@@ -1235,6 +1240,7 @@ export default async function E2eScenarioPage({
     const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
       id: section.id,
       label: section.label,
+      short: section.short,
       icon: section.icon,
       href:
         section.id === "my-product" ? currentHref : projectSectionHref("project_e2e", section.id),
@@ -1982,6 +1988,36 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * The Agent's trust panel, which lived in no fixture at all.
+   *
+   * It sits in `WorkspaceSection`'s `actions` slot on the real Agent route,
+   * which needs a session and a project — so nothing in this suite had ever
+   * rendered it, and a founder found on their own phone what no sweep of mine
+   * could see: three facts side by side above `sm`, each capped at 230px, and
+   * below `sm` they stack and *keep* the cap. The panel came to about 62% of
+   * the page it sits on.
+   *
+   * The component takes no props, so the fixture is the component. Rendered
+   * inside the same column width the real page gives it, because the defect is
+   * a width and a fixture that let it float free would not show it.
+   */
+  if (scenario === "agent-trust-panel") {
+    return (
+      <main className="mx-auto w-full max-w-[70rem] px-5 py-10 sm:px-8">
+        <div className="sr-only">{label}</div>
+        <h1 className="text-fg text-display font-bold">Agent</h1>
+        <p className="text-fg-prose mt-3">
+          Each change moves through validation, preview, review and your approval before anything
+          can be merged.
+        </p>
+        <div className="mt-6">
+          <AgentTrustPanel />
+        </div>
+      </main>
+    );
+  }
+
   /**
    * The frame on a route that has no navigation.
    *
@@ -2036,6 +2072,7 @@ export default async function E2eScenarioPage({
               items={PROJECT_SECTIONS.map((section) => ({
                 id: section.id,
                 label: section.label,
+                short: section.short,
                 icon: section.icon,
                 href:
                   section.id === "settings"

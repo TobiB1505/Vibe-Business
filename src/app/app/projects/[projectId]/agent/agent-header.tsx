@@ -75,7 +75,22 @@ export function AgentTrustPanel() {
       className="rounded-panel border-line-2 bg-surface-2 flex flex-none flex-col divide-y divide-[var(--color-line-2)] border sm:flex-row sm:divide-x sm:divide-y-0"
     >
       {FACTS.map((fact) => (
-        <div key={fact.key} className="flex max-w-[230px] gap-3 px-5 py-4">
+        <div
+          key={fact.key}
+          /*
+            `max-w-[230px]` is the width of one column when these three sit
+            side by side above `sm`. Below it they stack, and each one kept the
+            cap — so the panel shrank to about 62% of the page it sits on while
+            the heading and prose above it ran full width. Measured on a phone
+            it read as a floating card that had failed to load the rest of
+            itself.
+
+            `max-sm:max-w-none` is the whole fix: a stacked row is as wide as
+            its column, and the cap goes back the moment there are three
+            columns to cap.
+          */
+          className="flex max-w-[230px] gap-3 px-5 py-4 max-sm:max-w-none"
+        >
           <svg
             viewBox="0 0 24 24"
             width="19"

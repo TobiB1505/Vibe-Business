@@ -1150,7 +1150,15 @@ export function ProductScanExperience({
               <span className="grid size-11 shrink-0 place-items-center rounded-full border border-mint/25 bg-mint/[0.07] text-mint">
                 <CheckIcon size={19} strokeWidth={2.4} />
               </span>
-              <div className="min-w-0 flex-1">
+              {/*
+                `max-sm:basis-48` is what makes the row's `flex-wrap` do anything
+                (UI-36). `min-w-0 flex-1` lets this column shrink instead of
+                pushing a sibling onto the next line, and measured at 390 it
+                shrank to **five pixels** — a heading and a sentence in a 5px
+                column, beside a 175px button that had all the room it wanted.
+                A basis gives the wrap something to trigger on.
+              */}
+              <div className="min-w-0 flex-1 max-sm:basis-48">
                 <MonoLabel className="text-mint">Product scan · complete</MonoLabel>
                 <h2
                   id="product-scan-title"

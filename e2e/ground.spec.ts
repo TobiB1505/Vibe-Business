@@ -20,8 +20,18 @@ const DENSE = "/e2e/repository_intelligence";
 /** An ordinary screen in the account shell — no field, just ground. */
 const ACCOUNT = "/e2e/account-products";
 
-async function paletteV2(page: Page) {
-  await page.evaluate(() => document.documentElement.setAttribute("data-vibe", "v2"));
+/**
+ * Put the page in one palette, whatever the deployment renders.
+ *
+ * These tests are *about* the two palettes, so each has to say which one it is
+ * measuring rather than inherit it. That used to be free: the suite's server
+ * set no `VIBE_PALETTE`, so v1 was simply what a page arrived in and only the
+ * v2 half had to be asked for. The server renders v2 now (UI-37), and a test
+ * whose subject is "v1 paints nothing" cannot depend on which way that
+ * variable happens to point.
+ */
+async function palette(page: Page, name: "v1" | "v2") {
+  await page.evaluate((value) => document.documentElement.setAttribute("data-vibe", value), name);
   // One frame for the new custom properties to resolve.
   await page.waitForTimeout(200);
 }
@@ -45,6 +55,7 @@ function layer(page: Page, selector: string) {
 test.describe("the ground exists and stays out of the way", () => {
   test("paints nothing at all in the first palette", async ({ page }) => {
     await page.goto(NOVA);
+    await palette(page, "v1");
     for (const selector of [".vibe-atmosphere", ".vibe-grain", ".vibe-atmosphere-field"]) {
       const found = await layer(page, selector);
       // The hooks are rendered in v1 too; they simply match no rule there,
@@ -56,7 +67,7 @@ test.describe("the ground exists and stays out of the way", () => {
 
   test("paints the ramp and the grain in the second", async ({ page }) => {
     await page.goto(NOVA);
-    await paletteV2(page);
+    await palette(page, "v2");
 
     const ramp = await layer(page, ".vibe-atmosphere");
     expect(ramp.image).toContain("linear-gradient");
@@ -72,13 +83,13 @@ test.describe("the ground exists and stays out of the way", () => {
 
   test("gives the contained field only to the screen that opted in", async ({ page }) => {
     await page.goto(NOVA);
-    await paletteV2(page);
+    await palette(page, "v2");
     const field = await layer(page, ".vibe-atmosphere-field");
     expect(field.image).toContain("radial-gradient");
     expect(field.position).toBe("fixed");
 
     await page.goto(DENSE);
-    await paletteV2(page);
+    await palette(page, "v2");
     await expect(page.locator(".vibe-atmosphere-field")).toHaveCount(0);
     // The ramp is still there — a route that does not opt in gets the quiet
     // ground, never no ground at all.
@@ -128,6 +139,7 @@ test.describe("the ground exists and stays out of the way", () => {
 
   test("is a flat field in v1 and a lit ramp in v2, in decoded pixels", async ({ page }) => {
     await page.goto(NOVA);
+    await palette(page, "v1");
     const flatTop = await luminance(page, 8);
     const flatBottom = await luminance(page, 600);
     expect(
@@ -135,7 +147,7 @@ test.describe("the ground exists and stays out of the way", () => {
       "v1 is one colour top to bottom; a difference means the ground leaked into the first palette",
     ).toBeLessThan(0.5);
 
-    await paletteV2(page);
+    await palette(page, "v2");
     const litTop = await luminance(page, 8);
     const litBottom = await luminance(page, 600);
     // Measured at 2.01× when this was written. The bar is deliberately well
@@ -167,11 +179,12 @@ test.describe("the ground exists and stays out of the way", () => {
   test("is not painted over by the shell on an ordinary product screen", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto(ACCOUNT);
+    await palette(page, "v1");
     const column = 1420;
 
     const flatTop = await luminance(page, 8, column);
     const flatBottom = await luminance(page, 860, column);
-    await paletteV2(page);
+    await palette(page, "v2");
     const litTop = await luminance(page, 8, column);
     const litBottom = await luminance(page, 860, column);
 
@@ -201,7 +214,7 @@ test.describe("the ground exists and stays out of the way", () => {
 
   test("takes no pointer and no tab stop", async ({ page }) => {
     await page.goto(NOVA);
-    await paletteV2(page);
+    await palette(page, "v2");
     for (const selector of [".vibe-atmosphere", ".vibe-grain", ".vibe-atmosphere-field"]) {
       expect((await layer(page, selector)).events).toBe("none");
     }

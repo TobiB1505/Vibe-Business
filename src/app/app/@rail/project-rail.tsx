@@ -77,6 +77,7 @@ export async function ProjectRailSlot({ projectId }: { projectId: string }) {
   const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
     id: section.id,
     label: section.label,
+    short: section.short,
     icon: section.icon,
     href: projectSectionHref(project.id, section.id),
     count: section.id === "action-plan" ? countFor(counts.nextMoves) : null,

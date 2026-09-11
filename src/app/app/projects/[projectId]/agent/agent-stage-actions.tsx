@@ -228,7 +228,7 @@ export function AgentReviewDecision({
 
       {(change.progress.merged || change.outcome.state !== "unavailable") && (
         <details className="rounded-well border-line-2 bg-well group border px-4 py-3">
-          <summary className="text-fg-secondary hover:text-fg-body cursor-pointer list-none text-body font-medium">
+          <summary className="text-fg-secondary hover:text-fg-body vibe-tap w-fit cursor-pointer list-none text-body font-medium">
             <span className="group-open:hidden">After the merge</span>
             <span className="hidden group-open:inline">Hide post-merge record</span>
           </summary>

@@ -7,6 +7,7 @@ import { ONBOARDING_STATES } from "../onboarding/state";
 
 import { NOVA_ACTION_META } from "./actions";
 import {
+  NAME_QUESTION,
   NOVA_WORKFLOW_STATUSES,
   buildNovaFirstRunFeed,
   buildNovaWorkflowExplanation,
@@ -234,11 +235,21 @@ describe("what Nova says on her own two screens", () => {
 
 describe("the language of an introduction", () => {
   const sentences = [
+    /*
+      Both introductions, because they are not the same set of sentences: the
+      one that asks what to call somebody has a sentence the other does not,
+      and a sweep that only built the default would have let the newest thing
+      Nova says be the one thing nothing checked. That is the exact shape this
+      file's own docblock warns about upstream.
+    */
     ...(["introduce", "explain_workflow"] as const).flatMap((position) =>
       buildNovaFirstRunFeed(position)
         .filter((entry) => entry.kind === "nova.message")
         .map((entry) => entry.text),
     ),
+    ...buildNovaFirstRunFeed("introduce", null, true)
+      .filter((entry) => entry.kind === "nova.message")
+      .map((entry) => entry.text),
     ...buildNovaWorkflowExplanation().map((entry) =>
       entry.kind === "nova.message" ? entry.text : "",
     ),
@@ -293,5 +304,41 @@ describe("the language of an introduction", () => {
    */
   it("says who decides what ships", () => {
     expect(sentences.join(" ")).toMatch(/default branch/i);
+  });
+});
+
+describe("asking what to call somebody", () => {
+  const messages = (name: string | null, ask: boolean) =>
+    buildNovaFirstRunFeed("introduce", name, ask)
+      .filter((entry) => entry.kind === "nova.message")
+      .map((entry) => entry.text);
+
+  it("asks only when asked to", () => {
+    expect(messages(null, false)).not.toContain(NAME_QUESTION);
+    expect(messages(null, true)).toContain(NAME_QUESTION);
+  });
+
+  /*
+   * The case this step exists for. A GitHub login is a name somebody chose,
+   * so she greets by it — and it is not what anybody is *called*, so she still
+   * asks. Greeting and asking are two different questions about one person,
+   * and a screen that used the login as an answer to both would be reading a
+   * database out loud.
+   */
+  it("greets by a login and still asks what to call somebody", () => {
+    const said = messages("ada-lovelace", true);
+    expect(said[0]).toContain("ada-lovelace");
+    expect(said).toContain(NAME_QUESTION);
+  });
+
+  it("does not ask somebody who has already said", () => {
+    expect(messages("Tobi", false)).not.toContain(NAME_QUESTION);
+  });
+
+  /* Last, after everything she says about herself: a question before the
+     introduction is a form, after it is what two people do. */
+  it("asks after she has finished introducing herself", () => {
+    const said = messages(null, true);
+    expect(said[said.length - 1]).toBe(NAME_QUESTION);
   });
 });

@@ -72,21 +72,44 @@ function DetailInsightIcon({ kind }: { kind: "found" | "matter" | "connected" | 
       )}
     >
       {kind === "found" && (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="size-6">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          className="size-6"
+        >
           <circle cx="10.5" cy="10.5" r="5.5" />
           <path d="m15 15 4.5 4.5" />
           <path d="M8.5 10.5h4" />
         </svg>
       )}
       {kind === "matter" && (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-6">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-6"
+        >
           <path d="M9 18h6M10 21h4" />
           <path d="M8.2 14.4A6.2 6.2 0 1 1 15.8 14.4C14.7 15.2 14.2 16 14 17h-4c-.2-1-.7-1.8-1.8-2.6Z" />
           <path d="M12 2V1M4.9 4.9l-.8-.8M19.1 4.9l.8-.8" />
         </svg>
       )}
       {kind === "connected" && (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-6">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-6"
+        >
           <circle cx="6" cy="12" r="2.5" />
           <circle cx="18" cy="6" r="2.5" />
           <circle cx="18" cy="18" r="2.5" />
@@ -94,7 +117,15 @@ function DetailInsightIcon({ kind }: { kind: "found" | "matter" | "connected" | 
         </svg>
       )}
       {kind === "move" && (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-5">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="size-5"
+        >
           <path d="M7 17 17 7" />
           <path d="M9 7h8v8" />
         </svg>
@@ -145,13 +176,25 @@ function PriorityCard({
       <span
         aria-hidden="true"
         className={cn(
+          /*
+            Smaller on a phone (UI-36). The gutter below reserves room so the
+            text does not run under this, and at 390 that was 48px off every
+            line of a three-line summary — a third of the measure spent on
+            something `aria-hidden` says is decoration. It keeps its place and
+            gives most of the width back.
+          */
           "absolute -top-7 -right-5 flex size-28 items-center justify-center rounded-full border",
+          "max-sm:-top-5 max-sm:-right-4 max-sm:size-20",
           critical ? "border-coral/15 text-coral/60" : "border-mint/15 text-mint/60",
         )}
       >
-        {lens ? <BusinessLensIcon lens={lens} className="size-11" /> : <span className="text-4xl">!</span>}
+        {lens ? (
+          <BusinessLensIcon lens={lens} className="size-11 max-sm:size-8" />
+        ) : (
+          <span className="text-4xl">!</span>
+        )}
       </span>
-      <div className="relative flex flex-col gap-4 pr-12">
+      <div className="relative flex flex-col gap-4 pr-12 max-sm:pr-5">
         <span className={cn("text-caption font-semibold", critical ? "text-coral" : "text-mint")}>
           #1 Priority
         </span>
@@ -190,7 +233,10 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
   const change = view.recentChanges[0] ?? null;
 
   return (
-    <section className="business-brain-side-card flex flex-col gap-4 p-5" data-testid="recent-changes">
+    <section
+      className="business-brain-side-card flex flex-col gap-4 p-5"
+      data-testid="recent-changes"
+    >
       <h3 className="text-fg text-card-title font-semibold">Recent changes</h3>
       {change ? (
         <div className="flex items-start gap-3">
@@ -208,10 +254,17 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
           </span>
           <div className="min-w-0 flex-1">
             <p className="text-fg-body text-body font-medium">
-              Business Health {change.direction === "up" ? "increased" : change.direction === "down" ? "decreased" : "held steady"}
+              Business Health{" "}
+              {change.direction === "up"
+                ? "increased"
+                : change.direction === "down"
+                  ? "decreased"
+                  : "held steady"}
             </p>
             <p className="text-fg-muted mt-1 text-caption leading-relaxed">
-              {change.delta > 0 ? "+" : ""}{change.delta} points under the same scoring contract · {formatTimestamp(change.recordedAt) ?? change.recordedAt}
+              {change.delta > 0 ? "+" : ""}
+              {change.delta} points under the same scoring contract ·{" "}
+              {formatTimestamp(change.recordedAt) ?? change.recordedAt}
             </p>
           </div>
         </div>
@@ -316,9 +369,7 @@ function DefaultPanel({
       */}
       {contradictions.length > 0 && (
         <section className="business-brain-side-card flex flex-col gap-4 p-4 sm:p-5">
-          <h2 className="text-fg text-title font-semibold">
-            Your code against your live product
-          </h2>
+          <h2 className="text-fg text-title font-semibold">Your code against your live product</h2>
           {contradictions.map((check) => (
             <FindingCard
               key={check.id}
@@ -406,14 +457,26 @@ function SelectedPanel({
     >
       <div className="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6 sm:pt-6">
         <div className="min-w-0">
-          <span className={cn("text-[0.7rem] font-semibold tracking-[0.12em] uppercase", node.health === "weak" ? "text-coral" : "text-mint")}>
+          <span
+            className={cn(
+              "text-[0.7rem] font-semibold tracking-[0.12em] uppercase",
+              node.health === "weak" ? "text-coral" : "text-mint",
+            )}
+          >
             Selected dimension
           </span>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h2 className="text-fg text-moment font-semibold">
-              {node.label}
-            </h2>
-            <span className={cn("rounded-full border px-3 py-1 text-caption font-medium", node.health === "weak" ? "border-coral/25 bg-coral/[0.08] text-coral" : node.health === "strong" ? "border-mint/25 bg-mint/[0.08] text-mint" : "border-amber/25 bg-amber/[0.08] text-amber")}>
+            <h2 className="text-fg text-moment font-semibold">{node.label}</h2>
+            <span
+              className={cn(
+                "rounded-full border px-3 py-1 text-caption font-medium",
+                node.health === "weak"
+                  ? "border-coral/25 bg-coral/[0.08] text-coral"
+                  : node.health === "strong"
+                    ? "border-mint/25 bg-mint/[0.08] text-mint"
+                    : "border-amber/25 bg-amber/[0.08] text-amber",
+              )}
+            >
               {stateLabel}
             </span>
             {/*
@@ -428,7 +491,12 @@ function SelectedPanel({
             />
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="Back to Business Health overview" className="border-line-2 text-fg-muted hover:border-line-strong hover:text-fg flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border text-lg transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Back to Business Health overview"
+          className="border-line-2 text-fg-muted hover:border-line-strong hover:text-fg flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border text-lg transition-interactive focus-visible:ring-2 focus-visible:ring-mint"
+        >
           ×
         </button>
       </div>
@@ -476,7 +544,8 @@ function SelectedPanel({
                 <div className="min-w-0">
                   <h3 className="text-fg text-card-title font-semibold">Why it matters</h3>
                   <p className="text-fg-secondary mt-1.5 text-body leading-relaxed">
-                    {node.problem?.whyItMatters ?? "This audit did not record a separate impact explanation for this area."}
+                    {node.problem?.whyItMatters ??
+                      "This audit did not record a separate impact explanation for this area."}
                   </p>
                 </div>
               </div>
@@ -485,36 +554,60 @@ function SelectedPanel({
                 <DetailInsightIcon kind="connected" />
                 <div className="min-w-0 flex-1">
                   <h3 className="text-fg text-card-title font-semibold">Connected areas</h3>
-                  <p className="text-fg-muted mt-1 text-caption">Areas joined by the same audit conclusion.</p>
+                  <p className="text-fg-muted mt-1 text-caption">
+                    Areas joined by the same audit conclusion.
+                  </p>
                   {relationships.length > 0 ? (
                     <div className="mt-3 flex flex-wrap gap-2">
                       {relationships.map((relationship) => {
-                        const otherId = relationship.from === node.id ? relationship.to : relationship.from;
+                        const otherId =
+                          relationship.from === node.id ? relationship.to : relationship.from;
                         const other = view.nodes.find((candidate) => candidate.id === otherId);
                         if (!other) return null;
                         return (
-                          <button type="button" key={relationship.id} onClick={() => onSelect(other.id)} aria-label={`Explore connected area ${other.label}`} className="border-mint/20 bg-mint/[0.045] text-fg-secondary hover:border-mint/50 hover:text-mint min-h-9 cursor-pointer rounded-full border px-3 text-caption transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+                          <button
+                            type="button"
+                            key={relationship.id}
+                            onClick={() => onSelect(other.id)}
+                            aria-label={`Explore connected area ${other.label}`}
+                            className="border-mint/20 bg-mint/[0.045] text-fg-secondary hover:border-mint/50 hover:text-mint min-h-9 cursor-pointer rounded-full border px-3 text-caption transition-interactive focus-visible:ring-2 focus-visible:ring-mint"
+                          >
                             {other.label}
                           </button>
                         );
                       })}
                     </div>
                   ) : (
-                    <p className="text-fg-muted mt-3 text-body">No evidence-grounded relationship was recorded for this area.</p>
+                    <p className="text-fg-muted mt-3 text-body">
+                      No evidence-grounded relationship was recorded for this area.
+                    </p>
                   )}
                 </div>
               </div>
 
-              <div className={cn("relative mt-1 overflow-hidden rounded-card border p-4", node.health === "weak" ? "border-coral/60 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.12),transparent_44%),rgb(255_122_92/0.035)]" : "border-mint/40 bg-mint/[0.035]")}>
+              <div
+                className={cn(
+                  "relative mt-1 overflow-hidden rounded-card border p-4",
+                  node.health === "weak"
+                    ? "border-coral/60 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.12),transparent_44%),rgb(255_122_92/0.035)]"
+                    : "border-mint/40 bg-mint/[0.035]",
+                )}
+              >
                 <div className="flex items-start gap-3">
                   <DetailInsightIcon kind="move" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-fg text-card-title font-semibold">What to do next</h3>
-                      {node.problem && <span className="text-coral text-[0.65rem] font-semibold tracking-[0.08em] uppercase">#{node.problem.rank} priority</span>}
+                      {node.problem && (
+                        <span className="text-coral text-[0.65rem] font-semibold tracking-[0.08em] uppercase">
+                          #{node.problem.rank} priority
+                        </span>
+                      )}
                     </div>
                     <p className="text-fg mt-2 text-title font-semibold">
-                      {node.problem?.move?.title ?? node.problem?.headline ?? "No next move is linked yet"}
+                      {node.problem?.move?.title ??
+                        node.problem?.headline ??
+                        "No next move is linked yet"}
                     </p>
                     {node.problem?.move && (
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-caption">
@@ -524,8 +617,22 @@ function SelectedPanel({
                     )}
                   </div>
                 </div>
-                <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-field px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
-                  {node.problem ? actionLabel(node.problem.moveCount, hasMoves) : "View action plan"}
+                <Link
+                  href={
+                    node.problem && node.problem.moveCount > 0
+                      ? movesContextHref(movesHref, node.problem.key)
+                      : movesHref
+                  }
+                  className={cn(
+                    "mt-4 flex min-h-11 items-center justify-center gap-3 rounded-field px-4 text-body font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint",
+                    node.health === "weak"
+                      ? "bg-coral text-[#170805] hover:bg-[#ff8e73]"
+                      : "bg-mint text-mint-ink hover:bg-mint-hover",
+                  )}
+                >
+                  {node.problem
+                    ? actionLabel(node.problem.moveCount, hasMoves)
+                    : "View action plan"}
                   <ArrowRightIcon size={15} />
                 </Link>
               </div>
@@ -534,12 +641,16 @@ function SelectedPanel({
                 <details className="group border-line-1 border-t pt-4">
                   <summary className="text-fg-secondary hover:text-fg flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-inline text-body focus-visible:ring-2 focus-visible:ring-mint">
                     <span>Learn more about this dimension</span>
-                    <span aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</span>
+                    <span aria-hidden="true" className="transition-transform group-open:rotate-180">
+                      ⌄
+                    </span>
                   </summary>
                   <div className="border-amber/20 bg-amber/[0.035] mt-3 rounded-field border p-4">
                     <h3 className="text-amber text-caption font-medium">Only you can answer</h3>
                     <ul className="text-fg-muted mt-2 flex list-disc flex-col gap-1.5 pl-4 text-body">
-                      {node.missingContext.map((item) => <li key={item}>{item}</li>)}
+                      {node.missingContext.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
                     </ul>
                   </div>
                 </details>
@@ -549,21 +660,41 @@ function SelectedPanel({
 
           {activeTab === "signals" && (
             <div className="flex flex-col gap-4">
-              <section className="business-brain-insight-card overflow-hidden p-5" aria-labelledby={`${tabId}-score-heading`}>
+              <section
+                className="business-brain-insight-card overflow-hidden p-5"
+                aria-labelledby={`${tabId}-score-heading`}
+              >
                 <div className="flex items-start justify-between gap-5">
                   <div className="min-w-0">
-                    <span className="text-fg-meta text-[0.68rem] font-medium tracking-[0.1em] uppercase">Current lens score</span>
-                    <h3 id={`${tabId}-score-heading`} className="text-fg mt-1 text-title font-semibold">{node.label}</h3>
+                    <span className="text-fg-meta text-[0.68rem] font-medium tracking-[0.1em] uppercase">
+                      Current lens score
+                    </span>
+                    <h3
+                      id={`${tabId}-score-heading`}
+                      className="text-fg mt-1 text-title font-semibold"
+                    >
+                      {node.label}
+                    </h3>
                   </div>
                   <p className={figureClasses("md", cn("shrink-0", scoreTone))}>
-                    {node.score ?? "—"}<span className="text-fg-meta ml-1 text-caption font-normal tracking-normal">/100</span>
+                    {node.score ?? "—"}
+                    <span className="text-fg-meta ml-1 text-caption font-normal tracking-normal">
+                      /100
+                    </span>
                   </p>
                 </div>
-                <div className="bg-surface-1 mt-4 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
-                  <span className={cn("block h-full rounded-full", scoreBar)} style={{ width: `${node.score ?? 0}%` }} />
+                <div
+                  className="bg-surface-1 mt-4 h-1.5 overflow-hidden rounded-full"
+                  aria-hidden="true"
+                >
+                  <span
+                    className={cn("block h-full rounded-full", scoreBar)}
+                    style={{ width: `${node.score ?? 0}%` }}
+                  />
                 </div>
                 <p className="text-fg-muted mt-4 text-caption leading-relaxed">
-                  Vibe judged the recorded signals below together at lens level. Individual signals do not carry invented point values.
+                  Vibe judged the recorded signals below together at lens level. Individual signals
+                  do not carry invented point values.
                 </p>
               </section>
 
@@ -571,20 +702,37 @@ function SelectedPanel({
                 <section aria-labelledby={`${tabId}-signals-heading`}>
                   <div className="mb-3 flex items-end justify-between gap-3">
                     <div>
-                      <h3 id={`${tabId}-signals-heading`} className="text-fg text-card-title font-semibold">Signals behind this score</h3>
-                      <p className="text-fg-muted mt-1 text-caption">{evidence.length} recorded across {signalsBySource.length} {signalsBySource.length === 1 ? "source" : "sources"}</p>
+                      <h3
+                        id={`${tabId}-signals-heading`}
+                        className="text-fg text-card-title font-semibold"
+                      >
+                        Signals behind this score
+                      </h3>
+                      <p className="text-fg-muted mt-1 text-caption">
+                        {evidence.length} recorded across {signalsBySource.length}{" "}
+                        {signalsBySource.length === 1 ? "source" : "sources"}
+                      </p>
                     </div>
                   </div>
                   <div className="flex flex-col gap-3">
                     {signalsBySource.map(([source, signals]) => (
                       <div key={source} className="business-brain-insight-card overflow-hidden">
                         <div className="border-line-1 flex items-center justify-between gap-4 border-b px-4 py-3">
-                          <span className="text-fg-secondary text-caption font-medium">{source}</span>
-                          <span className="text-fg-meta text-caption tabular-nums">{signals.length}</span>
+                          <span className="text-fg-secondary text-caption font-medium">
+                            {source}
+                          </span>
+                          <span className="text-fg-meta text-caption tabular-nums">
+                            {signals.length}
+                          </span>
                         </div>
                         <ul className="divide-y divide-[var(--color-line-1)]">
                           {signals.map((signal) => (
-                            <li key={signal.id} className="text-fg-secondary px-4 py-3 text-caption leading-relaxed">{signal.detail}</li>
+                            <li
+                              key={signal.id}
+                              className="text-fg-secondary px-4 py-3 text-caption leading-relaxed"
+                            >
+                              {signal.detail}
+                            </li>
                           ))}
                         </ul>
                       </div>
@@ -592,17 +740,22 @@ function SelectedPanel({
                   </div>
                 </section>
               ) : (
-                <HonestTabEmpty title="No signals available" body="This area has no evidence-grounded signals in the current audit, so it remains unscored." />
+                <HonestTabEmpty
+                  title="No signals available"
+                  body="This area has no evidence-grounded signals in the current audit, so it remains unscored."
+                />
               )}
             </div>
           )}
 
           {activeTab === "history" && (
-            <HonestTabEmpty title="No comparable history for this area yet" body="Vibe currently tracks comparable history for overall Business Health, not for each business area on its own. A future scan under the same scoring contract is needed before a trend can be shown here." />
+            <HonestTabEmpty
+              title="No comparable history for this area yet"
+              body="Vibe currently tracks comparable history for overall Business Health, not for each business area on its own. A future scan under the same scoring contract is needed before a trend can be shown here."
+            />
           )}
         </motion.div>
       </AnimatePresence>
-
     </motion.section>
   );
 }
@@ -633,7 +786,9 @@ export function AuditIntelligence({
 }) {
   const reducedMotion = Boolean(useReducedMotion());
   const [selected, setSelected] = useState<BusinessLens | null>(null);
-  const node = selected ? (view.nodes.find((candidate) => candidate.id === selected) ?? null) : null;
+  const node = selected
+    ? (view.nodes.find((candidate) => candidate.id === selected) ?? null)
+    : null;
 
   function select(lens: BusinessLens) {
     setSelected((current) => (current === lens ? null : lens));
@@ -649,48 +804,78 @@ export function AuditIntelligence({
         className="business-brain-stage relative min-w-0 overflow-hidden rounded-stage border border-line-2 p-4 sm:p-6"
         data-testid="audit-map-panel"
       >
-          <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
-          <header className="relative z-10 flex min-h-[3.75rem] flex-wrap items-start justify-between gap-4">
-            {node ? (
-              <div className="flex flex-col gap-2">
-                <h2 className="sr-only">Business Map — {node.label}</h2>
-                <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-field border px-3.5 text-body font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
-                  <span aria-hidden="true">←</span>
-                  Back to overview
-                </button>
-                <p className="text-fg-muted text-caption">Exploring {node.label} and its evidence-grounded connections.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-1.5">
-                <h2 className="text-fg text-title font-semibold">Business Map</h2>
-                <p className="text-fg-muted text-body">Select any area to explore how the pieces connect.</p>
-              </div>
-            )}
-            {!node && (
-              <div className="text-fg-meta flex flex-col items-end gap-1 text-caption">
-                <span>{view.nodes.length} business areas</span>
-                {view.lastScanAt && <span>Last scan {formatTimestamp(view.lastScanAt) ?? view.lastScanAt}</span>}
-              </div>
-            )}
-          </header>
+        <span
+          aria-hidden="true"
+          className="business-brain-grid pointer-events-none absolute inset-0"
+        />
+        <header className="relative z-10 flex min-h-[3.75rem] flex-wrap items-start justify-between gap-4">
+          {node ? (
+            <div className="flex flex-col gap-2">
+              <h2 className="sr-only">Business Map — {node.label}</h2>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-field border px-3.5 text-body font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint"
+              >
+                <span aria-hidden="true">←</span>
+                Back to overview
+              </button>
+              <p className="text-fg-muted text-caption">
+                Exploring {node.label} and its evidence-grounded connections.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <h2 className="text-fg text-title font-semibold">Business Map</h2>
+              <p className="text-fg-muted text-body">
+                Select any area to explore how the pieces connect.
+              </p>
+            </div>
+          )}
+          {!node && (
+            <div className="text-fg-meta flex flex-col items-end gap-1 text-caption">
+              <span>{view.nodes.length} business areas</span>
+              {view.lastScanAt && (
+                <span>Last scan {formatTimestamp(view.lastScanAt) ?? view.lastScanAt}</span>
+              )}
+            </div>
+          )}
+        </header>
 
-          <div className="relative z-10 mt-3">
-            <BusinessMap
-              view={view}
-              selected={selected}
-              onSelect={select}
-            />
-          </div>
+        <div className="relative z-10 mt-3">
+          <BusinessMap view={view} selected={selected} onSelect={select} />
+        </div>
 
-          <footer className="border-line-1 relative z-10 mt-2 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
-            <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption" aria-label="Business health legend">
-              <li className="text-mint flex items-center gap-2"><span className="bg-mint size-2 rounded-full shadow-[0_0_10px_rgb(0_229_160/0.8)]" /><span>Strong <span className="text-fg-meta">70–100</span></span></li>
-              <li className="text-amber flex items-center gap-2"><span className="bg-amber size-2 rounded-full" /><span>Adequate <span className="text-fg-meta">50–69</span></span></li>
-              <li className="text-coral flex items-center gap-2"><span className="bg-coral size-2 rounded-full" /><span>Weak <span className="text-fg-meta">0–49</span></span></li>
-              <li className="text-fg-muted flex items-center gap-2"><span className="bg-fg-disabled size-2 rounded-full" />Not scored —</li>
-            </ul>
-            <p className="text-fg-meta text-caption">Missing evidence is never scored as zero.</p>
-          </footer>
+        <footer className="border-line-1 relative z-10 mt-2 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
+          <ul
+            className="flex flex-wrap items-center gap-x-5 gap-y-2 text-caption"
+            aria-label="Business health legend"
+          >
+            <li className="text-mint flex items-center gap-2">
+              <span className="bg-mint size-2 rounded-full shadow-[0_0_10px_rgb(0_229_160/0.8)]" />
+              <span>
+                Strong <span className="text-fg-meta">70–100</span>
+              </span>
+            </li>
+            <li className="text-amber flex items-center gap-2">
+              <span className="bg-amber size-2 rounded-full" />
+              <span>
+                Adequate <span className="text-fg-meta">50–69</span>
+              </span>
+            </li>
+            <li className="text-coral flex items-center gap-2">
+              <span className="bg-coral size-2 rounded-full" />
+              <span>
+                Weak <span className="text-fg-meta">0–49</span>
+              </span>
+            </li>
+            <li className="text-fg-muted flex items-center gap-2">
+              <span className="bg-fg-disabled size-2 rounded-full" />
+              Not scored —
+            </li>
+          </ul>
+          <p className="text-fg-meta text-caption">Missing evidence is never scored as zero.</p>
+        </footer>
       </section>
 
       <aside

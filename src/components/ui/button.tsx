@@ -203,7 +203,9 @@ const BASE_CLASSES =
   // Inert in v1; `theme-v2.css` gives it the press. Emitted here rather than
   // on `<Button>` so that `<Link className={buttonClasses()}>` call sites —
   // which have no component to hang an attribute on — carry it too.
-  "vibe-control " +
+  /* `vibe-tap` gives a thumb 44px to aim at without changing what is drawn
+     (UI-36). The size below stays the measured one. */
+  "vibe-control vibe-tap " +
   "inline-flex items-center justify-center select-none " +
   // Not `transition-colors`: that list includes `outline-color`, which would
   // fade the focus ring in over 150ms, so the indicator arrives after the

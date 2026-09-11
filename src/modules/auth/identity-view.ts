@@ -105,3 +105,40 @@ export function buildAccountIdentity(input: {
     chosen: false,
   };
 }
+
+/**
+ * What Nova may call somebody, or null.
+ *
+ * ## Why this is not `displayName`
+ *
+ * Because the rail and a greeting are asking different questions. The rail
+ * asks *who is signed in*, and an email address is a perfectly good answer to
+ * that — it is what we have, printed as what it is. A greeting asks *what do I
+ * call you*, and an address is not an answer to that at all. "Hi
+ * tobivlog@outlook.de" is worse than saying hello to nobody, and the shortened
+ * form is the guess this whole module exists to refuse.
+ *
+ * So two of the three identities may be spoken and one may not, and the two
+ * that may are exactly the two that are names: the one the founder gave, and
+ * the login they chose on GitHub. `novaGreeting` has a nameless form for the
+ * rest, and it is not a degraded greeting — it is the same warmth without a
+ * claim in it.
+ *
+ * It takes the same two inputs `buildAccountIdentity` does rather than the
+ * identity it builds, because an identity carries an email and this function's
+ * whole point is that an email is not an answer — a caller would have had to
+ * pass a null one in to ask the question, which reads as a lie about the
+ * account.
+ *
+ * It exists so the two screens that greet cannot answer this differently,
+ * which they did: both reached past the founder's own name for the GitHub
+ * login, because the login was all there was when they were written.
+ */
+export function greetableName(input: {
+  github: GithubIdentity | null;
+  founderName?: string | null;
+}): string | null {
+  if (input.founderName) return input.founderName;
+  if (input.github) return input.github.githubLogin;
+  return null;
+}
