@@ -43,8 +43,13 @@ function move(rank: number, id = `move-${rank}`): NovaMoveFact {
   return { id, rank, title: `Move ${rank}` };
 }
 
-function changeAt(stage: ChangeStage, preparedChangeId = "change-1") {
-  return { preparedChangeId, stage, headline: `Headline for ${stage}` };
+/* The default instant. Tests about anything other than recency leave it alone,
+   so two changes tie and the subject id keeps the result stable; the ones that
+   are about recency pass their own. */
+const AT = "2026-09-11T09:00:00.000Z";
+
+function changeAt(stage: ChangeStage, preparedChangeId = "change-1", createdAt = AT) {
+  return { preparedChangeId, stage, headline: `Headline for ${stage}`, createdAt };
 }
 
 const RUNNING: OperationView = {
@@ -320,7 +325,13 @@ describe("ordering when several things are true", () => {
   it("puts an interrupted agent ahead of a finished change", () => {
     const focus = deriveNovaFocus({
       ...quiet(),
-      changes: [changeAt("ready_to_merge", "change-a"), changeAt("awaiting_approval", "change-b")],
+      /* Dated, not tied: the two changes now order by recency rather than by
+         kind, and this test is about neither — it is about the question being
+         ahead of both. The newer change is the one awaiting review. */
+      changes: [
+        changeAt("ready_to_merge", "change-a", "2026-09-10T09:00:00.000Z"),
+        changeAt("awaiting_approval", "change-b", "2026-09-11T09:00:00.000Z"),
+      ],
       questions: [
         {
           founderInputRequestId: "req-1",
@@ -394,7 +405,124 @@ describe("ordering when several things are true", () => {
     expect(focus.primary).toMatchObject({ founderInputRequestId: "req-b" });
   });
 
-  it("orders two changes in the same stage stably by subject", () => {
+  /**
+   * The change a founder means is the one they just made.
+   *
+   * ## What this is about
+   *
+   * A founder on a phone had the Agent screen showing the change from their
+   * newest run — validated, approved, one click from merging — and Nova's
+   * thread beside it showing a three-week-old change from a different run,
+   * asking for a preview. Both screens were right about their own change.
+   * Nothing said which change either was about, so it read as the thread
+   * missing half the Agent's content.
+   *
+   * Two things put it there, and this describes the second: `review_change`
+   * sorts before `merge_ready` and always will, so seven abandoned changes
+   * waiting for a look buried the one that was ready. Nothing ages a change
+   * out of the ranking, so that was permanent.
+   */
+  it("leads with the newest change even when an older one has a higher kind", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      changes: [
+        changeAt("awaiting_approval", "change-old", "2026-08-21T18:06:00.000Z"),
+        changeAt("ready_to_merge", "change-new", "2026-09-02T00:31:00.000Z"),
+      ],
+    });
+
+    expect(focus.primary).toMatchObject({ preparedChangeId: "change-new" });
+    expect(focus.primary.kind).toBe("merge_ready");
+  });
+
+  /**
+   * The first thing that put it there: no clock at all.
+   *
+   * `listPreparedChangesForProject` reads newest first, so the ranking was
+   * handed the right order and dropped it — `NovaChangeFact` carried no date,
+   * and `compareCandidates` fell through to the change's uuid. Which change
+   * Nova led with was decided by which random identifier sorted lowest, and
+   * with eight changes in one project that is a coin toss the founder loses
+   * seven times out of eight.
+   */
+  it("does not decide between two changes of one kind by their identifiers", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      changes: [
+        /* Sorted the wrong way round by id on purpose: "a" beats "z"
+           alphabetically and loses on the clock. */
+        changeAt("awaiting_approval", "change-a", "2026-08-21T18:06:00.000Z"),
+        changeAt("awaiting_approval", "change-z", "2026-09-02T00:31:00.000Z"),
+      ],
+    });
+
+    expect(focus.primary).toMatchObject({ preparedChangeId: "change-z" });
+  });
+
+  /**
+   * Recency reorders changes among themselves; it never lifts one out of its
+   * tier.
+   *
+   * A failed validation is a problem and a change awaiting review is a
+   * decision, and the tier order is what says problems come first. So the
+   * newest change does not lead here, and that is the tier doing its job
+   * rather than this rule failing: a founder is not asked to approve something
+   * while a check is red beside it.
+   */
+  it("does not let a newer change outrank an older one in a higher tier", () => {
+    const focus = deriveNovaFocus({
+      ...quiet(),
+      changes: [
+        changeAt("validation_failed", "change-old", "2026-08-21T18:06:00.000Z"),
+        changeAt("awaiting_approval", "change-new", "2026-09-02T00:31:00.000Z"),
+      ],
+    });
+
+    expect(focus.primary).toMatchObject({ preparedChangeId: "change-old" });
+  });
+
+  /**
+   * The property `compareCandidates` relies on to stay transitive.
+   *
+   * Reordering a subset of candidates by a key of its own is usually a way to
+   * produce an intransitive comparator: with a non-change candidate sorting
+   * between two change kinds you get a < b, b < c, c < a, and `sort` is then
+   * free to return anything. It cannot happen while the change kinds are
+   * contiguous inside every tier — so that is asserted here rather than
+   * trusted, because it is a property of a hand-written list and the next
+   * person to insert a kind has no reason to know it matters.
+   */
+  it("keeps the change kinds contiguous within each tier", () => {
+    const CHANGE_KINDS: readonly FocusCandidateKind[] = [
+      "validation_failed",
+      "merge_blocked",
+      "review_change",
+      "merge_ready",
+      "outcome_pending",
+    ];
+
+    const byTier = new Map<string, FocusCandidateKind[]>();
+    for (const kind of FOCUS_CANDIDATE_KINDS) {
+      const tier = novaCandidateTier(kind);
+      byTier.set(tier, [...(byTier.get(tier) ?? []), kind]);
+    }
+
+    for (const [tier, kinds] of byTier) {
+      const positions = kinds
+        .map((kind, index) => ({ kind, index }))
+        .filter(({ kind }) => CHANGE_KINDS.includes(kind))
+        .map(({ index }) => index);
+
+      if (positions.length < 2) continue;
+
+      const first = positions[0]!;
+      expect(positions, `change kinds are not contiguous in tier "${tier}"`).toEqual(
+        positions.map((_, offset) => first + offset),
+      );
+    }
+  });
+
+  it("orders two changes prepared at the same instant stably by subject", () => {
     const first = deriveNovaFocus({
       ...quiet(),
       changes: [

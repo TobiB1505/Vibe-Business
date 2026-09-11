@@ -219,7 +219,17 @@ async function readChangeFacts(
       outcomeStatus: outcomes.get(change.id)?.status ?? null,
     });
 
-    return { preparedChangeId: change.id, stage, headline: change.branchName };
+    return {
+      preparedChangeId: change.id,
+      stage,
+      headline: change.branchName,
+      /* The order the read already had. `listPreparedChangesForProject` sorts
+         newest first, and handing the ranking the field rather than relying on
+         the array's order is what makes `deriveNovaFocus` total over its
+         input: a caller that sorted differently cannot change which change
+         Nova leads with. */
+      createdAt: change.createdAt,
+    };
   });
 }
 

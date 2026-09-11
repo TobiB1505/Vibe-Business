@@ -231,6 +231,32 @@ export type NovaChangeFact = {
   stage: ChangeStage;
   /** The stage's own sentence, already written to a founder. */
   headline: string;
+  /**
+   * When the change was prepared, as `prepared_changes.created_at` stores it.
+   *
+   * ## Why the ranking needs a clock for this and for nothing else
+   *
+   * Because a founder who has run the agent eight times means the eighth one,
+   * and nothing else in these facts can say which that is. Every other
+   * candidate carries the domain's own number — a Move has `rank`, a plan step
+   * has `order` — and a prepared change has neither: they are not a sequence
+   * the product decided, they are a pile that accumulated.
+   *
+   * ## What its absence cost
+   *
+   * `listPreparedChangesForProject` reads newest first and `readChangeFacts`
+   * preserves that order, so the ranking was handed the right answer and threw
+   * it away: with no field to compare, `compareCandidates` fell through to
+   * `candidateSubject`, which for a change is its uuid. So the change Nova led
+   * with was the one whose random identifier sorted lowest.
+   *
+   * A founder found it on a phone. The Agent screen showed the change from the
+   * newest run, already approved and one click from merging; the thread beside
+   * it showed a three-week-old change from a different run, asking for a
+   * preview. Both screens were correct about their own change and there was no
+   * way to tell, because neither says how old the change it is about is.
+   */
+  createdAt: string;
 };
 
 /** One open question, whoever asked it. */
@@ -358,7 +384,7 @@ type BareCandidateKind =
 export type NovaWorkingFact = { type: OperationType; view: OperationView };
 
 export type FocusCandidate =
-  | { kind: ChangeCandidateKind; preparedChangeId: string; headline: string }
+  | { kind: ChangeCandidateKind; preparedChangeId: string; headline: string; createdAt: string }
   | {
       kind: QuestionCandidateKind;
       founderInputRequestId: string;
@@ -441,6 +467,19 @@ function candidateRank(candidate: FocusCandidate): number | null {
   return null;
 }
 
+/**
+ * Whether a candidate is about one prepared change.
+ *
+ * The `preparedChangeId` test is the same one `home-view.ts` and
+ * `candidateSubject` use: the five change kinds are exactly the variants that
+ * carry it, and nothing else does.
+ */
+function isChangeCandidate(
+  candidate: FocusCandidate,
+): candidate is Extract<FocusCandidate, { preparedChangeId: string }> {
+  return "preparedChangeId" in candidate;
+}
+
 function candidateSubject(candidate: FocusCandidate): string {
   if ("preparedChangeId" in candidate) return candidate.preparedChangeId;
   if ("founderInputRequestId" in candidate) return candidate.founderInputRequestId;
@@ -458,6 +497,43 @@ function tierOrder(kind: FocusCandidateKind): number {
 function compareCandidates(a: FocusCandidate, b: FocusCandidate): number {
   const tier = tierOrder(a.kind) - tierOrder(b.kind);
   if (tier !== 0) return tier;
+
+  /*
+   * Between two changes, the newer one leads — whatever their kinds are.
+   *
+   * ## Why this outranks the kind order rather than breaking a tie inside it
+   *
+   * Because the kind order is an answer to *what should Vibe do about a
+   * change*, and two changes pose that question twice rather than once. Ranked
+   * by kind, seven abandoned changes waiting for a look permanently buried the
+   * one a founder had just approved: `review_change` sorts before `merge_ready`
+   * and always will, so the merge control was unreachable from the thread for
+   * as long as any older unreviewed change existed. Nothing ages a change out
+   * of the ranking, so "as long as" meant forever.
+   *
+   * A founder means the change they just made. Its own stage then decides what
+   * the thread shows about it, which is `AGENT_STAGE_FOR_CHANGE`'s job and not
+   * this function's.
+   *
+   * ## Why this is transitive, which a rule like it usually is not
+   *
+   * A comparator that reorders a subset by its own key can easily become
+   * intransitive: a non-change candidate sorting between two change kinds
+   * would give a < b, b < c, c < a and hand `sort` implementation-defined
+   * garbage. It cannot happen here, because inside every tier the change
+   * kinds are **contiguous** in `CANDIDATE_ORDER` — `validation_failed` and
+   * `merge_blocked` are adjacent, `review_change` and `merge_ready` are
+   * adjacent, and `outcome_pending` is alone in its tier. So reordering them
+   * among themselves cannot interleave with anything else.
+   *
+   * That is a property of the list rather than of this code, so
+   * `focus.test.ts` asserts it: inserting a kind between two change kinds
+   * fails there rather than corrupting an order nobody would look at.
+   */
+  if (isChangeCandidate(a) && isChangeCandidate(b)) {
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;
+    return candidateSubject(a).localeCompare(candidateSubject(b));
+  }
 
   const kind = CANDIDATE_ORDER[a.kind] - CANDIDATE_ORDER[b.kind];
   if (kind !== 0) return kind;
@@ -504,6 +580,7 @@ export function deriveNovaFocus(facts: NovaFocusFacts): NovaFocus {
       kind,
       preparedChangeId: change.preparedChangeId,
       headline: change.headline,
+      createdAt: change.createdAt,
     });
   }
 

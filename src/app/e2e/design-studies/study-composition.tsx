@@ -200,6 +200,7 @@ const DENSE_FACTS: NovaFocusFacts = {
       preparedChangeId: "change_dense",
       stage: "review_required",
       headline: "Two files changed on a branch of their own",
+      createdAt: "2026-09-11T09:00:00.000Z",
     },
   ],
   questions: [

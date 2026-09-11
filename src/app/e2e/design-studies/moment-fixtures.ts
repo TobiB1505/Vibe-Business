@@ -27,7 +27,11 @@ export const NO_FACTS: NovaFocusFacts = {
   working: null,
 };
 
-const CHANGE = { preparedChangeId: "change_moment", headline: "Two files changed on a branch" };
+const CHANGE = {
+  preparedChangeId: "change_moment",
+  headline: "Two files changed on a branch",
+  createdAt: "2026-09-11T09:00:00.000Z",
+};
 const MOVE = { id: "move_moment", rank: 1, title: "Add a pricing page" };
 
 export const MOMENT_FACTS: Record<FocusCandidateKind, NovaFocusFacts> = {

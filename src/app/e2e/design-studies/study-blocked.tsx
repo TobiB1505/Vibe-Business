@@ -102,7 +102,11 @@ const BASE: NovaFocusFacts = {
   working: null,
 };
 
-const CHANGE = { preparedChangeId: "change_blocked", headline: "Two files changed on a branch" };
+const CHANGE = {
+  preparedChangeId: "change_blocked",
+  headline: "Two files changed on a branch",
+  createdAt: "2026-09-11T09:00:00.000Z",
+};
 
 const FACTS: Record<string, NovaFocusFacts> = {
   source_disconnected: { ...BASE, sourceDisconnected: true },

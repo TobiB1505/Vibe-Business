@@ -68,6 +68,19 @@ with and keeps the rest in `secondary`, ordered by `attention.ts`'s existing
 tier vocabulary rather than a second copy of it. `deriveOnboardingState` is
 untouched and still owns the linear part.
 
+Between two prepared changes the order is **recency**, ahead of the kind order
+and not as a tie-break inside it. Ranked by kind, a pile of changes waiting for
+a look permanently buries the one a founder just approved — `review_change`
+sorts before `merge_ready`, nothing ages a change out of the ranking, and the
+Agent screen meanwhile focuses the newest run's change. So the two surfaces
+named two different changes and neither said which. A founder means the change
+they just made; its own stage then decides what the thread draws about it,
+which is `AGENT_STAGE_FOR_CHANGE`'s job. Recency reorders changes among
+themselves and never lifts one out of its tier: a failed check still leads over
+a newer change awaiting review. That stays transitive only because the change
+kinds are contiguous inside each tier, which `focus.test.ts` asserts rather
+than trusts.
+
 `focus.ts` is pure and decides only order; every candidate restates a fact
 another module already derived. `read.ts` is the I/O half: constant queries in
 the number of prepared changes, no service-role client, and **no network call

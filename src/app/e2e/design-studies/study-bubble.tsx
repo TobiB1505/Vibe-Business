@@ -141,6 +141,7 @@ const THREAD_FACTS: NovaFocusFacts = {
       preparedChangeId: "change_bubble",
       stage: "review_required",
       headline: "Two files changed on a branch of their own",
+      createdAt: "2026-09-11T09:00:00.000Z",
     },
   ],
   moves: [{ id: "move_bubble", rank: 1, title: "Add a pricing page" }],
