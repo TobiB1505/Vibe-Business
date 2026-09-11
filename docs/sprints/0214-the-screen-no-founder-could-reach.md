@@ -100,13 +100,43 @@ Both were missing from the *product*, not from the deleted file, and both had
 been missing since the day the workspace shipped.
 
 **The change's meaning.** The written rationale, the origin block and the Move
-backlink sat above the gates and had no second call site. `ChangeOrigin` is the
-one that renders for an agent change — *every* one, because
-`agentic_execution_v1` has no written rationale, and its own docblock says so —
-and [rule 78](../../CLAUDE.md) says the agent is the product now. So the sentence
-a founder most needs before approving, *what was this for*, was on no screen in
+backlink sat above the gates and had no second call site. So the sentence a
+founder most needs before approving, *what was this for*, was on no screen in
 the product. `AgentChangeMeaning` carries it, on the preview surface and the
 decision surface, with the precedence unchanged.
+
+> **[2026-09-11] This paragraph said one thing more than it could, and the
+> founder's phone found it.**
+>
+> It read: *"`ChangeOrigin` is the one that renders for an agent change — every
+> one, because `agentic_execution_v1` has no written rationale."* The premise is
+> right and the conclusion is backwards. `changeOriginFrom` needs the
+> opportunity, and the opportunity needs `opportunity_set_id` and
+> `opportunity_id` on the prepared change; the agent's branch step writes both
+> as null on purpose, and says so where it does it — *"an agentic change traces
+> to a plan step, not to an opportunity set."* So for an agent change the
+> rationale is null **and** the origin is null, and the ported component has
+> nothing to draw.
+>
+> What shipped for the product's one live path was therefore a bordered, padded
+> band with nothing in it, above the diff. Two things were behind that. The
+> frame did not ask whether its contents existed — fixed, `hasChangeMeaning` is
+> what a caller asks now. And removing it exposed a second, older one: the
+> wrapper drew `border-t` around `ChangeDiffSection`, which opens with a
+> `border-t` of its own, so two rules sat thirty-two pixels apart with nothing
+> between them. That one pre-dates this sprint and was simply never looked at.
+>
+> **The gap this sprint claimed to close is still open.** An agent change names
+> what it was for nowhere in the thread. Closing it needs the plan step the
+> execution spec carries, which is a read the card does not make — a decision,
+> not a patch.
+>
+> **The mechanism is the one this record already names, one layer further in.**
+> `change_agentic_review_required` gives an agentic change an `origin`, and its
+> own comment called that *"the reason the origin below has to exist"* — a
+> fixture asserting a shape the agent path cannot produce. Every test passed
+> against a card the product never builds. `change_agentic_no_origin` is the
+> truthful sibling, and it is what the new browser tests read.
 
 **The code-only preview gate** ([ADR 0063](../decisions/0063-review-classification-as-a-gate.md)).
 A change that alters no rendered page must not be offered a preview: serving a

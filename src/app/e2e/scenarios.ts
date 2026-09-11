@@ -635,8 +635,21 @@ export const E2E_SCENARIOS = {
       branchName: "vibe/agent-07d2308c197d",
       commitSha: "94c3165",
       filePaths: ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"],
-      // No written rationale, which is true of every agentic change there will
-      // ever be — and the reason the origin below has to exist.
+      /*
+       * No written rationale, which is true of every agentic change there will
+       * ever be.
+       *
+       * [2026-09-11] This used to add *"— and the reason the origin below has
+       * to exist"*, which was false about the product and is why a defect
+       * shipped. An agent change has no origin either: the branch step writes
+       * `opportunitySetId` and `opportunityId` as null on purpose, because
+       * *"an agentic change traces to a plan step, not to an opportunity
+       * set"*. The origin below is a shape the agent path cannot produce.
+       *
+       * It is kept, because the panels that read an origin still need a
+       * fixture carrying one and this one has browser tests on it. What was
+       * missing is the truthful sibling — `change_agentic_no_origin`.
+       */
       rationale: null,
       origin: {
         title: "Give the landing page a proper social preview",
@@ -703,6 +716,27 @@ export const E2E_SCENARIOS = {
    * gap is real and recorded in the sprint doc; what this scenario proves is
    * the state the section can actually produce coherently.
    */
+  /**
+   * An agent change exactly as the agent writes one.
+   *
+   * No rationale, and **no origin** — the two nulls the branch step stores by
+   * construction. Every change the product makes today has this shape, and no
+   * fixture had it, so the surface that draws the change's meaning was only
+   * ever rendered against a card that had some.
+   *
+   * What it caught: a bordered, padded band around nothing, above the diff, on
+   * a founder's phone. What it still shows is the gap under that — this change
+   * names what it was for nowhere.
+   */
+  change_agentic_no_origin: (): PreparedChangeCard =>
+    withProgress({
+      ...E2E_SCENARIOS.change_agentic_review_required(),
+      branchName: "vibe/agent-07346b413581",
+      rationale: null,
+      origin: null,
+      opportunityId: null,
+    }),
+
   change_not_validated: (): PreparedChangeCard =>
     withProgress({
       ...baseChange(),
