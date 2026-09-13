@@ -390,6 +390,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0100](docs/decisions/0100-the-founder-is-the-outside-witness.md) | The founder is the outside witness | §3.5 |
 | [0097](docs/decisions/0097-the-second-design-system-arrives-scoped.md) | The second design system arrives as a scope, not as a rewrite | UI and design tooling |
 | [0098](docs/decisions/0098-design-rules-are-revisable-truth-rules-are-not.md) | Design rules are revisable; truth rules are not | UI and design tooling |
+| [0109](docs/decisions/0109-the-business-agent-is-the-orchestrator.md) | The Business Agent is the orchestrator: one durable tool-calling turn under Nova's name, a second bounded exception to rule 41, founder-pressed controls for every consequential action (Proposed, unimplemented) | §3.6, Web surface |
 
 ### Layers with no section above
 
