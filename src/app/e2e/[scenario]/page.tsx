@@ -126,6 +126,11 @@ import {
   novaScenarioView,
   NOVA_SCENARIO_PRIORITY,
 } from "../nova-scenarios";
+import {
+  conversationScenarioView,
+  isE2eConversationScenario,
+} from "../nova-conversation-scenarios";
+import { NovaConversation } from "@/app/app/projects/[projectId]/nova/nova-conversation";
 import { E2E_ACTION_PLAN_SCENARIOS, isE2eActionPlanScenario } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import {
@@ -226,10 +231,7 @@ import {
   projectSectionHref,
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
-import {
-  E2E_CHANGE_HISTORY,
-  E2E_CHANGE_HISTORY_MOVES,
-} from "../change-history-scenarios";
+import { E2E_CHANGE_HISTORY, E2E_CHANGE_HISTORY_MOVES } from "../change-history-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -919,6 +921,25 @@ export default async function E2eScenarioPage({
       <StudyShell study={study}>
         <StudyNovaHome study={study} />
       </StudyShell>
+    );
+  }
+
+  if (isE2eConversationScenario(scenario)) {
+    /*
+      The conversation surface, on its own.
+
+      Mounted without the focus above it on purpose: the focus already has six
+      scenarios of its own, and a fixture that drew both would make every
+      assertion here reach past a screen's worth of unrelated content to find
+      the thing it is about.
+    */
+    return (
+      <main className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-6">
+        <NovaConversation
+          projectId="project_e2e"
+          conversation={conversationScenarioView(scenario)}
+        />
+      </main>
     );
   }
 

@@ -12,6 +12,8 @@ import { resolveFounderInputAction } from "../founder-input-action";
 
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";
+import { NovaConversation } from "./nova-conversation";
+import { readNovaConversation } from "@/modules/nova/conversation";
 import { NovaRail } from "./nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
 import { AtmosphereField } from "@/components/layout/atmosphere";
@@ -82,12 +84,21 @@ export async function NovaHome({
   userId: string;
   project: ProjectWorkspaceContext;
 }) {
-  const data = await readNovaHomeData(supabase, {
-    projectId: project.id,
-    userId,
-    projectName: project.name,
-    repositoryFullName: project.repository?.fullName ?? null,
-  });
+  const [data, conversation] = await Promise.all([
+    readNovaHomeData(supabase, {
+      projectId: project.id,
+      userId,
+      projectName: project.name,
+      repositoryFullName: project.repository?.fullName ?? null,
+    }),
+    /*
+     * The thread, read with the founder's own client so RLS decides which
+     * conversation they see (ADR 0109). Alongside the focus rather than after
+     * it: they are independent reads, and a founder waiting on two round trips
+     * for one screen is a round trip nobody chose.
+     */
+    readNovaConversation(supabase, { projectId: project.id, userId }),
+  ]);
 
   const href = {
     agent: projectSectionHref(project.id, "agent"),
@@ -187,6 +198,17 @@ export async function NovaHome({
           sectionHref={sectionHref}
           running={runningBlockFor(data, { projectId: project.id, canStart: connected })}
         />
+      </NovaRise>
+      {/*
+        The conversation, beneath what Nova already knows.
+
+        Later in the stagger than the focus because it is the second thing to
+        read, and because a founder who has never asked anything sees the
+        ranking arrive first and a composer settle under it — rather than an
+        empty box where the product used to say something.
+      */}
+      <NovaRise delay={0.16}>
+        <NovaConversation projectId={project.id} conversation={conversation} />
       </NovaRise>
     </NovaRoom>
   );

@@ -291,36 +291,72 @@ describe("Nova Home", () => {
      */
 
     /*
-     * Nova is not a chat box, and this is the claim rather than a style rule.
-     * There is nothing to type at her: she proposes one thing and a founder
-     * presses it or does not, which is what makes her a colleague rather than
-     * a prompt window — and `feed.test.ts` holds the other half, that she never
-     * describes herself as one.
+     * Nova has exactly one place to type at her, and this is the claim rather
+     * than a style rule.
      *
-     * ## The one field, and why the exemption is narrow
+     * ## What this test used to say, and why it changed
      *
-     * She asks what to call somebody, once, during her introduction. That is
+     * It used to say **none**: `<textarea>` forbidden everywhere with no
+     * exemption at all, because "a multi-line box is a chat box whatever the
+     * label above it says". That was true and it was the right guard for a
+     * product whose answer to every question was a control to press.
+     *
+     * [ADR 0109](../../../../../../docs/decisions/0109-the-business-agent-is-the-orchestrator.md)
+     * changed the product: the Business Agent answers a founder's question by
+     * calling a closed set of read tools and returning a validated sentence.
+     * That needs a question, and a question needs somewhere to write it. The
+     * guard is therefore **narrowed in the open** — Sprint 0215's shape —
+     * rather than deleted, and what replaces "none" is "one, and it is the
+     * composer":
+     *
+     *   - exactly one file in this route may hold a `<textarea>`, by name;
+     *   - it must be bounded by the shared constant the server also enforces,
+     *     never by a number typed into the component;
+     *   - it must carry the field name the Server Action reads, so the box is
+     *     wired to the bounded path rather than to something else;
+     *   - every other file still fails on a `<textarea>`, and the name field's
+     *     exemption is unchanged and still narrow.
+     *
+     * A second composer, an unbounded one, or one whose limit stopped being the
+     * shared constant fails here — which is the part of the old claim that was
+     * always doing the work.
+     *
+     * ## The one single-line field, unchanged
+     *
+     * Nova asks what to call somebody, once, during her introduction. That is
      * the only way to have a name without guessing — `identity-view.ts`
      * refuses to turn an address into one — and it is a *label*, not an
-     * instruction: it is normalised to one plain line, bounded by a database
-     * CHECK, and fenced as untrusted data wherever it reaches a model (rule 42).
-     *
-     * So the sweep still runs over every file, and the exempt one has to prove
-     * it is that field: bounded by the shared limit and carrying the same name
-     * the profile form writes. A second text box anywhere, or this one losing
-     * its bound, fails here.
-     *
-     * `<textarea>` stays forbidden everywhere with no exemption at all. A
-     * multi-line box is a chat box whatever the label above it says.
+     * instruction: normalised to one plain line, bounded by a database CHECK,
+     * and fenced as untrusted data wherever it reaches a model (rule 42).
      */
     const NAME_FIELD_FILE = "nova-opening-screen.tsx";
+    const COMPOSER_FILE = "nova-composer.tsx";
 
-    it("has no chat input anywhere", () => {
+    it("has exactly one composer, and no other text input", () => {
       for (const { name, body } of FILES) {
-        expect(body, name).not.toMatch(/<textarea/);
-        if (name === NAME_FIELD_FILE) continue;
+        if (name !== COMPOSER_FILE) expect(body, name).not.toMatch(/<textarea/);
+        if (name === NAME_FIELD_FILE || name === COMPOSER_FILE) continue;
         expect(body, name).not.toMatch(/type="text"|placeholder=/);
       }
+
+      const composers = FILES.filter(({ body }) => /<Textarea|<textarea/.test(body));
+      expect(composers.map(({ name }) => name)).toEqual([COMPOSER_FILE]);
+    });
+
+    it("keeps the one composer bounded by the shared limit and wired to the action", () => {
+      const composer = component(COMPOSER_FILE);
+
+      // One box, and it is the founder's question.
+      expect(composer.match(/<Textarea/g) ?? []).toHaveLength(1);
+      expect(composer).toContain('name="message"');
+
+      // Bounded by the shared constant, never by a number typed in here. The
+      // server enforces the same one, so the two cannot disagree.
+      expect(composer).toContain("maxLength={MAX_FOUNDER_MESSAGE_CHARS}");
+      expect(composer).not.toMatch(/maxLength=\{\d/);
+
+      // Wired to the bounded path rather than to some other handler.
+      expect(composer).toContain("askNovaAction");
     });
 
     it("lets the one exempt file hold the name field and nothing else", () => {
