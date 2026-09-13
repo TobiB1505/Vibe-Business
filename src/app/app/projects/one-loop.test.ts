@@ -25,6 +25,7 @@ const LINEAGE = read("src/modules/opportunities/lineage.ts");
 const SERVICE = read("src/modules/opportunities/service.ts");
 const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
 const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/content.tsx");
+const HEALTH_READ = read("src/modules/projects/business-health-read.ts");
 const PANEL = read("src/app/app/projects/[projectId]/plan/move-card.tsx");
 const STEPPER = read("src/app/app/projects/[projectId]/plan/move-stepper.tsx");
 const WORKSPACE = read("src/app/app/projects/[projectId]/plan/action-plan-workspace.tsx");
@@ -35,9 +36,7 @@ const PLAN_DETAIL = read("src/app/app/projects/[projectId]/plan/plan-detail-pane
  * the first one already named (ADR 0099).
  */
 const ATTESTATION_FORM = read("src/app/app/projects/[projectId]/plan/attestation-form.tsx");
-const PRIORITIES = read(
-  "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
-);
+const PRIORITIES = read("src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx");
 const BRAIN_VIEW = read("src/modules/projects/business-brain-view.ts");
 const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-panel.tsx");
 const RUN_AUDIT = read("src/app/app/projects/[projectId]/run-audit-button.tsx");
@@ -47,15 +46,9 @@ const WORKSPACE_READ_MODEL = read("src/modules/execution/workspace.ts");
 const AGENT_PAGE = read("src/app/app/projects/[projectId]/agent/page.tsx");
 const AGENT_READY = read("src/app/app/projects/[projectId]/agent/agent-ready-stage.tsx");
 const AGENT_START = read("src/app/app/projects/[projectId]/agent/agent-start-action.tsx");
-const AGENT_STAGE_ACTIONS = read(
-  "src/app/app/projects/[projectId]/agent/agent-stage-actions.tsx",
-);
-const AGENT_VALIDATE = read(
-  "src/app/app/projects/[projectId]/agent/agent-validate-action.tsx",
-);
-const VALIDATE_ACTION = read(
-  "src/app/app/projects/[projectId]/validate-change-action.ts",
-);
+const AGENT_STAGE_ACTIONS = read("src/app/app/projects/[projectId]/agent/agent-stage-actions.tsx");
+const AGENT_VALIDATE = read("src/app/app/projects/[projectId]/agent/agent-validate-action.tsx");
+const VALIDATE_ACTION = read("src/app/app/projects/[projectId]/validate-change-action.ts");
 const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts");
 /**
  * The Agent workspace's server actions.
@@ -65,9 +58,7 @@ const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts")
  * two redirect pages beside them are gone; there is one Agent screen and this
  * is what it submits to.
  */
-const AGENT_ACTIONS = read(
-  "src/app/app/projects/[projectId]/agent/agent-run-actions.ts",
-);
+const AGENT_ACTIONS = read("src/app/app/projects/[projectId]/agent/agent-run-actions.ts");
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
@@ -118,8 +109,20 @@ describe("lineage comes from stored identity", () => {
     expect(reader).not.toContain("getLatestSuccessfulAudit");
   });
 
+  /**
+   * The guard moved into the read the page now calls, and had to be found
+   * there rather than dropped.
+   *
+   * `readBusinessHealth` is the function the Business Health screen and the
+   * Business Agent's `get_business_health` tool both call (ADR 0109). The
+   * rebinding hazard is the same wherever the lineage is resolved, so the
+   * assertion follows the code: the screen must not resolve lineage itself,
+   * and the extracted read must still refuse to resolve it across audits.
+   */
   it("guards the audit page's lineage on the set matching the shown audit", () => {
-    expect(SCORE_PAGE).toContain("opportunities.set.businessAuditId === latestAudit.id");
+    expect(SCORE_PAGE).not.toContain("resolveMoveLineage(");
+    expect(HEALTH_READ).toContain("opportunities.set.businessAuditId === latestAudit.id");
+    expect(HEALTH_READ).toContain("resolveMoveLineage(");
   });
 
   /** §32: a new lookup boundary gets an explicit project scope. */
@@ -178,9 +181,9 @@ describe("context filters, it never reranks", () => {
   it("renders the rank the domain gave, never a positional one", () => {
     // The active card and the priority step both use the persisted rank.
     expect(PANEL).toContain("String(opportunity.rank).padStart(2");
-    expect(PANEL).toContain('data-rank={opportunity.rank}');
+    expect(PANEL).toContain("data-rank={opportunity.rank}");
     expect(STEPPER).toContain("opportunity.rank");
-    expect(STEPPER).toContain('data-rank={opportunity.rank}');
+    expect(STEPPER).toContain("data-rank={opportunity.rank}");
     expect(copyOf(PANEL)).not.toMatch(/rank\s*[:=]\s*index/);
   });
 
@@ -254,13 +257,13 @@ describe("the stepper owns selection without owning business state", () => {
     expect(STEPPER).toContain('event.key === "ArrowRight"');
     expect(STEPPER).toContain('aria-label="Previous move"');
     expect(STEPPER).toContain('aria-label="Next move"');
-    expect(WORKSPACE).toContain('drag={!reduceMotion');
+    expect(WORKSPACE).toContain("drag={!reduceMotion");
   });
 
   it("loads existing readiness per Move rather than deriving it in the browser", () => {
     expect(MOVES_PAGE).toContain("planReadinessByOpportunity");
     expect(MOVES_PAGE).toContain("actionPlanReadinessFrom(readinessInputs, opportunity.id)");
-    expect(WORKSPACE).not.toContain("executionReadiness === \"ready\"");
+    expect(WORKSPACE).not.toContain('executionReadiness === "ready"');
   });
 
   /**
@@ -406,9 +409,7 @@ describe("a refused run says which gate stopped it", () => {
 
   /** Rule 60: a re-read costs, so it is offered as a link and never started here. */
   it("offers the repository re-read without starting one", () => {
-    const notice = read(
-      "src/app/app/projects/[projectId]/agent/agent-start-refusal-notice.tsx",
-    );
+    const notice = read("src/app/app/projects/[projectId]/agent/agent-start-refusal-notice.tsx");
 
     // `StandaloneLink` since the underline work: it renders a `Link`, so this
     // is still navigation and still costs nothing until the user arrives.
@@ -537,7 +538,11 @@ describe("the plan hands off to the agent, and the agent points back", () => {
   it("reads the Action Plan's execution answer rather than deriving its own", () => {
     expect(AGENT_PAGE).toContain("buildOpportunityActionState({");
     expect(AGENT_FOCUS).toContain("OpportunityActionState");
-    for (const derivation of ["executionReadiness", "resolveExecutionCapability", "capability ==="]) {
+    for (const derivation of [
+      "executionReadiness",
+      "resolveExecutionCapability",
+      "capability ===",
+    ]) {
       expect(copyOf(AGENT_FOCUS), derivation).not.toContain(derivation);
     }
   });
@@ -570,7 +575,9 @@ describe("the plan hands off to the agent, and the agent points back", () => {
 
   /** Regression: a prepared change that quotes its Move and links nowhere. */
   it("links a prepared change back to the Move it answers", () => {
-    expect(WORKSPACE_READ_MODEL).toContain("opportunityId: opportunity ? prepared.opportunityId : null");
+    expect(WORKSPACE_READ_MODEL).toContain(
+      "opportunityId: opportunity ? prepared.opportunityId : null",
+    );
     expect(AGENT_PAGE).toContain("planMoveHref(basePlanHref, taskOpportunityId)");
     expect(AGENT_PAGE).toContain("backHref={planHref}");
     expect(CHANGE_ORIGIN).toContain("moveHref");
@@ -588,7 +595,7 @@ describe("the plan hands off to the agent, and the agent points back", () => {
      * *plan's* URL comes from `projectSectionHref`, not that a route may never
      * build any path. This page legitimately builds the internal dogfood href.
      */
-    expect(copyOf(AGENT_PAGE)).not.toContain('`/app/projects/${project.id}/action-plan');
+    expect(copyOf(AGENT_PAGE)).not.toContain("`/app/projects/${project.id}/action-plan");
   });
 
   it("keeps every production gate inside the new stage workspace", () => {
@@ -608,9 +615,7 @@ describe("the plan hands off to the agent, and the agent points back", () => {
      * reintroduction would not have to reuse the name to be the same mistake.
      */
     expect(
-      existsSync(
-        join(process.cwd(), "src/app/app/projects/[projectId]/agent/change-gates.tsx"),
-      ),
+      existsSync(join(process.cwd(), "src/app/app/projects/[projectId]/agent/change-gates.tsx")),
       "a second review surface exists again",
     ).toBe(false);
   });
@@ -630,7 +635,7 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(AGENT_VALIDATE).toContain("router.refresh()");
     expect(AGENT_VALIDATE).toContain("rerunChangeValidationAction");
     expect(VALIDATE_ACTION).toContain("reusePassed: boolean");
-    expect(VALIDATE_ACTION).toContain('revalidatePath(`/app/projects/${projectId}/agent`)');
+    expect(VALIDATE_ACTION).toContain("revalidatePath(`/app/projects/${projectId}/agent`)");
   });
 
   it("loads the exact prepared artifact named by the handoff", () => {

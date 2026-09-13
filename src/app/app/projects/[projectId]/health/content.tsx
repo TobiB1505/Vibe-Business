@@ -2,7 +2,6 @@ import { EmptyState, Notice } from "@/components/ui/states";
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import {
   getAuditAccessStatus,
-  getAuditCurrency,
   getAuditReadiness,
   readAuditEvidence,
   type AuditPrerequisite,
@@ -11,7 +10,7 @@ import {
   auditBlockedByCredits,
   resolveAuditCreditGate,
 } from "@/modules/business-audit/entitlement";
-import { getPausedAudit, getProjectAuditReadings } from "@/modules/business-audit/store";
+import { getPausedAudit } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
@@ -23,15 +22,13 @@ import {
 import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
-import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/lineage";
-import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { readBusinessHealth } from "@/modules/projects/business-health-read";
 import { buildNovaAuditEntry } from "@/modules/nova/feed";
 import { readNovaAuditVoice } from "@/modules/nova/voice/audit-slot";
 import { buildNovaSituation } from "@/modules/nova/briefing/situation";
 import { provenanceForAction } from "@/modules/provenance/actions";
 import { buildProvenanceChain } from "@/modules/provenance/chain";
 import { provenanceInputsFrom } from "@/modules/provenance/from-evidence";
-import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { AuditCreditNotice } from "../audit-credit-notice";
@@ -101,22 +98,34 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
    * Genuinely first, so it is awaited before the wave rather than inside it.
    * One extra round trip's worth of latency buys back eight.
    */
-  const evidence = await readAuditEvidence(supabase, projectId);
+  const [evidence, latestDeepScanSnapshot] = await Promise.all([
+    readAuditEvidence(supabase, projectId),
+    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+  ]);
   const { latestAudit, repository: latestSnapshot, live: latestLiveSnapshot } = evidence;
 
   const [
-    auditCurrency,
+    health,
     activeAuditOperation,
     auditReadiness,
     auditAccess,
     deepScanAccess,
-    latestDeepScanSnapshot,
     latestDeepScanSession,
-    opportunities,
     pausedAudit,
-    auditReadings,
   ] = await Promise.all([
-    getAuditCurrency(supabase, projectId, evidence),
+    /*
+     * The reading itself, through the same function the Business Agent's
+     * `get_business_health` tool calls (ADR 0109). It carries the currency
+     * check, the reading history, the Moves, their lineage against *this*
+     * audit and the brain view — all of which used to be written out here,
+     * and all of which the agent would otherwise have had to write out a
+     * second time.
+     */
+    readBusinessHealth(supabase, {
+      projectId,
+      evidence,
+      deepScanResultPresent: Boolean(latestDeepScanSnapshot?.result),
+    }),
     // Discovered on the server so returning here shows a running audit rather
     // than an inviting button (Sprint 7 §19).
     getActiveBusinessAuditOperation(supabase, projectId),
@@ -127,66 +136,16 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
       userId,
       owned: { productionUrl: project.productionUrl },
     }),
-    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
-    // CORE-2 §18: "Where I'd start" links to the existing Opportunity Engine's
-    // output. The audit never produces moves of its own.
-    getLatestOpportunities(supabase, projectId),
     // Read server-side so the question survives a reload, a navigation away,
     // and a different device: browser state is never authoritative here
     // (§33, §34, §35).
     getPausedAudit(supabase, projectId),
-    getProjectAuditReadings(supabase, projectId),
   ]);
 
+  const { currency: auditCurrency, opportunities, view: businessBrainView } = health;
+
   const hasMoves = (opportunities?.set.opportunities.length ?? 0) > 0;
-
-  /*
-   * Which of *this* audit's findings have Moves behind them (UI-S2 §7, §8).
-   *
-   * Guarded on the set's own audit id rather than computed unconditionally.
-   * A conclusion key addresses a position inside one immutable audit document,
-   * so reading a set's keys against a newer audit would silently rebind every
-   * Move to whatever finding now sits at that position — a link the founder
-   * would reasonably read as causal and that nothing ever asserted.
-   *
-   * Costs no extra query: both halves are already loaded above.
-   */
-  const contextualLineage =
-    latestAudit?.result && opportunities && opportunities.set.businessAuditId === latestAudit.id
-      ? resolveMoveLineage({
-          sourceAudit: latestAudit.result,
-          opportunities: opportunities.set.opportunities,
-        })
-      : {};
-  const contextualMoves = movesPerConclusion(contextualLineage);
-  const contextualMoveDetails = Object.fromEntries(
-    (opportunities?.set.opportunities ?? [])
-      .slice()
-      .sort((a, b) => a.rank - b.rank)
-      .flatMap((move) => {
-        const key = contextualLineage[move.id]?.conclusionKey;
-        return key
-          ? [[key, { title: move.title, impact: move.impact, effort: move.effort }] as const]
-          : [];
-      })
-      .filter(
-        ([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index,
-      ),
-  );
-
-  const usedSignedInEvidence =
-    Boolean(latestDeepScanSnapshot?.result) && !auditCurrency.newDeepScanEvidence;
-  const businessBrainView = latestAudit?.result
-    ? buildBusinessBrainView({
-        audit: latestAudit.result,
-        lastScanAt: latestAudit.completedAt ?? latestAudit.createdAt,
-        auditReadings,
-        movesByConclusion: contextualMoves,
-        moveByConclusion: contextualMoveDetails,
-        usedSignedInEvidence,
-      })
-    : null;
 
   const evidenceChain = buildProvenanceChain(
     provenanceInputsFrom({

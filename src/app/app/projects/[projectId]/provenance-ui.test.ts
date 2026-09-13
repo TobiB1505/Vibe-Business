@@ -49,8 +49,23 @@ describe("the panel is fed from what the page already read", () => {
     expect(body.match(/readAuditEvidence\(/g) ?? []).toHaveLength(1);
   });
 
+  /**
+   * Still once per render, one indirection later.
+   *
+   * `readBusinessHealth` took the currency check with it when the Business
+   * Health assembly was extracted so the Business Agent's tool and this screen
+   * could share one read (ADR 0109). The invariant this test exists for is
+   * unchanged — one resolution per render — so it is asserted where the
+   * resolution now happens, and the screen is held to naming it nowhere.
+   */
   it("resolves the audit's currency exactly once", () => {
-    expect(body.match(/getAuditCurrency\(/g) ?? []).toHaveLength(1);
+    expect(body.match(/getAuditCurrency\(/g) ?? []).toHaveLength(0);
+    expect(body.match(/readBusinessHealth\(/g) ?? []).toHaveLength(1);
+    const extracted = readFileSync(
+      join(process.cwd(), "src/modules/projects/business-health-read.ts"),
+      "utf8",
+    );
+    expect(extracted.match(/getAuditCurrency\(/g) ?? []).toHaveLength(1);
   });
 
   it("narrows the chain to the action this screen sells", () => {
