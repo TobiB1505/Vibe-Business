@@ -2,11 +2,18 @@ import Anthropic from "@anthropic-ai/sdk";
 import type {
   AIFailureCode,
   AIProvider,
+  AIToolCallingProvider,
   AIUsage,
+  AssistantBlock,
+  AgentTurn,
   ProviderErrorDiagnostic,
   StructuredRequest,
   StructuredResult,
   TokenCountResult,
+  ToolCall,
+  ToolCallingRequest,
+  ToolCallingResult,
+  ToolCallingUsage,
 } from "../provider";
 import { logRejectedProviderRequest } from "./provider-error-log";
 
@@ -23,9 +30,14 @@ import { logRejectedProviderRequest } from "./provider-error-log";
  * Three deliberate omissions, each a security property rather than a
  * simplification:
  *
- *  - **No `tools` parameter.** The model gets evidence and cannot act on
- *    it. This is what makes prompt injection in a customer's README or
- *    website headline a non-event rather than an incident.
+ *  - **No `tools` parameter on structured generation.** The model gets
+ *    evidence and cannot act on it. This is what makes prompt injection in a
+ *    customer's README or website headline a non-event rather than an
+ *    incident. Tool-calling turns exist only through the *separate*
+ *    `AIToolCallingProvider` contract (ADR 0109, Proposed): a different
+ *    request type, a different parameter builder, and a caller that has to
+ *    ask for the capability by name. `buildCountableParams` below still
+ *    cannot emit a tool.
  *  - **No streaming.** A single request/response keeps usage accounting and
  *    refusal handling exact.
  *  - **Thinking blocks are never read.** Only `text` blocks are extracted,
@@ -65,6 +77,63 @@ function toUsage(usage: {
     outputTokens: usage.output_tokens,
     thinkingTokens: usage.output_tokens_details?.thinking_tokens ?? 0,
   };
+}
+
+/**
+ * The tool-calling result carries cache tokens too. `null` from the API means
+ * "no cache was involved", which is zero tokens, not an unknown quantity.
+ */
+function toToolCallingUsage(usage: {
+  input_tokens: number;
+  output_tokens: number;
+  output_tokens_details?: { thinking_tokens: number } | null;
+  cache_read_input_tokens?: number | null;
+  cache_creation_input_tokens?: number | null;
+}): ToolCallingUsage {
+  return {
+    ...toUsage(usage),
+    cacheReadInputTokens: usage.cache_read_input_tokens ?? 0,
+    cacheCreationInputTokens: usage.cache_creation_input_tokens ?? 0,
+  };
+}
+
+/**
+ * The provider-neutral transcript, rendered onto the wire.
+ *
+ * Tool results become a `user` message of `tool_result` blocks, which is the
+ * one shape the API accepts for them. Nothing is added to any string: the
+ * caller fenced every result before it got here, and the adapter's job is
+ * representation, never content.
+ */
+function toWireMessages(turns: readonly AgentTurn[]): Anthropic.MessageParam[] {
+  return turns.map((turn): Anthropic.MessageParam => {
+    switch (turn.role) {
+      case "user":
+        return { role: "user", content: turn.content };
+      case "assistant":
+        return {
+          role: "assistant",
+          content: turn.content.map(
+            (block): Anthropic.ContentBlockParam =>
+              block.type === "text"
+                ? { type: "text", text: block.text }
+                : { type: "tool_use", id: block.id, name: block.name, input: block.input },
+          ),
+        };
+      case "tool_results":
+        return {
+          role: "user",
+          content: turn.results.map(
+            (result): Anthropic.ToolResultBlockParam => ({
+              type: "tool_result",
+              tool_use_id: result.toolCallId,
+              content: result.content,
+              is_error: result.isError,
+            }),
+          ),
+        };
+    }
+  });
 }
 
 /**
@@ -158,7 +227,7 @@ function classifyError(error: unknown): ClassifiedError {
   return { kind: "unclassified" };
 }
 
-export class AnthropicProvider implements AIProvider {
+export class AnthropicProvider implements AIProvider, AIToolCallingProvider {
   readonly name = "anthropic";
 
   constructor(private readonly messages: AnthropicMessagesClient) {}
@@ -331,5 +400,154 @@ export class AnthropicProvider implements AIProvider {
     }
 
     return { ok: true, data, usage, model: response.model, latencyMs };
+  }
+
+  /* -------------------------------------------------------------------------
+   * Tool-calling turns (AIToolCallingProvider)
+   *
+   * A second parameter builder rather than a flag on the first: the
+   * structured path must stay incapable of emitting a `tools` key, and the
+   * only way to make that structural is to never give it the code.
+   * ---------------------------------------------------------------------- */
+
+  private buildCountableToolParams(request: ToolCallingRequest) {
+    const thinking =
+      request.reasoning.mode === "adaptive" ? { thinking: { type: "adaptive" as const } } : {};
+    const effort =
+      request.reasoning.mode === "adaptive"
+        ? { output_config: { effort: request.reasoning.effort } }
+        : {};
+
+    return {
+      model: request.model,
+      system: request.system,
+      messages: toWireMessages(request.messages),
+      // `strict: true` makes the API guarantee that `tool_use.input` validates
+      // against the schema exactly, so a malformed argument is a provider-side
+      // impossibility rather than a runtime-side surprise. The runtime still
+      // validates on receipt (rule 45's discipline): the guarantee is about the
+      // wire, and the check is about what Vibe is willing to act on.
+      tools: request.tools.map(
+        (tool): Anthropic.Tool => ({
+          name: tool.name,
+          description: tool.description,
+          input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
+          strict: true,
+        }),
+      ),
+      // `tool_choice` is deliberately left at its default (`auto`). Forcing a
+      // tool is rejected outright by the newest model generation, and a loop
+      // that needs to force one is a loop that should have asked in prose.
+      ...thinking,
+      ...effort,
+    };
+  }
+
+  private buildToolParams(request: ToolCallingRequest) {
+    return {
+      ...this.buildCountableToolParams(request),
+      max_tokens: request.maxOutputTokens,
+    };
+  }
+
+  async countToolCallingInputTokens(request: ToolCallingRequest): Promise<TokenCountResult> {
+    try {
+      const result = await this.messages.countTokens(this.buildCountableToolParams(request));
+      return { ok: true, inputTokens: result.input_tokens };
+    } catch (error) {
+      const classified = classifyError(error);
+      if (classified.kind === "provider_state") {
+        return { ok: false, error: classified.code };
+      }
+      return { ok: false, error: "token_count_failed" };
+    }
+  }
+
+  /**
+   * Exactly one turn. The response is translated block by block into the
+   * neutral shape; thinking blocks are skipped here exactly as they are in
+   * `generateStructured`, so no reasoning leaves this file on either path.
+   */
+  async generateWithTools(request: ToolCallingRequest): Promise<ToolCallingResult> {
+    const startedAt = Date.now();
+
+    let response: Anthropic.Message;
+    try {
+      response = await this.messages.create(this.buildToolParams(request), {
+        timeout: request.timeoutMs,
+      });
+    } catch (error) {
+      const classified = classifyError(error);
+      const latencyMs = Date.now() - startedAt;
+
+      if (classified.kind === "request_rejected") {
+        logRejectedProviderRequest(error, classified.diagnostic);
+        return {
+          ok: false,
+          error: "provider_request_rejected",
+          diagnostic: classified.diagnostic,
+          model: request.model,
+          latencyMs,
+        };
+      }
+
+      return {
+        ok: false,
+        error: classified.kind === "provider_state" ? classified.code : "provider_unavailable",
+        model: request.model,
+        latencyMs,
+      };
+    }
+
+    const latencyMs = Date.now() - startedAt;
+    const usage = toToolCallingUsage(response.usage);
+
+    if (response.stop_reason === "refusal") {
+      return { ok: false, error: "provider_refusal", usage, model: response.model, latencyMs };
+    }
+
+    // The context window is a ceiling the caller's own budget should have
+    // stopped short of; reaching it is the same class of defect as a
+    // truncated structured answer, and gets the same code.
+    if (response.stop_reason === "model_context_window_exceeded") {
+      return { ok: false, error: "output_truncated", usage, model: response.model, latencyMs };
+    }
+
+    const content: AssistantBlock[] = [];
+    const toolCalls: ToolCall[] = [];
+    for (const block of response.content) {
+      if (block.type === "text") {
+        content.push({ type: "text", text: block.text });
+      } else if (block.type === "tool_use") {
+        const call: ToolCall = { id: block.id, name: block.name, input: block.input };
+        content.push({ type: "tool_use", ...call });
+        toolCalls.push(call);
+      }
+      // Thinking, redacted thinking and server-tool blocks are skipped: the
+      // first two by rule 43, the last because no server tool is ever sent.
+    }
+
+    const text = content
+      .filter((block): block is Extract<AssistantBlock, { type: "text" }> => block.type === "text")
+      .map((block) => block.text)
+      .join("");
+
+    const stopReason =
+      response.stop_reason === "tool_use"
+        ? "tool_use"
+        : response.stop_reason === "max_tokens"
+          ? "max_tokens"
+          : "end_turn";
+
+    return {
+      ok: true,
+      stopReason,
+      content,
+      text,
+      toolCalls,
+      usage,
+      model: response.model,
+      latencyMs,
+    };
   }
 }

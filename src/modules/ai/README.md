@@ -3,22 +3,23 @@
 The AI provider boundary ([ADR 0005](../../../docs/decisions/0005-ai-provider-abstraction.md), [ADR 0011](../../../docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md)) and everything that costs money.
 
 ```
-provider.ts            AIProvider — domain-owned, no Anthropic types
+provider.ts            AIProvider — domain-owned, no Anthropic types — and, beside it,
+                       AIToolCallingProvider: one tool-calling turn (ADR 0109, Proposed)
 operations.ts          model / reasoning / token budgets, per operation
 pricing.ts             effective-dated pricing + integer-exact cost
 usage.ts               internal provider-cost ledger (server-only)
-anthropic/adapter.ts   the ONLY file that imports the Anthropic SDK
-anthropic/client.ts    key loading + client construction (server-only)
+anthropic/adapter.ts   the ONLY file that imports the Anthropic SDK; implements both contracts
+anthropic/client.ts    key loading + client construction (server-only); one accessor per contract
 ```
 
 ## Non-negotiables
 
-- **No tools, ever.** `StructuredRequest` has no field for tools, web search, URL fetching, or code execution, and the adapter must never add one. A model that receives untrusted evidence and cannot act is why prompt injection is a wrong sentence rather than an incident.
+- **No tools on structured generation.** `StructuredRequest` has no field for tools, web search, URL fetching, or code execution, and the structured path in the adapter has no code that could add one — `provider-contract.test.ts` reads both as text. A model that receives untrusted evidence and cannot act is why prompt injection is a wrong sentence rather than an incident. Tool-calling turns exist only through the **separate** `AIToolCallingProvider` contract: its own request type, its own parameter builder, and an accessor (`getAIToolCallingProvider`) a caller has to name, so holding an `AIProvider` never implies the capability. That contract performs exactly one turn, never a loop; the loop belongs to the domain module that owns the conversation (`src/modules/business-agent/`). At HEAD nothing in production calls it — the seam pilot under `business-agent/pilot/` is its only caller, and the second exception to rule 41 it would need is still Proposed ([ADR 0109](../../../docs/decisions/0109-the-business-agent-is-the-orchestrator.md)).
 - **The SDK stops at the adapter.** Nothing outside `anthropic/` may import `@anthropic-ai/sdk`. Callers switch on `AIFailureCode`; a raw provider error must never reach a log line or a browser.
 - **Translate provider failures, never flatten them.** Both call paths — free token counting and the billable call — classify errors from the HTTP status and the API's typed `error.type` field, never from message text. A catch-all that reports one generic code hides operator-actionable states such as an unpaid account; the generic codes (`token_count_failed`, `provider_unavailable`) are last resorts for failures that map onto no known state.
 - **One code per stage, so a failure names its own cause.** A rejected request (`provider_request_rejected`), a response with no text (`structured_output_empty`), and unparseable text (`structured_output_json_invalid`) are three different bugs with three different fixes; the domain adds a fourth for its own post-validation. Sharing one code between them makes a production failure undiagnosable without spending another paid call.
 - **Diagnostics are a closed set of identifiers, never prose.** `ProviderErrorDiagnostic` carries an HTTP status, the typed `error.type`, and a request id — each pattern-validated on the way in, so a provider returning a message where an identifier belongs gets it dropped. There is no field for a message, a body, a payload, a prompt, or evidence.
-- **No reasoning leaves the adapter.** Only `text` blocks are read. Thinking token *counts* are read because they are billed; thinking *text* is never returned, stored, or displayed.
+- **No reasoning leaves the adapter.** Only `text` blocks are read — and on the tool-calling path, `text` and `tool_use` blocks. Thinking token *counts* are read because they are billed; thinking *text* is never returned, stored, or displayed, on either path.
 - **Every model identifier lives in `operations.ts`.** No route handler, action, or component may name a model, and nothing user-supplied may select one.
 - **A model and what you ask it for are one decision.** `reasoning` is a union — `{mode: "adaptive", effort}` or `{mode: "none"}` — so an effort level is only reachable for a model that supports one, and the adapter sends `thinking`/`output_config.effort` only for `adaptive`. These are not universal parameters: they arrived with one model generation, and an older model rejects a request carrying either. CORE-1 shipped Haiku 4.5 with `medium` effort, and every run failed on the *free* token count before spending anything, reporting `token_count_failed` — the code for "unattributable" — so nothing pointed at the payload. `operations.test.ts` now fails on that pairing instead.
 - **Every price lives in `pricing.ts`**, effective-dated, in integer nanodollars. No dollar constant belongs anywhere else, and floats have no place in a ledger.

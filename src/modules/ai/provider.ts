@@ -59,7 +59,21 @@ export type AIOperation =
    * same way in the ledger. Nothing writes a usage event for it yet: the eval
    * probe runs it and ledgers nothing, and the product path lands in Slice 9.
    */
-  | "nova_presentation";
+  | "nova_presentation"
+  /**
+   * One tool-calling turn of the Business Agent (ADR 0109, Proposed).
+   *
+   * Reached only through `AIToolCallingProvider.generateWithTools`, never
+   * through `generateStructured`, and `getOperationConfig` has no entry for
+   * it — a turn's budgets are per call *and* per turn, which `OperationConfig`
+   * cannot say. On this union for the same reason `agentic_execution` is: one
+   * ledger key per paid call, whatever shape the call took.
+   *
+   * At HEAD nothing in production sends it. The seam pilot under
+   * `src/modules/business-agent/pilot/` is its only caller, and that runs as a
+   * probe, never as part of `pnpm test`.
+   */
+  | "agent_turn";
 
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";
@@ -250,4 +264,131 @@ export interface AIProvider {
 
   /** Performs one billable structured-generation call. No retries, no loops. */
   generateStructured(request: StructuredRequest): Promise<StructuredResult>;
+}
+
+/* ---------------------------------------------------------------------------
+ * Tool-calling turns — a SEPARATE contract (ADR 0109, Proposed)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * One tool the model may be offered on a tool-calling turn.
+ *
+ * The same shape `coding-agent/provider.ts` gives its sandbox tools, kept
+ * provider-neutral here for the same reason: a descriptor constrains the
+ * model's *output shape*; it never decides whether a call is legal. The
+ * runtime that receives a call validates the arguments again, because a
+ * schema the model was shown is a request and a check the runtime performs
+ * is a fact.
+ */
+export type AIToolDescriptor = {
+  name: string;
+  /** Vibe-authored. Never assembled from repository, website or founder content (rule 42). */
+  description: string;
+  /**
+   * JSON Schema for the arguments, in the strict subset: `type: "object"`,
+   * every property `required`, `additionalProperties: false`.
+   */
+  inputSchema: Record<string, unknown>;
+};
+
+/** What the model produced on one turn, block by block, in order. Thinking is never here. */
+export type AssistantBlock =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: unknown };
+
+/** One tool call the runtime must answer before the next turn. */
+export type ToolCall = { id: string; name: string; input: unknown };
+
+/**
+ * The transcript, provider-neutral.
+ *
+ * Tool results are their own turn kind rather than a user message with
+ * special blocks in it: the caller fences every result as untrusted data
+ * (rule 42) and the adapter decides how the wire represents it. `content`
+ * strings are what the caller built — the adapter adds nothing.
+ */
+export type AgentTurn =
+  | { role: "user"; content: string }
+  | { role: "assistant"; content: readonly AssistantBlock[] }
+  | {
+      role: "tool_results";
+      results: readonly { toolCallId: string; content: string; isError: boolean }[];
+    };
+
+/**
+ * One tool-calling turn.
+ *
+ * Deliberately **not** a widening of `StructuredRequest`: that type still has
+ * no field a tool could arrive through, so the five shipped operations keep
+ * the absence ADR 0011 relies on structurally, not by convention.
+ */
+export type ToolCallingRequest = {
+  operation: AIOperation;
+  model: string;
+  /** Authored by us. Contains no customer content (rule 42). */
+  system: string;
+  /** The transcript so far. Rebuilt by the caller for every turn. */
+  messages: readonly AgentTurn[];
+  /** The closed tool set for this turn. An empty list is a legal request. */
+  tools: readonly AIToolDescriptor[];
+  maxOutputTokens: number;
+  reasoning: AIReasoning;
+  timeoutMs: number;
+};
+
+/**
+ * Cache tokens ride on this result and not on `AIUsage`, so the structured
+ * operations' shape stays byte-identical. A tool-calling loop re-sends a
+ * growing transcript every turn, which is exactly where cache reads and
+ * writes become the larger half of the input bill.
+ */
+export type ToolCallingUsage = AIUsage & {
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+};
+
+/**
+ * Why the model stopped. `tool_use` means the caller owes tool results;
+ * `end_turn` means the model is done; `max_tokens` means the turn was cut.
+ * A refusal is a failure (`provider_refusal`), never a stop reason.
+ */
+export type ToolCallingStopReason = "end_turn" | "tool_use" | "max_tokens";
+
+export type ToolCallingSuccess = {
+  ok: true;
+  stopReason: ToolCallingStopReason;
+  /** Every non-thinking block, in order, so the caller can replay the turn. */
+  content: readonly AssistantBlock[];
+  /** The text blocks joined; empty when the turn was only tool calls. */
+  text: string;
+  /** The tool_use blocks, in order. Empty unless `stopReason` is `tool_use`. */
+  toolCalls: readonly ToolCall[];
+  usage: ToolCallingUsage;
+  model: string;
+  latencyMs: number;
+};
+
+export type ToolCallingResult = ToolCallingSuccess | StructuredFailure;
+
+/**
+ * The tool-calling provider boundary.
+ *
+ * Kept apart from `AIProvider` on purpose. Every existing fake, adapter and
+ * caller of `AIProvider` is untouched by this contract's existence, and a
+ * caller that wants a tool-calling turn has to ask for this interface by
+ * name — which is the point: the capability is visible at the type level,
+ * never implied.
+ *
+ * Both methods are one request each. There is no loop, no retry and no
+ * streaming here; the loop belongs to the domain module that owns the
+ * conversation, exactly as `business-audit/runner.ts` owns its pipeline.
+ */
+export interface AIToolCallingProvider {
+  readonly name: string;
+
+  /** Counts the exact request that would be sent — tools and transcript included. */
+  countToolCallingInputTokens(request: ToolCallingRequest): Promise<TokenCountResult>;
+
+  /** Performs exactly one billable tool-calling turn. No retries, no loops. */
+  generateWithTools(request: ToolCallingRequest): Promise<ToolCallingResult>;
 }

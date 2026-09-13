@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  AGENT_TURN_CONFIG,
   BUSINESS_READINESS_AUDIT_CONFIG,
   getOperationConfig,
   PRODUCT_UNDERSTANDING_CONFIG,
+  type StructuredOperation,
 } from "./operations";
 import { resolvePricing } from "./pricing";
 import type { AIOperation } from "./provider";
@@ -50,8 +52,8 @@ const ADAPTIVE_CAPABLE_MODELS = ["claude-sonnet-5", "claude-opus-5"];
  * own case below, so nothing goes unchecked.
  */
 const STRUCTURED_OPERATIONS = OPERATIONS.filter(
-  (operation): operation is Exclude<AIOperation, "agentic_execution"> =>
-    operation !== "agentic_execution",
+  (operation): operation is StructuredOperation =>
+    operation !== "agentic_execution" && operation !== "agent_turn",
 );
 
 describe("operation configs", () => {
@@ -166,6 +168,31 @@ describe("output and time budgets are coherent", () => {
 
     expect(BUSINESS_READINESS_AUDIT_CONFIG.maxOutputTokens).toBeGreaterThan(
       JSON_PAYLOAD_TOKENS + HIGHEST_OBSERVED_THINKING,
+    );
+  });
+});
+
+/**
+ * The tool-calling turn is held to the same two pairings as every structured
+ * operation, even though it does not flow through `getOperationConfig`: a
+ * model asked for reasoning it cannot honour fails on the free token count,
+ * and an unpriced model throws only after the money is spent.
+ */
+describe("the agent turn config", () => {
+  it("only asks its model for reasoning the model supports", () => {
+    if (AGENT_TURN_CONFIG.reasoning.mode === "adaptive") {
+      expect(ADAPTIVE_CAPABLE_MODELS).toContain(AGENT_TURN_CONFIG.model);
+    }
+  });
+
+  it("has pricing configured for its model", () => {
+    expect(() => resolvePricing(AGENT_TURN_CONFIG.model)).not.toThrow();
+  });
+
+  it("can generate one call's whole output budget before its timeout", () => {
+    const MS_PER_OUTPUT_TOKEN = 9.8;
+    expect(AGENT_TURN_CONFIG.maxOutputTokensPerCall * MS_PER_OUTPUT_TOKEN).toBeLessThanOrEqual(
+      AGENT_TURN_CONFIG.timeoutMs,
     );
   });
 });

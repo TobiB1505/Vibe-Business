@@ -265,6 +265,46 @@ export const AGENTIC_EXECUTION_CONFIG: AgentModelConfig = {
 };
 
 /**
+ * The Business Agent's tool-calling turn (ADR 0109, Proposed; the seam pilot
+ * is its only caller at HEAD).
+ *
+ * Its own type, for the reason `AgentModelConfig` is: a turn has budgets on
+ * two levels — one model call, and the whole turn the call belongs to — and
+ * `OperationConfig` can say only the first. The per-turn ceilings (model
+ * calls, tool calls, total output) live with the loop that enforces them,
+ * in `src/modules/business-agent/pilot/budgets.ts`; what belongs here under
+ * rule 46 is the model, the reasoning mode, and the per-call ceilings that
+ * the provider is handed directly.
+ *
+ * **Sonnet 5, for the same reason the coding agent and Nova's voice are.** It
+ * is the one model this codebase has a measured cost distribution for, its
+ * rate is in `pricing.ts`, and a first comparison of two orchestration seams
+ * should differ in exactly one variable. Escalation is a decision to make
+ * after there is a baseline.
+ *
+ * `high` effort, as the audit: stepping down is a cost optimisation to make
+ * once tool selection has been measured, not before.
+ */
+export type ToolCallingConfig = {
+  operation: Extract<AIOperation, "agent_turn">;
+  model: string;
+  reasoning: AIReasoning;
+  /** Per model call. The loop's own ceilings bound the turn. */
+  maxOutputTokensPerCall: number;
+  maxInputTokensPerCall: number;
+  timeoutMs: number;
+};
+
+export const AGENT_TURN_CONFIG: ToolCallingConfig = {
+  operation: "agent_turn",
+  model: "claude-sonnet-5",
+  reasoning: { mode: "adaptive", effort: "high" },
+  maxOutputTokensPerCall: 4_000,
+  maxInputTokensPerCall: 24_000,
+  timeoutMs: 60_000,
+};
+
+/**
  * Nova's voice (Nova Slice 9).
  *
  * The cheapest operation in this file, and the only one that is allowed to be:
@@ -415,7 +455,15 @@ export const NOVA_VOICE_REGRESSION_JUDGE_CONFIG: EvalJudgeConfig = {
   timeoutMs: 120_000,
 };
 
-const CONFIGS: Record<Exclude<AIOperation, "agentic_execution">, OperationConfig> = {
+/**
+ * The operations a single structured request can carry. The two agent
+ * operations are excluded because neither is one request: `agentic_execution`
+ * runs in a sandbox, and `agent_turn` is a loop of tool-calling turns with
+ * budgets on two levels.
+ */
+export type StructuredOperation = Exclude<AIOperation, "agentic_execution" | "agent_turn">;
+
+const CONFIGS: Record<StructuredOperation, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
   product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
@@ -423,8 +471,6 @@ const CONFIGS: Record<Exclude<AIOperation, "agentic_execution">, OperationConfig
   nova_presentation: NOVA_PRESENTATION_CONFIG,
 };
 
-export function getOperationConfig(
-  operation: Exclude<AIOperation, "agentic_execution">,
-): OperationConfig {
+export function getOperationConfig(operation: StructuredOperation): OperationConfig {
   return CONFIGS[operation];
 }

@@ -3,7 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicEnv } from "@/lib/env/anthropic";
 import { AnthropicProvider } from "./adapter";
-import type { AIProvider } from "../provider";
+import type { AIProvider, AIToolCallingProvider } from "../provider";
 
 /**
  * Constructs the configured Anthropic provider (ADR 0008).
@@ -13,9 +13,23 @@ import type { AIProvider } from "../provider";
  * build, and never in a client bundle.
  */
 
-let cached: AIProvider | undefined;
+let cached: AnthropicProvider | undefined;
 
 export function getAIProvider(): AIProvider {
+  return getAnthropicProvider();
+}
+
+/**
+ * The tool-calling contract (ADR 0109, Proposed), served by the same adapter
+ * instance. A separate accessor so a caller has to ask for the capability by
+ * name — nothing that holds an `AIProvider` can reach a tool-calling turn
+ * through it.
+ */
+export function getAIToolCallingProvider(): AIToolCallingProvider {
+  return getAnthropicProvider();
+}
+
+function getAnthropicProvider(): AnthropicProvider {
   if (cached) return cached;
 
   const env = getAnthropicEnv();

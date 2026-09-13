@@ -248,6 +248,14 @@ describe("every relative link in the documentation resolves", () => {
  */
 const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string }[] = [
   {
+    path: "src/modules/ai/README.md",
+    claim: "No tools, ever.",
+    retiredBy:
+      "A separate tool-calling contract now exists beside AIProvider for the Business Agent's " +
+      "seam pilot (ADR 0109, Proposed). The structured path is still tool-free, and the README " +
+      "says so precisely rather than absolutely.",
+  },
+  {
     path: "DESIGN.md",
     claim: "recent activity and plan choices complete the page",
     retiredBy:
