@@ -209,7 +209,12 @@ const NEGATIONS = [
 /** How far back a negation may sit and still govern the phrase. */
 const NEGATION_WINDOW = 60;
 
-function findUnnegated(normalized: string, phrases: readonly string[]): string[] {
+/**
+ * Exported because the Business Agent's reply validator needs the same window
+ * over the same list (ADR 0109). A third copy of a negation heuristic is a
+ * third place for "this does not mean it is live" to be refused.
+ */
+export function findUnnegated(normalized: string, phrases: readonly string[]): string[] {
   return phrases.filter((phrase) => {
     let from = 0;
     for (;;) {
