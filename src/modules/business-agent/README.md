@@ -2,25 +2,47 @@
 
 The Business Agent's future home ([ADR 0109](../../../docs/decisions/0109-the-business-agent-is-the-orchestrator.md), Accepted; [the architecture audit of 2026-09-13](../../../docs/audits/2026-09-13-business-agent-architecture/README.md)).
 
-**At HEAD this module holds one thing: the seam pilot.** No conversation table, no composer, no production loop, no real tool reaches Supabase, GitHub, a sandbox or a customer URL. Everything under `pilot/` runs against a scripted fixture world, and the only paid path is a probe that `pnpm test` cannot reach.
+**At HEAD this module holds two things: the production agent, and the seam pilot that chose how it talks to a model.**
 
 ```
-pilot/
-  budgets.ts     the ceilings both seams run under — numbers in code, never in a prompt
-  fixtures.ts    the scripted world: one product, its focus, health, Moves, plan, resolver answers
-  tools.ts       eight read-only / prepare tools over that world; a closed registry (rule 76)
-  dispatch.ts    one tool call: unknown name, bad arguments and the ceiling all fail closed as results
-  prompt.ts      one system prompt, two output sections (native tools / structured actions); the fences
-  trajectory.ts  what one turn did — counts, ids, codes, the reply; never a prompt or a thinking block
-  seam-a.ts      the loop over AIToolCallingProvider.generateWithTools (native tool use)
-  seam-b.ts      the loop over AIProvider.generateStructured (a call_tool / answer action schema)
-  cases.ts       ten conversations with expected trajectories; four are critical
-  checks.ts      the deterministic grader — selection, order, ceilings, arguments, injection, claims
-  rubric.ts      what the judge is asked — grounding, invention, limits, injection, answered, stopped
-  scripted.ts    providers that replay a script, for the tests and for replaying a recorded run
-  measure.ts     request-shape measurement without a provider: bytes, schema metrics, re-sent context
-  seam.probe.ts  the paid comparison — pnpm agent:probe-seam — never part of pnpm test
+artifacts.ts     what a message may point at — no server-only, so the block registry can read it
+orchestrator/
+  budgets.ts     what one turn may spend — numbers in code, never in a prompt
+  prompt.ts      the system prompt, its version, and the fences everything else arrives in
+  validate.ts    what Vibe refuses to show a founder, whatever the model wrote
+  fallback.ts    the Vibe-authored sentences a founder reads when the model's answer cannot be used
+  dispatch.ts    one tool call: unknown name, bad arguments, a repeat and the ceiling all fail closed
+  loop.ts        the agent loop — one provider call per turn, no retry, every exit answers
+tools/
+  registry.ts    the closed set of six, their schemas, argument validation and result bounding
+  focus.ts       get_project_focus     → readNovaFocus
+  health.ts      get_business_health   → readBusinessHealth
+  opportunities.ts get_opportunities   → getLatestOpportunities
+  plan.ts        get_action_plan       → getLatestActionPlan
+  execution.ts   resolve_execution     → resolveAgentPlanRoutes
+  skills.ts      use_skill             → the skill registry
+skills/
+  registry.ts    the index the system prompt carries, and the version stored on every turn
+  next-move/     the one production skill: SKILL.md, and skill.ts holding the same bytes
+context/
+  brief.ts       what the agent knows before any tool runs — identity and freshness, no numbers
+eval/
+  world.ts       the states a real project is in, as rows in the tables production writes
+  cases.ts       ten conversations, each naming the regression it exists to catch
+  checks.ts      the deterministic grader — selection, order, ceilings, claims, tells, crossings
+  turn.probe.ts  the paid shipping gate — pnpm agent:probe-turn — never part of pnpm test
+pilot/           the seam experiment ADR 0109 was decided on; see below
 ```
+
+The turn itself — the conversation tables, the durable operation, the workflow
+and the Server Action — lives in `src/modules/operations/business-agent/`,
+because writing those tables needs the service-role client and rule 53 says
+where that lives.
+
+**What this module still does not hold:** any tool that writes to a repository,
+starts a paid operation, approves, merges, deploys, moves money, opens a
+connection to a URL, runs a command, composes SQL or names a model.
+`architecture.test.ts` reads the source and refuses each one.
 
 ## What the pilot is for
 
@@ -43,14 +65,21 @@ founder), and **the loop refuses an identical repeat and always speaks** when a
 ceiling ends a turn. Seam B stays as the control arm, and the probe still runs
 both.
 
-## What holds on both arms
+## What holds on both arms — and on the production agent
 
-- **Absent capability.** `PILOT_TOOL_NAMES` is the whole tool set. Nothing writes, spends, merges, deploys, runs a command or reaches a URL, so an injected instruction to do any of those resolves to `unknown_tool` — a result the model reads, never an action. `PROHIBITED_CAPABILITIES` exists for the grader, not the runtime.
-- **Arguments carry no authority.** Every identifier is resolved against the fixture's own project rows; a foreign or malformed id is `not_found`, and the fixture's foreign rows are never read by any tool (`checks.ts` looks for their marker in every result).
-- **Validation on receipt.** Seam A asks the provider for `strict` arguments and Seam B gets a flat bag; both go through `validateArguments` before a tool runs.
-- **Ceilings in code.** Model calls, tool calls, total output, per-call input (checked by the free count before the paid call), result bytes. `maxRetries = 0` on the client; the loops never retry either.
-- **The reply is checked.** Banned and causal claims, numerals absent from tool results, case-specific tells and forbidden strings — deterministically, before any judge.
+- **Absent capability.** `AGENT_TOOL_NAMES` is the whole tool set. Nothing writes, spends, merges, deploys, runs a command or reaches a URL, so an injected instruction to do any of those resolves to `unknown_tool` — a result the model reads, never an action. `PROHIBITED_CAPABILITIES` in `eval/checks.ts` exists for the grader, not the runtime.
+- **Arguments carry no authority.** `projectId` and `userId` come from the persisted operation row. Every identifier the model supplies is looked up inside this project's own rows; a Move id from another project is `not_found`, which is the same answer a malformed one gets. No adapter calls a store function that lacks a project predicate.
+- **No sentinel arguments.** Every argument is a required, real identifier the model read out of an earlier result. ADR 0109 measured what the alternative costs: asked to pass an empty string for "the latest", the model emitted fragments of its own tool-call markup and repeated the call until the ceiling stopped the turn with nothing said to the founder.
+- **A repeat is refused.** An identical `(tool, normalized arguments)` pair is answered with a Vibe-authored sentence naming what to do instead, and it counts against the tool budget — a guard that made repeats free would turn a loop into an unbounded one.
+- **Validation on receipt.** The provider is asked for strict arguments and Vibe validates them again before a tool runs, because a schema the model was shown is a request and a check the runtime performs is a fact.
+- **Ceilings in code.** Model calls, tool calls, total output, per-call input (checked by the free count before the paid call), result bytes, and a wall clock. `maxRetries = 0` on the client; the loop never retries either.
+- **The reply is checked.** Banned claims, claims that Vibe acted, causal claims, numerals no tool returned, and artifact references this turn did not read — deterministically, before a founder sees anything.
+- **Every exit answers.** There is no path out of `runAgentTurn` that returns an empty string. A ceiling, a provider failure, a refused reply and a silent model each resolve to a sentence from `fallback.ts`.
 
 ## Running it
 
-`pnpm test` runs everything here except the probe. `pnpm agent:probe-seam` needs `ANTHROPIC_API_KEY`, writes `.agent-eval/seam-results.jsonl` (git-ignored) and prints a per-seam summary; `AGENT_LIMIT=3` runs a pilot of the pilot first, and `AGENT_SEAM=A` runs one arm, which is how the measured run was taken — both arms in one invocation is slow enough to be worth splitting. The offline numbers the ADR quotes are printed by `measure.test.ts` on every run.
+`pnpm test` runs everything here except the probes.
+
+`pnpm agent:probe-turn` is the **shipping gate** for the first vertical slice: the ten cases in `eval/cases.ts` through the production tools, graded deterministically and then by the judge. It needs `ANTHROPIC_API_KEY`, writes `.agent-eval/turn-results.jsonl` (git-ignored), and `AGENT_LIMIT=2` runs a pilot of the eval first. **It has not been run.** ADR 0109's acceptance line is carried forward as the gate, and until this probe clears it no agent turn is put in front of a founder.
+
+`pnpm agent:probe-seam` is the seam comparison ADR 0109 was decided on. `AGENT_SEAM=A` runs one arm, which is how the measured run was taken — both arms in one invocation is slow enough to be worth splitting. The offline numbers the ADR quotes are printed by `measure.test.ts` on every run.

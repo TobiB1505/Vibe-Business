@@ -361,6 +361,23 @@ those live on the Vibe-owned side of a feed entry and never pass through
 inference. Every consequential control keeps Vibe's own words and its own
 price.
 
+That holds for the voice, and it now holds beside something else. [ADR
+0109](../../../docs/decisions/0109-the-business-agent-is-the-orchestrator.md)
+added the Business Agent: a founder can type a question into one composer on
+this screen, and a durable turn answers it by calling six read-only tools over
+this project's own rows. It changes nothing above. The agent's reply is still
+one string and is validated before a founder reads it; it still names no
+control, sets no price and starts nothing, because there is no tool in its
+registry that could. What is new is that a founder can ask — and the answer to
+"what needs attention now" is still `deriveNovaFocus`, deterministic and free,
+arriving above the conversation rather than being replaced by it.
+
+The turn lives in `src/modules/business-agent/` and
+`src/modules/operations/business-agent/`; what lives here is `conversation.ts`,
+which reads a thread back with the founder's own client, and `BLOCK_FOR_ARTIFACT`
+in `blocks.ts`, which says how a message's reference to a canonical row is
+drawn.
+
 ## Running the eval
 
 ```
