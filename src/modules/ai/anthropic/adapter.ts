@@ -438,6 +438,15 @@ export class AnthropicProvider implements AIProvider, AIToolCallingProvider {
       // `tool_choice` is deliberately left at its default (`auto`). Forcing a
       // tool is rejected outright by the newest model generation, and a loop
       // that needs to force one is a loop that should have asked in prose.
+      //
+      // One cache breakpoint, at the end of what has been sent so far. A
+      // tool-calling loop re-sends a transcript that only grows, so each turn
+      // reads what the previous turn wrote and pays the full rate for its own
+      // tail alone. Structured generation has no equivalent and is left
+      // untouched: one user string that changes every call has no stable
+      // prefix to cache, which is a property of that shape rather than an
+      // omission here.
+      cache_control: { type: "ephemeral" as const },
       ...thinking,
       ...effort,
     };

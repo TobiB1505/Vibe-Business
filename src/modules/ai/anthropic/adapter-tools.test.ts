@@ -138,6 +138,35 @@ describe("AnthropicProvider.generateWithTools — request shape", () => {
     ]);
   });
 
+  it("asks for one cache breakpoint on the tool path and none on the structured one", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    const create = vi.fn(async (body: Anthropic.MessageCreateParamsNonStreaming) => {
+      bodies.push(body as unknown as Record<string, unknown>);
+      return messageWith({
+        stop_reason: "end_turn",
+        content: [{ type: "text", text: '{"ok":true}', citations: null }],
+      });
+    });
+    const provider = new AnthropicProvider(clientWith({ create }));
+
+    await provider.generateWithTools(request);
+    await provider.generateStructured({
+      operation: "business_readiness_audit",
+      model: "claude-sonnet-5",
+      system: "s",
+      userContent: "u",
+      outputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
+      maxOutputTokens: 100,
+      reasoning: { mode: "none" },
+      timeoutMs: 1_000,
+    });
+
+    // A loop that re-sends a growing transcript reads what the last turn wrote.
+    expect(bodies[0].cache_control).toEqual({ type: "ephemeral" });
+    // One user string that changes every call has no stable prefix to cache.
+    expect(bodies[1].cache_control).toBeUndefined();
+  });
+
   it("omits thinking and effort when the reasoning mode is none", async () => {
     let sent: Record<string, unknown> | undefined;
     const create = vi.fn(async (body: Anthropic.MessageCreateParamsNonStreaming) => {
