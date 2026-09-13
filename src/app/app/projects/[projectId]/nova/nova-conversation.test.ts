@@ -92,3 +92,63 @@ describe("progress is observed, never invented", () => {
     expect(live).toContain('phase === "stalled"');
   });
 });
+
+describe("what Nova looked at is shown, and what she thought is not", () => {
+  it("renders the steps above the reply", () => {
+    const source = read("nova-conversation.tsx");
+    expect(source).toContain("<NovaThinking");
+    // Above, because that is the order they happened in.
+    expect(source.indexOf("<NovaThinking")).toBeLessThan(source.indexOf("<NovaBubble"));
+  });
+
+  it("selects no column a founder should not be reading", () => {
+    const reader = readFileSync(join(process.cwd(), "src/modules/nova/conversation.ts"), "utf8");
+    /*
+     * A window after the tool-call query rather than a slice between two
+     * markers: `agent_turn_runs` appears earlier in this file for the live
+     * turn, so slicing to its first occurrence read backwards and asserted
+     * nothing.
+     */
+    const from = reader.indexOf('.from("agent_turn_tool_calls")');
+    expect(from).toBeGreaterThan(-1);
+    const select = reader.slice(from, from + 400);
+    expect(select).toContain("turn_run_id, sequence, tool, decision, result_kind");
+    // Identifiers, arguments and Vibe's own message to the model stay put.
+    for (const withheld of ["input", "subject_ids", "denial_reason"]) {
+      expect(select, withheld).not.toContain(withheld);
+    }
+  });
+
+  it("never renders a tool's own name", () => {
+    const component = readFileSync(
+      join(process.cwd(), "src/components/nova/nova-thinking.tsx"),
+      "utf8",
+    );
+    // The label comes from the catalogue; the stored string never reaches JSX.
+    expect(component).toContain("step.label");
+    expect(component).not.toMatch(/step\.tool|call\.tool/);
+  });
+
+  it("says looked at rather than thought, because nobody watched a thought", () => {
+    const component = readFileSync(
+      join(process.cwd(), "src/components/nova/nova-thinking.tsx"),
+      "utf8",
+    );
+    const rendered = component.slice(component.indexOf("const summary ="));
+    expect(rendered).toContain("Looked at");
+    expect(rendered.toLowerCase()).not.toContain('"thought');
+  });
+
+  it("gives the shimmer an answer for reduced motion", () => {
+    const css = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+    const block = css.slice(css.indexOf(".nova-thinking-live"));
+    expect(block).toContain("prefers-reduced-motion");
+    /*
+     * The global kill switch stops the animation and would leave transparent
+     * text over a static gradient, so this one puts the colour back rather
+     * than relying on it.
+     */
+    expect(block).toContain("background-image: none");
+    expect(block).toContain("color: var(--color-fg-secondary)");
+  });
+});

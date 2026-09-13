@@ -42,7 +42,6 @@ export const getActionPlanTool: AgentTool = {
     },
   }),
   classification: "read_only",
-  progressLabel: "Looking at your Action Plan",
   async execute(context, input) {
     const requested = String(input.opportunity_id).trim();
 

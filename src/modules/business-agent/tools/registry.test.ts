@@ -2,6 +2,12 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fakeSupabase, FakeDatabase } from "@/modules/operations/test-support";
+import { BANNED_MODULE_NAMES } from "@/modules/nova/voice/checks";
+import {
+  AGENT_TOOL_PROGRESS_LABELS,
+  UNKNOWN_STEP_LABEL,
+  agentStepLabel,
+} from "../catalog";
 import { AGENT_SKILLS, AGENT_SKILL_IDS, SKILL_REGISTRY_VERSION } from "../skills/registry";
 import {
   AGENT_TOOLS,
@@ -61,12 +67,30 @@ describe("the registry is closed", () => {
     }
   });
 
-  it("gives every tool a Vibe-authored progress label", () => {
+  it("gives every tool a Vibe-authored progress label a founder can read", () => {
     for (const name of AGENT_TOOL_NAMES) {
-      expect(AGENT_TOOLS[name].progressLabel.length).toBeGreaterThan(3);
-      // The label is shown to a founder; Vibe's own vocabulary is not.
-      expect(AGENT_TOOLS[name].progressLabel.toLowerCase()).not.toContain("snapshot");
+      const label = AGENT_TOOL_PROGRESS_LABELS[name];
+      expect(label.length, name).toBeGreaterThan(3);
+      /*
+       * The label is what the thread shows while a step runs, so it is held to
+       * the same line generated prose is: none of Vibe's own words for its
+       * machinery, and never the tool's own name. A founder watching their
+       * business read `get_business_health` would be reading the codebase.
+       */
+      const normalized = label.toLowerCase();
+      for (const forbidden of [...BANNED_MODULE_NAMES, ...AGENT_TOOL_NAMES, "tool", "_"]) {
+        expect(normalized, `${name}: "${label}"`).not.toContain(forbidden);
+      }
     }
+  });
+
+  it("labels every recorded step, including one whose tool has since gone", () => {
+    for (const name of AGENT_TOOL_NAMES) {
+      expect(agentStepLabel(name)).toBe(AGENT_TOOL_PROGRESS_LABELS[name]);
+    }
+    // An old conversation read under new code renders Vibe's words, never the
+    // stored string.
+    expect(agentStepLabel("get_something_retired")).toBe(UNKNOWN_STEP_LABEL);
   });
 });
 

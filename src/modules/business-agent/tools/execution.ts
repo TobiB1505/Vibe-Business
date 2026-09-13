@@ -40,7 +40,6 @@ export const resolveExecutionTool: AgentTool = {
     },
   }),
   classification: "prepare",
-  progressLabel: "Checking what Vibe can build",
   async execute(context, input) {
     const requested = String(input.step_key).trim();
 

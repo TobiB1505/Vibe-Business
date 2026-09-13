@@ -50,7 +50,6 @@ export const getProjectFocusTool: AgentTool = {
     "What needs the founder's attention now, ranked by Vibe's own deterministic rules, what else is true, and whether something is already running. Every entry carries the id of the thing it is about. Call this first when the founder asks what to do next. Free.",
   inputSchema: strictObject({}),
   classification: "read_only",
-  progressLabel: "Checking what needs attention",
   async execute(context) {
     let focus;
     try {

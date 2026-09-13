@@ -29,7 +29,6 @@ export const getOpportunitiesTool: AgentTool = {
     "The ranked Moves from the latest Opportunity run — each with its id, the problem it addresses, why now, impact, effort and how confident Vibe is that the problem exists — plus which Move already has an Action Plan, and whether the ranking is stale against a newer audit. Free.",
   inputSchema: strictObject({}),
   classification: "read_only",
-  progressLabel: "Reading your Moves",
   async execute(context) {
     let opportunities;
     let plan;

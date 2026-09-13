@@ -1,4 +1,5 @@
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
+import { agentStepLabel } from "@/modules/business-agent/catalog";
 import type { NovaConversationView } from "@/modules/nova/conversation";
 import { buildOperationView } from "@/modules/operations/view";
 
@@ -68,6 +69,27 @@ const ASKED = {
   origin: "typed" as const,
   createdAt: "2026-09-13T10:00:00.000Z",
   artifacts: [],
+  thinking: null,
+};
+
+/*
+ * The steps behind the answer, as a turn would actually have recorded them.
+ *
+ * Labels come from `catalog.ts` rather than being written out here, so a
+ * fixture cannot drift into showing a founder a sentence the product does not
+ * use. One step found nothing and one was skipped, because a list where
+ * everything succeeded never exercises the two states that say so.
+ */
+const LOOKED_AT = {
+  durationMs: 6_200,
+  steps: [
+    { label: agentStepLabel("use_skill"), state: "done" as const },
+    { label: agentStepLabel("get_project_focus"), state: "done" as const },
+    { label: agentStepLabel("get_business_health"), state: "done" as const },
+    { label: agentStepLabel("get_opportunities"), state: "done" as const },
+    { label: agentStepLabel("get_action_plan"), state: "empty" as const },
+    { label: agentStepLabel("resolve_execution"), state: "skipped" as const },
+  ],
 };
 
 export function conversationScenarioView(scenario: E2eConversationScenario): NovaConversationView {
@@ -120,6 +142,9 @@ export function conversationScenarioView(scenario: E2eConversationScenario): Nov
           origin: "template",
           createdAt: "2026-09-13T10:00:20.000Z",
           artifacts: [],
+          // A turn that fell back still looked at things first, and the founder
+          // is entitled to see what it managed before it stopped.
+          thinking: { durationMs: 2_100, steps: LOOKED_AT.steps.slice(0, 2) },
         },
       ],
       working: null,
@@ -139,6 +164,7 @@ export function conversationScenarioView(scenario: E2eConversationScenario): Nov
         origin: "model",
         createdAt: "2026-09-13T10:00:20.000Z",
         artifacts: [{ kind: "opportunity", subjectId: "opp-1", opportunity: MOVE }],
+        thinking: LOOKED_AT,
       },
     ],
     working: null,

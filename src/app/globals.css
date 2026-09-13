@@ -1781,3 +1781,55 @@
   */
   mask-image: linear-gradient(180deg, transparent 0%, black 8%, black 92%, transparent 100%);
 }
+
+/*
+ * ADR 0109 — the label that shimmers while a turn is still being answered.
+ *
+ * ## Why it is here and not injected at runtime
+ *
+ * The 21st.dev component this idiom was taken from appends a `<style>` element
+ * to `document.head` the first time it renders, carrying its own hardcoded
+ * greys. Vibe has a stylesheet, and a component that writes into the document
+ * head is a second place styles come from — invisible to every tool that reads
+ * this file and impossible to theme.
+ *
+ * ## Reduced motion needs its own answer here
+ *
+ * The global `prefers-reduced-motion` block stops animations, and that is not
+ * enough for this one: the effect works by painting the gradient *through* the
+ * text, so a stopped animation would leave `color: transparent` over a static
+ * gradient. The guard below puts the colour back, because a founder who asked
+ * their system for less motion must still be able to read the word.
+ */
+.nova-thinking-live {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-fg-meta) 0%,
+    var(--color-fg-meta) 40%,
+    var(--color-fg) 50%,
+    var(--color-fg-meta) 60%,
+    var(--color-fg-meta) 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  animation: nova-thinking-shimmer 1.6s linear infinite;
+}
+
+@keyframes nova-thinking-shimmer {
+  from {
+    background-position: 100% center;
+  }
+  to {
+    background-position: 0% center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nova-thinking-live {
+    background-image: none;
+    color: var(--color-fg-secondary);
+  }
+}

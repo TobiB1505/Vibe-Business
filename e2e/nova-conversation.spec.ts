@@ -66,11 +66,71 @@ test.describe("a question and an answer", () => {
   });
 });
 
+test.describe("what Nova looked at", () => {
+  test("collapses to one line, and opens to the steps she actually took", async ({ page }) => {
+    await page.goto("/e2e/nova-conversation");
+
+    const summary = page.getByRole("button", { name: /Looked at your business/ });
+    await expect(summary).toBeVisible();
+    await expect(summary).toHaveAttribute("aria-expanded", "false");
+
+    // Closed by default: the answer is what the founder came for.
+    await expect(page.getByText("Reading your Business Health")).toBeHidden();
+
+    await summary.click();
+    await expect(summary).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText("Reading your Business Health")).toBeVisible();
+    await expect(page.getByText("Checking what needs attention")).toBeVisible();
+
+    // A step that found nothing says so rather than passing as done.
+    await expect(page.getByText("nothing there yet")).toBeVisible();
+  });
+
+  test("never shows a tool's own name or its arguments", async ({ page }) => {
+    await page.goto("/e2e/nova-conversation");
+    await page.getByRole("button", { name: /Looked at your business/ }).click();
+
+    const body = await page.locator("body").innerText();
+    for (const internal of [
+      "get_business_health",
+      "get_project_focus",
+      "get_action_plan",
+      "resolve_execution",
+      "use_skill",
+      "opportunity_id",
+    ]) {
+      expect(body, internal).not.toContain(internal);
+    }
+  });
+
+  test("says how long it took, and does not claim to have thought", async ({ page }) => {
+    await page.goto("/e2e/nova-conversation");
+
+    // A real elapsed time from the turn's own row, in whole seconds.
+    await expect(page.getByText(/Looked at your business, \d+ seconds/)).toBeVisible();
+    // "Thought" would be a claim about something nobody observed (rule 43).
+    expect(await page.locator("body").innerText()).not.toMatch(/Thought for/i);
+  });
+
+  test("is reachable and operable from the keyboard", async ({ page }) => {
+    await page.goto("/e2e/nova-conversation");
+
+    const summary = page.getByRole("button", { name: /Looked at your business/ });
+    await summary.focus();
+    await expect(summary).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(summary).toHaveAttribute("aria-expanded", "true");
+  });
+});
+
 test.describe("a turn still being answered", () => {
   test("says what it is doing, and never shows a fraction", async ({ page }) => {
     await page.goto("/e2e/nova-conversation-working");
 
+    // The stage the operation is actually in, shimmering in the header.
     await expect(page.getByText("Looking at what Vibe knows")).toBeVisible();
+    // And the stage it already passed, beneath it.
+    await expect(page.getByText("Understanding your question")).toBeVisible();
 
     // No percentage, no step counter, no "3 of 5" anywhere on the screen.
     const body = (await page.locator("body").innerText()).toLowerCase();

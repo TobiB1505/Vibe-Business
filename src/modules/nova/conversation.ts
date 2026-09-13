@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgentArtifactKind } from "@/modules/business-agent/artifacts";
+import { agentStepLabel } from "@/modules/business-agent/catalog";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import { getOperationRunById } from "@/modules/operations/store";
@@ -30,6 +31,34 @@ export type NovaConversationArtifact =
   | { kind: "opportunity"; subjectId: string; opportunity: BusinessOpportunity }
   | { kind: "audit"; subjectId: string };
 
+/**
+ * One step of a turn, as a founder reads it.
+ *
+ * ## What this is, and what it deliberately is not
+ *
+ * It is the record of a tool Vibe **dispatched** — its own observation of its
+ * own work, which is why it can be shown at all. It is not the model's
+ * reasoning: rule 43 says that is never requested, never persisted and never
+ * displayed, and there is no column it could have come from. What ChatGPT
+ * shows under "Thinking" is mostly this same thing — the steps an agent took —
+ * and that half is honest to show because somebody watched it happen.
+ *
+ * The label is Vibe's own sentence about the step, never the tool's name and
+ * never its arguments. `state` is what became of it, in three words a founder
+ * can act on rather than five internal decision codes.
+ */
+export type NovaThinkingStep = {
+  label: string;
+  /** `done` read something, `empty` found nothing there, `skipped` never ran. */
+  state: "done" | "empty" | "skipped";
+};
+
+export type NovaThinking = {
+  steps: readonly NovaThinkingStep[];
+  /** How long the turn took, from the turn's own row. Null when unknown. */
+  durationMs: number | null;
+};
+
 export type NovaConversationMessage = {
   id: string;
   sequence: number;
@@ -39,6 +68,8 @@ export type NovaConversationMessage = {
   origin: "typed" | "model" | "template";
   createdAt: string;
   artifacts: readonly NovaConversationArtifact[];
+  /** The steps behind this reply, when it came from a turn that took any. */
+  thinking: NovaThinking | null;
 };
 
 export type NovaConversationView = {
@@ -54,8 +85,19 @@ type MessageRow = {
   role: "founder" | "assistant";
   content: string;
   origin: "typed" | "model" | "template";
+  turn_run_id: string | null;
   created_at: string;
 };
+
+type ToolCallRow = {
+  turn_run_id: string;
+  sequence: number;
+  tool: string;
+  decision: string;
+  result_kind: string | null;
+};
+
+type TurnRow = { id: string; duration_ms: number | null };
 
 type ArtifactRow = { message_id: string; kind: AgentArtifactKind; subject_id: string };
 
@@ -84,7 +126,7 @@ export async function readNovaConversation(
   const [{ data: messageData }, { data: liveTurnData }] = await Promise.all([
     supabase
       .from("agent_messages")
-      .select("id, sequence, role, content, origin, created_at")
+      .select("id, sequence, role, content, origin, turn_run_id, created_at")
       .eq("conversation_id", conversationId)
       .order("sequence", { ascending: false })
       .limit(NOVA_TRANSCRIPT_LIMIT),
@@ -101,7 +143,9 @@ export async function readNovaConversation(
   // the thread reads in the order it happened.
   const rows = ((messageData ?? []) as MessageRow[]).slice().reverse();
 
-  const [artifacts, opportunities, working] = await Promise.all([
+  const turnIds = [...new Set(rows.flatMap((row) => (row.turn_run_id ? [row.turn_run_id] : [])))];
+
+  const [artifacts, opportunities, working, toolCalls, turns] = await Promise.all([
     rows.length === 0
       ? Promise.resolve([] as ArtifactRow[])
       : supabase
@@ -115,6 +159,28 @@ export async function readNovaConversation(
           .then(({ data }) => (data ?? []) as ArtifactRow[]),
     getLatestOpportunities(supabase, params.projectId),
     readWorkingTurn(supabase, (liveTurnData as LiveTurnRow | null)?.operation_run_id ?? null),
+    /*
+     * The steps, in the order Vibe ran them. Deliberately selecting four
+     * columns and not `input`, `subject_ids` or `denial_reason`: the first two
+     * are identifiers and the third is Vibe talking to the model, and none of
+     * the three is something a founder should be reading. What crosses is the
+     * name of the step, what Vibe decided, and whether it found anything.
+     */
+    turnIds.length === 0
+      ? Promise.resolve([] as ToolCallRow[])
+      : supabase
+          .from("agent_turn_tool_calls")
+          .select("turn_run_id, sequence, tool, decision, result_kind")
+          .in("turn_run_id", turnIds)
+          .order("sequence", { ascending: true })
+          .then(({ data }) => (data ?? []) as ToolCallRow[]),
+    turnIds.length === 0
+      ? Promise.resolve([] as TurnRow[])
+      : supabase
+          .from("agent_turn_runs")
+          .select("id, duration_ms")
+          .in("id", turnIds)
+          .then(({ data }) => (data ?? []) as TurnRow[]),
   ]);
 
   const movesById = new Map(
@@ -131,6 +197,7 @@ export async function readNovaConversation(
       content: row.content,
       origin: row.origin,
       createdAt: row.created_at,
+      thinking: buildThinking(row.turn_run_id, toolCalls, turns),
       artifacts: artifacts
         .filter((artifact) => artifact.message_id === row.id)
         .flatMap((artifact): NovaConversationArtifact[] => {
@@ -144,6 +211,40 @@ export async function readNovaConversation(
             ? [{ kind: "opportunity", subjectId: artifact.subject_id, opportunity: move }]
             : [];
         }),
+    })),
+  };
+}
+
+/**
+ * The steps of one turn, or nothing.
+ *
+ * Nothing when the turn ran none — a question answered from the context brief
+ * alone is a real and good outcome, and a "Thought for 0 seconds" header over
+ * an empty list would be furniture claiming work that did not happen.
+ *
+ * The five internal decisions collapse to three founder-facing states. A
+ * duplicate call, malformed arguments, an unknown name and a spent ceiling are
+ * four different bugs to Vibe and one fact to a founder: that step did not run.
+ */
+function buildThinking(
+  turnRunId: string | null,
+  toolCalls: readonly ToolCallRow[],
+  turns: readonly TurnRow[],
+): NovaThinking | null {
+  if (!turnRunId) return null;
+  const mine = toolCalls.filter((call) => call.turn_run_id === turnRunId);
+  if (mine.length === 0) return null;
+
+  return {
+    durationMs: turns.find((turn) => turn.id === turnRunId)?.duration_ms ?? null,
+    steps: mine.map((call) => ({
+      label: agentStepLabel(call.tool),
+      state:
+        call.decision !== "allowed"
+          ? ("skipped" as const)
+          : call.result_kind === "ok"
+            ? ("done" as const)
+            : ("empty" as const),
     })),
   };
 }

@@ -36,7 +36,6 @@ export const getBusinessHealthTool: AgentTool = {
     "The latest Business Audit reading: the overall state or the reason there is none, which areas are weakest, the ranked priorities with the evidence behind them, the strengths, and how old the reading is. Free.",
   inputSchema: strictObject({}),
   classification: "read_only",
-  progressLabel: "Reading your Business Health",
   async execute(context) {
     let health;
     try {

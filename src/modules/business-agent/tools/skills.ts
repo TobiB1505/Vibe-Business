@@ -32,7 +32,6 @@ export const useSkillTool: AgentTool = {
     },
   }),
   classification: "read_only",
-  progressLabel: "Understanding your question",
   async execute(_context, input) {
     const skill = findSkill(String(input.skill_id));
     if (!skill) {

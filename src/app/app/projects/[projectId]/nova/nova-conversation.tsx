@@ -1,5 +1,6 @@
 import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaLine } from "@/components/nova/nova-thread";
+import { NovaThinking } from "@/components/nova/nova-thinking";
 import { MoveBlock } from "@/components/nova/blocks";
 import { BLOCK_FOR_ARTIFACT } from "@/modules/nova/blocks";
 import type { NovaConversationArtifact, NovaConversationView } from "@/modules/nova/conversation";
@@ -56,6 +57,17 @@ export function NovaConversation({
               </li>
             ) : (
               <li key={message.id} className="flex w-full flex-col gap-3">
+                {/*
+                  What Nova looked at, above what she said — the order every
+                  chat surface a founder has used already puts them in, and the
+                  order they happened in.
+                */}
+                {message.thinking && (
+                  <NovaThinking
+                    steps={message.thinking.steps}
+                    durationMs={message.thinking.durationMs}
+                  />
+                )}
                 <NovaBubble index={index} aside={message.origin === "template"} tone="neutral">
                   <NovaLine>{message.content}</NovaLine>
                 </NovaBubble>

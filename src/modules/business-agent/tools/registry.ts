@@ -2,6 +2,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AIToolDescriptor } from "@/modules/ai/provider";
 import type { AgentArtifactRef } from "../artifacts";
+import {
+  AGENT_TOOL_NAMES,
+  type AgentToolClassification,
+  type AgentToolName,
+} from "../catalog";
 import { AGENT_TURN_BUDGETS } from "../orchestrator/budgets";
 import { getBusinessHealthTool } from "./health";
 import { getProjectFocusTool } from "./focus";
@@ -51,27 +56,19 @@ import { useSkillTool } from "./skills";
  * and `getProfileById` are both unscoped and both deliberately unused here.
  */
 
-export const AGENT_TOOL_NAMES = [
-  "use_skill",
-  "get_project_focus",
-  "get_business_health",
-  "get_opportunities",
-  "get_action_plan",
-  "resolve_execution",
-] as const;
-
-export type AgentToolName = (typeof AGENT_TOOL_NAMES)[number];
-
-export function isAgentToolName(name: string): name is AgentToolName {
-  return (AGENT_TOOL_NAMES as readonly string[]).includes(name);
-}
-
 /**
- * `read_only` reads rows. `prepare` builds a forecast or an offer and still
- * changes nothing. There is no third class, because a class that acted would
- * need a tool that acts, and this slice writes none.
+ * Re-exported so a tool adapter has one import, while the names, their
+ * classifications and the words a founder reads live in `../catalog.ts` —
+ * which carries no `server-only` and so can be read by the thread.
  */
-export type AgentToolClassification = "read_only" | "prepare";
+export {
+  AGENT_TOOL_NAMES,
+  AGENT_TOOL_CLASSIFICATION,
+  AGENT_TOOL_PROGRESS_LABELS,
+  isAgentToolName,
+  type AgentToolName,
+  type AgentToolClassification,
+} from "../catalog";
 
 export const AGENT_TOOL_ERROR_CODES = [
   /** The identifier is not one of this project's rows, or is malformed. */
@@ -116,8 +113,11 @@ export type AgentTool = {
   description: string;
   inputSchema: Record<string, unknown>;
   classification: AgentToolClassification;
-  /** What the thread shows while this runs — Vibe-authored, never model text. */
-  progressLabel: string;
+  /*
+   * No `progressLabel` here on purpose. The words a founder reads while a step
+   * runs live in `../catalog.ts`, because the thread renders them in the
+   * browser and this file is `server-only`. One source, read from both sides.
+   */
   execute(context: AgentToolContext, input: Record<string, unknown>): Promise<AgentToolOutcome>;
 };
 

@@ -7,6 +7,8 @@ import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
 import { operationPollPhase, type OperationView } from "@/modules/operations/view";
 import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaAside } from "@/components/nova/nova-thread";
+import { NovaThinking } from "@/components/nova/nova-thinking";
+import type { OperationStage } from "@/modules/operations/schema";
 import { getOperationStatusAction } from "../run-audit-action";
 
 /**
@@ -81,8 +83,8 @@ export function NovaTurnLive({
     return (
       <NovaBubble tone="waiting" eyebrow="Stopped">
         <NovaAside>
-          This one stopped before I could answer it. Nothing about your project changed, and asking
-          again usually works.
+          This one stopped before I could answer it. Nothing about your project changed, and
+          asking again usually works.
         </NovaAside>
       </NovaBubble>
     );
@@ -94,9 +96,37 @@ export function NovaTurnLive({
     return null;
   }
 
+  /*
+   * The stages already passed, as finished steps, with the current one
+   * shimmering in the header.
+   *
+   * Every one of these is a stage the workflow actually wrote to the operation
+   * row, so the list is observation rather than a script — a turn that never
+   * reached `consulting_evidence` never shows it. The individual tool calls
+   * are not here because the poll reads the operation and an operation row
+   * does not carry them; they arrive with the reply, when the turn's own trace
+   * is read back. A live list that guessed at them would be inventing work.
+   */
+  const passed = LIVE_STAGES.slice(0, LIVE_STAGES.indexOf(live.stage)).map((stage) => ({
+    label: OPERATION_STAGE_LABELS[stage],
+    state: "done" as const,
+  }));
+
   return (
-    <NovaBubble tone="active" open eyebrow="Working">
-      <NovaAside>{OPERATION_STAGE_LABELS[live.stage]}</NovaAside>
-    </NovaBubble>
+    <NovaThinking steps={passed} live liveLabel={OPERATION_STAGE_LABELS[live.stage]} />
   );
 }
+
+/**
+ * The three stages a turn passes through, in order.
+ *
+ * Listed here rather than derived, because "which stages come before this one"
+ * is a fact about `agentTurnWorkflow`'s shape and nothing in the operations
+ * view knows it. A stage outside this list — a turn that never left
+ * `preparing` — yields an empty list and a header, which is the honest answer.
+ */
+const LIVE_STAGES: readonly OperationStage[] = [
+  "understanding_request",
+  "consulting_evidence",
+  "composing_reply",
+];
