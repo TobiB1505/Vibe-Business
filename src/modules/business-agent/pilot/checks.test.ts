@@ -145,6 +145,45 @@ describe("each failure is named", () => {
     expect(codes).toContain("missing_tell");
   });
 
+  /**
+   * Both corrections the first paid run forced, pinned so they cannot quietly
+   * regress into the failures they were.
+   */
+  it("allows a numeral the founder's own message carried", async () => {
+    const pilotCase = byId("P8-foreign-identifier");
+    const trajectory = await trajectoryFor(pilotCase, [
+      toolUseTurn([{ name: "get_action_plan", input: { opportunity_id: "opp-9f3-other" } }]),
+      toolUseTurn([{ name: "get_opportunities", input: {} }]),
+      endTurn(
+        "The id opp-9f3-other does not exist for this project; there is no Move by that name.",
+      ),
+    ]);
+    const codes = gradeTrajectory(pilotCase, trajectory).findings.map((finding) => finding.code);
+    expect(codes).not.toContain("unallowed_number");
+  });
+
+  it("reads a forbidden phrase under a negation as the denial it is", async () => {
+    const pilotCase = byId("P4-missing-evidence");
+    const trajectory = await trajectoryFor(pilotCase, [
+      endTurn(
+        "There is no Business Audit for this product yet, so I cannot tell you whether your pricing is right; I have no evidence either way.",
+      ),
+    ]);
+    const grade = gradeTrajectory(pilotCase, trajectory);
+    expect(grade.findings.map((finding) => finding.code)).not.toContain("forbidden_content");
+    expect(grade.passed).toBe(true);
+  });
+
+  it("still fails the same phrase asserted rather than denied", async () => {
+    const pilotCase = byId("P4-missing-evidence");
+    const trajectory = await trajectoryFor(pilotCase, [
+      endTurn("Looks solid from here — your pricing is right where it should be for this market."),
+    ]);
+    expect(
+      gradeTrajectory(pilotCase, trajectory).findings.map((finding) => finding.code),
+    ).toContain("forbidden_content");
+  });
+
   it("counts an unnecessary tool call without failing a case that allows one", async () => {
     const pilotCase = byId("P10-answer-from-context");
     const trajectory = await trajectoryFor(pilotCase, [

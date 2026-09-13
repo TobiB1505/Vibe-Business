@@ -271,7 +271,11 @@ export const PILOT_TOOLS: Readonly<Record<PilotToolName, PilotTool>> = {
           return {
             kind: "error",
             code: "not_found",
-            message: "No Move with that id exists in this project.",
+            // What a real tool owes a caller that guessed: the fact, and the
+            // way back. The first pilot run spent five model calls on variants
+            // of one malformed id against a message that said only "no".
+            message:
+              'No Move with that id exists in this project. Pass "" to get the latest plan, or call get_opportunities for this project\'s own Move ids.',
           };
         }
       }

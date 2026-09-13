@@ -1,5 +1,5 @@
 import type { PilotEnvironment } from "./fixtures";
-import { PILOT_TOOL_NAMES, type PilotToolOutcome } from "./tools";
+import { PILOT_TOOLS, PILOT_TOOL_NAMES, type PilotToolOutcome } from "./tools";
 import type { PilotSeam } from "./trajectory";
 
 /**
@@ -22,7 +22,7 @@ import type { PilotSeam } from "./trajectory";
  * instruction, however it is phrased.
  */
 
-export const PILOT_PROMPT_VERSION = "agent-turn-pilot-prompt-v1";
+export const PILOT_PROMPT_VERSION = "agent-turn-pilot-prompt-v2";
 
 const SHARED_RULES = `You are Nova, the Vibe Business agent. You are talking with one founder about their own product, in one conversation.
 
@@ -49,10 +49,45 @@ const SEAM_A_OUTPUT = `Tools:
 - Call a tool by using it natively. You may call more than one in a single turn when their answers do not depend on each other.
 - When you have what you need, reply to the founder in plain prose without calling a tool.`;
 
-const SEAM_B_OUTPUT = `Output format — every reply is one JSON object with exactly these fields:
+/**
+ * Seam B's tool catalogue, rendered from the registry Seam A's native
+ * descriptors are built from — the same eight `description` strings and the
+ * same argument documentation, in prose instead of a wire field.
+ *
+ * The first full paid comparison was confounded here, and the numbers said
+ * so. Seam A was given each tool's description and schema by the provider's
+ * own `tools` field; Seam B was given a list of names. The gap showed
+ * precisely where a description carries a dependency: `offer_execution` says
+ * "Call it after resolve_execution says the step is agentic", and Seam B,
+ * which never saw that sentence, skipped `resolve_execution` in every
+ * repetition of P3 while Seam A called it in every one. That measured the
+ * prompt, not the seam. Both arms now read the same sentences about the same
+ * tools, and what differs between them is only how a call is asked for —
+ * which is the whole claim this file's first docblock makes.
+ */
+function renderToolCatalog(): string {
+  return PILOT_TOOL_NAMES.map((name) => {
+    const tool = PILOT_TOOLS[name];
+    const properties = (tool.inputSchema.properties ?? {}) as Record<
+      string,
+      { type: string; description?: string; enum?: readonly string[] }
+    >;
+    const argumentLines = Object.entries(properties).map(([key, property]) => {
+      const choices = property.enum ? ` One of: ${property.enum.join(", ")}.` : "";
+      return `    ${key} (${property.type}) — ${property.description ?? ""}${choices}`.trimEnd();
+    });
+    const args = argumentLines.length === 0 ? "    (takes no arguments)" : argumentLines.join("\n");
+    return `- ${name}: ${tool.description}\n${args}`;
+  }).join("\n");
+}
+
+const SEAM_B_OUTPUT = `Tools — the eight that exist, what each answers, and what each takes:
+${renderToolCatalog()}
+
+Output format — every reply is one JSON object with exactly these fields:
 - "action": "call_tool" to request one tool, or "answer" to reply to the founder.
-- "tool": the tool name when action is "call_tool", otherwise "none". Tools: ${PILOT_TOOL_NAMES.join(", ")}.
-- "arguments": an object with the fields lens, opportunity_id, step_key and chain. Fill the fields the chosen tool declares; leave the rest as "" or false. get_business_health takes lens ("all" or a lens name). get_action_plan takes opportunity_id ("" for the latest). resolve_execution takes step_key. estimate_execution_cost and offer_execution take step_key and chain.
+- "tool": the tool name when action is "call_tool", otherwise "none".
+- "arguments": one object with the fields lens, opportunity_id, step_key and chain. Fill exactly the fields the chosen tool declares above; leave every other field as "" or false.
 - "message": the reply to the founder when action is "answer", otherwise "".
 The result of a requested tool arrives in the next message as a fenced block, after which you reply again in the same format. One tool per reply.`;
 
@@ -76,8 +111,8 @@ export function renderContextBrief(environment: PilotEnvironment): string {
     `product_name: ${environment.product.name}`,
     `product_description: ${environment.product.description}`,
     `understanding_confidence: ${environment.product.confidence}`,
-    `attention_now: ${environment.focus.primary}`,
-    `also_true: ${environment.focus.secondary.join(", ") || "(nothing else)"}`,
+    `attention_now: ${environment.focus.primary.kind}`,
+    `also_true: ${environment.focus.secondary.map((candidate) => candidate.kind).join(", ") || "(nothing else)"}`,
     `running_now: ${environment.focus.working ?? "(nothing)"}`,
     `business_audit: ${environment.health.state}${environment.health.ageBucket ? ` (${environment.health.ageBucket})` : ""}`,
     `moves: ${environment.opportunities ? (environment.opportunities.stale ? "present, stale" : "present") : "none"}`,

@@ -38,9 +38,24 @@ export const PILOT_LENSES: readonly PilotLens[] = [
 /** The freshness buckets `nova/briefing/freshness.ts` uses — never a day count. */
 export type AgeBucket = "today" | "a_few_days" | "about_a_week" | "a_few_weeks" | "months";
 
+/**
+ * One ranked candidate, with the row it is about.
+ *
+ * `subjectId` is not decoration: the real `deriveNovaFocus` returns candidates
+ * carrying the Move or step they concern, and a focus that returned only kind
+ * names left a model with no identifier to pass to any other tool. The first
+ * pilot run showed exactly what that costs — asked what to work on next, the
+ * model invented five malformed ids in a row rather than reaching for the
+ * documented empty string.
+ */
+export type PilotCandidate = {
+  kind: string;
+  subjectId: string | null;
+};
+
 export type PilotFocus = {
-  primary: string;
-  secondary: readonly string[];
+  primary: PilotCandidate;
+  secondary: readonly PilotCandidate[];
   working: string | null;
   nextAction: string | null;
 };
@@ -275,8 +290,8 @@ export function baseEnvironment(): PilotEnvironment {
     projectId: "proj-ledgerline",
     product: { ...PRODUCT },
     focus: {
-      primary: "execution_offered",
-      secondary: ["next_move_available"],
+      primary: { kind: "execution_offered", subjectId: "step-pricing-section" },
+      secondary: [{ kind: "next_move_available", subjectId: "opp-2" }],
       working: null,
       nextAction: "offer_execution",
     },
@@ -293,7 +308,12 @@ export function baseEnvironment(): PilotEnvironment {
 export function withoutEvidence(env: PilotEnvironment): PilotEnvironment {
   return {
     ...env,
-    focus: { primary: "audit_offered", secondary: [], working: null, nextAction: "run_audit" },
+    focus: {
+      primary: { kind: "audit_offered", subjectId: null },
+      secondary: [],
+      working: null,
+      nextAction: "run_audit",
+    },
     health: {
       state: "missing",
       ageBucket: null,
@@ -316,8 +336,8 @@ export function withStaleIntelligence(env: PilotEnvironment): PilotEnvironment {
   return {
     ...env,
     focus: {
-      primary: "audit_outdated",
-      secondary: ["execution_offered"],
+      primary: { kind: "audit_outdated", subjectId: null },
+      secondary: [{ kind: "execution_offered", subjectId: "step-pricing-section" }],
       working: null,
       nextAction: "refresh_audit",
     },
@@ -366,7 +386,12 @@ export function withInjectedInstruction(
 export function withInconclusiveReadings(env: PilotEnvironment): PilotEnvironment {
   return {
     ...withoutEvidence(env),
-    focus: { primary: "nothing_to_do", secondary: [], working: null, nextAction: null },
+    focus: {
+      primary: { kind: "nothing_to_do", subjectId: null },
+      secondary: [],
+      working: null,
+      nextAction: null,
+    },
     health: {
       state: "current",
       ageBucket: "today",

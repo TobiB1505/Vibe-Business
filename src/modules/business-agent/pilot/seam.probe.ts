@@ -11,7 +11,7 @@ import {
 import { PILOT_CASES, PILOT_CRITICAL_CASE_IDS, type PilotCase } from "./cases";
 import { gradeTrajectory, type PilotGrade } from "./checks";
 import { formatShapeMeasurement, measurePilotShapes } from "./measure";
-import { PILOT_PROMPT_VERSION } from "./prompt";
+import { PILOT_PROMPT_VERSION, renderContextBrief } from "./prompt";
 import {
   buildPilotJudgeUserContent,
   PILOT_CRITERIA,
@@ -136,6 +136,7 @@ async function judgeTrajectory(
   pilotCase: PilotCase,
   trajectory: Trajectory,
   rendered: readonly string[],
+  contextBrief: string,
   base: CaseResult,
 ): Promise<void> {
   const provider = getAIProvider();
@@ -144,7 +145,7 @@ async function judgeTrajectory(
       operation: "agent_turn",
       model: JUDGE.config.model,
       system: PILOT_JUDGE_SYSTEM_PROMPT,
-      userContent: buildPilotJudgeUserContent(pilotCase, trajectory, rendered),
+      userContent: buildPilotJudgeUserContent(pilotCase, trajectory, rendered, contextBrief),
       outputSchema: PILOT_JUDGE_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
       maxOutputTokens: JUDGE.config.maxOutputTokens,
       reasoning: JUDGE.config.reasoning,
@@ -204,6 +205,8 @@ async function runOne(seam: PilotSeam, pilotCase: PilotCase, rep: number): Promi
   };
 
   const rendered: string[] = [];
+  const environment = pilotCase.environment();
+  const contextBrief = renderContextBrief(environment);
 
   try {
     const trajectory = await withCeiling(
@@ -212,7 +215,7 @@ async function runOne(seam: PilotSeam, pilotCase: PilotCase, rep: number): Promi
             provider: getAIToolCallingProvider(),
             config: AGENT_TURN_CONFIG,
             caseId: pilotCase.id,
-            environment: pilotCase.environment(),
+            environment,
             history: pilotCase.history,
             founderMessage: pilotCase.founderMessage,
             observeToolResult: (text) => rendered.push(text),
@@ -221,7 +224,7 @@ async function runOne(seam: PilotSeam, pilotCase: PilotCase, rep: number): Promi
             provider: getAIProvider(),
             config: AGENT_TURN_CONFIG,
             caseId: pilotCase.id,
-            environment: pilotCase.environment(),
+            environment,
             history: pilotCase.history,
             founderMessage: pilotCase.founderMessage,
             observeToolResult: (text) => rendered.push(text),
@@ -235,7 +238,10 @@ async function runOne(seam: PilotSeam, pilotCase: PilotCase, rep: number): Promi
     base.metrics = grade.metrics;
     base.finalMessage = trajectory.finalMessage;
     base.toolTrail = trajectory.toolCalls.map(
-      (call) => `${call.requested}:${call.decision}${call.errorCode ? `:${call.errorCode}` : ""}`,
+      (call) =>
+        `${call.requested}(${call.input ? JSON.stringify(call.input) : "?"}):${call.decision}${
+          call.errorCode ? `:${call.errorCode}` : ""
+        }`,
     );
     // A silently substituted model invalidates the comparison the run exists
     // to make, so it is recorded rather than absorbed.
@@ -249,7 +255,7 @@ async function runOne(seam: PilotSeam, pilotCase: PilotCase, rep: number): Promi
       return base;
     }
 
-    await judgeTrajectory(pilotCase, trajectory, rendered, base);
+    await judgeTrajectory(pilotCase, trajectory, rendered, contextBrief, base);
     return base;
   } catch (error) {
     return {
