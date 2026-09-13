@@ -1,3 +1,4 @@
+import { AGENT_ARTIFACT_KINDS } from "../business-agent/artifacts";
 import type { FocusCandidateKind } from "./focus";
 import { OPERATION_TYPES, type OperationType } from "../operations/schema";
 import type { ProgressSequenceId } from "../operations/view";
@@ -92,6 +93,15 @@ export const BLOCK_FOR_OPERATION: Record<OperationType, BlockKind> = {
      of which has its own surface precisely because it is not a conversation. */
   preview_teardown: "none",
   business_measurement: "none",
+  /*
+   * A turn draws nothing of its own on Home.
+   *
+   * The conversation surface renders its own working state inline in the
+   * thread, where the founder is already looking, so a second rendering in the
+   * focus block would be the same wait shown twice. `none` here is the
+   * registry saying "somebody else draws this", not "this is invisible".
+   */
+  agent_turn: "none",
   account_erasure: "none",
 };
 
@@ -165,6 +175,24 @@ export const BLOCK_FOR_MOMENT: Record<FocusCandidateKind, BlockKind> = {
 };
 
 /** Every operation type that shows something, for a caller that needs the set. */
+/**
+ * Which block renders a conversation artifact (ADR 0109).
+ *
+ * A third registry beside the moment and the operation ones, and total over
+ * `AgentArtifactKind` for the same reason they are total over theirs: a kind
+ * with no renderer is a reference the thread would silently drop, and a
+ * reference the founder cannot see is worse than one that was never made.
+ *
+ * Two kinds, because two have renderers. The audit's catalogue names ten; nine
+ * of them have no block, no caller and nothing to draw, so they are not here
+ * (rule 15). Adding one means adding the block in the same change — which is
+ * exactly what a total record makes unavoidable.
+ */
+export const BLOCK_FOR_ARTIFACT: Record<(typeof AGENT_ARTIFACT_KINDS)[number], BlockKind> = {
+  opportunity: "move",
+  audit: "audit",
+};
+
 export function watchableOperations(): OperationType[] {
   return OPERATION_TYPES.filter((type) => BLOCK_FOR_OPERATION[type] !== "none");
 }

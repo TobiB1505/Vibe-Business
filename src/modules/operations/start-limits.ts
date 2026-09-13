@@ -56,6 +56,17 @@ export const START_LIMITS: Record<OperationType, StartLimit> = {
   action_planning: PAID_INFERENCE,
   product_understanding: PAID_INFERENCE,
   agent_execution: PAID_INFERENCE,
+  /*
+   * A turn is a conversation, and five an hour is not one.
+   *
+   * The other paid-inference entries bound operations a founder starts a
+   * handful of times a week; this one bounds a founder talking. `FREE_WORK`'s
+   * windows are the shape of that — generous enough that an ordinary
+   * conversation never meets them, tight enough that a loop or a script does.
+   * It is the tightest ceiling Vibe holds on turn spend after the per-turn
+   * budgets, so it stays until a measured turn cost says what it should be.
+   */
+  agent_turn: FREE_WORK,
 
   change_validation: PAID_INFRASTRUCTURE,
   change_preview: PAID_INFRASTRUCTURE,

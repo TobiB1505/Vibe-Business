@@ -52,6 +52,16 @@ export const OPERATION_COST_CLASS: Record<OperationType, OperationCostClass> = {
   action_planning: "paid_inference",
   product_understanding: "paid_inference",
   agent_execution: "paid_inference",
+  /*
+   * A turn spends inference, so the switch reaches it.
+   *
+   * `launch-v1` charges the founder nothing for a turn, which makes it free to
+   * *them* and not free to Vibe — and this class is about Vibe's spend, not the
+   * founder's. Classing it `free` because no Credits move would be the one
+   * reading of this table under which the kill switch could not stop the
+   * operation whose per-turn cost nobody has measured yet.
+   */
+  agent_turn: "paid_inference",
 
   change_validation: "paid_infrastructure",
   change_preview: "paid_infrastructure",

@@ -13,6 +13,7 @@ import { REVIEW_POLICY } from "@/modules/review/policy";
 import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { releaseOperationBilling } from "./billing";
 import { failOperationRun, getOperationRunById, type StoredOperationRun } from "./store";
+import { AGENT_TURN_BUDGETS } from "@/modules/business-agent/orchestrator/budgets";
 import type { OperationType } from "./schema";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveAgentHold } from "@/modules/coding-agent/hold";
@@ -139,6 +140,19 @@ const OPERATION_STALE_DEADLINE_MS: Record<OperationType, number | null> = {
 
   /** Its own mechanism — see the docblock. */
   agent_execution: null,
+
+  /*
+   * The turn's own wall clock plus grace.
+   *
+   * A turn that is still `running` past its own ceiling is one nothing is
+   * carrying: the loop stops itself at `maxWallClockMs` and writes a reply, so
+   * anything beyond that is a workflow that died rather than a turn taking its
+   * time. Sweeping matters here more than elsewhere — the single-live-turn
+   * index means a dead turn blocks the conversation, and a founder whose next
+   * question is refused because their last one never finished has lost the
+   * thread rather than one answer.
+   */
+  agent_turn: AGENT_TURN_BUDGETS.maxWallClockMs + OPERATION_STALE_GRACE_MS,
 };
 
 /**

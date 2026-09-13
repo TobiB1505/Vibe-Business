@@ -64,7 +64,8 @@ export function buildOperationView(
   const failureCode = (input.failureCode as OperationFailureCode | null) ?? null;
 
   const since = Date.parse(input.startedAt ?? input.createdAt);
-  const stalled = live && Number.isFinite(since) && now.getTime() - since > OPERATION_STALL_THRESHOLD_MS;
+  const stalled =
+    live && Number.isFinite(since) && now.getTime() - since > OPERATION_STALL_THRESHOLD_MS;
 
   return {
     operationId: input.operationId,
@@ -153,7 +154,10 @@ export function freshestOperation(
  * status, a preview state, an outcome state. What matters is only whether the
  * poll is naming something other than what is on screen.
  */
-export function shouldRefreshForState(polled: string | null | undefined, rendered: string): boolean {
+export function shouldRefreshForState(
+  polled: string | null | undefined,
+  rendered: string,
+): boolean {
   if (polled === null || polled === undefined) return false;
   return polled !== rendered;
 }
@@ -239,6 +243,19 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   running_agent: "Making the change",
   extracting_change: "Working out exactly what changed",
   verifying_change: "Checking the change is inside its limits",
+
+  /*
+   * A Business Agent turn, said the way a founder would describe the wait.
+   *
+   * Three stages because three things actually happen, and no fourth for
+   * "thinking": a stage a founder cannot check is a progress bar with words on
+   * it. `consulting_evidence` deliberately does not name which evidence —
+   * which tool runs next is the model's choice, and a label promising the
+   * Business Health before the model has asked for it would be a claim.
+   */
+  understanding_request: "Understanding your question",
+  consulting_evidence: "Looking at what Vibe knows",
+  composing_reply: "Working out what to tell you",
   completed: "Completed",
 };
 

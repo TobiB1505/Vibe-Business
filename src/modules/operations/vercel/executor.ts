@@ -14,6 +14,7 @@ import { productUnderstandingWorkflow } from "../product-understanding/workflow"
 import { productScanWorkflow } from "../product-scan/workflow";
 import { actionPlanningWorkflow } from "../action-plans/workflow";
 import { agentExecutionWorkflow } from "../agent-execution/workflow";
+import { agentTurnWorkflow } from "../business-agent/workflow";
 import { accountErasureWorkflow } from "../account-erasure/workflow";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "../executor";
 import type { OperationType } from "../schema";
@@ -55,6 +56,7 @@ const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> =
   product_scan: productScanWorkflow,
   action_planning: actionPlanningWorkflow,
   agent_execution: agentExecutionWorkflow,
+  agent_turn: agentTurnWorkflow,
   account_erasure: accountErasureWorkflow,
 };
 

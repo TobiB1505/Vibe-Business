@@ -14,6 +14,8 @@ import type { OperationFailureCode } from "./failures";
  * Each message says what happened and, where it is true, what the user can do.
  */
 export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = {
+  agent_turn_failed:
+    "Nova could not finish answering that one. Nothing about your project changed, and everything Vibe already knows is still here. Asking again usually works.",
   project_not_found: "This project could not be found.",
   operation_not_found: "That analysis could not be found.",
   repository_intelligence_missing: "Inspect the repository first — this needs that evidence.",

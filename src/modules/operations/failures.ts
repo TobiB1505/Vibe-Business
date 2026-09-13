@@ -90,6 +90,21 @@ export type OperationExecutionFailure =
    */
   | "insufficient_credits";
 
+/**
+ * A Business Agent turn that could not answer (ADR 0109).
+ *
+ * One code, because from the founder's side there is one outcome: the question
+ * was not answered. Which ceiling or which provider error caused it is on the
+ * turn row, where it belongs; a founder does not need to learn the difference
+ * between a model-call ceiling and a wall clock.
+ *
+ * Deliberately not retryable. A turn that failed already spent its calls, and a
+ * one-click retry on a maybe-billed loop is how a durable system quietly
+ * doubles a bill — the same argument `inference_interrupted` is kept out for.
+ * Asking again is a new question, typed by the founder, and that is the retry.
+ */
+export type AgentTurnFailure = "agent_turn_failed";
+
 export type OperationFailureCode =
   | AuditRunFailure
   | OpportunityRunFailure
@@ -107,6 +122,7 @@ export type OperationFailureCode =
   | UnderstandingFailure
   | ActionPlanRunFailure
   | AgentOperationFailure
+  | AgentTurnFailure
   | OperationExecutionFailure;
 
 /**

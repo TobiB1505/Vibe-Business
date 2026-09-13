@@ -114,6 +114,15 @@ export const OPERATION_TYPES = [
    * distinguish success from any other deletion (ADR 0057 §2).
    */
   "account_erasure",
+  /**
+   * One founder message answered by the Business Agent (ADR 0109).
+   *
+   * Durable because a turn reads several documents and calls the model more
+   * than once, which is tens of seconds and therefore outside the request
+   * (rule 49). Unlike every other operation here it produces words rather than
+   * a document, and its result row is the turn.
+   */
+  "agent_turn",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -186,6 +195,14 @@ export const OPERATION_STAGES = [
    * `starting_dev_server` are v1's, kept because rows recorded them.
    */
   "starting_dev_server",
+  /*
+   * A Business Agent turn, in the three things a founder actually waits
+   * through: reading the question and loading the procedure, calling tools,
+   * and writing the answer. No fourth stage for "thinking", and no fraction.
+   */
+  "understanding_request",
+  "consulting_evidence",
+  "composing_reply",
   "checking_preview",
   "restoring_artifact",
   "verifying_artifact",
