@@ -5,7 +5,7 @@ import {
 } from "@/modules/onboarding/state";
 import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
-import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NovaRail } from "@/features/nova/home/nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";

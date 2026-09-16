@@ -17,10 +17,13 @@ import { describe, expect, it } from "vitest";
  */
 
 const APP = join(process.cwd(), "src/app/app/projects/[projectId]");
+/* The voice component lives in the Nova feature (ADR 0109); the page that reads
+   the sentence stays a route. Both are held to the same rule. */
+const FEATURE = join(process.cwd(), "src/features/nova/voice");
 const FILES = ["nova-audit-voice.tsx", join("health", "content.tsx")];
 
 function source(file: string): string {
-  return readFileSync(join(APP, file), "utf8");
+  return readFileSync(join(file.startsWith("nova-") ? FEATURE : APP, file), "utf8");
 }
 
 /** Comments removed: what is left is what runs. */

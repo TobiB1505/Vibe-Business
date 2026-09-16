@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
  * values in `home-view.test.ts`, where it belongs.
  */
 
-const NOVA_DIR = join(process.cwd(), "src/app/app/projects/[projectId]/nova");
+const NOVA_DIR = join(process.cwd(), "src/features/nova/home");
 
 /** Comments state what the code must not do, and would match every rule. */
 function stripComments(source: string): string {

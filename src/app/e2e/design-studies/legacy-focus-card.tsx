@@ -6,7 +6,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
-import { footnoteFor } from "@/app/app/projects/[projectId]/nova/footnote";
+import { footnoteFor } from "@/features/nova/home/footnote";
 
 /**
  * The Focus Card, kept as the picture of what the thread replaced.

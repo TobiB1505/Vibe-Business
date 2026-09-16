@@ -1,4 +1,4 @@
-import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NovaRail } from "@/features/nova/home/nova-rail";
 import type { ActionPlanChecklist } from "@/modules/action-plans/service";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import { buildOperationView } from "@/modules/operations/view";

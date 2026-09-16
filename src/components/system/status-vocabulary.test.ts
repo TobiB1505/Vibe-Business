@@ -218,7 +218,7 @@ describe("Nova's presence state", () => {
  * valued on a Tailwind colour is the shape being kept out.
  */
 describe("Nova components take their words from the vocabulary", () => {
-  const NOVA_DIR = join(process.cwd(), "src/app/app/projects/[projectId]/nova");
+  const NOVA_DIR = join(process.cwd(), "src/features/nova/home");
 
   const sources = readdirSync(NOVA_DIR)
     .filter((name) => name.endsWith(".tsx"))

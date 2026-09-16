@@ -4,11 +4,11 @@ import { revalidatePath } from "next/cache";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { novaActionSubjectKind, type DispatchableNovaActionId } from "./nova-dispatch";
 
-import { checkProductionOutcomeAction } from "../outcome-actions";
-import { startAuditAction } from "../run-audit-action";
-import { startPlanAction } from "../plan-action";
-import { startUnderstandingAction } from "../understanding-actions";
-import { rerunChangeValidationAction } from "../validate-change-action";
+import { checkProductionOutcomeAction } from "@/app/app/projects/[projectId]/outcome-actions";
+import { startAuditAction } from "@/app/app/projects/[projectId]/run-audit-action";
+import { startPlanAction } from "@/app/app/projects/[projectId]/plan-action";
+import { startUnderstandingAction } from "@/app/app/projects/[projectId]/understanding-actions";
+import { rerunChangeValidationAction } from "@/app/app/projects/[projectId]/validate-change-action";
 
 /**
  * The controls Nova Home can press itself (UI Sourcing Spec §14, C1).

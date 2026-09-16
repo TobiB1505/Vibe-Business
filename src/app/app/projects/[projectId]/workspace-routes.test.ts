@@ -64,7 +64,10 @@ function railSource(): string {
  * directory, so the lookups further down address a nested route the same way
  * they address a top-level one.
  */
-function routeFiles(directory: string = ROUTE_DIR, prefix = ""): { name: string; source: string }[] {
+function routeFiles(
+  directory: string = ROUTE_DIR,
+  prefix = "",
+): { name: string; source: string }[] {
   const files: { name: string; source: string }[] = [];
 
   const page = join(directory, "page.tsx");
@@ -249,8 +252,13 @@ describe("routes load only what they render", () => {
 
   it("keeps Home's reads to what Home draws", () => {
     // Not a route file, so it is read directly: this is the module the index
-    // delegates its whole read to, and the bounds belong to it.
-    const nova = readFileSync(join(ROUTE_DIR, "nova/nova-home-data.ts"), "utf8");
+    // delegates its whole read to, and the bounds belong to it. It lives in
+    // the Nova feature (ADR 0109), not under the route, and the budget follows
+    // the read wherever it is composed.
+    const nova = readFileSync(
+      join(process.cwd(), "src/features/nova/home/nova-home-data.ts"),
+      "utf8",
+    );
 
     // Calls rather than mentions: the module names the reads it deliberately
     // does not make, and a substring check would match its own reasoning.

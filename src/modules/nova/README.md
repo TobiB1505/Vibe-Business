@@ -6,14 +6,17 @@ its founder amendments are §O of the same record. The voice model and its
 prompt are decided by measurement, not argument — see §P and §Q of the audit,
 and [ADR 0084](../../../docs/decisions/0084-nova-voice-is-measured-not-argued.md).
 
-**Nova speaks on the onboarding route and nowhere else yet.**
+**Nova speaks on the onboarding route and on the project index.**
 `/app/onboarding/[projectId]` renders her introduction, the walkthrough she
 offers once, and the sentences above the scan and the reveal. The project Home
-is still Business Health — [ADR 0085](../../../docs/decisions/0085-nova-is-the-project-home.md)
-records that it will not stay that way, and `deriveNovaFocus` is built and
-tested with nothing mounting it. No usage event is written for Nova at all:
-`nova_presentation` is on the operation union for ledger-key consistency and
-no inference has run through it.
+is Nova — [ADR 0085](../../../docs/decisions/0085-nova-is-the-project-home.md)
+decided it and Sprint 0162 mounted it: `deriveNovaFocus`'s ranking rendered as
+a thread. The surface itself lives in
+[`src/features/nova/`](../../features/README.md) since
+[ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md); this
+module is what she knows and says, not where she is drawn. Her voice tier is
+live on two slots and is claimed once per identity
+([ADR 0086](../../../docs/decisions/0086-nova-presentation-is-claimed-stored-and-attempted-once.md)).
 
 ## What is here
 
@@ -138,9 +141,10 @@ the control offered.
 
 `actions.ts` is the catalog: for each control, its label, the retail kind it
 charges under, whether it is consequential, and whether a person confirms
-first. It holds no function — every Server Action in this codebase lives under
-`src/app/`, so the binding lives beside them in
-`src/app/app/projects/[projectId]/nova-actions.ts` as a total Record of real
+first. It holds no function — Server Actions live in the surface layers
+(`src/app/` and `src/features/`), and a domain module imports none of them
+(rule 86). The binding lives with the surface, in
+`src/features/nova/bindings/nova-actions.ts`, as a total Record of real
 references, which makes a renamed or deleted action a build failure.
 
 Two ids are addresses rather than actions (`review_change`, `view_move`).

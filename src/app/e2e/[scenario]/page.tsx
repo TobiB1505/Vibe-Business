@@ -52,10 +52,10 @@ import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-o
 import { AgentTrustPanel } from "@/app/app/projects/[projectId]/agent/agent-header";
 import { OPENING_ASKS_NAME_SCENARIO } from "../design-studies/studies";
 import { StudyOnboarding } from "../design-studies/study-onboarding";
-import { NovaOpeningScreen } from "@/app/app/projects/[projectId]/nova/nova-opening-screen";
+import { NovaOpeningScreen } from "@/features/nova/home/nova-opening-screen";
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
-import { NovaRail } from "@/app/app/projects/[projectId]/nova/nova-rail";
+import { NovaRail } from "@/features/nova/home/nova-rail";
 import { NOVA_THREAD_SURFACE, NovaRoom } from "@/components/nova/nova-room";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import { onboardingSteps } from "@/modules/onboarding/state";
@@ -160,7 +160,7 @@ import {
   isE2eNovaVoiceScenario,
   novaVoiceEntry,
 } from "../nova-voice-scenarios";
-import { NovaFocusThread } from "@/app/app/projects/[projectId]/nova/nova-focus-thread";
+import { NovaFocusThread } from "@/features/nova/home/nova-focus-thread";
 import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";

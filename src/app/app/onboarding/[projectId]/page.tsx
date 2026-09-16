@@ -42,8 +42,8 @@ import {
 } from "./actions";
 import { NovaFirstRun } from "./nova-first-run";
 import { NovaOnboardingHeader } from "./nova-onboarding-header";
-import { NovaOpeningScreen } from "../../projects/[projectId]/nova/nova-opening-screen";
-import { NovaRail } from "../../projects/[projectId]/nova/nova-rail";
+import { NovaOpeningScreen } from "@/features/nova/home/nova-opening-screen";
+import { NovaRail } from "@/features/nova/home/nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
 import { onboardingSteps } from "@/modules/onboarding/state";
 import { novaPresenceState } from "@/components/system/status-vocabulary";

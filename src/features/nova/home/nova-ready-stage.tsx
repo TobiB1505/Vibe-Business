@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { projectSectionHref } from "@/components/layout/project-shell";
-import { AgentReadyStage } from "../agent/agent-ready-stage";
-import { agentStartControls } from "../agent/agent-start-controls";
-import type { AgentTask } from "../agent/agent-task-panel";
+import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-ready-stage";
+import { agentStartControls } from "@/app/app/projects/[projectId]/agent/agent-start-controls";
+import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import {

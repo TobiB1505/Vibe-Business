@@ -31,7 +31,7 @@ import {
 import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-preflight";
 import { REFUSAL_SHAPES } from "@/modules/execution-contract/view";
 import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
-import { NovaMoveVoice } from "../nova-move-voice";
+import { NovaMoveVoice } from "@/features/nova/voice/nova-move-voice";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
 import { MovesRefreshBar } from "./moves-refresh-bar";
 import type { Metadata } from "next";

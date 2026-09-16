@@ -95,10 +95,10 @@ describe("the room", () => {
     expect(composes.sort()).toEqual([
       "app/app/onboarding/[projectId]/loading.tsx",
       "app/app/onboarding/[projectId]/page.tsx",
-      "app/app/projects/[projectId]/nova/nova-home.tsx",
-      "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
       "app/e2e/[scenario]/page.tsx",
       "app/e2e/design-studies/study-onboarding.tsx",
+      "features/nova/home/nova-home.tsx",
+      "features/nova/home/nova-opening-screen.tsx",
     ]);
   });
 
@@ -132,9 +132,8 @@ describe("the room", () => {
     expect(room).not.toMatch(/NOVA_THREAD_SURFACE = "[^"]*border/);
 
     const opening =
-      FILES.find(
-        (file) => file.path === "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
-      )?.source ?? "";
+      FILES.find((file) => file.path === "features/nova/home/nova-opening-screen.tsx")?.source ??
+      "";
     /* And the opening wears the constant rather than a copy of its value. */
     expect(opening).toContain("className={NOVA_THREAD_SURFACE}");
     expect(opening).toContain("surface={false}");
@@ -154,7 +153,7 @@ describe("the room", () => {
 
   it("is the shipped rail the opening assembles, not a drawing of one", () => {
     const opening = FILES.find(
-      (file) => file.path === "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
+      (file) => file.path === "features/nova/home/nova-opening-screen.tsx",
     );
 
     expect(opening).toBeDefined();
@@ -171,7 +170,7 @@ describe("the room", () => {
 
   it("ends the opening in the column the next screen renders", () => {
     const opening = FILES.find(
-      (file) => file.path === "app/app/projects/[projectId]/nova/nova-opening-screen.tsx",
+      (file) => file.path === "features/nova/home/nova-opening-screen.tsx",
     )?.source;
     const handover = FILES.find(
       (file) => file.path === "app/app/onboarding/[projectId]/nova-first-run.tsx",

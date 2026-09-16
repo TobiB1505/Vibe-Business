@@ -37,7 +37,7 @@ import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { AuditCreditNotice } from "../audit-credit-notice";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditOverview } from "../audit-overview";
-import { NovaAuditVoice } from "../nova-audit-voice";
+import { NovaAuditVoice } from "@/features/nova/voice/nova-audit-voice";
 import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../audit-lifecycle";
 import { NeedsUserPanel } from "../needs-user-panel";
 import { ProvenancePanel } from "../provenance-panel";

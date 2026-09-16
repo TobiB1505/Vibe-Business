@@ -5,7 +5,7 @@ import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { deriveNovaFocus, FOCUS_CANDIDATE_KINDS } from "@/modules/nova/focus";
 import { buildNovaHomeView, novaControlLabel, type NovaHomeEntry } from "@/modules/nova/home-view";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
-import { NovaFocusThread } from "@/app/app/projects/[projectId]/nova/nova-focus-thread";
+import { NovaFocusThread } from "@/features/nova/home/nova-focus-thread";
 import { Moves } from "./elements";
 import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
 import { MOMENT_FACTS, NO_FACTS } from "./moment-fixtures";

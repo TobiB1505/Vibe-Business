@@ -6,17 +6,18 @@ import type { RetailOperationKind } from "../credits/retail";
  * ## Why the function is not here
  *
  * §K described this as a registry of `{ serverAction, price, consequential }`,
- * and the middle two are here. The function reference is not, because every
- * Server Action in this codebase lives under `src/app/` and nothing under
- * `src/modules/` imports one — the single existing crossing is a `import type`
- * (`coding-agent/agent-workspace.ts:11`). A runtime import the other way would
- * make the domain layer depend on a route's file layout.
+ * and the middle two are here. The function reference is not, because Server
+ * Actions belong to the surface layers (`src/app/`, `src/features/`) and a
+ * domain module imports none of them — rule 86, held by
+ * `src/lib/consistency/feature-boundaries.test.ts`, which also records the
+ * type-only crossings that still exist. A runtime import the other way would
+ * make the domain layer depend on a surface's file layout.
  *
- * So the binding lives beside the actions, in `src/app/app/projects/
- * [projectId]/nova-actions.ts`, where the compiler proves each id names a real
- * export. This file holds the half that is policy rather than plumbing, and
- * stays pure — which is what lets the feed read a price without pulling a
- * route's dependency graph behind it.
+ * So the binding lives with the surface, in
+ * `src/features/nova/bindings/nova-actions.ts`, where the compiler proves each
+ * id names a real export. This file holds the half that is policy rather than
+ * plumbing, and stays pure — which is what lets the feed read a price without
+ * pulling a surface's dependency graph behind it.
  *
  * ## Two ids are not actions at all
  *

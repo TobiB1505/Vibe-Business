@@ -1,7 +1,7 @@
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { hasNovaIntroduced } from "@/modules/onboarding/store";
-import { NovaHome } from "./nova/nova-home";
-import { NovaOpeningScreen } from "./nova/nova-opening-screen";
+import { NovaHome } from "@/features/nova/home/nova-home";
+import { NovaOpeningScreen } from "@/features/nova/home/nova-opening-screen";
 import { getGithubIdentity } from "@/modules/github/identity";
 import { getFounderName } from "@/modules/auth/founder-profile";
 import { greetableName } from "@/modules/auth/identity-view";

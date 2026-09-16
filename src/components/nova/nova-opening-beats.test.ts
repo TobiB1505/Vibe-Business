@@ -114,7 +114,7 @@ describe("the opening's beats", () => {
  */
 describe("the states the opening may not animate", () => {
   const SCREEN = readFileSync(
-    join(process.cwd(), "src/app/app/projects/[projectId]/nova/nova-opening-screen.tsx"),
+    join(process.cwd(), "src/features/nova/home/nova-opening-screen.tsx"),
     "utf8",
   );
 

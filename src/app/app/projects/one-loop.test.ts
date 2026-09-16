@@ -80,7 +80,7 @@ const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
  * Nova is the surface that names a Move today, so the regression is asserted
  * where it can actually happen.
  */
-const NOVA_HOME = read("src/app/app/projects/[projectId]/nova/nova-home.tsx");
+const NOVA_HOME = read("src/features/nova/home/nova-home.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {

@@ -1,6 +1,6 @@
 import { Suspense } from "react";
-import { AgentBuildStage } from "../agent/agent-build-stage";
-import { AgentCore } from "../agent/agent-core";
+import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
+import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
 import { NovaAgentLive } from "./nova-agent-live";
 import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";

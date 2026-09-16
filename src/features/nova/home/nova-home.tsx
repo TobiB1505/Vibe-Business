@@ -6,9 +6,9 @@ import type { ProjectWorkspaceContext } from "@/modules/projects/workspace-conte
 
 import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 
-import { AgentWorkspaceChoiceAction } from "../agent/agent-workspace-choice-action";
+import { AgentWorkspaceChoiceAction } from "@/app/app/projects/[projectId]/agent/agent-workspace-choice-action";
 import { formatElapsedShort } from "@/lib/utils/format-datetime";
-import { resolveFounderInputAction } from "../founder-input-action";
+import { resolveFounderInputAction } from "@/app/app/projects/[projectId]/founder-input-action";
 
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";

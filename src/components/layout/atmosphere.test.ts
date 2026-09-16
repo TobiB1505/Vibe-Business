@@ -78,7 +78,7 @@ describe("the ground is connected, not just defined", () => {
         // The fixture composes Nova Home's parts by hand, so it has to mirror
         // the opt-in or no browser test ever sees the field.
         "src/app/e2e/[scenario]/page.tsx",
-        "src/app/app/projects/[projectId]/nova/nova-home.tsx",
+        "src/features/nova/home/nova-home.tsx",
       ].sort(),
     );
   });

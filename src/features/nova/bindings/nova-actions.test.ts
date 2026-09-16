@@ -20,7 +20,7 @@ import { NOVA_ACTION_IDS, NOVA_ACTION_META } from "@/modules/nova/actions";
  */
 
 const SOURCE = readFileSync(
-  join(process.cwd(), "src/app/app/projects/[projectId]/nova-actions.ts"),
+  join(process.cwd(), "src/features/nova/bindings/nova-actions.ts"),
   "utf8",
 );
 
