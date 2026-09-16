@@ -1,6 +1,6 @@
 # 0086 - Nova presentation inference is claimed, stored, and attempted once
 
-Status: Accepted
+Status: Accepted; its shape — a categorical "do not build" reopened only under named conditions, all together — is reused by [0109](0109-nova-first-application-shell.md) on 2026-09-16 for the thread and the composer. The five conditions here are unchanged and still bind every generated sentence.
 Date: 2026-09-03
 
 Amends §M of [the Nova architecture audit](../audits/2026-09-03-nova-architecture-audit/README.md), which lists "a Nova copy LLM call per message" under **What NOT to build**. Builds on [ADR 0084](0084-nova-voice-is-measured-not-argued.md), which decided the model and the prompt but not when a call may be made. Introduces one table, `nova_voice_messages`. Changes no execution authority, no approval path, and nothing about the four reasoning operations.

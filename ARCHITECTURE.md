@@ -223,6 +223,8 @@ Three names are **reserved and never used**: `audits`, `previews` and `usage` ea
 
 These are code-organization boundaries, not process/network boundaries, for as long as the modular monolith holds (see ADR 0001 "Revisit when").
 
+**[Confirmed — ADR 0109]** Above the modules sit two more layers with one import direction: `src/app` is **routing and composition** (layouts, pages, route handlers, the rail slot — an access gate plus a composition, never product logic), and `src/features` is the **product surface** (screens, `commands.ts` for Server Actions, `queries.ts` for composed reads, artifact views), which reads and writes the domain only through `src/modules`. `src/components` and `src/lib` sit beside the modules and import nothing above them. Imports flow `app → features → modules`; `src/lib/consistency/feature-boundaries.test.ts` fails the build on a new upward import and records every crossing that still exists with the slice that retires it. The first tenant is `src/features/nova/`, the surface behind the project index; the rest of the surfaces move in the slices [the restructure audit](docs/audits/2026-09-16-nova-first-restructure/README.md) derives. See [0109-nova-first-application-shell.md](docs/decisions/0109-nova-first-application-shell.md).
+
 ---
 
 ## 6. Domain Model
@@ -385,6 +387,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0106](docs/decisions/0106-the-rail-is-a-layout-per-area.md) | One rail, a layout per area, and a first frame | Web surface |
 | [0107](docs/decisions/0107-a-year-is-ten-months.md) | A year is ten months charged and twelve granted | Billing |
 | [0108](docs/decisions/0108-a-phone-is-not-a-narrow-desktop.md) | A phone is not a narrow desktop | UI |
+| [0109](docs/decisions/0109-nova-first-application-shell.md) | Nova-first application shell: Nova is the primary interaction surface, the workspace shows her artifacts, and `src/features` sits between routes and modules | §5, Web surface |
 | [0096](docs/decisions/0096-a-contradiction-is-not-a-measurement.md) | A contradiction is not a measurement: static and live consistency checks | Internal operator console |
 | [0099](docs/decisions/0099-the-refusal-becomes-a-handoff.md) | The refusal becomes a handoff | §3.5 |
 | [0100](docs/decisions/0100-the-founder-is-the-outside-witness.md) | The founder is the outside witness | §3.5 |

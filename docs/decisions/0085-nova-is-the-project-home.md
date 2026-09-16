@@ -1,6 +1,6 @@
 # 0085 - Nova is the project Home
 
-Status: Accepted
+Status: Accepted; completed by [0109](0109-nova-first-application-shell.md) on 2026-09-16 — Home is Nova here, and there the project *is* Nova with a workspace beside her. The foreclosure of a rail item for Nova stands; the seven-row rail this ADR kept does not.
 
 Date: 2026-09-03
 
