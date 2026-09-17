@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { deriveNovaFocus, type FocusCandidateKind, type NovaFocusFacts } from "./focus";
 import { buildNovaHomeView } from "./home-view";
@@ -9,6 +10,7 @@ import {
   artifactRefId,
   isArtifactKind,
   parseArtifactRef,
+  workspaceArtifactFor,
   WORKSPACE_ARTIFACT_PARAM,
   WORKSPACE_ARTIFACT_REF_PARAM,
   type ArtifactRef,
@@ -255,5 +257,84 @@ describe("the parameter names", () => {
   it("are the two the addresses spell", () => {
     expect(WORKSPACE_ARTIFACT_PARAM).toBe("artifact");
     expect(WORKSPACE_ARTIFACT_REF_PARAM).toBe("ref");
+  });
+});
+
+/**
+ * What the workspace opens on, and the fallback it must not reach for.
+ *
+ * ## The defect these exist because of
+ *
+ * The thread route read `parseArtifactRef(...) ?? latestArtifactIn(view)`, so
+ * an address that named **nothing resolvable** fell through to the last thing
+ * the conversation had pointed at. A founder following a stale link to a Move
+ * that had since been superseded was shown the business reading instead — and
+ * it looked exactly like the link had worked, which is the failure mode that
+ * makes it worth a test rather than a comment.
+ *
+ * The rule is that a fallback belongs to *silence*, never to *a wrong answer*.
+ */
+describe("what the workspace opens on", () => {
+  const FALLBACK: ArtifactRef = { kind: "business_health" };
+
+  it("uses the conversation's own pointer when the address says nothing", () => {
+    expect(workspaceArtifactFor({ kind: undefined, ref: undefined, fallback: FALLBACK })).toEqual(
+      FALLBACK,
+    );
+  });
+
+  it("opens nothing when the address says nothing and the thread pointed at nothing", () => {
+    expect(workspaceArtifactFor({ kind: undefined, ref: undefined, fallback: null })).toBeNull();
+  });
+
+  it("opens what the address names", () => {
+    expect(workspaceArtifactFor({ kind: "product", ref: undefined, fallback: FALLBACK })).toEqual({
+      kind: "product",
+    });
+
+    expect(workspaceArtifactFor({ kind: "opportunity", ref: "o1", fallback: FALLBACK })).toEqual({
+      kind: "opportunity",
+      opportunityId: "o1",
+    });
+  });
+
+  /**
+   * The whole point. Each of these is an address a founder can genuinely
+   * arrive with — a stale bookmark, a mistyped link, a kind the product
+   * retired — and every one of them used to open the fallback.
+   */
+  it.each([
+    ["a kind that is not one of the eight", "preview", undefined],
+    ["a kind that was never one", "invoice", undefined],
+    ["a path pretending to be a kind", "../../etc/passwd", undefined],
+    ["a Move with no Move in it", "opportunity", undefined],
+    ["a Move with an empty reference", "opportunity", ""],
+    ["a change with no change in it", "prepared_change", undefined],
+    ["an empty parameter", "", undefined],
+  ])("opens nothing for %s, and never the fallback", (_name, kind, ref) => {
+    expect(workspaceArtifactFor({ kind, ref, fallback: FALLBACK })).toBeNull();
+  });
+
+  /**
+   * Total over the union, so a ninth kind cannot quietly start falling back:
+   * every kind the address can name resolves to itself and to nothing else.
+   */
+  it("never substitutes one artifact for another", () => {
+    for (const kind of ARTIFACT_KINDS) {
+      const opened = workspaceArtifactFor({ kind, ref: "ref_1", fallback: FALLBACK });
+      expect(opened, kind).toEqual(parseArtifactRef(kind, "ref_1"));
+      expect(opened?.kind, kind).toBe(kind);
+    }
+  });
+
+  it("is what the thread route asks, with the thread's own pointer as the fallback", () => {
+    const route = readFileSync(
+      "src/app/app/projects/[projectId]/threads/[threadId]/page.tsx",
+      "utf8",
+    );
+
+    expect(route).toContain("workspaceArtifactFor");
+    // The `??` this replaced is the defect, and it must not come back.
+    expect(route).not.toMatch(/parseArtifactRef\([\s\S]*?\)\s*\?\?/);
   });
 });

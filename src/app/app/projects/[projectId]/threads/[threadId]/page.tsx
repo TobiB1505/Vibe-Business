@@ -6,7 +6,7 @@ import { ThreadScreen } from "@/features/nova/thread/thread-view";
 import { ProjectWorkspacePane } from "@/features/workspace/host/project-workspace-pane";
 import { latestArtifactIn } from "@/modules/nova/threads/view";
 import {
-  parseArtifactRef,
+  workspaceArtifactFor,
   WORKSPACE_ARTIFACT_PARAM,
   WORKSPACE_ARTIFACT_REF_PARAM,
 } from "@/modules/nova/artifacts";
@@ -62,11 +62,15 @@ export default async function ProjectThreadPage({
   if (view === null) notFound();
 
   const query = await searchParams;
-  const artifact =
-    parseArtifactRef(
-      one(query[WORKSPACE_ARTIFACT_PARAM]),
-      one(query[WORKSPACE_ARTIFACT_REF_PARAM]),
-    ) ?? latestArtifactIn(view);
+  const artifact = workspaceArtifactFor({
+    kind: one(query[WORKSPACE_ARTIFACT_PARAM]),
+    ref: one(query[WORKSPACE_ARTIFACT_REF_PARAM]),
+    /*
+      Only when the address says nothing. A parameter that names no artifact
+      resolves to nothing rather than to this — see `workspaceArtifactFor`.
+    */
+    fallback: latestArtifactIn(view),
+  });
 
   return (
     <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] lg:items-start">

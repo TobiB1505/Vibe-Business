@@ -188,6 +188,46 @@ export function parseArtifactRef(
   }
 }
 
+/**
+ * What the workspace opens on, given an address and a default.
+ *
+ * ## Why an absent parameter and a wrong one are different answers
+ *
+ * They were the same answer, and that was the defect: the route read
+ * `parseArtifactRef(...) ?? latestArtifactIn(view)`, so a founder who followed
+ * a stale or mistyped link was silently shown **a different artifact** — the
+ * last thing the conversation happened to point at — with nothing saying the
+ * address had not resolved. A link to a Move that has since been superseded
+ * would open the business reading instead, and look exactly like it had worked.
+ *
+ * So the fallback belongs to *silence*, never to *a wrong answer*:
+ *
+ * - **no parameter** — the address says nothing, so the conversation's own
+ *   most recent pointer is the best available answer to what it is about.
+ * - **a parameter that resolves** — that artifact, obviously.
+ * - **a parameter that does not** — nothing, and the pane says what it is for.
+ *   That is what {@link parseArtifactRef} already refuses to guess at, and this
+ *   is where the refusal stops being undone one line later.
+ *
+ * `kind` present with a `ref` the address needs and does not carry counts as
+ * *does not resolve*, not as silence: `?artifact=opportunity` is a founder
+ * asking for a Move, and there is no Move in it.
+ */
+export function workspaceArtifactFor(params: {
+  /** The `artifact` query value, or undefined when the address omits it. */
+  kind: string | undefined;
+  /** The `ref` query value, or undefined. */
+  ref: string | undefined;
+  /** What to show when the address says nothing at all. */
+  fallback: ArtifactRef | null;
+}): ArtifactRef | null {
+  // Undefined is absent; an empty string is a founder who sent `?artifact=`,
+  // which is an address that names no kind and therefore names nothing.
+  if (params.kind === undefined) return params.fallback;
+
+  return parseArtifactRef(params.kind, params.ref);
+}
+
 /** Whether a string is one of the eight. Exported for a store reading one back. */
 export function isArtifactKind(value: string): value is ArtifactKind {
   return (ARTIFACT_KINDS as readonly string[]).includes(value);
