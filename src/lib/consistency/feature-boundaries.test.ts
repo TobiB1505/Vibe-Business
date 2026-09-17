@@ -29,12 +29,30 @@ import { describe, expect, it } from "vitest";
  * crossing appears, and it also fails when a recorded crossing has quietly
  * gone — a register that can rot is a register nobody reads.
  *
- * The list is meant to shrink. Slice 1 of the restructure audit moves the Agent
- * and Plan surfaces into `src/features` and empties most of the `components`
- * and `modules` sections; Slice 2 gives every feature a `commands.ts` and
- * empties the action imports; Slice 6 moves the palette and the tone
- * vocabulary below both layers. Adding to this list is a decision, not a
- * convenience, and the entry says which slice removes it.
+ * The list is meant to shrink. Slice 1 takes the product surfaces out of
+ * `src/components` — the nine Nova blocks, the landing page, the three domain
+ * views — and moves `palette.ts` below both layers, which empties the
+ * `components` section for good; Slice 2 takes the Agent, Plan, Health and
+ * product surfaces out of the route tree and empties the `modules` section;
+ * Slice 3 gives every feature a `commands.ts` and empties the rest. Adding to
+ * this list is a decision, not a convenience, and the entry says which slice
+ * removes it.
+ *
+ * ## One thing the register may never legalize
+ *
+ * An import **into** `src/features` from below it. That is not a crossing on
+ * its way out, it is the layering inverted, and one exception would make the
+ * rest decorative — a component that may compose a feature is a component with
+ * product knowledge, which is the thing the split exists to prevent. It is
+ * asserted unconditionally, and an entry that tried to allow it fails too.
+ *
+ * Which makes the real question *what a component is*, and that is a judgement
+ * this file can only half enforce. It can prove no component imports a feature
+ * or a route. It cannot prove a component is a primitive — `blocks/audit.tsx`
+ * would pass every mechanical check the day its import moved. The
+ * classification lives in ADR 0109 §2 and the audit's §C.2: a component
+ * renders a shape, may take a module's types and label tables, and may never
+ * compose a product surface, bind a Server Action or know a route.
  *
  * ## What is checked, and what is not
  *
@@ -81,43 +99,50 @@ const TRANSITIONAL_CROSSINGS: readonly {
   {
     file: "components/nova/blocks/workspace.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — the Agent surface moves to src/features/agent",
+    retiredBy:
+      "Slice 1 — the block moves to features/nova/thread/blocks; the crossing travels with it and Slice 2 closes it",
     reason: "Blocks compose shipped screens (Sprint 0162); the screen lives in the route tree.",
   },
   {
     file: "components/nova/blocks/review.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — the Agent surface moves to src/features/agent",
+    retiredBy:
+      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
     reason: "Same.",
   },
   {
     file: "components/nova/blocks/agent.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — the Agent surface moves to src/features/agent",
+    retiredBy:
+      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
     reason: "Same.",
   },
   {
     file: "components/nova/blocks/move.tsx",
     allowed: ["app/app/projects/[projectId]/plan/"],
-    retiredBy: "Slice 1 — the Plan surface moves to src/features/plan",
+    retiredBy:
+      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
     reason: "Same, for the Move card.",
   },
   {
     file: "components/nova/blocks/audit.tsx",
     allowed: ["app/app/projects/[projectId]/business-brain/"],
-    retiredBy: "Slice 6 — Business Health moves to src/features/health",
+    retiredBy:
+      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
     reason: "Same, for the business map.",
   },
   {
     file: "components/marketing/landing-agent.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — the Agent surface moves to src/features/agent",
+    retiredBy:
+      "Slice 1 — the landing page moves to features/marketing; Slice 2 closes the crossing",
     reason: "The landing page shows the real Agent components rather than a drawing of them.",
   },
   {
     file: "components/marketing/landing-business-map.tsx",
     allowed: ["app/app/projects/[projectId]/business-brain/"],
-    retiredBy: "Slice 6 — Business Health moves to src/features/health",
+    retiredBy:
+      "Slice 1 — the landing page moves to features/marketing; Slice 2 closes the crossing",
     reason: "Same, for the business map.",
   },
   {
@@ -126,45 +151,46 @@ const TRANSITIONAL_CROSSINGS: readonly {
       "app/app/projects/[projectId]/understanding-actions",
       "app/app/projects/[projectId]/product-scan-status-action",
     ],
-    retiredBy: "Slice 2 — the product feature's commands.ts",
+    retiredBy:
+      "Slice 1 — the scan experience moves to features/product; Slice 3 gives it the feature's commands.ts",
     reason: "A shared component that binds two Server Actions living in the route tree.",
   },
   {
     file: "components/layout/app-frame.tsx",
     allowed: ["app/palette"],
-    retiredBy: "Slice 6 — palette.ts moves beside the components that read it",
+    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
     reason: "The palette switch is a module under src/app that is not a route.",
   },
   {
     file: "components/layout/account-card.tsx",
     allowed: ["app/palette"],
-    retiredBy: "Slice 6 — palette.ts moves beside the components that read it",
+    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
     reason: "Same.",
   },
   {
     file: "components/layout/mobile-account.tsx",
     allowed: ["app/palette"],
-    retiredBy: "Slice 6 — palette.ts moves beside the components that read it",
+    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
     reason: "Same.",
   },
   {
     file: "components/layout/palette-switch.tsx",
     allowed: ["app/palette"],
-    retiredBy: "Slice 6 — palette.ts moves beside the components that read it",
+    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
     reason: "Same.",
   },
   /* ── modules → app (type-only) ─────────────────────────────────────────── */
   {
     file: "modules/coding-agent/change-stage-view.ts",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — ValidationCheck and MergeSummary move into src/modules/coding-agent",
+    retiredBy: "Slice 2 — ValidationCheck and MergeSummary move into src/modules/coding-agent",
     reason: "Type-only: the view builder returns the shapes the Agent components declare.",
   },
   {
     file: "modules/coding-agent/agent-workspace.ts",
     allowed: ["app/app/projects/[projectId]/agent/", "components/system/cost-line"],
     retiredBy:
-      "Slice 1 — AgentTask, ValidationCheck, PreviewChange, MergeSummary and ChangeCost move into the module",
+      "Slice 2 — AgentTask, ValidationCheck, PreviewChange, MergeSummary and ChangeCost move into the module",
     reason: "Type-only, same; plus the cost line's shape.",
   },
   /* ── modules → components ──────────────────────────────────────────────── */
@@ -172,33 +198,33 @@ const TRANSITIONAL_CROSSINGS: readonly {
     file: "modules/coding-agent/ui/agent-execution-live-view.tsx",
     allowed: ["components/ui/"],
     retiredBy:
-      "Slice 1 — a component inside a module moves to src/features/agent, or is deleted if nothing mounts it",
+      "Slice 2 — a component inside a module moves to src/features/agent, or is deleted if nothing mounts it",
     reason:
       "A screen that was built beside its read model before there was a surface layer to hold it.",
   },
   {
     file: "modules/execution/change-history-view.ts",
     allowed: ["components/ui/status-pill"],
-    retiredBy: "Slice 6 — the tone vocabulary moves to src/lib, below both layers",
+    retiredBy: "Slice 3 — the tone vocabulary moves to src/lib, below both layers",
     reason: "Type-only: a view builder names a tone a primitive defines.",
   },
   {
     file: "modules/projects/business-brain-view.ts",
     allowed: ["components/ui/score-display"],
-    retiredBy: "Slice 6 — scoreDisplay and ScoreTone move to src/lib, below both layers",
+    retiredBy: "Slice 3 — scoreDisplay and ScoreTone move to src/lib, below both layers",
     reason: "The business reading formats its score with the primitive's own formatter.",
   },
   /* ── features → app ────────────────────────────────────────────────────── */
   {
     file: "features/nova/home/nova-agent-stage.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — the Agent surface moves to src/features/agent",
+    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
     reason: "Nova streams the Agent's own build stage.",
   },
   {
     file: "features/nova/home/nova-ready-stage.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 1 — the Agent surface moves to src/features/agent",
+    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
     reason: "Nova offers the Agent's own start controls.",
   },
   {
@@ -207,7 +233,7 @@ const TRANSITIONAL_CROSSINGS: readonly {
       "app/app/projects/[projectId]/agent/agent-workspace-choice-action",
       "app/app/projects/[projectId]/founder-input-action",
     ],
-    retiredBy: "Slices 1 and 2 — the Agent surface and the feature commands",
+    retiredBy: "Slices 2 and 3 — the Agent surface and the feature commands",
     reason: "One Agent action wrapper and one Server Action the thread binds.",
   },
   {
@@ -219,19 +245,19 @@ const TRANSITIONAL_CROSSINGS: readonly {
       "app/app/projects/[projectId]/understanding-actions",
       "app/app/projects/[projectId]/validate-change-action",
     ],
-    retiredBy: "Slice 2 — every feature exposes commands.ts and the actions leave the route tree",
+    retiredBy: "Slice 3 — every feature exposes commands.ts and the actions leave the route tree",
     reason: "The dispatch calls five Server Actions that still live beside the routes.",
   },
   {
     file: "features/nova/home/nova-header-live.tsx",
     allowed: ["app/app/projects/[projectId]/run-audit-action"],
-    retiredBy: "Slice 2 — every feature exposes commands.ts",
+    retiredBy: "Slice 3 — every feature exposes commands.ts",
     reason: "The status poll reads through the operation-status action.",
   },
   {
     file: "features/nova/home/nova-opening-screen.tsx",
     allowed: ["app/app/onboarding/[projectId]/actions"],
-    retiredBy: "Slice 2 — the onboarding feature's commands.ts",
+    retiredBy: "Slice 3 — the onboarding feature's commands.ts",
     reason: "The introduction writes its milestone through the onboarding actions.",
   },
   {
@@ -249,7 +275,7 @@ const TRANSITIONAL_CROSSINGS: readonly {
       "app/app/projects/[projectId]/understanding-actions",
       "app/app/projects/[projectId]/validate-change-action",
     ],
-    retiredBy: "Slice 2 — the binding imports each feature's commands.ts instead",
+    retiredBy: "Slice 3 — the binding imports each feature's commands.ts instead",
     reason:
       "The catalogue's binding table names every Server Action it binds, and the compiler proves each exists.",
   },
@@ -374,8 +400,28 @@ describe("the layering holds: app → features → modules", () => {
   it("lets nothing below the features import from them", () => {
     // Features are the top of the product; a component or a module that
     // imported one would have product knowledge it is not allowed to have.
+    // Unconditional: the register is not consulted, because this is not a
+    // crossing being retired — it is the layering inverted (ADR 0109 §2).
     const into = CROSSINGS.filter((crossing) => crossing.to === "features");
-    expect(into.map((c) => `${c.file} → ${c.target}`)).toEqual([]);
+    expect(
+      into.map((c) => `${c.file} → ${c.target}`),
+      "A file below the feature layer imports a feature. Move the file into " +
+        "the feature instead: a component that composes a product surface is " +
+        "a feature wearing a component's address (rule 86).",
+    ).toEqual([]);
+  });
+
+  it("refuses a register entry that would allow one", () => {
+    // Belt and braces: the assertion above catches the import, and this
+    // catches the attempt to write down permission for it.
+    const legalizing = TRANSITIONAL_CROSSINGS.filter((entry) =>
+      entry.allowed.some((prefix) => prefix.startsWith("features/")),
+    );
+    expect(
+      legalizing.map((entry) => entry.file),
+      "TRANSITIONAL_CROSSINGS may never name a target inside src/features. " +
+        "The register is for crossings on their way out; this one has no way out.",
+    ).toEqual([]);
   });
 
   it("lets lib import from nothing above it", () => {
