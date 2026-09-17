@@ -29,8 +29,12 @@ home/       the project index — the ranking mounted as a thread
 thread/
   blocks/                   BlockKind → the owning feature's view, framed
   queries.ts                one thread's three bounded reads
-  thread-view.tsx           the stored turns, read back — no composer, no controls
+  thread-view.tsx           the stored turns, read back, with the composer under them
   thread-skeleton.tsx       the first frame both thread routes answer a click with
+conversation/
+  nova-composer.tsx         the one input in this product
+  queries.ts                what a question is answered from, composed from the screens' own reads
+  commands/ask-nova.ts      "use server" — the only place generation can happen
 bindings/
   nova-actions.ts           catalogue id → the real Server Action or href. Total; the compiler checks it.
 voice/
@@ -60,19 +64,22 @@ Each lands **beside** `home/`, never inside it, and each is a decision under
 [ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §5 and
 §6 rather than a feature this README can promise.
 
-| Slice | Directory       | What it is                                                                             |
-| ----- | --------------- | -------------------------------------------------------------------------------------- |
-| 6     | `conversation/` | the composer, the turn rendering, and the one command that generates                   |
-| 6     | `actions/`      | a proposal becomes the control the catalogue already defines, and a founder presses it |
-| 7     | `threads/`      | the thread list, and the shell destination that needs one                              |
+| Slice | Directory  | What it is                                                |
+| ----- | ---------- | --------------------------------------------------------- |
+| 7     | `threads/` | the thread list, and the shell destination that needs one |
 
-The shape of the last two is the part worth stating here, because it is the one
+The shape of the conversation is worth restating here, because it is the part
 that could erode quietly. Nova has **two lanes**. The conversation lane may
 reason and explain over canonical project data and holds no capability — no
 tool, no web access, no database handle, no service-role client, no say in what
 it reads. The action lane is the binding in `bindings/`, unchanged, with its
 existing preflight, price, confirmation and execution path. Generated text is
 never the last thing before a consequential effect; a press is.
+
+`features/nova/actions/` was named for Slice 6 and was not built: a proposal is
+a catalogue id, and the control it renders is the one `bindings/` already binds.
+A directory between them would have been a second answer to a question that has
+one.
 
 And the transcript is memory, not truth: deleting a thread must not change
 canonical business state, though it may remove what Nova can infer from earlier

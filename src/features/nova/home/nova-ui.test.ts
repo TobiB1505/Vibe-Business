@@ -291,11 +291,26 @@ describe("Nova Home", () => {
      */
 
     /*
-     * Nova is not a chat box, and this is the claim rather than a style rule.
-     * There is nothing to type at her: she proposes one thing and a founder
-     * presses it or does not, which is what makes her a colleague rather than
-     * a prompt window — and `feed.test.ts` holds the other half, that she never
-     * describes herself as one.
+     * **There is exactly one input in this product, and it is not on Home.**
+     *
+     * This assertion used to read *"has no chat input anywhere"*, and its
+     * comment said *"there is nothing to type at her"*. That was true for three
+     * years and Slice 6 of [ADR 0109] ended it, so the claim is rewritten in
+     * the open rather than edited green — which would have been the cheapest
+     * and worst move available, and is the same trap Sprint 0215 recorded
+     * walking past.
+     *
+     * What the Nova architecture audit's §M closed was an **unrestricted** chat
+     * input: free text feeding a decision. The composer feeds a *validated
+     * reply* and decides nothing — every consequential effect stays behind the
+     * control the catalogue already defines, which is ADR 0109 §5's sentence:
+     * generated text is never the last thing before one, a press is.
+     *
+     * So the rule is narrower and still absolute: **Home has no input at all.**
+     * Home is the ranking — one thing to do and a control for it — and a box on
+     * it would be a second way to ask for the same thing. The composer lives in
+     * `features/nova/conversation/`, on the thread, and `conversation-lane.test.ts`
+     * is where its own bounds are asserted.
      *
      * ## The one field, and why the exemption is narrow
      *
@@ -305,19 +320,15 @@ describe("Nova Home", () => {
      * instruction: it is normalised to one plain line, bounded by a database
      * CHECK, and fenced as untrusted data wherever it reaches a model (rule 42).
      *
-     * So the sweep still runs over every file, and the exempt one has to prove
-     * it is that field: bounded by the shared limit and carrying the same name
-     * the profile form writes. A second text box anywhere, or this one losing
-     * its bound, fails here.
-     *
-     * `<textarea>` stays forbidden everywhere with no exemption at all. A
-     * multi-line box is a chat box whatever the label above it says.
+     * So the sweep still runs over every file here, and the exempt one has to
+     * prove it is that field: bounded by the shared limit and carrying the same
+     * name the profile form writes.
      */
     const NAME_FIELD_FILE = "nova-opening-screen.tsx";
 
-    it("has no chat input anywhere", () => {
+    it("keeps every input off Home, except the one that asks for a name", () => {
       for (const { name, body } of FILES) {
-        expect(body, name).not.toMatch(/<textarea/);
+        expect(body, name).not.toMatch(/<textarea|<Textarea/);
         if (name === NAME_FIELD_FILE) continue;
         expect(body, name).not.toMatch(/type="text"|placeholder=/);
       }

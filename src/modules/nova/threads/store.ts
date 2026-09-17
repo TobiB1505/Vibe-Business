@@ -357,3 +357,87 @@ export async function markThreadRead(
 
   if (error) throw error;
 }
+
+/**
+ * One conversational turn — the question, the reply, and what they point at.
+ *
+ * ## Why this is one database call and not four inserts
+ *
+ * A transcript with a question and no answer reads as an answer that never
+ * came; one with an answer and no question reads as Nova volunteering
+ * something. They are one write, and `append_nova_conversation_turn` is where
+ * that write is atomic.
+ *
+ * It is also the only way a `nova` message can be written at all from a
+ * founder's session: `nova_messages`' insert policy pins `authenticated` to
+ * `author = 'founder'`, deliberately, and the restructure audit's §C.8
+ * forecloses the service-role client for this layer by name. The function is
+ * `security definer` and re-checks ownership against `auth.uid()` inside
+ * itself — the same shape `resolve_founder_input_request` uses.
+ *
+ * Returns the founder message's sequence, so a caller can say how far the
+ * thread has moved without reading it back.
+ */
+export async function appendConversationTurn(
+  supabase: SupabaseClient,
+  params: {
+    threadId: string;
+    question: string;
+    reply: string;
+    artifact?: { kind: ArtifactKind; ref: string | null } | null;
+    actionId?: NovaActionId | null;
+    contextVersion?: string | null;
+    contextHash?: string | null;
+  },
+): Promise<number> {
+  const { data, error } = await supabase.rpc("append_nova_conversation_turn", {
+    p_thread_id: params.threadId,
+    p_question: params.question,
+    p_reply: params.reply,
+    p_artifact_kind: params.artifact?.kind ?? null,
+    p_artifact_ref: params.artifact?.ref ?? null,
+    p_action_id: params.actionId ?? null,
+    p_context_version: params.contextVersion ?? null,
+    p_context_hash: params.contextHash ?? null,
+  });
+
+  if (error) throw error;
+  return typeof data === "number" ? data : 0;
+}
+
+/**
+ * How many questions the founder has asked in this thread.
+ *
+ * `count: "exact", head: true` transfers no rows, so this is a bound check
+ * rather than a read of the conversation — which matters because it runs before
+ * every question and the thread it counts is the one growing.
+ */
+export async function countFounderQuestions(
+  supabase: SupabaseClient,
+  params: { threadId: string },
+): Promise<number> {
+  const { count, error } = await supabase
+    .from(MESSAGES)
+    .select("id", { count: "exact", head: true })
+    .eq("thread_id", params.threadId)
+    .eq("author", "founder");
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/** The same, across one account's projects within a window. */
+export async function countFounderQuestionsSince(
+  supabase: SupabaseClient,
+  params: { userId: string; since: string },
+): Promise<number> {
+  const { count, error } = await supabase
+    .from(MESSAGES)
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", params.userId)
+    .eq("author", "founder")
+    .gte("created_at", params.since);
+
+  if (error) throw error;
+  return count ?? 0;
+}

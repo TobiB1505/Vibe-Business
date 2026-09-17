@@ -191,8 +191,16 @@ const WORKFLOW_OFFER =
  * judge, build, review. All true, and all of it answers a question nobody had
  * yet. The thing a person actually does not know on meeting this screen is
  * *what kind of thing am I talking to* — and the answer is unusual enough to
- * be worth saying outright. She is not a chat box. There is nothing to type.
- * She proposes one thing and a person presses it or does not.
+ * be worth saying outright. She leads: she proposes one thing and a person
+ * presses it or does not, so nobody has to work out what to ask.
+ *
+ * This used to end *"she is not a chat box; there is nothing to type"*, and
+ * Slice 6 of [ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md)
+ * ended it — a founder may now ask her anything, and she answers from what
+ * Vibe knows. The steps below did not change, because what they say is still
+ * true and is the part that matters on a first meeting: you do not *need* to
+ * write prompts. Being able to is a different sentence, and this screen is not
+ * where it belongs.
  *
  * So the interaction comes first and the pipeline second, and the block that
  * follows shows the shape rather than describing it again.

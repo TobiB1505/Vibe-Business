@@ -59,7 +59,30 @@ export type AIOperation =
    * same way in the ledger. Nothing writes a usage event for it yet: the eval
    * probe runs it and ledgers nothing, and the product path lands in Slice 9.
    */
-  | "nova_presentation";
+  | "nova_presentation"
+  /**
+   * Nova answering a founder's question about their own business (ADR 0110).
+   *
+   * The second operation on this union that produces no new intelligence, and
+   * the first that is allowed to *explain*. Every fact it may state was decided
+   * by one of the operations above; what this call adds is reasoning over facts
+   * Vibe already holds — *why is conversion the blocker*, *why Move 1 before
+   * Move 2*, *explain the audit more simply* — which the eighteen-item action
+   * catalogue cannot express and which refusing would be refusing the product.
+   *
+   * It holds **no capability**: no tool, no web access, no URL fetch, no
+   * database handle, no service-role client, and no say in what it reads. Vibe
+   * assembles a bounded context pack, the model returns a shape — one message,
+   * an optional artifact reference from a closed union, an optional catalogue
+   * id — and every field is validated before a founder sees it (rule 41,
+   * [ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §5).
+   *
+   * Free to the founder and bounded per thread and per window
+   * ([ADR 0110](../../../docs/decisions/0110-a-question-costs-nothing-and-is-bounded.md)):
+   * a founder who hesitates before asking a question is a founder not using the
+   * product. It is still a paid call, so it is keyed here like every other one.
+   */
+  | "nova_conversation";
 
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";

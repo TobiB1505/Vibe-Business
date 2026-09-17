@@ -76,3 +76,58 @@ test.describe("a stored conversation", () => {
     });
   }
 });
+
+/**
+ * The one input in this product, at rest (ADR 0109 §5, ADR 0110).
+ *
+ * Only the resting state, and that is the right shape rather than a limitation:
+ * pressing reaches a Server Action that begins with `requireProjectAccess`, and
+ * the browser suite has no session. What a browser has to prove here is all
+ * true before anything is sent — that the field is legible and reachable, that
+ * it is bounded, and that a founder can see what asking costs **before** they
+ * ask, which is rule 60's shape applied to an operation that costs nothing.
+ */
+test.describe("the composer", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto("/e2e/thread-composer");
+  });
+
+  test("says what asking costs, in the word rather than a zero", async ({ page }) => {
+    // ADR 0094: a free operation says so. A zero is a number in a currency and
+    // invites the question of when it stops being zero.
+    await expect(page.getByText("Included", { exact: true })).toBeVisible();
+    await expect(page.getByText("0 Credits")).toHaveCount(0);
+  });
+
+  test("is one bounded field with a name a screen reader can use", async ({ page }) => {
+    const field = page.getByLabel("Ask Nova about your product");
+
+    await expect(field).toBeVisible();
+    await expect(field).toHaveAttribute("maxlength", "1200");
+    await expect(page.locator("textarea")).toHaveCount(1);
+  });
+
+  test("is reachable and pressable from the keyboard", async ({ page }) => {
+    const field = page.getByLabel("Ask Nova about your product");
+
+    await field.focus();
+    await expect(field).toBeFocused();
+    await field.fill("why is conversion the blocker?");
+
+    await expect(page.getByRole("button", { name: "Ask" })).toBeEnabled();
+  });
+
+  for (const viewport of WIDTHS) {
+    test(`fits at ${viewport.name}`, async ({ page }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+
+      await expect(page.getByLabel("Ask Nova about your product")).toBeVisible();
+
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+});

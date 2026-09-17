@@ -415,12 +415,58 @@ export const NOVA_VOICE_REGRESSION_JUDGE_CONFIG: EvalJudgeConfig = {
   timeoutMs: 120_000,
 };
 
+/**
+ * Nova answering a question about a founder's own business (ADR 0110).
+ *
+ * ## Why the same model the voice tier ended up on
+ *
+ * The voice eval measured the pair this whole layer rests on — `grounded` and
+ * `no_invention` — across 46 cases: Haiku 4.5 scored 41% and 39%, Sonnet 5
+ * scored 72% and 78%. Haiku wrote fluent, well-shaped, correctly-numbered
+ * sentences that invented the *reasons*, and two prompt revisions moved that
+ * without closing it.
+ *
+ * That finding transfers with more force, not less. The voice tier is a
+ * reporter forbidden to explain anything; this one is **allowed** to explain,
+ * which is precisely the capability Haiku abused when it was not allowed to.
+ * Choosing the cheaper model for the harder task because the easier task
+ * measured badly on it would be the wrong direction to be wrong in.
+ *
+ * ## Why no thinking, on a call a founder is waiting for
+ *
+ * `reasoning: { mode: "none" }`, for the two reasons the voice config gives
+ * and one more. The eval deliberately gave Sonnet no thinking budget — if
+ * avoiding invention had needed reasoning tokens, that would itself have been
+ * the finding, and it was not. And a founder is watching a composer: a reply
+ * that takes thirty seconds to think has lost to a reply that arrived.
+ *
+ * There is **no measured cost behind this operation yet**, which is exactly why
+ * ADR 0110 prices it at nothing and bounds it instead. Rule 78's bar — never
+ * activate a customer-facing price without a measured cost behind it — is met
+ * by charging nothing, not by guessing.
+ *
+ * Budgets: input is the largest of the Nova operations because the pack carries
+ * the audit's shape, the plan, the change state and the recent turns, and it is
+ * still an order of magnitude below the audit's own evidence pack. Output is
+ * one reply plus two short optional fields. `timeoutMs` is set for a person
+ * waiting, not for a durable step.
+ */
+export const NOVA_CONVERSATION_CONFIG: OperationConfig = {
+  operation: "nova_conversation",
+  model: "claude-sonnet-5",
+  reasoning: { mode: "none" },
+  maxOutputTokens: 1_200,
+  maxInputTokens: 12_000,
+  timeoutMs: 20_000,
+};
+
 const CONFIGS: Record<Exclude<AIOperation, "agentic_execution">, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
   product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
   action_planning: ACTION_PLANNING_CONFIG,
   nova_presentation: NOVA_PRESENTATION_CONFIG,
+  nova_conversation: NOVA_CONVERSATION_CONFIG,
 };
 
 export function getOperationConfig(

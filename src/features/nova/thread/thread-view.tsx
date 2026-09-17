@@ -2,6 +2,7 @@ import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaAside, NovaLine } from "@/components/nova/nova-thread";
 import { EmptyState } from "@/components/ui/states";
 import type { ThreadTurn, ThreadView } from "@/modules/nova/threads/view";
+import { NovaComposer } from "@/features/nova/conversation/nova-composer";
 
 /**
  * A stored thread, read back.
@@ -29,15 +30,42 @@ import type { ThreadTurn, ThreadView } from "@/modules/nova/threads/view";
  * per turn rather than a rule across the thread because turns arrive in
  * batches and a single divider would have to choose one of them.
  */
-export function ThreadScreen({ view }: { view: ThreadView }) {
-  if (view.turns.length === 0) return <EmptyThread />;
-
+export function ThreadScreen({
+  view,
+  /**
+   * Whether this screen may ask.
+   *
+   * False in the lab, which mounts the transcript to look at it and has no
+   * project to ask about. Every other caller leaves it alone.
+   */
+  composer = true,
+}: {
+  view: ThreadView;
+  composer?: boolean;
+}) {
   return (
-    <section className="flex flex-col gap-2.5" aria-label={view.thread.title}>
-      {view.turns.map((turn, index) => (
-        <Turn key={turn.id} turn={turn} index={index} />
-      ))}
-    </section>
+    <div className="flex flex-col gap-6">
+      {view.turns.length === 0 ? (
+        <EmptyThread />
+      ) : (
+        <section className="flex flex-col gap-2.5" aria-label={view.thread.title}>
+          {view.turns.map((turn, index) => (
+            <Turn key={turn.id} turn={turn} index={index} />
+          ))}
+        </section>
+      )}
+
+      {/*
+        The composer, under the transcript, where a conversation puts one. It is
+        the last thing on the screen because everything above it already
+        happened — and it is absent in the lab, where there is no project to ask
+        about (ADR 0109 §5: generation happens in a founder-initiated command,
+        and a fixture has nobody to initiate it).
+      */}
+      {composer && view.thread.projectId.length > 0 && (
+        <NovaComposer projectId={view.thread.projectId} />
+      )}
+    </div>
   );
 }
 

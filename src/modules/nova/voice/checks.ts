@@ -209,7 +209,16 @@ const NEGATIONS = [
 /** How far back a negation may sit and still govern the phrase. */
 const NEGATION_WINDOW = 60;
 
-function findUnnegated(normalized: string, phrases: readonly string[]): string[] {
+/**
+ * Which of `phrases` the message actually **asserts**, rather than denies.
+ *
+ * Exported because the conversation lane refuses the same claims and must not
+ * own a second copy of what counts as a denial. It needs the distinction more
+ * than this lane does: a founder may ask *"is it live yet?"*, and the correct
+ * answer — *"I can't tell you whether it is live; Vibe never observes that"* —
+ * contains the banned phrase and is the sentence the product exists to say.
+ */
+export function findUnnegated(normalized: string, phrases: readonly string[]): string[] {
   return phrases.filter((phrase) => {
     let from = 0;
     for (;;) {

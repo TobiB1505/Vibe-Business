@@ -382,10 +382,43 @@ describe("J. privilege catalog", () => {
         and has_function_privilege(r.role, p.oid, 'EXECUTE');
     `);
 
-    // No exceptions. Anything appearing here is a privilege-escalation surface
-    // nobody argued for.
+    // Anything appearing here is a privilege-escalation surface that has to be
+    // argued for by name. The list is the review.
     //
-    // There were two, and both are gone rather than grandfathered.
+    // ## `append_nova_conversation_turn` — argued for, ADR 0109 §5
+    //
+    // It writes one conversational turn: the founder's question, Nova's reply,
+    // and their optional pointers. It has to be `SECURITY DEFINER` because
+    // `nova_messages`' insert policy pins `authenticated` to
+    // `author = 'founder'` deliberately — a client controls every byte it
+    // sends, and a browser that could write `author = 'nova'` through the table
+    // could put words in her mouth in the founder's own history. And it has to
+    // be reachable by `authenticated`, because the founder pressing Ask is its
+    // only caller; the restructure audit's §C.8 forecloses the service-role
+    // client for the conversation layer by name, since it bypasses RLS
+    // entirely and a conversation layer holding it is one bug away from
+    // reading across tenants.
+    //
+    // **Its reach is bounded by ownership, not by an argument.** It takes no
+    // owner parameter: it re-reads the thread joined to `projects` and requires
+    // `projects.user_id = auth.uid()`, so the rows it can write are exactly the
+    // rows the caller could already write as `founder`, plus the author column
+    // the table withholds from a client. `record_auth_attempt`'s failure is the
+    // one to check this against, and it does not apply: that function was
+    // reachable by `anon` — anyone holding the published key — and its bound was
+    // on what an argument could reach. This one refuses a caller with no
+    // session at all.
+    //
+    // **What it does leave open, stated rather than discovered.** A founder can
+    // call the RPC directly and write a sentence into *their own* transcript
+    // attributed to Nova. That is self-deception, not access: the transcript is
+    // memory and never a position (ADR 0109 §6,
+    // `transcript-is-not-a-position.test.ts`), so nothing in the product reads
+    // it back as authority, and the rows are already deletable by the founder
+    // with the thread. The alternative — widening the insert policy — would
+    // allow the same thing with no atomicity and no ownership re-check.
+    //
+    // There were two others, and both are gone rather than grandfathered.
     //
     // `disconnect_project` had to be `SECURITY DEFINER` (its caller holds no
     // `DELETE ON public.projects`) and had to be reachable by `authenticated`,
@@ -406,8 +439,8 @@ describe("J. privilege catalog", () => {
     // pass one. `20260827233010` revoked the grant and the only caller is now a
     // service-role client (VB-053, ADR 0060).
     //
-    // Which leaves the honest form of this assertion: none.
-    expect(reachable).toBe("<none>");
+    // Which leaves one, argued above, and nothing else.
+    expect(reachable).toBe("append_nova_conversation_turn");
   });
 
   it("pins search_path on every SECURITY DEFINER function in public", () => {

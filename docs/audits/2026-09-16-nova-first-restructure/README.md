@@ -18,7 +18,7 @@ This record was written and reviewed the same day. The review found two things w
 
 **3. One claim was too absolute.** §C.5's first condition said *"Deleting every thread changes no screen except the thread list."* That is right about canonical business state and wrong about the conversation: a founder who says *"okay, Variante B"* and then *"dann machen wir das"* is relying on the transcript to carry the reference. The rule is now two sentences — deleting a thread must not change canonical business state, and may remove conversational memory.
 
-## Correction — 2026-09-17, while building Slices 4 and 5
+## Correction — 2026-09-17, while building Slices 4, 5 and 6
 
 Slice 4's own definition turned out to be two slices wearing one name, and the seam is geometric rather than architectural. Recorded here rather than rewritten in §D, so the original plan stands and what was actually built is legible beside it.
 
@@ -33,6 +33,14 @@ Slice 4's own definition turned out to be two slices wearing one name, and the s
 **`/threads` is a route the plan did not name.** §C.3 listed only `threads/[threadId]`. A thread id is not something a screen can link to without reading one, and §D forbids Home adding a read — so the project's conversation gets a stable address that resolves to whichever thread is open, and Nova's rail links to *that*. Without it the route would have been reachable by nothing, which is the dead architecture this plan is under instruction not to build.
 
 **The migration is written, tested against a real PostgreSQL, and not deployed.** `SUPABASE_ACCESS_TOKEN` is unset in the session that built this, so `pnpm db:status`, `pnpm db:push` and `pnpm db:types` cannot run (rules 29–34 forbid the SQL-editor fallback in any case). `supabase/tests/nova-threads.migration.ts` applies every migration to a cluster it creates itself and proves twenty-one properties of the result, so the SQL is not unverified — but the remote database does not have these tables, and `src/types/database.ts` has not been regenerated. It was left alone rather than hand-edited: it is a generated file, and a hand-written table in it is a claim about a database nobody checked. **Deploying is the owner's next step.**
+
+**§E.2 was answered without the owner in the room, and the answer says so.** The audit recommended *absorbed and bounded at launch*, and [ADR 0110](../../decisions/0110-a-question-costs-nothing-and-is-bounded.md) adopts it: a conversation turn is free, rendered as **Included** in ADR 0094's sense, and bounded per thread and per account. The ADR is marked provisional in exactly one respect and firm in the other — the bound is not an option, the price is the owner's to revisit — and it names what would change if the answer is *charge for it* (a rate-card entry and a disclosure; nothing in the safety model).
+
+**`features/nova/actions/` was named in §D and was not built.** A proposal is a catalogue id, and the control it renders is the one `bindings/nova-actions.ts` already binds. A directory between them would have been a second answer to a question that has one.
+
+**The action lane needed a second `security definer` function, which §C.9 did not anticipate.** `nova_messages`' insert policy pins `authenticated` to `author = 'founder'` on purpose — a browser that could write `author = 'nova'` could put words in her mouth in the founder's own history — and §C.8 forecloses the service-role client for this layer by name. What is left is `append_nova_conversation_turn`: one atomic write of the question, the reply and their optional pointers, with ownership re-checked inside against `auth.uid()` through the project row. It is the same shape `resolve_founder_input_request` uses.
+
+**The composer reached the thread, not the project index.** §D said *"the composer"* without saying where. It sits under the transcript, where a conversation puts one; Home stays the ranking — one thing to do and a control for it — and `nova-ui.test.ts`'s sweep now says **Home has no input at all** rather than *"no chat input anywhere"*, rewritten in the open as §D asked.
 
 **Retention is deliberately undecided.** §E.1 asks which class a thread belongs to and nothing here answers it. Both tables are named in `NEVER_SWEPT_BY_AGE` with that reason: a transcript is not an operational event stream, an audit trail, a financial record or derived intelligence, and picking a period to fill the gap would be exactly the silent policy change ADR 0068 §7 forbids. Until somebody decides, nothing deletes a founder's conversation on a clock. Erasure is unaffected — both cascade from `projects`.
 
@@ -526,7 +534,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** A run started from Home leaves a `system` message in the thread; reloading shows it; deleting the thread changes no canonical state; `database.ts` matches the migration.
 - **Not in this slice.** Typing. Generation. The sidebar.
 
-### Slice 6 — The conversation lane and the action resolver
+### Slice 6 — The conversation lane and the action resolver ✅ *shipped ([Sprint 0228](../../sprints/0228-nova-may-be-asked.md)); the price is decided by [ADR 0110](../../decisions/0110-a-question-costs-nothing-and-is-bounded.md) and the two migrations are not deployed — see the 2026-09-17 correction*
 
 - **Goal.** The founder types; Nova answers from canonical data or proposes a catalogue action; the workspace shows what she is talking about. §C.5 and §C.8 are the contract.
 - **Affected.** Every sentence in the product that says there is nothing to type — `first-run.ts:193`, `WORKFLOW_STEPS`, `nova-how-it-works.tsx`, `e2e/nova-name.spec.ts`, `nova-ui.test.ts`'s "has no chat input anywhere" (rewritten in the open to "has exactly one input, and it is the composer, bounded"), `UX-CONTRACT.md:96`, `DESIGN.md` §Nova, `src/modules/nova/README.md`.

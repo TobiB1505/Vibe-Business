@@ -1880,7 +1880,17 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-2xl p-8 max-sm:p-4">
         {label}
-        <ThreadScreen view={threadScenarioView(scenario)} />
+        {/*
+          `composer={false}`: the lab has no project to ask about, and ADR 0109
+          §5 says generation happens in a founder-initiated command. The one
+          scenario that does mount it shows the resting state only — pressing
+          would reach a Server Action that starts with `requireProjectAccess`,
+          and the browser suite has no session.
+        */}
+        <ThreadScreen
+          view={threadScenarioView(scenario)}
+          composer={scenario === "thread-composer"}
+        />
       </main>
     );
   }

@@ -32,6 +32,8 @@ first-run.ts   Nova's introduction, and the walkthrough she offers once
 onboarding.ts  the scan and the reveal, and what may ride along with "yes"
 briefing/      what is worth saying beside the focus, and how fresh it is
 threads/       the transcript: schema, store, read model — memory, never truth
+conversation/  the lane that may reason: the pack, the prompt, the checks, the bound
+intent/        a founder's sentence → one catalogue id, or nothing, without a model
 voice/
   payload.ts   what the model is given, what it may return, and the reuse identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
@@ -43,6 +45,31 @@ voice/
     rubric.ts  the six questions a regular expression cannot answer
     nova-voice.probe.ts   the paid run — never part of `pnpm test`
 ```
+
+## Two lanes, and one sentence between them
+
+`conversation/` may **reason and explain** over canonical project data; the
+action catalogue in `actions.ts` **does**. The boundary is one sentence:
+_generated text is never the last thing before a consequential effect; a press
+is_ ([ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §5).
+
+The conversation lane holds **no capability** — no tool, no web access, no URL
+fetch, no database handle, no service-role client, no credential and no say in
+what it reads. Vibe assembles a bounded pack in `conversation/context.ts`, which
+is pure and cannot fetch anything; the model returns a shape; every field is
+validated against that pack before a founder sees it, with a deterministic
+template underneath every failure. `conversation/conversation-lane.test.ts` is
+the guard, and it is seven assertions rather than a paragraph because each of
+those properties erodes through one reasonable-looking import.
+
+`intent/` resolves an instruction without a model at all — _"merge it"_ becomes
+the control the ranking already offers — and refuses anything it is not sure of,
+which is the only direction it may be wrong in.
+
+Asking costs nothing and is bounded instead
+([ADR 0110](../../../docs/decisions/0110-a-question-costs-nothing-and-is-bounded.md)):
+a price on a question is a tax on understanding, and free-and-unbounded is the
+shape that ends in an incident.
 
 ## The transcript is memory; the domain is truth
 

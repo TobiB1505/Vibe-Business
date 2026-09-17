@@ -26,6 +26,16 @@ export const E2E_THREAD_SCENARIOS = [
   "thread-transcript",
   /** A project nothing has happened to yet. */
   "thread-empty",
+  /**
+   * The composer, unpressed.
+   *
+   * Only the resting state. Pressing it calls a Server Action that begins with
+   * `requireProjectAccess`, and the browser suite has no session — which is the
+   * right shape rather than a limitation: what a browser has to prove here is
+   * that the one input in this product is legible, bounded and says what asking
+   * costs, all of which are true before anything is sent.
+   */
+  "thread-composer",
 ] as const;
 
 export type E2eThreadScenario = (typeof E2E_THREAD_SCENARIOS)[number];
@@ -77,7 +87,7 @@ const MESSAGES: ThreadMessage[] = [
 ];
 
 export function threadScenarioView(scenario: E2eThreadScenario): ThreadView {
-  if (scenario === "thread-empty") {
+  if (scenario === "thread-empty" || scenario === "thread-composer") {
     return buildThreadView({ thread: THREAD, messages: [], runs: [] });
   }
 
