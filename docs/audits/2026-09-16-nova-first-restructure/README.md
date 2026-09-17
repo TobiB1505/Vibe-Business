@@ -18,13 +18,23 @@ This record was written and reviewed the same day. The review found two things w
 
 **3. One claim was too absolute.** §C.5's first condition said *"Deleting every thread changes no screen except the thread list."* That is right about canonical business state and wrong about the conversation: a founder who says *"okay, Variante B"* and then *"dann machen wir das"* is relying on the transcript to carry the reference. The rule is now two sentences — deleting a thread must not change canonical business state, and may remove conversational memory.
 
-## Correction — 2026-09-17, while building Slice 4
+## Correction — 2026-09-17, while building Slices 4 and 5
 
 Slice 4's own definition turned out to be two slices wearing one name, and the seam is geometric rather than architectural. Recorded here rather than rewritten in §D, so the original plan stands and what was actually built is legible beside it.
 
 **The pane does not fit, and the reason belongs to Slice 7.** §D's Slice 4 says *"what the ranking opens shows in the pane on desktop"*, and ADR 0109 §4 says the same. At 1280 the project rail takes 256px and Nova's work column 300 more, leaving the thread about 640: a third column splits that into two unreadable ones, and a prepared change's review gate at 300px is not a smaller version of that screen, it is a different one. What has to move first is the seven-row rail — which is Slice 7's whole subject. So Slice 4 shipped the half of §4 that needs no column, **the address**, and the pane and its bottom sheet move to Slice 7 with the rail. The alternative was a three-column layout built to be replaced by the next slice, which is the dead parallel architecture this plan is under instruction not to build.
 
 **`preview` and `diff` are not artifact kinds.** §C.7's table listed ten and gave both of those the address *"same"* — the prepared change's. A kind whose address is another kind's, and whose view is mounted by that other kind's view, is not an object a founder opens; it is a stage `agentStageForChange` picks *within* one prepared change. Eight kinds shipped, and `prepared_change` names its three stage views rather than one. A registry that admitted a kind with no address of its own would be the generic renderer §4 refuses.
+
+**Slice 5's tail went somewhere else, and the somewhere else is better.** §D said the `system` message is appended *"beside `speakAfterOperation`"* in `src/modules/operations/*/execution.ts`. `speakAfterOperation` exists in two of the twenty-three files that end a run, and there are ninety call sites of `completeOperationRun` and `failOperationRun` between them — so following the plan would have been twenty-one wirings and twenty-one chances to miss one, where a miss is invisible (the thread simply has a gap nobody can see is a gap). Those two store functions are the only place a run becomes terminal, and they already return *whether this call performed the transition*, which is exactly the idempotency signal an append needs. The message is written there, once, and a new operation type gets one by existing.
+
+**`src/modules/nova/artifacts.ts` exists because of this slice.** `nova_messages.artifact_kind` needs the closed union to check its `CHECK` against, and a module may not import a feature (rule 86). §C.7's registry keeps *where an artifact is read and what draws it*; the union itself moved to the domain, beside `blocks.ts`, which is the same shape for the same reason.
+
+**`/threads` is a route the plan did not name.** §C.3 listed only `threads/[threadId]`. A thread id is not something a screen can link to without reading one, and §D forbids Home adding a read — so the project's conversation gets a stable address that resolves to whichever thread is open, and Nova's rail links to *that*. Without it the route would have been reachable by nothing, which is the dead architecture this plan is under instruction not to build.
+
+**The migration is written, tested against a real PostgreSQL, and not deployed.** `SUPABASE_ACCESS_TOKEN` is unset in the session that built this, so `pnpm db:status`, `pnpm db:push` and `pnpm db:types` cannot run (rules 29–34 forbid the SQL-editor fallback in any case). `supabase/tests/nova-threads.migration.ts` applies every migration to a cluster it creates itself and proves twenty-one properties of the result, so the SQL is not unverified — but the remote database does not have these tables, and `src/types/database.ts` has not been regenerated. It was left alone rather than hand-edited: it is a generated file, and a hand-written table in it is a claim about a database nobody checked. **Deploying is the owner's next step.**
+
+**Retention is deliberately undecided.** §E.1 asks which class a thread belongs to and nothing here answers it. Both tables are named in `NEVER_SWEPT_BY_AGE` with that reason: a transcript is not an operational event stream, an audit trail, a financial record or derived intelligence, and picking a period to fill the gap would be exactly the silent policy change ADR 0068 §7 forbids. Until somebody decides, nothing deletes a founder's conversation on a clock. Erasure is unaffected — both cascade from `projects`.
 
 **One addition the plan did not name.** `ARTIFACT_SEGMENT` is typed against `PROJECT_SECTIONS` and `PROJECT_SUBSECTIONS` rather than merely checked against them, so the compiler refuses an address for a section that does not exist before any test runs. The test stays: a type cannot describe a section renamed in one table and still named here in the other.
 
@@ -506,7 +516,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** A change awaiting review shows as a card in the thread and as the prepared-change artifact in the pane, and `/agent?change=<id>` renders the same stage full-page.
 - **Not in this slice.** Threads, the composer, the rail.
 
-### Slice 5 — Persistent threads
+### Slice 5 — Persistent threads ✅ *shipped ([Sprint 0227](../../sprints/0227-a-conversation-that-survives-a-reload.md)); the migration is written and tested but not deployed — see the 2026-09-17 correction*
 
 - **Goal.** A thread is an address and a record (§C.9): the tables, a store and read model, system-authored messages from operation tails, and a read marker. No composer yet — a thread opens with the ranking and fills with what happened.
 - **Affected.** `src/modules/operations/*/execution.ts` tails (append a `system` message beside `speakAfterOperation`), `features/nova/home/*` (opening a thread from a moment), the retention sweep, `src/types/database.ts` regenerated.

@@ -41,6 +41,27 @@ export function projectSectionPath(projectId: string, segment: string): string {
 }
 
 /**
+ * A project's conversation, and one thread of it.
+ *
+ * Two functions because they answer two questions. `threadsPath` is *this
+ * project's conversation* — a stable address that resolves to whichever thread
+ * is currently open, which is what a link from a screen wants and what the
+ * shell's *Threads* destination will be. `threadPath` is one exact thread,
+ * which is what a bookmark, a notification and a founder's own history want.
+ *
+ * Kept here beside the section paths rather than in the thread feature, for
+ * the reason this file exists at all: an address with two owners is an address
+ * that eventually points at two places.
+ */
+export function threadsPath(projectId: string): string {
+  return `${projectPath(projectId)}/threads`;
+}
+
+export function threadPath(projectId: string, threadId: string): string {
+  return `${threadsPath(projectId)}/${threadId}`;
+}
+
+/**
  * The anchor one prepared change is addressed by inside the Agent screen.
  *
  * A fragment rather than a route: a prepared change is one card in a list whose

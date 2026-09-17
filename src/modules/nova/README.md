@@ -26,8 +26,12 @@ read.ts        the facts behind it, gathered in a bounded number of queries
 actions.ts     what each control says, costs, and does to the world
 feed.ts        the focus as entries on a screen — sentences, one control, progress
 home-view.ts   the focus as Home composes it — one card, a strip, a bounded stack
+blocks.ts      which block a moment or a running operation shows — total, both ways
+artifacts.ts   what the workspace can show, and which artifact a block opens
 first-run.ts   Nova's introduction, and the walkthrough she offers once
 onboarding.ts  the scan and the reveal, and what may ride along with "yes"
+briefing/      what is worth saying beside the focus, and how fresh it is
+threads/       the transcript: schema, store, read model — memory, never truth
 voice/
   payload.ts   what the model is given, what it may return, and the reuse identity
   prompt.ts    the persona, and the fence untrusted content arrives behind
@@ -40,6 +44,20 @@ voice/
     nova-voice.probe.ts   the paid run — never part of `pnpm test`
 ```
 
+## The transcript is memory; the domain is truth
+
+`threads/` records what happened; it decides nothing. **Deleting every thread
+must change no canonical fact about a business** — an audit lives in
+`business_audit_results`, an approval in `change_approvals`, a charge in the
+billing graph, and a message can only ever point at one
+([ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §6).
+
+Which is a rule that erodes one import at a time, so it is a test:
+`threads/transcript-is-not-a-position.test.ts` fails if anything under this
+module outside `threads/` imports the thread store or its read model, and
+asserts by name that `focus.ts` and `read.ts` cannot see a message at all. The
+ranking must never be able to remember that a founder said something.
+
 ## Two projections, one ranking
 
 `feed.ts` and `home-view.ts` both turn a `NovaFocus` into something a screen
@@ -48,7 +66,7 @@ need different shapes for the same facts. The feed is linear — message,
 control, progress, asides. Home is one dominant card with a strip and a stack
 beneath it.
 
-What they do not have is different *facts*, and specifically not different
+What they do not have is different _facts_, and specifically not different
 words: `home-view.ts` reads Nova's sentences back out of `feed.ts` through
 `novaCandidateMessage` rather than keeping a second table. Neither reorders
 anything. `deriveNovaFocus` decides what leads and what follows, and both

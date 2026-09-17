@@ -1,4 +1,6 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
+import { ArrowRightIcon } from "@/components/ui/icons.generated";
 import { NovaPresence, type NovaPresenceState } from "@/components/nova/nova-presence";
 import { NovaHappened, NovaThinking } from "@/components/nova/nova-thread";
 import { MonoLabel } from "@/components/ui/typography";
@@ -39,6 +41,7 @@ export function NovaRail({
   working,
   checklist,
   activity,
+  conversationHref,
   setup,
   mark,
   frame = true,
@@ -51,6 +54,15 @@ export function NovaRail({
   working: NovaWorkingEntry | null;
   checklist: ActionPlanChecklist | null;
   activity: readonly ActivityEntry[];
+  /**
+   * Where this project's conversation is read in full.
+   *
+   * Optional, and absent is the honest answer for the onboarding shell, which
+   * mounts this column before a project has had anything happen to it — a link
+   * to an empty transcript, offered during setup, is a door to a room with
+   * nothing in it.
+   */
+  conversationHref?: string;
   /**
    * Setup, as an ordered list, while there is setup left.
    *
@@ -100,7 +112,12 @@ export function NovaRail({
   const below = [
     setup && setup.length > 0 ? <Setup key="setup" steps={setup} /> : null,
     checklist ? <Plan key="plan" checklist={checklist} /> : null,
-    activity.length > 0 ? <Earlier key="earlier" past={activity} now={now} /> : null,
+    /* Either half is reason enough to draw this block: a project can have a
+       conversation before the audit log has anything to say about it, and the
+       way in must not depend on the list beside it. */
+    activity.length > 0 || conversationHref ? (
+      <Earlier key="earlier" past={activity} now={now} conversationHref={conversationHref} />
+    ) : null,
   ].filter(Boolean);
 
   return (
@@ -300,7 +317,15 @@ function StepRow({
  * would mark the boundary of a set that is either empty or already said at
  * the top of the thread.
  */
-function Earlier({ past, now }: { past: readonly ActivityEntry[]; now: Date }) {
+function Earlier({
+  past,
+  now,
+  conversationHref,
+}: {
+  past: readonly ActivityEntry[];
+  now: Date;
+  conversationHref?: string;
+}) {
   return (
     <div className="border-line-1 flex flex-col gap-1.5 border-t pt-4">
       <MonoLabel>Earlier</MonoLabel>
@@ -315,6 +340,26 @@ function Earlier({ past, now }: { past: readonly ActivityEntry[]; now: Date }) {
           />
         ))}
       </div>
+
+      {/*
+        The way into the conversation itself.
+
+        This list is the last few things that happened, capped, and derived from
+        the audit log; the thread is what Nova has actually written down, in
+        order, and it survives a reload. The link is here because this is where
+        a founder is already looking backwards — and it is one address
+        (`/threads`) rather than a thread id, so it stays correct as threads come
+        and go.
+      */}
+      {conversationHref && (
+        <Link
+          href={conversationHref}
+          className="text-fg-meta hover:text-fg mt-1 inline-flex w-fit items-center gap-1 rounded-full px-1.5 py-0.5 font-mono text-caption transition-interactive"
+        >
+          The whole conversation
+          <ArrowRightIcon size={12} />
+        </Link>
+      )}
     </div>
   );
 }

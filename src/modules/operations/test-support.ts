@@ -1148,6 +1148,13 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         // would see `undefined` where Postgres always fills `0`.
         if (this.table === "operation_runs") row.pause_cycle ??= 0;
 
+        // `nova_threads.last_read_sequence integer not null default 0`. The
+        // store deliberately never sends it — a thread is opened unread and
+        // "unread" is a comparison against this number rather than a null
+        // check, so a double that answered `undefined` would make every turn
+        // read as already seen.
+        if (this.table === "nova_threads") row.last_read_sequence ??= 0;
+
         const violation = this.db.checkConstraints(this.table, row);
         if (violation) return { data: null, error: violation };
 

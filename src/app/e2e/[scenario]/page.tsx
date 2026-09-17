@@ -161,6 +161,8 @@ import {
   novaVoiceEntry,
 } from "../nova-voice-scenarios";
 import { NovaFocusThread } from "@/features/nova/home/nova-focus-thread";
+import { isE2eThreadScenario, threadScenarioView } from "../thread-scenarios";
+import { ThreadScreen } from "@/features/nova/thread/thread-view";
 import {
   isE2eWorkspaceArtifactScenario,
   workspaceArtifactEntry,
@@ -1864,6 +1866,21 @@ export default async function E2eScenarioPage({
       <main className="mx-auto max-w-3xl p-8">
         {label}
         <ProvenancePanel provenance={e2eProvenance(scenario)} projectId="project_e2e" />
+      </main>
+    );
+  }
+
+  /*
+   * A stored conversation, read back (ADR 0109 §6). The screen is the product's
+   * own, given a view model the product's own builder produced — an event's
+   * sentence is composed on every read, so a fixture that wrote one would keep
+   * passing after the table changed.
+   */
+  if (isE2eThreadScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-2xl p-8 max-sm:p-4">
+        {label}
+        <ThreadScreen view={threadScenarioView(scenario)} />
       </main>
     );
   }

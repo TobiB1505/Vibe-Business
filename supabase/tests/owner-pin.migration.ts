@@ -312,11 +312,16 @@ describe("VB-026 — policies resolve the caller once per statement", () => {
     // the provider ledgers below, plus the one SELECT policy ADR 0086 adds to
     // `nova_voice_messages`, plus the four `founder_profiles` carries — one
     // per command, because the founder owns every write to their own name —
-    // plus the one SELECT policy ADR 0099 adds to `action_plan_handoffs`.
+    // plus the one SELECT policy ADR 0099 adds to `action_plan_handoffs`, plus
+    // the four ADR 0109 §6 adds for the transcript: select and update on
+    // `nova_threads` (the update is the read marker, narrowed to two columns
+    // by a column-level grant because a policy cannot narrow columns), and
+    // select and insert on `nova_messages` (the insert is what pins a founder
+    // to `author = 'founder'`).
     // Stated as the arithmetic rather than as a magic number, so a future
-    // change has to say which of the five it moved.
+    // change has to say which of the six it moved.
     expect(Number(db.sql(`select count(*) from pg_policies where schemaname = 'public';`))).toBe(
-      119 - 2 + 1 + 4 + 1,
+      119 - 2 + 1 + 4 + 1 + 4,
     );
   });
 });

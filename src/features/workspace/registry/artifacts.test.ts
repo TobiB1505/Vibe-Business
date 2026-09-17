@@ -2,15 +2,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
-import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "@/modules/nova/blocks";
-import {
-  ARTIFACT_FOR_BLOCK,
-  ARTIFACT_KINDS,
-  ARTIFACT_SEGMENT,
-  ARTIFACT_SOURCES,
-  artifactHref,
-  type ArtifactKind,
-} from "./artifacts";
+import { ARTIFACT_KINDS, type ArtifactKind } from "@/modules/nova/artifacts";
+import { ARTIFACT_SEGMENT, ARTIFACT_SOURCES, artifactHref } from "./artifacts";
 
 /**
  * The registry describes a workspace that exists ([ADR 0109](../../../../docs/decisions/0109-nova-first-application-shell.md) §4).
@@ -25,8 +18,10 @@ import {
  *    it can stay data — importing them would pull ten features' server graphs
  *    into any build that wanted one address. Text that is never checked is a
  *    comment, so it is checked here.
- * 3. **Every block kind has been decided.** Total over `BlockKind`, the same
- *    shape and the same reason as `BLOCK_FOR_MOMENT` itself.
+ *
+ * The union itself, and which artifact a block opens, are asserted beside them
+ * in `src/modules/nova/artifacts.test.ts`: a kind is domain vocabulary and this
+ * file is about where it is drawn.
  *
  * Nothing is rendered and nothing is read from a database, which is the
  * property `modules/nova/blocks.ts` argues for and this file inherits.
@@ -44,9 +39,9 @@ function source(path: string): string {
 }
 
 describe("the artifact registry", () => {
-  it("lists every kind of the union, once", () => {
+  it("gives every kind of the union a place to be read", () => {
     expect([...ARTIFACT_KINDS].sort()).toEqual(Object.keys(ARTIFACT_SEGMENT).sort());
-    expect(new Set(ARTIFACT_KINDS).size).toBe(ARTIFACT_KINDS.length);
+    expect([...ARTIFACT_KINDS].sort()).toEqual(Object.keys(ARTIFACT_SOURCES).sort());
   });
 
   it.each(ARTIFACT_KINDS)("%s is read at a section a founder can reach", (kind) => {
@@ -108,52 +103,6 @@ describe("the artifact registry", () => {
     expect(text).not.toContain("createClient");
     expect(text).not.toContain("createServiceClient");
     expect(text).not.toContain("Action(");
-  });
-});
-
-describe("what a block opens", () => {
-  it("decides every block kind, and names only kinds that exist", () => {
-    const kinds = new Set<string>(ARTIFACT_KINDS);
-
-    for (const [block, artifact] of Object.entries(ARTIFACT_FOR_BLOCK)) {
-      if (artifact !== null) expect(kinds, block).toContain(artifact);
-    }
-  });
-
-  /**
-   * Every block the product can actually draw is decided here.
-   *
-   * The compiler already makes the record total over `BlockKind`. What it
-   * cannot say is that the union and the two tables that produce it still
-   * agree — so this asks the producers: every block a moment raises and every
-   * block a run in flight raises is a row here. `blocks.ts` exports no list of
-   * its kinds, and inventing one beside the union would be the copy these
-   * records exist to avoid; the values of the two total tables *are* the list.
-   */
-  it("covers every block the product can draw", () => {
-    const reachable = new Set<BlockKind>([
-      ...Object.values(BLOCK_FOR_MOMENT),
-      ...Object.values(BLOCK_FOR_OPERATION),
-    ]);
-
-    for (const block of reachable) {
-      expect(Object.keys(ARTIFACT_FOR_BLOCK), block).toContain(block);
-    }
-    expect(reachable.size).toBeGreaterThan(1);
-  });
-
-  /**
-   * A run is an event, not an object.
-   *
-   * `progress` draws the named stages of something still happening and `none`
-   * draws nothing at all. Neither has a page that shows more than the thread
-   * does, so a link on either would take a founder away from the only surface
-   * telling them anything. Written down because "it has no artifact yet" and
-   * "it has no artifact" look identical in a table.
-   */
-  it("gives a run in flight no address", () => {
-    expect(ARTIFACT_FOR_BLOCK.progress).toBeNull();
-    expect(ARTIFACT_FOR_BLOCK.none).toBeNull();
   });
 });
 

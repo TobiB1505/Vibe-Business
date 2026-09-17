@@ -5,9 +5,16 @@ What Nova is talking about, and where it is read in full. Decided by
 built in Slice 4.
 
 ```
-registry/artifacts.ts   ArtifactKind → segment, read, views; and what a block opens
+registry/artifacts.ts   ArtifactKind → segment, read, views
 host/artifact-open.ts   an artifact → { href, label }: the way out of the conversation
 ```
+
+The **union itself** is [`src/modules/nova/artifacts.ts`](../../modules/nova/artifacts.ts),
+beside `blocks.ts` and for the same reason a block kind lives there: a kind is
+domain vocabulary — what a message in a thread refers to, what a `CHECK`
+enumerates, what a moment resolves to — while _where it is read_ and _what draws
+it_ are the product surface. It lived here for one slice, and the thread schema
+is what showed the seam.
 
 **Nothing here is a view.** That is the point of the directory, not an
 omission. _One view, two frames, and no copies_: the artifact view **is** the
@@ -44,8 +51,8 @@ build.
 ## What must never happen here
 
 - **No artifact a model composes.** The union is closed and the record is
-  total; a kind is added by a person, in this file, with a read and a view that
-  already exist.
+  total; a kind is added by a person, in the module, with a read and a view that
+  already exist here.
 - **No second URL owner.** Every parameter and fragment comes from the module
   that owns the contract — [ADR 0058](../../../docs/decisions/0058-move-focus-url-contract.md)'s
   `?plan=` and `?change=` from `modules/action-plans/source.ts`, the

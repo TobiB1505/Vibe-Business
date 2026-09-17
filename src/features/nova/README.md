@@ -28,6 +28,9 @@ home/       the project index — the ranking mounted as a thread
   nova-artifact.ts          which workspace artifact a moment is about (pure)
 thread/
   blocks/                   BlockKind → the owning feature's view, framed
+  queries.ts                one thread's three bounded reads
+  thread-view.tsx           the stored turns, read back — no composer, no controls
+  thread-skeleton.tsx       the first frame both thread routes answer a click with
 bindings/
   nova-actions.ts           catalogue id → the real Server Action or href. Total; the compiler checks it.
 voice/
@@ -57,11 +60,11 @@ Each lands **beside** `home/`, never inside it, and each is a decision under
 [ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §5 and
 §6 rather than a feature this README can promise.
 
-| Slice | Directory             | What it is                                                                             |
-| ----- | --------------------- | -------------------------------------------------------------------------------------- |
-| 5     | `threads/`, `thread/` | the thread list and the turn view, once `nova_threads` and `nova_messages` exist       |
-| 6     | `conversation/`       | the composer, the turn rendering, and the one command that generates                   |
-| 6     | `actions/`            | a proposal becomes the control the catalogue already defines, and a founder presses it |
+| Slice | Directory       | What it is                                                                             |
+| ----- | --------------- | -------------------------------------------------------------------------------------- |
+| 6     | `conversation/` | the composer, the turn rendering, and the one command that generates                   |
+| 6     | `actions/`      | a proposal becomes the control the catalogue already defines, and a founder presses it |
+| 7     | `threads/`      | the thread list, and the shell destination that needs one                              |
 
 The shape of the last two is the part worth stating here, because it is the one
 that could erode quietly. Nova has **two lanes**. The conversation lane may

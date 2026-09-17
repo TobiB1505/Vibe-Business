@@ -4,9 +4,10 @@ import { NovaAside, NovaLine, NovaRenderBlock } from "@/components/nova/nova-thr
 import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { BLOCK_FOR_MOMENT, type BlockKind } from "@/modules/nova/blocks";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
+import { artifactForEntry } from "@/modules/nova/artifacts";
 import { artifactOpen } from "@/features/workspace/host/artifact-open";
 import type { ReactNode } from "react";
-import { artifactForEntry } from "./nova-artifact";
+
 import { footnoteFor } from "./footnote";
 
 /**

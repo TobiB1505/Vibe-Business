@@ -11,6 +11,7 @@ import { formatElapsedShort } from "@/lib/utils/format-datetime";
 import { resolveFounderInputAction } from "@/features/founder-input/commands/founder-input-action";
 
 import { NovaRise } from "./nova-rise";
+import { threadsPath } from "@/lib/routing/project-urls";
 import { NovaFocusThread } from "./nova-focus-thread";
 import { NovaRail } from "./nova-rail";
 import { NovaRoom } from "@/components/nova/nova-room";
@@ -159,6 +160,7 @@ export async function NovaHome({
             working={data.view.working}
             checklist={data.checklist}
             activity={data.activity}
+            conversationHref={threadsPath(project.id)}
           />
         </NovaRise>
       }

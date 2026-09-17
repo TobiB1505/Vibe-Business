@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OperationStage, OperationStatus, OperationType } from "./schema";
 import { arePaidOperationsDisabled, isPaidOperation } from "./kill-switch";
 import { ACCOUNT_WINDOW_MS, PROJECT_WINDOW_MS, startAllowed } from "./start-limits";
+import { FIRST_THREAD_TITLE, rememberOperationInThread } from "./nova-thread";
 
 /**
  * Persistence for durable operations (Sprint 7 §6, §15).
@@ -547,10 +548,55 @@ export async function completeOperationRun(
     })
     .eq("id", params.operationId)
     .in("status", [...ACTIVE_STATUSES])
-    .select("id");
+    .select("id, project_id, user_id, operation_type");
 
   if (error) throw error;
-  return (data ?? []).length > 0;
+
+  const transitioned = (data ?? [])[0] as TerminalRow | undefined;
+  if (transitioned === undefined) return false;
+
+  await remember(supabase, transitioned);
+  return true;
+}
+
+/**
+ * The two terminal transitions leave a memory in the project's thread.
+ *
+ * Here rather than in each of the ninety call sites, and here rather than in
+ * the two tails that already call `speakAfterOperation`: this is the one place
+ * a run becomes terminal, and it already knows whether *this* call performed
+ * the transition. See `nova-thread.ts` for why that signal is exactly what an
+ * append needs, and why it can never fail the run it is the tail of.
+ *
+ * The columns come back from the update's own `returning`, so remembering costs
+ * no extra read on any path.
+ */
+type TerminalRow = {
+  id: string;
+  /** Null for an account-level operation, never for a project one (ADR 0057 §1). */
+  project_id: string | null;
+  /** Null once this operation's owner has been erased (ADR 0057 §2). */
+  user_id: string | null;
+  operation_type: OperationType;
+};
+
+async function remember(supabase: SupabaseClient, row: TerminalRow): Promise<void> {
+  /*
+   * An erased owner. `operation_runs.user_id` goes null when an account is
+   * tombstoned, and a thread has an owner by definition — there is nobody left
+   * for this to be a memory for, and writing `null` into a `not null` column
+   * would fail the insert into the silence `rememberOperationInThread` keeps.
+   * Deciding it here means the silence stays for real surprises.
+   */
+  if (row.user_id === null) return;
+
+  await rememberOperationInThread(supabase, {
+    operationId: row.id,
+    projectId: row.project_id,
+    userId: row.user_id,
+    type: row.operation_type,
+    threadTitle: FIRST_THREAD_TITLE,
+  });
 }
 
 export async function failOperationRun(
@@ -566,10 +612,15 @@ export async function failOperationRun(
     })
     .eq("id", params.operationId)
     .in("status", [...ACTIVE_STATUSES])
-    .select("id");
+    .select("id, project_id, user_id, operation_type");
 
   if (error) throw error;
-  return (data ?? []).length > 0;
+
+  const transitioned = (data ?? [])[0] as TerminalRow | undefined;
+  if (transitioned === undefined) return false;
+
+  await remember(supabase, transitioned);
+  return true;
 }
 
 /**

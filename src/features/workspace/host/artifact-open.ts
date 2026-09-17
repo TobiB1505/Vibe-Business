@@ -1,5 +1,6 @@
 import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
-import { artifactHref, ARTIFACT_SEGMENT, type ArtifactRef } from "../registry/artifacts";
+import type { ArtifactRef } from "@/modules/nova/artifacts";
+import { artifactHref, ARTIFACT_SEGMENT } from "../registry/artifacts";
 
 /**
  * How a founder leaves the conversation for the thing itself.

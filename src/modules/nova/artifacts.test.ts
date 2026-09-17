@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
-import {
-  deriveNovaFocus,
-  type FocusCandidateKind,
-  type NovaFocusFacts,
-} from "@/modules/nova/focus";
-import { buildNovaHomeView } from "@/modules/nova/home-view";
-import { BLOCK_FOR_MOMENT } from "@/modules/nova/blocks";
-import { ARTIFACT_FOR_BLOCK } from "@/features/workspace/registry/artifacts";
-import { artifactForEntry } from "./nova-artifact";
+import { deriveNovaFocus, type FocusCandidateKind, type NovaFocusFacts } from "./focus";
+import { buildNovaHomeView } from "./home-view";
+import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "./blocks";
+import { ARTIFACT_FOR_BLOCK, ARTIFACT_KINDS, artifactForEntry } from "./artifacts";
 
 /**
  * Every moment either opens the right artifact or opens none.
@@ -24,7 +19,7 @@ import { artifactForEntry } from "./nova-artifact";
  * ## Why the facts are built here
  *
  * The lab already owns twenty-one fact sets, under `src/app/e2e/design-studies/`,
- * and they say of themselves that nothing under `/app` imports them. A product
+ * and they say of themselves that nothing under `/app` imports them. A module
  * test reaching into the fixture route for its inputs would tie the two
  * together in the direction that makes the fixtures load-bearing. These are the
  * smallest facts that raise the four moments carrying an artifact with an id or
@@ -105,5 +100,58 @@ describe("the artifact a moment is about", () => {
   it("gives a disconnected source no artifact either", () => {
     const entry = primary({ sourceDisconnected: true });
     expect(artifactForEntry(entry)).toBeNull();
+  });
+});
+
+describe("what a block opens", () => {
+  it("decides every block kind, and names only kinds that exist", () => {
+    const kinds = new Set<string>(ARTIFACT_KINDS);
+
+    for (const [block, artifact] of Object.entries(ARTIFACT_FOR_BLOCK)) {
+      if (artifact !== null) expect(kinds, block).toContain(artifact);
+    }
+  });
+
+  /**
+   * Every block the product can actually draw is decided here.
+   *
+   * The compiler already makes the record total over `BlockKind`. What it
+   * cannot say is that the union and the two tables that produce it still
+   * agree — so this asks the producers: every block a moment raises and every
+   * block a run in flight raises is a row here. `blocks.ts` exports no list of
+   * its kinds, and inventing one beside the union would be the copy these
+   * records exist to avoid; the values of the two total tables *are* the list.
+   */
+  it("covers every block the product can draw", () => {
+    const reachable = new Set<BlockKind>([
+      ...Object.values(BLOCK_FOR_MOMENT),
+      ...Object.values(BLOCK_FOR_OPERATION),
+    ]);
+
+    for (const block of reachable) {
+      expect(Object.keys(ARTIFACT_FOR_BLOCK), block).toContain(block);
+    }
+    expect(reachable.size).toBeGreaterThan(1);
+  });
+
+  /**
+   * A run is an event, not an object.
+   *
+   * `progress` draws the named stages of something still happening and `none`
+   * draws nothing at all. Neither has a page that shows more than the thread
+   * does, so a link on either would take a founder away from the only surface
+   * telling them anything. Written down because "it has no artifact yet" and
+   * "it has no artifact" look identical in a table.
+   */
+  it("gives a run in flight no address", () => {
+    expect(ARTIFACT_FOR_BLOCK.progress).toBeNull();
+    expect(ARTIFACT_FOR_BLOCK.none).toBeNull();
+  });
+});
+
+describe("the artifact union", () => {
+  it("names every kind once", () => {
+    expect(new Set(ARTIFACT_KINDS).size).toBe(ARTIFACT_KINDS.length);
+    expect(ARTIFACT_KINDS.length).toBeGreaterThan(5);
   });
 });

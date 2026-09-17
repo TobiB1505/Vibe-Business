@@ -64,6 +64,7 @@ const GROWTH_TABLES = [
   "billing_usage_events",
   "deep_scan_provider_usage",
   "execution_interrupts",
+  "nova_messages",
   "operation_runs",
   "product_scan_events",
   "review_browser_usage",

@@ -1,10 +1,10 @@
-import { type BlockKind } from "@/modules/nova/blocks";
+import type { ArtifactKind, ArtifactRef } from "@/modules/nova/artifacts";
 import type { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
 import { preparedChangeHref, projectSectionPath } from "@/lib/routing/project-urls";
 
 /**
- * What the workspace can show, as a closed union — never an engine.
+ * Where each artifact is read, and what draws it — never an engine.
  *
  * ## Why a registry rather than a renderer
  *
@@ -14,6 +14,12 @@ import { preparedChangeHref, projectSectionPath } from "@/lib/routing/project-ur
  * existing read model, an existing view and an existing address. There is no
  * universal artifact engine, no generic renderer, and no artifact a model
  * composes.
+ *
+ * The **union itself** is `src/modules/nova/artifacts.ts`, beside `blocks.ts`
+ * and for the same reason a block kind lives there: a kind is domain
+ * vocabulary — what a message refers to, what a `CHECK` enumerates — while
+ * *where it is read* and *what draws it* are the product surface, which is
+ * here.
  *
  * **One view, two frames, and no copies.** The artifact view *is* the owning
  * feature's view — `AuditOverview`, `UnderstandingPanel`, `MoveCard`, the Agent
@@ -32,55 +38,7 @@ import { preparedChangeHref, projectSectionPath } from "@/lib/routing/project-ur
  * client or server, can ask where an artifact opens without pulling ten
  * features behind it. Its one component import is `import type`, which the
  * compiler erases.
- *
- * ## What is deliberately not a kind
- *
- * A **preview** and a **diff**. The restructure audit's §C.7 listed both, and
- * both listed their address as *"same"* — the prepared change's. They are what
- * `agentStageForChange` picks *within* one prepared change, not objects a
- * founder can open on their own, and a kind whose address and whose read are
- * another kind's is the generic renderer this decision refuses. `prepared_change`
- * covers them, at whichever stage the change is in.
  */
-
-/**
- * One artifact, and what its address needs to name it.
- *
- * A discriminated union rather than `{ kind, id? }`, so the compiler refuses an
- * address built without the id it interpolates. `ArtifactKind` is derived from
- * it for the same reason `BlockKind` is written once: two unions that must
- * agree and are never compared is how they stop agreeing.
- */
-export type ArtifactRef =
-  /** The business reading: nine lenses, the score and the leading blocker. */
-  | { kind: "business_health" }
-  /** What Vibe understands the product to be, and what it learned that from. */
-  | { kind: "product" }
-  /** One Move, read before it is paid for. */
-  | { kind: "opportunity"; opportunityId: string }
-  /** The sequence of steps, and which one is waiting. */
-  | { kind: "action_plan" }
-  /** The agent at work: its stages, its events and the files it touched. */
-  | { kind: "agent_execution" }
-  /** One prepared change and its whole review gate, at whatever stage it is. */
-  | { kind: "prepared_change"; preparedChangeId: string }
-  /** What a merged change made measurable. */
-  | { kind: "experiment" }
-  /** A question Vibe is waiting on, with the run that asked it around it. */
-  | { kind: "founder_input" };
-
-export type ArtifactKind = ArtifactRef["kind"];
-
-export const ARTIFACT_KINDS = [
-  "business_health",
-  "product",
-  "opportunity",
-  "action_plan",
-  "agent_execution",
-  "prepared_change",
-  "experiment",
-  "founder_input",
-] as const satisfies readonly ArtifactKind[];
 
 /**
  * Which section each artifact is read at, by URL segment.
@@ -184,31 +142,6 @@ export const ARTIFACT_SOURCES: Record<
     read: ["src/modules/founder-input/store.ts", "getFounderInputRequest"],
     views: [["src/features/founder-input/founder-input-card.tsx", "FounderInputCard"]],
   },
-};
-
-/**
- * Which artifact a thread block opens, total over `BlockKind`.
- *
- * The same shape and the same reason as `BLOCK_FOR_MOMENT`: a tenth block kind
- * fails the build here until somebody decides what opening it means.
- *
- * `null` is a decision, not a gap. A run's named stages and an empty block are
- * **events, not objects** — there is no page that shows more of them than the
- * thread already does, and a link to one would be a founder leaving the only
- * surface that was telling them anything.
- */
-export const ARTIFACT_FOR_BLOCK: Record<BlockKind, ArtifactKind | null> = {
-  audit: "business_health",
-  scan: "product",
-  agent: "agent_execution",
-  /* The step being offered is one row of the sequence, and the sequence is
-     where it is read in order. */
-  ready: "action_plan",
-  review: "prepared_change",
-  move: "opportunity",
-  ask: "founder_input",
-  progress: null,
-  none: null,
 };
 
 /**

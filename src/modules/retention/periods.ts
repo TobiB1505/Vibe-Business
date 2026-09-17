@@ -143,6 +143,34 @@ export const NEVER_SWEPT_BY_AGE = [
     table: "ai_usage_events",
     reason: "The same, and the one ADR 0068 §5 already excluded by name.",
   },
+  /*
+   * The two that are not in ADR 0068's classes at all.
+   *
+   * A transcript is not an operational event stream, not an audit trail, not a
+   * financial record and not derived intelligence — it is the founder's own
+   * words and the product's replies to them. Which class it belongs to is an
+   * open decision (the restructure audit's §E.1), and a period picked here to
+   * fill the gap would be exactly the silent policy choice ADR 0068 §7 exists
+   * to prevent. Until somebody decides, nothing deletes a founder's
+   * conversation on a clock.
+   *
+   * Erasure is unaffected: both cascade from `projects`, so an account going
+   * away takes its threads with it.
+   */
+  {
+    table: "nova_threads",
+    reason:
+      "A founder's own conversation, and not one of ADR 0068's four classes. Which class it " +
+      "belongs to is open (restructure audit §E.1); until that is decided, a period chosen here " +
+      "would be the silent policy change §7 forbids. Deleted by cascade when a project is.",
+  },
+  {
+    table: "nova_messages",
+    reason:
+      "The turns in one. Same argument as the thread above, and one more: a transcript with its " +
+      "older half deleted is a transcript that misrepresents what was said, which is worse than " +
+      "one that is long.",
+  },
   {
     table: "billing_credit_ledger",
     reason:
