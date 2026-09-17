@@ -1,0 +1,611 @@
+"use client";
+
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
+import { Button } from "@/components/ui/button";
+import { projectSectionHref } from "@/components/layout/project-shell";
+import { useBrowserClock } from "@/lib/client/use-browser-clock";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { shouldRefreshForState } from "@/modules/operations/view";
+import { PREVIEW_STAGE_LABELS, type PreviewCard } from "@/modules/change-preview/view";
+import type { PreviewStage } from "@/modules/change-preview/schema";
+import {
+  getPreviewStatusAction,
+  startPreviewAction,
+  stopPreviewAction,
+  type StartPreviewActionState,
+  type StopPreviewActionState,
+} from "@/app/app/projects/[projectId]/preview-actions";
+import { formatTime } from "@/lib/utils/format-datetime";
+import { proseLinkClasses } from "@/components/ui/text-link";
+
+/**
+ * Temporary preview, as the user sees it (Sprint 10B-3 §2, §4, §8, §10, §17).
+ *
+ * ## The vocabulary is the product guarantee
+ *
+ * A running preview means one thing: the change's exact commit started and
+ * answered inside an isolated environment. It is never rendered as *validated*,
+ * *approved*, *merged* or *deployed*, and the panel keeps saying so at the
+ * moment a user is most likely to assume otherwise — when they are looking at
+ * their own application working.
+ *
+ * ```
+ * change prepared → preview_available → validation → human approval → merge
+ *                          ↑ we are here, and it no longer waits for the next box
+ * ```
+ *
+ * Sprint 0114 moved this box left. A preview used to boot from a *passing*
+ * validation's snapshot, so it arrived after roughly five minutes of checks;
+ * it now runs a development server on a fresh clone and can be started the
+ * moment a change exists. What that costs is stated rather than hidden: it is
+ * the prepared code running, not the checked application, and the confirmation
+ * says so before the click (ADR 0064).
+ *
+ * ## The preview URL is untrusted, and stays outside Vibe
+ *
+ * `Open preview` is a plain link with `target="_blank"`. Deliberately:
+ *
+ *  - **no iframe.** Embedding untrusted customer code inside Vibe's origin is
+ *    the whole class of problem this codebase exists not to have.
+ *  - **no proxy.** Serving it through Vibe would make Vibe's runtime fetch
+ *    arbitrary responses from an application it did not write.
+ *  - **no screenshot, no DOM import, no HTML fetch.** Nothing from the preview
+ *    is ever rendered anywhere inside Vibe (§17).
+ *
+ * `rel="noreferrer"` matters here beyond habit: without it the preview would
+ * receive Vibe's project URL — which contains the project id — in a `Referer`
+ * header, handing an internal identifier to code we did not write.
+ *
+ * ## State is given, never inferred
+ *
+ * The card comes from the server. The one thing this component computes is the
+ * countdown, and it is presentation only — the server refuses to return an
+ * origin past the deadline whatever the browser believes (§13).
+ */
+
+const POLL_INTERVAL_MS = 2000;
+
+type Live = {
+  /** The server's own status for this session, ahead of the next server render. */
+  status: string;
+  origin: string | null;
+  expiresAt: string;
+  verdict: string | null;
+};
+
+function remaining(expiresAt: string, now: number): string | null {
+  const deadline = Date.parse(expiresAt);
+  if (!Number.isFinite(deadline)) return null;
+
+  const seconds = Math.floor((deadline - now) / 1000);
+  if (seconds <= 0) return null;
+
+  const minutes = Math.floor(seconds / 60);
+  return minutes >= 1 ? `${minutes} min left` : `${seconds}s left`;
+}
+
+function localTime(iso: string): string {
+  // Clock only: the surrounding copy already establishes the day. Deterministic
+  // across server and client — see format-datetime.ts.
+  return formatTime(iso) ?? iso;
+}
+
+/**
+ * The public-exposure confirmation (§4).
+ *
+ * Every sentence is load-bearing and none of them is reassurance. It says what
+ * will exist (a public, unlisted URL), who can reach it (anyone with the link),
+ * what will not be there (production secrets and data), how long it lasts, and
+ * what is not being changed.
+ *
+ * It deliberately never says *private*, *secure link* or *authenticated
+ * preview*. There is no access control on the origin, and describing one that
+ * does not exist would be the single most dangerous sentence in this product.
+ */
+function ConfirmDialog({
+  onCancel,
+  onConfirm,
+  pending,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+}) {
+  return (
+    <ConfirmPanel
+      title="Start temporary preview?"
+      tone="caution"
+      pending={pending}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      confirmLabel="Start temporary preview"
+    >
+      <>
+        <p>
+          Vibe will start your application from this change&apos;s exact commit, in an isolated
+          environment, and make it temporarily available through a public, unlisted URL.
+        </p>
+        {/* The sentence ADR 0064 exists to make sure is said. A preview runs
+            before the safety checks finish, and it is a development server —
+            so it shows the code, not the checked application. */}
+        <p className="text-amber">
+          This is a preview of the code, not a checked build. Vibe&apos;s safety checks run
+          separately and are what decide whether the change is sound.
+        </p>
+        <p className="text-amber">
+          Anyone who has the URL may be able to open it until the preview expires.
+        </p>
+        <p>Vibe will not add production secrets or production data.</p>
+        <p>The preview expires automatically after 15 minutes.</p>
+        <p>Your production site and default branch will not be changed.</p>
+      </>
+    </ConfirmPanel>
+  );
+}
+
+/**
+ * Repeated wherever a preview looks like success. That is exactly when it is
+ * needed — and only while it is true (UI-5 §4).
+ */
+function NotApproved({ approved, merged }: { approved: boolean; merged: boolean }) {
+  return (
+    <p className="text-caption text-fg-muted">
+      {merged ? "Merged · Deployment not verified by Vibe" : "Not merged · Not deployed"}
+      {approved ? "" : " · Not reviewed by a human"}
+    </p>
+  );
+}
+
+export function PreviewPanel({
+  projectId,
+  preparedChangeId,
+  card,
+  /** The origin this render already resolved, before the first poll returns. */
+  serverOrigin,
+  /**
+   * The project's verified public origin, for the "before" half (ADR 0065).
+   *
+   * Offered beside a running preview so a person can put the two side by side
+   * in two tabs. Labelled as *the live site now*, never as the base commit —
+   * production may have moved since this change was prepared, and saying
+   * otherwise would be the comparison lying quietly.
+   */
+  productionUrl,
+  approved,
+  merged,
+  presentation = "section",
+}: {
+  projectId: string;
+  preparedChangeId: string;
+  card: PreviewCard;
+  serverOrigin: string | null;
+  productionUrl: string | null;
+  /** A human approved this exact commit, and that still stands (UI-5 §4). */
+  approved: boolean;
+  /** The default branch carries this change, verified by reading it back. */
+  merged: boolean;
+  /** Removes legacy divider chrome when the controls live in the Agent stage. */
+  presentation?: "section" | "workspace";
+}) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const openerRef = useReturnFocus<HTMLButtonElement>(confirming);
+  /**
+   * The last action's answer, start or stop.
+   *
+   * One slot for both, because the panel shows one action's outcome at a time
+   * and a stop that was refused deserves a message exactly as much as a start
+   * that was.
+   */
+  const [state, setState] = useState<StartPreviewActionState | StopPreviewActionState>(null);
+  const [, startTransition] = useTransition();
+  /**
+   * Which action is in flight, if any.
+   *
+   * `useTransition`'s `pending` cannot answer this: one transition serves start,
+   * stop and re-validate, so keying the "Starting…" block off it meant clicking
+   * **Stop** rendered "Starting temporary preview… / Preview ready". Both lines
+   * were technically produced by the code and neither was true.
+   */
+  const [intent, setIntent] = useState<"start" | "stop" | "validate" | null>(null);
+  const [live, setLive] = useState<Live | null>(null);
+  const [stage, setStage] = useState<PreviewStage | null>(card.stage);
+
+  const startedSessionId = state?.ok
+    ? "previewSessionId" in state
+      ? state.previewSessionId
+      : null
+    : null;
+  const sessionId = startedSessionId ?? card.previewSessionId;
+
+  /**
+   * The session's state, preferring what the poll just learned.
+   *
+   * The card is a server render, and between the poll seeing `running` and
+   * `router.refresh()` landing there is a window where the panel knows the
+   * preview is ready and renders "Starting…" anyway. The first real preview
+   * spent that window showing a user a working preview they could not open.
+   *
+   * So the poll's answer wins while it is fresher. It is the same server
+   * authority either way — this read went through `getPreviewStatus`, which
+   * checks ownership and expiry — just newer than the last render.
+   */
+  const previewState =
+    live?.status === "running" && card.state === "starting" ? "running" : card.state;
+
+  // `starting` and `running` are the two states with something to poll for.
+  // Anything else is settled, and polling it would be a request every two
+  // seconds forever for an answer that is not coming.
+  const shouldPoll =
+    previewState === "starting" ||
+    previewState === "running" ||
+    previewState === "stopping" ||
+    intent === "start";
+
+  useOperationPoll<{
+    status: string;
+    stage: PreviewStage;
+    origin: string | null;
+    expiresAt: string;
+    verdict: "preview_available" | null;
+  }>({
+    key: sessionId,
+    enabled: shouldPoll,
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      if (!sessionId) return { kind: "unavailable" };
+
+      const result = await getPreviewStatusAction(projectId, sessionId);
+      if (!result.ok) return { kind: "unavailable" };
+
+      return {
+        kind: "value",
+        value: {
+          status: result.status,
+          stage: result.stage as PreviewStage,
+          origin: result.origin,
+          expiresAt: result.expiresAt,
+          verdict: result.verdict,
+        },
+      };
+    },
+    onReading: (next) => {
+      setLive({
+        status: next.status,
+        origin: next.origin,
+        expiresAt: next.expiresAt,
+        verdict: next.verdict,
+      });
+      setStage(next.stage);
+
+      /**
+       * Refresh only when the server render is genuinely behind (§7).
+       *
+       * Refreshing on every tick looked harmless and was not. This page render
+       * costs a provider call and several reads, so a refresh can outlast the
+       * two seconds until the next one — and the next `router.refresh()`
+       * supersedes the one still in flight. At two-second intervals for a
+       * fifteen-minute preview, that is ~450 re-renders of which one may never
+       * land.
+       *
+       * The preview panel hid this from itself: `previewState` prefers the
+       * poll, so it rendered a running preview correctly while the page around
+       * it kept the state from *before* the preview existed. The Review
+       * section, reading that same stale render, said "Preview required"
+       * beside a running preview.
+       *
+       * So compare against what the card already shows and refresh on the
+       * transition only. Once the card agrees, there is nothing to fetch until
+       * the status changes again.
+       */
+      if (shouldRefreshForState(next.status, card.state)) router.refresh();
+    },
+  });
+
+  /**
+   * Drives the countdown only. The server is what refuses an expired origin.
+   *
+   * Null while nothing is running, which stops the ticker, and null on the
+   * server and the hydrating render, which is what keeps the countdown out of
+   * the markup until the browser owns the clock (PERF-021). It used to seed
+   * itself from `Date.now()` in an initial state — read once by Node and once
+   * by the browser, a second or so apart, which is a whole minute of
+   * difference at any minute boundary.
+   */
+  const now = useBrowserClock(previewState === "running" ? 1000 : null);
+
+  function confirmStart() {
+    setIntent("start");
+    startTransition(async () => {
+      setConfirming(false);
+      /*
+       * The prepared change, not a validated artifact (ADR 0064).
+       *
+       * A preview clones the prepared commit and serves it, so it no longer
+       * waits for a build to exist — which is the point: the validation this
+       * used to require takes minutes, and this is what a person looks at
+       * while it runs.
+       */
+      // The confirmation travels to the server as an explicit argument. The
+      // dialog closing is not what authorizes this; the boolean is (§5).
+      setState(await startPreviewAction(projectId, preparedChangeId, true));
+      router.refresh();
+      setIntent(null);
+    });
+  }
+
+  function stop() {
+    if (!sessionId) return;
+
+    setIntent("stop");
+    startTransition(async () => {
+      // The result was previously discarded, so a refused stop produced no
+      // message, no state change and no clue — the button simply went back to
+      // "Stop preview" as though nothing had been asked.
+      setState(await stopPreviewAction(projectId, sessionId));
+      // Never a faked "stopped" before the backend confirms: the sandbox and
+      // the snapshot are the backend's to account for (§12).
+      router.refresh();
+      setIntent(null);
+    });
+  }
+
+  const expiresAt = live?.expiresAt ?? card.expiresAt;
+  const countdown = expiresAt && now !== null ? remaining(expiresAt, now) : null;
+  const starting = previewState === "starting" || intent === "start";
+  /**
+   * A stop the user has asked for, before the server render agrees.
+   *
+   * Symmetrical with `starting`, and it was missing: a click on **Stop
+   * preview** left the whole running block on screen — origin, countdown,
+   * "Anyone with the preview URL…" — with only the button's label changed. The
+   * first real stop looked to the user like nothing had happened at all.
+   *
+   * This claims an *intent*, never an outcome. The section below still says
+   * "Stopping…", because the sandbox, the snapshot and the ledger belong to the
+   * workflow and only it can report them finished (§12).
+   */
+  const stopping = previewState === "stopping" || intent === "stop";
+
+  return (
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
+      <h4 className="text-card-title font-medium text-fg-body">Temporary preview</h4>
+
+      {starting ? (
+        <div className="space-y-2">
+          <p className="text-body text-fg-prose">Starting temporary preview…</p>
+          <p className="text-body text-fg-secondary">
+            {PREVIEW_STAGE_LABELS[stage ?? "preflight"]}
+          </p>
+          {/* The Sprint 7 promise, restated where it matters. */}
+          <p className="text-caption text-fg-muted">
+            You can leave this page. Vibe will continue starting the preview.
+          </p>
+        </div>
+      ) : stopping ? (
+        <div className="space-y-2">
+          <p className="text-body text-fg-prose">Stopping preview…</p>
+          {/* The workflow owns the sandbox, the snapshot and the ledger from
+              here. Saying "stopped" before it confirms would be the one claim
+              this panel is in no position to make (§12). */}
+          <p className="text-caption text-fg-muted">
+            Vibe is stopping the environment and releasing the saved build.
+          </p>
+        </div>
+      ) : previewState === "running" ? (
+        <div className="space-y-3">
+          <p className="text-body text-mint">Temporary public preview</p>
+
+          <div className="flex flex-wrap gap-2">
+            {/* The poll's answer first, the server render's second. Both come
+                from `getPreviewStatus`; the poll is simply newer. Preferring
+                only the poll meant a freshly loaded page said "Resolving
+                preview address…" for an origin it had already resolved. */}
+            {(live?.origin ?? serverOrigin) ? (
+              <a
+                href={live?.origin ?? serverOrigin ?? ""}
+                target="_blank"
+                // Not only convention: without `noreferrer` the preview would
+                // receive Vibe's project URL — and the project id in it — in a
+                // Referer header, handing an internal identifier to code Vibe
+                // did not write.
+                rel="noreferrer noopener"
+                className="rounded-inset border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-body text-mint hover:bg-mint-tint"
+              >
+                Open preview
+              </a>
+            ) : (
+              <span className="rounded-inset border border-line-2 px-3 py-1.5 text-body text-fg-muted">
+                Resolving preview address…
+              </span>
+            )}
+
+            {/*
+              * The "before" half, and the honest label for it (ADR 0065).
+              *
+              * A plain link to the customer's own site in a second tab — no
+              * screenshot, no capture, no browser session, nothing stored. It
+              * says *now*, because production may have moved since this change
+              * was prepared and calling it "before" would quietly make the
+              * comparison a claim about the base commit.
+              */}
+            {productionUrl && (
+              <a
+                href={productionUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-inset border border-line-2 px-3 py-1.5 text-body text-fg-prose hover:text-fg"
+              >
+                Open your live site now
+              </a>
+            )}
+
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={stop}
+              disabled={intent !== null}
+            >
+              {/* No "Stopping…" label here any more: a stop in flight renders
+                  the stopping section instead of this block, so this branch is
+                  only ever reached while the preview is genuinely running. */}
+              Stop preview
+            </Button>
+          </div>
+
+          {expiresAt && (
+            <p className="text-caption text-fg-muted">
+              Expires at {localTime(expiresAt)}
+              {countdown ? ` · ${countdown}` : ""}
+            </p>
+          )}
+
+          {/* Said beside the running preview, not only in the dialog that
+              started it (ADR 0064). This is the moment a person is most likely
+              to read a working page as a checked one — it is a development
+              server on the prepared commit, and the checks are a separate
+              answer arriving separately. */}
+          <p className="text-caption text-fg-muted">
+            This is the prepared code running, not a checked build. Vibe&apos;s safety checks are
+            a separate answer.
+          </p>
+
+          <p className="text-caption text-amber/80">
+            Anyone with the preview URL may be able to access it until it expires.
+          </p>
+          <NotApproved approved={approved} merged={merged} />
+        </div>
+      ) : previewState === "not_available" ? (
+        <div className="space-y-2">
+          <p className="text-body text-fg-secondary">Nothing to preview yet</p>
+          <p className="text-caption text-fg-muted">
+            Vibe has not written a commit for this change.
+          </p>
+        </div>
+      ) : previewState === "not_supported" ? (
+        /*
+         * Said here rather than after a click.
+         *
+         * This used to render `ready_to_start`: the founder pressed it,
+         * confirmed publishing an unlisted public URL, and *then* learned no
+         * server exists for their framework. The confirmation is load-bearing
+         * on the server rather than a courtesy, which is exactly why asking for
+         * it on behalf of something that cannot start is the wrong order.
+         *
+         * The second sentence is most of the message. A founder told only
+         * "no preview" would reasonably assume they had lost checking and
+         * merging too, and they have not.
+         */
+        <div className="space-y-2" data-testid="preview-not-supported">
+          <p className="text-body text-fg-secondary">Nothing to look at for this project</p>
+          <p className="text-caption text-fg-muted">
+            Vibe does not know how to start a development server for this project&apos;s framework
+            yet. Checking a change and merging it still work.
+          </p>
+        </div>
+      ) : previewState === "repository_not_ready" ? (
+        /*
+         * The other half of the same rule, and the reason it is not one state.
+         *
+         * Told "your framework has no development server", a founder whose
+         * framework is fine would go looking for a fault that is not there.
+         * What is actually missing is Vibe's read of the repository — an
+         * analysis older than the check, a lockfile, an unanswered question
+         * about which app — and every one of those has a move, which is why
+         * this sentence points at one and the other does not.
+         */
+        <div className="space-y-2" data-testid="preview-repository-not-ready">
+          <p className="text-body text-fg-secondary">Nothing to look at yet</p>
+          <p className="text-caption text-fg-muted">
+            Vibe cannot tell which application to run for this project. Scan your product again
+            from{" "}
+            <Link
+              href={`${projectSectionHref(projectId, "my-product")}#product-scan`}
+              className={proseLinkClasses()}
+            >
+              My Product
+            </Link>
+            {" "}— it is free. Checking a change and merging it still work.
+          </p>
+        </div>
+      ) : previewState === "workspace_not_previewable" ? (
+        /*
+         * The third reason, and the only one that is Vibe declining rather
+         * than Vibe lacking. Neither the framework sentence nor the scan
+         * sentence is true here, so neither is shown — and the founder has no
+         * move, which is why the copy spends itself on what still works
+         * instead of on an instruction they cannot follow.
+         */
+        <div className="space-y-2" data-testid="preview-workspace-not-previewable">
+          <p className="text-body text-fg-secondary">Nothing to look at for this application</p>
+          <p className="text-caption text-fg-muted">
+            This application installs from a workspace root, and Vibe cannot start a development
+            server for it yet. Checking a change and merging it still work.
+          </p>
+        </div>
+      ) : previewState === "failed" ? (
+        <div className="space-y-2">
+          <p className="text-body text-coral">Preview failed</p>
+          {/* Safe copy from a stable code. Never a provider message, never a
+              sandbox stack trace (§14). */}
+          {card.failureMessage && <p className="text-body text-fg-secondary">{card.failureMessage}</p>}
+        </div>
+      ) : previewState === "stopped" || previewState === "expired" ? (
+        <div className="space-y-2">
+          <p className="text-body text-fg-secondary">
+            {previewState === "expired" ? "Preview expired" : "Preview stopped"}
+          </p>
+          <p className="text-caption text-fg-muted">
+            {previewState === "expired"
+              ? "The temporary preview has ended."
+              : "The temporary preview was stopped and its environment was released."}
+          </p>
+        </div>
+      ) : confirming ? (
+        <ConfirmDialog
+          onCancel={() => setConfirming(false)}
+          onConfirm={confirmStart}
+          // Any action in flight disables the dialog. A start specifically
+          // cannot be one of them — that renders the starting block instead,
+          // which is exactly what the type narrowing here proves.
+          pending={intent !== null}
+        />
+      ) : (
+        <div className="space-y-2">
+          <p className="text-body text-fg-secondary">Not started</p>
+          <p className="text-caption text-fg-muted">
+            Vibe will run this change&rsquo;s code in an isolated environment for 15 minutes, on a
+            public, unlisted URL. It is the prepared code running, not a checked build. Your
+            repository and production site are not changed.
+          </p>
+          <Button
+            ref={openerRef}
+            type="button"
+            variant="primary"
+            onClick={() => setConfirming(true)}
+            disabled={intent !== null}
+          >
+            Start temporary preview
+          </Button>
+        </div>
+      )}
+
+      {state?.ok === false && <p className="text-body text-coral">{state.message}</p>}
+
+      {state?.ok && state.kind === "reused" && (
+        <p className="text-caption text-fg-muted">
+          A preview of this exact build is already running — nothing new was started.
+        </p>
+      )}
+    </section>
+  );
+}

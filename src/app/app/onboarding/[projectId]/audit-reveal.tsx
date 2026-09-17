@@ -8,7 +8,7 @@ import type {
   BusinessReadinessAudit,
 } from "@/modules/business-audit/schema";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
-import { BusinessMap } from "../../projects/[projectId]/business-brain/business-map";
+import { BusinessMap } from "@/features/health/business-map";
 
 /**
  * What the audit found, as the body of a render block.

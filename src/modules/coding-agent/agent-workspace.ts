@@ -9,11 +9,11 @@ import {
   type PreparedChangeWorkspaceItem,
 } from "@/modules/execution/workspace";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
-import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
+import type { AgentTask } from "./workspace-view";
 import { findLatestOperation } from "@/modules/operations/store";
-import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
-import type { PreviewChange } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
-import type { MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import type { ValidationCheck } from "./workspace-view";
+import type { PreviewChange } from "./workspace-view";
+import type { MergeSummary } from "./workspace-view";
 import type { StoredExecutionEvent } from "./observability/events";
 import type { StoredExecutionInterrupt } from "./store";
 import {
@@ -32,7 +32,7 @@ import { type TimelineStep } from "./observability/timeline";
 import { runObservationFrom, type LiveFile } from "./observability/live-view";
 import type { ValidationSummary } from "@/modules/validation/view";
 import { findReservationForOperation } from "@/modules/credits/store";
-import type { ChangeCost } from "@/components/system/cost-line";
+import type { ChangeCost } from "@/modules/credits/change-cost";
 import { getAgentExecutionStatus } from "./service";
 
 /**

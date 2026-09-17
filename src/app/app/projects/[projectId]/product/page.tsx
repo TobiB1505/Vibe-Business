@@ -23,9 +23,9 @@ import {
   getLatestSnapshotAttempt,
   getLatestSuccessfulSnapshot,
 } from "@/modules/repository-intelligence/store";
-import { DeepScanSpotlight } from "./deep-scan-spotlight";
-import { UnderstandingConfirm } from "../understanding-confirm";
-import { UnderstandingPanel } from "../understanding-panel";
+import { DeepScanSpotlight } from "@/features/product/deep-scan-spotlight";
+import { UnderstandingConfirm } from "@/features/product/understanding-confirm";
+import { UnderstandingPanel } from "@/features/product/understanding-panel";
 import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import type { Metadata } from "next";
 

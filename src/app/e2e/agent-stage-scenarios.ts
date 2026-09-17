@@ -82,7 +82,7 @@ function progress(stage: ChangeStage) {
   };
 }
 
-import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
+import type { AgentTask } from "@/features/agent/agent-task-panel";
 import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
 
 /** The Move the reference set works on, in the shape the panel takes. */
@@ -102,7 +102,7 @@ const TASK: AgentTask = {
   ],
 };
 
-import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import type { ValidationCheck } from "@/features/agent/agent-validation-checks";
 import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
 import type { ValidationSummary } from "@/modules/validation/view";
 import type { ChangeCost } from "@/components/system/cost-line";
@@ -149,7 +149,7 @@ const FILE_EVENTS: StoredExecutionEvent[] = ([
 import type {
   PreviewChange,
   PreviewImages,
-} from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+} from "@/features/agent/agent-preview-stage";
 
 const PREVIEW_CHANGES: PreviewChange[] = [
   {
@@ -177,7 +177,7 @@ const PREVIEW_CHANGES: PreviewChange[] = [
  */
 const PREVIEW_IMAGES: PreviewImages | null = null;
 
-import type { MergeFile, MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import type { MergeFile, MergeSummary } from "@/features/agent/agent-merge-stage";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 

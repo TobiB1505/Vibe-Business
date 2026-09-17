@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AgentWorkspaceChoice } from "@/app/app/projects/[projectId]/agent/agent-workspace-choice";
+import { AgentWorkspaceChoice } from "@/features/agent/agent-workspace-choice";
 import type { WorkspaceCandidate } from "@/modules/validation/profile";
 
 /**

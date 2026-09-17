@@ -1,10 +1,10 @@
 "use client";
 
-import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
+import { AgentFileActivity } from "@/features/agent/agent-file-activity";
 import {
   AgentValidationChecks,
   type ValidationCheck,
-} from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+} from "@/features/agent/agent-validation-checks";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 
 /**

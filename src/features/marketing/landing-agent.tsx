@@ -2,8 +2,8 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import type { CSSProperties, ReactNode } from "react";
-import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
-import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
+import { AgentRunFiles } from "@/features/agent/agent-run-files";
+import { ValidationDepthNote } from "@/features/agent/validation-depth-note";
 import { LandingStep } from "@/features/marketing/landing-step";
 import { Reveal } from "@/features/marketing/reveal";
 import { CostLine } from "@/components/system/cost-line";

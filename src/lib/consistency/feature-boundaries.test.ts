@@ -97,86 +97,217 @@ const TRANSITIONAL_CROSSINGS: readonly {
   retiredBy: string;
   reason: string;
 }[] = [
-  /* ── features → app: the blocks and the landing page, moved by Slice 1 ──
-     These were `components → app` until Slice 1 took them out of
-     `src/components`. The crossing travelled with the file rather than being
-     added: the register's total did not grow, and Slice 2 closes every one of
-     them by moving the screens they compose. */
+  /* ── features → app: Server Actions that have not moved yet ───────────
+     Slice 2 moved the surfaces; the actions they bind stay in the route
+     tree until Slice 3 gives each feature a `commands.ts`. Every entry
+     here is that one shape, and the whole section goes at once. */
   {
-    file: "features/nova/thread/blocks/workspace.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
-    reason:
-      "Blocks compose shipped screens (Sprint 0162); the screen still lives in the route tree.",
+    file: "features/agent/agent-start-action.tsx",
+    allowed: ["app/app/projects/[projectId]/agent/agent-run-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
-    file: "features/nova/thread/blocks/review.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
-    reason: "Same — six of the Agent's stage components and their actions.",
+    file: "features/agent/agent-validate-action.tsx",
+    allowed: ["app/app/projects/[projectId]/validate-change-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
-    file: "features/nova/thread/blocks/agent.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
-    reason: "Same.",
+    file: "features/agent/agent-workspace-choice-action.tsx",
+    allowed: ["app/app/projects/[projectId]/agent/workspace-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
-    file: "features/nova/thread/blocks/move.tsx",
-    allowed: ["app/app/projects/[projectId]/plan/"],
-    retiredBy: "Slice 2 — the Plan surface moves to src/features/plan",
-    reason: "Same, for the Move card.",
+    file: "features/agent/approval-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/approval-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
-    file: "features/nova/thread/blocks/audit.tsx",
-    allowed: ["app/app/projects/[projectId]/business-brain/"],
-    retiredBy: "Slice 2 — Business Health moves to src/features/health",
-    reason: "Same, for the business map.",
+    file: "features/agent/business-impact-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/business-impact-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
-    file: "features/marketing/landing-agent.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
-    reason: "The landing page shows the real Agent components rather than a drawing of them.",
+    file: "features/agent/change-diff-section.tsx",
+    allowed: ["app/app/projects/[projectId]/prepare-change-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
-    file: "features/marketing/landing-business-map.tsx",
-    allowed: ["app/app/projects/[projectId]/business-brain/"],
-    retiredBy: "Slice 2 — Business Health moves to src/features/health",
-    reason: "Same, for the business map.",
+    file: "features/agent/discard-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/discard-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/agent/merge-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/merge-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/agent/outcome-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/outcome-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/agent/preview-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/preview-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/agent/review-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/review-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/agent/validation-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/validate-change-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/health/needs-user-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/needs-user-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/health/run-audit-button.tsx",
+    allowed: ["app/app/projects/[projectId]/run-audit-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/plan/action-plan-workspace.tsx",
+    allowed: ["app/app/projects/[projectId]/run-audit-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/plan/attestation-form.tsx",
+    allowed: ["app/app/projects/[projectId]/founder-action-attestation"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/plan/handoff-card.tsx",
+    allowed: ["app/app/projects/[projectId]/handoff-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/plan/moves-refresh-bar.tsx",
+    allowed: ["app/app/projects/[projectId]/opportunities-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/plan/plan-detail-panel.tsx",
+    allowed: [
+      "app/app/projects/[projectId]/founder-input-action",
+      "app/app/projects/[projectId]/plan-action",
+      "app/app/projects/[projectId]/run-audit-action",
+    ],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/plan/prepare-change-panel.tsx",
+    allowed: [
+      "app/app/projects/[projectId]/prepare-change-action",
+      "app/app/projects/[projectId]/run-audit-action",
+    ],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/product/deep-scan-panel.tsx",
+    allowed: ["app/app/projects/[projectId]/deep-scan-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/product/understanding-confirm.tsx",
+    allowed: ["app/app/projects/[projectId]/understanding-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/product/understanding-progress.tsx",
+    allowed: ["app/app/projects/[projectId]/understanding-actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   {
     file: "features/product/product-scan-experience.tsx",
     allowed: [
-      "app/app/projects/[projectId]/understanding-actions",
       "app/app/projects/[projectId]/product-scan-status-action",
+      "app/app/projects/[projectId]/understanding-actions",
     ],
-    retiredBy: "Slice 3 — the product feature exposes commands.ts",
-    reason: "A shared surface that binds two Server Actions still living in the route tree.",
-  },
-  /* ── modules → app (type-only) ─────────────────────────────────────────── */
-  {
-    file: "modules/coding-agent/change-stage-view.ts",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — ValidationCheck and MergeSummary move into src/modules/coding-agent",
-    reason: "Type-only: the view builder returns the shapes the Agent components declare.",
-  },
-  {
-    file: "modules/coding-agent/agent-workspace.ts",
-    allowed: ["app/app/projects/[projectId]/agent/", "components/system/cost-line"],
     retiredBy:
-      "Slice 2 — AgentTask, ValidationCheck, PreviewChange, MergeSummary and ChangeCost move into the module",
-    reason: "Type-only, same; plus the cost line's shape.",
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/project-settings/delete-project-button.tsx",
+    allowed: ["app/app/projects/[projectId]/actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/project-settings/disconnect-button.tsx",
+    allowed: ["app/app/projects/[projectId]/actions"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/project-settings/founder-intent-form.tsx",
+    allowed: ["app/app/projects/[projectId]/founder-intent-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
+  },
+  {
+    file: "features/project-settings/production-url-form.tsx",
+    allowed: ["app/app/projects/[projectId]/production-url-action"],
+    retiredBy:
+      "Slice 3 — the owning feature exposes commands.ts and the action leaves the route tree",
+    reason: "A moved surface still binds a Server Action that has not moved yet.",
   },
   /* ── modules → components ──────────────────────────────────────────────── */
-  {
-    file: "modules/coding-agent/ui/agent-execution-live-view.tsx",
-    allowed: ["components/ui/"],
-    retiredBy:
-      "Slice 2 — a component inside a module moves to src/features/agent, or is deleted if nothing mounts it",
-    reason:
-      "A screen that was built beside its read model before there was a surface layer to hold it.",
-  },
   {
     file: "modules/execution/change-history-view.ts",
     allowed: ["components/ui/status-pill"],
@@ -190,18 +321,6 @@ const TRANSITIONAL_CROSSINGS: readonly {
     reason: "The business reading formats its score with the primitive's own formatter.",
   },
   /* ── features → app ────────────────────────────────────────────────────── */
-  {
-    file: "features/nova/home/nova-agent-stage.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
-    reason: "Nova streams the Agent's own build stage.",
-  },
-  {
-    file: "features/nova/home/nova-ready-stage.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
-    reason: "Nova offers the Agent's own start controls.",
-  },
   {
     file: "features/nova/home/nova-home.tsx",
     allowed: [

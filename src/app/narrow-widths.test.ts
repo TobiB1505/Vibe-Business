@@ -46,7 +46,7 @@ const PHONE_WIDTH = 360;
  * the rule.
  */
 const DELIBERATELY_NARROW: Record<string, string> = {
-  "app/app/projects/[projectId]/business-brain/business-map.tsx":
+  "features/health/business-map.tsx":
     "a caption under a planet — the cap is what keeps two words from running past the planet they name",
   "features/marketing/landing-business-map.tsx": "the same caption on the landing page's own map",
   "components/brand/product-logo.tsx":

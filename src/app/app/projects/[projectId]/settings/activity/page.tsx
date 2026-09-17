@@ -2,7 +2,7 @@ import { WorkspaceSection } from "@/components/layout/project-shell";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { ActivityFeed } from "../../activity-feed";
+import { ActivityFeed } from "@/features/project-settings/activity-feed";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

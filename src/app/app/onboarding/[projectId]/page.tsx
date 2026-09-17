@@ -30,9 +30,9 @@ import {
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { getProductScanEvents } from "@/modules/product-scan/store";
 import { buildProductScanPresentation } from "@/modules/product-scan/presentation";
-import { AuditAnalyzing, AuditPreparing } from "../../projects/[projectId]/audit-lifecycle";
-import { DeepScanPanel } from "../../projects/[projectId]/deep-scan-panel";
-import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
+import { AuditAnalyzing, AuditPreparing } from "@/features/health/audit-lifecycle";
+import { DeepScanPanel } from "@/features/product/deep-scan-panel";
+import { NeedsUserPanel } from "@/features/health/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
 import {
   completeOnboardingAction,

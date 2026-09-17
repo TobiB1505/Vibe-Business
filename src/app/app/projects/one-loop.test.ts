@@ -24,34 +24,34 @@ const copyOf = (source: string) =>
 const LINEAGE = read("src/modules/opportunities/lineage.ts");
 const SERVICE = read("src/modules/opportunities/service.ts");
 const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
-const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/content.tsx");
-const PANEL = read("src/app/app/projects/[projectId]/plan/move-card.tsx");
-const STEPPER = read("src/app/app/projects/[projectId]/plan/move-stepper.tsx");
-const WORKSPACE = read("src/app/app/projects/[projectId]/plan/action-plan-workspace.tsx");
-const PLAN_DETAIL = read("src/app/app/projects/[projectId]/plan/plan-detail-panel.tsx");
+const SCORE_PAGE = read("src/features/health/content.tsx");
+const PANEL = read("src/features/plan/move-card.tsx");
+const STEPPER = read("src/features/plan/move-stepper.tsx");
+const WORKSPACE = read("src/features/plan/action-plan-workspace.tsx");
+const PLAN_DETAIL = read("src/features/plan/plan-detail-panel.tsx");
 /*
  * The step's criterion and the answer that closes it, split out of the panel so
  * the handoff card can compose them without drawing a second card around a step
  * the first one already named (ADR 0099).
  */
-const ATTESTATION_FORM = read("src/app/app/projects/[projectId]/plan/attestation-form.tsx");
+const ATTESTATION_FORM = read("src/features/plan/attestation-form.tsx");
 const PRIORITIES = read(
-  "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
+  "src/features/health/audit-intelligence.tsx",
 );
 const BRAIN_VIEW = read("src/modules/projects/business-brain-view.ts");
-const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-panel.tsx");
-const RUN_AUDIT = read("src/app/app/projects/[projectId]/run-audit-button.tsx");
+const PREPARE_PANEL = read("src/features/plan/prepare-change-panel.tsx");
+const RUN_AUDIT = read("src/features/health/run-audit-button.tsx");
 const AUDIT_STORE = read("src/modules/business-audit/store.ts");
 const SOURCE = read("src/modules/action-plans/source.ts");
 const WORKSPACE_READ_MODEL = read("src/modules/execution/workspace.ts");
 const AGENT_PAGE = read("src/app/app/projects/[projectId]/agent/page.tsx");
-const AGENT_READY = read("src/app/app/projects/[projectId]/agent/agent-ready-stage.tsx");
-const AGENT_START = read("src/app/app/projects/[projectId]/agent/agent-start-action.tsx");
+const AGENT_READY = read("src/features/agent/agent-ready-stage.tsx");
+const AGENT_START = read("src/features/agent/agent-start-action.tsx");
 const AGENT_STAGE_ACTIONS = read(
-  "src/app/app/projects/[projectId]/agent/agent-stage-actions.tsx",
+  "src/features/agent/agent-stage-actions.tsx",
 );
 const AGENT_VALIDATE = read(
-  "src/app/app/projects/[projectId]/agent/agent-validate-action.tsx",
+  "src/features/agent/agent-validate-action.tsx",
 );
 const VALIDATE_ACTION = read(
   "src/app/app/projects/[projectId]/validate-change-action.ts",
@@ -69,9 +69,9 @@ const AGENT_ACTIONS = read(
   "src/app/app/projects/[projectId]/agent/agent-run-actions.ts",
 );
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
-const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
+const CHANGE_ORIGIN = read("src/features/agent/change-origin.tsx");
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
-const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
+const HOME_STATUS = read("src/features/health/home-status.tsx");
 /*
  * Where a surface names a Move and offers the way into it.
  *
@@ -407,7 +407,7 @@ describe("a refused run says which gate stopped it", () => {
   /** Rule 60: a re-read costs, so it is offered as a link and never started here. */
   it("offers the repository re-read without starting one", () => {
     const notice = read(
-      "src/app/app/projects/[projectId]/agent/agent-start-refusal-notice.tsx",
+      "src/features/agent/agent-start-refusal-notice.tsx",
     );
 
     // `StandaloneLink` since the underline work: it renders a `Link`, so this

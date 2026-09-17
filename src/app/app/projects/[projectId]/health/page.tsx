@@ -1,5 +1,5 @@
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { ProjectBusinessHealth } from "./content";
+import { ProjectBusinessHealth } from "@/features/health/content";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

@@ -611,7 +611,7 @@ describe("the internal root problem never reaches a screen", () => {
   it("is not referenced by the component that shows the reasoning trail", async () => {
     const { readFileSync } = await import("node:fs");
     const source = readFileSync(
-      "src/app/app/projects/[projectId]/reasoning-trail.tsx",
+      "src/features/health/reasoning-trail.tsx",
       "utf8",
     );
 

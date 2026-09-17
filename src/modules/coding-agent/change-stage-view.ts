@@ -3,8 +3,8 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
 import type {
   ValidationCheck,
   ValidationCheckState,
-} from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
-import type { MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+} from "./workspace-view";
+import type { MergeSummary } from "./workspace-view";
 import type { ValidationPhaseView } from "@/modules/validation/view";
 
 /**

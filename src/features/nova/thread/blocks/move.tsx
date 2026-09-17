@@ -1,4 +1,4 @@
-import { MoveCard } from "@/app/app/projects/[projectId]/plan/move-card";
+import { MoveCard } from "@/features/plan/move-card";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import type { OpportunityActionState } from "@/modules/execution/view";
 

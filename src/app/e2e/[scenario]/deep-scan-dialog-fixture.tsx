@@ -1,6 +1,6 @@
 "use client";
 
-import { LiveViewDialog } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { LiveViewDialog } from "@/features/product/deep-scan-panel";
 
 /**
  * The sign-in dialog, mounted directly in the states it cannot otherwise reach.

@@ -2,30 +2,30 @@ import { Suspense } from "react";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { SkeletonSection } from "@/components/ui/skeleton";
-import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
+import { PlanDetailPanel } from "@/features/plan/plan-detail-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import {
   AgentPreviewActions,
   AgentReviewDecision,
-} from "@/app/app/projects/[projectId]/agent/agent-stage-actions";
+} from "@/features/agent/agent-stage-actions";
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { novaControlLabel } from "@/modules/nova/home-view";
-import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
-import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { IntelligenceSummary } from "@/features/product/intelligence-summary";
+import { AuditOverview } from "@/features/health/audit-overview";
 import { crossCheckIntelligence } from "@/modules/repository-intelligence/cross-check";
 import { SourceCoverageStrip } from "@/components/system/source-coverage";
 import { ProductRevealFacts } from "@/app/app/onboarding/[projectId]/reveal-facts";
 import { buildSourceCoverage } from "@/modules/provenance/source-coverage";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
-import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
-import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
+import { AuditCreditNotice } from "@/features/health/audit-credit-notice";
+import { RunAuditButton } from "@/features/health/run-audit-button";
 import { auditBlockedByCredits } from "@/modules/business-audit/entitlement";
-import { NeedsUserPanel } from "@/app/app/projects/[projectId]/needs-user-panel";
+import { NeedsUserPanel } from "@/features/health/needs-user-panel";
 import {
   AuditAnalyzing,
   AuditPreparing,
   AuditWaitingHeader,
-} from "@/app/app/projects/[projectId]/audit-lifecycle";
+} from "@/features/health/audit-lifecycle";
 import { creditsToUnits } from "@/modules/credits/units";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import { FocusCard } from "../design-studies/legacy-focus-card";
@@ -49,7 +49,7 @@ import { StudyWireframe } from "../design-studies/study-wireframe";
 import { StudyBlock } from "../design-studies/study-block";
 import { StudyRail } from "../design-studies/study-rail";
 import { StudyOpening, StudyOpeningWalkthrough } from "../design-studies/study-opening";
-import { AgentTrustPanel } from "@/app/app/projects/[projectId]/agent/agent-header";
+import { AgentTrustPanel } from "@/features/agent/agent-header";
 import { OPENING_ASKS_NAME_SCENARIO } from "../design-studies/studies";
 import { StudyOnboarding } from "../design-studies/study-onboarding";
 import { NovaOpeningScreen } from "@/features/nova/home/nova-opening-screen";
@@ -134,12 +134,12 @@ import {
   isE2eAgentScenario,
   isE2eHomeScenario,
 } from "../command-center-scenarios";
-import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
-import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
+import { AgentPanel } from "@/features/agent/agent-panel";
+import { HomeStatus } from "@/features/health/home-status";
 import { EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
-import { AgentPlanNextNotice } from "@/app/app/projects/[projectId]/agent/agent-plan-next-notice";
-import { AgentStaleReadNotice } from "@/app/app/projects/[projectId]/agent/agent-stale-read-notice";
-import { AgentWorkspaceChoice } from "@/app/app/projects/[projectId]/agent/agent-workspace-choice";
+import { AgentPlanNextNotice } from "@/features/agent/agent-plan-next-notice";
+import { AgentStaleReadNotice } from "@/features/agent/agent-stale-read-notice";
+import { AgentWorkspaceChoice } from "@/features/agent/agent-workspace-choice";
 import { Button } from "@/components/ui/button";
 import {
   ANSWERED_WORKSPACE_ROOT,
@@ -161,25 +161,25 @@ import {
   novaVoiceEntry,
 } from "../nova-voice-scenarios";
 import { NovaFocusThread } from "@/features/nova/home/nova-focus-thread";
-import { ProvenancePanel } from "@/app/app/projects/[projectId]/provenance-panel";
+import { ProvenancePanel } from "@/features/health/provenance-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
-import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
-import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
-import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
-import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
-import { AgentRunFiles } from "@/app/app/projects/[projectId]/agent/agent-run-files";
-import { ChangeHistoryTable } from "@/app/app/projects/[projectId]/agent/change-history-table";
-import { WithheldPaths } from "@/app/app/projects/[projectId]/agent/withheld-paths";
-import { ValidationDepthNote } from "@/app/app/projects/[projectId]/agent/validation-depth-note";
+import { AgentWorkspacePanel } from "@/features/agent/agent-workspace-panel";
+import { AgentActivity } from "@/features/agent/agent-activity";
+import { AgentValidationChecks } from "@/features/agent/agent-validation-checks";
+import { AgentFileActivity } from "@/features/agent/agent-file-activity";
+import { AgentRunFiles } from "@/features/agent/agent-run-files";
+import { ChangeHistoryTable } from "@/features/agent/change-history-table";
+import { WithheldPaths } from "@/features/agent/withheld-paths";
+import { ValidationDepthNote } from "@/features/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
-import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
-import { PreviewPanel } from "@/app/app/projects/[projectId]/preview-panel";
-import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
-import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
-import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
-import { AgentValidateStage } from "@/app/app/projects/[projectId]/agent/agent-validate-stage";
-import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-ready-stage";
-import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-run-task-header";
+import { AgentPreviewStage } from "@/features/agent/agent-preview-stage";
+import { PreviewPanel } from "@/features/agent/preview-panel";
+import { AgentMergeStage } from "@/features/agent/agent-merge-stage";
+import { AgentCore } from "@/features/agent/agent-core";
+import { AgentBuildStage } from "@/features/agent/agent-build-stage";
+import { AgentValidateStage } from "@/features/agent/agent-validate-stage";
+import { AgentReadyStage } from "@/features/agent/agent-ready-stage";
+import { AgentRunTaskHeader } from "@/features/agent/agent-run-task-header";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_PROFILE_SCENARIOS,
@@ -236,9 +236,9 @@ import {
   E2E_UNDERSTANDING_SCENARIOS,
   isE2eUnderstandingScenario,
 } from "../understanding-scenarios";
-import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding-panel";
-import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
-import { UnderstandingProgress } from "@/app/app/projects/[projectId]/understanding-progress";
+import { UnderstandingPanel } from "@/features/product/understanding-panel";
+import { UnderstandingConfirm } from "@/features/product/understanding-confirm";
+import { UnderstandingProgress } from "@/features/product/understanding-progress";
 import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import { E2E_PRODUCT_SCAN_SCENARIOS, isE2eProductScanScenario } from "../product-scan-scenarios";
 import { ProductScanRevealFixture } from "../product-scan-reveal-fixture";
@@ -249,19 +249,19 @@ import {
 } from "@/app/app/onboarding/[projectId]/operation-states";
 import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions";
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
-import { AgentStartRefusalNotice } from "@/app/app/projects/[projectId]/agent/agent-start-refusal-notice";
-import { ActionPlanWorkspace } from "@/app/app/projects/[projectId]/plan/action-plan-workspace";
-import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refresh-bar";
+import { AgentStartRefusalNotice } from "@/features/agent/agent-start-refusal-notice";
+import { ActionPlanWorkspace } from "@/features/plan/action-plan-workspace";
+import { MovesRefreshBar } from "@/features/plan/moves-refresh-bar";
 import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/settings/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
-import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { DeepScanPanel } from "@/features/product/deep-scan-panel";
 import { AtmosphereField } from "@/components/layout/atmosphere";
 import { CookieSettings } from "@/components/consent/cookie-settings";
 import { Surface } from "@/components/ui/surface";
-import { ProjectSettingsView } from "@/app/app/projects/[projectId]/settings/project-settings-view";
-import { ScanHandoff } from "@/app/app/projects/[projectId]/scan-handoff";
+import { ProjectSettingsView } from "@/features/project-settings/project-settings-view";
+import { ScanHandoff } from "@/features/product/scan-handoff";
 import { DeepScanDialogFixture } from "./deep-scan-dialog-fixture";
 import {
   E2E_DEEP_SCAN_SCENARIOS,
@@ -270,7 +270,7 @@ import {
   isE2eDeepScanScenario,
   isE2eDeepScanSpotlightScenario,
 } from "../deep-scan-scenarios";
-import { DeepScanSpotlight } from "@/app/app/projects/[projectId]/product/deep-scan-spotlight";
+import { DeepScanSpotlight } from "@/features/product/deep-scan-spotlight";
 import { buildDeepScanSpotlight } from "@/modules/authenticated-product-intelligence/spotlight";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import { agentReadyForecastNotes } from "../agent-stage-scenarios";

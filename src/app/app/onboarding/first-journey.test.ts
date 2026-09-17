@@ -240,7 +240,7 @@ describe("the reveal does not depend on a remote image", () => {
     // that passed its own fallback would leave this describing somewhere else.
     for (const [name, source] of [
       ["onboarding", PAGE],
-      ["understanding-panel", read("src/app/app/projects/[projectId]/understanding-panel.tsx")],
+      ["understanding-panel", read("src/features/product/understanding-panel.tsx")],
     ] as const) {
       const elements = source.match(/<ProductLogo[\s\S]*?\/>/g) ?? [];
       expect(elements.length, name).toBeGreaterThan(0);
@@ -250,7 +250,7 @@ describe("the reveal does not depend on a remote image", () => {
 
   it("is what both reveal surfaces render", () => {
     expect(PAGE).toContain("<ProductLogo");
-    expect(read("src/app/app/projects/[projectId]/understanding-panel.tsx")).toContain(
+    expect(read("src/features/product/understanding-panel.tsx")).toContain(
       "<ProductLogo",
     );
   });
@@ -266,7 +266,7 @@ describe("the reveal does not depend on a remote image", () => {
   it("leaves no raw remote img behind on either surface", () => {
     for (const [name, source] of [
       ["onboarding", PAGE],
-      ["workspace", read("src/app/app/projects/[projectId]/understanding-panel.tsx")],
+      ["workspace", read("src/features/product/understanding-panel.tsx")],
     ] as const) {
       expect(copyOf(source), name).not.toContain("<img");
     }

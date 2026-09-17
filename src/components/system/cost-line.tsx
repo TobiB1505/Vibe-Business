@@ -1,4 +1,5 @@
-import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
+import type { ChangeCost } from "@/modules/credits/change-cost";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -22,11 +23,7 @@ import { cn } from "@/lib/utils/cn";
  * is the same lie ADR 0094 refuses in the other direction.
  */
 
-export type ChangeCost =
-  | { kind: "settled"; credits: CreditUnits }
-  | { kind: "released" }
-  | { kind: "pending" }
-  | { kind: "unknown" };
+export type { ChangeCost } from "@/modules/credits/change-cost";
 
 export function CostLine({ cost, className }: { cost: ChangeCost; className?: string }) {
   if (cost.kind === "unknown") return null;

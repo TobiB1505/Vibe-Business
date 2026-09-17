@@ -2,7 +2,7 @@ import { WorkspaceSection, projectSectionHref } from "@/components/layout/projec
 import { EmptyState } from "@/components/ui/states";
 import { getProjectImpact } from "@/modules/business-measurement/project-impact";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { ExperimentCard } from "../experiment-card";
+import { ExperimentCard } from "@/features/experiments/experiment-card";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

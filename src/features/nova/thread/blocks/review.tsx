@@ -1,12 +1,12 @@
-import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
-import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
-import { AgentValidateStage } from "@/app/app/projects/[projectId]/agent/agent-validate-stage";
+import { AgentMergeStage } from "@/features/agent/agent-merge-stage";
+import { AgentPreviewStage } from "@/features/agent/agent-preview-stage";
+import { AgentValidateStage } from "@/features/agent/agent-validate-stage";
 import {
   AgentPreviewActions,
   AgentReviewDecision,
-} from "@/app/app/projects/[projectId]/agent/agent-stage-actions";
-import { AgentValidateAction } from "@/app/app/projects/[projectId]/agent/agent-validate-action";
-import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+} from "@/features/agent/agent-stage-actions";
+import { AgentValidateAction } from "@/features/agent/agent-validate-action";
+import { AgentValidationChecks } from "@/features/agent/agent-validation-checks";
 import { Notice } from "@/components/ui/states";
 import {
   agentStageForChange,

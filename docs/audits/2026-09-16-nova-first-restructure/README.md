@@ -463,7 +463,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** The `components → app` section of the register is empty and deleted; `pnpm lint`, `pnpm typecheck`, `pnpm test` green; nothing a founder sees changed.
 - **Not in this slice.** The Agent, Plan and Health surfaces (Slice 2). The shell's fourteen files (Slice 7). Any change inside a moved file.
 
-### Slice 2 — The product surfaces leave the route tree
+### Slice 2 — The product surfaces leave the route tree ✅ *shipped ([Sprint 0224](../../sprints/0224-the-surfaces-leave-the-routes.md))*
 
 - **Goal.** Close `features → app` and `modules → app`: a route file becomes an access gate plus one feature view.
 - **Affected.** `agent/*` (35 non-route files) → `features/agent/`; `plan/*` (9) → `features/plan/`; `business-brain/*` (2) and `health/content.tsx` → `features/health/`; `product/*` views and the loose `understanding-*`, `deep-scan-*`, `scan-handoff`, `live-browser-canvas`, `scan-glyphs` → `features/product/`; the seven gate panels and `change-origin`, `change-rationale`, `reasoning-trail` → `features/agent/`; `experiment-card` → `features/experiments/`; `settings/*`, `founder-intent-form`, `production-url-form`, `disconnect-button`, `delete-project-button`, `activity-feed` → `features/project-settings/`. `AgentTask`, `ValidationCheck`, `PreviewChange`, `MergeSummary` and `ChangeCost` move into `src/modules/coding-agent/`; `modules/coding-agent/ui/agent-execution-live-view.tsx` moves to `features/agent/` or is deleted if nothing mounts it.

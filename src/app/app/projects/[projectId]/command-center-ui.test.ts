@@ -1,8 +1,9 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { source } from "@/lib/test/ui-source";
 import { findCausalClaims } from "@/modules/business-measurement/causality";
-import { actionLabelText } from "./test-support";
+import { actionLabelText } from "@/lib/test/ui-source";
 
 /**
  * The Command Center's language rules, asserted against the UI source (CORE-5).
@@ -19,14 +20,8 @@ import { actionLabelText } from "./test-support";
  * already holds, applied to the surfaces that did not exist to break them yet.
  */
 
-const DIR = join(process.cwd(), "src/app/app/projects/[projectId]");
-
 const SOURCE_COVERAGE = join(process.cwd(), "src/modules/provenance/source-coverage.ts");
 const SOURCE_COVERAGE_UI = join(process.cwd(), "src/components/system/source-coverage.tsx");
-
-function source(file: string): string {
-  return readFileSync(join(DIR, file), "utf8");
-}
 
 /**
  * The file with its comments removed and whitespace collapsed.
@@ -47,7 +42,7 @@ function renderedCopy(file: string): string {
 }
 
 describe("the agent surface promises nothing it does not do", () => {
-  const AGENT_FILES = ["agent-panel.tsx", "home-status.tsx"];
+  const AGENT_FILES = ["features/agent/agent-panel.tsx", "features/health/home-status.tsx"];
 
   /**
    * The brief for this sprint ended its agent flow with "[Create Pull
@@ -76,7 +71,7 @@ describe("the agent surface promises nothing it does not do", () => {
    * run (see the Agent page's docblock).
    */
   it("never narrates work it cannot observe", () => {
-    const copy = renderedCopy("agent-panel.tsx");
+    const copy = renderedCopy("features/agent/agent-panel.tsx");
     expect(copy).not.toMatch(/\b(is building|is writing|is working on|currently building)\b/i);
   });
 
@@ -86,13 +81,16 @@ describe("the agent surface promises nothing it does not do", () => {
    * production ready, and the agent card must not summarise it as any of them.
    */
   it("never summarises a check as safety or correctness", () => {
-    const copy = renderedCopy("agent-panel.tsx");
+    const copy = renderedCopy("features/agent/agent-panel.tsx");
     expect(copy).not.toMatch(/\b(safe to merge|verified safe|proven correct|production ready)\b/i);
   });
 });
 
 describe("experiments report observations, never causes", () => {
-  const FILES = ["experiment-card.tsx", "experiments/page.tsx"];
+  const FILES = [
+    "features/experiments/experiment-card.tsx",
+    "app/app/projects/[projectId]/experiments/page.tsx",
+  ];
 
   /**
    * The heart of it. This product runs no controlled experiments —
@@ -113,7 +111,7 @@ describe("experiments report observations, never causes", () => {
    * rules exist to prevent.
    */
   it("never renders a missing measurement as a bad result", () => {
-    const copy = renderedCopy("experiment-card.tsx");
+    const copy = renderedCopy("features/experiments/experiment-card.tsx");
     expect(copy).not.toMatch(/\bno (impact|effect|improvement|change measured)\b/i);
   });
 
@@ -123,7 +121,7 @@ describe("experiments report observations, never causes", () => {
    * would assert a link neither establishes.
    */
   it("keeps the production observation and the business one apart", () => {
-    const src = source("experiment-card.tsx");
+    const src = source("features/experiments/experiment-card.tsx");
     expect(src).toContain("entry.outcome.state");
     expect(src).toContain("entry.businessImpact.headline");
   });
@@ -137,7 +135,7 @@ describe("home tells the truth about what it does not know", () => {
    * from a raw value — a `?? 0` here would defeat the whole view model.
    */
   it("renders health from the view model's states, never from a raw number", () => {
-    const src = source("home-status.tsx");
+    const src = source("features/health/home-status.tsx");
 
     for (const state of ['health.kind === "scored"', 'health.kind === "unscored"', 'health.kind === "not_analyzed"']) {
       expect(src, `home-status.tsx does not handle ${state}`).toContain(state);
@@ -147,7 +145,7 @@ describe("home tells the truth about what it does not know", () => {
   });
 
   it("distinguishes a Move that was never looked for from one that was not found", () => {
-    const src = source("home-status.tsx");
+    const src = source("features/health/home-status.tsx");
     expect(src).toContain('nextMove.kind === "none_found"');
     expect(src).toContain('nextMove.kind === "not_identified"');
   });
@@ -165,7 +163,7 @@ describe("the audit lifecycle reaches the founder without a reload", () => {
    * silently strands the founder on a state the server has already left.
    */
   it("refreshes the route when the polled operation moves", () => {
-    const src = source("run-audit-button.tsx");
+    const src = source("features/health/run-audit-button.tsx");
     expect(src).toContain("onReading:");
     // The transition rule, not the tick: refresh only when the poll names
     // something other than what the server rendered.
@@ -189,7 +187,7 @@ describe("one Product Scan, in the founder's words", () => {
    * names, file paths and event names are unaffected.
    */
   it("offers one scan control for both sources, not one per module", () => {
-    const page = source("product/page.tsx");
+    const page = source("app/app/projects/[projectId]/product/page.tsx");
     expect(page).toContain("ProductScanExperience");
     expect(page).not.toContain("InspectButton");
     expect(page).not.toContain("InspectLiveButton");
@@ -207,7 +205,7 @@ describe("one Product Scan, in the founder's words", () => {
   it("tells a founder when a source was read, partially read, or failed", () => {
     // The reference-fidelity dossier owns these source cards now; their
     // contract still carries the unified scan's four honest states.
-    const src = source("understanding-panel.tsx");
+    const src = source("features/product/understanding-panel.tsx");
     // Three honest states, not a boolean: a client-rendered site was visited
     // and partly unread, which is neither "ready" nor "not yet".
     expect(src).toContain('"partial"');
@@ -228,8 +226,8 @@ describe("one Product Scan, in the founder's words", () => {
   });
 
   it("ends the Product page at the profile confirmation instead of repeating legacy findings", () => {
-    const page = source("product/page.tsx");
-    const panel = source("understanding-panel.tsx");
+    const page = source("app/app/projects/[projectId]/product/page.tsx");
+    const panel = source("features/product/understanding-panel.tsx");
 
     expect(page).not.toContain("<IntelligenceSummary");
     expect(page).not.toContain("<LiveIntelligenceSummary");
@@ -242,7 +240,7 @@ describe("one Product Scan, in the founder's words", () => {
 
   it("never shows a founder the modules' own names", () => {
     const files = [
-      ["product/page.tsx", renderedCopy("product/page.tsx")],
+      ["product/page.tsx", renderedCopy("app/app/projects/[projectId]/product/page.tsx")],
       [
         "product-scan-experience.tsx",
         readFileSync(
@@ -250,9 +248,9 @@ describe("one Product Scan, in the founder's words", () => {
           "utf8",
         ).replace(/\/\*[\s\S]*?\*\//g, " "),
       ],
-      ["intelligence-summary.tsx", renderedCopy("intelligence-summary.tsx")],
-      ["live-intelligence-summary.tsx", renderedCopy("live-intelligence-summary.tsx")],
-      ["health/content.tsx", renderedCopy("health/content.tsx")],
+      ["features/product/intelligence-summary.tsx", renderedCopy("features/product/intelligence-summary.tsx")],
+      ["features/product/live-intelligence-summary.tsx", renderedCopy("features/product/live-intelligence-summary.tsx")],
+      ["features/health/content.tsx", renderedCopy("features/health/content.tsx")],
     ] as const;
     for (const [file, copy] of files) {
       expect(copy, file).not.toContain("Repository intelligence");

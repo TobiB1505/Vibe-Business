@@ -2,7 +2,7 @@ import { WorkspaceSection } from "@/components/layout/project-shell";
 import { EmptyState } from "@/components/ui/states";
 import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { DeepScanPanel } from "../../deep-scan-panel";
+import { DeepScanPanel } from "@/features/product/deep-scan-panel";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

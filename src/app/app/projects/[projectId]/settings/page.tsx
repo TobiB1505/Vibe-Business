@@ -1,7 +1,7 @@
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { findReconnectInstallationId } from "@/modules/projects/attach";
-import { ProjectSettingsView } from "./project-settings-view";
+import { ProjectSettingsView } from "@/features/project-settings/project-settings-view";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {

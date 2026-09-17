@@ -286,7 +286,7 @@ describe("the focus ring is never animated", () => {
     // A progress bar, not a control: it cannot take focus, and it runs at
     // 300ms deliberately because it is reporting movement rather than
     // responding to a pointer.
-    "src/app/app/projects/[projectId]/understanding-progress.tsx",
+    "src/features/product/understanding-progress.tsx",
   ]);
 
   it("is defined once, as a utility", () => {
@@ -562,8 +562,8 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
    * glyph — a character sized as an icon: `×`, `!`, an avatar initial
    */
   const NOT_TYPE: [string, number][] = [
-    ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 3], // glyph ×3
-    ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // a mono rank, "01"
+    ["src/features/health/audit-intelligence.tsx", 3], // glyph ×3
+    ["src/features/plan/move-card.tsx", 1], // a mono rank, "01"
     ["src/features/product/product-scan-experience.tsx", 1], // glyph
     ["src/components/ui/credit-amount.tsx", 1], // the price, sized with its coin
   ];

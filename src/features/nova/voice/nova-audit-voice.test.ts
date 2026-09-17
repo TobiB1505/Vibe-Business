@@ -16,11 +16,11 @@ import { describe, expect, it } from "vitest";
  * comments are stripped before anything is matched.
  */
 
-const APP = join(process.cwd(), "src/app/app/projects/[projectId]");
+const APP = join(process.cwd(), "src/features/health");
 /* The voice component lives in the Nova feature (ADR 0109); the page that reads
    the sentence stays a route. Both are held to the same rule. */
 const FEATURE = join(process.cwd(), "src/features/nova/voice");
-const FILES = ["nova-audit-voice.tsx", join("health", "content.tsx")];
+const FILES = ["nova-audit-voice.tsx", "content.tsx"];
 
 function source(file: string): string {
   return readFileSync(join(file.startsWith("nova-") ? FEATURE : APP, file), "utf8");
@@ -61,7 +61,7 @@ describe("the audit screen reads Nova's sentence and cannot generate one", () =>
   });
 
   it("reads through the one function that resolves an identity to a sentence", () => {
-    expect(code(join("health", "content.tsx"))).toContain("readNovaAuditVoice");
+    expect(code("content.tsx")).toContain("readNovaAuditVoice");
   });
 });
 
@@ -114,6 +114,6 @@ describe("the page shows nothing about an audit Nova never saw", () => {
    * that never happened.
    */
   it("renders the message only for a resolved identity", () => {
-    expect(code(join("health", "content.tsx"))).toContain("novaAuditVoice?.resolved &&");
+    expect(code("content.tsx")).toContain("novaAuditVoice?.resolved &&");
   });
 });

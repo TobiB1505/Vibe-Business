@@ -4,7 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import {
   BusinessLensIcon,
   planetStyle,
-} from "@/app/app/projects/[projectId]/business-brain/business-map";
+} from "@/features/health/business-map";
 import { LandingStep } from "@/features/marketing/landing-step";
 import { Reveal } from "@/features/marketing/reveal";
 import { MonoLabel } from "@/components/ui/typography";

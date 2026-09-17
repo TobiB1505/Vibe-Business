@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BusinessMap } from "@/app/app/projects/[projectId]/business-brain/business-map";
+import { BusinessMap } from "@/features/health/business-map";
 import { FindingCard } from "@/components/system/finding-card";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import type { BusinessBrainView } from "@/modules/projects/business-brain-view";
