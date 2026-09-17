@@ -15,9 +15,8 @@ src/lib         cross-cutting
 
 Imports flow `app → features → modules`. A feature reads and writes the domain
 only through `src/modules`; it never imports a route file. **Nothing below the
-feature layer may import a feature**, and unlike the crossings that are on their
-way out, that one can never be registered — it is not a debt, it is the layering
-inverted.
+feature layer may import a feature**, and that one can never be registered at
+all — it is not a debt to retire, it is the layering inverted.
 
 Which makes the question _what a component is_, and the answer is the line this
 directory exists to hold: a component **renders a shape**. It may take a
@@ -29,9 +28,12 @@ semantic components — `StatusPill`, `FindingCard`, `CostDisclosure`,
 `NovaPresence` — stay where they are: each renders one module's view type and
 composes no screen.
 
-The crossings that still exist are written down in
-`src/lib/consistency/feature-boundaries.test.ts` with the slice that retires
-each. That list shrinks and never grows.
+There are no crossings left. `TRANSITIONAL_CROSSINGS` in
+`src/lib/consistency/feature-boundaries.test.ts` ships as `[]`: nothing under
+`src/features`, `src/modules`, `src/components` or `src/lib` imports from a layer
+above it, anywhere. The register stays because an entry is how a _future_ debt
+gets written down with the slice that retires it — that list shrinks and never
+grows.
 
 A feature is cut by **what a founder does**, a module by **what is true**. One
 feature reads several modules; one module serves several features. That is why
@@ -42,22 +44,37 @@ Plan's views.
 ## What is here
 
 ```
-nova/    the Nova surface — the project index's thread, its bindings, and her voice on two pages
+nova/              the project index's thread, its blocks, its bindings, and her voice on two pages
+workspace/         where an artifact is read in full — a registry and a frame, and no views of its own
+agent/             the five stages, the gate panels, the diff, and eleven commands
+plan/              the Action Plan, the Moves, and the handoff
+health/            the diagnosis: nine lenses, the score, the evidence
+product/           the product profile, the Deep Scan and the scan experience
+experiments/       what a merged change made measurable
+founder-input/     a question Vibe is waiting on, shared by the Agent and the plan
+project-settings/  the production URL, the founder's intent, the repository
+onboarding/        the setup flow's commands
+connect/  account/       the commands those surfaces own
+marketing/         the landing page and the legal pages
 ```
+
+Every one of them carries a `README.md` saying what it holds and what it must
+not. `commands/` inside a feature is its `"use server"` modules; `src/app` holds
+none, and `feature-boundaries.test.ts` refuses one.
 
 ## What arrives, and in which order
 
-The order is forced. `src/components` still composes product surfaces — the nine
-Nova blocks, two landing components, three whole domain views — so those move
+The order was forced. `src/components` composed product surfaces — the nine
+Nova blocks, two landing components, three whole domain views — so those moved
 **first**; moving the Agent into `features/agent/` while a component still
-composed it would force the one import the boundary forbids.
+composed it would have forced the one import the boundary forbids.
 
 | Slice | What lands                                                                                                     |
 | ----- | -------------------------------------------------------------------------------------------------------------- |
 | 1     | `nova/thread/blocks/`, `product/`, `founder-input/`, `marketing/` — `src/components` stops knowing the product |
 | 2     | `agent/`, `plan/`, `health/`, `experiments/`, `project-settings/` — the surfaces leave the route tree          |
-| 3     | `commands.ts` and `queries.ts` per feature; one URL owner in `src/lib/routing/`                                |
-| 4     | `workspace/` — the host and the artifact registry, and no views of its own                                     |
+| 3     | `commands/` per feature; one URL owner in `src/lib/routing/`                                                   |
+| 4     | `workspace/` — the artifact registry and its frame, and no views of its own                                    |
 | 5     | `nova/threads/`, `nova/thread/` — persistent threads                                                           |
 | 6     | `nova/conversation/`, `nova/actions/` — the conversation lane and the action resolver                          |
 | 7     | `shell/` — the project and account navigation                                                                  |

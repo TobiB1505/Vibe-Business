@@ -293,6 +293,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -310,13 +311,20 @@ function FocusSection({
      */
     if (!data.question) {
       return (
-        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
+        <NovaFocusThread
+          entry={entry}
+          projectId={projectId}
+          voice={data.momentVoice}
+          running={running}
+          asides={asides}
+        />
       );
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -356,13 +364,20 @@ function FocusSection({
      */
     if (!data.change) {
       return (
-        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
+        <NovaFocusThread
+          entry={entry}
+          projectId={projectId}
+          voice={data.momentVoice}
+          running={running}
+          asides={asides}
+        />
       );
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -394,13 +409,20 @@ function FocusSection({
      */
     if (data.workspaceCandidates.length === 0) {
       return (
-        <NovaFocusThread entry={entry} voice={data.momentVoice} running={running} asides={asides} />
+        <NovaFocusThread
+          entry={entry}
+          projectId={projectId}
+          voice={data.momentVoice}
+          running={running}
+          asides={asides}
+        />
       );
     }
 
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -444,6 +466,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -456,6 +479,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -487,6 +511,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -503,6 +528,7 @@ function FocusSection({
     return (
       <NovaFocusThread
         entry={entry}
+        projectId={projectId}
         voice={data.momentVoice}
         running={running}
         asides={asides}
@@ -522,6 +548,7 @@ function FocusSection({
   return (
     <NovaFocusThread
       entry={entry}
+      projectId={projectId}
       voice={data.momentVoice}
       running={running}
       asides={asides}

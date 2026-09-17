@@ -161,6 +161,11 @@ import {
   novaVoiceEntry,
 } from "../nova-voice-scenarios";
 import { NovaFocusThread } from "@/features/nova/home/nova-focus-thread";
+import {
+  isE2eWorkspaceArtifactScenario,
+  workspaceArtifactEntry,
+  WORKSPACE_ARTIFACT_PROJECT,
+} from "../workspace-artifact-scenarios";
 import { ProvenancePanel } from "@/features/health/provenance-panel";
 import { E2E_AGENT_STAGE_SCENARIOS, isE2eAgentStageScenario } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/features/agent/agent-workspace-panel";
@@ -1859,6 +1864,32 @@ export default async function E2eScenarioPage({
       <main className="mx-auto max-w-3xl p-8">
         {label}
         <ProvenancePanel provenance={e2eProvenance(scenario)} projectId="project_e2e" />
+      </main>
+    );
+  }
+
+  /*
+   * The address on an artifact (ADR 0109 §4). The thread is the product's own,
+   * given the product's own ranking; what the block draws is a placeholder,
+   * because the claim is about the frame's meta row and not about what is
+   * inside it — see `workspace-artifact-scenarios.ts`.
+   */
+  if (isE2eWorkspaceArtifactScenario(scenario)) {
+    const entry = workspaceArtifactEntry(scenario);
+
+    return (
+      <main className="mx-auto max-w-2xl p-8 max-sm:p-4">
+        {label}
+        <NovaFocusThread
+          entry={entry}
+          projectId={WORKSPACE_ARTIFACT_PROJECT}
+          asides={[]}
+          block={
+            <p data-testid="artifact-body" className="text-ui text-fg-body">
+              The composed surface this moment opens.
+            </p>
+          }
+        />
       </main>
     );
   }

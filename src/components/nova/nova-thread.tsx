@@ -1,4 +1,6 @@
+import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
+import { ArrowRightIcon } from "@/components/ui/icons.generated";
 import type { StatusTone } from "@/components/ui/status-pill";
 
 /**
@@ -395,6 +397,25 @@ export function NovaRenderBlock({
    * region's accessible name either way — a screen reader still needs it.
    */
   namesItself = false,
+  /**
+   * Where this block is read in full, when it is read anywhere else.
+   *
+   * A frame around a composed surface used to be a dead end: the thread showed
+   * the audit, the change, the Move, and nothing on screen said the product had
+   * a page for any of them. This is [ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md)
+   * §4's *"its full-page address is how a founder leaves the conversation for
+   * it"* — the workspace's half that does not need a column.
+   *
+   * A `{ href, label }` and not a node, because the caller may not compose one:
+   * a block whose destination is a URL this component invents is the second URL
+   * owner Slice 3 spent a whole slice removing. It comes from
+   * `features/workspace/`, or it is absent.
+   *
+   * Absent is a real answer and a common one. A run's stages have no page that
+   * shows more of them than this does, and a link to one would take a founder
+   * away from the only surface telling them anything.
+   */
+  open,
   children,
   index = 0,
 }: {
@@ -402,6 +423,7 @@ export function NovaRenderBlock({
   tone?: StatusTone;
   at?: string;
   namesItself?: boolean;
+  open?: { href: string; label: string };
   children: ReactNode;
   index?: number;
 }) {
@@ -424,6 +446,23 @@ export function NovaRenderBlock({
         */}
         {at && (
           <span className="shrink-0 font-mono text-caption text-fg-meta tabular-nums">{at}</span>
+        )}
+
+        {/*
+          The meta row's own register, not a control: the same size and the same
+          colour as the label opposite it, so the frame stays furniture and the
+          composed surface below it keeps every bit of the emphasis. The arrow
+          is what `arrow.test.ts` permits and requires — this navigates, and a
+          block's own buttons act in place.
+        */}
+        {open && (
+          <Link
+            href={open.href}
+            className="shrink-0 inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-mono text-caption text-fg-meta transition-interactive hover:text-fg"
+          >
+            {open.label}
+            <ArrowRightIcon size={12} />
+          </Link>
         )}
       </div>
       {children}

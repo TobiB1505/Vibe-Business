@@ -4,7 +4,9 @@ import { NovaAside, NovaLine, NovaRenderBlock } from "@/components/nova/nova-thr
 import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { BLOCK_FOR_MOMENT, type BlockKind } from "@/modules/nova/blocks";
 import type { NovaHomeEntry } from "@/modules/nova/home-view";
+import { artifactOpen } from "@/features/workspace/host/artifact-open";
 import type { ReactNode } from "react";
+import { artifactForEntry } from "./nova-artifact";
 import { footnoteFor } from "./footnote";
 
 /**
@@ -139,6 +141,15 @@ export function NovaFocusThread({
    * them. Absent means there is nothing to collide with.
    */
   controlLabel,
+  /**
+   * The project, so the block can say where it is read in full.
+   *
+   * Optional, and that is not laxity: a lab sheet mounts this component with a
+   * fact set and no project, and a link built from a placeholder id would be a
+   * link to a 404 sitting in the gallery that exists to judge the surface.
+   * Without one the block draws exactly what it drew before.
+   */
+  projectId,
 }: {
   entry: NovaHomeEntry;
   voice?: string | null;
@@ -147,9 +158,25 @@ export function NovaFocusThread({
   block?: ReactNode;
   control?: ReactNode;
   controlLabel?: string;
+  projectId?: string;
 }) {
   const status = statusForCandidate(entry.kind);
   const kind = BLOCK_FOR_MOMENT[entry.kind];
+
+  /*
+   * Where this moment's block is read in full. Derived rather than passed: the
+   * three tables behind `artifactForEntry` are total, so the moment that gets
+   * an address and the moment that does not is a decision the domain already
+   * made — and a caller choosing per call site is how two moments about the
+   * same object come to point at different screens.
+   *
+   * Only the moment's block. The run in flight below it is an *event*, and the
+   * page that would open shows the object it will produce rather than the run
+   * — a link to it mid-run promises a founder something that is not there yet.
+   */
+  const artifact = projectId === undefined ? null : artifactForEntry(entry);
+  const open =
+    artifact === null || projectId === undefined ? undefined : artifactOpen(projectId, artifact);
 
   /*
    * The question she asks before the control, when it says something the
@@ -221,6 +248,7 @@ export function NovaFocusThread({
           label={BLOCK_LABEL[kind]}
           namesItself={BLOCK_NAMES_ITSELF[kind]}
           tone={status.tone}
+          open={open}
           index={4}
         >
           {block}

@@ -18,6 +18,20 @@ This record was written and reviewed the same day. The review found two things w
 
 **3. One claim was too absolute.** §C.5's first condition said *"Deleting every thread changes no screen except the thread list."* That is right about canonical business state and wrong about the conversation: a founder who says *"okay, Variante B"* and then *"dann machen wir das"* is relying on the transcript to carry the reference. The rule is now two sentences — deleting a thread must not change canonical business state, and may remove conversational memory.
 
+## Correction — 2026-09-17, while building Slice 4
+
+Slice 4's own definition turned out to be two slices wearing one name, and the seam is geometric rather than architectural. Recorded here rather than rewritten in §D, so the original plan stands and what was actually built is legible beside it.
+
+**The pane does not fit, and the reason belongs to Slice 7.** §D's Slice 4 says *"what the ranking opens shows in the pane on desktop"*, and ADR 0109 §4 says the same. At 1280 the project rail takes 256px and Nova's work column 300 more, leaving the thread about 640: a third column splits that into two unreadable ones, and a prepared change's review gate at 300px is not a smaller version of that screen, it is a different one. What has to move first is the seven-row rail — which is Slice 7's whole subject. So Slice 4 shipped the half of §4 that needs no column, **the address**, and the pane and its bottom sheet move to Slice 7 with the rail. The alternative was a three-column layout built to be replaced by the next slice, which is the dead parallel architecture this plan is under instruction not to build.
+
+**`preview` and `diff` are not artifact kinds.** §C.7's table listed ten and gave both of those the address *"same"* — the prepared change's. A kind whose address is another kind's, and whose view is mounted by that other kind's view, is not an object a founder opens; it is a stage `agentStageForChange` picks *within* one prepared change. Eight kinds shipped, and `prepared_change` names its three stage views rather than one. A registry that admitted a kind with no address of its own would be the generic renderer §4 refuses.
+
+**One addition the plan did not name.** `ARTIFACT_SEGMENT` is typed against `PROJECT_SECTIONS` and `PROJECT_SUBSECTIONS` rather than merely checked against them, so the compiler refuses an address for a section that does not exist before any test runs. The test stays: a type cannot describe a section renamed in one table and still named here in the other.
+
+**`ARTIFACT_SOURCES` names its reads and views as text rather than importing them.** Not in the plan either way. Importing them would pull ten features' server graphs behind any file that wanted one address — the cost that refused a `commands.ts` barrel in Slice 3 — and would make the registry unusable from a client component. The claim *"every kind has an existing read model and an existing view"* is then a claim about text, so `artifacts.test.ts` checks it against the files.
+
+---
+
 **The original slice order**, superseded by §D: *0 Nova out of the route layer · 1 Agent and Plan out of the route layer · 2 command/query and URL ownership · 3 workspace host · 4 threads · 5 composer · 6 shell · 7 legacy.* Slice 0 shipped as written and is unaffected.
 
 ---
@@ -483,7 +497,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** One file builds `/app/projects/${id}` from parts; no `"use server"` file imports from `@/components`; the register is empty and `TRANSITIONAL_CROSSINGS` ships as `[]`.
 - **Not in this slice.** Refactoring the bodies of the orchestrating actions — onboarding's free-versus-charged decision stays where it is until a feature owns onboarding.
 
-### Slice 4 — The workspace host and the first artifacts
+### Slice 4 — The workspace host and the first artifacts ✅ *shipped in part ([Sprint 0226](../../sprints/0226-an-artifact-knows-where-it-is-read.md)); the pane moved to Slice 7 — see the 2026-09-17 correction*
 
 - **Goal.** Nova + Workspace becomes real on the project index: what the ranking opens shows in the pane on desktop and inline below `lg`, and the same view renders full-page at its own address.
 - **Affected.** `features/nova/home/nova-home.tsx` (the block becomes a card plus a host mount), `components/nova/nova-room.tsx` (the work column takes the host), `projects/[projectId]/layout.tsx` (the host slot), and the six section pages (render the artifact view full-page — same output, one indirection).
