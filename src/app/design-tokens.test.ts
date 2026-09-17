@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { activePalette } from "./palette";
+import { activePalette } from "@/lib/palette";
 
 /**
  * The colour tokens, measured rather than trusted (UI-6 §7).
@@ -564,7 +564,7 @@ describe("headings come from Vibe's scale, not Tailwind's", () => {
   const NOT_TYPE: [string, number][] = [
     ["src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx", 3], // glyph ×3
     ["src/app/app/projects/[projectId]/plan/move-card.tsx", 1], // a mono rank, "01"
-    ["src/components/product-scan/product-scan-experience.tsx", 1], // glyph
+    ["src/features/product/product-scan-experience.tsx", 1], // glyph
     ["src/components/ui/credit-amount.tsx", 1], // the price, sized with its coin
   ];
 

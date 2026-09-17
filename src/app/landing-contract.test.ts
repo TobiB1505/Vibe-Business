@@ -52,7 +52,7 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
  * into a staircase, so it was deleted rather than left as a file this contract
  * still pointed at.
  */
-const PROOF = read("src/components/marketing/landing-business-map.tsx");
+const PROOF = read("src/features/marketing/landing-business-map.tsx");
 /*
  * The plan cards, which are a component rather than a block of the page
  * (UI-34).
@@ -62,7 +62,7 @@ const PROOF = read("src/components/marketing/landing-business-map.tsx");
  * The same lesson as the hero and the proof section: a contract that reads only
  * `page.tsx` goes on passing against an empty search.
  */
-const PLANS = read("src/components/marketing/landing-price.tsx");
+const PLANS = read("src/features/marketing/landing-price.tsx");
 /*
  * The close, which is a component rather than the foot of the page (UI-34).
  *
@@ -71,7 +71,7 @@ const PLANS = read("src/components/marketing/landing-price.tsx");
  * and an assertion left pointing at `page.tsx` would go on passing against a
  * file that no longer contains the sentence.
  */
-const CLOSE = read("src/components/marketing/landing-close.tsx");
+const CLOSE = read("src/features/marketing/landing-close.tsx");
 /*
  * The hero, which is now a component rather than a block of the page (UI-34).
  *
@@ -82,9 +82,9 @@ const CLOSE = read("src/components/marketing/landing-close.tsx");
  * it, and it joins `PUBLIC_SURFACES` for the same reason: it is the first thing
  * a stranger reads.
  */
-const HERO = read("src/components/marketing/landing-hero-deck.tsx");
+const HERO = read("src/features/marketing/landing-hero-deck.tsx");
 /* The block under it, which is the first argument a stranger reads (UI-34). */
-const PROBLEM = read("src/components/marketing/landing-problem.tsx");
+const PROBLEM = read("src/features/marketing/landing-problem.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");
 
 const PRIVACY = read("src/app/privacy/page.tsx");

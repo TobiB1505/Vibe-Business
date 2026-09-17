@@ -1,4 +1,4 @@
-import { Reveal } from "@/components/marketing/reveal";
+import { Reveal } from "@/features/marketing/reveal";
 import { MonoLabel } from "@/components/ui/typography";
 import { LENS_LABELS } from "@/modules/business-audit/map-view";
 import { BUSINESS_LENSES, type BusinessLens } from "@/modules/business-audit/schema";

@@ -3,7 +3,7 @@ import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
-import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
+import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";

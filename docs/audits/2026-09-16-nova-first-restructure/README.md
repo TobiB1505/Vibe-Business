@@ -444,7 +444,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 
 `src/features/nova/{home,bindings,voice}`, the project index as a composition, `feature-boundaries.test.ts` with its register. 542 files / 9,559 tests green; no address and no rendered output changed.
 
-### Slice 1 — `src/components` stops knowing the product
+### Slice 1 — `src/components` stops knowing the product ✅ *shipped ([Sprint 0223](../../sprints/0223-a-component-that-knew-the-product.md))*
 
 - **Goal.** Make the boundary structurally true rather than registered: after this slice no file under `src/components` imports `@/app`, none composes a product surface, and none can ever need `@/features`.
 - **Affected.** Moves, with no change inside the files beyond imports:

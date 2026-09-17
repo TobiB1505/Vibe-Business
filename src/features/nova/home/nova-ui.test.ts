@@ -41,7 +41,7 @@ const component = (name: string) => FILES.find((file) => file.name === name)?.bo
  * asserted where they are made rather than where they used to be pasted.
  */
 const block = (name: string) =>
-  stripComments(readFileSync(join(process.cwd(), "src/components/nova/blocks", name), "utf8"));
+  stripComments(readFileSync(join(process.cwd(), "src/features/nova/thread/blocks", name), "utf8"));
 
 describe("Nova Home", () => {
   it("has the components this slice is made of", () => {
@@ -406,7 +406,7 @@ describe("Nova Home", () => {
     it("mounts the blocks rather than a second copy of their decisions", () => {
       const home = component("nova-home.tsx");
 
-      expect(home).toContain('from "@/components/nova/blocks"');
+      expect(home).toContain('from "@/features/nova/thread/blocks"');
       for (const composed of ["<ReviewBlock", "<AskBlock", "<WorkspaceAskBlock"]) {
         expect(home, composed).toContain(composed);
       }

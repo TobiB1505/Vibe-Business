@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import type { FounderInputFormState } from "@/components/founder-input/founder-input-card";
+import type { FounderInputFormState } from "@/features/founder-input/founder-input-card";
 import type { FounderInputResponse } from "@/modules/founder-input/schema";
 import { getFounderInputRequest } from "@/modules/founder-input/store";
 import { resolveFounderInput } from "@/modules/operations/founder-input/server-writes";

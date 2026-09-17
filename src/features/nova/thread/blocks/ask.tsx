@@ -1,7 +1,7 @@
 "use client";
 
-import { FounderInputCard } from "@/components/founder-input/founder-input-card";
-import type { FounderInputFormState } from "@/components/founder-input/founder-input-card";
+import { FounderInputCard } from "@/features/founder-input/founder-input-card";
+import type { FounderInputFormState } from "@/features/founder-input/founder-input-card";
 import type { FounderInputRequest } from "@/modules/founder-input/schema";
 
 /**

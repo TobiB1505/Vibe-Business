@@ -1,7 +1,7 @@
 import { VibeMark } from "@/components/brand/vibe-mark";
-import { LandingStep } from "@/components/marketing/landing-step";
-import { MarketingCta } from "@/components/marketing/marketing-cta";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { MarketingCta } from "@/features/marketing/marketing-cta";
+import { Reveal } from "@/features/marketing/reveal";
 import { GithubMark } from "@/components/brand/provider-marks";
 import { MonoLabel } from "@/components/ui/typography";
 

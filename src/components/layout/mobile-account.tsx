@@ -10,7 +10,7 @@ import { ChevronRightIcon, DismissIcon } from "@/components/ui/icons.generated";
 import { Sheet } from "@/components/ui/sheet";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import type { CreditUnits } from "@/modules/credits/units";
-import type { Palette } from "@/app/palette";
+import type { Palette } from "@/lib/palette";
 
 /**
  * The account level, on a phone (UI-35).

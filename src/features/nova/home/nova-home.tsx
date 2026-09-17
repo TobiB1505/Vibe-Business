@@ -37,7 +37,7 @@ import {
   ReviewBlock,
   ScanBlock,
   WorkspaceAskBlock,
-} from "@/components/nova/blocks";
+} from "@/features/nova/thread/blocks";
 import { NovaAgentStage } from "./nova-agent-stage";
 import { NovaReadyStage } from "./nova-ready-stage";
 import { NovaLinkControl, NovaServerActionControl } from "./nova-control";

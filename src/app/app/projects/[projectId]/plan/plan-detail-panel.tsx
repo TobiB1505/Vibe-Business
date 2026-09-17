@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { FounderInputCard } from "@/features/founder-input/founder-input-card";
 import { Button } from "@/components/ui/button";
 import { SeeMore } from "@/components/ui/see-more";
 import { ChevronDownIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";

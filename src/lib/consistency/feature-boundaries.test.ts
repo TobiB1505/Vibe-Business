@@ -29,14 +29,16 @@ import { describe, expect, it } from "vitest";
  * crossing appears, and it also fails when a recorded crossing has quietly
  * gone — a register that can rot is a register nobody reads.
  *
- * The list is meant to shrink. Slice 1 takes the product surfaces out of
- * `src/components` — the nine Nova blocks, the landing page, the three domain
- * views — and moves `palette.ts` below both layers, which empties the
- * `components` section for good; Slice 2 takes the Agent, Plan, Health and
- * product surfaces out of the route tree and empties the `modules` section;
- * Slice 3 gives every feature a `commands.ts` and empties the rest. Adding to
- * this list is a decision, not a convenience, and the entry says which slice
- * removes it.
+ * The list is meant to shrink, and it has. Slice 1 took the product surfaces
+ * out of `src/components` — the nine Nova blocks, the landing page's twenty
+ * files, the three domain views — and moved `palette.ts` below both layers,
+ * which **emptied the `components` section for good**: no file under
+ * `src/components` imports from above it any more, and a test below asserts
+ * that rather than trusting the list. What is left is `features → app` (the
+ * screens those surfaces compose, closed by Slice 2), `modules → app` (two
+ * type-only, closed by Slice 2) and `modules → components` (four, closed by
+ * Slices 2 and 3). Adding to this list is a decision, not a convenience, and
+ * the entry says which slice removes it.
  *
  * ## One thing the register may never legalize
  *
@@ -95,89 +97,62 @@ const TRANSITIONAL_CROSSINGS: readonly {
   retiredBy: string;
   reason: string;
 }[] = [
-  /* ── components → app ─────────────────────────────────────────────────── */
+  /* ── features → app: the blocks and the landing page, moved by Slice 1 ──
+     These were `components → app` until Slice 1 took them out of
+     `src/components`. The crossing travelled with the file rather than being
+     added: the register's total did not grow, and Slice 2 closes every one of
+     them by moving the screens they compose. */
   {
-    file: "components/nova/blocks/workspace.tsx",
+    file: "features/nova/thread/blocks/workspace.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy:
-      "Slice 1 — the block moves to features/nova/thread/blocks; the crossing travels with it and Slice 2 closes it",
-    reason: "Blocks compose shipped screens (Sprint 0162); the screen lives in the route tree.",
+    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
+    reason:
+      "Blocks compose shipped screens (Sprint 0162); the screen still lives in the route tree.",
   },
   {
-    file: "components/nova/blocks/review.tsx",
+    file: "features/nova/thread/blocks/review.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy:
-      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
+    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
+    reason: "Same — six of the Agent's stage components and their actions.",
+  },
+  {
+    file: "features/nova/thread/blocks/agent.tsx",
+    allowed: ["app/app/projects/[projectId]/agent/"],
+    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
     reason: "Same.",
   },
   {
-    file: "components/nova/blocks/agent.tsx",
-    allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy:
-      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
-    reason: "Same.",
-  },
-  {
-    file: "components/nova/blocks/move.tsx",
+    file: "features/nova/thread/blocks/move.tsx",
     allowed: ["app/app/projects/[projectId]/plan/"],
-    retiredBy:
-      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
+    retiredBy: "Slice 2 — the Plan surface moves to src/features/plan",
     reason: "Same, for the Move card.",
   },
   {
-    file: "components/nova/blocks/audit.tsx",
+    file: "features/nova/thread/blocks/audit.tsx",
     allowed: ["app/app/projects/[projectId]/business-brain/"],
-    retiredBy:
-      "Slice 1 — the block moves to features/nova/thread/blocks; Slice 2 closes the crossing",
+    retiredBy: "Slice 2 — Business Health moves to src/features/health",
     reason: "Same, for the business map.",
   },
   {
-    file: "components/marketing/landing-agent.tsx",
+    file: "features/marketing/landing-agent.tsx",
     allowed: ["app/app/projects/[projectId]/agent/"],
-    retiredBy:
-      "Slice 1 — the landing page moves to features/marketing; Slice 2 closes the crossing",
+    retiredBy: "Slice 2 — the Agent surface moves to src/features/agent",
     reason: "The landing page shows the real Agent components rather than a drawing of them.",
   },
   {
-    file: "components/marketing/landing-business-map.tsx",
+    file: "features/marketing/landing-business-map.tsx",
     allowed: ["app/app/projects/[projectId]/business-brain/"],
-    retiredBy:
-      "Slice 1 — the landing page moves to features/marketing; Slice 2 closes the crossing",
+    retiredBy: "Slice 2 — Business Health moves to src/features/health",
     reason: "Same, for the business map.",
   },
   {
-    file: "components/product-scan/product-scan-experience.tsx",
+    file: "features/product/product-scan-experience.tsx",
     allowed: [
       "app/app/projects/[projectId]/understanding-actions",
       "app/app/projects/[projectId]/product-scan-status-action",
     ],
-    retiredBy:
-      "Slice 1 — the scan experience moves to features/product; Slice 3 gives it the feature's commands.ts",
-    reason: "A shared component that binds two Server Actions living in the route tree.",
-  },
-  {
-    file: "components/layout/app-frame.tsx",
-    allowed: ["app/palette"],
-    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
-    reason: "The palette switch is a module under src/app that is not a route.",
-  },
-  {
-    file: "components/layout/account-card.tsx",
-    allowed: ["app/palette"],
-    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
-    reason: "Same.",
-  },
-  {
-    file: "components/layout/mobile-account.tsx",
-    allowed: ["app/palette"],
-    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
-    reason: "Same.",
-  },
-  {
-    file: "components/layout/palette-switch.tsx",
-    allowed: ["app/palette"],
-    retiredBy: "Slice 1 — palette.ts moves to src/lib, below both layers",
-    reason: "Same.",
+    retiredBy: "Slice 3 — the product feature exposes commands.ts",
+    reason: "A shared surface that binds two Server Actions still living in the route tree.",
   },
   /* ── modules → app (type-only) ─────────────────────────────────────────── */
   {
@@ -408,6 +383,19 @@ describe("the layering holds: app → features → modules", () => {
       "A file below the feature layer imports a feature. Move the file into " +
         "the feature instead: a component that composes a product surface is " +
         "a feature wearing a component's address (rule 86).",
+    ).toEqual([]);
+  });
+
+  it("keeps src/components out of the route tree entirely", () => {
+    // Slice 1 emptied this, and the assertion is what keeps it empty: a
+    // component that needs something from `src/app` is a component with
+    // product knowledge, and the answer is to move the file rather than to
+    // register the import (rule 86).
+    const fromComponents = CROSSINGS.filter((crossing) => crossing.from === "components");
+    expect(
+      fromComponents.map((c) => `${c.file} → ${c.target}`),
+      "A component imports from src/app. There is no entry for it and there " +
+        "should not be one — move the file into the feature that owns it.",
     ).toEqual([]);
   });
 

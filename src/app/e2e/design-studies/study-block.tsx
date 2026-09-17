@@ -4,19 +4,19 @@ import {
   type BusinessBrainView,
 } from "@/modules/projects/business-brain-view";
 import { buildOperationView, OPERATION_STAGE_LABELS } from "@/modules/operations/view";
-import { AgentChecks, AgentWorking } from "@/components/nova/blocks/agent";
-import { AskBlock } from "@/components/nova/blocks/ask";
-import { WorkspaceAskBlock } from "@/components/nova/blocks/workspace";
-import { MoveBlock } from "@/components/nova/blocks/move";
-import { ProgressBlock } from "@/components/nova/blocks/progress";
-import { ReviewBlock } from "@/components/nova/blocks/review";
+import { AgentChecks, AgentWorking } from "@/features/nova/thread/blocks/agent";
+import { AskBlock } from "@/features/nova/thread/blocks/ask";
+import { WorkspaceAskBlock } from "@/features/nova/thread/blocks/workspace";
+import { MoveBlock } from "@/features/nova/thread/blocks/move";
+import { ProgressBlock } from "@/features/nova/thread/blocks/progress";
+import { ReviewBlock } from "@/features/nova/thread/blocks/review";
 import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
 import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-ready-stage";
 import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { labResolveAction } from "./lab-resolve-action";
-import { AuditBlock } from "@/components/nova/blocks/audit";
-import { ScanBlock } from "@/components/nova/blocks/scan";
+import { AuditBlock } from "@/features/nova/thread/blocks/audit";
+import { ScanBlock } from "@/features/nova/thread/blocks/scan";
 import { agentReadyForecastNotes, E2E_AGENT_STAGE_SCENARIOS } from "../agent-stage-scenarios";
 import { E2E_MOVES_SCENARIOS } from "../moves-scenarios";
 import { E2E_SCENARIOS } from "../scenarios";

@@ -8,7 +8,7 @@ import { SkeletonBlock } from "@/components/ui/skeleton";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import type { CreditUnits } from "@/modules/credits/units";
 import { cn } from "@/lib/utils/cn";
-import { activePalette, paletteSwitchable } from "@/app/palette";
+import { activePalette, paletteSwitchable } from "@/lib/palette";
 
 /**
  * One rail, for the whole signed-in product (UI-13).

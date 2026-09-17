@@ -2,7 +2,7 @@
 
 import { GithubMark } from "@/components/brand/provider-marks";
 import { NovaPresence } from "@/components/nova/nova-presence";
-import { MarketingCta } from "@/components/marketing/marketing-cta";
+import { MarketingCta } from "@/features/marketing/marketing-cta";
 import { ArrowRightIcon, BranchIcon, CheckIcon, LockIcon } from "@/components/ui/dashboard-icons";
 import { buttonClasses } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";

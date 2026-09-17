@@ -1,5 +1,5 @@
-import { LandingStep } from "@/components/marketing/landing-step";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { Reveal } from "@/features/marketing/reveal";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 import { isSensitivePath } from "@/modules/repository-intelligence/path-policy";

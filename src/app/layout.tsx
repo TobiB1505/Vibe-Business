@@ -8,7 +8,7 @@ import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
 import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
-import { activePalette, paletteSwitchable, PALETTE_BOOT_SCRIPT } from "./palette";
+import { activePalette, paletteSwitchable, PALETTE_BOOT_SCRIPT } from "@/lib/palette";
 
 /**
  * The technical typeface is declared in `./fonts.ts` and exposed to the

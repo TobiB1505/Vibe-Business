@@ -246,7 +246,7 @@ describe("one Product Scan, in the founder's words", () => {
       [
         "product-scan-experience.tsx",
         readFileSync(
-          join(process.cwd(), "src/components/product-scan/product-scan-experience.tsx"),
+          join(process.cwd(), "src/features/product/product-scan-experience.tsx"),
           "utf8",
         ).replace(/\/\*[\s\S]*?\*\//g, " "),
       ],

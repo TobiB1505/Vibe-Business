@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
-import { AgentWorking } from "@/components/nova/blocks/agent";
+import { AgentWorking } from "@/features/nova/thread/blocks/agent";
 import { NovaDissolving } from "@/components/nova/nova-dissolving";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { getNovaAgentEventsAction } from "./nova-agent-events-action";

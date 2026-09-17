@@ -239,7 +239,7 @@ import {
 import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding-panel";
 import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
 import { UnderstandingProgress } from "@/app/app/projects/[projectId]/understanding-progress";
-import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
+import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import { E2E_PRODUCT_SCAN_SCENARIOS, isE2eProductScanScenario } from "../product-scan-scenarios";
 import { ProductScanRevealFixture } from "../product-scan-reveal-fixture";
 import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";

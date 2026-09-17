@@ -1,5 +1,5 @@
-import { LandingStep } from "@/components/marketing/landing-step";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { Reveal } from "@/features/marketing/reveal";
 import { ChevronDownIcon } from "@/components/ui/icons.generated";
 import { MonoLabel } from "@/components/ui/typography";
 

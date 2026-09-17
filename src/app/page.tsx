@@ -1,16 +1,16 @@
 import { MarketingShell } from "@/components/layout/marketing-shell";
-import { LandingAgent } from "@/components/marketing/landing-agent";
-import { LandingBoundary } from "@/components/marketing/landing-boundary";
-import { LandingBusinessMap } from "@/components/marketing/landing-business-map";
-import { LandingClose } from "@/components/marketing/landing-close";
-import { LandingMove } from "@/components/marketing/landing-move";
-import { LandingHeroDeck } from "@/components/marketing/landing-hero-deck";
-import { LandingNova } from "@/components/marketing/landing-nova";
-import { LandingObjections } from "@/components/marketing/landing-objections";
-import { LandingPrice } from "@/components/marketing/landing-price";
-import { LandingOutcome } from "@/components/marketing/landing-outcome";
-import { LandingProblem } from "@/components/marketing/landing-problem";
-import { LandingScan } from "@/components/marketing/landing-scan";
+import { LandingAgent } from "@/features/marketing/landing-agent";
+import { LandingBoundary } from "@/features/marketing/landing-boundary";
+import { LandingBusinessMap } from "@/features/marketing/landing-business-map";
+import { LandingClose } from "@/features/marketing/landing-close";
+import { LandingMove } from "@/features/marketing/landing-move";
+import { LandingHeroDeck } from "@/features/marketing/landing-hero-deck";
+import { LandingNova } from "@/features/marketing/landing-nova";
+import { LandingObjections } from "@/features/marketing/landing-objections";
+import { LandingPrice } from "@/features/marketing/landing-price";
+import { LandingOutcome } from "@/features/marketing/landing-outcome";
+import { LandingProblem } from "@/features/marketing/landing-problem";
+import { LandingScan } from "@/features/marketing/landing-scan";
 
 export default function HomePage() {
   return (

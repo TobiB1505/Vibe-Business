@@ -1,8 +1,8 @@
 import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaLine } from "@/components/nova/nova-thread";
-import { LandingStep } from "@/components/marketing/landing-step";
-import { NovaEntrance } from "@/components/marketing/nova-entrance";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { NovaEntrance } from "@/features/marketing/nova-entrance";
+import { Reveal } from "@/features/marketing/reveal";
 import { statusForCandidate } from "@/components/system/status-vocabulary";
 import { MonoLabel } from "@/components/ui/typography";
 import { novaCandidateMessage } from "@/modules/nova/feed";

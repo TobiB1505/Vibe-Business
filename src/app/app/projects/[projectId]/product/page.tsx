@@ -1,5 +1,5 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
-import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
+import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import { EmptyState } from "@/components/ui/states";
 import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";
 import { buildDeepScanSpotlight } from "@/modules/authenticated-product-intelligence/spotlight";

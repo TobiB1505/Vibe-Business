@@ -5,8 +5,8 @@ import {
   BusinessLensIcon,
   planetStyle,
 } from "@/app/app/projects/[projectId]/business-brain/business-map";
-import { LandingStep } from "@/components/marketing/landing-step";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { Reveal } from "@/features/marketing/reveal";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 import { LENS_LABELS } from "@/modules/business-audit/map-view";

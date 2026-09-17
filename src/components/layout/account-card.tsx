@@ -4,7 +4,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
 import { PaletteSwitch } from "@/components/layout/palette-switch";
-import { activePalette, paletteSwitchable } from "@/app/palette";
+import { activePalette, paletteSwitchable } from "@/lib/palette";
 
 /**
  * Who is signed in, at the foot of the rail. One control, one destination.

@@ -22,7 +22,7 @@ import {
   type BlockedActionDestinations,
   type OpportunityActionState,
 } from "@/modules/execution/view";
-import { DiffView } from "@/components/change/diff-view";
+import { DiffView } from "@/features/agent/diff-view";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import { getOperationStatusAction } from "./run-audit-action";
 import { agentChangeHref, agentMoveHref } from "@/modules/action-plans/source";

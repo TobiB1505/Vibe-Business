@@ -1,6 +1,6 @@
 "use server";
 
-import type { FounderInputFormState } from "@/components/founder-input/founder-input-card";
+import type { FounderInputFormState } from "@/features/founder-input/founder-input-card";
 
 /**
  * The action the lab does not have.

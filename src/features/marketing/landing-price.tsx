@@ -1,6 +1,6 @@
-import { LandingStep } from "@/components/marketing/landing-step";
-import { PlanCards, type PlanCard } from "@/components/marketing/plan-cards";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { PlanCards, type PlanCard } from "@/features/marketing/plan-cards";
+import { Reveal } from "@/features/marketing/reveal";
 import { MonoLabel } from "@/components/ui/typography";
 import { ANNUAL_PAID_MONTHS, listPlans, WELCOME_CREDIT_UNITS } from "@/modules/billing/catalog";
 import { formatCreditsForDisplay } from "@/modules/credits/units";

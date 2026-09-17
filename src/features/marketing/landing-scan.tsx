@@ -1,12 +1,12 @@
-import { LandingStep } from "@/components/marketing/landing-step";
-import { Reveal } from "@/components/marketing/reveal";
+import { LandingStep } from "@/features/marketing/landing-step";
+import { Reveal } from "@/features/marketing/reveal";
 import {
   LANDING_SCAN_EVENTS,
   LANDING_SCAN_OPERATION,
   LANDING_SCAN_PRESENTATION,
-} from "@/components/marketing/landing-scan-example";
-import { EXAMPLE_SOURCES } from "@/components/marketing/landing-sources";
-import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
+} from "@/features/marketing/landing-scan-example";
+import { EXAMPLE_SOURCES } from "@/features/marketing/landing-sources";
+import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import { SourceCoverageStrip } from "@/components/system/source-coverage";
 import { CheckIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";

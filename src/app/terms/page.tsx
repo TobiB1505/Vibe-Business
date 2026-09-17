@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
+import { LegalPage, LegalSection } from "@/features/marketing/legal-page";
 import { proseLinkClasses } from "@/components/ui/text-link";
 
 export const metadata: Metadata = {

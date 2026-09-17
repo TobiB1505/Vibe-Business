@@ -2,7 +2,7 @@
 
 import { motion, useReducedMotion } from "motion/react";
 import { GithubMark } from "@/components/brand/provider-marks";
-import { MarketingCta } from "@/components/marketing/marketing-cta";
+import { MarketingCta } from "@/features/marketing/marketing-cta";
 import { NovaPresence } from "@/components/nova/nova-presence";
 import { BranchIcon, LockIcon } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";

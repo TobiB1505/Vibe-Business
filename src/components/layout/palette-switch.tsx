@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { SegmentedControl } from "@/components/ui/list-controls";
-import { PALETTE_STORAGE_KEY, type Palette } from "@/app/palette";
+import { PALETTE_STORAGE_KEY, type Palette } from "@/lib/palette";
 
 /**
  * Flip the design system, here, now.

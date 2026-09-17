@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
+import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import type { OperationView } from "@/modules/operations/view";
 import type { ProductScanPresentation } from "@/modules/product-scan/presentation";
 import type { ProductScanEvent } from "@/modules/product-scan/schema";

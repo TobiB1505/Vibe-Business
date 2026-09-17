@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { DiffView } from "@/components/change/diff-view";
+import { DiffView } from "@/features/agent/diff-view";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import {
   REVIEW_CLASSIFICATION_LABELS,

@@ -41,7 +41,7 @@ import { AgentValidationChecks } from "./agent-validation-checks";
 import { ValidationDepthNote } from "./validation-depth-note";
 import { AgentValidateAction } from "./agent-validate-action";
 import { AgentQuestionPanel } from "./agent-question-panel";
-import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { FounderInputCard } from "@/features/founder-input/founder-input-card";
 import { resolveAgentInterruptAction } from "./interrupt-actions";
 import { AgentFileActivity } from "./agent-file-activity";
 import { AgentRunFiles } from "./agent-run-files";
