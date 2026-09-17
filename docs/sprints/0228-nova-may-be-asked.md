@@ -168,6 +168,8 @@ mutation-tested by planting the real thing.
   PostgreSQL cluster the harness creates itself — thirty-one assertions across
   the two — and the remote database has neither. **Until they are deployed,
   nothing in the product can write a thread or a turn.**
+
+  *[Deployed 2026-09-17, after Slice 8, through the Supabase MCP `apply_migration` — the token is still absent. The account of it, including the filename reconciliation and the one new security advisory, is in [the audit's deployment note](../audits/2026-09-16-nova-first-restructure/README.md). This paragraph was true when it was written and stands.]*
 - **No model has ever answered a question here.** Every test uses a double. The
   prompt is written against the voice tier's measured failures and is itself
   **unmeasured**: there is no conversation eval, no `cases.ts`, no rubric and no

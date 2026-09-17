@@ -72,6 +72,67 @@ export type Database = {
           },
         ]
       }
+      action_plan_handoffs: {
+        Row: {
+          action_plan_id: string
+          action_plan_step_key: string
+          action_plan_step_order: number
+          created_at: string
+          handoff_version: string
+          id: string
+          issued_to_user_id: string
+          project_id: string
+          purpose: string
+          tool: string
+        }
+        Insert: {
+          action_plan_id: string
+          action_plan_step_key: string
+          action_plan_step_order: number
+          created_at?: string
+          handoff_version?: string
+          id?: string
+          issued_to_user_id: string
+          project_id: string
+          purpose?: string
+          tool: string
+        }
+        Update: {
+          action_plan_id?: string
+          action_plan_step_key?: string
+          action_plan_step_order?: number
+          created_at?: string
+          handoff_version?: string
+          id?: string
+          issued_to_user_id?: string
+          project_id?: string
+          purpose?: string
+          tool?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "action_plan_handoffs_plan_project_fk"
+            columns: ["action_plan_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "action_plans"
+            referencedColumns: ["id", "project_id"]
+          },
+          {
+            foreignKeyName: "action_plan_handoffs_plan_step_fk"
+            columns: ["action_plan_id", "action_plan_step_key"]
+            isOneToOne: true
+            referencedRelation: "action_plan_steps"
+            referencedColumns: ["action_plan_id", "step_key"]
+          },
+          {
+            foreignKeyName: "action_plan_handoffs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       action_plan_steps: {
         Row: {
           action_plan_id: string
@@ -2584,6 +2645,27 @@ export type Database = {
           },
         ]
       }
+      founder_profiles: {
+        Row: {
+          created_at: string
+          display_name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       free_audit_grants: {
         Row: {
           audit_id: string | null
@@ -2834,6 +2916,142 @@ export type Database = {
           },
           {
             foreignKeyName: "measurement_plans_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nova_messages: {
+        Row: {
+          action_id: string | null
+          artifact_kind: string | null
+          artifact_ref: string | null
+          author: string
+          body: string | null
+          context_hash: string | null
+          context_version: string | null
+          created_at: string
+          id: string
+          kind: string
+          operation_run_id: string | null
+          outcome: string | null
+          project_id: string
+          sequence: number
+          subject_id: string | null
+          subject_kind: string | null
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          action_id?: string | null
+          artifact_kind?: string | null
+          artifact_ref?: string | null
+          author: string
+          body?: string | null
+          context_hash?: string | null
+          context_version?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          operation_run_id?: string | null
+          outcome?: string | null
+          project_id: string
+          sequence: number
+          subject_id?: string | null
+          subject_kind?: string | null
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          action_id?: string | null
+          artifact_kind?: string | null
+          artifact_ref?: string | null
+          author?: string
+          body?: string | null
+          context_hash?: string | null
+          context_version?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          operation_run_id?: string | null
+          outcome?: string | null
+          project_id?: string
+          sequence?: number
+          subject_id?: string | null
+          subject_kind?: string | null
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nova_messages_operation_run_id_fkey"
+            columns: ["operation_run_id"]
+            isOneToOne: false
+            referencedRelation: "operation_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nova_messages_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nova_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "nova_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nova_messages_thread_project_fk"
+            columns: ["thread_id", "project_id"]
+            isOneToOne: false
+            referencedRelation: "nova_threads"
+            referencedColumns: ["id", "project_id"]
+          },
+        ]
+      }
+      nova_threads: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string | null
+          last_read_sequence: number
+          project_id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_read_sequence?: number
+          project_id: string
+          status?: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          last_read_sequence?: number
+          project_id?: string
+          status?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nova_threads_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -3695,6 +3913,8 @@ export type Database = {
           nova_workflow_status: string
           product_revealed_at: string | null
           project_id: string
+          signed_in_product_declined_at: string | null
+          signed_in_product_revealed_at: string | null
           state: string
           updated_at: string
         }
@@ -3708,6 +3928,8 @@ export type Database = {
           nova_workflow_status?: string
           product_revealed_at?: string | null
           project_id: string
+          signed_in_product_declined_at?: string | null
+          signed_in_product_revealed_at?: string | null
           state?: string
           updated_at?: string
         }
@@ -3721,6 +3943,8 @@ export type Database = {
           nova_workflow_status?: string
           product_revealed_at?: string | null
           project_id?: string
+          signed_in_product_declined_at?: string | null
+          signed_in_product_revealed_at?: string | null
           state?: string
           updated_at?: string
         }
@@ -4311,6 +4535,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      append_nova_conversation_turn: {
+        Args: {
+          p_action_id?: string
+          p_artifact_kind?: string
+          p_artifact_ref?: string
+          p_context_hash?: string
+          p_context_version?: string
+          p_question: string
+          p_reply: string
+          p_thread_id: string
+        }
+        Returns: number
+      }
       attach_repository_to_project: {
         Args: {
           p_default_branch: string
@@ -4414,6 +4651,17 @@ export type Database = {
           execution_interrupt_id: string
           founder_input_request_id: string
         }[]
+      }
+      record_action_plan_handoff: {
+        Args: {
+          p_action_plan_id: string
+          p_action_plan_step_key: string
+          p_project_id: string
+          p_purpose: string
+          p_tool: string
+          p_user_id: string
+        }
+        Returns: string
       }
       record_auth_attempt: {
         Args: { p_identifier_hash: string; p_succeeded: boolean }
