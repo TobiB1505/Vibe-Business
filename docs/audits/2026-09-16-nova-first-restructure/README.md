@@ -8,6 +8,20 @@ The brief: turn Vibe Business from *a dashboard with an AI assistant* into *an A
 
 ---
 
+## Correction — 2026-09-16, in review
+
+This record was written and reviewed the same day. The review found two things wrong **at the time of writing**, and they are corrected below rather than quietly rewritten: the original text of each is stated here so a reader can see what was believed.
+
+**1. The original Slice 1 would have broken the boundary it had just drawn.** §C.2 said `src/components` may not import `src/features`, and §D's Slice 1 moved the Agent and Plan surfaces into `src/features` while leaving `src/components/nova/blocks/*` composing them — which forces exactly that import. Eleven files in `src/components` compose a product surface today, and the register's answer would have been a permanent exception rather than a shrinking one. The boundary is right; the slice was wrong. §C.2 now classifies every component, §C.3's map moves product-aware composition out of `src/components`, and the slices are reordered so `src/components` stops knowing the product **before** anything moves into `src/features` beside it (new Slice 1).
+
+**2. The chat as specified was a command palette, not an operator.** The original §C.5 condition 2 read *"the composer resolves text to a closed intent set — the catalogue's ids, a small set of artifact-open intents, and* cannot*"*, and condition 4 read *"Nova's replies come from the tables first"* as a hard boundary. That answers *"run the audit"* and refuses *"why is conversion our biggest problem?"* — which is the question an AI business operator exists for. §C.5 is replaced by a two-lane architecture: a **conversation lane** that may reason and explain generatively over canonical project data, and an **action lane** that stays closed and typed. The conditions are rewritten around that split; none of the safety properties is weakened, and one is strengthened (generation may never happen in a read or a render).
+
+**3. One claim was too absolute.** §C.5's first condition said *"Deleting every thread changes no screen except the thread list."* That is right about canonical business state and wrong about the conversation: a founder who says *"okay, Variante B"* and then *"dann machen wir das"* is relying on the transcript to carry the reference. The rule is now two sentences — deleting a thread must not change canonical business state, and may remove conversational memory.
+
+**The original slice order**, superseded by §D: *0 Nova out of the route layer · 1 Agent and Plan out of the route layer · 2 command/query and URL ownership · 3 workspace host · 4 threads · 5 composer · 6 shell · 7 legacy.* Slice 0 shipped as written and is unaffected.
+
+---
+
 ## A. Verdict
 
 1. **The domain layer is ready and does not need to change.** `src/modules/` already exposes the query side a chat needs: nearly every module has a pure `build<Thing>View(input) → object` beside an async `get*`/`read*` in its store (§B.4). The commands are the existing Server Actions. Nothing in the brief needs a new engine, a new provider or a new background technology.
@@ -15,6 +29,8 @@ The brief: turn Vibe Business from *a dashboard with an AI assistant* into *an A
 3. **Three things stand in the way, and none of them is the domain.** (a) The Nova surface, the Agent surface and the Plan surface live inside the route tree, and `src/components/nova/blocks/*` reaches *up* into `src/app/**/agent/*` to compose them — twenty upward import lines from components alone (§B.4). (b) Three files own the project URL shape independently, and one Server Action imports a layout component to build a redirect (§B.4). (c) Forty-odd tests pin source **paths** and assert on source **text**, so a move is a test change as much as a code change — that is the cost, and it is bounded and known (§B.6).
 4. **The chat is foreclosed at HEAD, on purpose, and the foreclosure is load-bearing in three places.** The Nova audit's §M refuses "an unrestricted chat input" and "a transcript as source of truth"; `nova-ui.test.ts` asserts *no chat input anywhere*; `first-run.ts` says *there is nothing to type*. Reopening it is a decision, not a feature. ADR 0109 reopens it the way ADR 0086 reopened the per-message model call: not "yes", but "permitted under conditions, all of them together" (§C.5).
 5. **The right first cut is structural, not visible.** Move the Nova surface out of the route tree into `src/features/nova/`, make the route a composition, and add the boundary test that keeps every future slice honest. Zero product change, every URL untouched, every test green — and every later slice has somewhere to land.
+6. **Product knowledge is in `src/components`, and that is the first thing to fix.** Eleven files there compose a product surface — the nine Nova blocks and the landing page's two real-component embeds — three more are whole domain views, and the landing page itself is twenty. Twelve of them reach into `src/app` today. Until they leave, "the Agent's view moves to a feature" and "components may not import features" cannot both be true.
+7. **Nova needs two lanes, not one.** Everything the closed catalogue answers is *what to do*; a founder also asks *why*, *compare these*, *what does this mean for launch*. Those cannot be pressed into eighteen action ids, and the machinery to answer them safely already exists: `generateStructured` with no tools, `checks.ts` refusing any numeral outside an allowlist Vibe supplied, a template floor under every failure, and `audit-is-a-choice.test.ts`'s invariant that a priced operation is always a press.
 
 ---
 
@@ -128,17 +144,17 @@ Boundary tests that a new directory must respect: `service-boundary.test.ts` (`R
 
 **1. What stays unchanged?** Every domain module and every engine: repository/live/authenticated intelligence, product understanding, business audit, opportunities, action plans, execution contract/context, coding agent + gateway + sandbox runtime, validation, change preview, review, approvals, merge, outcome verification, business measurement, credits/billing/economy, operations, audit log, retention. All migrations and RLS. `src/modules/nova/` (focus, read, actions, feed, home-view, blocks, briefing, voice) — it is the chat's ranking, catalogue and voice already. `src/components/nova/` primitives. The auth, connect, onboarding and settings routes. The `@rail` slot mechanism and `AppFrame`. All URL contracts (§C.7).
 
-**2. What only moves?** The Nova surface (`projects/[projectId]/nova/*`, `nova-actions.ts`, `nova-audit-voice.tsx`, `nova-move-voice.tsx`) → `src/features/nova/`. The Agent surface (`agent/*` minus `page.tsx`/`loading.tsx`) → `src/features/agent/`. The Plan surface (`plan/*` minus route files) → `src/features/plan/`. The loose gate panels and the health/product/experiments/settings views → the feature that owns each. Server Actions → beside the feature they serve. Nothing changes inside them on the way.
+**2. What only moves?** *[Corrected 2026-09-16 in review: this answer named only the route tree. Eleven files in `src/components` compose a product surface too — the nine Nova blocks and the landing page's two real-component embeds — and three more are whole domain views (`FounderInputCard`, `DiffView`, `ProductScanExperience`). They move first; see §C.2 and Slice 1.]* The Nova surface (`projects/[projectId]/nova/*`, `nova-actions.ts`, `nova-audit-voice.tsx`, `nova-move-voice.tsx`) → `src/features/nova/`. The Agent surface (`agent/*` minus `page.tsx`/`loading.tsx`) → `src/features/agent/`. The Plan surface (`plan/*` minus route files) → `src/features/plan/`. The loose gate panels and the health/product/experiments/settings views → the feature that owns each. Server Actions → beside the feature they serve. Nothing changes inside them on the way.
 
 **3. What is dashboard legacy?** The seven-equal-rows rail and its badges as the primary navigation (ADR 0045 §"Command Center", kept by 0085); `PROJECT_SECTIONS` as the product's mental model; `home-status.tsx`, `agent-panel.tsx`, `intelligence-summary.tsx`, `live-intelligence-summary.tsx`, `reasoning-trail.tsx`, `validation-panel.tsx`, `understanding-progress.tsx` (dead or fixture-only); the `design-studies/legacy-*` fixtures; the "Command Center" vocabulary in `command-center-ui.test.ts` and `command-center-scenarios.ts`; `src/modules/projects/dashboard.ts` and `attention.ts`'s account-level ranking (still used by `/app`'s resolver — keep the function, retire the name).
 
-**4. What contradicts Nova-first?** (a) *"Nothing to type"* as a product claim — `first-run.ts:193`, `WORKFLOW_STEPS`, `nova-how-it-works.tsx` (built to end the hunt for the text box), `nova-ui.test.ts` "has no chat input anywhere", `e2e/nova-name.spec.ts` "nothing to write at her in". (b) *"No transcript"* — `nova-feed.tsx:14`, `nova-onboarding-thread.tsx:36`, `components/nova/nova-ui.test.ts` "keeps no transcript". (c) The rail asking "which of seven places" on every visit, which ADR 0085 named as the question Nova exists to remove. (d) Blocks that can only exist *inside* Home's thread, because their screens live in route directories. (e) `UX-CONTRACT.md:96` — *"leads with exactly one control"* — stays true for the ranking's answer but cannot describe a composer.
+**4. What contradicts Nova-first?** (a) *"Nothing to type"* as a product claim — `first-run.ts:193`, `WORKFLOW_STEPS`, `nova-how-it-works.tsx` (built to end the hunt for the text box), `nova-ui.test.ts` "has no chat input anywhere", `e2e/nova-name.spec.ts` "nothing to write at her in". (b) *"No transcript"* — `nova-feed.tsx:14`, `nova-onboarding-thread.tsx:36`, `components/nova/nova-ui.test.ts` "keeps no transcript". (c) The rail asking "which of seven places" on every visit, which ADR 0085 named as the question Nova exists to remove. (d) Blocks that can only exist *inside* Home's thread, because their screens live in route directories — and the blocks themselves live in `src/components`, which is the boundary problem the review found (§C.2). (e) `UX-CONTRACT.md:96` — *"leads with exactly one control"* — stays true for the ranking's answer but cannot describe a composer.
 
 **5. Which views become workspace artifacts directly?** In order of readiness: `AuditOverview` (+ `BusinessMap`, `AuditIntelligence`) over `BusinessBrainView` → **BusinessHealthArtifact**; `UnderstandingPanel` + `DeepScanSpotlight` over `UnderstandingView`/`DeepScanSpotlight` → **ProductArtifact**; `MoveCard` + `PlanCompleteCard` + `PlanDetailPanel` over `BusinessOpportunity`/`OpportunityActionState`/`ActionPlan` → **OpportunityArtifact / ActionPlanArtifact**; the four Agent stages over `PreparedChangeWorkspaceItem` → **AgentExecutionArtifact / PreparedChangeArtifact**; `PreviewPanel` + `ReviewPanel` over `PreviewCard`/`ReviewCard` → **PreviewArtifact**; `DiffView` over `PreparedDiff` → **DiffArtifact**; `ExperimentCard` over `ProjectImpactEntry` → **ExperimentArtifact**; `FounderInputCard` over `FounderInputRequest` → **FounderInputArtifact**; `ActivityFeed`, `ProvenancePanel`, `ProjectSettingsView`. Not artifacts: `DeepScanPanel` (a live browser session — stays a route), `ProductScanExperience` in its polling variants (its `showcase` variant proves a read-only artifact is one prop away).
 
 **6. Which Nova components carry into a real chat?** All of `src/components/nova/` unchanged: `NovaBubble` is the message; `speechBubbles` is the grouping; `NovaThreadHeader` is the header; `NovaPresence` is the avatar; `NovaArriving` is the typing beat; `NovaHappened` is the system-event row; `NovaRenderBlock` is the artifact card-in-thread; `NovaRoom` is the two-column room; `NovaMove` is the tool-call control. From the module: `NovaEntry`/`NovaHomeEntry` are message shapes minus author and time; `NOVA_ACTION_META` × `nova-actions.ts` is the tool schema and registry; `NovaVoicePayload` is a per-message context bundle; `deriveNovaFocus` is what Nova opens a thread with. From the surface: `nova-agent-live.tsx`'s tail-poll is the tool-output stream.
 
-**7. What persistence does the chat need?** Two tables, both *records of interaction*, never sources of state (§C.5): `nova_threads` (project-scoped, user-scoped, title, created/updated, status) and `nova_messages` (thread, sequence, author `founder | nova | system`, kind `text | action | artifact | event`, bounded text, `action_id`/`subject` for a catalogue action and its outcome, `artifact_kind` + `artifact_ref` pointing at a canonical row, `operation_run_id`, `created_at`). Plus a read marker per thread. Retention class per [ADR 0068](../../decisions/0068-retention-periods.md) to be decided (operational, 90 days, or derived-by-count); RLS full CRUD on own rows like `project_founder_resolutions`; no service-role write path except operation tails appending `system` messages. **No `nova_state`.** The ranking keeps deriving from canonical rows; a thread is what was said, not what is true.
+**7. What persistence does the chat need?** *[Corrected 2026-09-16 in review: "never sources of state" is right about canonical business state and wrong about conversational memory — see §C.6 and the thread model in §C.9, which this answer's shape otherwise survives.]* Two tables, both *records of interaction*, never sources of canonical business state: `nova_threads` (project-scoped, user-scoped, title, created/updated, status) and `nova_messages` (thread, sequence, author `founder | nova | system`, kind `text | action | artifact | event`, bounded text, `action_id`/`subject` for a catalogue action and its outcome, `artifact_kind` + `artifact_ref` pointing at a canonical row, `operation_run_id`, `created_at`). Plus a read marker per thread. Retention class per [ADR 0068](../../decisions/0068-retention-periods.md) to be decided (operational, 90 days, or derived-by-count); RLS full CRUD on own rows like `project_founder_resolutions`; no service-role write path except operation tails appending `system` messages. **No `nova_state`.** The ranking keeps deriving from canonical rows; a thread is what was said, not what is true.
 
 **8. Where is the UI too coupled to server/domain logic?** `health/content.tsx` (515 L loader-as-page, ~20 reads), `agent/page.tsx` (923 L), `plan/page.tsx` (392 L), `onboarding/[projectId]/page.tsx` (975 L state machine), `product/page.tsx` — each is the read composition *and* the screen. `PlanDetailPanel`, `ActionPlanWorkspace`, `PreviewPanel`, `DeepScanPanel` bind actions and polls inside presentation. `blocks/*` compose route components. `agent-run-actions.ts` builds URLs from a layout.
 
@@ -156,18 +172,20 @@ Boundary tests that a new directory must respect: `service-boundary.test.ts` (`R
 CURRENT                                          TARGET
 ────────────────────────────────────────         ────────────────────────────────────────
 src/app/app/projects/[projectId]/                src/app/app/projects/[projectId]/
-  page.tsx      ← imports ./nova/nova-home         page.tsx      ← composes @/features/nova
-  nova/*  (17 files, the surface)                  layout.tsx    ← ProjectShell → Nova + Workspace
-  agent/* (38 files, the surface + 3 actions)      health/ product/ plan/ agent/ experiments/
-  plan/*  (11 files)                                 page.tsx      ← thin: access + one feature view
-  health/content.tsx (loader + screen)           src/features/
-  27 loose panels + 22 action files                nova/        home/ thread/ composer/ threads/ voice/
-src/components/nova/blocks → @/app/**/agent       workspace/   host/ registry/ artifacts/
-src/modules/coding-agent → @/app/**/agent (types) agent/ plan/ health/ product/ experiments/ settings/
-src/modules/nova (ranking, catalogue, voice)     src/modules/  (unchanged)
-                                                 src/components/ (unchanged; blocks import @/features)
+  page.tsx      ← imports @/features/nova          page.tsx      ← composes @/features/nova
+  agent/* (38 files, surface + 3 actions)          layout.tsx    ← Nova column + Workspace column
+  plan/*  (11 files)                               health/ product/ plan/ agent/ experiments/
+  health/content.tsx (loader + screen)               page.tsx      ← access gate + one feature view
+  business-brain/* (2 files, 1,353 lines)          threads/[threadId]/page.tsx
+  27 loose panels + 22 action files              src/features/
+src/components/                                    nova/      home/ thread/ conversation/ actions/ threads/
+  nova/blocks/*  → composes @/app/**/agent         workspace/ host/ registry/
+  marketing/*    → composes @/app/**/agent         agent/ plan/ health/ product/ experiments/
+  product-scan/, founder-input/, change/           project-settings/ founder-input/ marketing/ shell/
+src/modules/coding-agent → @/app (2 type-only)   src/modules/  (unchanged, + nova/{threads,conversation,intent})
+src/app/palette.ts ← read by 4 components        src/components/ primitives only — no product surface
 Rail: Nova · Health · Product · Plan · Agent     Rail: Products · New chat · Threads · Settings
-      · Experiments · Settings   (7 equal rooms)  Project: Nova (thread + composer) │ Workspace (artifact)
+      · Experiments · Settings  (7 equal rooms)   Project: Nova (thread + composer) │ Workspace (artifact)
 ```
 
 ```
@@ -178,21 +196,33 @@ component                               UI (features/*)
                                           ↓ modules/*                  (domain, unchanged)
 ```
 
-### C.2 Layer rules
+### C.2 Layer rules, and what belongs in `src/components`
 
 | Layer | Owns | May import | May not import |
 | --- | --- | --- | --- |
 | `src/app` | Routing, layouts, `page.tsx`/`loading.tsx`/`error.tsx`, route handlers, metadata, the `@rail` slot. **Composition only.** | `@/features`, `@/components`, `@/modules`, `@/lib` | — |
-| `src/features` | Product surfaces and use cases: screens, feature-scoped client components, `commands.ts` (`"use server"`), `queries.ts` (composed reads), feature-local view models, artifact views. | `@/components`, `@/modules`, `@/lib`, other features' *public* files | `@/app` (transitional exceptions recorded in `src/lib/consistency/feature-boundaries.test.ts`, each with the slice that retires it) |
-| `src/components` | Presentation primitives with no product knowledge: `ui/`, `system/`, `layout/`, `nova/` (bubble, thread, presence…). | `@/components`, `@/lib`, types from `@/modules` | `@/features`, `@/app` (the ten `blocks/*` imports are transitional, retired by Slice 1) |
-| `src/modules` | Domain: stores, services, view builders, operations, providers. | `@/modules`, `@/lib` | `@/features`, `@/app` (two type-only crossings retired by Slice 1) |
-| `src/lib` | Cross-cutting utilities, Supabase clients, routing tables, consistency tests. | `@/lib`, `@/modules` types | `@/features`, `@/app` |
+| `src/features` | Product surfaces and use cases: screens, feature-scoped client components, `commands.ts` (`"use server"`), `queries.ts` (composed reads), feature-local view models. | `@/components`, `@/modules`, `@/lib`, other features | `@/app` (transitional entries only, each naming the slice that retires it) |
+| `src/components` | Presentation primitives with no product knowledge. | `@/components`, `@/lib`, **types and label tables** from `@/modules` | `@/features` — **never, under any entry**; `@/app` |
+| `src/modules` | Domain: stores, services, view builders, operations, providers. | `@/modules`, `@/lib` | `@/features` — never; `@/app` (two type-only entries, retired by Slice 2) |
+| `src/lib` | Cross-cutting utilities, Supabase clients, routing tables, consistency tests. | `@/lib`, `@/modules` types | everything above, unconditionally |
 
-Import direction is downward only. The test that holds it is the deliverable of Slice 0; the allowlist inside it is the debt register, and the test fails when an entry stops being true — the same shape as `REVIEWED_SITES`.
+**`components → features` and `modules → features` can never be registered.** The register exists for crossings that are being retired on a named slice; an import into a feature is not a crossing to retire, it is the layering inverted. `feature-boundaries.test.ts` asserts it unconditionally and refuses any register entry that targets `features/`.
 
-Not a rule: a feature per module. Features are cut by **what a founder does** (talk to Nova, look at an artifact, review a change), modules by **what is true** (an audit, a plan, a merge). One feature reads several modules; one module serves several features.
+Which means the question is not *may a component import a feature* but **what is a component**. Every file under `src/components` today, classified:
 
-### C.3 Directory map (target, end of Slice 7)
+| Class | What it is | Files | Where it belongs |
+| --- | --- | --- | --- |
+| **Presentation primitive** | Renders a shape. No product vocabulary, no domain import. | `ui/*` (41), `brand/*` (4), `consent/*` (5), `analytics/*` (1), `layout/{app-frame,atmosphere,auth-shell,settings-column}`, `nova/{nova-bubble,nova-thread,nova-speech,nova-presence,nova-arriving,nova-dissolving,nova-room,nova-clock,nova-motion,nova-opening,nova-opening-beats,nova-move}` | **stays** |
+| **Domain-shaped primitive** | Renders one module's view type or label table. Names no surface, composes no screen. | `system/*` (13 — `FindingCard`, `CostDisclosure`, `EvidenceDrawer`, `SourceCoverage`, `ActionBlock`, `OperationProgress`, `Wallet`, `status-vocabulary`…), `nova/{nova-feed,nova-message,nova-choice}` | **stays** — `components → modules` is legal and is what keeps Vibe's semantic components from becoming generic ones (DESIGN.md) |
+| **Feature composition** | Mounts a product surface inside another surface's frame. | `nova/blocks/*` (9 files, 592 lines) | `features/nova/thread/blocks/` — **Slice 1** |
+| **Domain view** | The whole view of one canonical object, with its action injected rather than bound. | `founder-input/founder-input-card.tsx` (419), `change/diff-view.tsx` (207), `product-scan/product-scan-experience.tsx` (1,382) | `features/founder-input/`, `features/agent/`, `features/product/` — **Slice 1** |
+| **Product surface** | A screen, or the navigation of one. | `marketing/*` (20), `layout/{project-shell,project-nav,project-switcher,project-breadcrumb-trail,mobile-tab-bar,account-shell,account-nav,account-card,mobile-account,app-shell,marketing-header,marketing-shell,record-visit,palette-switch}` (14) | `features/marketing/` — **Slice 1**; `features/shell/` — **Slice 7**, with the navigation change that rewrites them anyway |
+
+Two consequences worth stating plainly. **`src/components` is not primitive-only until Slice 7**, because the shell's fourteen files are rewritten by the navigation change and moving them twice would be churn — they cross no boundary today, so they wait. And **the mechanical guarantee arrives in Slice 1**: after it, no file under `src/components` imports `@/app`, none composes a product surface, and none ever needs `@/features`.
+
+`src/app/palette.ts` moves to `src/lib/palette.ts` in the same slice. It imports one thing (`@/lib/env/app-url`), four components read it, and it is the only reason four layout primitives reach into `src/app` at all.
+
+### C.3 Directory map (target)
 
 ```
 src/
@@ -200,132 +230,188 @@ src/
     (marketing)…  auth/  login/  signup/  …                      unchanged
     api/                                                         unchanged
     app/
-      layout.tsx  page.tsx  @rail/                               unchanged mechanism; rail contents change in Slice 6
-      (account)/settings/**                                      unchanged
-      connect/  onboarding/  internal/                           unchanged
+      layout.tsx  page.tsx  @rail/                               unchanged mechanism; rail contents change in Slice 7
+      (account)/settings/**  connect/  onboarding/  internal/    unchanged
       projects/[projectId]/
-        layout.tsx          ProjectShell: Nova column + Workspace column (Slice 3)
-        page.tsx            Nova + default artifact (the ranking's block)
-        loading.tsx error.tsx
-        threads/[threadId]/page.tsx                              Slice 4 — a thread is an address
-        health/  product/  product/deep-scan/  plan/  agent/  experiments/  settings/  settings/activity/
+        layout.tsx          ProjectShell: Nova column + Workspace column   (Slice 4)
+        page.tsx            Nova + the artifact the ranking opens
+        threads/[threadId]/page.tsx                              (Slice 5)
+        health/ product/ product/deep-scan/ plan/ agent/ experiments/ settings/ settings/activity/
                             each page.tsx = access gate + one feature view; URLs unchanged
   features/
     nova/
-      README.md
-      home/          nova-home.tsx, nova-home-data.ts (queries), nova-home-actions.ts (commands), nova-dispatch.ts,
-                     nova-focus-thread.tsx, nova-rail.tsx, nova-control.tsx, nova-header-live.tsx,
-                     nova-agent-live.tsx, nova-agent-stage.tsx, nova-agent-events-action.ts, nova-ready-stage.tsx,
-                     nova-opening-screen.tsx, nova-rise.tsx, footnote.ts                     ← Slice 0 (moved)
-      bindings/      nova-actions.ts (catalogue id → command)                              ← Slice 0 (moved)
-      voice/         nova-audit-voice.tsx, nova-move-voice.tsx                              ← Slice 0 (moved)
-      threads/       thread-list.tsx, thread read model, new-thread command                 ← Slice 4
-      messages/      message rows: founder / nova / system / action / artifact              ← Slice 4
-      composer/      the bounded input, intent resolution, refusal copy                     ← Slice 5
-      tools/         catalogue dispatch with a recorded outcome (extends nova-dispatch)      ← Slice 5
+      home/          the ranking mounted as a thread                        (exists)
+      bindings/      catalogue id → Server Action or href                   (exists)
+      voice/         Nova's sentence on two pages                           (exists)
+      thread/
+        blocks/      BlockKind → the owning feature's view, framed          (Slice 1)
+        thread-view  the turn list, once threads exist                      (Slice 5)
+      threads/       the thread list and its commands                       (Slice 5)
+      conversation/  composer, turn rendering, the generation command       (Slice 6)
+      actions/       proposal → existing control → existing command         (Slice 6)
     workspace/
-      README.md
-      host/          workspace-host.tsx (desktop pane / phone sheet), empty state, artifact chrome   ← Slice 3
-      registry/      artifact-kinds.ts: kind → { read, view, href }  (total record, tested)          ← Slice 3
-      artifacts/     business-health.tsx, product.tsx, opportunity.tsx, action-plan.tsx,
-                     prepared-change.tsx, preview.tsx, diff.tsx, experiment.tsx, founder-input.tsx    ← Slices 3, 6, 7
-    agent/           the 38 files from agent/ minus route files; commands.ts (3 actions)      ← Slice 1
-    plan/            the plan/ surface; commands.ts                                         ← Slice 1
-    health/          content.tsx → queries.ts + business-health view; run-audit, needs-user  ← Slice 6
-    product/         product page views, understanding, deep-scan spotlight                  ← Slice 6
-    experiments/     experiment card + query                                                 ← Slice 6
-    project-settings/ settings view + forms + actions                                        ← Slice 6
-    onboarding/      (later, unchanged in this plan)
-  components/        unchanged; nova/blocks/* import @/features/agent and @/features/plan   ← Slice 1
-  modules/           unchanged
+      host/          the pane on desktop, the sheet below `lg`              (Slice 4)
+      registry/      ArtifactKind → { read, view, href }  (total, tested)   (Slice 4)
+    agent/           the 35 files from agent/, the gate panels, diff-view; commands.ts   (Slices 1, 2)
+    plan/            the plan surface; commands.ts                          (Slices 1, 2)
+    health/          business-brain + content.tsx split into queries + view (Slice 2)
+    product/         product views, understanding, deep-scan, scan experience (Slices 1, 2)
+    founder-input/   the question and its answer, shared by agent and plan  (Slice 1)
+    marketing/       the landing page and the legal pages                   (Slice 1)
+    experiments/  project-settings/  onboarding/                            (Slice 2)
+    shell/           the project and account navigation                     (Slice 7)
+  components/        primitives only (see C.2)
+  modules/
+    nova/
+      focus  read  actions  feed  home-view  blocks  briefing  voice        (unchanged)
+      threads/       thread and message store, schema, read model           (Slice 5)
+      conversation/  payload, prompt, checks, service — `voice/`'s shape    (Slice 6)
+      intent/        text → one catalogue id, or nothing                    (Slice 6)
+    … every other module unchanged
   lib/
-    routing/         retired-addresses.ts (unchanged), project-urls.ts (one owner)           ← Slice 2
-    consistency/     feature-boundaries.test.ts                                              ← Slice 0
+    palette.ts       moved from src/app                                     (Slice 1)
+    routing/         retired-addresses.ts (unchanged), project-urls.ts      (Slice 3)
+    consistency/     feature-boundaries.test.ts                             (exists)
 ```
+
+A feature is cut by **what a founder does**, a module by **what is true**. One feature reads several modules; one module serves several features. `features → features` is legal — the thread's blocks mount the Agent's and the Plan's views, which is the whole point of the correction.
 
 ### C.4 Keep / Move / Refactor / Replace / New
 
-**Keep** (unchanged, not even a path):
-- Every `src/modules/*` engine, store, service, operation, provider, view builder; every migration; every RLS policy; the service-role allowlist; the agent gateway; the sandbox runtime.
-- `src/modules/nova/` in full — the chat ranks, speaks and prices with it.
-- `src/components/nova/`, `src/components/system/`, `src/components/ui/`, `src/components/layout/app-frame.tsx` and the `@rail` mechanism.
-- Auth, connect, onboarding and settings routes; `/app` resolver; retired-address redirects; API routes; middleware.
-- All URL contracts (§C.7). The e2e fixture route and its scenario data (their imports move).
+**Keep** — every `src/modules/*` engine, store, service, operation, provider and view builder; every migration and RLS policy; the service-role allowlist; the agent gateway and sandbox runtime; `src/modules/nova/` in full; the primitives and domain-shaped primitives of §C.2; auth, connect, onboarding and settings routes; the `/app` resolver; the retired-address redirects; the API routes and middleware; every URL contract in §C.7.
 
-**Move** (a better layer, same code):
-- `projects/[projectId]/nova/*` → `features/nova/home/`; `nova-actions.ts` → `features/nova/bindings/`; `nova-audit-voice.tsx`, `nova-move-voice.tsx` → `features/nova/voice/`. *(Slice 0)*
-- `agent/*` (35 non-route files) → `features/agent/`; `plan/*` (9) → `features/plan/`; the seven gate panels, `change-diff-section`, `change-origin`, `change-rationale`, `prepare-change-panel` → `features/agent/` and `features/plan/`. *(Slice 1)*
-- The 22 root `*-action.ts` files → `features/<owner>/commands.ts` (one file per feature, same exports). *(Slice 2)*
-- `health/content.tsx`, `business-brain/*`, `audit-*`, `run-audit-button`, `needs-user-panel`, `provenance-panel` → `features/health/`; `product/*`, `understanding-*`, `deep-scan-*`, `scan-handoff`, `live-browser-canvas`, `scan-glyphs` → `features/product/`; `experiment-card` → `features/experiments/`; `settings/*`, `founder-intent-form`, `production-url-form`, `disconnect-button`, `delete-project-button` → `features/project-settings/`; `activity-feed` → `features/project-settings/`. *(Slice 6)*
+**Move** — in slice order: the nine blocks, the three domain views, the twenty marketing files and `palette.ts` out of `src/components` and `src/app` (Slice 1); the Agent, Plan, Business Health, product, experiments and project-settings surfaces out of the route tree (Slice 2); the twenty-two root action files into each feature's `commands.ts` (Slice 3); the shell's fourteen files into `features/shell/` (Slice 7).
 
-**Refactor** (responsibility changes):
-- `PROJECT_SECTIONS` stops being the navigation and becomes the **artifact-kind → address** table the workspace host and the retired-URL routes read from. `projectSectionHref` keeps its signature. *(Slices 3, 6)*
-- The three URL owners collapse into `src/lib/routing/project-urls.ts`; `attention.ts`, `nova-home-actions.ts` and `agent-run-actions.ts` import it. *(Slice 2)*
-- `health/content.tsx`, `agent/page.tsx`, `plan/page.tsx`, `product/page.tsx`: the read composition becomes `queries.ts`; the route becomes access gate + view. *(Slices 1, 6)*
-- `nova-home.tsx`'s block: on desktop the block opens as the workspace artifact and the thread keeps a `NovaRenderBlock` *card* pointing at it; on a phone the block stays inline (ADR 0108's two shells). *(Slice 3)*
-- `deriveNovaFocus` gains no state. A thread *opens* with the ranking's primary as Nova's first message; every later Nova message is either a catalogue action's recorded outcome, a system event, or a bounded reply. *(Slices 4, 5)*
-- `blocks/*` import `@/features/agent`, `@/features/plan`; `coding-agent` type crossings move the two types into `src/modules/coding-agent/` where their data is. *(Slice 1)*
-- `nova-how-it-works.tsx`, `WORKFLOW_STEPS` ("you don't need to write prompts") and `first-run.ts:193` are rewritten when the composer lands, not before — a claim that stays true until the slice that makes it false. *(Slice 5)*
+**Refactor** — `PROJECT_SECTIONS` stops being the navigation and stays the address table the workspace host and the retired routes read (Slices 4, 7). The three URL owners collapse into `src/lib/routing/project-urls.ts` (Slice 3). `health/content.tsx`, `agent/page.tsx`, `plan/page.tsx` and `product/page.tsx` split into `queries.ts` plus a view (Slice 2). The Agent stages, the gate panels and `FounderInputCard` gain nothing — they already carry the `presentation` prop the host needs (§C.6). `blocks/*` import `@/features/*` instead of `@/app/**` (Slices 1, 2). `nova-how-it-works.tsx`, `WORKFLOW_STEPS` and `first-run.ts:193` — every sentence telling a founder there is nothing to type — are rewritten by the slice that gives them something to type (Slice 6), not before.
 
-**Replace** (should disappear):
-- The seven-row project rail as primary navigation → app sidebar (Products · New chat · Threads · Settings) and, inside a project, Nova + Workspace. *(Slice 6)*
-- `home-status.tsx`, `agent-panel.tsx`, `intelligence-summary.tsx`, `live-intelligence-summary.tsx`, `reasoning-trail.tsx`, `validation-panel.tsx`, `understanding-progress.tsx`, `design-studies/legacy-*` → deleted with their fixture scenarios and the negative assertions that guard them. *(Slice 7)*
-- The "Command Center" vocabulary in tests and scenario names. *(Slice 7)*
-- The phone tab bar's four sections → Nova · Workspace · Threads · Account. *(Slice 6)*
+**Replace** — the seven-row project rail as primary navigation (Slice 7); the seven dead or fixture-only files and the `design-studies/legacy-*` fixtures (Slice 8); the "Command Center" vocabulary in tests and scenario names (Slice 8); the phone's four section tabs (Slice 7).
 
-**New** (genuinely new systems, each behind ADR 0109's conditions):
-- `src/features/workspace/` — the artifact host and a **total** registry `ArtifactKind → { read, view, href }`. Not a universal engine: a `Record` over a closed union, checked by the compiler and a test, each entry pointing at an existing read model and an existing view. *(Slice 3)*
-- `nova_threads` + `nova_messages` (§C.5) with RLS, retention class and a read model. *(Slice 4)*
-- The composer and the **bounded intent resolver**: free text → one of the catalogue's ids (or a query kind, or "cannot") → the existing binding. *(Slice 5)*
-- `src/lib/consistency/feature-boundaries.test.ts`. *(Slice 0)*
+**New** — `features/workspace/{host,registry}` (Slice 4); `nova_threads` and `nova_messages` with their store and read model (Slice 5); `modules/nova/conversation/` and `modules/nova/intent/`, the composer and the proposal control (Slice 6); `src/lib/consistency/feature-boundaries.test.ts` (shipped, Slice 0).
 
-### C.5 The chat model — and the conditions it lives under
+### C.5 Nova: two lanes
 
-The Nova audit refused a chat for reasons that are still right: no system in the product reads free text into a decision; a transcript must never become the source of a position; there is exactly one agent loop and it lives in a sandbox with no credential. ADR 0109 does not overrule those; it states the conditions under which a thread and a composer satisfy them.
+The closed catalogue answers *what to do*. A founder also asks *why is conversion the blocker*, *how do you read our pricing*, *what changed since last week*, *why Move 1 before Move 2*, *explain the audit more simply*, *what are our two options*. None of those is an action, none can be pressed into eighteen ids, and refusing them is refusing the product.
+
+So Nova has two capabilities with one boundary between them:
 
 ```
-Thread        { id, projectId, userId, title, status: open|archived, createdAt, updatedAt, lastReadSequence }
-Message       { id, threadId, sequence, author: founder|nova|system, kind, createdAt, ... }
-  kind = text      { text ≤ 1200 }                                       founder's words, or Nova's bounded reply
-       | action    { actionId: NovaActionId, subject, outcome }           Nova ran a catalogue action; outcome is Vibe-observed
-       | artifact  { artifactKind, artifactRef }                          "here is the thing" — a pointer, never a copy
-       | event     { operationRunId | auditEventId }                      a run started/settled/failed — from the tail, not the model
+                         NOVA
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+       CONVERSATION                ACTION
+       reasons, explains           does
+              │                       │
+   generateStructured, no tools   typed intent → catalogue id
+   deterministic context pack     → existing binding
+   validated before display       → existing authorization
+   template floor underneath      → existing confirmation and price
+              │                   → existing execution path
+              │                       │
+        text + an artifact        a control the founder presses
+              └───────────┬───────────┘
+                          │
+                    DOMAIN ENGINE
+                 (canonical, unchanged)
 ```
 
-Conditions (the ADR's, restated for the plan):
+**The conversation lane may reason freely and may not act.** It reads canonical project context — identity, product understanding, repository and live intelligence, Deep Scan, the audit, opportunities, plans, execution and change state, experiments, measurements, and the thread's own recent turns — and returns prose plus, optionally, a pointer at an artifact and a proposal. It writes nothing but its own message.
 
-1. **A message is a record, never an input to a ranking.** `deriveNovaFocus` and every position stay derived from canonical rows. A thread is what was said. Deleting every thread changes no screen except the thread list.
-2. **Free text is bounded and closed.** ≤1200 characters, the founder-input secret guard, never interpolated into a system prompt (rule 42), never handed to a tool-bearing model (rule 41). The composer resolves text to a **closed intent set**: the 18 catalogue ids, a small set of artifact-open intents ("show me the change" → `PreparedChangeArtifact`), and *cannot*. Resolution is deterministic first (labels, subjects, artifact names); if a model is used to classify, it returns one enum value from a fenced user message, is metered under a named operation with a price that says so (rule 94), and its answer is looked up — never executed.
-3. **Every action is the existing binding.** A resolved intent calls the same Server Action the button calls, with the same preflight, the same price disclosure, the same confirmation for consequential actions. The thread records the outcome Vibe observed (`{ ok, reused }`, an operation id), never the model's account of it. Nothing in a thread authorizes a branch write; approval and merge stay bound to a commit and a person (rules 67–74).
-4. **Nova's replies come from the tables first.** The sentence for a moment is `novaCandidateMessage`; the reply to an unresolvable request is a template; a generated sentence goes through the voice path with its five conditions (ADR 0086) — claimed once per identity, validated by `checks.ts`, template underneath. There is no per-keystroke and no per-message unbounded generation.
-5. **No second agent loop.** The composer never gets tools. The coding agent stays the only agent, in its VM, reached through the gateway.
-6. **Threads are project-scoped and owner-scoped.** RLS as `project_founder_resolutions`; `system` messages appended from operation tails through `src/modules/operations/` (the one place the service-role client belongs); retention per ADR 0068's classes.
+**The action lane is unchanged from what ships today.** A proposal is a catalogue id and a subject; it renders the control that id already has, with the label, the price kind, the consequence flag and the confirmation `NOVA_ACTION_META` already carries. The founder presses it. `audit-is-a-choice.test.ts` already holds both halves of this — *a priced operation is always a press*, and *no Nova module starts an operation itself* — and the conversation is not an exemption from either.
 
-### C.6 Workspace artifacts
+**One sentence joins them:** generated text is never the last thing before a consequential effect; a press always is. A read-only navigation (open the diff, show the plan) has no consequence and may follow a resolved intent directly.
 
-Not a universal artifact engine. A closed union and a total record:
+**How the truth rules stay mechanical.** The model's output is structured, not free: one message string, an optional `{ kind, ref }` from a closed artifact union, an optional catalogue id from the closed catalogue. Vibe then validates before a founder sees any of it — `checkNovaMessage` already refuses a numeral that is not in the `allowedNumericFacts` list Vibe supplied, refuses `ALWAYS_BANNED_CLAIMS`, and the service already has five ways to fall back to a deterministic template. An artifact reference that does not resolve to a row the founder owns is dropped; an action id that is not in `NOVA_ACTION_META` is dropped. A discarded field degrades the reply; it never becomes an unverifiable claim on screen (rule 45's shape, applied to a sentence instead of an evidence id).
 
-| Kind | Reads (exists) | View (exists) | Address (exists) |
+**What the model never gets:** a tool, a URL, a database handle, the service-role client, a credential, a branch, or the choice of what to read. Context assembly is deterministic Vibe code against a byte budget; the model receives a pack and returns a shape. Removing capability, not prompt wording, is what bounds injection (rule 41), and customer-derived content in the pack stays fenced and untrusted-labelled (rule 42), as does the founder's own message.
+
+**Replies from the tables are a preference, not a boundary.** Where a moment already has a written sentence — the twenty-one in `feed.ts`, the eleven setup states, the two voice slots — that sentence is used, because it is free, tested and consistent. The generative path exists for the questions those tables cannot answer, and a question is not pushed into a template to avoid a model call.
+
+**What a generated reply may never do:** claim a cause the evidence does not carry, state a figure Vibe did not measure, call anything safe, correct, deployed or live, say that something was done when nothing ran, or present a plan step as executed. Those are truth rules, not style, and they are not revisable ([ADR 0098](../../decisions/0098-design-rules-are-revisable-truth-rules-are-not.md)); `feed.test.ts` and `checks.ts` already sweep the vocabulary and both extend to the new path.
+
+### C.6 Canonical state and conversational state
+
+**Canonical business state is never conversational, and never derived from chat text**: audit scores and findings, opportunities, action plans, execution state, prepared changes, approvals, validation, merge state, experiments, business measurements, credits and pricing, repository and product intelligence. Every one of those has a store, an identity and a write path today, and the conversation reads them and writes none of them.
+
+**The transcript is conversational memory.** It is what lets *"the second one"*, *"that option"*, *"like you just did"* and *"then let's do that"* resolve to something, and a Nova that cannot resolve them is a search box with a personality. So the thread's recent turns are part of the context pack, bounded like everything else in it.
+
+The rule, in two sentences:
+
+> Deleting a thread must not change canonical business state.
+> Deleting a thread may remove conversational memory, and therefore what Nova can infer from earlier dialogue.
+
+And the seam between them: **a preference expressed in conversation becomes canonical only by passing through a canonical write that already exists** — a founder input resolution, a product correction, a founder intent, an attestation, an approval. *"Variante B gefällt mir besser"* is memory. *"Dann machen wir das"* is a proposal, a control and a press, and what it writes is written by the command that already owns that write.
+
+### C.7 Workspace artifacts — one view, two frames
+
+Not a universal engine, and not a second copy of every screen. The repository already models this: eight components carry a `presentation` prop today (`"section" | "workspace"` on the five gate panels, `"panel" | "block"` on `NeedsUserPanel`, `"card" | "workspace" | "block"` on `FounderInputCard`, `"page" | "block"` on the Agent's validate stage). The artifact view **is** the feature's view, mounted with a frame.
+
+So `features/workspace/` holds two things and no views: the **host** (the pane beside the thread on desktop, the bottom sheet below `lg`) and a **registry** — one total record over a closed union:
+
+| Kind | Reads (exists) | View (exists, after Slice 2 in its feature) | Address (exists) |
 | --- | --- | --- | --- |
 | `business_health` | `getProjectAuditById` → `buildBusinessBrainView` | `AuditOverview` | `/health`, `#business-audit` |
 | `product` | `getLatestProfile` → `buildUnderstandingView`, `buildDeepScanSpotlight` | `UnderstandingPanel`, `DeepScanSpotlight` | `/product` |
 | `opportunity` | `getLatestOpportunities` + `buildOpportunityActionState` | `MoveCard` | `/plan?plan=<id>#planned-work` |
 | `action_plan` | `getLatestActionPlan` + `readActionPlanReadinessInputs` | `PlanDetailPanel`, `PlanCompleteCard` | `/plan?plan=<id>` |
 | `agent_execution` | `readAgentWorkspace`, `listExecutionEvents` | `AgentBuildStage` + `AgentCore`, `NovaAgentLive` | `/agent?plan=<id>` |
-| `prepared_change` | `getPreparedChangeWorkspaceItem` | the four `*-stage` components by `agentStageForChange` | `/agent?change=<id>#prepared-change-<id>` |
+| `prepared_change` | `getPreparedChangeWorkspaceItem` | the four `*-stage` components, by `agentStageForChange` | `/agent?change=<id>#prepared-change-<id>` |
 | `preview` | `buildPreviewCard`, `buildReviewCard` | `PreviewPanel`, `ReviewPanel` | same |
 | `diff` | `getPreparedDiffAction` | `DiffView` | same |
 | `experiment` | `getProjectImpact` | `ExperimentCard` | `/experiments` |
-| `founder_input` | `getFounderInputRequest` | `FounderInputCard` (via `AskBlock`) | `/agent` or `/plan` |
+| `founder_input` | `getFounderInputRequest` | `FounderInputCard` | `/agent` or `/plan` |
 
-The host does two things: resolve `{ kind, ref }` → one read → one view, and give the thing a frame (title, "open full page" link to its existing address, close). On desktop it is the right column of `NovaRoom`; below `lg` it is the bottom `Sheet` ADR 0108 already fixed. `BLOCK_FOR_MOMENT` keeps deciding which artifact a moment opens — the registry maps a `BlockKind` to an `ArtifactKind` in one more total record.
+`BLOCK_FOR_MOMENT` keeps deciding what a moment shows; one more total record maps a `BlockKind` to an `ArtifactKind`. The host resolves `{ kind, ref }` to one read and one view and gives it a frame with the artifact's own address on it, so "open it properly" is always one click and every deep link still works.
 
-### C.7 URL contracts — every address and what happens to it
+**Nova explains, the workspace shows.** A reply that would be a wall of text is a short reply and an artifact; the message field carries a paragraph bound like the voice slots already do, and what it would have listed is the thing beside it. The workspace is not a second navigation — it shows the object under discussion, and its full-page address is how a founder leaves the conversation for it.
+
+### C.8 What must not leak into the conversation layer
+
+Every one of these is an existing rule, restated where the new lane could erode it:
+
+- **No service-role client** anywhere in `features/nova/conversation/` or `modules/nova/conversation/`. The conversation reads under the founder's own session and RLS; `service-boundary.test.ts` is the guard and gains no entry (rule 53).
+- **No credential in model context** — not the Anthropic key, not GitHub, Supabase, Stripe or a sandbox token (rules 8, 62, 79).
+- **No tool, no web access, no URL fetch, no code execution, no database handle** for the conversation model (rule 41). The one agent that has tools stays in its VM behind the gateway (rules 75–82).
+- **No branch write, no merge, no approval** through generated text. An approval binds to an immutable artifact identity and a person; a sentence can never be that (rules 67–74).
+- **No hidden paid operation and no implicit spend.** Every model call is counted before and recorded after (rule 47), and a priced *domain* operation is still a press with its price shown first (rule 60).
+- **No user or customer content in a system prompt.** The founder's message and every evidence excerpt are fenced, untrusted-labelled user content (rules 25, 36, 42).
+- **No model reasoning requested, stored or displayed** (rule 43). `NovaThinking` shows a status line, never a thought.
+- **No raw source or page content persisted** in a thread — a message may name a file path as evidence, never carry a file (rules 26, 37).
+- **No generation on a read or a render.** A thread renders from rows; only a founder-initiated command generates. This is stronger than [ADR 0086](../../decisions/0086-nova-presentation-is-claimed-stored-and-attempted-once.md)'s condition 5 and is what keeps the cost of looking at a screen knowable.
+
+### C.9 The thread model
+
+One table for threads, one for messages, a `kind` discriminator and per-kind CHECK constraints — the idiom `nova_voice_messages` already uses, where three CHECKs enforce that a resolution is whole, that a voice row carries its message and that a fallback row carries none. No table per message kind, and no JSON blob standing in for a schema.
+
+```
+nova_threads
+  id · project_id → projects · user_id · title (≤120, Vibe-composed or the founder's first line)
+  status: open | archived · created_at · updated_at · last_message_at · last_read_sequence
+
+nova_messages
+  id · thread_id → nova_threads · project_id · user_id · sequence (monotonic per thread, unique)
+  author: founder | nova | system
+  kind:   text | action_proposal | action_result | artifact | event
+  body            text ≤1200, and only for `text`
+  action_id       a NovaActionId, and only for proposal/result
+  subject_kind, subject_id      the catalogue's NovaActionSubject, for proposal/result
+  artifact_kind, artifact_ref   a closed union + a canonical row id, for artifact
+  operation_run_id → operation_runs, for result/event
+  outcome         the observed result of a pressed proposal, never the model's account of it
+  context_version, context_hash   what the turn was answered from (the shape, never the content)
+  created_at
+```
+
+`confirmation` is not a kind: whether a proposal needs one is `NOVA_ACTION_META.requiresConfirmation`, and what happened to it is the `action_result`. A turn is therefore a real turn — founder text, Nova text, an artifact beside it, a proposal, and the result when it is pressed — rather than a list of system events with a chat theme.
+
+RLS as `project_founder_resolutions`: the owner may read and insert their own rows; `system` messages are appended from operation tails through `src/modules/operations/`, which is the one module that may hold the service-role client. Retention under [ADR 0068](../../decisions/0068-retention-periods.md)'s frame — which class is §E.1.
+
+### C.10 URL contracts — every address and what happens to it
 
 | Address today | Target | Guaranteed by |
 | --- | --- | --- |
 | `/app` | unchanged resolver | `loading-coverage.test.ts`, ADR 0104 |
-| `/app/projects/:id` | Nova + default artifact (unchanged address) | `workspace-routes.test.ts` |
+| `/app/projects/:id` | Nova + the artifact the ranking opens (unchanged address) | `workspace-routes.test.ts` |
 | `/app/projects/:id/health`, `#business-audit` | renders `BusinessHealthArtifact` full-page; anchor kept | `project-sections.test.ts`, `opportunities/view.ts` |
 | `/app/projects/:id/product`, `#product-scan` | `ProductArtifact` full-page | same |
 | `/app/projects/:id/product/deep-scan` | unchanged route (only `maxDuration` route) | `workspace-routes.test.ts:288` |
@@ -333,117 +419,122 @@ The host does two things: resolve `{ kind, ref }` → one read → one view, and
 | `/app/projects/:id/agent`, `?plan=`, `?change=`, `#prepared-change-<id>` | `PreparedChangeArtifact` full-page; params unchanged | same |
 | `/app/projects/:id/experiments` | `ExperimentArtifact` list full-page | — |
 | `/app/projects/:id/settings`, `#founder-intent`, `/settings/activity` | unchanged | — |
-| `/app/projects/:id/threads/:threadId` | **new** (Slice 4) | — |
+| `/app/projects/:id/threads/:threadId` | **new** (Slice 5) | — |
 | `/app/projects/:id/{score,prepared,understanding}` | 307 as today | `retired-addresses.ts` |
 | `/app/{products,repositories,billing,profile}[/…]` | 307 as today | same |
 | `/app/settings/**`, `#credit-packs`, `#plans` | unchanged | `rail-switch.test.ts` |
 | `/app/onboarding[/…]`, `/app/connect/github{,/callback,/accounts,/repositories}` | unchanged | `first-journey.test.ts` |
+| `/`, `/privacy`, `/terms` | unchanged addresses; their components move to `features/marketing/` | `landing-contract.test.ts`, `sitemap.test.ts` |
 | `/auth/callback`, `/auth/confirm`, `?next=`, `?error=` | unchanged | `auth/*.test.ts` |
 | `/api/**`, `src/proxy.ts` matcher | unchanged | — |
 | `/e2e/[scenario]` | unchanged (imports move) | `fixture-guard.test.ts` |
-| `revalidatePath` targets | unchanged strings, one owner | Slice 2 adds a test; `/app/profile` corrected |
+| `revalidatePath` targets | unchanged strings, one owner | Slice 3 adds a test; `/app/profile` corrected |
 
-A section page whose surface became an artifact still renders that artifact at its own URL, full page, with the same heading id and `scroll-mt`. Deep links, recovery fragments and bookmarks resolve exactly as before. The rail row disappears (Slice 6); the address does not.
+A section page whose surface became an artifact still renders that artifact at its own URL, full page, with the same heading id and `scroll-mt`. Deep links, recovery fragments and bookmarks resolve exactly as before. The rail row disappears (Slice 7); the address does not.
 
 ---
 
 ## D. Phase 3 — Migration slices
 
-Derived from the dependency graph in §B.4, not from the brief's example list. Each slice is independently green, changes no domain module, and can be reverted by deleting its files. The order is forced: artifacts need the Agent and Plan surfaces out of the route tree (1) before they can be hosted (3); the shell change (6) needs artifacts (3) and threads (4) to have something to navigate to; legacy removal (7) is last because it is the only slice that removes an address from the rail.
+Reordered by the review (see the correction above). The order is forced by the dependency graph: `src/components` must stop composing product surfaces **before** those surfaces move into `src/features` beside it, or the move itself inverts the layering. Everything after that is unchanged in substance and renumbered by one, except that the conversation slice grew a lane.
 
-### Slice 0 — Nova leaves the route layer *(this sprint)*
+Each slice is independently green, changes no domain engine, and reverts by deleting its files.
 
-- **Goal.** Establish `src/features/` with the Nova surface as its first tenant, make `page.tsx` a composition, and land the boundary test that turns the layering into a build failure rather than a convention.
-- **Affected.** `src/app/app/projects/[projectId]/page.tsx` (imports), `onboarding/[projectId]/page.tsx` (imports), `health/content.tsx`, `plan/page.tsx` (voice imports), `src/app/e2e/[scenario]/page.tsx` and four `design-studies/*` (imports), ten path-pinned tests (§B.6), `src/modules/nova/README.md` and `src/modules/nova/actions.ts` docblock (they name the old path and say every action lives under `src/app/`).
-- **New.** `src/features/nova/{home,bindings,voice}/` (moved files), `src/features/nova/README.md`, `src/features/README.md`, `src/lib/consistency/feature-boundaries.test.ts`, CLAUDE.md rule 86.
+### Slice 0 — Nova leaves the route layer ✅ *shipped ([Sprint 0222](../../sprints/0222-nova-leaves-the-route-layer.md))*
+
+`src/features/nova/{home,bindings,voice}`, the project index as a composition, `feature-boundaries.test.ts` with its register. 542 files / 9,559 tests green; no address and no rendered output changed.
+
+### Slice 1 — `src/components` stops knowing the product
+
+- **Goal.** Make the boundary structurally true rather than registered: after this slice no file under `src/components` imports `@/app`, none composes a product surface, and none can ever need `@/features`.
+- **Affected.** Moves, with no change inside the files beyond imports:
+  - `components/nova/blocks/*` (9 files, 592 L) → `features/nova/thread/blocks/`
+  - `components/product-scan/product-scan-experience.tsx` (1,382 L) → `features/product/`
+  - `components/founder-input/founder-input-card.tsx` (419 L) → `features/founder-input/`
+  - `components/change/diff-view.tsx` (207 L) → `features/agent/`
+  - `components/marketing/*` (20 files) → `features/marketing/`
+  - `src/app/palette.ts` → `src/lib/palette.ts`
+  Importers to rewrite: `features/nova/home/{nova-home,nova-agent-live}.tsx`, `app/app/projects/[projectId]/{agent/page,agent/interrupt-actions,plan/plan-detail-panel,prepare-change-panel,change-diff-section,product/page}`, `app/app/onboarding/[projectId]/page.tsx`, `app/{page,privacy/page,terms/page}.tsx`, `app/e2e/[scenario]/page.tsx`, `app/e2e/product-scan-reveal-fixture.tsx`, five `design-studies/*`, `components/layout/{app-frame,account-card,mobile-account,palette-switch}.tsx`, `app/layout.tsx`.
+  Tests to re-point: `features/nova/home/nova-ui.test.ts` (the `block()` helper and the barrel assertion at :409), `app/landing-contract.test.ts` (5 paths), `app/narrow-widths.test.ts` (2), `app/design-tokens.test.ts` (1), `app/app/projects/[projectId]/command-center-ui.test.ts` (1), `app/palette.test.ts`, and the register in `feature-boundaries.test.ts`.
+- **New.** `features/{product,founder-input,marketing}/README.md`, `features/nova/thread/README.md` or a paragraph in the feature's own.
 - **Migration.** None.
-- **Risks.** A path-pinned test silently stops sweeping (e.g. `status-vocabulary.test.ts` reading an empty directory) — every moved sweep asserts it found files. A relative import that pointed at a sibling action now crosses into `src/app` — recorded in the boundary test's transitional list with the retiring slice.
-- **Tests.** The existing 9,548 pass unchanged in meaning; the ten path-pinned tests point at the new paths; the boundary test asserts: `modules` → nothing above it beyond the recorded crossings (two type-only into the route tree, four into components); `components` → no `@/features`, no `@/app` beyond the recorded twelve files; `features` → no `@/app` beyond the recorded six files; `lib` → nothing above it, unconditionally; `app` route files under `projects/[projectId]` import Nova only through `@/features/nova`; every register entry still exists (so the register cannot rot).
-- **Done when.** `pnpm lint`, `pnpm typecheck`, `pnpm test` green; no file under `src/app/app/projects/[projectId]/` is named `nova*`; the boundary test is in the suite; documentation-currency passes with the README fix.
-- **Not in this slice.** Any visible change. Any move of Agent, Plan or the actions. Any new table. The app shell. The composer.
+- **Risks.** The blocks' imports of `@/app/**/agent/*` become `features → app` — the same crossings one layer down, retired by Slice 2. The register's total does not grow and no new *kind* of crossing appears; say so in the sprint record rather than letting a reader count. `landing-contract.test.ts` reads five marketing files by path and is the tightest coupling in the move.
+- **Tests.** Existing, re-pointed. The boundary test gains: no file under `src/components` imports `@/app`; `src/components/nova/blocks` does not exist; no register entry names a `components/` file.
+- **Done when.** The `components → app` section of the register is empty and deleted; `pnpm lint`, `pnpm typecheck`, `pnpm test` green; nothing a founder sees changed.
+- **Not in this slice.** The Agent, Plan and Health surfaces (Slice 2). The shell's fourteen files (Slice 7). Any change inside a moved file.
 
-### Slice 1 — The Agent and the Plan leave the route layer
+### Slice 2 — The product surfaces leave the route tree
 
-- **Goal.** Close the `components → app` and `modules → app` crossings (the register in `feature-boundaries.test.ts`) by moving the surfaces the blocks compose.
-- **Affected.** `agent/*` (35 files) → `src/features/agent/`; `plan/*` (9) → `src/features/plan/`; the seven gate panels + `change-diff-section`, `change-origin`, `change-rationale`, `change-meaning`, `withheld-paths` → `features/agent/`; `prepare-change-panel` → `features/plan/`; `src/components/nova/blocks/*` imports; `AgentTask` and `ValidationCheck` types → `src/modules/coding-agent/`; `agent-run-actions.ts` stops importing `project-shell` (uses `src/lib/routing` after Slice 2, or a local builder until then). Tests: `test-support.ts` `DIR`, `one-loop.test.ts` (~10 paths), `approval-ui`, `merge-ui`, `command-center-ui`, `outcome-ui`, `business-impact-ui`, `change-origin-ui`, `change-rationale-ui`, `agent-run-actions.security.test.ts`, `plan-actions-on-a-stale-plan.test.ts`, `question-promise.test.ts`, `narrow-widths.test.ts`, `design-tokens.test.ts` (two path entries), `workspace-routes.test.ts` (route dir walk excludes moved non-route files — it already only reads `page.tsx`), fixture imports.
-- **New.** `src/features/agent/README.md`, `src/features/plan/README.md`; `commands.ts` in each (the three Agent actions and the Plan actions re-exported from their moved files, so import sites have one door).
+- **Goal.** Close `features → app` and `modules → app`: a route file becomes an access gate plus one feature view.
+- **Affected.** `agent/*` (35 non-route files) → `features/agent/`; `plan/*` (9) → `features/plan/`; `business-brain/*` (2) and `health/content.tsx` → `features/health/`; `product/*` views and the loose `understanding-*`, `deep-scan-*`, `scan-handoff`, `live-browser-canvas`, `scan-glyphs` → `features/product/`; the seven gate panels and `change-origin`, `change-rationale`, `reasoning-trail` → `features/agent/`; `experiment-card` → `features/experiments/`; `settings/*`, `founder-intent-form`, `production-url-form`, `disconnect-button`, `delete-project-button`, `activity-feed` → `features/project-settings/`. `AgentTask`, `ValidationCheck`, `PreviewChange`, `MergeSummary` and `ChangeCost` move into `src/modules/coding-agent/`; `modules/coding-agent/ui/agent-execution-live-view.tsx` moves to `features/agent/` or is deleted if nothing mounts it.
+- **New.** A `README.md` and a `queries.ts` per feature; `commands.ts` stubs re-exporting the actions that still live beside the routes until Slice 3.
 - **Migration.** None.
-- **Risks.** `test-support.ts`'s `actionLabels` refusing an empty list is the guard — moving a panel without moving its test makes the test fail loudly, which is the intended direction. `workspace-routes.test.ts` "no prepared workspace outside `/agent`" reads route files only; the moved components keep the same read budget because their pages did not change.
-- **Tests.** All existing, re-pointed. Boundary test's transitional list shrinks to zero for `components` and `modules`.
-- **Done when.** `src/components/nova/blocks/*` import only `@/features/*` and `@/components/*`; `src/modules/coding-agent` imports nothing from `@/app`, and `modules/coding-agent/ui/` no longer exists; the Agent and Plan pages are ≤ their loader plus one view mount.
-- **Not in this slice.** Changing what the stages render. The workspace host. Moving Health/Product/Experiments/Settings (they have no upward importers and can wait for Slice 6).
+- **Risks.** The largest test churn of the plan: `test-support.ts`'s hard-coded `DIR`, `one-loop.test.ts` (~23 paths), eight `*-ui.test.ts`, `workspace-routes.test.ts`'s route walk, `design-tokens.test.ts`, `narrow-widths.test.ts`, and the fixture route's imports. `test-support.ts`'s refusal to return an empty control list is the guard that makes a missed move loud.
+- **Tests.** Existing, re-pointed. The register's `features → app` and `modules → app` sections empty and are deleted.
+- **Done when.** Every `page.tsx` under `projects/[projectId]` is a gate plus a mount; `src/modules` imports nothing above it; `pnpm test` green.
+- **Not in this slice.** Splitting the loaders (the page may still hold its reads; `queries.ts` arrives with Slice 3). Any new UI.
 
-### Slice 2 — One URL owner and a command/query door per feature
+### Slice 3 — One URL owner, one command/query door per feature
 
-- **Goal.** The typed boundary the brief asks for: a route imports `queries.ts` and `commands.ts` from a feature and nothing deeper; URLs have one owner.
-- **Affected.** `src/modules/projects/attention.ts:83` (`projectHref`), `features/nova/home/nova-home-actions.ts` (`homePath`), `features/agent/agent-run-actions.ts` → all import `src/lib/routing/project-urls.ts`; `project-shell.tsx` re-exports `projectSectionHref` from it (signature unchanged); the 22 root `*-action.ts` files → `features/<owner>/commands.ts`; `revalidatePath("/app/profile")` → `/app/settings/profile`.
-- **New.** `src/lib/routing/project-urls.ts` (project base, section hrefs, prepared-change anchor — moved, not rewritten); `src/lib/routing/project-urls.test.ts`; a `revalidate-targets.test.ts` asserting every `revalidatePath` literal resolves to a live route or the `/app` layout.
-- **Migration.** None.
-- **Risks.** `PLAN_OPPORTUNITY_PARAM`/`planMoveHref` are pinned as *literal source text* in `one-loop.test.ts:491-495` and belong to `action-plans/source.ts` by ADR 0058 — they do **not** move; `project-urls.ts` imports them. `attention.ts` is used by `/app`'s resolver — its output must be byte-identical (assert in its test).
-- **Tests.** `project-sections.test.ts` unchanged; new URL tests; the source-text assertions in `one-loop.test.ts` unchanged.
-- **Done when.** Exactly one file in `src/` builds `/app/projects/${id}` from parts; no `"use server"` file imports from `@/components`; `pnpm test` green.
-- **Not in this slice.** Refactoring the *bodies* of the orchestrating actions (onboarding's free-vs-charged decision stays where it is until a feature owns onboarding). Any UI change.
+- **Goal.** The typed boundary: a route imports `queries.ts` and `commands.ts` and nothing deeper; URLs have one owner.
+- **Affected.** `modules/projects/attention.ts` (`projectHref`), `features/nova/home/nova-home-actions.ts` (`homePath`), `features/agent/agent-run-actions.ts` (which builds its redirect from `@/components/layout/project-shell`) → all read `src/lib/routing/project-urls.ts`. The 22 root action files → each feature's `commands.ts`. Each feature's page-level reads → `queries.ts`. `revalidatePath("/app/profile")` → `/app/settings/profile`. `modules/execution/change-history-view.ts` and `modules/projects/business-brain-view.ts` stop importing `@/components/ui/*` — `StatusTone` and `scoreDisplay` move to `src/lib`.
+- **New.** `src/lib/routing/project-urls.ts` (+ test); `src/lib/ui-vocabulary.ts` or similar for the tone type and the score formatter; a `revalidate-targets.test.ts`.
+- **Risks.** `PLAN_OPPORTUNITY_PARAM` and `planMoveHref` are pinned as literal source text in `one-loop.test.ts:491-495` and belong to `action-plans/source.ts` by ADR 0058 — they do **not** move; `project-urls.ts` imports them. `attention.ts` feeds the `/app` resolver and must stay byte-identical in output.
+- **Done when.** One file builds `/app/projects/${id}` from parts; no `"use server"` file imports from `@/components`; the register is empty and `TRANSITIONAL_CROSSINGS` ships as `[]`.
+- **Not in this slice.** Refactoring the bodies of the orchestrating actions — onboarding's free-versus-charged decision stays where it is until a feature owns onboarding.
 
-### Slice 3 — The workspace host and the first artifacts
+### Slice 4 — The workspace host and the first artifacts
 
-- **Goal.** Nova + Workspace becomes real on the project index: the ranking's block opens in the workspace pane on desktop and stays inline on a phone; the same artifact views are rendered full-page by their existing section routes.
-- **Affected.** `features/nova/home/nova-home.tsx` (the block becomes an artifact card + host mount), `components/nova/nova-room.tsx` (the work column takes the host; the rail moves into it or beside it — decide in the sprint with the ui-audit skill), `projects/[projectId]/layout.tsx` (host slot), `health/page.tsx`, `agent/page.tsx`, `plan/page.tsx`, `experiments/page.tsx` (render the artifact view full-page — same output, one indirection).
-- **New.** `src/features/workspace/{host,registry,artifacts}/`, `ARTIFACT_KINDS` (closed union) and `ARTIFACT_FOR_BLOCK: Record<BlockKind, ArtifactKind | null>` (total), `artifact-registry.test.ts` (every kind has a read, a view and an address; every address is a `PROJECT_SECTIONS` address; no artifact starts an operation on render — the same rule `workspace-routes.test.ts` holds for routes), fixture scenarios for the host at 1280 and 390, `e2e/workspace-host.spec.ts`.
-- **Migration.** None.
-- **Risks.** Read budgets: the host must not add reads to the index — it renders from what `nova-home-data.ts` already loaded, and a full-page artifact route keeps its own budget line in `workspace-routes.test.ts`. Rule 69: the browser-visible state must be tested at both widths before it ships. ADR 0108: below `lg` the pane is the bottom sheet, never a stacked column.
-- **Tests.** Registry totality; `workspace-routes.test.ts` read-budget rows unchanged; the four `nova-*.spec.ts` unchanged; new host spec.
-- **Done when.** A change awaiting review shows as a card in the thread and as the `PreparedChangeArtifact` in the pane; `/agent?change=<id>` still renders the same stage full page; no new query on the index.
-- **Not in this slice.** Threads, the composer, the rail change, Business Health/Product moving to features (they are rendered *through* the registry from where they are).
+- **Goal.** Nova + Workspace becomes real on the project index: what the ranking opens shows in the pane on desktop and inline below `lg`, and the same view renders full-page at its own address.
+- **Affected.** `features/nova/home/nova-home.tsx` (the block becomes a card plus a host mount), `components/nova/nova-room.tsx` (the work column takes the host), `projects/[projectId]/layout.tsx` (the host slot), and the six section pages (render the artifact view full-page — same output, one indirection).
+- **New.** `features/workspace/{host,registry}/`, `ARTIFACT_KINDS` (closed union), `ARTIFACT_FOR_BLOCK` (total over `BlockKind`), `artifact-registry.test.ts` (every kind has a read, a view and an address; every address is a `PROJECT_SECTIONS` address; rendering an artifact starts nothing), fixture scenarios at 1280 and 390, `e2e/workspace-host.spec.ts`.
+- **Risks.** Read budgets — the host renders from what `nova-home-data.ts` already loaded and adds no query to the index; `workspace-routes.test.ts` keeps its per-route budget rows. Rule 69: both widths tested in a browser before it ships. ADR 0108: below `lg` it is the bottom sheet, never a stacked column.
+- **Done when.** A change awaiting review shows as a card in the thread and as the prepared-change artifact in the pane, and `/agent?change=<id>` renders the same stage full-page.
+- **Not in this slice.** Threads, the composer, the rail.
 
-### Slice 4 — Persistent threads
+### Slice 5 — Persistent threads
 
-- **Goal.** A thread is an address and a record: `nova_threads`, `nova_messages`, a read model, and system-authored messages from operation tails. No composer yet — a thread opens with the ranking and fills with what happened.
-- **Affected.** `src/modules/operations/*/execution.ts` tails (append a `system` message beside `speakAfterOperation`), `features/nova/home/*` (opening a thread from a moment; the thread route renders the same `NovaFocusThread` plus history), `@rail` (a Threads section becomes possible; landed in Slice 6), retention sweep (a new class or membership in an existing one — a decision inside ADR 0068's frame), `src/types/database.ts` regenerated.
-- **New.** Migration `nova_threads` + `nova_messages` (RLS full CRUD on own rows; `system` inserts via service role from `operations/`; CHECKs: text ≤1200, sequence monotonic per thread, `artifact_ref` shape, author ∈ {founder, nova, system}); `src/modules/nova/threads/{schema,store,view}.ts` (module-level, because operations append to it); `features/nova/threads/`, `features/nova/messages/`; `projects/[projectId]/threads/[threadId]/page.tsx` + `loading.tsx`; `db:test` migration tests; `read-bounds.test.ts` entries for the new growth table; `table-writers.test.ts` sees a writer.
-- **Migration.** Yes — deployed with `pnpm db:push` after `pnpm db:status` (rules 29–34), never by SQL editor.
-- **Risks.** "Transcript as source of truth" — held by a test: no file under `src/modules/nova/` except `threads/` imports the thread store, and `read.ts`/`focus.ts` do not. A thread must not add reads to Home: the index opens the *latest open thread* by one bounded query or none. Retention class is a decision (§E).
-- **Tests.** Store tests with the fake client; RLS contract in `db:test`; `feature-boundaries` unchanged; a source test that `deriveNovaFocus` cannot see a message.
-- **Done when.** A run started from Home leaves a `system` message in the thread; reloading shows it; deleting the thread changes nothing on Home; the migration is live and `database.ts` matches it.
-- **Not in this slice.** Typing. Nova generating anything new. The sidebar.
+- **Goal.** A thread is an address and a record (§C.9): the tables, a store and read model, system-authored messages from operation tails, and a read marker. No composer yet — a thread opens with the ranking and fills with what happened.
+- **Affected.** `src/modules/operations/*/execution.ts` tails (append a `system` message beside `speakAfterOperation`), `features/nova/home/*` (opening a thread from a moment), the retention sweep, `src/types/database.ts` regenerated.
+- **New.** The migration; `src/modules/nova/threads/{schema,store,view}.ts`; `features/nova/{threads,thread}/`; `projects/[projectId]/threads/[threadId]/{page,loading}.tsx`; `db:test` RLS tests; `read-bounds.test.ts` entries for the new growth tables.
+- **Migration.** Yes — `pnpm db:status` before `pnpm db:push`, never by SQL editor (rules 29–34).
+- **Risks.** The transcript must not become a position: a test asserts that nothing under `src/modules/nova/` except `threads/` imports the thread store, and that `focus.ts` and `read.ts` cannot see a message. A thread must add no read to Home.
+- **Done when.** A run started from Home leaves a `system` message in the thread; reloading shows it; deleting the thread changes no canonical state; `database.ts` matches the migration.
+- **Not in this slice.** Typing. Generation. The sidebar.
 
-### Slice 5 — The composer and the bounded intent resolver
+### Slice 6 — The conversation lane and the action resolver
 
-- **Goal.** The founder can type at Nova; the text resolves to a closed intent; the intent runs the existing binding; the thread records the founder's words, the resolution, and the observed outcome.
-- **Affected.** `nova-ui.test.ts` "has no chat input anywhere" (rewritten in the open to "has exactly one input and it is the composer, bounded"), `first-run.ts:193` and `WORKFLOW_STEPS`, `nova-how-it-works.tsx` (now an illustration of a *turn*), `e2e/nova-name.spec.ts`, `UX-CONTRACT.md:96`, `DESIGN.md` §Nova, `src/modules/nova/README.md`.
-- **New.** `features/nova/composer/` (the input; ≤1200; the founder-input secret guard reused; submit is a command), `src/modules/nova/intent/{resolve,catalogue}.ts` (deterministic resolution over labels, subjects and artifact names; `cannot` as a real answer with a sentence), optionally `nova_intent_classification` as a named, priced `ai/operations.ts` entry returning one enum value from a fenced payload (its own tiny ADR if it is priced; free if ADR 0094 applies), `features/nova/tools/` (dispatch with a recorded outcome), `intent.test.ts` (fifty phrasings → ids; injection strings → `cannot`; no id outside the catalogue is reachable).
-- **Migration.** None beyond Slice 4 (a `founder` message and an `action` message are rows).
-- **Risks.** Rule 41/42 — the classifier has no tools and no system-prompt interpolation; rule 47 — metered; rule 60 — a resolved *paid* intent still stops at the priced control with confirmation, never auto-starts; the merge intent resolves to the approval artifact, never to `mergeApprovedChangeAction` directly (rules 67–74). The `feed.test.ts` language rules apply to every new sentence.
-- **Tests.** Intent resolution; the boundary that no resolved intent reaches a command the catalogue does not name; source test that the composer's text never reaches a `system` prompt.
-- **Done when.** "Run the audit again" from the composer ends on the same priced control the ranking offers; "show me the change" opens the artifact; "merge it" opens the approval, never merges; an injection attempt produces `cannot` and a row.
-- **Not in this slice.** Nova answering open questions in generated prose (a later decision with its own measurement, per ADR 0084's method). Multi-turn model context.
+- **Goal.** The founder types; Nova answers from canonical data or proposes a catalogue action; the workspace shows what she is talking about. §C.5 and §C.8 are the contract.
+- **Affected.** Every sentence in the product that says there is nothing to type — `first-run.ts:193`, `WORKFLOW_STEPS`, `nova-how-it-works.tsx`, `e2e/nova-name.spec.ts`, `nova-ui.test.ts`'s "has no chat input anywhere" (rewritten in the open to "has exactly one input, and it is the composer, bounded"), `UX-CONTRACT.md:96`, `DESIGN.md` §Nova, `src/modules/nova/README.md`.
+- **New.** `modules/nova/conversation/{payload,prompt,checks,service}.ts` mirroring `voice/`'s proven shape; `modules/nova/intent/` (deterministic resolution over labels, subjects and artifact names, with `cannot` as a real answer); `features/nova/conversation/` (composer, turn view, the generation command); `features/nova/actions/` (proposal → existing control → existing command); a `nova_conversation` entry in `ai/operations.ts` with its own ADR for the price (§E.2); per-thread and per-window turn bounds beside `operations/start-limits.ts`.
+- **Risks.** This is the slice where a safety property could erode silently, so each one is a test: no service-role import in the conversation layer; the founder's text never reaches a system prompt; the model's reply is validated before persistence; an action id that is not in the catalogue is dropped; a merge intent resolves to the approval artifact and never to `mergeApprovedChangeAction`; generation happens in a command and never in a render.
+- **Done when.** *"Why is conversion our biggest problem?"* gets a grounded answer with the business-health artifact beside it; *"run the audit again"* ends on the same priced control the ranking offers; *"merge it"* opens the approval; an injection attempt produces a refusal and a row; and a founder who says *"the second one"* is understood.
+- **Not in this slice.** Multi-turn model memory beyond the bounded pack. Nova initiating a conversation on her own.
 
-### Slice 6 — The app shell
+### Slice 7 — The app shell
 
-- **Goal.** The sidebar becomes Products · New chat · Threads · Settings; inside a project the screen is Nova + Workspace; Health, Product, Experiments and Settings render through the registry at their unchanged addresses.
-- **Affected.** `@rail/project-rail.tsx` and `@rail/projects/[projectId]/layout.tsx` (the rail's contents — the slot mechanism is unchanged), `mobile-tab-bar.tsx` (four tabs: Nova · Workspace · Threads · Account), `project-shell.tsx` (`PROJECT_SECTIONS` remains the address table, no longer the nav), `health/content.tsx` → `features/health/queries.ts` + view; `product/*`, `experiments/*`, `settings/*` → their features; `rail-switch.test.ts`, `project-sections.test.ts` (rewritten to assert addresses, not rail rows), `e2e/rail-fold.spec.ts`, `mobile-shell.spec.ts`.
-- **New.** `features/nova/threads/thread-list.tsx` in the rail; `features/health`, `features/product`, `features/experiments`, `features/project-settings`.
-- **Migration.** None.
-- **Risks.** ADR 0085's foreclosure (*a seventh rail item for Nova*) is honoured — Nova is not a rail item, she is the project. ADR 0106's fluency (rail as a layout, prefetch across the fold) must survive: `rail-fold.spec.ts` is the guard. The two rail widths must stay one (`rail-switch.test.ts`). Rule 69 at both widths.
-- **Done when.** A founder opening a project sees Nova and the workspace, and every old section URL still resolves to its artifact full-page.
+- **Goal.** Products · New chat · Threads · Settings at the app level; Nova + Workspace inside a project; every old section address still resolving full-page.
+- **Affected.** `@rail/project-rail.tsx` and the rail layouts (contents, not mechanism), `mobile-tab-bar.tsx` (Nova · Workspace · Threads · Account), `project-shell.tsx` (`PROJECT_SECTIONS` stays the address table), the shell's fourteen files → `features/shell/`, `rail-switch.test.ts`, `project-sections.test.ts`, `e2e/{rail-fold,mobile-shell}.spec.ts`.
+- **Risks.** ADR 0085's foreclosure holds — Nova is not a rail item, she is the project. ADR 0106's fluency (rail as a layout, prefetch across the fold) must survive; `rail-fold.spec.ts` is the guard. Rule 69 at both widths.
+- **Done when.** A founder opening a project sees Nova and the workspace, and every old section URL resolves to its artifact full-page.
 - **Not in this slice.** Deleting anything.
 
-### Slice 7 — Legacy retirement
+### Slice 8 — Legacy retirement
 
-- **Goal.** Remove what nothing reaches.
-- **Affected.** The seven dead/fixture-only files, `design-studies/legacy-*`, their scenarios and the negative assertions that kept them off pages; `command-center-*` names; `PROJECT_SECTIONS` rows that no longer render a heading (the table keeps the address); `docs/ROADMAP.md` entries that closed.
+- **Goal.** Remove what nothing reaches: the seven dead or fixture-only files, `design-studies/legacy-*`, their scenarios and the negative assertions guarding them, the "Command Center" vocabulary, and the ROADMAP entries that closed.
 - **New.** Nothing. `RETIRED_CLAIMS` entries for the sentences that stop being true.
-- **Migration.** None.
 - **Done when.** `grep -r "command-center\|home-status\|agent-panel" src` returns only history.
-- **Not in this slice.** Removing any address (retired addresses stay 307s).
+- **Not in this slice.** Removing any address — retired addresses stay 307s.
 
 ---
 
 ## E. What this plan does not decide (rule 14)
 
-Each of these changes what a slice builds, and none can be settled from the code:
+Each changes what a slice builds, and none can be settled from the code:
 
-1. **Retention class for threads and messages** — operational (90 days), derived-by-count, or a new class. ADR 0068 frames it; Slice 4 needs an answer.
-2. **Whether intent classification may call a model at all, and at what price.** Deterministic resolution ships first; a classifier is an `ai/operations.ts` entry with a rate-card line (ADR 0061's method) or a documented free operation (ADR 0094). Slice 5.
-3. **Whether Nova ever answers in generated prose beyond the slot templates.** ADR 0084's measurement method applies; not scoped here.
-4. **Thread scope** — per project only (the plan's assumption, because Nova's facts are project-scoped) or also account-level.
+1. **Retention class for threads and messages** — operational (90 days), derived-by-count, or a new class. ADR 0068 frames it; Slice 5 needs the answer.
+2. **What a conversation turn costs, and who pays.** A turn is a metered inference with its own ledger key either way. Whether it is charged at retail like the other operations, absorbed as a free operation that says so ([ADR 0094](../../decisions/0094-a-free-operation-says-so.md)), or bounded per thread and per window, is its own decision before Slice 6 ships — and the bound is not optional, only its shape is. Recommended: absorbed and bounded at launch, because a founder who hesitates before asking a question is a founder not using the product, and priced later from measured cost the way `agent_execution` was.
+3. **Whether intent resolution may call a model at all.** Deterministic resolution over the catalogue's own labels and subjects ships first; a classifier is an `ai/operations.ts` entry or it does not exist.
+4. **Thread scope** — per project only (this plan's assumption, because Nova's facts are project-scoped) or also account-level.
 5. **The phone's fourth tab** — Threads or Account; ADR 0108's four-tab ceiling forces one out.
+6. **Whether `modules/coding-agent/ui/agent-execution-live-view.tsx` has a caller at all.** Nothing in `src/` mounts it; Slice 2 either moves it to `features/agent/` or deletes it, and that is a reading, not a plan.

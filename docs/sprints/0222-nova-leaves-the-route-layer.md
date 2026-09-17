@@ -79,7 +79,12 @@ same rule. Every sweep still asserts it found files.
 - **Moving the Agent and Plan surfaces in the same sprint.** It is the next
   slice and it closes twenty-six register entries; it also touches
   `test-support.ts`, `one-loop.test.ts` (ten paths) and a dozen `*-ui.test.ts`
-  files. Two moves in one commit is one move nobody can review.
+  files. Two moves in one commit is one move nobody can review. *[2026-09-16,
+  in review: it is no longer the next slice. The review found that moving those
+  surfaces into `src/features` while `src/components/nova/blocks/*` still
+  composes them forces `components → features`, which this sprint's own
+  boundary forbids. `src/components` is emptied of product surfaces first —
+  see the correction in [the audit](../audits/2026-09-16-nova-first-restructure/README.md).]*
 - **Moving `nova-actions.ts` into the domain module.** It imports eleven Server
   Actions; the domain must not depend on a surface's file layout, which is the
   whole rule. It is composition, and it lives with the surface.

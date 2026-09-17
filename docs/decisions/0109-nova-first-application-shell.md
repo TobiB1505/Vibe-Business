@@ -1,6 +1,6 @@
 # 0109 - Nova-first application shell
 
-Status: Accepted
+Status: Accepted; **revised in review the same day** — the founder's review found that §2's boundary and §7's first slice contradicted each other, and that §5's conditions specified a command palette rather than an operator. Three things changed: §2 gains the clause that a component holds no product surface (and that an import into a feature can never be registered); §5 is replaced by the two-lane architecture below; §6 is new and makes the canonical/conversational distinction precise. The original §5 read *"Free text is bounded and closed … the composer resolves text to a closed intent set"* and *"Nova's replies come from the tables first"*, and its first condition claimed *"deleting every thread changes no screen except the thread list"*. Nothing in §1, §3, §4 or the address guarantee changed, and no safety property was weakened.
 Date: 2026-09-16
 
 Amends the navigation half of [ADR 0045](0045-command-center-information-architecture.md) and completes what [ADR 0085](0085-nova-is-the-project-home.md) started. Reopens, under conditions, two items the [Nova architecture audit](../audits/2026-09-03-nova-architecture-audit/README.md) §M closed — *an unrestricted chat input* and *a transcript as source of truth* — in the shape [ADR 0086](0086-nova-presentation-is-claimed-stored-and-attempted-once.md) used for a third. Changes no domain module, no provider, no background technology, no approval or merge semantics, and no audit principle. The evidence is [the restructure audit](../audits/2026-09-16-nova-first-restructure/README.md); the first slice is [Sprint 0222](../sprints/0222-nova-leaves-the-route-layer.md).
@@ -23,7 +23,7 @@ The audit's arithmetic still holds and has improved. `src/modules/nova/` is a pu
 
 Three things, none of them domain:
 
-1. **The surfaces live in the route tree and reach into each other.** The Nova, Agent and Plan surfaces are directories under `src/app/app/projects/[projectId]/`. `src/components/nova/blocks/*` imports ten components from `@/app/**/agent/*` and `plan/*` to compose them into the thread; `src/modules/coding-agent` imports two types from the same place; one Server Action imports a layout component to build its redirect. Putting the Agent's view into a workspace pane beside the thread is route-tree surgery, not an import.
+1. **The surfaces live in the route tree, and `src/components` composes them.** The Nova, Agent and Plan surfaces are directories under `src/app/app/projects/[projectId]/`. `src/components/nova/blocks/*` imports eleven components out of `@/app/**/agent/*`, `plan/` and `business-brain/` to compose them into the thread; two landing components do the same; `src/modules/coding-agent` borrows two types from the same place; one Server Action imports a layout component to build its redirect; four layout primitives reach into `src/app` for the palette. Putting the Agent's view into a workspace pane beside the thread is route-tree surgery, not an import — and because the composing files sit in `src/components`, moving the surfaces into `src/features` without moving them first would force `components → features`, which is the layering inverted. Eleven files there compose a product surface and three more are whole domain views; they are features wearing a component's address.
 2. **The layering is a convention.** `src/modules/nova/actions.ts` and the module README state that every Server Action lives under `src/app/` and nothing under `src/modules/` imports one. `src/modules/auth/actions.ts` and the two type crossings already contradict it, and no test would have said so.
 3. **The chat is foreclosed in three places at once.** The Nova audit's §M refuses *an unrestricted chat input* — no system in the product reads free text into a decision, and a chat box is a third, unbounded one — and *a transcript as source of truth*. `nova-ui.test.ts` asserts *no chat input anywhere*; `first-run.ts` tells the founder *there is nothing to type*; `nova-feed.tsx` says *not a chat*. Those reasons are still right. What they refuse is an unbounded input and a transcript that decides. They do not refuse a bounded input that resolves to the catalogue, or a transcript that records.
 
@@ -37,7 +37,7 @@ Server-side logic, Route Handlers, webhooks, Supabase SSR auth, Stripe, the Anth
 
 Inside a project, the screen is **Nova and the Workspace**: a persistent thread with a composer on one side, and on the other the artifact Nova is speaking about or working on — the business reading, a product understanding, a Move, a plan, a running agent, a prepared change, a preview, a diff, an experiment, a question. The founder talks to Nova; Nova uses the existing systems; the workspace makes the result visible, controllable and trustworthy.
 
-The app-level navigation becomes **Products · New chat · Threads · Settings**. The seven-row project rail stops being the product's mental model. Nothing that has an address loses it (§6).
+The app-level navigation becomes **Products · New chat · Threads · Settings**. The seven-row project rail stops being the product's mental model. Nothing that has an address loses it (§7).
 
 ### 2. Three layers, with one direction
 
@@ -51,6 +51,10 @@ src/lib        cross-cutting
 
 Imports flow downward: `app → features → modules`; `components` and `lib` sit beside `modules` and above nothing. `src/app` may not hold product logic or large UI; a route file is an access gate plus a composition. The rule is enforced by `src/lib/consistency/feature-boundaries.test.ts`, whose allowlist is the debt register: every crossing that exists today is recorded with the slice that retires it, and the test fails both when a new crossing appears and when a recorded one has quietly gone — the shape `REVIEWED_SITES` gave the service-role boundary.
 
+**`components → features` and `modules → features` can never be registered.** The register exists for crossings being retired on a named slice; an import into a feature is not a crossing to retire, it is the layering inverted, and one exception would make the rest of this decision decorative. The test asserts it unconditionally and refuses any register entry that targets `features/`.
+
+Which turns the question into **what a component is**. A component renders a shape; it may take a module's types and label tables, and it may not compose a product surface, bind a Server Action or know a route. By that reading, fourteen files under `src/components` are features wearing a component's address — the nine Nova blocks, the two landing embeds, and the three whole domain views (`FounderInputCard`, `DiffView`, `ProductScanExperience`) — and the landing page's other eighteen files are a surface in their own right. They move out **before** anything moves in beside them, which is why the first slice of §8 is `src/components`, not the Agent. Vibe's semantic components stay exactly where they are: `StatusPill`, `FindingCard`, `CostDisclosure`, `ConfidenceIndicator`, `EvidenceDrawer`, `ActionBlock`, `SourceCoverage` and `NovaPresence` render one module's view type and compose no screen, which is the line.
+
 The typed boundary the UI reaches through is a feature's `commands.ts` and `queries.ts`. A component does not call an arbitrary Server Action or a module internal; it calls the feature's named command or renders the feature's composed read. The read models (`build*View`, `build*Card`) and the Server Actions that exist today *are* that boundary's two halves; the decision gives them a door, not a rewrite.
 
 ### 3. The domain modules stay the brain
@@ -59,41 +63,87 @@ Every module under `src/modules/` — intelligence, understanding, audit, opport
 
 ### 4. Workspace artifacts are a closed registry, not an engine
 
-An artifact is a `{ kind, ref }` resolved by one total record `ArtifactKind → { read, view, href }` over a closed union — checked by the compiler and by a test that every kind has an existing read model, an existing view and an existing address. The first views are the ones already pure over a domain object: `AuditOverview` over `BusinessBrainView`, `UnderstandingPanel`, `MoveCard`, the four Agent stages over `PreparedChangeWorkspaceItem`, `PreviewPanel`, `DiffView`, `ExperimentCard`, `FounderInputCard`. `BLOCK_FOR_MOMENT` keeps deciding which artifact a moment opens. On a desktop the artifact is the pane beside the thread; below `lg` it is the bottom sheet ([ADR 0108](0108-a-phone-is-not-a-narrow-desktop.md)). A section route renders its artifact full-page at its unchanged address.
+An artifact is a `{ kind, ref }` resolved by one total record `ArtifactKind → { read, view, href }` over a closed union — checked by the compiler and by a test that every kind has an existing read model, an existing view and an existing address.
+
+**One view, two frames, and no copies.** The artifact view *is* the owning feature's view, mounted with a frame: eight components already carry a `presentation` prop for exactly this (`"section" | "workspace"` on the five gate panels, `"panel" | "block"` on `NeedsUserPanel`, `"card" | "workspace" | "block"` on `FounderInputCard`, `"page" | "block"` on the Agent's validate stage). So `features/workspace/` holds the host and the registry and not a single view — `AuditOverview` over `BusinessBrainView`, `UnderstandingPanel`, `MoveCard`, the four Agent stages over `PreparedChangeWorkspaceItem`, `PreviewPanel`, `DiffView`, `ExperimentCard` and `FounderInputCard` each stay in the feature that owns them. `BLOCK_FOR_MOMENT` keeps deciding which artifact a moment opens; one more total record maps a `BlockKind` to an `ArtifactKind`. On a desktop the artifact is the pane beside the thread; below `lg` it is the bottom sheet ([ADR 0108](0108-a-phone-is-not-a-narrow-desktop.md)). A section route renders its artifact full-page at its unchanged address.
+
+**Nova explains, the workspace shows.** A reply that would be a wall of text is a short reply and an artifact beside it; the message carries a paragraph bound like the voice slots already do. The workspace is not a second navigation — it shows the object under discussion, and its full-page address is how a founder leaves the conversation for it.
 
 No universal artifact engine, no generic renderer, no artifact that a model composes.
 
-### 5. The chat is permitted under six conditions, all six together
+### 5. Nova has two lanes: she may reason freely, and act only through closed capabilities
 
-This amends the Nova audit's §M the way ADR 0086 amended it: not *yes*, but *only like this*.
+The closed catalogue answers *what to do*. A founder also asks *why is conversion the blocker*, *how do you read our pricing*, *what changed since last week*, *why Move 1 before Move 2*, *explain the audit more simply*, *what are our two options*, *what would happen if we shipped this*. None of those is an action, none can be pressed into eighteen ids, and a product that refuses them is a command palette with a face on it. The original condition 2 refused them, and that is what this revision reverses.
 
-1. **A message is a record, never an input to a ranking.** `deriveNovaFocus` and every position keep deriving from canonical rows. Deleting every thread changes no screen but the thread list. There is no `nova_state`.
-2. **Free text is bounded and closed.** At most 1,200 characters, the founder-input secret guard, never interpolated into a system prompt (rule 42), never given to a model that holds a tool (rule 41). The composer resolves text to a closed intent set — the catalogue's ids, a small set of artifact-open intents, and *cannot* — deterministically first. If a model classifies, it returns one enumeration value from a fenced user message, is metered under a named operation whose price says so (rules 47, 94), and its answer is looked up, never executed.
-3. **Every action is the existing binding.** A resolved intent calls the Server Action the button calls, with the same preflight, the same price before the click (rule 60) and the same confirmation for a consequential action. The thread records the outcome Vibe observed, never the model's account of it (rule 77). No message authorizes a branch write: approval and merge stay bound to one commit and one person (rules 67–74).
-4. **Nova's replies come from the tables first.** A moment's sentence is `novaCandidateMessage`; the reply to an unresolvable request is a template; a generated sentence goes through the voice path under ADR 0086's five conditions. No per-message unbounded generation.
-5. **No second agent loop.** The composer has no tools. The coding agent stays the only agent, in its VM, through the gateway (rules 75–82).
-6. **Threads are project- and owner-scoped records.** RLS as `project_founder_resolutions`; `system` messages appended from operation tails through `src/modules/operations/`; a retention class under [ADR 0068](0068-retention-periods.md).
+```
+                         NOVA
+                          │
+              ┌───────────┴───────────┐
+              │                       │
+       CONVERSATION                ACTION
+       reasons, explains           does
+              │                       │
+   structured generation,        typed intent → one catalogue id
+   no tools, a bounded pack      → the existing binding
+   Vibe assembles, the model     → the existing authorization
+   never chooses what to read    → the existing confirmation and price
+   validated before display      → the existing execution path
+   deterministic floor beneath   │
+              │                  a control the founder presses
+              └───────────┬───────────┘
+                          │
+                    DOMAIN ENGINE  (canonical, unchanged)
+```
 
-A chat that cannot satisfy all six is still the thing §M refuses.
+**The conversation lane may read and explain; it may not act.** It is given canonical project context — identity, product understanding, repository and live intelligence, Deep Scan, the audit, opportunities, plans, execution and change state, experiments, measurements, and the thread's own recent turns — and it returns prose, optionally a pointer at an artifact, optionally a proposal. It writes nothing but its own message.
 
-### 6. Every address survives
+**The action lane is what ships today, unchanged.** A proposal names a catalogue id and a subject; Vibe renders the control that id already has, carrying the label, the price kind, the consequence flag and the confirmation `NOVA_ACTION_META` already holds. The founder presses it. `audit-is-a-choice.test.ts` already asserts both halves — *a priced operation is always a press* and *no Nova module starts an operation itself* — and the conversation is not an exemption from either.
+
+**One sentence joins the lanes:** generated text is never the last thing before a consequential effect; a press always is. A read-only navigation — open the diff, show the plan — has no consequence and may follow a resolved intent directly.
+
+The conditions, all of them together:
+
+1. **Canonical truth is never conversational.** Audit scores and findings, opportunities, plans, execution state, prepared changes, approvals, validation, merge state, experiments, measurements, credits and pricing, repository and product intelligence: each keeps its own store, identity and write path, and none is ever derived from chat text. `deriveNovaFocus` and every position keep deriving from canonical rows. There is no `nova_state`.
+2. **The model gets context, never capability.** No tool, no web access, no URL fetch, no code execution, no database handle, no service-role client, no credential, and no say in what is read: Vibe assembles a bounded pack deterministically and the model receives it. Removing capability, not prompt wording, is what bounds injection (rule 41). The founder's message and every customer-derived excerpt travel as fenced, untrusted-labelled user content, never in a system prompt (rules 25, 36, 42).
+3. **Output is a shape, not a free-form answer.** One message string, an optional `{ kind, ref }` from the closed artifact union, an optional id from the closed catalogue. The model may name an artifact and an action; naming is not calling, and Vibe does the lookup.
+4. **Nothing reaches a founder unvalidated.** `checkNovaMessage` already refuses a numeral outside the `allowedNumericFacts` list Vibe supplied and refuses `ALWAYS_BANNED_CLAIMS`; an artifact reference that does not resolve to a row the founder owns is dropped; an id absent from `NOVA_ACTION_META` is dropped. A discarded field degrades the reply and never becomes an unverifiable claim on screen (rule 45's shape, applied to a sentence). Under every failure there is a deterministic template, as `service.ts` already proves five ways.
+5. **Generation happens in a command, never in a read or a render.** Rendering a thread costs no inference; only a founder-initiated turn does. This is stronger than [ADR 0086](0086-nova-presentation-is-claimed-stored-and-attempted-once.md)'s fifth condition and is what keeps the cost of looking at a screen knowable. Every call is counted before and recorded after (rule 47), and a turn is bounded per thread and per window.
+6. **Every action is the existing binding.** Same preflight, same price before the click (rule 60), same confirmation, same execution path. The thread records the outcome Vibe observed, never the model's account of it (rule 77). No message authorizes a branch write: approval and merge stay bound to one commit and one person, and a *merge* intent resolves to the approval artifact rather than to the write (rules 67–74).
+7. **No second agent loop.** The composer has no tools and never gets them. The coding agent stays the only agent, in its own VM, behind the gateway (rules 75–82).
+
+**Replies from the tables are a preference, not a boundary.** Where a moment already has a written sentence — the twenty-one in `feed.ts`, the eleven setup states, the two voice slots — that sentence is used, because it is free, tested and consistent. The generative path exists for what those tables cannot answer, and a real question is not forced into a template to avoid a model call.
+
+**What a generated reply may never do** is unchanged and not revisable ([ADR 0098](0098-design-rules-are-revisable-truth-rules-are-not.md)): claim a cause the evidence does not carry, state a figure Vibe did not measure, call anything safe, correct, deployed or live, say something was done when nothing ran, or present a proposal as executed. Where it cannot answer from what it has, it says so — an unassessable question is answered with its absence, the same way an unassessable lens scores `null` (rule 44).
+
+### 6. The transcript is memory; the domain is truth
+
+The original first condition said deleting every thread changes no screen but the thread list. That is right about canonical business state and wrong about the conversation: *"the second one"*, *"that option"*, *"like you just did"* and *"then let's do that"* resolve against what was said, and a Nova who cannot resolve them is a search box with a personality. So the thread's recent turns are part of the context pack, bounded like everything else in it.
+
+> Deleting a thread must not change canonical business state.
+> Deleting a thread may remove conversational memory, and therefore what Nova can infer from earlier dialogue.
+
+And the seam between them: **a preference expressed in conversation becomes canonical only by passing through a canonical write that already exists** — a founder input resolution, a product correction, a founder intent, an attestation, an approval. *"I prefer variant B"* is memory. *"Then let's do that"* is a proposal, a control and a press, and what it writes is written by the command that already owns that write.
+
+Threads are project- and owner-scoped, with RLS as `project_founder_resolutions`, `system` messages appended from operation tails through `src/modules/operations/`, and a retention class under [ADR 0068](0068-retention-periods.md). One table for threads and one for messages, with a `kind` discriminator and per-kind CHECK constraints — the idiom `nova_voice_messages` already uses — so a turn is a real turn rather than a list of system events with a chat theme, and no kind gets a table of its own.
+
+### 7. Every address survives
 
 Every `PROJECT_SECTIONS` and `PROJECT_SUBSECTIONS` address, `/health` as a rendering alias, the fragments the domain publishes (`#business-audit`, `#planned-work`, `#prepared-change-<id>`, `#product-scan`, `#founder-intent`), the parameters [ADR 0058](0058-move-focus-url-contract.md) owns (`?plan=`, `?change=`, `?from=`), `?opening`, the 307 table in `src/lib/routing/retired-addresses.ts`, the auth and connect routes, the API routes and the middleware matcher, the `revalidatePath` targets and the e2e fixture route all keep resolving to what they resolve to today. A rail row may disappear; an address may not. The restructure audit's §C.7 lists each with the test that guards it, and the URL shape gains one owner in `src/lib/routing/` in place of the three it has.
 
-### 7. The rebuild is incremental, and the first slice is invisible
+### 8. The rebuild is incremental, and the first slice is invisible
 
-Eight slices, each independently green, each reverting by deleting its files, in the order the dependency graph forces: the Nova surface leaves the route layer with the boundary test (Slice 0, this sprint); the Agent and Plan surfaces follow, closing every upward import (1); one URL owner and a command/query door per feature (2); the workspace host and the first artifacts (3); persistent threads with system-authored messages (4); the composer and the bounded resolver (5); the app shell (6); legacy removal (7). No slice removes a function, rewrites an engine or lands a schema before the slice that needs it.
+Nine slices, each independently green, each reverting by deleting its files, in the order the dependency graph forces: the Nova surface leaves the route layer with the boundary test (Slice 0, shipped); `src/components` stops composing product surfaces (1); the Agent, Plan, Health and product surfaces leave the route tree (2); one URL owner and a command/query door per feature (3); the workspace host and the first artifacts (4); persistent threads with system-authored messages (5); the conversation lane, the composer and the action resolver (6); the app shell (7); legacy removal (8). The first two are in that order because moving a surface into `src/features` while `src/components` still composes it would force the one import §2 forbids. No slice removes a function, rewrites an engine or lands a schema before the slice that needs it.
 
 ## Consequences
 
-**Easier.** A surface can be put anywhere — in the thread, in the pane, full-page — because it is a feature view over a read model rather than a file in a route directory. Adding an artifact is a row in a total record. The layering fails the build instead of a review. A founder opens a project to one question and one answer.
+**Easier.** A surface can be put anywhere — in the thread, in the pane, full-page — because it is a feature view over a read model rather than a file in a route directory, and because the `presentation` prop the repository already uses means one view rather than two. Adding an artifact is a row in a total record. The layering fails the build instead of a review. A founder asks a question in their own words and gets an answer, or a control, rather than choosing a door.
 
-**Harder.** Forty-two test files pin paths under `src/app/app/`, so every move is a test change; that cost is the price of a suite that asserts on source, and it is paid slice by slice rather than at once. Two ADRs now describe Nova's surface — 0085 said she is Home, this says Home is her — and only the dates say which is later. The Nova audit's §M is amended twice (0086 and here), and a reader has to hold both amendments to know what §M still forbids: everything it lists, except under the named conditions.
+**Harder.** Forty-two test files pin paths under `src/app/app/`, so every move is a test change; that cost is the price of a suite that asserts on source, and it is paid slice by slice rather than at once. Two ADRs now describe Nova's surface — 0085 said she is Home, this says Home is her — and only the dates say which is later. The Nova audit's §M is amended twice (0086 and here), and a reader has to hold both amendments to know what §M still forbids: everything it lists, except under the named conditions. And the product now has a generative surface a founder types into, which is a class of failure this repository has never had to hold: a sentence that is fluent, grounded-looking and wrong. §5's conditions 3, 4 and 5 exist because prompt wording cannot hold it and a validator, a closed output shape and a deterministic floor can.
 
-**Foreclosed.** A Nova with tools or web access. A thread that decides anything. A composer whose text reaches a system prompt or a module internal. A universal artifact engine. A rail item for Nova (ADR 0085 stands: she is the project, not a row in it). A Vite migration, a second front-end, a microservice split, a new state library, a new database, a new background technology. Removing an address to tidy the navigation.
+**Foreclosed.** A Nova with tools, web access or a database handle. A thread that decides anything canonical. A composer whose text reaches a system prompt or a module internal. Generated text as the last step before a consequential effect. A component that composes a product surface, and any register entry that legalizes an import into a feature. A universal artifact engine. A rail item for Nova (ADR 0085 stands: she is the project, not a row in it). A Vite migration, a second front-end, a microservice split, a new state library, a new database, a new background technology. Removing an address to tidy the navigation.
 
-**Not decided here.** The retention class for threads; whether intent classification may be a paid model call and at what price; whether Nova ever answers in generated prose beyond the slot templates; account-level threads; which of Threads or Account takes the phone's fourth tab. Each is named in the audit's §E and is decided by the slice that needs it, with its own record.
+**Not decided here.** The retention class for threads; what a conversation turn costs and who pays for it, which is its own decision before Slice 6 ships — though *that it is bounded* is decided here, only the shape of the bound is open; whether intent resolution may call a model at all; account-level threads; which of Threads or Account takes the phone's fourth tab. Each is named in the audit's §E and is decided by the slice that needs it, with its own record.
 
 ## Status of the code
 
-Slice 0 lands with this decision: `src/features/nova/` holds the Nova surface, the project index composes it, `src/lib/consistency/feature-boundaries.test.ts` holds the layering, and CLAUDE.md rule 86 names it. The rail, every screen and every address are unchanged at HEAD. Slices 1–7 are recorded in the audit and are not yet built.
+Slice 0 shipped with the first version of this decision: `src/features/nova/` holds the Nova surface, the project index composes it, `src/lib/consistency/feature-boundaries.test.ts` holds the layering, and CLAUDE.md rule 86 names it. The revision above changed no code except that test's register and its own rules — rule 86 gains the clause that a component holds no product surface, and rule 87 states the two lanes. The rail, every screen and every address are unchanged at HEAD, and **nothing of §5 or §6 is built**: there is no thread table, no composer and no conversation path in the product. Slices 1–8 are recorded in [the audit](../audits/2026-09-16-nova-first-restructure/README.md) and are not yet built.

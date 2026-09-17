@@ -4,7 +4,7 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 
 ## Where to look
 
-Eighty-six rules in one flat list is the order they were written in, not an order anybody can hold in their head. This table is the only navigation; the rules themselves stay exactly where they are, because a rule number is permanent and a renumbering would silently invalidate every document that cites one (rule 83).
+Eighty-seven rules in one flat list is the order they were written in, not an order anybody can hold in their head. This table is the only navigation; the rules themselves stay exactly where they are, because a rule number is permanent and a renumbering would silently invalidate every document that cites one (rule 83).
 
 `src/lib/consistency/claude-rule-index.test.ts` fails the build if a rule is missing from this table, listed twice, or numbered past the end — so the index cannot quietly stop describing the list below it.
 
@@ -24,6 +24,7 @@ Eighty-six rules in one flat list is the order they were written in, not an orde
 | **Ship user-visible state** — tests, and the four questions | 10, 69 |
 | **Build UI** | 85 |
 | **Add or move a screen, a Server Action or a composed read** — which layer it belongs to | 86 |
+| **Let Nova speak or act** — the conversation lane, the action lane, what a transcript may be | 87 |
 | **Ask for a permission or handle a credential** | 11, 12, 22 |
 
 1. Read [PRODUCT.md](PRODUCT.md) and [ARCHITECTURE.md](ARCHITECTURE.md) before significant implementation work.
@@ -119,7 +120,9 @@ Eighty-six rules in one flat list is the order they were written in, not an orde
 
 85. UI work goes through the repo-native design toolkit in [.claude/skills/](.claude/skills/), not from memory and not from scratch — see [ADR 0095](docs/decisions/0095-design-tooling-is-repo-native.md). The rule is **search → inspect → choose → adapt → install**: search Vibe's own inventory first, then shadcn primitives, then the external registries; port by hand into Vibe's tokens and semantics. Never `shadcn init`, and never change `aliases` in `components.json` — they point every install command at a gitignored `src/components/vendor/`, which is what makes `src/components/ui/` unreachable by one. Secrets stay `${VAR}` in `.mcp.json`.
 
-86. Three layers, one direction — see [ADR 0109](docs/decisions/0109-nova-first-application-shell.md). `src/app` is routing and composition: a route file is an access gate plus a composition of feature views, never a home for product logic or large UI. `src/features` is the product surface: screens, `commands.ts` (`"use server"`), `queries.ts` (composed reads), artifact views. `src/modules` is the domain and imports from neither. `src/components` and `src/lib` import nothing above them. Imports flow `app → features → modules`; `src/lib/consistency/feature-boundaries.test.ts` fails the build on a new upward import. Every crossing that exists today is recorded there with the slice that retires it — shrink that list, never grow it, and never move a surface without moving the tests that pin its path.
+86. Three layers, one direction — see [ADR 0109](docs/decisions/0109-nova-first-application-shell.md). `src/app` is routing and composition: a route file is an access gate plus a composition of feature views, never a home for product logic or large UI. `src/features` is the product surface: screens, `commands.ts` (`"use server"`), `queries.ts` (composed reads), artifact views. `src/modules` is the domain and imports from neither. `src/components` and `src/lib` import nothing above them. A **component renders a shape**: it may take a module's types and label tables, and it may never compose a product surface, bind a Server Action or know a route — a file that does is a feature wearing a component's address, and it moves rather than earning an exception. Imports flow `app → features → modules`; `src/lib/consistency/feature-boundaries.test.ts` fails the build on a new upward import. Every crossing that exists today is recorded there with the slice that retires it — shrink that list, never grow it, and never move a surface without moving the tests that pin its path. `components → features` and `modules → features` can never be registered at all: that is not a crossing to retire, it is the layering inverted.
+
+87. Nova may converse openly, and act only through closed Vibe capabilities — see [ADR 0109](docs/decisions/0109-nova-first-application-shell.md) §5. The **conversation lane** may reason and explain over canonical project data, and holds no capability: no tool, no web access, no URL fetch, no database handle, no service-role client, no credential, and no say in what it reads — Vibe assembles a bounded context pack, the model returns a shape (one message, an optional artifact reference, an optional catalogue id), and every field is validated before a founder sees it, with a deterministic template underneath every failure. The **action lane** is the existing binding with its existing preflight, price, confirmation and execution path: generated text is never the last thing before a consequential effect, a press is, and a merge intent resolves to the approval rather than to the write. Generation happens in a founder-initiated command, never in a read or a render. And canonical business state is never derived from a transcript: deleting a thread must not change it, though it may remove conversational memory.
 
 ## UI / Design Tooling
 

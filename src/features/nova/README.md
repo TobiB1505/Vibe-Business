@@ -48,7 +48,25 @@ for this feature; `voice/` reaches nothing above it.
 
 ## What arrives next, and where
 
-`threads/` and `messages/` (Slice 4, persistent threads), `composer/` and
-`tools/` (Slice 5, the bounded input and the recorded dispatch). Each lands
-beside `home/`, not inside it, and each is a decision under ADR 0109's six
-conditions rather than a feature this README can promise.
+Each lands **beside** `home/`, never inside it, and each is a decision under
+[ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §5 and
+§6 rather than a feature this README can promise.
+
+| Slice | Directory             | What it is                                                                                     |
+| ----- | --------------------- | ---------------------------------------------------------------------------------------------- |
+| 1     | `thread/blocks/`      | the nine blocks, out of `src/components`, each mounting the owning feature's view with a frame |
+| 5     | `threads/`, `thread/` | the thread list and the turn view, once `nova_threads` and `nova_messages` exist               |
+| 6     | `conversation/`       | the composer, the turn rendering, and the one command that generates                           |
+| 6     | `actions/`            | a proposal becomes the control the catalogue already defines, and a founder presses it         |
+
+The shape of the last two is the part worth stating here, because it is the one
+that could erode quietly. Nova has **two lanes**. The conversation lane may
+reason and explain over canonical project data and holds no capability — no
+tool, no web access, no database handle, no service-role client, no say in what
+it reads. The action lane is the binding in `bindings/`, unchanged, with its
+existing preflight, price, confirmation and execution path. Generated text is
+never the last thing before a consequential effect; a press is.
+
+And the transcript is memory, not truth: deleting a thread must not change
+canonical business state, though it may remove what Nova can infer from earlier
+dialogue.
