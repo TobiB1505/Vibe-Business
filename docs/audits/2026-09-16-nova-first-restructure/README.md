@@ -80,6 +80,29 @@ Slice 5's and Slice 6's migrations are applied to the production project. This i
 
 ---
 
+## Correction — 2026-09-17, finishing Slices 7 and 8
+
+**§E.4 was answered, and it is the answer the ownership model already implied.**
+The audit left *are threads also account-level?* open and Slice 7 stopped on it, because §C.3 and §D put **Products · New chat · Threads · Settings** at the account level while §C.9 makes a thread project-scoped. The owner answered: the conversation group lives **inside the active product**, under the switcher. *Threads* at the account level names something that does not exist, and *New chat* there asks which product. §E.5 dissolves with it — the phone has three destinations rather than four, because the product has a conversation and the things it is about rather than seven peers.
+
+**The rail is a hierarchy, not a shorter list.** §D's *"remove what nothing reaches"* framing suggested the seven would be cut. None was: every address is the one it was, `PROJECT_SECTIONS` is still the address table, and all five capabilities keep their row, their count and the Agent's live status. What changed is that they are named as a **set** — the workspace — below the conversation and one step quieter. Demotion is presentation and never reach; the disclosure the audit considered would trade seven equal doors for one nobody opens.
+
+**§4's pane is a parameter, not a column the audit could have specified.** §C.7 and §D both describe a pane and a bottom sheet. It shipped as `?artifact=<kind>[&ref=<id>]` on a thread's own address, and the reason is the sentence §4 makes rather than the geometry it assumed: the artifact has to be visible *while the conversation stays visible*, and a route would have replaced the conversation and then needed a mechanism to come back to it. A parameter needs none — the founder never left.
+
+**And the sheet is a stacked section, which is a departure from ADR 0108.** A `<dialog>` and an `<aside>` cannot hold one server-rendered artifact between them without rendering it twice: two business maps, two sets of ids, two of every control inside a review gate. What ADR 0108 protects against is a *squeezed column*; a section at full width is the other honest answer, and it is deep-linkable where a sheet is not.
+
+**Three of the eight artifact kinds are named rather than drawn.** §C.7's table implied eight views. A plan is a sequence read in order, a run is five stages and two live streams, and a founder question belongs to the run paused on it — each is a workspace rather than a thing to look at, and a third of one beside a conversation is not a smaller version of it. The decision is a branch with a reason rather than a gap, which is why the switch has no `default:`.
+
+**The audit did not anticipate that the conversation could not open a thread.** §C.8 forecloses the service-role client for this layer by name and the tables were built for a founder who reads and a durable step that writes — so `nova_threads` granted `authenticated` no insert at all. Slice 6 then called `ensureOpenThread` under the founder's own session, and the first question in a project no run had finished in failed with `42501`. Nothing caught it: `FakeDatabase` models rows and not grants. The grant is three columns now, behind a policy that reads ownership off the project row.
+
+**And it found a door with no caller.** `insert own nova_messages` admitted a founder writing their own words, and no code has ever used it — the one conversational write is the definer function, which does not pass through a policy at all. It was the route every direct-insert attack takes, so it is revoked. Least privilege (rule 11) rather than a new mechanism.
+
+**Slice 8's order held, and the rewrite is where the value was.** Eight assertions titled *"Nova Home"* moved onto Nova Home, and moving them found a defect sitting in production while the test passed: a stalled run read *"Analyzing business"* in mint, because the header called every operation the ranking held `active`. Two claims moved to the surfaces that own them — the missing score to the production business map, the evidence drawer's focus trap to a panel mounting `CitationCount` as four production surfaces do. Five legacy components deleted; the four fixture-only ones are **retained deliberately**, because retiring them is re-pointing 24 assertions rather than deleting four files.
+
+**What the browser could not be asked.** Every press in this restructure reaches a Server Action that begins with `requireProjectAccess`, and the browser suite has no session — so *New chat*, the composer's submit and the thread list's links are proved as far as that front door and no further. What a browser did prove is the half a unit test cannot: which group a founder's eye reaches first, that the pane sits beside the conversation at 1280 and under it at 390, and that a founder's own question is drawn as theirs.
+
+---
+
 ## A. Verdict
 
 1. **The domain layer is ready and does not need to change.** `src/modules/` already exposes the query side a chat needs: nearly every module has a pure `build<Thing>View(input) → object` beside an async `get*`/`read*` in its store (§B.4). The commands are the existing Server Actions. Nothing in the brief needs a new engine, a new provider or a new background technology.
@@ -569,7 +592,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** *"Why is conversion our biggest problem?"* gets a grounded answer with the business-health artifact beside it; *"run the audit again"* ends on the same priced control the ranking offers; *"merge it"* opens the approval; an injection attempt produces a refusal and a row; and a founder who says *"the second one"* is understood.
 - **Not in this slice.** Multi-turn model memory beyond the bounded pack. Nova initiating a conversation on her own.
 
-### Slice 7 — The app shell ⚠️ *half shipped ([Sprint 0229](../../sprints/0229-the-shell-is-a-surface.md)): the files moved, the navigation did not, and the reason is §E.4 — see the 2026-09-17 correction*
+### Slice 7 — The app shell ✅ *shipped in two parts: the files moved ([Sprint 0229](../../sprints/0229-the-shell-is-a-surface.md)), then the navigation and the pane once §E.4 was answered ([Sprint 0231](../../sprints/0231-the-door-nobody-walked-through.md), [Sprint 0232](../../sprints/0232-seven-doors-and-a-conversation.md)) — see the 2026-09-17 corrections*
 
 - **Goal.** Products · New chat · Threads · Settings at the app level; Nova + Workspace inside a project; every old section address still resolving full-page.
 - **Affected.** `@rail/project-rail.tsx` and the rail layouts (contents, not mechanism), `mobile-tab-bar.tsx` (Nova · Workspace · Threads · Account), `project-shell.tsx` (`PROJECT_SECTIONS` stays the address table), the shell's fourteen files → `features/shell/`, `rail-switch.test.ts`, `project-sections.test.ts`, `e2e/{rail-fold,mobile-shell}.spec.ts`.
@@ -577,7 +600,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** A founder opening a project sees Nova and the workspace, and every old section URL resolves to its artifact full-page.
 - **Not in this slice.** Deleting anything.
 
-### Slice 8 — Legacy retirement ⚠️ *part shipped ([Sprint 0230](../../sprints/0230-three-files-nothing-reached.md)); the order was wrong and is corrected — see the 2026-09-17 correction*
+### Slice 8 — Legacy retirement ✅ *shipped in two parts: three unreferenced files ([Sprint 0230](../../sprints/0230-three-files-nothing-reached.md)), then the rewrite the order demanded ([Sprint 0233](../../sprints/0233-the-card-that-outlived-its-screen.md)) — see the 2026-09-17 corrections*
 
 - **Goal.** Remove what nothing reaches: the seven dead or fixture-only files, `design-studies/legacy-*`, their scenarios and the negative assertions guarding them, the "Command Center" vocabulary, and the ROADMAP entries that closed.
 - **New.** Nothing. `RETIRED_CLAIMS` entries for the sentences that stop being true.

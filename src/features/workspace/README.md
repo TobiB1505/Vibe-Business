@@ -1,12 +1,16 @@
 # Workspace
 
-What Nova is talking about, and where it is read in full. Decided by
-[ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §4,
-built in Slice 4.
+What Nova is talking about — beside the conversation, and at its own address.
+Decided by
+[ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §4: the
+addresses in Slice 4, the pane in Slice 7.
 
 ```
-registry/artifacts.ts   ArtifactKind → segment, read, views
-host/artifact-open.ts   an artifact → { href, label }: the way out of the conversation
+registry/artifacts.ts        ArtifactKind → segment, read, views; and the two addresses
+host/artifact-open.ts        an artifact → { href, label }: the way out of the conversation
+host/workspace-pane.tsx      the frame: a name, a way out, and whatever it is given
+host/project-workspace-pane.tsx  the same frame with the reads behind it
+host/artifact-views.tsx      kind → the owning feature's view, or the reason it is opened instead
 ```
 
 The **union itself** is [`src/modules/nova/artifacts.ts`](../../modules/nova/artifacts.ts),
@@ -16,12 +20,13 @@ enumerates, what a moment resolves to — while _where it is read_ and _what dra
 it_ are the product surface. It lived here for one slice, and the thread schema
 is what showed the seam.
 
-**Nothing here is a view.** That is the point of the directory, not an
+**Nothing here draws an artifact.** That is the point of the directory, not an
 omission. _One view, two frames, and no copies_: the artifact view **is** the
-owning feature's view — `AuditOverview`, `UnderstandingPanel`, `MoveCard`, the
-three Agent stages, `ExperimentCard`, `FounderInputCard` — and eight of them
-already carry a `presentation` prop for exactly this. A universal artifact
-renderer would be a second copy of every screen, drifting from the first.
+owning feature's view — `AuditBlock`, `UnderstandingPanel`, `MoveBlock`,
+`ReviewBlock`, `ExperimentCard` — and each already carries the compact
+presentation this needs. `artifact-views.tsx` is a switch that mounts them and
+a frame that names them; a universal artifact renderer would be a second copy of
+every screen, drifting from the first.
 
 `artifacts.ts` holds strings and arithmetic over them, imports no component,
 and names its reads and views as text that `artifacts.test.ts` checks. That is
@@ -29,24 +34,58 @@ what lets one file answer _where does this open_ from a client component, a
 server component or a test, without pulling ten features' server graphs behind
 it — the same argument that refused a `commands.ts` barrel in Slice 3.
 
-## What a founder sees today, and what is still missing
+## The pane
 
-The thread's blocks now carry an address: an audit reading says it is read in
-**Business Health**, a prepared change in **Agent**, a Move in **Action Plan**.
-Before this, no block in the thread linked anywhere at all.
+The workspace is a **query parameter on the conversation's own address** —
+`?artifact=<kind>[&ref=<id>]#workspace` on a thread — and not a route. A route
+would have replaced the conversation, and _returning to it_ would then have
+needed a mechanism: a stored scroll position, a back stack, a remembered
+thread. A parameter needs none of that, because the founder never left. The
+transcript is the same rendered tree, the composer keeps its draft, and a
+founder can send somebody a link to _the thing Nova was talking about_ with the
+conversation around it.
 
-**The pane and the sheet are not here yet.** ADR 0109 §4 says the artifact is a
-pane beside the thread on a desktop and a bottom sheet below `lg`. The reason
-neither is here is geometry: at 1280 the project rail takes 256px and Nova's
-work column 300 more, leaving the thread about 640 — a third column splits that
-into two unreadable ones, and a prepared change's review gate at 300px is not a
-smaller version of that screen, it is a different one. The rail is what has to
-go, and it goes in Slice 7, which is the slice that owns the navigation. Until
-then the artifact renders inline in the thread, which is where it already was.
+Two columns from `lg`, two stacked sections below it.
+[ADR 0108](../../../docs/decisions/0108-a-phone-is-not-a-narrow-desktop.md) says
+a phone gets a bottom sheet, and this is a section instead — the reason is DOM
+rather than taste. A sheet is a `<dialog>` and a column is an `<aside>`, and one
+server-rendered artifact cannot be in both without being rendered twice: two
+business maps, two sets of ids, two of every control inside a review gate. The
+founder reaches it the same way either way, it is deep-linkable, and returning
+is scrolling rather than dismissing. What ADR 0108 was protecting against is a
+_squeezed column_, and a section at full width is the other honest answer.
 
-Recorded rather than quietly deferred, because a `host/` holding a link and
-claiming to be a pane is the parallel architecture this restructure must not
-build.
+Which artifact: the address when it says, otherwise the last thing Nova pointed
+at in that thread. A parameter naming a kind that does not exist, or omitting a
+reference the address interpolates, resolves to **nothing** rather than to a
+guess — `?artifact=opportunity` with no `ref` would open the pane on "a Move"
+with no Move.
+
+### Five are drawn, three are named
+
+| Kind              | What the pane does                                                                                                                                    |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `business_health` | `AuditBlock` — the thread's own                                                                                                                       |
+| `product`         | `UnderstandingPanel`, with no controls: confirming, correcting and re-scanning are consequential and two are priced                                   |
+| `opportunity`     | `MoveBlock`                                                                                                                                           |
+| `prepared_change` | `ReviewBlock`, at whatever stage the change is                                                                                                        |
+| `experiment`      | `ExperimentCard` for the most recent merged change                                                                                                    |
+| `action_plan`     | **named**: a sequence read in order, with a control per step. Three steps of it in a column is not a smaller plan                                     |
+| `agent_execution` | **named**: five stages and two live streams. A third of it while the run moves is what a founder would watch instead of the screen built for watching |
+| `founder_input`   | **named**: a question belongs to the run paused on it, and it is already the first thing on Nova's own screen when it matters                         |
+
+The three are a decision with a reason rather than a gap, which is why
+`artifact-views.tsx` has no `default:` branch: a ninth kind fails the build
+until somebody makes the same decision about it.
+
+### Why the frame holds no read
+
+So a browser can see it. Every read here needs a session-scoped Supabase client
+and the fixture route the browser suite drives has neither a session nor a
+database — a pane that resolved its own artifact could be screenshotted at 390px
+by nothing at all, which is rule 69's third question answered with a shrug. It
+is also the cost the registry exists to avoid: `artifact-views.tsx` pulls ten
+features' server graphs, and the frame must not.
 
 ## What must never happen here
 

@@ -26,11 +26,16 @@ home/       the project index — the ranking mounted as a thread
   nova-rise.tsx             the entrance
   footnote.ts               echo suppression between a prompt and its control
   nova-artifact.ts          which workspace artifact a moment is about (pure)
+  nova-header-status.ts     what the line under her name says, from the run's phase
 thread/
   blocks/                   BlockKind → the owning feature's view, framed
-  queries.ts                one thread's three bounded reads
+  queries.ts                one thread's three bounded reads, and the list of them
   thread-view.tsx           the stored turns, read back, with the composer under them
-  thread-skeleton.tsx       the first frame both thread routes answer a click with
+  thread-list.tsx           every conversation this product has had, and which is current
+  turn-pointers.tsx         the two turns that are not words: a chip, and a recorded offer
+  new-thread-button.tsx     *New chat* — a button, because opening one is a write
+  commands/new-thread.ts    "use server" — opens one, or reuses an empty one
+  thread-skeleton.tsx       the first frame each thread route answers a click with
 conversation/
   nova-composer.tsx         the one input in this product
   queries.ts                what a question is answered from, composed from the screens' own reads
@@ -58,15 +63,35 @@ available to carry. `features → features` is ordinary: the thread's blocks mou
 the Agent's and the Plan's views, which is what a thread composing the product
 means.
 
-## What arrives next, and where
+## The conversation, end to end
 
-Each lands **beside** `home/`, never inside it, and each is a decision under
-[ADR 0109](../../../docs/decisions/0109-nova-first-application-shell.md) §5 and
-§6 rather than a feature this README can promise.
+`/app/projects/:id` is the ranking as a thread. `/threads` is every conversation
+this product has had, with the **current** one marked — current being where the
+next run event lands, which is the most recently created open thread, which is
+the same rule `findOpenThread` applies rather than a second answer.
+`/threads/:threadId` is one conversation, with the composer under it and the
+workspace beside it.
 
-| Slice | Directory  | What it is                                                |
-| ----- | ---------- | --------------------------------------------------------- |
-| 7     | `threads/` | the thread list, and the shell destination that needs one |
+A thread is named after the **first question asked in it**, set inside the same
+statement that writes the turn. Until there is one it keeps the name Vibe gave
+it: a thread a run opened has no question to be named after, and _"Your
+product"_ is the honest placeholder. Before this every thread was called that
+and stayed called that, which makes a list of conversations a list nobody can
+use.
+
+**Two turns are not words**, and both used to draw nothing at all. An `artifact`
+turn is a chip that opens the pane beside the conversation; an `action_proposal`
+is a line recording that she offered something, pointing at the ranking rather
+than growing a button. A stored proposal rendered as a control would be a second
+copy of a priced control, built from a row rather than from the thing it acts
+on, and still there a week after the change it was about had merged.
+
+**A founder's own words are theirs.** Before the composer they could not occur;
+once they could, they were drawn exactly like a run finishing — so the one line
+on the screen a founder had written themselves read as something Vibe had said
+to them. `NovaBubble` has a third register now, and it is alignment rather than
+a fifth colour: the register axis is about the _moment_, and a question is not
+amber or coral.
 
 The shape of the conversation is worth restating here, because it is the part
 that could erode quietly. Nova has **two lanes**. The conversation lane may

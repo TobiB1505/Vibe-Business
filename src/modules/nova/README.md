@@ -27,11 +27,11 @@ actions.ts     what each control says, costs, and does to the world
 feed.ts        the focus as entries on a screen — sentences, one control, progress
 home-view.ts   the focus as Home composes it — one card, a strip, a bounded stack
 blocks.ts      which block a moment or a running operation shows — total, both ways
-artifacts.ts   what the workspace can show, and which artifact a block opens
+artifacts.ts   what the workspace can show, which artifact a block opens, and how one is spelled in a URL
 first-run.ts   Nova's introduction, and the walkthrough she offers once
 onboarding.ts  the scan and the reveal, and what may ride along with "yes"
 briefing/      what is worth saying beside the focus, and how fresh it is
-threads/       the transcript: schema, store, read model — memory, never truth
+threads/       the transcript: schema, store, read model, refusals — memory, never truth
 conversation/  the lane that may reason: the pack, the prompt, the checks, the bound
 intent/        a founder's sentence → one catalogue id, or nothing, without a model
 voice/
