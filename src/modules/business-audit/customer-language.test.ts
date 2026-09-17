@@ -603,20 +603,4 @@ describe("the internal root problem never reaches a screen", () => {
     expect(withJargon.blocking).toEqual([]);
   });
 
-  /**
-   * A source assertion, because this boundary is invisible in the rendered
-   * output: showing the wrong field looks perfectly reasonable on screen, and
-   * only the absence of a validation error would ever hint at it.
-   */
-  it("is not referenced by the component that shows the reasoning trail", async () => {
-    const { readFileSync } = await import("node:fs");
-    const source = readFileSync(
-      "src/features/health/reasoning-trail.tsx",
-      "utf8",
-    );
-
-    // The doc comment explains why it is absent; the JSX must not use it.
-    const jsx = source.slice(source.indexOf("export function ReasoningTrail"));
-    expect(jsx).not.toContain("conclusion.rootProblem");
-  });
 });

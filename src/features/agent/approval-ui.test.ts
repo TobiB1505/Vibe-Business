@@ -126,7 +126,6 @@ describe("no deploy affordance exists anywhere in the project page", () => {
     "features/agent/approval-panel.tsx",
     "features/agent/review-panel.tsx",
     "features/agent/preview-panel.tsx",
-    "features/agent/validation-panel.tsx",
   ];
 
   it("has no approve-and-merge, merge, deploy or ship control outside the merge panel", () => {

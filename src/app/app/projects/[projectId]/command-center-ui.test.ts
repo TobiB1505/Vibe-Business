@@ -249,7 +249,6 @@ describe("one Product Scan, in the founder's words", () => {
         ).replace(/\/\*[\s\S]*?\*\//g, " "),
       ],
       ["features/product/intelligence-summary.tsx", renderedCopy("features/product/intelligence-summary.tsx")],
-      ["features/product/live-intelligence-summary.tsx", renderedCopy("features/product/live-intelligence-summary.tsx")],
       ["features/health/content.tsx", renderedCopy("features/health/content.tsx")],
     ] as const;
     for (const [file, copy] of files) {

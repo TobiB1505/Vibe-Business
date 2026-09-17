@@ -18,7 +18,7 @@ This record was written and reviewed the same day. The review found two things w
 
 **3. One claim was too absolute.** §C.5's first condition said *"Deleting every thread changes no screen except the thread list."* That is right about canonical business state and wrong about the conversation: a founder who says *"okay, Variante B"* and then *"dann machen wir das"* is relying on the transcript to carry the reference. The rule is now two sentences — deleting a thread must not change canonical business state, and may remove conversational memory.
 
-## Correction — 2026-09-17, while building Slices 4 to 7
+## Correction — 2026-09-17, while building Slices 4 to 8
 
 Slice 4's own definition turned out to be two slices wearing one name, and the seam is geometric rather than architectural. Recorded here rather than rewritten in §D, so the original plan stands and what was actually built is legible beside it.
 
@@ -33,6 +33,8 @@ Slice 4's own definition turned out to be two slices wearing one name, and the s
 **`/threads` is a route the plan did not name.** §C.3 listed only `threads/[threadId]`. A thread id is not something a screen can link to without reading one, and §D forbids Home adding a read — so the project's conversation gets a stable address that resolves to whichever thread is open, and Nova's rail links to *that*. Without it the route would have been reachable by nothing, which is the dead architecture this plan is under instruction not to build.
 
 **The migration is written, tested against a real PostgreSQL, and not deployed.** `SUPABASE_ACCESS_TOKEN` is unset in the session that built this, so `pnpm db:status`, `pnpm db:push` and `pnpm db:types` cannot run (rules 29–34 forbid the SQL-editor fallback in any case). `supabase/tests/nova-threads.migration.ts` applies every migration to a cluster it creates itself and proves twenty-one properties of the result, so the SQL is not unverified — but the remote database does not have these tables, and `src/types/database.ts` has not been regenerated. It was left alone rather than hand-edited: it is a generated file, and a hand-written table in it is a claim about a database nobody checked. **Deploying is the owner's next step.**
+
+**Slice 8's order was wrong, and the reason is worth more than the slice.** It says *remove what nothing reaches*, and lists `design-studies/legacy-*` among the things nothing reaches. They are reached: eight assertions in `e2e/nova-home.spec.ts` and one in `e2e/ground.spec.ts` drive the `nova-*` fixture scenarios, and those scenarios mount `legacy-focus-card.tsx` and its four siblings. So eight browser assertions titled *"Nova Home"* are about the card the thread replaced — they pass, and they are about a screen no founder can reach. Deleting the files first would leave the product with **less** coverage than it has now. The order is: rewrite those against a fixture that mounts `NovaFocusThread`, then delete. Three components with no reference at all were deleted; the four that are fixture-only, and the "Command Center" vocabulary that retires with one of them, are named in the ROADMAP with what each costs.
 
 **Slice 7's navigation cannot be built until §E.4 is answered, and this is where that became visible.** §C.3 and §D put **Products · New chat · Threads · Settings** at the *account* level. §C.9 and §E.4 make a thread **project-scoped**, and §E.4 leaves account-level threads open. Those cannot both hold: *Threads* at the account level names something that does not exist, and *New chat* asks which product. The same decision blocks the phone's four tabs, where §E.5 already asks which of Threads and Account is cut. Inventing either would be inventing a product requirement, which rule 14 and the brief both forbid — so the navigation waits, and with it ADR 0109 §4's pane, which waits on the rail shrinking.
 
@@ -557,7 +559,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** A founder opening a project sees Nova and the workspace, and every old section URL resolves to its artifact full-page.
 - **Not in this slice.** Deleting anything.
 
-### Slice 8 — Legacy retirement
+### Slice 8 — Legacy retirement ⚠️ *part shipped ([Sprint 0230](../../sprints/0230-three-files-nothing-reached.md)); the order was wrong and is corrected — see the 2026-09-17 correction*
 
 - **Goal.** Remove what nothing reaches: the seven dead or fixture-only files, `design-studies/legacy-*`, their scenarios and the negative assertions guarding them, the "Command Center" vocabulary, and the ROADMAP entries that closed.
 - **New.** Nothing. `RETIRED_CLAIMS` entries for the sentences that stop being true.

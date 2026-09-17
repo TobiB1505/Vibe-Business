@@ -81,7 +81,6 @@ describe("every panel the allowlists cover still yields controls", () => {
     "features/agent/outcome-panel.tsx",
     "features/agent/business-impact-panel.tsx",
     "features/agent/preview-panel.tsx",
-    "features/agent/validation-panel.tsx",
     "features/agent/review-panel.tsx",
   ])("%s", (file) => {
     expect(actionLabels(source(file)).length).toBeGreaterThan(0);

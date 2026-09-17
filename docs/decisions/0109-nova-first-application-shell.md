@@ -146,7 +146,7 @@ Nine slices, each independently green, each reverting by deleting its files, in 
 
 ## Status of the code
 
-**Slices 0–6 have shipped and Slice 7 is half shipped** ([Sprint 0222](../sprints/0222-nova-leaves-the-route-layer.md) through [0229](../sprints/0229-the-shell-is-a-surface.md)).
+**Slices 0–6 have shipped; Slices 7 and 8 are part shipped** ([Sprint 0222](../sprints/0222-nova-leaves-the-route-layer.md) through [0230](../sprints/0230-three-files-nothing-reached.md)).
 
 §2 is complete: the layering holds with no exception available, and `src/components` is primitives only — the shell moved to `src/features/shell/` in Slice 7, and the boundary test found that `app-frame.tsx` had been classified as a primitive and composes the account surface. §4's registry is `src/features/workspace/` over a closed union in `src/modules/nova/artifacts.ts`. §6 is real, and `transcript-is-not-a-position.test.ts` refuses any import that would let the ranking read a message. §5 is built: a bounded pack assembled by pure code, one model with no capability, every field validated, a deterministic template underneath, one `"use server"` command, and seven conditions held as assertions. The price is [ADR 0110](0110-a-question-costs-nothing-and-is-bounded.md)'s.
 
@@ -154,4 +154,6 @@ Nine slices, each independently green, each reverting by deleting its files, in 
 
 **Not deployed, and off by default.** Slice 5's and Slice 6's migrations are proven against a real PostgreSQL cluster the test harness creates itself, and the remote database has neither: the sessions that wrote them had no `SUPABASE_ACCESS_TOKEN`, so `pnpm db:push` and `pnpm db:types` could not run, and the SQL-editor fallback is refused by rules 29–34. `src/types/database.ts` is two migrations behind on purpose rather than hand-edited. The conversation lane is additionally behind `NOVA_CONVERSATION_ENABLED`, default off, and has never met a model: there is no conversation eval.
 
-Every address is unchanged at HEAD. Slice 8 is recorded in [the audit](../audits/2026-09-16-nova-first-restructure/README.md).
+**Slice 8 removed three components nothing referenced and stopped there**, because its own order was wrong: eight browser assertions in `e2e/nova-home.spec.ts` drive fixture scenarios that mount `design-studies/legacy-*`, so deleting those first would leave the product with less coverage than it has. Rewrite, then delete — the ROADMAP names what each remaining file costs.
+
+Every address is unchanged at HEAD.
