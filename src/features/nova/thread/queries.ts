@@ -2,7 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { findOpenThread, getThread, readThreadMessages } from "@/modules/nova/threads/store";
+import {
+  findOpenThread,
+  getThread,
+  listThreads,
+  readThreadMessages,
+} from "@/modules/nova/threads/store";
+import type { Thread } from "@/modules/nova/threads/schema";
 import {
   buildThreadView,
   operationRunIdsIn,
@@ -88,4 +94,41 @@ export async function readOpenThreadId(
 ): Promise<string | null> {
   const thread = await findOpenThread(supabase, projectId);
   return thread?.id ?? null;
+}
+
+/**
+ * How many conversations the list shows.
+ *
+ * Twenty is a long time for one product and short enough that the read stays a
+ * constant. There is no paging control and this is not an oversight: a founder
+ * looking for a conversation from three months ago is looking for *what
+ * happened*, and that is the Activity log, which has paging and is the record.
+ * Threads are memory, not an archive to browse.
+ */
+export const THREAD_LIST_LIMIT = 20;
+
+export type ThreadListEntry = {
+  thread: Thread;
+  /** Whether this is the one a run event would land in — the newest open one. */
+  current: boolean;
+};
+
+/**
+ * This project's conversations, and which one is current.
+ *
+ * "Current" is computed here rather than stored, from the same rule
+ * `findOpenThread` applies: the most recently created open thread is where the
+ * next event lands. Two places asking the question one way is what keeps the
+ * list's highlight and the store's writes talking about the same thread.
+ */
+export async function readThreadList(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<ThreadListEntry[]> {
+  const [threads, open] = await Promise.all([
+    listThreads(supabase, { projectId, limit: THREAD_LIST_LIMIT }),
+    findOpenThread(supabase, projectId),
+  ]);
+
+  return threads.map((thread) => ({ thread, current: thread.id === open?.id }));
 }

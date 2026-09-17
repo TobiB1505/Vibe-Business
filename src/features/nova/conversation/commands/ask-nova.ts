@@ -13,6 +13,7 @@ import {
 } from "@/modules/nova/conversation/payload";
 import { answerNovaQuestion } from "@/modules/nova/conversation/service";
 import { isNovaConversationEnabled } from "@/modules/nova/conversation/switch";
+import { parseArtifactRef, type ArtifactRef } from "@/modules/nova/artifacts";
 import { resolveNovaIntent } from "@/modules/nova/intent/resolve";
 import {
   appendConversationTurn,
@@ -62,7 +63,21 @@ import { buildQuestionContext } from "../queries";
  */
 
 export type AskNovaResult =
-  | { ok: true; reply: string; artifactKind: string | null; actionId: string | null }
+  | {
+      ok: true;
+      reply: string;
+      /**
+       * What she pointed at, already parsed into the union.
+       *
+       * A `{ kind, ref }` pair rather than a kind, because the composer builds a
+       * link out of it and two of the eight kinds need their reference to have
+       * an address at all. Parsed here rather than at the surface: a client
+       * component checking a string against a closed union is a second place
+       * for the check to be wrong.
+       */
+      artifact: ArtifactRef | null;
+      actionId: string | null;
+    }
   /** A bound, a refused question, or a project that cannot be reached. */
   | { ok: false; message: string };
 
@@ -147,7 +162,7 @@ export async function askNovaAction(projectId: string, question: string): Promis
     return {
       ok: true,
       reply,
-      artifactKind: intent.kind === "artifact" ? intent.artifact : null,
+      artifact: intent.kind === "artifact" ? parseArtifactRef(intent.artifact, undefined) : null,
       actionId: intent.kind === "action" ? intent.actionId : null,
     };
   }
@@ -218,7 +233,10 @@ export async function askNovaAction(projectId: string, question: string): Promis
   return {
     ok: true,
     reply: outcome.reply.message,
-    artifactKind: outcome.reply.artifact?.kind ?? null,
+    artifact: parseArtifactRef(
+      outcome.reply.artifact?.kind,
+      outcome.reply.artifact?.ref ?? undefined,
+    ),
     actionId: outcome.reply.actionId ?? null,
   };
 }

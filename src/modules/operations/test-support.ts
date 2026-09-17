@@ -124,6 +124,42 @@ function matches(row: Row, filters: Filter[]): boolean {
   });
 }
 
+/**
+ * One ordering key, applied the way Postgres applies it.
+ *
+ * Numbers compare as numbers. Everything used to be stringified before
+ * comparison, which sorts an integer column as text: `sequence` came back
+ * 1, 10, 11, … 2, 20. Every ordered read in the product that is keyed on a
+ * counter rather than a timestamp was therefore modelled wrongly — the Product
+ * Scan timeline, the agent execution events, the agent activity feed, all of
+ * which order by `sequence` and several of which then cap the result, so the
+ * fake would hand back a different *set* of rows than Postgres would, not just
+ * a different order.
+ *
+ * Nulls are their own comparison and never a value. `null` stringified is `""`,
+ * which sorts before every real timestamp ascending and after every one
+ * descending — the opposite of `nulls last` in both directions.
+ */
+function compareBy(
+  left: Row,
+  right: Row,
+  key: { column: string; ascending: boolean; nullsFirst: boolean },
+): number {
+  const a = left[key.column];
+  const b = right[key.column];
+  const direction = key.ascending ? 1 : -1;
+
+  const aMissing = a === null || a === undefined;
+  const bMissing = b === null || b === undefined;
+  if (aMissing || bMissing) {
+    if (aMissing && bMissing) return 0;
+    return (aMissing ? 1 : -1) * (key.nullsFirst ? -1 : 1);
+  }
+
+  if (typeof a === "number" && typeof b === "number") return (a - b) * direction;
+  return String(a).localeCompare(String(b)) * direction;
+}
+
 export class FakeDatabase {
   private readonly tables = new Map<string, Row[]>();
 
@@ -140,6 +176,22 @@ export class FakeDatabase {
    * survives review (VB-020).
    */
   failNextReadWith: { table: string; code?: string; message: string } | null = null;
+
+  /** The last timestamp this database handed out, so the next one is later. */
+  private lastStamp = 0;
+
+  /**
+   * A timestamp strictly later than the previous one.
+   *
+   * Postgres's `now()` is transaction time at microsecond resolution, so two
+   * rows inserted by two statements never carry the same value. `new Date()`
+   * has millisecond resolution and routinely does — which makes a read that
+   * orders by `created_at` return a tie, and a tie is an order nothing decides.
+   */
+  now(): string {
+    this.lastStamp = Math.max(this.lastStamp + 1, Date.now());
+    return new Date(this.lastStamp).toISOString();
+  }
 
   rows(table: string): Row[] {
     let rows = this.tables.get(table);
@@ -955,8 +1007,15 @@ export class FakeDatabase {
 
 class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   private filters: Filter[] = [];
-  private orderColumn: string | null = null;
-  private orderAscending = true;
+  /**
+   * Every `.order()` in the chain, in the order PostgREST applies them.
+   *
+   * It held the *last* one, as a column and a direction, so a second `.order()`
+   * silently replaced the first — which turns a deterministic read into a
+   * tie-break nothing decides. `nova_threads` is read by "last message, then
+   * created", and came back in whatever order the rows were inserted in.
+   */
+  private orderKeys: { column: string; ascending: boolean; nullsFirst: boolean }[] = [];
   private limitCount: number | null = null;
   private rangeBounds: { from: number; to: number } | null = null;
   private countMode = false;
@@ -1018,9 +1077,22 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     this.filters.push({ kind: "lt", column, value });
     return this;
   }
-  order(column: string, options?: { ascending?: boolean }): this {
-    this.orderColumn = column;
-    this.orderAscending = options?.ascending ?? true;
+  order(column: string, options?: { ascending?: boolean; nullsFirst?: boolean }): this {
+    const ascending = options?.ascending ?? true;
+    this.orderKeys.push({
+      column,
+      ascending,
+      /*
+       * Postgres's own default, which PostgREST passes through: ascending sorts
+       * nulls last, descending sorts them first. A double that put them
+       * wherever `localeCompare("")` happened to land would model `nulls last`
+       * as `nulls first` on every descending read — and `nova_threads` is
+       * ordered by `last_message_at desc nulls last` precisely so a
+       * conversation nobody has said anything in sorts *after* the ones they
+       * have.
+       */
+      nullsFirst: options?.nullsFirst ?? !ascending,
+    });
     return this;
   }
   limit(count: number): this {
@@ -1086,30 +1158,14 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   private resolveRows(): Row[] {
     let rows = this.db.rows(this.table).filter((row) => matches(row, this.filters));
 
-    if (this.orderColumn) {
-      const column = this.orderColumn;
+    if (this.orderKeys.length > 0) {
+      const keys = this.orderKeys;
       rows = [...rows].sort((a, b) => {
-        const direction = this.orderAscending ? 1 : -1;
-        const left = a[column];
-        const right = b[column];
-
-        /*
-         * Numbers compare as numbers.
-         *
-         * Everything used to be stringified before comparison, which sorts an
-         * integer column as text: `sequence` came back 1, 10, 11, … 2, 20. Every
-         * ordered read in the product that is keyed on a counter rather than a
-         * timestamp was therefore modelled wrongly — the Product Scan timeline,
-         * the agent execution events, the agent activity feed, all of which order
-         * by `sequence` and several of which then cap the result, so the fake
-         * would hand back a different *set* of rows than Postgres would, not just
-         * a different order.
-         */
-        if (typeof left === "number" && typeof right === "number") {
-          return (left - right) * direction;
+        for (const key of keys) {
+          const compared = compareBy(a, b, key);
+          if (compared !== 0) return compared;
         }
-
-        return String(left ?? "").localeCompare(String(right ?? "")) * direction;
+        return 0;
       });
     }
 
@@ -1132,8 +1188,21 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
 
       for (const payload of payloads) {
         const row: Row = { id: `${this.table}_${this.db.rows(this.table).length + 1}`, ...payload };
-        row.created_at ??= new Date().toISOString();
-        row.updated_at ??= new Date().toISOString();
+        /*
+         * A clock that never stands still.
+         *
+         * `new Date()` has millisecond resolution, so two rows inserted in the
+         * same tick used to carry the *same* `created_at` — and every read that
+         * orders by it then returned them in an order nothing decides. Postgres
+         * does not behave that way: `now()` is transaction time at microsecond
+         * resolution, and two inserts are two transactions.
+         *
+         * Found by `openNewThread`: a founder pressing *New chat* must land in
+         * the thread they just opened, and the fake could answer either.
+         */
+        const stamp = this.db.now();
+        row.created_at ??= stamp;
+        row.updated_at ??= stamp;
 
         // `approved_at timestamptz not null default now()`. The application
         // deliberately does not send this column — a database default is what
@@ -1154,6 +1223,13 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         // check, so a double that answered `undefined` would make every turn
         // read as already seen.
         if (this.table === "nova_threads") row.last_read_sequence ??= 0;
+
+        // `nova_threads.status text not null default 'open'`. The store stopped
+        // sending it once `authenticated` was granted three columns and not
+        // this one (Slice 7's boundary migration) — so the default is now the
+        // only thing that sets it, and a double that left it `undefined` would
+        // make `findOpenThread` miss every thread it just opened.
+        if (this.table === "nova_threads") row.status ??= "open";
 
         // `nova_threads.status text not null default 'open'`. The store stopped
         // sending it once `authenticated` was granted three columns and not

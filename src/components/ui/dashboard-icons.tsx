@@ -44,8 +44,18 @@ export {
   SignOutIcon,
 } from "./icons.generated";
 
+/*
+ * Imported as well as re-exported, because `DashboardIcon` resolves these two
+ * by name: the rail asks for "threads" and "workspace", which are Vibe's words
+ * for two destinations, and the marks behind them are Lucide's path data in
+ * Vibe's frame (ADR 0101).
+ */
+import { ThreadsIcon, WorkspaceIcon } from "./icons.generated";
+
 export type DashboardIconName =
   | "nova"
+  | "threads"
+  | "workspace"
   | "home"
   | "products"
   | "repositories"
@@ -332,6 +342,10 @@ export function TargetIcon(props: IconProps) {
 export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardIconName }) {
   const Icon = {
     nova: NovaIcon,
+    /* Lucide path data in Vibe's frame (ADR 0101). The rail names a
+       destination — "threads", "workspace" — never a catalogue icon. */
+    threads: ThreadsIcon,
+    workspace: WorkspaceIcon,
     home: HomeIcon,
     products: ProductsIcon,
     repositories: RepositoriesIcon,

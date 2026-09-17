@@ -1,3 +1,4 @@
+import { parseArtifactRef, type ArtifactRef } from "../artifacts";
 import type { OperationType } from "../../operations/schema";
 import { THREAD_EVENT_WORDS, type Thread, type ThreadMessage } from "./schema";
 
@@ -121,4 +122,31 @@ export function operationRunIdsIn(messages: readonly ThreadMessage[]): string[] 
         .filter((id): id is string => id !== null),
     ),
   ];
+}
+
+/**
+ * The last thing Nova pointed at in this conversation.
+ *
+ * What the workspace opens on when the address does not say. A conversation is
+ * *about* something, and the most recent pointer is the best available answer
+ * to what — better than a default section, which would be the pane guessing,
+ * and better than nothing, which would make a founder press a chip to see what
+ * they were just told about.
+ *
+ * Null is ordinary: a thread of run events and questions has pointed at nothing
+ * yet, and the pane says so in its own words rather than opening on a section.
+ */
+export function latestArtifactIn(view: ThreadView): ArtifactRef | null {
+  for (let index = view.turns.length - 1; index >= 0; index -= 1) {
+    const turn = view.turns[index];
+    if (turn === undefined || turn.kind !== "artifact") continue;
+
+    const artifact = parseArtifactRef(
+      turn.message.artifact?.kind,
+      turn.message.artifact?.ref ?? undefined,
+    );
+    if (artifact !== null) return artifact;
+  }
+
+  return null;
 }

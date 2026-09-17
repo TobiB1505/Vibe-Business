@@ -150,14 +150,29 @@ test.describe("the phone's shell", () => {
 test.describe("the two levels of the phone's navigation", () => {
   test.use({ viewport: PHONE });
 
-  test("reaches every section, including the ones behind More", async ({ page }) => {
+  /**
+   * Rewritten in the open when the bar stopped being four sections and a
+   * *More* (ADR 0109 §1, Slice 7).
+   *
+   * What it asserted before was that four sections reached the thumb and the
+   * rest were behind a disclosure — true, and a description of the screen this
+   * restructure exists to replace. The bar is now Nova, the conversations and
+   * the workspace, because those are the three things a founder is doing
+   * rather than the first four items of a seven-item list. The reachability
+   * claim underneath is unchanged and is the point: every section is still one
+   * or two taps away, and *Project Settings* is still the one that would be
+   * unreachable if somebody filtered it here the way the desktop rail does.
+   */
+  test("reaches every section, including the ones inside the workspace", async ({ page }) => {
     await page.goto(SHELL);
     const bar = page.getByTestId("mobile-tab-bar");
 
-    // Four in the bar, and the fifth control opens the rest.
-    await expect(bar.getByRole("link")).toHaveCount(4);
+    // Nova and Threads in the bar; the workspace behind its own tab.
+    await expect(bar.getByRole("link")).toHaveCount(2);
+    await expect(bar.getByRole("link", { name: "Nova" })).toBeVisible();
+    await expect(bar.getByRole("link", { name: "Threads" })).toBeVisible();
 
-    await bar.getByRole("button", { name: "More" }).click();
+    await bar.getByRole("button", { name: "Workspace" }).click();
     const sheet = page.getByRole("dialog");
     /*
       Project Settings is filtered out of the desktop rail — it moved into the
@@ -284,9 +299,9 @@ test.describe("a sheet you can get out of", () => {
    */
   const SHEETS = [
     [
-      "the sections sheet",
+      "the workspace sheet",
       async (page: import("@playwright/test").Page) =>
-        page.getByTestId("mobile-tab-bar").getByRole("button", { name: "More" }).click(),
+        page.getByTestId("mobile-tab-bar").getByRole("button", { name: "Workspace" }).click(),
     ],
     [
       "the account sheet",

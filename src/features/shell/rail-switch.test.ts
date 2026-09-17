@@ -32,6 +32,14 @@ const PROJECT_SHELL = readFileSync("src/features/shell/project-shell.tsx", "utf8
  */
 const PROJECT_RAIL = PROJECT_SHELL.slice(PROJECT_SHELL.indexOf("export function ProjectRail"));
 const SWITCHER = readFileSync("src/features/shell/project-switcher.tsx", "utf8");
+/**
+ * The slot that fills the rail.
+ *
+ * Which sections reach which group is decided here rather than in the
+ * component: `ProjectRail` renders two arrays and the slot builds them, which
+ * is what lets the phone's bar be a second rendering of the same two.
+ */
+const RAIL_SLOT = readFileSync("src/app/app/@rail/project-rail.tsx", "utf8");
 const ACCOUNT_SHELL = readFileSync("src/features/shell/account-shell.tsx", "utf8");
 const APP_FRAME = readFileSync("src/features/shell/app-frame.tsx", "utf8");
 
@@ -87,8 +95,21 @@ describe("project settings belongs to the project switcher", () => {
     expect(PROJECT_SECTIONS.find((section) => section.id === "settings")?.label).toBe(
       "Project Settings",
     );
-    // And the rail must still keep it out of the main nav list.
-    expect(rail).toContain('item.id !== "settings"');
+    /*
+     * And it is still kept out of the rail's lists — by its group rather than
+     * by a filter on its id (ADR 0109 §1). The rail draws `nova` and
+     * `workspace`; Project Settings is neither, so there is nothing to exclude
+     * it *from* any more. Written as an assertion about the table because that
+     * is now where the decision is: a section that quietly acquired the
+     * `workspace` group would appear in the rail without anybody editing it.
+     */
+    expect(PROJECT_SECTIONS.find((section) => section.id === "settings")?.group).toBe("product");
+    const slot = code(RAIL_SLOT);
+    expect(slot).toContain('section.group === "nova"');
+    expect(slot).toContain('section.group === "workspace"');
+    expect(slot, "Project Settings must not be built into a rail group").not.toContain(
+      'section.group === "product"',
+    );
   });
 });
 

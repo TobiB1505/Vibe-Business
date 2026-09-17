@@ -7,6 +7,7 @@ import { NovaBubble } from "@/components/nova/nova-bubble";
 import { NovaAside, NovaLine } from "@/components/nova/nova-thread";
 import { MAX_QUESTION_CHARS } from "@/modules/nova/conversation/payload";
 import { askNovaAction, type AskNovaResult } from "./commands/ask-nova";
+import { ArtifactChip, ProposalLine } from "@/features/nova/thread/turn-pointers";
 
 /**
  * The one input in this product (ADR 0109 §5).
@@ -35,7 +36,18 @@ import { askNovaAction, type AskNovaResult } from "./commands/ask-nova";
  * (ADR 0110 §2), and the second would arrive against a thread the first had
  * already moved.
  */
-export function NovaComposer({ projectId }: { projectId: string }) {
+export function NovaComposer({
+  projectId,
+  /**
+   * The thread this is asking in, so a pointer in the answer has somewhere to
+   * open. The chip opens the workspace *beside this conversation*, which needs
+   * this conversation's address.
+   */
+  threadId,
+}: {
+  projectId: string;
+  threadId: string;
+}) {
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<AskNovaResult | null>(null);
   const field = useRef<HTMLTextAreaElement>(null);
@@ -54,13 +66,32 @@ export function NovaComposer({ projectId }: { projectId: string }) {
   return (
     <section className="flex flex-col gap-3" aria-label="Ask Nova">
       {result !== null && (
-        <NovaBubble aside={!result.ok} tail index={0}>
-          {result.ok ? (
-            <NovaLine>{result.reply}</NovaLine>
-          ) : (
-            <NovaAside>{result.message}</NovaAside>
+        <div className="flex flex-col gap-2.5">
+          <NovaBubble aside={!result.ok} tail index={0}>
+            {result.ok ? (
+              <NovaLine>{result.reply}</NovaLine>
+            ) : (
+              <NovaAside>{result.message}</NovaAside>
+            )}
+          </NovaBubble>
+
+          {/*
+            What she pointed at, and what she offered. Both are stored as their
+            own turns and both are drawn by the thread on the next load — they
+            are repeated here for the same reason the reply is: the founder is
+            looking at this spot, and an answer that mentioned a Move with no
+            way to open it would be a sentence about a thing behind a refresh.
+          */}
+          {result.ok && result.artifact !== null && (
+            <ArtifactChip projectId={projectId} threadId={threadId} artifact={result.artifact} />
           )}
-        </NovaBubble>
+
+          {result.ok && result.actionId !== null && (
+            <NovaBubble aside index={1}>
+              <ProposalLine projectId={projectId} actionId={result.actionId} />
+            </NovaBubble>
+          )}
+        </div>
       )}
 
       <form action={ask} className="flex flex-col gap-2.5">

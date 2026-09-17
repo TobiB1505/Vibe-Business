@@ -7,9 +7,12 @@ import {
 } from "../../operations/test-support";
 import {
   appendMessage,
+  countMessages,
   ensureOpenThread,
   getThread,
+  listThreads,
   markThreadRead,
+  openNewThread,
   readThreadMessages,
 } from "./store";
 
@@ -228,5 +231,122 @@ describe("appending a turn", () => {
 
     expect(db.rows("nova_threads")[0].last_message_at).not.toBeNull();
     expect(thread.lastMessageAt).toBeNull();
+  });
+});
+
+/**
+ * A second conversation, and the list of them (ADR 0109 §1, Slice 7).
+ *
+ * `ensureOpenThread` and `openNewThread` answer opposite questions and both are
+ * right. The first is *where does this belong* — a run finishing, a question
+ * asked with nothing in progress — and it must reuse. The second is a founder
+ * pressing **New chat**, which is a request for somewhere else to talk, and
+ * reusing would be ignoring them.
+ */
+describe("starting a second conversation", () => {
+  it("opens one beside the thread that is already open", async () => {
+    const db = new FakeDatabase();
+    const first = await ensureOpenThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "Your product",
+    });
+
+    const second = await openNewThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "New chat",
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(second.status).toBe("open");
+    expect(db.rows("nova_threads")).toHaveLength(2);
+  });
+
+  /**
+   * The property the schema's missing unique index exists for. After a second
+   * thread is opened it is where the next run event lands, because
+   * `findOpenThread` takes the most recently created open thread — so a founder
+   * who starts a new conversation does not watch the next thing that happens
+   * get filed in the old one.
+   */
+  it("becomes where the next run event lands", async () => {
+    const db = new FakeDatabase();
+    await ensureOpenThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "Your product",
+    });
+
+    const second = await openNewThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "New chat",
+    });
+
+    const current = await ensureOpenThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "Your product",
+    });
+
+    expect(current.id).toBe(second.id);
+  });
+
+  it("counts a thread's turns without reading one", async () => {
+    const db = new FakeDatabase();
+    const thread = await threadWith(db, 3);
+
+    const recorder = newQueryRecorder();
+    expect(await countMessages(fakeSupabase(db, recorder), { threadId: thread.id })).toBe(3);
+
+    // `head: true` transfers no rows — this is a bound check, not a read of the
+    // conversation, and it runs before every *New chat*.
+    expect(selectsOf(recorder, "nova_messages")).toEqual(["id"]);
+  });
+});
+
+describe("listing a project's conversations", () => {
+  it("returns the most recently touched first, and an untouched one last", async () => {
+    const db = new FakeDatabase();
+    const first = await threadWith(db, 1);
+    const second = await openNewThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "Nothing said yet",
+    });
+
+    const listed = await listThreads(fakeSupabase(db), { projectId: PROJECT, limit: 10 });
+
+    expect(listed.map((thread) => thread.id)).toEqual([first.id, second.id]);
+    expect(listed[1]?.lastMessageAt).toBeNull();
+  });
+
+  it("shows no other project's conversations", async () => {
+    const db = new FakeDatabase();
+    await threadWith(db, 1);
+    await openNewThread(fakeSupabase(db), {
+      projectId: OTHER_PROJECT,
+      userId: USER,
+      title: "Theirs",
+    });
+
+    const listed = await listThreads(fakeSupabase(db), { projectId: PROJECT, limit: 10 });
+
+    expect(listed).toHaveLength(1);
+    expect(listed[0]?.projectId).toBe(PROJECT);
+  });
+
+  it("is bounded, because this table grows with use", async () => {
+    const db = new FakeDatabase();
+    for (let index = 0; index < 5; index += 1) {
+      await openNewThread(fakeSupabase(db), {
+        projectId: PROJECT,
+        userId: USER,
+        title: `Chat ${index}`,
+      });
+    }
+
+    expect(await listThreads(fakeSupabase(db), { projectId: PROJECT, limit: 2 })).toHaveLength(2);
   });
 });

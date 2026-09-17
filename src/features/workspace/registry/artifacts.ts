@@ -1,7 +1,13 @@
-import type { ArtifactKind, ArtifactRef } from "@/modules/nova/artifacts";
+import {
+  artifactRefId,
+  WORKSPACE_ARTIFACT_PARAM,
+  WORKSPACE_ARTIFACT_REF_PARAM,
+  type ArtifactKind,
+  type ArtifactRef,
+} from "@/modules/nova/artifacts";
 import type { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/features/shell/project-shell";
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
-import { preparedChangeHref, projectSectionPath } from "@/lib/routing/project-urls";
+import { preparedChangeHref, projectSectionPath, threadPath } from "@/lib/routing/project-urls";
 
 /**
  * Where each artifact is read, and what draws it — never an engine.
@@ -167,4 +173,32 @@ export function artifactHref(projectId: string, artifact: ArtifactRef): string {
     default:
       return section;
   }
+}
+
+/**
+ * The same artifact, shown **beside the conversation** rather than instead of it.
+ *
+ * The workspace is a parameter on a thread's own address, so this is the thread
+ * plus what to put in the pane, and the fragment is what a phone uses to reach
+ * the pane when it is a section under the transcript rather than a column
+ * beside it. A founder following this link lands in the conversation with the
+ * thing under discussion open — which is the sentence ADR 0109 §4 makes, and
+ * the reason returning from the workspace needs no mechanism at all.
+ *
+ * `artifactHref` above is the other half and is not replaced by this: one is
+ * *the thing, whole, at its own address*, the other is *the thing, beside what
+ * was said about it*. A founder wants both, at different moments.
+ */
+export const WORKSPACE_ANCHOR = "workspace";
+
+export function threadArtifactHref(
+  projectId: string,
+  threadId: string,
+  artifact: ArtifactRef,
+): string {
+  const ref = artifactRefId(artifact);
+  const query = new URLSearchParams({ [WORKSPACE_ARTIFACT_PARAM]: artifact.kind });
+  if (ref !== null) query.set(WORKSPACE_ARTIFACT_REF_PARAM, ref);
+
+  return `${threadPath(projectId, threadId)}?${query.toString()}#${WORKSPACE_ANCHOR}`;
 }

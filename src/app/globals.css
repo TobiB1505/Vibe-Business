@@ -455,7 +455,7 @@
    * because both sides read the same number.
    */
   --frame-inset: 1.25rem;
-  --rail-gap: 1.25rem;
+  --rail-gap: 1rem;
 
   /*
    * The phone's frame (UI-35).

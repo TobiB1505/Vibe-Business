@@ -4,6 +4,7 @@ import {
   projectSectionHref,
   type ProjectNavItem,
 } from "@/features/shell/project-shell";
+import { threadsPath } from "@/lib/routing/project-urls";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { activePlanName } from "@/modules/billing/plan-name";
@@ -74,7 +75,15 @@ export async function ProjectRailSlot({ projectId }: { projectId: string }) {
    */
   const countFor = (value: number | null): number | null => (value && value > 0 ? value : null);
 
-  const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
+  /**
+   * One row per section, in the two groups the rail draws (ADR 0109 §1).
+   *
+   * The table decides which group a section is in; this decides what each row
+   * *says*. Splitting them here rather than in the component keeps the rail a
+   * rendering of two arrays, which is what lets the phone's bar be a second
+   * rendering of the same two without either knowing about the other.
+   */
+  const rowFor = (section: (typeof PROJECT_SECTIONS)[number]): ProjectNavItem => ({
     id: section.id,
     label: section.label,
     short: section.short,
@@ -90,7 +99,44 @@ export async function ProjectRailSlot({ projectId }: { projectId: string }) {
     // Mint on Action Plan: those are things Vibe is offering to act on.
     // Agent is a neutral queue count, not an invitation.
     countTone: section.id === "action-plan" ? "accent" : "neutral",
-  }));
+  });
+
+  /*
+   * Nova, and the conversations.
+   *
+   * `threads` is not a section and never becomes one: a conversation is a row
+   * in a list with its own address, not a screen at a segment, and a
+   * `PROJECT_SECTIONS` entry for it would give it a `projectSectionHref` that
+   * resolves to the list rather than to any thread. `threadsPath` owns that
+   * address (Slice 3: one URL owner), and this is the one row in the rail
+   * built from a path helper rather than from the table.
+   */
+  const novaItems: ProjectNavItem[] = [
+    ...PROJECT_SECTIONS.filter((section) => section.group === "nova").map(rowFor),
+    {
+      id: "threads",
+      label: "Threads",
+      short: "Threads",
+      icon: "threads",
+      href: threadsPath(project.id),
+      count: null,
+      status: null,
+      countTone: "neutral",
+    },
+  ];
+
+  const workspaceItems = PROJECT_SECTIONS.filter((section) => section.group === "workspace").map(
+    rowFor,
+  );
+
+  /*
+   * Neither group, and drawn only on a phone. See `ProjectRail`: the desktop
+   * rail offers it from the switcher, and the phone's switcher is itself inside
+   * the sheet — two disclosures deep is unreachable.
+   */
+  const projectSettingsItem = rowFor(
+    PROJECT_SECTIONS.find((section) => section.id === "settings") ?? PROJECT_SECTIONS[0],
+  );
 
   return (
     <ProjectRail
@@ -112,7 +158,9 @@ export async function ProjectRailSlot({ projectId }: { projectId: string }) {
           href: projectSectionHref(sibling.id, "home"),
         })),
       ]}
-      items={navItems}
+      novaItems={novaItems}
+      workspaceItems={workspaceItems}
+      projectSettingsItem={projectSettingsItem}
     />
   );
 }

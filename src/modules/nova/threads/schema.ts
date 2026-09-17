@@ -1,4 +1,4 @@
-import { ARTIFACT_KINDS, type ArtifactKind } from "../artifacts";
+import type { ArtifactKind } from "../artifacts";
 import { NOVA_ACTION_IDS, type NovaActionId } from "../actions";
 import type { NovaActionSubject } from "../feed";
 import { OPERATION_TYPES, type OperationType } from "../../operations/schema";
@@ -90,6 +90,23 @@ export const MAX_MESSAGE_CHARS = 1200;
 
 /** The longest a thread title may be. Vibe composes it, or it is a first line. */
 export const MAX_THREAD_TITLE_CHARS = 120;
+
+/**
+ * What a conversation is called before anything has been said in it.
+ *
+ * Replaced by the founder's first question, inside the same statement that
+ * writes the turn — so this is what a founder sees for the seconds between
+ * pressing *New chat* and asking something, and never the name of a
+ * conversation that has one.
+ *
+ * Its sibling is `FIRST_THREAD_TITLE` in `modules/operations/nova-thread.ts`,
+ * which names the thread a *run* opens: there is no question to name that one
+ * after, because nobody was in the room. Two constants because they answer two
+ * questions, and both live in the domain rather than in the command that uses
+ * them — a `"use server"` module may export nothing but async functions, which
+ * is how the second one came to be in the wrong place once already.
+ */
+export const NEW_THREAD_TITLE = "New chat";
 
 /**
  * What a founder reads when a run ends, and which runs they read about at all.
@@ -231,7 +248,12 @@ export function isNovaActionId(value: string): value is NovaActionId {
   return (NOVA_ACTION_IDS as readonly string[]).includes(value);
 }
 
-/** The same, for an artifact kind read back out of a row. */
-export function isArtifactKind(value: string): value is ArtifactKind {
-  return (ARTIFACT_KINDS as readonly string[]).includes(value);
-}
+/**
+ * The same, for an artifact kind read back out of a row.
+ *
+ * Re-exported rather than written again: the predicate belongs beside the union
+ * it is about, and the workspace's URL parser needs the same one. Two copies of
+ * a membership test over a closed union is how one of them comes to be checked
+ * against a stale list.
+ */
+export { isArtifactKind } from "../artifacts";

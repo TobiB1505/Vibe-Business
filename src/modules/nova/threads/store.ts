@@ -200,6 +200,87 @@ export async function findOpenThread(
   return row === undefined ? null : toThread(row);
 }
 
+/**
+ * This project's recent conversations, newest first.
+ *
+ * ## Why the order is `last_message_at` and not `created_at`
+ *
+ * A founder looks for the conversation they were *in*, not the one they started
+ * most recently, and those stop being the same thread the moment a run writes
+ * into an older one. `nova_threads_project_idx` is `(project_id, status,
+ * last_message_at desc nulls last)`, which is this read exactly — a thread with
+ * nothing in it yet sorts last rather than first, which is also right: an empty
+ * conversation is not the one you were having.
+ *
+ * Bounded, because this table grows with use and an unbounded read of a growing
+ * table is the truncating read PERF-018 is about. Archived threads are included
+ * deliberately: a founder who put one away can still find it, and the status
+ * travels so a surface can say which is which.
+ */
+export async function listThreads(
+  supabase: SupabaseClient,
+  params: { projectId: string; limit: number },
+): Promise<Thread[]> {
+  const { data, error } = await supabase
+    .from(THREADS)
+    .select(THREAD_COLUMNS)
+    .eq("project_id", params.projectId)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(params.limit);
+
+  if (error) throw error;
+  return ((data ?? []) as ThreadRow[]).map(toThread);
+}
+
+/**
+ * Open a new conversation, whatever is already open.
+ *
+ * ## Why this is not `ensureOpenThread`
+ *
+ * They answer opposite questions. `ensureOpenThread` is *where does this belong*
+ * — a run finishing, a question asked with no thread in progress — and it must
+ * reuse. This is a founder pressing **New chat**, which is a request for a
+ * second place to talk, and reusing would be ignoring them.
+ *
+ * The two coexist because `findOpenThread` takes the most recent open thread:
+ * after this, that is the new one, so the next run event lands in the
+ * conversation the founder is actually in. That is why the schema never grew a
+ * unique index on "one open thread per project" — it would have had to be
+ * dropped here.
+ */
+export async function openNewThread(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; title: string },
+): Promise<Thread> {
+  const { data, error } = await supabase
+    .from(THREADS)
+    .insert({
+      project_id: params.projectId,
+      user_id: params.userId,
+      title: params.title.trim().slice(0, MAX_THREAD_TITLE_CHARS),
+    })
+    .select(THREAD_COLUMNS)
+    .single();
+
+  if (error) throw error;
+  return toThread(data as ThreadRow);
+}
+
+/** How many turns a thread holds, without reading one. */
+export async function countMessages(
+  supabase: SupabaseClient,
+  params: { threadId: string },
+): Promise<number> {
+  const { count, error } = await supabase
+    .from(MESSAGES)
+    .select("id", { count: "exact", head: true })
+    .eq("thread_id", params.threadId);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getThread(
   supabase: SupabaseClient,
   params: { threadId: string; projectId: string },

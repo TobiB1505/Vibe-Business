@@ -102,6 +102,22 @@ export function NovaBubble({
    * making one.
    */
   aside = false,
+  /**
+   * The founder's own words.
+   *
+   * Aligned to the end of the column and without a tail, which is how every
+   * chat a founder has ever used says *you said this* — and the reason it is
+   * alignment rather than a fifth colour is that the register axis above is
+   * about the **moment**, not about the speaker. A founder's question is not
+   * amber or coral; it is theirs.
+   *
+   * It matters more than it looks: before the composer existed, everything in
+   * a thread was either Nova or the product observing something, and both were
+   * drawn on the left. A founder's own question rendered identically to a run
+   * finishing — so the one line on the screen they wrote themselves read as
+   * something Vibe had said to them.
+   */
+  mine = false,
   /** The status word, from `statusForCandidate`. Never written at a call site. */
   eyebrow,
   /**
@@ -117,17 +133,20 @@ export function NovaBubble({
   tone?: StatusTone;
   open?: boolean;
   aside?: boolean;
+  mine?: boolean;
   eyebrow?: string;
   tail?: boolean;
   index?: number;
 }) {
-  const hasTail = tail && !aside;
+  const hasTail = tail && !aside && !mine;
 
   return (
     <div
       className={`bubble bubble-arrive ${aside ? "bubble-neutral" : TONE_CLASS[tone]} ${
         open && !aside ? "bubble-open" : ""
-      } ${hasTail ? "bubble-tailed" : ""} flex w-fit min-w-0 max-w-[46ch] flex-col gap-2.5 px-3.5 py-2.5`}
+      } ${hasTail ? "bubble-tailed" : ""} ${
+        mine ? "self-end" : ""
+      } flex w-fit min-w-0 max-w-[46ch] flex-col gap-2.5 px-3.5 py-2.5`}
       style={{ "--i": index } as CSSProperties}
     >
       {hasTail && <BubbleTail />}

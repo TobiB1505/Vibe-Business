@@ -102,6 +102,15 @@ const MANIFEST = {
    * turns to say so.
    */
   ExternalLinkIcon: "arrow-up-right",
+  /*
+   * The two the Nova-first shell needed and the hand-drawn set did not have.
+   *
+   * A conversation and a workspace are both *navigation* marks, so they are
+   * re-exported through `dashboard-icons.tsx` under Vibe's own names — the
+   * rail names a destination, never a Lucide icon.
+   */
+  ThreadsIcon: "messages-square",
+  WorkspaceIcon: "layout-panel-left",
 };
 
 const HEADER = `import type { SVGProps } from "react";

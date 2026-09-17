@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildThreadView, operationRunIdsIn, type ThreadEventRun } from "./view";
+import { buildThreadView, latestArtifactIn, operationRunIdsIn, type ThreadEventRun } from "./view";
 import { THREAD_EVENT_WORDS, type Thread, type ThreadMessage } from "./schema";
 
 const THREAD: Thread = {
@@ -134,5 +134,79 @@ describe("which runs a transcript needs read", () => {
     ]);
 
     expect(ids).toEqual(["run_1", "run_2"]);
+  });
+});
+
+/**
+ * What the workspace opens on when the address does not say (ADR 0109 §4).
+ *
+ * A conversation is *about* something, and the last thing Nova pointed at is
+ * the honest answer to what. The alternative — a default section — would be the
+ * pane guessing, and a founder who had just been told about a Move would be
+ * shown a business reading instead.
+ */
+describe("the last artifact a conversation pointed at", () => {
+  it("is the most recent one, not the first", () => {
+    const view = buildThreadView({
+      thread: THREAD,
+      messages: [
+        message({
+          sequence: 1,
+          author: "nova",
+          kind: "artifact",
+          artifact: { kind: "business_health", ref: "" },
+        }),
+        message({ sequence: 2, author: "nova", kind: "text", body: "and this one" }),
+        message({
+          sequence: 3,
+          author: "nova",
+          kind: "artifact",
+          artifact: { kind: "opportunity", ref: "opp_9" },
+        }),
+      ],
+      runs: [],
+    });
+
+    expect(latestArtifactIn(view)).toEqual({ kind: "opportunity", opportunityId: "opp_9" });
+  });
+
+  it("is nothing in a thread that has pointed at nothing", () => {
+    const view = buildThreadView({
+      thread: THREAD,
+      messages: [message({ sequence: 1, kind: "text", body: "words" })],
+      runs: [],
+    });
+
+    expect(latestArtifactIn(view)).toBeNull();
+  });
+
+  /**
+   * A stored kind the union no longer holds, or a reference an address needs
+   * and the row does not carry. The pane opens on nothing rather than on a
+   * guess — and it skips *past* the unusable row to a usable one, because the
+   * founder's conversation did point at something.
+   */
+  it("skips a pointer it cannot follow", () => {
+    const view = buildThreadView({
+      thread: THREAD,
+      messages: [
+        message({
+          sequence: 1,
+          author: "nova",
+          kind: "artifact",
+          artifact: { kind: "product", ref: "" },
+        }),
+        message({
+          sequence: 2,
+          author: "nova",
+          kind: "artifact",
+          // A Move with no id: `?plan=undefined` is a link to nothing.
+          artifact: { kind: "opportunity", ref: "" },
+        }),
+      ],
+      runs: [],
+    });
+
+    expect(latestArtifactIn(view)).toEqual({ kind: "product" });
   });
 });

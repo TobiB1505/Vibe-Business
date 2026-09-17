@@ -127,6 +127,91 @@ describe("one turn, written once", () => {
   });
 });
 
+/**
+ * A thread's name (ADR 0109 §1, Slice 7).
+ *
+ * `title` is not a column a founder may update — the grant covers three columns
+ * and that is not one of them — and until this migration nothing else set it
+ * either. Every thread a run opened was called *"Your product"* and stayed
+ * called that, which makes a list of conversations a list nobody can use.
+ */
+describe("what a conversation is called", () => {
+  it("takes its name from the first question asked in it", () => {
+    const named = db.sql(
+      `with i as (insert into public.nova_threads (project_id, user_id, title)` +
+        ` values ('${projectId}', '${owner}', 'Your product') returning id) select id from i;`,
+    );
+
+    db.sqlLast(
+      asUser(owner, call(`'${named}', 'is my pricing the problem?', 'It is the biggest one.'`)),
+    );
+
+    expect(db.sql(`select title from public.nova_threads where id = '${named}';`)).toBe(
+      "is my pricing the problem?",
+    );
+  });
+
+  /**
+   * The second question does not rename it. The condition is *no founder
+   * message before this one*, not *this is message one* — a thread that already
+   * holds four run events and no questions is still being asked its first.
+   */
+  it("keeps that name once it has one", () => {
+    const named = db.sql(
+      `with i as (insert into public.nova_threads (project_id, user_id, title)` +
+        ` values ('${projectId}', '${owner}', 'Your product') returning id) select id from i;`,
+    );
+
+    db.sqlLast(asUser(owner, call(`'${named}', 'first thing', 'answer'`)));
+    db.sqlLast(asUser(owner, call(`'${named}', 'second thing', 'another answer'`)));
+
+    expect(db.sql(`select title from public.nova_threads where id = '${named}';`)).toBe(
+      "first thing",
+    );
+  });
+
+  it("is still named after the founder when a run got there first", () => {
+    const named = db.sql(
+      `with i as (insert into public.nova_threads (project_id, user_id, title)` +
+        ` values ('${projectId}', '${owner}', 'Your product') returning id) select id from i;`,
+    );
+
+    // A run's own event, written by the service role at a terminal transition.
+    const run = db.sql(
+      `with r as (insert into public.operation_runs` +
+        ` (project_id, user_id, operation_type, status, failure_code, completed_at, input_identity)` +
+        /* Failed rather than completed: a completed audit must name the audit it
+           produced, and this test is about the thread's title rather than about
+           a run's result. A terminal run is a terminal run either way. */
+        ` values ('${projectId}', '${owner}', 'business_audit', 'failed', 'timeout', now(), repeat('a', 64))` +
+        ` returning id) select id from r;`,
+    );
+    db.sql(
+      `insert into public.nova_messages (thread_id, project_id, user_id, sequence, author, kind, operation_run_id)` +
+        ` values ('${named}', '${projectId}', '${owner}', 1, 'system', 'event', '${run}');`,
+    );
+
+    db.sqlLast(asUser(owner, call(`'${named}', 'what happened there?', 'It finished.'`)));
+
+    expect(db.sql(`select title from public.nova_threads where id = '${named}';`)).toBe(
+      "what happened there?",
+    );
+  });
+
+  it("never exceeds the column's own ceiling", () => {
+    const named = db.sql(
+      `with i as (insert into public.nova_threads (project_id, user_id, title)` +
+        ` values ('${projectId}', '${owner}', 'Your product') returning id) select id from i;`,
+    );
+
+    db.sqlLast(asUser(owner, call(`'${named}', '${"q".repeat(400)}', 'answer'`)));
+
+    expect(
+      db.sql(`select char_length(title) from public.nova_threads where id = '${named}';`),
+    ).toBe("120");
+  });
+});
+
 describe("what it refuses", () => {
   /**
    * The one that matters. Ownership is re-checked inside the function against

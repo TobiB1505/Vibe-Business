@@ -36,6 +36,24 @@ export const E2E_THREAD_SCENARIOS = [
    * costs, all of which are true before anything is sent.
    */
   "thread-composer",
+  /**
+   * A conversation with the workspace beside it (ADR 0109 §4, Slice 7).
+   *
+   * The two turns that are not words — a pointer and an offer — and the pane
+   * they open into. Both used to draw nothing at all, so this scenario is the
+   * only place the difference between "Nova pointed at something" and "nothing
+   * happened" is visible.
+   */
+  "thread-workspace",
+  /**
+   * The conversations index (ADR 0109 §1, Slice 7).
+   *
+   * Three threads — the current one, one that has been put away, and one with
+   * nothing said in it yet — because those are the three a founder has to be
+   * able to tell apart at a glance, and *current* is the one nothing else on
+   * the screen says.
+   */
+  "thread-list",
 ] as const;
 
 export type E2eThreadScenario = (typeof E2E_THREAD_SCENARIOS)[number];
@@ -86,9 +104,58 @@ const MESSAGES: ThreadMessage[] = [
   message({ sequence: 6, operationRunId: "run_merge" }),
 ];
 
+/**
+ * The same week, with a pointer and an offer in it.
+ *
+ * `artifact` and `action_proposal` rows carry no words at all — the CHECKs
+ * refuse them — so what a founder sees for each is composed by the surface, and
+ * a fixture that hand-wrote either would be testing itself.
+ */
+const POINTED_AT: ThreadMessage[] = [
+  ...MESSAGES,
+  message({
+    sequence: 7,
+    author: "founder",
+    kind: "text",
+    body: "why is conversion the blocker?",
+  }),
+  message({
+    sequence: 8,
+    author: "nova",
+    kind: "text",
+    body: "Your pricing is never stated, so nobody reaches a decision.",
+  }),
+  message({
+    sequence: 9,
+    author: "nova",
+    kind: "artifact",
+    artifact: { kind: "business_health", ref: "" },
+  }),
+  message({
+    sequence: 10,
+    author: "nova",
+    kind: "action_proposal",
+    actionId: "nova.refresh_audit",
+    subject: { kind: "project" },
+  }),
+];
+
 export function threadScenarioView(scenario: E2eThreadScenario): ThreadView {
   if (scenario === "thread-empty" || scenario === "thread-composer") {
     return buildThreadView({ thread: THREAD, messages: [], runs: [] });
+  }
+
+  if (scenario === "thread-workspace") {
+    return buildThreadView({
+      thread: THREAD,
+      messages: POINTED_AT,
+      runs: [
+        { id: "run_scan", type: "product_scan", outcome: "completed" },
+        { id: "run_audit", type: "business_audit", outcome: "completed" },
+        { id: "run_agent", type: "agent_execution", outcome: "failed" },
+        { id: "run_merge", type: "change_merge", outcome: "completed" },
+      ],
+    });
   }
 
   return buildThreadView({
@@ -101,4 +168,40 @@ export function threadScenarioView(scenario: E2eThreadScenario): ThreadView {
       { id: "run_merge", type: "change_merge", outcome: "completed" },
     ],
   });
+}
+
+/**
+ * A project with more than one conversation.
+ *
+ * `current` is computed by `readThreadList` in production, from the same rule
+ * `findOpenThread` applies — the most recently created open thread. Here it is
+ * stated, because the lab has no clock and the claim being tested is that the
+ * list *says* which one it is.
+ */
+export function threadListScenario(): { thread: Thread; current: boolean }[] {
+  return [
+    {
+      thread: {
+        ...THREAD,
+        id: "thread_current",
+        title: "why is conversion the blocker?",
+        lastMessageAt: "2026-09-16T17:20:00.000Z",
+      },
+      current: true,
+    },
+    {
+      thread: {
+        ...THREAD,
+        id: "thread_older",
+        title: "what should I build first?",
+        status: "archived",
+        lastMessageAt: "2026-09-02T11:05:00.000Z",
+      },
+      current: false,
+    },
+    {
+      thread: { ...THREAD, id: "thread_fresh", title: "New chat", lastMessageAt: null },
+      current: false,
+    },
+  ];
 }

@@ -1,6 +1,6 @@
-import { ThreadSkeleton } from "@/features/nova/thread/thread-skeleton";
+import { ThreadListSkeleton } from "@/features/nova/thread/thread-skeleton";
 
-/** Shown while `/threads` resolves which thread is open. */
+/** Shown while the conversations index reads this project's threads. */
 export default function Loading() {
-  return <ThreadSkeleton />;
+  return <ThreadListSkeleton />;
 }

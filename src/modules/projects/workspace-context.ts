@@ -202,11 +202,20 @@ export const getProjectFrameContext = cache(async function getProjectFrameContex
  * Returns the context or renders 404 — the same answer for "no such project"
  * and "not yours", so a URL cannot enumerate project ids.
  */
-export async function requireProjectAccess(projectId: string): Promise<{
+/**
+ * What a gated route holds after `requireProjectAccess`.
+ *
+ * Named rather than re-derived per surface. Three files had written
+ * `Awaited<ReturnType<typeof requireProjectAccess>>` locally, which is the same
+ * type three times and three places for it to be widened by accident.
+ */
+export type ProjectAccess = {
   supabase: SupabaseClient;
   userId: string;
   project: ProjectWorkspaceContext;
-}> {
+};
+
+export async function requireProjectAccess(projectId: string): Promise<ProjectAccess> {
   // VB-028. A malformed id reaches PostgREST as `.eq("id", "x")`, which answers
   // 22P02 and throws — a 500 for something anyone can produce by typing. From
   // outside, an id that cannot exist and one that does not exist are the same

@@ -3,6 +3,8 @@ import { NovaAside, NovaLine } from "@/components/nova/nova-thread";
 import { EmptyState } from "@/components/ui/states";
 import type { ThreadTurn, ThreadView } from "@/modules/nova/threads/view";
 import { NovaComposer } from "@/features/nova/conversation/nova-composer";
+import { parseArtifactRef } from "@/modules/nova/artifacts";
+import { ArtifactChip, ProposalLine } from "./turn-pointers";
 
 /**
  * A stored thread, read back.
@@ -50,7 +52,13 @@ export function ThreadScreen({
       ) : (
         <section className="flex flex-col gap-2.5" aria-label={view.thread.title}>
           {view.turns.map((turn, index) => (
-            <Turn key={turn.id} turn={turn} index={index} />
+            <Turn
+              key={turn.id}
+              turn={turn}
+              index={index}
+              projectId={view.thread.projectId}
+              threadId={view.thread.id}
+            />
           ))}
         </section>
       )}
@@ -63,7 +71,7 @@ export function ThreadScreen({
         and a fixture has nobody to initiate it).
       */}
       {composer && view.thread.projectId.length > 0 && (
-        <NovaComposer projectId={view.thread.projectId} />
+        <NovaComposer projectId={view.thread.projectId} threadId={view.thread.id} />
       )}
     </div>
   );
@@ -72,29 +80,82 @@ export function ThreadScreen({
 /**
  * One turn.
  *
- * A turn with no words draws nothing at all — not a frame, not a placeholder.
- * `buildThreadView` returns null for an event whose run it could not read or
- * whose type the product stopped remembering, and a box saying "something
- * happened" would be the surface writing a fact nobody recorded.
+ * ## Three shapes, and one that draws nothing
+ *
+ * Words are a bubble. An **artifact** is a chip that opens the pane beside this
+ * conversation, and a **proposal** is a line saying she offered something —
+ * neither has words of its own, and both used to fall through the null check
+ * below and render nothing at all. That was a gap rather than a decision: an
+ * artifact turn is a pointer, and a pointer that draws nothing is a turn the
+ * founder cannot tell happened.
+ *
+ * What genuinely draws nothing is an **event** whose run has gone — deleted, or
+ * of a type the product stopped remembering. `buildThreadView` returns null for
+ * those, and a box saying "something happened" would be the surface writing a
+ * fact nobody recorded.
  */
-function Turn({ turn, index }: { turn: ThreadTurn; index: number }) {
+function Turn({
+  turn,
+  index,
+  projectId,
+  threadId,
+}: {
+  turn: ThreadTurn;
+  index: number;
+  projectId: string;
+  threadId: string;
+}) {
+  if (turn.kind === "artifact") {
+    const artifact = parseArtifactRef(
+      turn.message.artifact?.kind,
+      turn.message.artifact?.ref ?? undefined,
+    );
+
+    // A kind the union no longer holds, or a reference the address needs and
+    // the row does not carry. Nothing rather than a chip that opens on nothing.
+    if (artifact === null) return null;
+
+    return (
+      <NovaBubble aside tail={index === 0} index={index}>
+        <ArtifactChip projectId={projectId} threadId={threadId} artifact={artifact} />
+      </NovaBubble>
+    );
+  }
+
+  if (turn.kind === "action_proposal" && turn.message.actionId !== null) {
+    return (
+      <NovaBubble aside tail={index === 0} index={index}>
+        <ProposalLine projectId={projectId} actionId={turn.message.actionId} />
+      </NovaBubble>
+    );
+  }
+
   if (turn.text === null) return null;
 
   /*
-   * The register. Nova speaks; the system observes. They are different claims
-   * and `nova_messages.author` is what keeps them apart — a run finishing is a
-   * fact the product noticed, never a sentence she chose to say.
+   * Three registers, from one column. Nova speaks, the founder asks, and the
+   * system observes — `nova_messages.author` is what keeps them apart, and a
+   * run finishing is a fact the product noticed rather than a sentence she
+   * chose to say.
+   *
+   * The founder's own words were the one this screen did not have. Before the
+   * composer they could not occur; once they could, they were drawn exactly
+   * like an observation, so the only line on the screen a founder had written
+   * themselves read as something Vibe had said to them.
    */
   const fromNova = turn.author === "nova";
+  const mine = turn.author === "founder";
 
   return (
     <NovaBubble
-      aside={!fromNova}
+      aside={!fromNova && !mine}
+      mine={mine}
       tail={index === 0}
       index={index}
-      eyebrow={turn.unread ? "New" : undefined}
+      /* A founder does not need telling that what they just asked is new. */
+      eyebrow={turn.unread && !mine ? "New" : undefined}
     >
-      {fromNova ? <NovaLine>{turn.text}</NovaLine> : <NovaAside>{turn.text}</NovaAside>}
+      {fromNova || mine ? <NovaLine>{turn.text}</NovaLine> : <NovaAside>{turn.text}</NovaAside>}
     </NovaBubble>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { DashboardIcon } from "@/components/ui/dashboard-icons";
 import { agentMoveHref, PLAN_OPPORTUNITY_PARAM } from "@/modules/action-plans/source";
 import type { ProjectNavItem } from "./project-shell";
@@ -58,7 +58,36 @@ import { cn } from "@/lib/utils/cn";
  * carries to destinations they mean nothing to. Every other item stays a plain
  * section link, and the parameter authorises nothing at either end.
  */
-export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
+export function ProjectNav({
+  items,
+  /**
+   * How loudly this group speaks (ADR 0109 §1).
+   *
+   * `quiet` is the workspace: the same rows, the same counts, the same live
+   * Agent status, set one step back so the conversation above reads as the
+   * place you are and these read as the things it is about. It is a smaller
+   * row and a quieter resting colour and nothing else — an active workspace
+   * section is marked exactly as loudly as an active conversation, because
+   * *where you are* is never the thing to be subtle about.
+   */
+  tone = "primary",
+  /**
+   * A row that is not a destination, appended to the list.
+   *
+   * *New chat* is the only one, and it is a row rather than a block under the
+   * list because the rail has to fit a laptop: a standalone control with its
+   * own spacing costs half again what a row does, and a founder reads a list of
+   * three the same way whether the third one navigates or writes.
+   *
+   * A node rather than a callback, because this is a client component and a
+   * server parent cannot hand it a function.
+   */
+  children,
+}: {
+  items: ProjectNavItem[];
+  tone?: "primary" | "quiet";
+  children?: ReactNode;
+}) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const stripRef = useRef<HTMLUListElement>(null);
@@ -108,6 +137,13 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
       ref={stripRef}
       className={cn(
         "flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible",
+        /*
+          Tighter between the workspace's rows, and only on the rail. Five
+          quiet rows read as one group at 2px and as five separate controls at
+          4px — and the eight pixels are what makes the whole navigation fit a
+          780px laptop without the list scrolling (`rail-fold.spec.ts`).
+        */
+        tone === "quiet" && "lg:gap-0.5",
         // The affordance: the strip visibly runs off its right edge rather
         // than appearing to end. A mask rather than an overlay so it cannot
         // sit on top of a link and swallow a tap, and only below `lg`, where
@@ -125,16 +161,25 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
               href={hrefFor(item)}
               aria-current={current ? "page" : undefined}
               className={cn(
-                "rounded-nav flex items-center gap-3 px-3 py-3 text-body",
+                "rounded-nav flex items-center gap-3 px-3 text-body",
+                /*
+                  Both tighter than the `py-3` this list used to carry, and the
+                  reason is the laptop: the rail holds nine rows now where it
+                  held seven, and `rail-fold.spec.ts` asks that all of them fit
+                  a 780px screen without the list scrolling.
+                */
+                tone === "quiet" ? "py-2" : "py-2.5",
                 "transition-[color,background-color,border-color] duration-150 ease-vibe",
                 current
                   ? "bg-mint-tint border-mint-line text-fg border font-semibold shadow-[inset_2px_0_0_var(--color-mint)]"
-                  : "text-fg-secondary hover:bg-surface-2 hover:text-fg-body",
+                  : tone === "quiet"
+                    ? "text-fg-muted hover:bg-surface-2 hover:text-fg-body"
+                    : "text-fg-secondary hover:bg-surface-2 hover:text-fg-body",
               )}
             >
               <DashboardIcon
                 name={item.icon}
-                size={19}
+                size={tone === "quiet" ? 17 : 19}
                 className={cn("shrink-0", current && "text-mint")}
               />
               <span className="whitespace-nowrap">{item.label}</span>
@@ -164,6 +209,7 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
           </li>
         );
       })}
+      {children && <li className="lg:w-full">{children}</li>}
     </ul>
   );
 }

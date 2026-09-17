@@ -2,7 +2,17 @@ import { describe, expect, it } from "vitest";
 import { deriveNovaFocus, type FocusCandidateKind, type NovaFocusFacts } from "./focus";
 import { buildNovaHomeView } from "./home-view";
 import { BLOCK_FOR_MOMENT, BLOCK_FOR_OPERATION, type BlockKind } from "./blocks";
-import { ARTIFACT_FOR_BLOCK, ARTIFACT_KINDS, artifactForEntry } from "./artifacts";
+import {
+  ARTIFACT_FOR_BLOCK,
+  ARTIFACT_KINDS,
+  artifactForEntry,
+  artifactRefId,
+  isArtifactKind,
+  parseArtifactRef,
+  WORKSPACE_ARTIFACT_PARAM,
+  WORKSPACE_ARTIFACT_REF_PARAM,
+  type ArtifactRef,
+} from "./artifacts";
 
 /**
  * Every moment either opens the right artifact or opens none.
@@ -153,5 +163,97 @@ describe("the artifact union", () => {
   it("names every kind once", () => {
     expect(new Set(ARTIFACT_KINDS).size).toBe(ARTIFACT_KINDS.length);
     expect(ARTIFACT_KINDS.length).toBeGreaterThan(5);
+  });
+});
+
+/**
+ * The workspace's address, and what it refuses (ADR 0109 §4, Slice 7).
+ *
+ * A query string is whatever somebody typed, and this is the one place a typed
+ * string becomes a member of a closed union. Everything downstream — the pane,
+ * the chip, the registry — takes an `ArtifactRef` and can therefore assume the
+ * kind exists and the reference is present where the address interpolates one.
+ */
+describe("reading an artifact out of an address", () => {
+  it("accepts every kind that has no reference", () => {
+    const refless = ARTIFACT_KINDS.filter(
+      (kind) => kind !== "opportunity" && kind !== "prepared_change",
+    );
+
+    for (const kind of refless) {
+      expect(parseArtifactRef(kind, undefined), kind).toEqual({ kind });
+    }
+  });
+
+  it.each([
+    ["opportunity", "opportunityId"],
+    ["prepared_change", "preparedChangeId"],
+  ])("accepts %s with its reference", (kind, field) => {
+    expect(parseArtifactRef(kind, "abc")).toEqual({ kind, [field]: "abc" });
+  });
+
+  /**
+   * The empty frame ADR 0109 §4 refuses. `?artifact=opportunity` with no `ref`
+   * would open the pane on "a Move" with no Move — so it opens on nothing, and
+   * the pane says what it is for instead.
+   */
+  it.each(["opportunity", "prepared_change"])(
+    "refuses %s without the reference its address needs",
+    (kind) => {
+      expect(parseArtifactRef(kind, undefined)).toBeNull();
+      expect(parseArtifactRef(kind, "")).toBeNull();
+    },
+  );
+
+  it.each([
+    ["a kind that is not one of the eight", "preview"],
+    ["a kind that was never one", "invoice"],
+    ["something that is not a kind at all", "../../etc/passwd"],
+  ])("refuses %s", (_name, kind) => {
+    expect(parseArtifactRef(kind, "abc")).toBeNull();
+  });
+
+  it("refuses an absent parameter", () => {
+    expect(parseArtifactRef(undefined, undefined)).toBeNull();
+  });
+
+  it("agrees with the membership test the thread schema uses", () => {
+    for (const kind of ARTIFACT_KINDS) expect(isArtifactKind(kind)).toBe(true);
+    expect(isArtifactKind("preview")).toBe(false);
+  });
+});
+
+describe("the reference an artifact carries", () => {
+  it.each<[ArtifactRef, string | null]>([
+    [{ kind: "business_health" }, null],
+    [{ kind: "opportunity", opportunityId: "opp_1" }, "opp_1"],
+    [{ kind: "prepared_change", preparedChangeId: "chg_1" }, "chg_1"],
+  ])("reads %o", (artifact, expected) => {
+    expect(artifactRefId(artifact)).toBe(expected);
+  });
+
+  /**
+   * Round-tripping is the property that matters: what `artifactRefId` produces
+   * is what `parseArtifactRef` is handed back out of a URL, so the two have to
+   * agree for every kind. Total over the union, so a ninth fails here.
+   */
+  it("round-trips every kind through the address", () => {
+    for (const kind of ARTIFACT_KINDS) {
+      const artifact = parseArtifactRef(kind, "ref_1");
+      expect(artifact, kind).not.toBeNull();
+      expect(parseArtifactRef(kind, artifactRefId(artifact!) ?? undefined), kind).toEqual(artifact);
+    }
+  });
+});
+
+describe("the parameter names", () => {
+  /**
+   * Two parameters rather than one packed string, and they are asserted because
+   * every link in the product spells them and a rename would silently stop
+   * every existing address resolving.
+   */
+  it("are the two the addresses spell", () => {
+    expect(WORKSPACE_ARTIFACT_PARAM).toBe("artifact");
+    expect(WORKSPACE_ARTIFACT_REF_PARAM).toBe("ref");
   });
 });

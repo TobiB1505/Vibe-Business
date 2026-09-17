@@ -9,6 +9,7 @@ import {
   AgentReviewDecision,
 } from "@/features/agent/agent-stage-actions";
 import { preparedChangeAnchorId } from "@/features/shell/project-shell";
+import { threadsPath } from "@/lib/routing/project-urls";
 import { novaControlLabel } from "@/modules/nova/home-view";
 import { IntelligenceSummary } from "@/features/product/intelligence-summary";
 import { AuditOverview } from "@/features/health/audit-overview";
@@ -161,8 +162,11 @@ import {
   novaVoiceEntry,
 } from "../nova-voice-scenarios";
 import { NovaFocusThread } from "@/features/nova/home/nova-focus-thread";
-import { isE2eThreadScenario, threadScenarioView } from "../thread-scenarios";
+import { isE2eThreadScenario, threadListScenario, threadScenarioView } from "../thread-scenarios";
 import { ThreadScreen } from "@/features/nova/thread/thread-view";
+import { ThreadList } from "@/features/nova/thread/thread-list";
+import { THREADS_HEADING } from "@/features/nova/thread/thread-skeleton";
+import { WorkspacePane } from "@/features/workspace/host/workspace-pane";
 import {
   isE2eWorkspaceArtifactScenario,
   workspaceArtifactEntry,
@@ -360,6 +364,75 @@ function FixtureRail({ credits, children }: { credits: number; children: ReactNo
         }}
       />
     </>
+  );
+}
+
+/**
+ * The two rail groups a project fixture needs (ADR 0109 §1).
+ *
+ * One helper rather than a copy per scenario, for the reason the rail itself
+ * takes two arrays: the lab must draw the navigation the product draws, and two
+ * hand-built arrays in two scenarios are two chances to draw a different one.
+ * The counts are the Action Plan's three and the Agent's thirteen — the numbers
+ * every rail screenshot in this suite has carried since UI-11.
+ */
+function fixtureRailItems(
+  href: (section: (typeof PROJECT_SECTIONS)[number]) => string,
+  options: { counts?: boolean } = {},
+): {
+  novaItems: ProjectNavItem[];
+  workspaceItems: ProjectNavItem[];
+  projectSettingsItem: ProjectNavItem;
+} {
+  const counts = options.counts ?? true;
+
+  const rowFor = (section: (typeof PROJECT_SECTIONS)[number]): ProjectNavItem => ({
+    id: section.id,
+    label: section.label,
+    short: section.short,
+    icon: section.icon,
+    href: href(section),
+    count:
+      counts && section.id === "action-plan" ? 3 : counts && section.id === "agent" ? 13 : null,
+    countTone: section.id === "action-plan" ? "accent" : "neutral",
+  });
+
+  return {
+    novaItems: [
+      ...PROJECT_SECTIONS.filter((section) => section.group === "nova").map(rowFor),
+      {
+        id: "threads",
+        label: "Threads",
+        short: "Threads",
+        icon: "threads",
+        href: threadsPath("project_e2e"),
+        count: null,
+        countTone: "neutral",
+      },
+    ],
+    workspaceItems: PROJECT_SECTIONS.filter((section) => section.group === "workspace").map(rowFor),
+    projectSettingsItem: rowFor(
+      PROJECT_SECTIONS.find((section) => section.id === "settings") ?? PROJECT_SECTIONS[0],
+    ),
+  };
+}
+
+/**
+ * A stand-in for an artifact, at the size a real one occupies.
+ *
+ * Deliberately not a real `AuditBlock`: the claim this scenario makes is about
+ * the *pane* — its name, its way out, and whether it and the conversation both
+ * fit — and mounting a business map here would make the screenshot a test of
+ * the map instead. The block itself has its own coverage on Nova's own screen.
+ */
+function FixtureArtifact() {
+  return (
+    <div className="border-line-1 bg-surface-1 rounded-panel flex flex-col gap-3 border p-5">
+      <p className="text-fg-body text-body font-medium">Pricing clarity</p>
+      <p className="text-fg-muted text-body">
+        Scored 42 of 100. Nobody reaches a decision, because nothing states what it costs.
+      </p>
+    </div>
   );
 }
 
@@ -1244,16 +1317,9 @@ export default async function E2eScenarioPage({
   if (isE2eUnderstandingScenario(scenario)) {
     const fixture = E2E_UNDERSTANDING_SCENARIOS[scenario]();
     const currentHref = `/e2e/${scenario}`;
-    const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
-      id: section.id,
-      label: section.label,
-      short: section.short,
-      icon: section.icon,
-      href:
-        section.id === "my-product" ? currentHref : projectSectionHref("project_e2e", section.id),
-      count: section.id === "action-plan" ? 3 : section.id === "agent" ? 13 : null,
-      countTone: section.id === "action-plan" ? "accent" : "neutral",
-    }));
+    const rail = fixtureRailItems((section) =>
+      section.id === "my-product" ? currentHref : projectSectionHref("project_e2e", section.id),
+    );
 
     return (
       <AppFrame
@@ -1277,7 +1343,9 @@ export default async function E2eScenarioPage({
                   href: "/app/projects/project_e2e_planner",
                 },
               ]}
-              items={navItems}
+              novaItems={rail.novaItems}
+              workspaceItems={rail.workspaceItems}
+              projectSettingsItem={rail.projectSettingsItem}
             />
           </FixtureRail>
         }
@@ -1877,6 +1945,61 @@ export default async function E2eScenarioPage({
    * passing after the table changed.
    */
   if (isE2eThreadScenario(scenario)) {
+    const view = threadScenarioView(scenario);
+
+    /*
+     * Nova and the workspace, in the layout the thread route builds (ADR 0109
+     * §4). Two columns from `lg` and two stacked sections below it, and the
+     * pane's *frame* is the product's own — what fills it is a stand-in,
+     * because every artifact read needs a session-scoped Supabase client and
+     * this route has neither a session nor a database. What a browser is here
+     * to prove is the frame: that the conversation and the thing it is about
+     * are both legible at 1280, that neither is squeezed at 390, and that the
+     * pane names what it is showing and offers the way out to the whole of it.
+     */
+    /*
+     * The conversations index (ADR 0109 §1). The list is the product's own
+     * component; what it is given is three threads that are deliberately the
+     * three states a founder has to tell apart — current, archived, and one
+     * with nothing said in it yet.
+     */
+    if (scenario === "thread-list") {
+      return (
+        <main className="mx-auto max-w-3xl p-8 max-sm:p-4">
+          {label}
+          <div className="flex flex-col gap-7">
+            <div className="flex flex-col gap-2">
+              <span className="text-mint text-[0.68rem] font-semibold tracking-[0.15em] uppercase">
+                {THREADS_HEADING.eyebrow}
+              </span>
+              <h1 className="text-fg text-headline font-bold sm:text-display">
+                {THREADS_HEADING.title}
+              </h1>
+            </div>
+            <ThreadList projectId="project_e2e" entries={threadListScenario()} />
+          </div>
+        </main>
+      );
+    }
+
+    if (scenario === "thread-workspace") {
+      return (
+        <main className="mx-auto grid max-w-[80rem] gap-8 p-8 max-sm:p-4 lg:grid-cols-[minmax(0,1fr)_minmax(20rem,26rem)] lg:items-start">
+          <div className="min-w-0">
+            {label}
+            <ThreadScreen view={view} composer />
+          </div>
+          <WorkspacePane
+            projectId="project_e2e"
+            artifact={{ kind: "business_health" }}
+            className="lg:sticky lg:top-6"
+          >
+            <FixtureArtifact />
+          </WorkspacePane>
+        </main>
+      );
+    }
+
     return (
       <main className="mx-auto max-w-2xl p-8 max-sm:p-4">
         {label}
@@ -1887,10 +2010,7 @@ export default async function E2eScenarioPage({
           would reach a Server Action that starts with `requireProjectAccess`,
           and the browser suite has no session.
         */}
-        <ThreadScreen
-          view={threadScenarioView(scenario)}
-          composer={scenario === "thread-composer"}
-        />
+        <ThreadScreen view={view} composer={scenario === "thread-composer"} />
       </main>
     );
   }
@@ -2109,6 +2229,11 @@ export default async function E2eScenarioPage({
   if (scenario === "project-settings" || scenario === "project-settings-disconnected") {
     const connected = scenario === "project-settings";
     const settingsHref = projectSectionHref("project_e2e", "settings");
+    const settingsRail = fixtureRailItems(
+      (section) =>
+        section.id === "settings" ? settingsHref : projectSectionHref("project_e2e", section.id),
+      { counts: false },
+    );
 
     return (
       <AppFrame
@@ -2127,18 +2252,9 @@ export default async function E2eScenarioPage({
                   repositoryFullName: connected ? "acme/acme" : null,
                 },
               ]}
-              items={PROJECT_SECTIONS.map((section) => ({
-                id: section.id,
-                label: section.label,
-                short: section.short,
-                icon: section.icon,
-                href:
-                  section.id === "settings"
-                    ? settingsHref
-                    : projectSectionHref("project_e2e", section.id),
-                count: null,
-                countTone: "neutral" as const,
-              }))}
+              novaItems={settingsRail.novaItems}
+              workspaceItems={settingsRail.workspaceItems}
+              projectSettingsItem={settingsRail.projectSettingsItem}
             />
           </FixtureRail>
         }

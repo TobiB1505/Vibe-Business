@@ -141,3 +141,66 @@ const REF_FOR_KIND: Record<ArtifactKind, (candidate: FocusCandidate) => Artifact
       ? { kind: "prepared_change", preparedChangeId: candidate.preparedChangeId }
       : null,
 };
+
+/**
+ * How an artifact is spelled in a URL.
+ *
+ * The workspace is a **parameter on the conversation's own address**, not a
+ * route of its own, and that is the whole of why "returning from the workspace
+ * preserves the conversation" needs no mechanism: the founder never left. It
+ * also means a founder can send somebody a link to *the thing Nova was talking
+ * about* and the conversation arrives with it.
+ *
+ * Two parameters rather than one packed string, for the reason
+ * `PLAN_OPPORTUNITY_PARAM` is its own parameter: a composite value is a format,
+ * and a format needs a parser that can disagree with the thing that wrote it.
+ */
+export const WORKSPACE_ARTIFACT_PARAM = "artifact";
+export const WORKSPACE_ARTIFACT_REF_PARAM = "ref";
+
+/**
+ * A pair of query values back into the union, or nothing.
+ *
+ * Total over `ArtifactKind`, so a ninth kind fails the build here rather than
+ * silently becoming an address that opens on nothing. Both halves are checked:
+ * a kind that needs a reference and arrives without one is **not** an artifact
+ * — `?artifact=opportunity` with no `ref` would otherwise render "a Move" with
+ * no Move, which is the empty frame ADR 0109 §4 refuses.
+ *
+ * Nothing here trusts the value: it is a query string, which is to say it is
+ * whatever somebody typed. The kind is checked against the closed union and the
+ * reference is only ever used to look a row up through a client the founder's
+ * own session scopes — never interpolated into anything, and never authority.
+ */
+export function parseArtifactRef(
+  kind: string | undefined,
+  ref: string | undefined,
+): ArtifactRef | null {
+  if (kind === undefined || !isArtifactKind(kind)) return null;
+
+  switch (kind) {
+    case "opportunity":
+      return ref === undefined || ref.length === 0 ? null : { kind, opportunityId: ref };
+    case "prepared_change":
+      return ref === undefined || ref.length === 0 ? null : { kind, preparedChangeId: ref };
+    default:
+      return { kind };
+  }
+}
+
+/** Whether a string is one of the eight. Exported for a store reading one back. */
+export function isArtifactKind(value: string): value is ArtifactKind {
+  return (ARTIFACT_KINDS as readonly string[]).includes(value);
+}
+
+/** The reference an artifact carries, when it carries one. */
+export function artifactRefId(artifact: ArtifactRef): string | null {
+  switch (artifact.kind) {
+    case "opportunity":
+      return artifact.opportunityId;
+    case "prepared_change":
+      return artifact.preparedChangeId;
+    default:
+      return null;
+  }
+}

@@ -41,6 +41,14 @@
 -- sequence, so two tabs racing the same question resolve to one turn and a
 -- refusal rather than to two identical questions in the record.
 --
+-- ## 3b. A thread takes its name from the first question asked in it
+--
+-- `title` is not a column a founder may update, and until now nothing else set
+-- it either: every thread a run opened was called *"Your product"* and every
+-- thread stayed called that. A list of conversations with one name is a list
+-- nobody can use. The first founder question is the best name available, it is
+-- free, and it is set inside the same statement that writes the turn.
+--
 -- ## 4. The read marker cannot move backwards
 --
 -- `markThreadRead` compares before it writes, but the grant is on the column
@@ -96,6 +104,7 @@ declare
   v_thread public.nova_threads%rowtype;
   v_user uuid := (select auth.uid());
   v_next integer;
+  v_founder_turns integer;
 begin
   if v_user is null then
     raise exception 'not_authenticated';
@@ -146,6 +155,10 @@ begin
   from public.nova_messages m
   where m.thread_id = p_thread_id;
 
+  select count(*) into v_founder_turns
+  from public.nova_messages m
+  where m.thread_id = p_thread_id and m.author = 'founder';
+
   insert into public.nova_messages
     (thread_id, project_id, user_id, sequence, author, kind, body)
   values
@@ -179,9 +192,29 @@ begin
        'nova', 'action_proposal', p_action_id, 'project');
   end if;
 
-  update public.nova_threads
-  set last_message_at = now(), updated_at = now()
-  where id = p_thread_id;
+  -- A thread is named after the first thing the founder asked in it.
+  --
+  -- Until there is one it keeps the name Vibe gave it: a thread opened by a run
+  -- finishing has no question to be named after, and *"Your product"* is the
+  -- honest placeholder. The founder's first question is a better name than any
+  -- placeholder and than anything a model would compose, it is free, and it
+  -- happens exactly once — which is why the condition is *no founder message
+  -- before this one* rather than *the title is still the default*. A founder who
+  -- renamed a thread would not have their name taken away by their next
+  -- question, because a founder cannot rename one: `title` is not in the
+  -- column grant.
+  --
+  -- `v_next` is not the test. A thread that already holds four run events and no
+  -- questions is still being asked its first one.
+  if v_founder_turns = 0 then
+    update public.nova_threads
+    set title = left(btrim(p_question), 120), last_message_at = now(), updated_at = now()
+    where id = p_thread_id;
+  else
+    update public.nova_threads
+    set last_message_at = now(), updated_at = now()
+    where id = p_thread_id;
+  end if;
 
   return v_next;
 end;

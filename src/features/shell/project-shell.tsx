@@ -9,6 +9,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import { RailNav, RailScroll } from "@/features/shell/app-frame";
 import { ProjectNav } from "./project-nav";
 import { MobileTabBar } from "./mobile-tab-bar";
+import { NewThreadButton } from "@/features/nova/thread/new-thread-button";
 import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";
 import { projectPath, projectSectionPath } from "@/lib/routing/project-urls";
 import { cn } from "@/lib/utils/cn";
@@ -60,6 +61,35 @@ import { cn } from "@/lib/utils/cn";
  * It lives here rather than in the tab bar because a section is one thing with
  * two names, and a lookup table in a component is how the two names drift.
  */
+/**
+ * Where a section sits in the founder-facing navigation (ADR 0109 §1).
+ *
+ * ## Why this is a field on the table and not a second table
+ *
+ * Because a section's address and its place in the navigation are facts about
+ * the same thing, and two tables keyed by the same id is how one of them comes
+ * to be missing a row. `PROJECT_SUBSECTIONS` stays separate for the opposite
+ * reason — those are not in the navigation at all, and a flag saying so on
+ * every row would be a flag somebody has to remember to set.
+ *
+ * ## What the three groups mean
+ *
+ * `nova` is the conversation, and it is the product's primary surface. It is
+ * one section because there is one of it.
+ *
+ * `workspace` is what Nova talks *about* — the business reading, the product,
+ * the plan, the agent, what shipped. These were seven equal doors in the rail,
+ * and a founder arriving at a screen with seven equal doors has been asked to
+ * choose rather than told what to do. They are now the workspace, named as
+ * such, below the conversation and quieter than it. Every address is
+ * unchanged: this is a change to what a rail says, not to where anything is.
+ *
+ * `product` is the project's own settings — not a capability and not a
+ * destination in the loop, which is why it has been outside the section list
+ * in the rail since UI-11 and is grouped rather than deleted.
+ */
+export type ProjectSectionGroup = "nova" | "workspace" | "product";
+
 export const PROJECT_SECTIONS = [
   /*
    * The project index is Nova (ADR 0085). It was Business Health, which
@@ -78,13 +108,14 @@ export const PROJECT_SECTIONS = [
    * item that names a *who* rather than a subject, and the mark beside it is
    * the same instrument the page itself carries.
    */
-  { id: "home", label: "Nova", short: "Nova", icon: "nova", segment: "" },
+  { id: "home", label: "Nova", short: "Nova", icon: "nova", segment: "", group: "nova" },
   {
     id: "business-health",
     label: "Business Health",
     short: "Health",
     icon: "business-health",
     segment: "health",
+    group: "workspace",
   },
   {
     // Second, immediately after Home, because every section below reasons
@@ -95,15 +126,31 @@ export const PROJECT_SECTIONS = [
     short: "Product",
     icon: "products",
     segment: "product",
+    group: "workspace",
   },
-  { id: "action-plan", label: "Action Plan", short: "Plan", icon: "action-plan", segment: "plan" },
-  { id: "agent", label: "Agent", short: "Agent", icon: "agent", segment: "agent" },
+  {
+    id: "action-plan",
+    label: "Action Plan",
+    short: "Plan",
+    icon: "action-plan",
+    segment: "plan",
+    group: "workspace",
+  },
+  {
+    id: "agent",
+    label: "Agent",
+    short: "Agent",
+    icon: "agent",
+    segment: "agent",
+    group: "workspace",
+  },
   {
     id: "experiments",
     label: "Experiments",
     short: "Results",
     icon: "experiments",
     segment: "experiments",
+    group: "workspace",
   },
   {
     id: "settings",
@@ -111,6 +158,7 @@ export const PROJECT_SECTIONS = [
     short: "Settings",
     icon: "settings",
     segment: "settings",
+    group: "product",
   },
 ] as const;
 
@@ -273,8 +321,18 @@ export function projectSectionLabel(projectId: string, pathname: string): string
  */
 export { preparedChangeAnchorId, preparedChangeHref } from "@/lib/routing/project-urls";
 
+/**
+ * What a rail row can be about.
+ *
+ * A section, or the conversation list — which is a destination in the rail and
+ * deliberately not a section: a thread has no place in `PROJECT_SECTIONS`
+ * because it is not one screen at one segment, it is a list of rows each with
+ * their own address. `threads` here is the id of a *row*, not of a section.
+ */
+export type ProjectNavId = ProjectSectionId | "threads";
+
 export type ProjectNavItem = {
-  id: ProjectSectionId;
+  id: ProjectNavId;
   label: string;
   /**
    * The same destination in one word, for the phone's tab bar (UI-35).
@@ -319,7 +377,9 @@ export function ProjectRail({
   connected,
   planName,
   switcherItems,
-  items,
+  novaItems,
+  workspaceItems,
+  projectSettingsItem,
   // No `currentId`: the active section is derived from the URL inside
   // `ProjectNav`, so it cannot disagree with the address bar after a refresh,
   // a Back navigation, or a link opened in a new tab.
@@ -330,7 +390,22 @@ export function ProjectRail({
   /** The account's plan, resolved from its live subscription. */
   planName: string;
   switcherItems: ProjectSwitcherItem[];
-  items: ProjectNavItem[];
+  /** Nova, and the conversations. The product's primary surface. */
+  novaItems: ProjectNavItem[];
+  /** What Nova talks about. Below the conversation, and quieter. */
+  workspaceItems: ProjectNavItem[];
+  /**
+   * Project Settings, which is in neither group and is drawn in neither list.
+   *
+   * On the desktop rail it is offered by the product switcher — the control
+   * that says which product you are in — and this component never draws it. On
+   * a phone the switcher is itself inside the sheet, so a founder would have to
+   * open two disclosures to reach it; there it joins the sheet's own list. The
+   * asymmetry is deliberate and predates this slice: the old rail filtered
+   * `settings` out of the desktop list by id and passed the whole list to the
+   * bar.
+   */
+  projectSettingsItem: ProjectNavItem;
 }) {
   const current = {
     id: projectId,
@@ -353,55 +428,93 @@ export function ProjectRail({
         The phone's navigation, beside the rail's rather than instead of it in
         the source (UI-35). `RailNav` is `max-lg:hidden` and this is
         `lg:hidden`, so exactly one is ever drawn — two presentations of one
-        list of sections, from one array, which is what stops them drifting.
-
-        Project Settings is *not* filtered out here as it is below: on the
-        desktop rail it moved into the switcher, and on a phone the switcher is
-        inside this component's own sheet. Dropping it from both would leave
-        the section unreachable.
+        navigation, from the same two arrays, which is what stops them drifting.
       */}
-      <MobileTabBar items={items} context={switcher} />
+      <MobileTabBar
+        items={novaItems}
+        sheetItems={[...workspaceItems, projectSettingsItem]}
+        newChat={<NewThreadButton projectId={projectId} className="w-full" />}
+        context={switcher}
+      />
 
       <RailNav direction="back" label="Project sections">
         {/*
-        No eyebrow above the switcher. `PROJECT` labelled a control that
-        already says what it is — the product's mark, its name and a selector
-        glyph — and it cost a row in a rail whose section list was being cut
-        off four items in.
-      */}
+          No eyebrow above the switcher. `PROJECT` labelled a control that
+          already says what it is — the product's mark, its name and a selector
+          glyph — and it cost a row in a rail whose section list was being cut
+          off four items in.
+        */}
         {switcher}
 
-        <div className="border-line-1 my-2 border-t" />
+        {/*
+          The conversation, first and unlabelled.
+
+          Unlabelled because an eyebrow over two rows is a heading for a thing
+          that needs no heading, and because the point of the group is that it
+          is *not* one option among several — it is where the founder is. The
+          workspace below it carries the eyebrow precisely because it is a set.
+        */}
+        <ProjectNav items={novaItems}>
+          {/*
+            Starting a conversation is a write, so it is a button and not a
+            link: Next.js prefetches links, and a prefetched route that opened a
+            thread would open one nobody pressed. It is a *row* in this list
+            rather than a control under it because the rail has to fit a
+            laptop — see `rail-fold.spec.ts`.
+          */}
+          <NewThreadButton projectId={projectId} appearance="row" />
+        </ProjectNav>
+
+        {/*
+          The rail's one divider. It used to have three — under the switcher,
+          above the workspace and above General — and three lines in a 256px
+          column is a column made of lines. The switcher already reads as a
+          header for what is under it, and `General` is the last thing in the
+          list, so the one that survives is the one that separates two *kinds*
+          of destination: the conversation, and what it is about.
+        */}
+        <div className="border-line-1 mt-1.5 border-t pt-1.5">
+          <MonoLabel className="px-1 tracking-[0.18em]">Workspace</MonoLabel>
+        </div>
+
         <RailScroll>
-          <ProjectNav items={items.filter((item) => item.id !== "settings")} />
+          {/*
+            What Nova talks about. `tone="quiet"` is the whole of the visual
+            demotion and it is deliberately small: these are real destinations
+            with real counts and a live Agent status, and hiding them behind a
+            disclosure would trade seven equal doors for one door nobody opens.
+            What changed is that they are *named as a group* and sit under the
+            conversation rather than beside it.
+          */}
+          <ProjectNav items={workspaceItems} tone="quiet" />
         </RailScroll>
 
         {/*
-        The one row in this rail that is not about this product.
+          The one row in this rail that is not about this product.
 
-        `Project Settings` was here, one row above the account's own Settings,
-        which asked a founder to read two nearly identical labels to tell a
-        product apart from an account. It moved into the switcher — the control
-        that says which product you are in — and what is left is the way out of
-        the product context entirely.
+          `Project Settings` was here, one row above the account's own Settings,
+          which asked a founder to read two nearly identical labels to tell a
+          product apart from an account. It moved into the switcher — the control
+          that says which product you are in — and what is left is the way out of
+          the product context entirely.
 
-        It does not open a page inside this navigation: it unfolds the rail
-        into the account's own, landing on General. The chevron says so, and
-        the label above it is `General` because that is where the fold arrives
-        — the founder is told the destination before the click, not after it.
+          It does not open a page inside this navigation: it unfolds the rail
+          into the account's own, landing on General. The chevron says so, and
+          the label above it is `General` because that is where the fold arrives
+          — the founder is told the destination before the click, not after it.
 
-        `prefetch` is not decoration here. This is the one link in the product
-        that swaps the whole rail, and an unwarmed swap is the difference
-        between a fold and a wait.
-      */}
-        <div className="border-line-1 mt-2 flex flex-col gap-1.5 border-t pt-2">
+          `prefetch` is not decoration here. This is the one link in the product
+          that swaps the whole rail, and an unwarmed swap is the difference
+          between a fold and a wait.
+        */}
+        <div className="mt-1.5 flex flex-col gap-1 pt-1.5">
           <MonoLabel className="px-1 tracking-[0.18em]">General</MonoLabel>
           <Link
             href="/app/settings"
             prefetch
             className={cn(
               "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav group/settings",
-              "flex items-center gap-2.5 px-3 py-2.5 text-body transition-interactive",
+              "flex items-center gap-2.5 px-3 py-2 text-body transition-interactive",
               "focus-visible:ring-mint focus-visible:ring-2 focus-visible:outline-none",
             )}
           >

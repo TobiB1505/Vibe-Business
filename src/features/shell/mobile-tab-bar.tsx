@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { useId, useState, type ReactNode } from "react";
 import { DashboardIcon } from "@/components/ui/dashboard-icons";
 import { Button } from "@/components/ui/button";
-import { DismissIcon, MoreIcon } from "@/components/ui/icons.generated";
+import { DismissIcon } from "@/components/ui/icons.generated";
 import { Sheet } from "@/components/ui/sheet";
 import { agentMoveHref, PLAN_OPPORTUNITY_PARAM } from "@/modules/action-plans/source";
 import { cn } from "@/lib/utils/cn";
@@ -31,39 +31,71 @@ import type { ProjectNavItem } from "./project-shell";
  *
  * ## The shape
  *
- * Four sections in the thumb's reach and the rest behind *More*, which is the
- * phone's own convention and not an invention of this file. Four rather than
- * six because a tab is a fifth of 390px: at six the labels stop being words
- * and become abbreviations of words, and an unlabelled icon row is a quiz.
+ * Nova, the conversations, and the workspace — three tabs, and the account is
+ * the avatar in the corner (UI-35). It was four sections and a *More*, which
+ * is the phone's own convention and was the right shape for a product with
+ * seven equal destinations. This one does not have seven: it has a
+ * conversation and the things that conversation is about, and the bar now says
+ * so. Three rather than six for the reason four was better than six — a tab is
+ * a fraction of 390px, and at that width labels stop being words and become
+ * abbreviations of words.
  *
- * ## What More has to carry, and why the dot is not decoration
+ * ## What the Workspace tab has to carry, and why the dot is not decoration
  *
- * Hiding a section behind a disclosure hides its count with it. Agent sits
- * there, and Agent is where a prepared change waits. So More carries a dot
- * exactly when something behind it does — derived from the same `count` and
- * `status` the visible tabs render, never set by hand. It is the one case
- * where a control has to say something about content it is not showing, and
- * an honest dot is cheaper than promoting a section nobody asked for.
+ * Putting a section behind a disclosure puts its count there too. Agent is
+ * behind this one, and Agent is where a prepared change waits. So the tab
+ * carries a dot exactly when something behind it does — derived from the same
+ * `count` and `status` the sheet's rows render, never set by hand. It is the
+ * one case where a control has to say something about content it is not
+ * showing, and an honest dot is cheaper than promoting a section nobody asked
+ * for.
  *
  * A dot that could appear when nothing is waiting would be a fabricated
  * signal, which is why it reads the items rather than a flag.
  */
 
-/** How many sections reach the bar itself. The rest are behind *More*. */
-const VISIBLE_TABS = 4;
-
 export function MobileTabBar({
   items,
+  sheetItems,
+  newChat,
   context,
 }: {
+  /**
+   * The tabs themselves: Nova and the conversations (ADR 0109 §1).
+   *
+   * Two rather than four, and the four were the problem. A phone showed Nova,
+   * Health, Product and Plan as four equal tabs with the rest behind *More* —
+   * which is the seven-equal-doors screen with a scrollbar, and worse, because
+   * the split between the four and the rest was decided by array order rather
+   * than by anything a founder would recognise.
+   */
   items: ProjectNavItem[];
+  /**
+   * The workspace, behind its own tab.
+   *
+   * Not *More*. *More* is a place things are put when they did not fit, which
+   * is exactly what it was — a founder had to know that the Agent was hiding
+   * there. **Workspace** is a name for the set, and it is the same name the
+   * rail uses one breakpoint up, so the two navigations describe the product
+   * the same way.
+   */
+  sheetItems: ProjectNavItem[];
+  /**
+   * Starting a conversation, inside the sheet.
+   *
+   * A write, so it is a button and not a tab: a tab is a `<Link>` and Next.js
+   * prefetches those. It is beside the product switcher rather than on the bar
+   * because a bar of three destinations and one action is a bar where one cell
+   * behaves differently from the others with nothing to say so.
+   */
+  newChat?: ReactNode;
   /**
    * Which product this is, and how to change it — the rail's switcher.
    *
    * It has to land somewhere: below `lg` the rail is not drawn, and a founder
    * with three products cannot be left with no way to reach the other two. The
-   * sheet behind *More* is where it goes because it is product context, not
-   * account context, and the avatar in the corner is the account.
+   * sheet is where it goes because it is product context, not account context,
+   * and the avatar in the corner is the account.
    */
   context?: ReactNode;
 }) {
@@ -72,8 +104,8 @@ export function MobileTabBar({
   const [moreOpen, setMoreOpen] = useState(false);
   const moreTitleId = useId();
 
-  const visible = items.slice(0, VISIBLE_TABS);
-  const hidden = items.slice(VISIBLE_TABS);
+  const visible = items;
+  const hidden = sheetItems;
 
   function isActive(href: string): boolean {
     if (pathname === href) return true;
@@ -89,7 +121,7 @@ export function MobileTabBar({
   }
 
   /* The Move being read, carried onward to Agent — the rail's rule (UI-S3 §5). */
-  const actionPlanHref = items.find((item) => item.id === "action-plan")?.href;
+  const actionPlanHref = [...items, ...sheetItems].find((item) => item.id === "action-plan")?.href;
   const selectedMove =
     actionPlanHref && pathname === actionPlanHref ? searchParams.get(PLAN_OPPORTUNITY_PARAM) : null;
 
@@ -191,7 +223,11 @@ export function MobileTabBar({
                   )}
                 />
                 <span className="relative">
-                  <MoreIcon size={20} className={moreActive ? "text-mint" : undefined} />
+                  <DashboardIcon
+                    name="workspace"
+                    size={20}
+                    className={moreActive ? "text-mint" : undefined}
+                  />
                   {moreWaiting && (
                     <span
                       data-testid="more-waiting"
@@ -205,7 +241,7 @@ export function MobileTabBar({
                     />
                   )}
                 </span>
-                <span className="text-label leading-none">More</span>
+                <span className="text-label leading-none">Workspace</span>
               </button>
             </li>
           )}
@@ -252,8 +288,9 @@ export function MobileTabBar({
               and the same label as the evidence drawer's, which is the one
               sheet in this product that already had one.
             */}
+            {newChat && <div className="px-1 pb-3">{newChat}</div>}
             <h2 id={moreTitleId} className="text-fg-meta px-2 pb-2 font-mono text-label uppercase">
-              More sections
+              Workspace
             </h2>
             {hidden.map((item) => {
               const current = isActive(item.href);
