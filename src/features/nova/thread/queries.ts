@@ -81,22 +81,6 @@ async function runsFor(
 }
 
 /**
- * Which thread this project's conversation is currently in, if any.
- *
- * One row by project and status, and it deliberately does **not** open one:
- * `/threads` is a read, and a read that created a thread would mean looking at
- * a screen wrote a row. Threads are opened by something happening — see
- * `rememberOperationInThread`.
- */
-export async function readOpenThreadId(
-  supabase: SupabaseClient,
-  projectId: string,
-): Promise<string | null> {
-  const thread = await findOpenThread(supabase, projectId);
-  return thread?.id ?? null;
-}
-
-/**
  * How many conversations the list shows.
  *
  * Twenty is a long time for one product and short enough that the read stays a

@@ -24,34 +24,34 @@ import { cn } from "@/lib/utils/cn";
  */
 
 /**
- * The Command Center: six sections, in navigation order (UI-11).
+ * A project's sections: seven of them, in navigation order, across three
+ * groups (ADR 0109 §1).
  *
  * ## What changed, and why the shape did not
  *
  * The workspace used to name its sections after its own machinery — Overview,
  * Business score, Next moves, Prepared, Deep Scan, Impact, Activity. Every one
  * of those is a true description of what the route holds and none of them is
- * how a founder thinks about their own business.
+ * how a founder thinks about their own business. UI-11 replaced them with the
+ * loop; ADR 0109 stopped presenting the result as seven equal doors and put
+ * the conversation above them.
  *
- * Business Health now *is* Home. Diagnosis is the project's opening context,
- * not a second destination beside a summary of the same diagnosis. The
- * remaining sections continue the product's durable model (`PRODUCT.md` §11:
- * Understand → Diagnose → Prioritize → Plan → Execute → Measure).
- *
- * `segment` is the URL segment under `/app/projects/[projectId]`. Home is the
- * index route and therefore has an empty segment — it is the project's own URL,
- * not a child of it.
+ * The project index is Nova, and Business Health is a section of the workspace
+ * beside the rest. `segment` is the URL segment under
+ * `/app/projects/[projectId]`; Nova is the index route and therefore has an
+ * empty segment — it is the project's own URL, not a child of it.
  *
  * Each maps to the work it owns:
  *
- *   home         — the diagnosis, business map and what to do next
- *   my-product   — the product profile, its sources and what it can do
- *   action-plan  — `opportunities-panel` + `action-plan-panel`
- *   agent        — the five-stage workspace and the gate panels (validation,
- *                  approval and merge all live inside a prepared change)
- *   experiments  — what a merged change made measurable, via the project
- *                  impact model
- *   settings     — production URL, founder intent, the repository connection
+ *   home            — Nova, and the conversation the founder arrives in
+ *   business-health — the diagnosis, business map and what to do next
+ *   my-product      — the product profile, its sources and what it can do
+ *   action-plan     — `opportunities-panel` + `action-plan-panel`
+ *   agent           — the five-stage workspace and the gate panels (validation,
+ *                     approval and merge all live inside a prepared change)
+ *   experiments     — what a merged change made measurable, via the project
+ *                     impact model
+ *   settings        — production URL, founder intent, the repository connection
  */
 /*
  * `short` is the same destination said in one word, for the phone's tab bar
