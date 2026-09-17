@@ -1,4 +1,4 @@
-import { WorkspaceSection } from "@/components/layout/project-shell";
+import { WorkspaceSection } from "@/features/shell/project-shell";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";

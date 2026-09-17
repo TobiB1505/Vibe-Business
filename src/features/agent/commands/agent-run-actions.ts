@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { preparedChangeHref, projectSectionHref } from "@/components/layout/project-shell";
+import { preparedChangeHref, projectSectionHref } from "@/features/shell/project-shell";
 import { agentChangeHref, agentMoveHref } from "@/modules/action-plans/source";
 import type { ReviewClassificationResult } from "@/modules/review/classification";
 import { resolveReviewClassification } from "@/modules/review/classification-service";

@@ -3,7 +3,7 @@ import {
   ProjectRail,
   projectSectionHref,
   type ProjectNavItem,
-} from "@/components/layout/project-shell";
+} from "@/features/shell/project-shell";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { activePlanName } from "@/modules/billing/plan-name";

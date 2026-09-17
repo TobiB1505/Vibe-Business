@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
-import { projectSectionHref } from "@/components/layout/project-shell";
+import { projectSectionHref } from "@/features/shell/project-shell";
 import { useBrowserClock } from "@/lib/client/use-browser-clock";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { ArrowLeftIcon, type DashboardIconName } from "@/components/ui/dashboard-icons";
 import { AccountNav } from "./account-nav";
-import { RailNav, RailScroll } from "./app-frame";
+import { RailNav, RailScroll } from "@/features/shell/app-frame";
 import { cn } from "@/lib/utils/cn";
 
 /**

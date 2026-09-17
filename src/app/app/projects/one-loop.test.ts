@@ -70,7 +70,7 @@ const AGENT_ACTIONS = read(
 );
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/features/agent/change-origin.tsx");
-const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
+const PROJECT_NAV = read("src/features/shell/project-nav.tsx");
 const HOME_STATUS = read("src/features/health/home-status.tsx");
 /*
  * Where a surface names a Move and offers the way into it.

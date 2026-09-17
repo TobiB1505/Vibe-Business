@@ -1,5 +1,5 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import { MarketingShell } from "@/components/layout/marketing-shell";
+import { MarketingShell } from "@/features/shell/marketing-shell";
 import { ChevronRightIcon } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
 import { MonoLabel } from "@/components/ui/typography";

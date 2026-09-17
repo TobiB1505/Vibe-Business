@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AccountShell } from "@/components/layout/account-shell";
+import { AccountShell } from "@/features/shell/account-shell";
 
 /**
  * The account content column, shared by every page in this route group.

@@ -18,7 +18,7 @@ import { describe, expect, it } from "vitest";
  * exactly how a capability leaves a product without anybody noticing.
  */
 
-const CARD = readFileSync("src/components/layout/account-card.tsx", "utf8");
+const CARD = readFileSync("src/features/shell/account-card.tsx", "utf8");
 const GENERAL = readFileSync("src/app/app/(account)/settings/page.tsx", "utf8");
 
 /** Comments name the menu while explaining that it is gone. */

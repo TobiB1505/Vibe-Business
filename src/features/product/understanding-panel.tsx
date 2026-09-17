@@ -7,7 +7,7 @@ import { SourceCoverageList } from "@/components/system/source-coverage";
 import type { SourceCoverage } from "@/modules/provenance/source-coverage";
 import { CitationCount } from "@/components/system/evidence-drawer";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import { projectSectionHref } from "@/components/layout/project-shell";
+import { projectSectionHref } from "@/features/shell/project-shell";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import {
   GOAL_LABELS,

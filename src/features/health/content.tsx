@@ -1,5 +1,5 @@
 import { EmptyState, Notice } from "@/components/ui/states";
-import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { WorkspaceSection, projectSectionHref } from "@/features/shell/project-shell";
 import {
   getAuditAccessStatus,
   getAuditCurrency,

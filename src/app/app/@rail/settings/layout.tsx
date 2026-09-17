@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { RailBrand } from "@/components/layout/app-frame";
+import { RailBrand } from "@/features/shell/app-frame";
 import { RailAccountFooter } from "../rail-account-footer";
 import { SettingsRailSlot } from "../settings-rail";
 

@@ -54,6 +54,7 @@ experiments/       what a merged change made measurable
 founder-input/     a question Vibe is waiting on, shared by the Agent and the plan
 project-settings/  the production URL, the founder's intent, the repository
 onboarding/        the setup flow's commands
+shell/             the product's navigation: the rail, the tabs, the switcher, the frames
 connect/  account/       the commands those surfaces own
 marketing/         the landing page and the legal pages
 ```
@@ -76,12 +77,16 @@ composed it would have forced the one import the boundary forbids.
 | 3     | `commands/` per feature; one URL owner in `src/lib/routing/`                                                   |
 | 4     | `workspace/` — the artifact registry and its frame, and no views of its own                                    |
 | 5     | `nova/threads/`, `nova/thread/` — persistent threads                                                           |
-| 6     | `nova/conversation/`, `nova/actions/` — the conversation lane and the action resolver                          |
-| 7     | `shell/` — the project and account navigation                                                                  |
+| 6     | `nova/conversation/` — the conversation lane and the action resolver                                           |
+| 7     | `shell/` — the shell leaves `src/components`; the navigation waits on §E.4 and §E.5                            |
 
 Until a surface has moved, it stays where it is and the route renders it. A
 half-moved surface is a parallel architecture, which is the one thing this
 directory must not become.
+
+`src/components` is primitives only from Slice 7. What is left under
+`components/layout/` — `atmosphere.tsx`, `auth-shell.tsx`, `settings-column.tsx`
+— renders a shape and names no route.
 
 The plan and its reasoning: [the restructure audit](../../docs/audits/2026-09-16-nova-first-restructure/README.md)
 and [ADR 0109](../../docs/decisions/0109-nova-first-application-shell.md).

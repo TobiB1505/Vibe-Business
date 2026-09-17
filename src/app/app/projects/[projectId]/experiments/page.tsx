@@ -1,4 +1,4 @@
-import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { WorkspaceSection, projectSectionHref } from "@/features/shell/project-shell";
 import { EmptyState } from "@/components/ui/states";
 import { getProjectImpact } from "@/modules/business-measurement/project-impact";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";

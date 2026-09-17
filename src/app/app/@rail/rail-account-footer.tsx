@@ -1,4 +1,4 @@
-import { RailFooter } from "@/components/layout/app-frame";
+import { RailFooter } from "@/features/shell/app-frame";
 import { createClient } from "@/lib/supabase/server";
 import { buildAccountIdentity } from "@/modules/auth/identity-view";
 import { getFounderName } from "@/modules/auth/founder-profile";

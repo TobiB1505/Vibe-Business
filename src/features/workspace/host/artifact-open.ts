@@ -1,4 +1,4 @@
-import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
+import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/features/shell/project-shell";
 import type { ArtifactRef } from "@/modules/nova/artifacts";
 import { artifactHref, ARTIFACT_SEGMENT } from "../registry/artifacts";
 

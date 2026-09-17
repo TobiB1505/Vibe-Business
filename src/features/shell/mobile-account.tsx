@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useId, useState } from "react";
-import { PaletteSwitch } from "@/components/layout/palette-switch";
+import { PaletteSwitch } from "@/features/shell/palette-switch";
 import { Wallet } from "@/components/system/wallet";
 import { Avatar } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";

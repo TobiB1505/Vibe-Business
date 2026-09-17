@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { projectSectionHref } from "@/components/layout/project-shell";
+import { projectSectionHref } from "@/features/shell/project-shell";
 import { AgentReadyStage } from "@/features/agent/agent-ready-stage";
 import { agentStartControls } from "@/features/agent/agent-start-controls";
 import type { AgentTask } from "@/modules/coding-agent/workspace-view";

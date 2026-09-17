@@ -1,4 +1,4 @@
-import { projectSectionHref, type WorkspaceSectionId } from "@/components/layout/project-shell";
+import { projectSectionHref, type WorkspaceSectionId } from "@/features/shell/project-shell";
 import { formatDate } from "@/lib/utils/format-datetime";
 import type { ActionProvenance } from "@/modules/provenance/actions";
 import type { ProvenanceRemedy } from "@/modules/provenance/chain";

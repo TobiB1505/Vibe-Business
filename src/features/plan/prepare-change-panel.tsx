@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, buttonClasses } from "@/components/ui/button";
-import { preparedChangeHref } from "@/components/layout/project-shell";
+import { preparedChangeHref } from "@/features/shell/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import {

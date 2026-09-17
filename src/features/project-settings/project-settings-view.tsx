@@ -1,4 +1,4 @@
-import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { WorkspaceSection, projectSectionHref } from "@/features/shell/project-shell";
 import { SettingsColumn } from "@/components/layout/settings-column";
 import { DangerRow, DangerZone } from "@/components/system/danger-zone";
 import { StatusPill } from "@/components/ui/status-pill";

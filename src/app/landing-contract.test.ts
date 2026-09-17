@@ -39,7 +39,7 @@ function copyOf(source: string): string {
 }
 
 const LANDING = read("src/app/page.tsx");
-const SHELL = read("src/components/layout/marketing-shell.tsx");
+const SHELL = read("src/features/shell/marketing-shell.tsx");
 /*
  * The proof section the landing page actually renders (UI-19).
  *

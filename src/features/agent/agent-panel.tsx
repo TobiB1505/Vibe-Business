@@ -1,5 +1,5 @@
 import type { ElementType } from "react";
-import { preparedChangeHref } from "@/components/layout/project-shell";
+import { preparedChangeHref } from "@/features/shell/project-shell";
 import { STATUS_GLYPHS, StatusDot, statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";

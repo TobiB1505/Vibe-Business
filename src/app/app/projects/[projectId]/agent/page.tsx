@@ -5,7 +5,7 @@ import {
   WorkspaceSection,
   preparedChangeAnchorId,
   projectSectionHref,
-} from "@/components/layout/project-shell";
+} from "@/features/shell/project-shell";
 import { Notice } from "@/components/ui/states";
 import {
   AGENT_CHANGE_PARAM,

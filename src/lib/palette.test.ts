@@ -68,7 +68,7 @@ describe("the local switch is a tool, not a preference", () => {
     // A control that appears in production because somebody dropped the
     // condition is the failure this exists for, and it is invisible in every
     // local run.
-    const card = readFileSync("src/components/layout/account-card.tsx", "utf8");
+    const card = readFileSync("src/features/shell/account-card.tsx", "utf8");
     expect(card).toContain("{paletteSwitchable() && <PaletteSwitch");
     const layout = readFileSync("src/app/layout.tsx", "utf8");
     expect(layout).toContain("{paletteSwitchable() && (");
@@ -80,7 +80,7 @@ describe("the local switch is a tool, not a preference", () => {
     // the override silently stops being remembered.
     expect(PALETTE_STORAGE_KEY).toBe("vibe-palette");
     expect(PALETTE_BOOT_SCRIPT).toContain(JSON.stringify(PALETTE_STORAGE_KEY));
-    expect(readFileSync("src/components/layout/palette-switch.tsx", "utf8")).toContain(
+    expect(readFileSync("src/features/shell/palette-switch.tsx", "utf8")).toContain(
       "PALETTE_STORAGE_KEY",
     );
   });

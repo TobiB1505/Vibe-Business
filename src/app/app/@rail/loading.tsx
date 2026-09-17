@@ -1,4 +1,4 @@
-import { RailSkeleton } from "@/components/layout/app-frame";
+import { RailSkeleton } from "@/features/shell/app-frame";
 
 /**
  * The boundary the rail was missing (UI-14).

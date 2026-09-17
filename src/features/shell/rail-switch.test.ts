@@ -21,7 +21,7 @@ import { PROJECT_SECTIONS } from "./project-shell";
  * its own back, and that each still says how to reach the other.
  */
 
-const PROJECT_SHELL = readFileSync("src/components/layout/project-shell.tsx", "utf8");
+const PROJECT_SHELL = readFileSync("src/features/shell/project-shell.tsx", "utf8");
 
 /**
  * The rail's own render, not the whole file.
@@ -31,9 +31,9 @@ const PROJECT_SHELL = readFileSync("src/components/layout/project-shell.tsx", "u
  * heading. What moved is where it is *offered*, so that is what this reads.
  */
 const PROJECT_RAIL = PROJECT_SHELL.slice(PROJECT_SHELL.indexOf("export function ProjectRail"));
-const SWITCHER = readFileSync("src/components/layout/project-switcher.tsx", "utf8");
-const ACCOUNT_SHELL = readFileSync("src/components/layout/account-shell.tsx", "utf8");
-const APP_FRAME = readFileSync("src/components/layout/app-frame.tsx", "utf8");
+const SWITCHER = readFileSync("src/features/shell/project-switcher.tsx", "utf8");
+const ACCOUNT_SHELL = readFileSync("src/features/shell/account-shell.tsx", "utf8");
+const APP_FRAME = readFileSync("src/features/shell/app-frame.tsx", "utf8");
 
 /** Comments explain the move by name; a test that counted prose would pass on one. */
 function code(source: string): string {

@@ -1,4 +1,4 @@
-import { WorkspaceSection } from "@/components/layout/project-shell";
+import { WorkspaceSection } from "@/features/shell/project-shell";
 import { EmptyState } from "@/components/ui/states";
 import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";

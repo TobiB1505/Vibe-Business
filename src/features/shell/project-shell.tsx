@@ -6,7 +6,7 @@ import {
   type DashboardIconName,
 } from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
-import { RailNav, RailScroll } from "./app-frame";
+import { RailNav, RailScroll } from "@/features/shell/app-frame";
 import { ProjectNav } from "./project-nav";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";

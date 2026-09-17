@@ -1,4 +1,4 @@
-import { projectSectionHref, preparedChangeHref } from "@/components/layout/project-shell";
+import { projectSectionHref, preparedChangeHref } from "@/features/shell/project-shell";
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaHomeEntry, NovaHomeSection } from "@/modules/nova/home-view";

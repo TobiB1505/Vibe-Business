@@ -1,5 +1,5 @@
 import type { ArtifactKind, ArtifactRef } from "@/modules/nova/artifacts";
-import type { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
+import type { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/features/shell/project-shell";
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
 import { preparedChangeHref, projectSectionPath } from "@/lib/routing/project-urls";
 

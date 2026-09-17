@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
+import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/features/shell/project-shell";
 import { ARTIFACT_KINDS, type ArtifactKind } from "@/modules/nova/artifacts";
 import { ARTIFACT_SEGMENT, ARTIFACT_SOURCES, artifactHref } from "./artifacts";
 

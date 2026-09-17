@@ -5,7 +5,7 @@ import {
   PROJECT_SECTIONS,
   WORKSPACE_SECTION_HEADINGS,
   projectSectionHref,
-} from "@/components/layout/project-shell";
+} from "@/features/shell/project-shell";
 
 /**
  * The workspace routes as a set (Sprint UI-2 Part 2; renamed by CORE-5).

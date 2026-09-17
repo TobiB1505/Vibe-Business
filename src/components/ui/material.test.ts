@@ -69,7 +69,7 @@ describe("the primitives emit the material hooks", () => {
     // one place the `<aside>` is declared, so the question cannot be answered
     // two ways again.
     expect(
-      readFileSync(join(process.cwd(), "src/components/layout/app-frame.tsx"), "utf8"),
+      readFileSync(join(process.cwd(), "src/features/shell/app-frame.tsx"), "utf8"),
       "the rail does not wear vibe-chrome",
     ).toContain("vibe-chrome");
   });
@@ -402,7 +402,7 @@ describe("the ground is reachable", () => {
    * root that also fills.
    */
   it("no full-height shell root fills the viewport with bg-app", () => {
-    const dir = join(process.cwd(), "src/components/layout");
+    const dir = join(process.cwd(), "src/features/shell");
     const offenders: string[] = [];
     for (const entry of readdirSync(dir)) {
       if (!entry.endsWith(".tsx") || entry.endsWith(".test.tsx")) continue;

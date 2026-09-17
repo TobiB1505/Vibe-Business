@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
-import { MarketingHeader } from "@/components/layout/marketing-header";
+import { MarketingHeader } from "@/features/shell/marketing-header";
 import { buttonClasses } from "@/components/ui/button";
 
 /**

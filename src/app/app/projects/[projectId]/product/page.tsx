@@ -1,4 +1,4 @@
-import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { WorkspaceSection, projectSectionHref } from "@/features/shell/project-shell";
 import { ProductScanExperience } from "@/features/product/product-scan-experience";
 import { EmptyState } from "@/components/ui/states";
 import { loadDeepScanViewModel } from "@/modules/authenticated-product-intelligence/service";

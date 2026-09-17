@@ -1,5 +1,5 @@
 import { agentChangeHref, planMoveHref } from "@/modules/action-plans/source";
-import { preparedChangeHref, projectSectionHref } from "@/components/layout/project-shell";
+import { preparedChangeHref, projectSectionHref } from "@/features/shell/project-shell";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import type { NovaActionId } from "@/modules/nova/focus";
 

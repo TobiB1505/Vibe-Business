@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { ProjectBreadcrumbTrail } from "@/components/layout/project-breadcrumb-trail";
-import { RecordVisit } from "@/components/layout/record-visit";
-import { ProjectShell } from "@/components/layout/project-shell";
+import { ProjectBreadcrumbTrail } from "@/features/shell/project-breadcrumb-trail";
+import { RecordVisit } from "@/features/shell/record-visit";
+import { ProjectShell } from "@/features/shell/project-shell";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectFrameContext } from "@/modules/projects/workspace-context";
 

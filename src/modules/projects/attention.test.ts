@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/components/layout/project-shell";
+import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS } from "@/features/shell/project-shell";
 import {
   ATTENTION_DISPLAY_LIMIT,
   buildAttentionItems,

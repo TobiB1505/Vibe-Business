@@ -18,7 +18,7 @@ This record was written and reviewed the same day. The review found two things w
 
 **3. One claim was too absolute.** §C.5's first condition said *"Deleting every thread changes no screen except the thread list."* That is right about canonical business state and wrong about the conversation: a founder who says *"okay, Variante B"* and then *"dann machen wir das"* is relying on the transcript to carry the reference. The rule is now two sentences — deleting a thread must not change canonical business state, and may remove conversational memory.
 
-## Correction — 2026-09-17, while building Slices 4, 5 and 6
+## Correction — 2026-09-17, while building Slices 4 to 7
 
 Slice 4's own definition turned out to be two slices wearing one name, and the seam is geometric rather than architectural. Recorded here rather than rewritten in §D, so the original plan stands and what was actually built is legible beside it.
 
@@ -33,6 +33,12 @@ Slice 4's own definition turned out to be two slices wearing one name, and the s
 **`/threads` is a route the plan did not name.** §C.3 listed only `threads/[threadId]`. A thread id is not something a screen can link to without reading one, and §D forbids Home adding a read — so the project's conversation gets a stable address that resolves to whichever thread is open, and Nova's rail links to *that*. Without it the route would have been reachable by nothing, which is the dead architecture this plan is under instruction not to build.
 
 **The migration is written, tested against a real PostgreSQL, and not deployed.** `SUPABASE_ACCESS_TOKEN` is unset in the session that built this, so `pnpm db:status`, `pnpm db:push` and `pnpm db:types` cannot run (rules 29–34 forbid the SQL-editor fallback in any case). `supabase/tests/nova-threads.migration.ts` applies every migration to a cluster it creates itself and proves twenty-one properties of the result, so the SQL is not unverified — but the remote database does not have these tables, and `src/types/database.ts` has not been regenerated. It was left alone rather than hand-edited: it is a generated file, and a hand-written table in it is a claim about a database nobody checked. **Deploying is the owner's next step.**
+
+**Slice 7's navigation cannot be built until §E.4 is answered, and this is where that became visible.** §C.3 and §D put **Products · New chat · Threads · Settings** at the *account* level. §C.9 and §E.4 make a thread **project-scoped**, and §E.4 leaves account-level threads open. Those cannot both hold: *Threads* at the account level names something that does not exist, and *New chat* asks which product. The same decision blocks the phone's four tabs, where §E.5 already asks which of Threads and Account is cut. Inventing either would be inventing a product requirement, which rule 14 and the brief both forbid — so the navigation waits, and with it ADR 0109 §4's pane, which waits on the rail shrinking.
+
+**What Slice 7 did ship is the half that needed no decision**: the shell's files left `src/components`, so `src/components` is primitives only and ADR 0109 §2's claim is complete. Nothing a founder sees changed.
+
+**§C.2 misclassified `app-frame.tsx` as a presentation primitive.** It composes `AccountCard` and `MobileAccount` — a frame that composes the account surface is the signed-in product's shell, whatever its filename suggests. The boundary test said so the moment the files it composes moved, which is the register working: fifteen files moved, not fourteen.
 
 **§E.2 was answered without the owner in the room, and the answer says so.** The audit recommended *absorbed and bounded at launch*, and [ADR 0110](../../decisions/0110-a-question-costs-nothing-and-is-bounded.md) adopts it: a conversation turn is free, rendered as **Included** in ADR 0094's sense, and bounded per thread and per account. The ADR is marked provisional in exactly one respect and firm in the other — the bound is not an option, the price is the owner's to revisit — and it names what would change if the answer is *charge for it* (a rate-card entry and a disclosure; nothing in the safety model).
 
@@ -543,7 +549,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** *"Why is conversion our biggest problem?"* gets a grounded answer with the business-health artifact beside it; *"run the audit again"* ends on the same priced control the ranking offers; *"merge it"* opens the approval; an injection attempt produces a refusal and a row; and a founder who says *"the second one"* is understood.
 - **Not in this slice.** Multi-turn model memory beyond the bounded pack. Nova initiating a conversation on her own.
 
-### Slice 7 — The app shell
+### Slice 7 — The app shell ⚠️ *half shipped ([Sprint 0229](../../sprints/0229-the-shell-is-a-surface.md)): the files moved, the navigation did not, and the reason is §E.4 — see the 2026-09-17 correction*
 
 - **Goal.** Products · New chat · Threads · Settings at the app level; Nova + Workspace inside a project; every old section address still resolving full-page.
 - **Affected.** `@rail/project-rail.tsx` and the rail layouts (contents, not mechanism), `mobile-tab-bar.tsx` (Nova · Workspace · Threads · Account), `project-shell.tsx` (`PROJECT_SECTIONS` stays the address table), the shell's fourteen files → `features/shell/`, `rail-switch.test.ts`, `project-sections.test.ts`, `e2e/{rail-fold,mobile-shell}.spec.ts`.

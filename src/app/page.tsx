@@ -1,4 +1,4 @@
-import { MarketingShell } from "@/components/layout/marketing-shell";
+import { MarketingShell } from "@/features/shell/marketing-shell";
 import { LandingAgent } from "@/features/marketing/landing-agent";
 import { LandingBoundary } from "@/features/marketing/landing-boundary";
 import { LandingBusinessMap } from "@/features/marketing/landing-business-map";

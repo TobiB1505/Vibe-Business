@@ -1,4 +1,4 @@
-import { WorkspaceSection } from "@/components/layout/project-shell";
+import { WorkspaceSection } from "@/features/shell/project-shell";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 
 /**

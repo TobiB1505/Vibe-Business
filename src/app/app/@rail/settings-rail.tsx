@@ -1,6 +1,6 @@
 import { projectPath } from "@/lib/routing/project-urls";
 import { cookies } from "next/headers";
-import { SettingsRail, type SettingsRailBack } from "@/components/layout/account-shell";
+import { SettingsRail, type SettingsRailBack } from "@/features/shell/account-shell";
 import { createClient } from "@/lib/supabase/server";
 import { LAST_VISITED_COOKIE } from "@/modules/projects/last-visited";
 import { isUuid } from "@/lib/validation/uuid";

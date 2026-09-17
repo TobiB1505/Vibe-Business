@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AppShell } from "@/components/layout/app-shell";
+import { AppShell } from "@/features/shell/app-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 

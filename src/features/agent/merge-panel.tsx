@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
-import { preparedChangeAnchorId } from "@/components/layout/project-shell";
+import { preparedChangeAnchorId } from "@/features/shell/project-shell";
 import type { MergeCard } from "@/modules/merge/view";
 import {
   REVIEW_CLASSIFICATION_LABELS,

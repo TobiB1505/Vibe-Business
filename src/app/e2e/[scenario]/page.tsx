@@ -8,7 +8,7 @@ import {
   AgentPreviewActions,
   AgentReviewDecision,
 } from "@/features/agent/agent-stage-actions";
-import { preparedChangeAnchorId } from "@/components/layout/project-shell";
+import { preparedChangeAnchorId } from "@/features/shell/project-shell";
 import { novaControlLabel } from "@/modules/nova/home-view";
 import { IntelligenceSummary } from "@/features/product/intelligence-summary";
 import { AuditOverview } from "@/features/health/audit-overview";
@@ -222,8 +222,8 @@ import { StudyForms } from "../design-studies/study-forms";
 import { StudyType } from "../design-studies/study-type";
 import { StudyFigure } from "../design-studies/study-figure";
 import { StudyLinks } from "../design-studies/study-links";
-import { AccountShell, SettingsRail } from "@/components/layout/account-shell";
-import { AppFrame, RailBrand, RailFooter } from "@/components/layout/app-frame";
+import { AccountShell, SettingsRail } from "@/features/shell/account-shell";
+import { AppFrame, RailBrand, RailFooter } from "@/features/shell/app-frame";
 import {
   PROJECT_SECTIONS,
   ProjectBreadcrumb,
@@ -232,7 +232,7 @@ import {
   WorkspaceSection,
   projectSectionHref,
   type ProjectNavItem,
-} from "@/components/layout/project-shell";
+} from "@/features/shell/project-shell";
 import {
   E2E_CHANGE_HISTORY,
   E2E_CHANGE_HISTORY_MOVES,

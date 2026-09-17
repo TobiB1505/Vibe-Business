@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { MarketingShell } from "@/components/layout/marketing-shell";
+import { MarketingShell } from "@/features/shell/marketing-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 

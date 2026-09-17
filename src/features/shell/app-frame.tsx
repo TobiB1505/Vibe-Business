@@ -1,8 +1,8 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
-import { AccountCard } from "@/components/layout/account-card";
-import { MobileAccount } from "@/components/layout/mobile-account";
+import { AccountCard } from "./account-card";
+import { MobileAccount } from "./mobile-account";
 import { Wallet } from "@/components/system/wallet";
 import { SkeletonBlock } from "@/components/ui/skeleton";
 import type { AccountIdentity } from "@/modules/auth/identity-view";

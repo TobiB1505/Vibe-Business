@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { AppFrame } from "@/components/layout/app-frame";
+import { AppFrame } from "@/features/shell/app-frame";
 import { requireSession } from "@/modules/auth/session";
 
 /**

@@ -1,4 +1,4 @@
-import { projectSectionHref } from "@/components/layout/project-shell";
+import { projectSectionHref } from "@/features/shell/project-shell";
 import { Disclosure, FoundList, TechnicalDetails } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/states";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";

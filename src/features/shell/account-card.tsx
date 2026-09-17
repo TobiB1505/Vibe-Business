@@ -3,7 +3,7 @@ import { Avatar } from "@/components/ui/avatar";
 import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";
 import type { AccountIdentity } from "@/modules/auth/identity-view";
-import { PaletteSwitch } from "@/components/layout/palette-switch";
+import { PaletteSwitch } from "@/features/shell/palette-switch";
 import { activePalette, paletteSwitchable } from "@/lib/palette";
 
 /**

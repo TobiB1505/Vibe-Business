@@ -44,11 +44,9 @@ describe("the balance is one object", () => {
     // There is one rail now (UI-13) and one foot inside it, so the two cannot
     // diverge: `RailFooter` renders the balance and the identity for both
     // states of the fold, and neither navigation composes its own.
-    expect(/\bWallet\b/.test(readFileSync("src/components/layout/app-frame.tsx", "utf8"))).toBe(
-      true,
-    );
+    expect(/\bWallet\b/.test(readFileSync("src/features/shell/app-frame.tsx", "utf8"))).toBe(true);
     for (const rail of ["account-shell", "project-shell"]) {
-      const source = code(readFileSync(`src/components/layout/${rail}.tsx`, "utf8"));
+      const source = code(readFileSync(`src/features/shell/${rail}.tsx`, "utf8"));
       expect(/\bWallet\b/.test(source), `${rail} composes a balance of its own again`).toBe(false);
     }
   });
@@ -66,7 +64,13 @@ describe("the balance is one object", () => {
       if (owners.includes(path) || path.startsWith("src/app/e2e/design-studies/")) continue;
       // Billing is the ledger and states amounts in its own tables; the rails
       // are what this rule is about.
-      if (!path.startsWith("src/components/layout/")) continue;
+      /*
+       * The shell, which is where a rail is. It moved out of
+       * `src/components/layout/` in Slice 7 of ADR 0109 — a frame that composes
+       * the account card is a product surface, not a primitive — and the rule
+       * moved with it rather than being widened to the whole repository.
+       */
+      if (!path.startsWith("src/features/shell/")) continue;
       const text = readFileSync(path, "utf8");
       for (const [line] of text.matchAll(/[^\n]*tabular-nums[^\n]*/g)) {
         if (/Credits/.test(line)) offenders.push(`${path}: ${line.trim().slice(0, 80)}`);
