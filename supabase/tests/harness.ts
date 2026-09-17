@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, existsSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -66,6 +66,19 @@ export type Cluster = {
   sqlLast: (statements: string) => string;
   /** Runs SQL expecting failure; returns the error text. Throws if it succeeds. */
   sqlExpectingError: (statements: string) => string;
+  /**
+   * Runs several scripts in genuinely parallel sessions and reports each one.
+   *
+   * Every other method here runs one `psql` to completion, which can prove what
+   * a statement does and can never prove what two of them do at once. A row
+   * lock, a unique index and a `select … for update` only mean anything under
+   * contention, so the one way to test them is to contend: N processes, started
+   * together, against the same cluster.
+   *
+   * `ok` is per script — a losing writer is the *expected* result of most of
+   * these, so a failure is data rather than an exception.
+   */
+  sqlParallel: (scripts: readonly string[]) => Promise<{ ok: boolean; out: string; err: string }[]>;
   stop: () => void;
 };
 
@@ -145,7 +158,19 @@ export function startCluster(repoRoot: string): Cluster {
     try {
       const out = execFileSync(
         join(bin, "psql"),
-        ["-h", socketDir, "-p", String(port), "-U", "postgres", "-v", "ON_ERROR_STOP=1", ...args, "-f", file],
+        [
+          "-h",
+          socketDir,
+          "-p",
+          String(port),
+          "-U",
+          "postgres",
+          "-v",
+          "ON_ERROR_STOP=1",
+          ...args,
+          "-f",
+          file,
+        ],
         { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
       );
       return { out, err: "", ok: true };
@@ -157,14 +182,17 @@ export function startCluster(repoRoot: string): Cluster {
 
   const sql = (statements: string): string => {
     const result = psql(["-tA"], statements);
-    if (!result.ok) throw new Error(`SQL failed:\n${result.err}\n--- statements ---\n${statements}`);
+    if (!result.ok)
+      throw new Error(`SQL failed:\n${result.err}\n--- statements ---\n${statements}`);
     return result.out.trim();
   };
 
   const sqlExpectingError = (statements: string): string => {
     const result = psql(["-tA"], statements);
     if (result.ok) {
-      throw new Error(`Expected failure but the statements succeeded:\n${statements}\n${result.out}`);
+      throw new Error(
+        `Expected failure but the statements succeeded:\n${statements}\n${result.out}`,
+      );
     }
     return result.err.trim();
   };
@@ -172,7 +200,9 @@ export function startCluster(repoRoot: string): Cluster {
   sql(PLATFORM_STUB);
 
   const migrations = join(repoRoot, "supabase", "migrations");
-  for (const file of readdirSync(migrations).filter((f) => f.endsWith(".sql")).sort()) {
+  for (const file of readdirSync(migrations)
+    .filter((f) => f.endsWith(".sql"))
+    .sort()) {
     const body = readFileSync(join(migrations, file), "utf8");
     const result = psql(["-1", "-q"], body);
     if (!result.ok) throw new Error(`Migration ${file} failed:\n${result.err}`);
@@ -186,10 +216,42 @@ export function startCluster(repoRoot: string): Cluster {
     return lines[lines.length - 1] ?? "";
   };
 
+  const sqlParallel = (
+    scripts: readonly string[],
+  ): Promise<{ ok: boolean; out: string; err: string }[]> =>
+    Promise.all(
+      scripts.map((script, index) => {
+        const file = join(socketDir, `parallel-${index}.sql`);
+        writeFileSync(file, script);
+        return new Promise<{ ok: boolean; out: string; err: string }>((resolve) => {
+          execFile(
+            join(bin, "psql"),
+            [
+              "-h",
+              socketDir,
+              "-p",
+              String(port),
+              "-U",
+              "postgres",
+              "-v",
+              "ON_ERROR_STOP=1",
+              "-tA",
+              "-f",
+              file,
+            ],
+            { encoding: "utf8" },
+            (error, stdout, stderr) =>
+              resolve({ ok: error === null, out: String(stdout), err: String(stderr) }),
+          );
+        });
+      }),
+    );
+
   return {
     sql,
     sqlLast,
     sqlExpectingError,
+    sqlParallel,
     stop: () => {
       try {
         asServerUser(bin, `pg_ctl -D ${dataDir} -m immediate -w stop`);

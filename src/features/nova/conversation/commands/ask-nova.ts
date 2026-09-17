@@ -21,6 +21,7 @@ import {
   ensureOpenThread,
 } from "@/modules/nova/threads/store";
 import { ACCOUNT_QUESTION_WINDOW_MS } from "@/modules/nova/conversation/limits";
+import { turnRefusalMessage } from "@/modules/nova/threads/refusals";
 import { FIRST_THREAD_TITLE } from "@/modules/operations/nova-thread";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { threadsPath } from "@/lib/routing/project-urls";
@@ -132,13 +133,15 @@ export async function askNovaAction(projectId: string, question: string): Promis
         ? "Here is the control for that. Press it when you are ready — I never start anything myself."
         : "Here it is.";
 
-    await appendConversationTurn(access.supabase, {
+    const written = await appendConversationTurn(access.supabase, {
       threadId: thread.id,
       question: trimmed,
       reply,
       artifact: intent.kind === "artifact" ? { kind: intent.artifact, ref: null } : null,
       actionId: intent.kind === "action" ? intent.actionId : null,
     });
+
+    if (!written.ok) return { ok: false, message: turnRefusalMessage(written.reason) };
 
     revalidatePath(threadsPath(projectId));
     return {
@@ -176,7 +179,7 @@ export async function askNovaAction(projectId: string, question: string): Promis
     });
   }
 
-  await appendConversationTurn(access.supabase, {
+  const written = await appendConversationTurn(access.supabase, {
     threadId: thread.id,
     question: trimmed,
     reply: outcome.reply.message,
@@ -199,6 +202,16 @@ export async function askNovaAction(projectId: string, question: string): Promis
           })
         : null,
   });
+
+  /*
+   * A refused write after a spent call. The ledger entry above stands — rule 47
+   * records what was billed, not what was kept — and the founder is told why
+   * there is nothing new in the thread rather than watching a reply appear and
+   * vanish on the next load. The only refusals reachable here are a thread
+   * archived or deleted in another tab and a double press, and in the last case
+   * the answer they are being pointed at is genuinely already there.
+   */
+  if (!written.ok) return { ok: false, message: turnRefusalMessage(written.reason) };
 
   revalidatePath(threadsPath(projectId));
 

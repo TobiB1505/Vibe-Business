@@ -255,62 +255,48 @@ describe("what a founder's own session may write", () => {
     );
   }
 
-  it("lets them write their own words", () => {
-    const at = sequence + 1;
-    sequence = at;
-    db.sql(
-      asOwner(
-        `insert into public.nova_messages (thread_id, project_id, user_id, sequence, author, kind, body)` +
-          ` values ('${threadId}', '${projectId}', '${userId}', ${at}, 'founder', 'text', 'Why is conversion the blocker?');`,
-      ),
-    );
-  });
-
   /**
-   * The one that would matter. A client controls every byte it sends, so a
-   * browser that could write `author = 'system'` could write a merge that never
-   * happened into the founder's own history and then read it back as a fact.
+   * Written when a founder's session could insert their own words, and rewritten
+   * in the open when Slice 7's boundary migration took that grant away.
+   *
+   * The `insert own nova_messages` policy admitted `author = 'founder'` rows and
+   * no code ever used it: the conversation's one write is
+   * `append_nova_conversation_turn`, which is `security definer` and does not
+   * pass through a policy at all. So the assertions below used to measure which
+   * *rows* the policy rejected, and they now measure that there is no row a
+   * founder can offer it — which is the stronger claim, and the one rule 11
+   * asks for. The per-kind CHECKs those rows were also exercising are proved
+   * directly, above, where the writer is the service role and the constraint is
+   * the only thing standing there.
    */
-  it("refuses to let them write as the system", () => {
-    const at = sequence + 1;
-    expect(
-      db.sqlExpectingError(
-        asOwner(
-          `insert into public.nova_messages (thread_id, project_id, user_id, sequence, author, kind, operation_run_id)` +
-            ` values ('${threadId}', '${projectId}', '${userId}', ${at}, 'system', 'event', null);`,
-        ),
-      ),
-    ).toMatch(/row-level security|nova_messages_event_names_its_run/);
-  });
-
-  it("refuses to let them write a result nobody observed", () => {
-    const at = sequence + 1;
-    expect(
-      db.sqlExpectingError(
-        asOwner(
-          `insert into public.nova_messages (thread_id, project_id, user_id, sequence, author, kind, action_id, subject_kind, subject_id, outcome)` +
-            ` values ('${threadId}', '${projectId}', '${userId}', ${at}, 'founder', 'action_result', 'nova.merge_change', 'prepared_change', 'change_7', 'succeeded');`,
-        ),
-      ),
-    ).toMatch(/row-level security|nova_messages_founder_writes_words/);
-  });
-
-  it("refuses to let them write into somebody else's project", () => {
+  it.each([
+    ["their own words", `${"$SEQ"}, 'founder', 'text', 'Why is conversion the blocker?'`],
+    ["a system event", `${"$SEQ"}, 'system', 'text', 'The merge finished.'`],
+    ["something in Nova's voice", `${"$SEQ"}, 'nova', 'text', 'I merged it for you.'`],
+  ])("refuses to let them write %s", (_name, tail) => {
     const at = sequence + 1;
     expect(
       db.sqlExpectingError(
         asOwner(
           `insert into public.nova_messages (thread_id, project_id, user_id, sequence, author, kind, body)` +
-            ` values ('${threadId}', '${otherProjectId}', '${userId}', ${at}, 'founder', 'text', 'x');`,
+            ` values ('${threadId}', '${projectId}', '${userId}', ${tail.replace("$SEQ", String(at))});`,
         ),
       ),
-    ).toMatch(/row-level security|nova_messages_thread_project_fk/);
+    ).toMatch(/permission denied/);
+  });
+
+  it("holds no insert privilege on the table at all", () => {
+    expect(
+      db.sql(
+        `select count(*) from information_schema.role_table_grants` +
+          ` where grantee = 'authenticated' and table_name = 'nova_messages'` +
+          ` and privilege_type = 'INSERT';`,
+      ),
+    ).toBe("0");
   });
 
   it("shows them their own threads and nobody else's", () => {
-    expect(
-      db.sqlLast(asOwner(`select count(*) from public.nova_threads;`)),
-    ).toBe("1");
+    expect(db.sqlLast(asOwner(`select count(*) from public.nova_threads;`))).toBe("1");
 
     const otherThread = db.sql(
       `with i as (insert into public.nova_threads (project_id, user_id, title)` +
@@ -321,7 +307,9 @@ describe("what a founder's own session may write", () => {
   });
 
   it("lets them mark a thread read, and nothing else about it", () => {
-    db.sql(asOwner(`update public.nova_threads set last_read_sequence = 3 where id = '${threadId}';`));
+    db.sql(
+      asOwner(`update public.nova_threads set last_read_sequence = 3 where id = '${threadId}';`),
+    );
     expect(
       db.sql(`select last_read_sequence from public.nova_threads where id = '${threadId}';`),
     ).toBe("3");

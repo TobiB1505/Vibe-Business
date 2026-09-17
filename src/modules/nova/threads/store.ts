@@ -157,9 +157,15 @@ export async function ensureOpenThread(
       project_id: params.projectId,
       user_id: params.userId,
       title: params.title.trim().slice(0, MAX_THREAD_TITLE_CHARS),
-      /* The column's default, sent explicitly: a thread is opened, and the
-         status is what the read above selects on. */
-      status: "open",
+      /*
+       * `status` is deliberately absent, and the absence is the grant.
+       * `authenticated` may insert `(project_id, user_id, title)` and nothing
+       * else, so the columns that carry a thread's state take their defaults —
+       * `status` is `'open'`, which is what the read above selects on. Sending
+       * it explicitly would be denied for a founder and identical for the
+       * service role, which is the worse of the two failures: it works in
+       * every test and fails for one caller in production.
+       */
     })
     .select(THREAD_COLUMNS)
     .single();
@@ -359,6 +365,29 @@ export async function markThreadRead(
 }
 
 /**
+ * The four refusals `append_nova_conversation_turn` raises by name.
+ *
+ * Every one is reachable from a browser without anything going wrong: a thread
+ * archived in another tab, a double press, a thread deleted between the read
+ * that addressed it and the write, an empty field that got past the composer.
+ * They are matched on the exception text because that is what PostgREST
+ * surfaces, and they are a closed list so that a fifth one — a genuine fault —
+ * keeps throwing instead of being quietly rendered as a polite sentence.
+ */
+export const TURN_REFUSALS = [
+  "thread_not_found",
+  "thread_archived",
+  "turn_duplicate",
+  "turn_incomplete",
+] as const;
+
+export type TurnRefusal = (typeof TURN_REFUSALS)[number];
+
+export type AppendTurnResult =
+  | { ok: true; sequence: number }
+  | { ok: false; reason: TurnRefusal };
+
+/**
  * One conversational turn — the question, the reply, and what they point at.
  *
  * ## Why this is one database call and not four inserts
@@ -375,6 +404,15 @@ export async function markThreadRead(
  * `security definer` and re-checks ownership against `auth.uid()` inside
  * itself — the same shape `resolve_founder_input_request` uses.
  *
+ * ## Why it returns a refusal rather than throwing one
+ *
+ * Four of the function's five `raise`s are things a founder can cause by
+ * pressing a button twice or asking in a thread they archived in another tab,
+ * and a 500 is the wrong answer to any of them. They come back as a
+ * {@link TurnRefusal} the command turns into a sentence; anything else is a
+ * real database error and still throws, because a caller cannot do anything
+ * useful with one and hiding it would lose it.
+ *
  * Returns the founder message's sequence, so a caller can say how far the
  * thread has moved without reading it back.
  */
@@ -389,7 +427,7 @@ export async function appendConversationTurn(
     contextVersion?: string | null;
     contextHash?: string | null;
   },
-): Promise<number> {
+): Promise<AppendTurnResult> {
   const { data, error } = await supabase.rpc("append_nova_conversation_turn", {
     p_thread_id: params.threadId,
     p_question: params.question,
@@ -401,8 +439,13 @@ export async function appendConversationTurn(
     p_context_hash: params.contextHash ?? null,
   });
 
-  if (error) throw error;
-  return typeof data === "number" ? data : 0;
+  if (error) {
+    const refusal = TURN_REFUSALS.find((reason) => (error.message ?? "").includes(reason));
+    if (refusal) return { ok: false, reason: refusal };
+    throw error;
+  }
+
+  return { ok: true, sequence: typeof data === "number" ? data : 0 };
 }
 
 /**

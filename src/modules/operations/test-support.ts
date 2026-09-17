@@ -1155,6 +1155,13 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         // read as already seen.
         if (this.table === "nova_threads") row.last_read_sequence ??= 0;
 
+        // `nova_threads.status text not null default 'open'`. The store stopped
+        // sending it once `authenticated` was granted three columns and not
+        // this one (Slice 7's boundary migration) — so the default is now the
+        // only thing that sets it, and a double that left it `undefined` would
+        // make `findOpenThread` miss every thread it just opened.
+        if (this.table === "nova_threads") row.status ??= "open";
+
         const violation = this.db.checkConstraints(this.table, row);
         if (violation) return { data: null, error: violation };
 
