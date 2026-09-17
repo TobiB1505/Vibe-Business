@@ -4633,6 +4633,30 @@ export type Database = {
         Args: { p_reservation_id: string }
         Returns: undefined
       }
+      open_nova_thread: {
+        Args: {
+          p_only_if_empty?: boolean
+          p_project_id: string
+          p_title: string
+        }
+        Returns: {
+          created_at: string
+          id: string
+          last_message_at: string | null
+          last_read_sequence: number
+          project_id: string
+          status: string
+          title: string
+          updated_at: string
+          user_id: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "nova_threads"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       raise_execution_founder_input_request: {
         Args: {
           p_agent_execution_run_id: string
