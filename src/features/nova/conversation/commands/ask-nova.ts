@@ -25,7 +25,7 @@ import { ACCOUNT_QUESTION_WINDOW_MS } from "@/modules/nova/conversation/limits";
 import { turnRefusalMessage } from "@/modules/nova/threads/refusals";
 import { FIRST_THREAD_TITLE } from "@/modules/operations/nova-thread";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { threadsPath } from "@/lib/routing/project-urls";
+import { threadPath, threadsPath } from "@/lib/routing/project-urls";
 import { readNovaHomeData } from "@/features/nova/home/nova-home-data";
 import { buildQuestionContext } from "../queries";
 
@@ -158,7 +158,7 @@ export async function askNovaAction(projectId: string, question: string): Promis
 
     if (!written.ok) return { ok: false, message: turnRefusalMessage(written.reason) };
 
-    revalidatePath(threadsPath(projectId));
+    revalidateConversation(projectId, thread.id);
     return {
       ok: true,
       reply,
@@ -228,7 +228,7 @@ export async function askNovaAction(projectId: string, question: string): Promis
    */
   if (!written.ok) return { ok: false, message: turnRefusalMessage(written.reason) };
 
-  revalidatePath(threadsPath(projectId));
+  revalidateConversation(projectId, thread.id);
 
   return {
     ok: true,
@@ -239,4 +239,19 @@ export async function askNovaAction(projectId: string, question: string): Promis
     ),
     actionId: outcome.reply.actionId ?? null,
   };
+}
+
+/**
+ * Both addresses a turn changed, and the thread first.
+ *
+ * `/threads` is the list — its ordering and its *current* marker move when a
+ * turn lands — and `/threads/[threadId]` is the transcript the turn is *in*.
+ * Revalidating only the list was the original, and it was right while
+ * `/threads` redirected to the open thread and the two were one address. Slice
+ * 7 made them two, and a founder who asked something and then reloaded the
+ * thread would have been served the render from before their own question.
+ */
+function revalidateConversation(projectId: string, threadId: string): void {
+  revalidatePath(threadPath(projectId, threadId));
+  revalidatePath(threadsPath(projectId));
 }
