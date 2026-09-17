@@ -4,7 +4,8 @@ Slice 7's security pass over the tables Slices 5 and 6 introduced: `nova_threads
 `nova_messages` and `append_nova_conversation_turn`, attacked on purpose.
 
 **The migration is written, proven against a real PostgreSQL, and not deployed.**
-See *What has not been proved*.
+See *What has not been proved* — and the dated bracket there, which records that
+it was deployed later the same day.
 
 ## What was wrong
 
@@ -134,6 +135,19 @@ the service role and the constraint is the only thing standing there.
   migration nobody asked for is not a thing to do on the way past. **Until it
   is, the first question in a project no run has finished in still fails**, and
   *New chat* has no grant to insert under.
+
+  *[Deployed 2026-09-17, on the owner's instruction, through the same Supabase
+  MCP path. Both tables were **empty**, so the revoked policy took no row with
+  it. Verified by reading the catalogues: the messages insert policy is gone and
+  `authenticated` holds `SELECT` there and nothing else, the threads insert
+  grant is exactly `project_id, title, user_id`, the read-marker trigger is on
+  `nova_threads` and `nova_messages` still carries none, and the turn function
+  keeps `search_path=""` with all three guards, callable by `authenticated` and
+  not by `anon`. The remote assigned its own version, so the file is
+  `20260917122549_nova_conversation_boundary.sql` here (rule 34) — later than the
+  two it depends on, so the order is unchanged. No new advisory: the read-marker
+  function is `security invoker`. This paragraph was true when it was written and
+  stands.]*
 - **No model has answered a question here.** Unchanged from Sprint 0228: every
   test uses a double, there is no conversation eval, and
   `NOVA_CONVERSATION_ENABLED` is off by default.
