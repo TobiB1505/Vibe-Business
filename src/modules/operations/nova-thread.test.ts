@@ -21,6 +21,12 @@ const USER = "user_1";
 
 function database(overrides: Record<string, unknown> = {}) {
   const db = new FakeDatabase();
+  /*
+   * The thread's owner comes from the project row, never from the caller
+   * (`open_nova_thread` selects it). A run always has one; seeding it is the
+   * precondition, not a convenience.
+   */
+  db.rows("projects").push({ id: PROJECT, user_id: USER, name: "race" });
   db.rows("operation_runs").push({
     id: "op_1",
     project_id: PROJECT,

@@ -138,49 +138,102 @@ function toSubject(row: MessageRow): NovaActionSubject | null {
 /**
  * The thread a project's conversation is currently in, created if there is none.
  *
- * One open thread per project until a founder can start a second one (Slice 6's
- * composer, Slice 7's *New chat*). "The most recent open one" rather than a
- * unique index, because the index would have to be dropped the moment a second
- * thread is possible, and a schema that has to change to allow a planned
- * feature is a schema that decided something it was not asked to.
+ * ## Why this is one database call and not a read then an insert
+ *
+ * Because it used to be two, and the window between them is a split
+ * conversation. Two tabs asking a first question at once — or a run finishing
+ * while a founder asks — both read *no open thread* and both insert, and the
+ * turns then land in two different threads, each looking complete.
+ *
+ * No client-side fix reaches it: PostgREST runs each request in its own
+ * transaction, so nothing here can be held across the read and the write.
+ * `open_nova_thread` makes the decision under a per-project advisory lock, and
+ * is `security invoker`, so this call has exactly the reach the caller already
+ * had — RLS for a founder, no RLS for the service role.
+ *
+ * "The most recent open one" rather than a unique index, still: the index would
+ * have to be dropped for *New chat*, and a schema that has to change to allow a
+ * planned feature is a schema that decided something it was not asked to.
  */
 export async function ensureOpenThread(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string; title: string },
 ): Promise<Thread> {
-  const existing = await findOpenThread(supabase, params.projectId);
-  if (existing) return existing;
+  return openThread(supabase, { ...params, onlyIfEmpty: false });
+}
 
-  const { data: created, error: createError } = await supabase
-    .from(THREADS)
-    .insert({
-      project_id: params.projectId,
-      user_id: params.userId,
-      title: params.title.trim().slice(0, MAX_THREAD_TITLE_CHARS),
-      /*
-       * `status` is deliberately absent, and the absence is the grant.
-       * `authenticated` may insert `(project_id, user_id, title)` and nothing
-       * else, so the columns that carry a thread's state take their defaults —
-       * `status` is `'open'`, which is what the read above selects on. Sending
-       * it explicitly would be denied for a founder and identical for the
-       * service role, which is the worse of the two failures: it works in
-       * every test and fails for one caller in production.
-       */
-    })
-    .select(THREAD_COLUMNS)
-    .single();
+/**
+ * Open a new conversation, unless the current one has had nothing said in it.
+ *
+ * ## Why this is not `ensureOpenThread`
+ *
+ * They answer opposite questions. `ensureOpenThread` is *where does this belong*
+ * — a run finishing, a question asked with no thread in progress — and it must
+ * reuse. This is a founder pressing **New chat**, which is a request for a
+ * second place to talk, and reusing a thread with anything in it would be
+ * ignoring them.
+ *
+ * An **empty** open thread is reused, and that is not the same concession: a
+ * second press means the same thing as the first, and two identical empty rows
+ * in the founder's own list is not an answer to it. Under the same lock, so two
+ * presses race to one thread rather than to two.
+ *
+ * The two coexist because the newest open thread is the current one: after
+ * this, that is the new one, so the next run event lands in the conversation
+ * the founder is actually in.
+ */
+export async function openNewThread(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; title: string },
+): Promise<Thread> {
+  return openThread(supabase, { ...params, onlyIfEmpty: true });
+}
 
-  if (createError) throw createError;
-  return toThread(created as ThreadRow);
+/**
+ * The one call both of them are.
+ *
+ * `userId` is deliberately not sent. The function takes it from `auth.uid()`
+ * for a founder and from the project row for the service role, which has no
+ * session — the authority is the persisted relationship, never an argument
+ * (rule 53). It stays in the signature because every caller has it to hand and
+ * removing it from two public functions would be a wider change than this is.
+ */
+async function openThread(
+  supabase: SupabaseClient,
+  params: { projectId: string; title: string; onlyIfEmpty: boolean },
+): Promise<Thread> {
+  const { data, error } = await supabase.rpc("open_nova_thread", {
+    p_project_id: params.projectId,
+    p_title: params.title.trim().slice(0, MAX_THREAD_TITLE_CHARS),
+    p_only_if_empty: params.onlyIfEmpty,
+  });
+
+  if (error) throw error;
+
+  const row = (Array.isArray(data) ? data[0] : data) as ThreadRow | undefined;
+  /*
+   * A project that does not exist, or one the caller cannot insert into. The
+   * function returns no row rather than raising, because the insert selects
+   * from `projects` — so an unresolvable project is an empty result and is an
+   * error here rather than a thread nobody can find.
+   */
+  if (row === undefined) throw new Error("open_nova_thread returned no thread");
+
+  return toThread(row);
 }
 
 /**
  * The thread a project's conversation is currently in, or none.
  *
- * A read, and only a read. `/threads` calls it to resolve an address, and a
- * version of it that opened a thread would mean looking at a screen wrote a
- * row — which is the same line `ADR 0086` draws around a paid attempt, asked
- * one layer down where the cost is a record rather than money.
+ * A read, and only a read. The conversations index calls it to mark which one
+ * is **current** — where the next run event will land — and a version of it
+ * that opened a thread would mean looking at a screen wrote a row, which is the
+ * line `ADR 0086` draws around a paid attempt, asked one layer down where the
+ * cost is a record rather than money.
+ *
+ * Deliberately *not* what `ensureOpenThread` calls any more: find-and-create is
+ * one statement under a lock now, and a read here followed by an insert there
+ * is exactly the race that statement exists to close.
  */
 export async function findOpenThread(
   supabase: SupabaseClient,
@@ -231,54 +284,6 @@ export async function listThreads(
 
   if (error) throw error;
   return ((data ?? []) as ThreadRow[]).map(toThread);
-}
-
-/**
- * Open a new conversation, whatever is already open.
- *
- * ## Why this is not `ensureOpenThread`
- *
- * They answer opposite questions. `ensureOpenThread` is *where does this belong*
- * — a run finishing, a question asked with no thread in progress — and it must
- * reuse. This is a founder pressing **New chat**, which is a request for a
- * second place to talk, and reusing would be ignoring them.
- *
- * The two coexist because `findOpenThread` takes the most recent open thread:
- * after this, that is the new one, so the next run event lands in the
- * conversation the founder is actually in. That is why the schema never grew a
- * unique index on "one open thread per project" — it would have had to be
- * dropped here.
- */
-export async function openNewThread(
-  supabase: SupabaseClient,
-  params: { projectId: string; userId: string; title: string },
-): Promise<Thread> {
-  const { data, error } = await supabase
-    .from(THREADS)
-    .insert({
-      project_id: params.projectId,
-      user_id: params.userId,
-      title: params.title.trim().slice(0, MAX_THREAD_TITLE_CHARS),
-    })
-    .select(THREAD_COLUMNS)
-    .single();
-
-  if (error) throw error;
-  return toThread(data as ThreadRow);
-}
-
-/** How many turns a thread holds, without reading one. */
-export async function countMessages(
-  supabase: SupabaseClient,
-  params: { threadId: string },
-): Promise<number> {
-  const { count, error } = await supabase
-    .from(MESSAGES)
-    .select("id", { count: "exact", head: true })
-    .eq("thread_id", params.threadId);
-
-  if (error) throw error;
-  return count ?? 0;
 }
 
 export async function getThread(
@@ -464,9 +469,7 @@ export const TURN_REFUSALS = [
 
 export type TurnRefusal = (typeof TURN_REFUSALS)[number];
 
-export type AppendTurnResult =
-  | { ok: true; sequence: number }
-  | { ok: false; reason: TurnRefusal };
+export type AppendTurnResult = { ok: true; sequence: number } | { ok: false; reason: TurnRefusal };
 
 /**
  * One conversational turn — the question, the reply, and what they point at.

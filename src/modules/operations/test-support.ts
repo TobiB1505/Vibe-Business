@@ -1550,6 +1550,75 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
    * routine ran, for this identity's rows and nobody else's, and the payload no
    * longer carries the two keys that must go together with the column (§8).
    */
+  /**
+   * Find-or-create a project's open thread.
+   *
+   * ## What this models, and what it cannot
+   *
+   * The **decision** — which thread a caller gets, and when a new row is
+   * written. Not the **lock**: this runs in one JavaScript turn, so there is no
+   * interleaving for an advisory lock to prevent, and a double that pretended
+   * otherwise would be asserting the property the function exists for while
+   * proving nothing about it. That property is proved against a real cluster by
+   * `supabase/tests/nova-thread-race.migration.ts`, with real parallel sessions.
+   *
+   * `p_only_if_empty` is *New chat*: an open thread is reused only when nothing
+   * has been said in it.
+   */
+  open_nova_thread: (db, params) => {
+    const projectId = params.p_project_id;
+    if (!projectId) return { message: "open_nova_thread requires a project id" };
+
+    const open = db
+      .rows("nova_threads")
+      .filter((row) => row.project_id === projectId && row.status === "open")
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+
+    const existing = open[0];
+    const hasMessages =
+      existing !== undefined &&
+      db.rows("nova_messages").some((row) => row.thread_id === existing.id);
+
+    if (existing !== undefined && !(params.p_only_if_empty === true && hasMessages)) {
+      return { data: [existing] };
+    }
+
+    const project = db.rows("projects").find((row) => row.id === projectId);
+    /*
+     * The function selects from `projects`, so an unresolvable one inserts no
+     * row and returns none rather than raising. The store turns that into an
+     * error, which is where it belongs.
+     */
+    if (!project) return { data: [] };
+
+    /*
+     * The function's whole job here is a write to `nova_threads`, so it honours
+     * the same arming as a write through the table API — otherwise moving the
+     * insert behind an RPC would silently disarm every test of what happens
+     * when a thread cannot be written.
+     */
+    const armed = db.failNextWriteWith;
+    if (armed && armed.table === "nova_threads") {
+      db.failNextWriteWith = null;
+      return { code: armed.code, message: armed.message };
+    }
+
+    const stamp = db.now();
+    const created: Row = {
+      id: `nova_threads_${db.rows("nova_threads").length + 1}`,
+      project_id: projectId,
+      user_id: project.user_id,
+      title: String(params.p_title ?? "").trim().slice(0, 120),
+      status: "open",
+      last_read_sequence: 0,
+      last_message_at: null,
+      created_at: stamp,
+      updated_at: stamp,
+    };
+    db.rows("nova_threads").push(created);
+
+    return { data: [created] };
+  },
   erase_account_audit_metadata: (db, params) => {
     if (!params.p_user_id) return { message: "erase_account_audit_metadata requires a user id" };
 

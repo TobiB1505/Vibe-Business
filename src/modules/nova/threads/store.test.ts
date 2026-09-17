@@ -7,7 +7,6 @@ import {
 } from "../../operations/test-support";
 import {
   appendMessage,
-  countMessages,
   ensureOpenThread,
   getThread,
   listThreads,
@@ -20,7 +19,21 @@ const PROJECT = "project_1";
 const OTHER_PROJECT = "project_2";
 const USER = "user_1";
 
+/**
+ * The project a thread belongs to.
+ *
+ * `open_nova_thread` selects from `projects` — that is where the owner comes
+ * from for the service role, which has no session, and it is why an
+ * unresolvable project opens nothing rather than a thread nobody can reach. A
+ * double that skipped it would be modelling a function that took the owner from
+ * its caller, which is the thing rule 53 forbids.
+ */
+function seedProject(db: FakeDatabase, id = PROJECT, userId = USER): void {
+  db.rows("projects").push({ id, user_id: userId, name: id });
+}
+
 async function threadWith(db: FakeDatabase, count: number) {
+  seedProject(db);
   const thread = await ensureOpenThread(fakeSupabase(db), {
     projectId: PROJECT,
     userId: USER,
@@ -41,6 +54,7 @@ async function threadWith(db: FakeDatabase, count: number) {
 describe("opening a project's thread", () => {
   it("opens one and then reuses it", async () => {
     const db = new FakeDatabase();
+    seedProject(db);
     const first = await ensureOpenThread(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
@@ -59,6 +73,7 @@ describe("opening a project's thread", () => {
 
   it("opens a thread unread and empty", async () => {
     const db = new FakeDatabase();
+    seedProject(db);
     const thread = await ensureOpenThread(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
@@ -72,6 +87,7 @@ describe("opening a project's thread", () => {
 
   it("cuts a title the database would refuse", async () => {
     const db = new FakeDatabase();
+    seedProject(db);
     const thread = await ensureOpenThread(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
@@ -244,13 +260,20 @@ describe("appending a turn", () => {
  * reusing would be ignoring them.
  */
 describe("starting a second conversation", () => {
-  it("opens one beside the thread that is already open", async () => {
+  /**
+   * Rewritten in the open when the empty-thread reuse moved into
+   * `open_nova_thread`.
+   *
+   * It used to open an *empty* thread and expect a second one beside it, on the
+   * old rule that **New chat** always inserts. The command has reused an empty
+   * open thread since it was written — a second press means the same thing as
+   * the first — and what changed is only that the decision is now made under
+   * the lock rather than between two round trips. So the thread this opens
+   * beside has something in it, which is the case the button is actually for.
+   */
+  it("opens one beside a conversation that has been used", async () => {
     const db = new FakeDatabase();
-    const first = await ensureOpenThread(fakeSupabase(db), {
-      projectId: PROJECT,
-      userId: USER,
-      title: "Your product",
-    });
+    const first = await threadWith(db, 1);
 
     const second = await openNewThread(fakeSupabase(db), {
       projectId: PROJECT,
@@ -272,6 +295,7 @@ describe("starting a second conversation", () => {
    */
   it("becomes where the next run event lands", async () => {
     const db = new FakeDatabase();
+    seedProject(db);
     await ensureOpenThread(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
@@ -293,16 +317,66 @@ describe("starting a second conversation", () => {
     expect(current.id).toBe(second.id);
   });
 
-  it("counts a thread's turns without reading one", async () => {
+  /**
+   * The empty-thread reuse, which is *New chat* pressed twice.
+   *
+   * The decision moved into `open_nova_thread` when the read-then-write between
+   * these two presses turned out to be the race that produced the two empty
+   * threads this behaviour exists to prevent. What is asserted here is the
+   * decision; the lock that makes it decisive under contention is asserted
+   * against a real cluster in `nova-thread-race.migration.ts`.
+   */
+  it("reuses an open thread that has had nothing said in it", async () => {
     const db = new FakeDatabase();
-    const thread = await threadWith(db, 3);
+    seedProject(db);
+    const first = await openNewThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "New chat",
+    });
 
+    const second = await openNewThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "New chat",
+    });
+
+    expect(second.id).toBe(first.id);
+    expect(db.rows("nova_threads")).toHaveLength(1);
+  });
+
+  it("opens a second one the moment the first has anything in it", async () => {
+    const db = new FakeDatabase();
+    const first = await threadWith(db, 1);
+
+    const second = await openNewThread(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      title: "New chat",
+    });
+
+    expect(second.id).not.toBe(first.id);
+    expect(db.rows("nova_threads")).toHaveLength(2);
+  });
+
+  /**
+   * `user_id` is not sent, and that is the point: the function takes it from
+   * `auth.uid()` for a founder and from the project row for the service role.
+   * Authority is the persisted relationship, never an argument (rule 53).
+   */
+  it("never sends an owner for the database to trust", async () => {
+    const db = new FakeDatabase();
+    seedProject(db);
     const recorder = newQueryRecorder();
-    expect(await countMessages(fakeSupabase(db, recorder), { threadId: thread.id })).toBe(3);
 
-    // `head: true` transfers no rows — this is a bound check, not a read of the
-    // conversation, and it runs before every *New chat*.
-    expect(selectsOf(recorder, "nova_messages")).toEqual(["id"]);
+    await openNewThread(fakeSupabase(db, recorder), {
+      projectId: PROJECT,
+      userId: "somebody-else",
+      title: "New chat",
+    });
+
+    expect(db.rows("nova_threads")[0].user_id).toBe(USER);
+    expect(recorder.reads).toContain("rpc:open_nova_thread");
   });
 });
 
@@ -325,6 +399,7 @@ describe("listing a project's conversations", () => {
   it("shows no other project's conversations", async () => {
     const db = new FakeDatabase();
     await threadWith(db, 1);
+    seedProject(db, OTHER_PROJECT);
     await openNewThread(fakeSupabase(db), {
       projectId: OTHER_PROJECT,
       userId: USER,
@@ -339,11 +414,23 @@ describe("listing a project's conversations", () => {
 
   it("is bounded, because this table grows with use", async () => {
     const db = new FakeDatabase();
+    /*
+      Rows rather than presses. This claim is about the limit on the read, and
+      five presses of *New chat* now resolve to one thread — correctly, because
+      an empty open conversation is already somewhere to start. Going through
+      the opener to set up a read's fixture would make this a test of the
+      opener.
+    */
     for (let index = 0; index < 5; index += 1) {
-      await openNewThread(fakeSupabase(db), {
-        projectId: PROJECT,
-        userId: USER,
+      db.rows("nova_threads").push({
+        id: `thread_${index}`,
+        project_id: PROJECT,
+        user_id: USER,
         title: `Chat ${index}`,
+        status: "open",
+        created_at: db.now(),
+        last_message_at: db.now(),
+        last_read_sequence: 0,
       });
     }
 

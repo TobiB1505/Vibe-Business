@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 
-import { countMessages, findOpenThread, openNewThread } from "@/modules/nova/threads/store";
+import { openNewThread } from "@/modules/nova/threads/store";
 import { NEW_THREAD_TITLE } from "@/modules/nova/threads/schema";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { threadPath, threadsPath } from "@/lib/routing/project-urls";
@@ -23,6 +23,11 @@ import { threadPath, threadsPath } from "@/lib/routing/project-urls";
  * A thread with anything in it is never reused. That is the whole point of the
  * button.
  *
+ * **The deciding is in the database**, not here. It was a read and then a
+ * write, and two presses landing between them made the two empty threads this
+ * paragraph says do not happen. `open_nova_thread` holds a per-project advisory
+ * lock across both halves.
+ *
  * ## Why this writes under the founder's own session
  *
  * `nova_threads` grants `authenticated` an insert on three columns behind a
@@ -35,16 +40,11 @@ import { threadPath, threadsPath } from "@/lib/routing/project-urls";
 export async function startNewThreadAction(projectId: string): Promise<void> {
   const access = await requireProjectAccess(projectId);
 
-  const open = await findOpenThread(access.supabase, projectId);
-
-  const thread =
-    open !== null && (await countMessages(access.supabase, { threadId: open.id })) === 0
-      ? open
-      : await openNewThread(access.supabase, {
-          projectId,
-          userId: access.userId,
-          title: NEW_THREAD_TITLE,
-        });
+  const thread = await openNewThread(access.supabase, {
+    projectId,
+    userId: access.userId,
+    title: NEW_THREAD_TITLE,
+  });
 
   revalidatePath(threadsPath(projectId));
   redirect(threadPath(projectId, thread.id));
