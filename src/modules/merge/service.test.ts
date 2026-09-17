@@ -120,7 +120,7 @@ describe("the client cannot choose what is merged (§14)", () => {
 
   it("exposes only identifiers and a confirmation on the action signature", () => {
     const action = readFileSync(
-      join(process.cwd(), "src/app/app/projects/[projectId]/merge-actions.ts"),
+      join(process.cwd(), "src/features/agent/commands/merge-actions.ts"),
       "utf8",
     );
 

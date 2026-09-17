@@ -8,7 +8,7 @@ import { novaPresenceState, statusForCandidate } from "@/components/system/statu
 
 import { AgentWorkspaceChoiceAction } from "@/features/agent/agent-workspace-choice-action";
 import { formatElapsedShort } from "@/lib/utils/format-datetime";
-import { resolveFounderInputAction } from "@/app/app/projects/[projectId]/founder-input-action";
+import { resolveFounderInputAction } from "@/features/founder-input/commands/founder-input-action";
 
 import { NovaRise } from "./nova-rise";
 import { NovaFocusThread } from "./nova-focus-thread";

@@ -10,7 +10,7 @@ import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import {
   startOpportunitiesAction,
   type StartOpportunitiesActionState,
-} from "@/app/app/projects/[projectId]/opportunities-action";
+} from "@/features/plan/commands/opportunities-action";
 
 /**
  * When this plan was worked out, and how to work it out again (ACTION PLAN UI-2).

@@ -9,7 +9,7 @@ import {
   retryProductScanAction,
   type BeginUnderstandingState,
   type ConfirmAndAuditState,
-} from "./actions";
+} from "@/features/onboarding/commands/onboarding-actions";
 
 export function RetryProductScan({ projectId }: { projectId: string }) {
   const router = useRouter();

@@ -24,13 +24,13 @@ import {
 } from "@/modules/execution/view";
 import { DiffView } from "@/features/agent/diff-view";
 import type { PreparedDiff } from "@/modules/execution/diff";
-import { getOperationStatusAction } from "@/app/app/projects/[projectId]/run-audit-action";
+import { getOperationStatusAction } from "@/features/health/commands/run-audit-action";
 import { agentChangeHref, agentMoveHref } from "@/modules/action-plans/source";
 import {
   getPreparedDiffAction,
   prepareChangeAction,
   type PrepareChangeActionState,
-} from "@/app/app/projects/[projectId]/prepare-change-action";
+} from "@/features/plan/commands/prepare-change-action";
 import { ChevronDownIcon, DismissIcon } from "@/components/ui/icons.generated";
 import { StandaloneLink } from "@/components/ui/text-link";
 

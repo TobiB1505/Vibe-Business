@@ -17,7 +17,7 @@ import {
   stopPreviewAction,
   type StartPreviewActionState,
   type StopPreviewActionState,
-} from "@/app/app/projects/[projectId]/preview-actions";
+} from "@/features/agent/commands/preview-actions";
 import { formatTime } from "@/lib/utils/format-datetime";
 import { proseLinkClasses } from "@/components/ui/text-link";
 

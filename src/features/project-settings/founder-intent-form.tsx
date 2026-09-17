@@ -17,7 +17,7 @@ import {
   type ProjectStage,
 } from "@/modules/projects/founder-intent";
 import type { SaveFounderIntentFailure } from "@/modules/projects/founder-intent-store";
-import { saveFounderIntentAction, type FounderIntentActionState } from "@/app/app/projects/[projectId]/founder-intent-action";
+import { saveFounderIntentAction, type FounderIntentActionState } from "@/features/project-settings/commands/founder-intent-action";
 import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
 
 /**

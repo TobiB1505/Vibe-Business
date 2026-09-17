@@ -10,6 +10,7 @@ import { RailNav, RailScroll } from "./app-frame";
 import { ProjectNav } from "./project-nav";
 import { MobileTabBar } from "./mobile-tab-bar";
 import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";
+import { projectPath, projectSectionPath } from "@/lib/routing/project-urls";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -228,15 +229,14 @@ export const WORKSPACE_SECTION_HEADINGS: Record<
 
 /** The canonical URL of one workspace section. One place builds these. */
 export function projectSectionHref(projectId: string, sectionId: WorkspaceSectionId): string {
-  const base = `/app/projects/${projectId}`;
   // Opportunity blocked states already publish this id as their only recovery
   // path. It now lands on the canonical Home anchor rather than disappearing.
-  if (sectionId === "business-audit") return `${base}#business-audit`;
+  if (sectionId === "business-audit") return `${projectPath(projectId)}#business-audit`;
 
   const section = [...PROJECT_SECTIONS, ...PROJECT_SUBSECTIONS].find(
     (candidate) => candidate.id === sectionId,
   );
-  return section && section.segment ? `${base}/${section.segment}` : base;
+  return projectSectionPath(projectId, section?.segment ?? "");
 }
 
 /**
@@ -251,7 +251,7 @@ export function projectSectionHref(projectId: string, sectionId: WorkspaceSectio
  * `product/deep-scan` and the more specific answer is the true one.
  */
 export function projectSectionLabel(projectId: string, pathname: string): string | null {
-  const base = `/app/projects/${projectId}`;
+  const base = projectPath(projectId);
   if (!pathname.startsWith(base)) return null;
 
   const rest = pathname.slice(base.length).replace(/^\/+|\/+$/g, "");
@@ -267,22 +267,11 @@ export function projectSectionLabel(projectId: string, pathname: string): string
 /**
  * One prepared change, addressed within the Agent page (UI-S2 §27).
  *
- * A fragment rather than a route, because a prepared change is not a page — it
- * is one card in a list whose whole point is that every artifact stays
- * reachable. The fragment is enough for the browser to scroll to it and for the
- * page to say which one was just prepared, and it costs no new route, no new
- * read model and no change to the card itself.
- *
- * Built here so the link and the anchor cannot drift: one function produces the
- * id, one produces the URL that targets it.
+ * Built in `src/lib/routing/project-urls.ts` and re-exported here, because
+ * every existing import names this module and the pair is pure string
+ * arithmetic that a domain module may also need.
  */
-export function preparedChangeAnchorId(preparedChangeId: string): string {
-  return `prepared-change-${preparedChangeId}`;
-}
-
-export function preparedChangeHref(preparedHref: string, preparedChangeId: string): string {
-  return `${preparedHref}#${preparedChangeAnchorId(preparedChangeId)}`;
-}
+export { preparedChangeAnchorId, preparedChangeHref } from "@/lib/routing/project-urls";
 
 export type ProjectNavItem = {
   id: ProjectSectionId;
@@ -346,7 +335,7 @@ export function ProjectRail({
   const current = {
     id: projectId,
     name: projectName,
-    href: `/app/projects/${projectId}`,
+    href: projectPath(projectId),
   };
 
   const switcher = (

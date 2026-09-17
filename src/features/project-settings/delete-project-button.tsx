@@ -6,7 +6,7 @@ import {
   deleteProjectAction,
   type DeleteProjectActionState,
   type DeleteProjectFailure,
-} from "@/app/app/projects/[projectId]/actions";
+} from "@/features/project-settings/commands/project-lifecycle-actions";
 import { DeleteIcon } from "@/components/ui/icons.generated";
 import { Button } from "@/components/ui/button";
 

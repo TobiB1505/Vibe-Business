@@ -9,7 +9,7 @@ import {
   confirmUnderstandingAction,
   saveCorrectionsAction,
   type SaveCorrectionsState,
-} from "@/app/app/projects/[projectId]/understanding-actions";
+} from "@/features/product/commands/understanding-actions";
 
 /**
  * "Did I get this right?" (CORE-1 §23, §24, §32).

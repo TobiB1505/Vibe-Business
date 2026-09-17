@@ -68,3 +68,15 @@ directory must not become.
 
 The plan and its reasoning: [the restructure audit](../../docs/audits/2026-09-16-nova-first-restructure/README.md)
 and [ADR 0109](../../docs/decisions/0109-nova-first-application-shell.md).
+
+## Where a feature keeps its commands
+
+`features/<x>/commands/` holds the `"use server"` modules that feature owns.
+`src/lib/consistency/feature-boundaries.test.ts` refuses a Server Action
+anywhere under `src/app`, with two named exemptions — the internal operator
+console and the e2e fixture's own action — so the routing layer stays a gate
+and a composition.
+
+There is no `commands.ts` barrel. A barrel that re-exports server actions is an
+extra hop that pulls a whole feature's server graph into any build that touches
+one of them; the directory is the door.

@@ -2,10 +2,7 @@
 
 import { useActionState } from "react";
 import { NovaMoveButton } from "@/components/nova/nova-move";
-import {
-  startPlanAction,
-  type StartPlanActionState,
-} from "@/app/app/projects/[projectId]/plan-action";
+import { startPlanAction, type StartPlanActionState } from "@/features/plan/commands/plan-action";
 
 /**
  * The decision onboarding ends on (audit Slice 6, R15).

@@ -8,7 +8,7 @@ import {
   AGENT_START_FAILURE_LABELS,
   AGENT_START_REFUSAL_LABELS,
 } from "@/modules/coding-agent/view";
-import { startAgentRunAction, type StartAgentRunState } from "@/app/app/projects/[projectId]/agent/agent-run-actions";
+import { startAgentRunAction, type StartAgentRunState } from "@/features/agent/commands/agent-run-actions";
 import { AgentStartRefusalNotice } from "./agent-start-refusal-notice";
 
 const initialState: StartAgentRunState = null;

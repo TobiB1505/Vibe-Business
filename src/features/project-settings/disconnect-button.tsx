@@ -6,7 +6,7 @@ import {
   disconnectProjectAction,
   type DisconnectProjectActionState,
   type DisconnectProjectFailure,
-} from "@/app/app/projects/[projectId]/actions";
+} from "@/features/project-settings/commands/project-lifecycle-actions";
 import { DeleteIcon } from "@/components/ui/icons.generated";
 import { Button } from "@/components/ui/button";
 

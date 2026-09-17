@@ -69,7 +69,7 @@ describe("the panel offers only what this sprint implements (§28, §34)", () =>
 
   it("offers no connect action, because no connector exists (§34, §49)", () => {
     expect(actionLabels(src).join(" ")).not.toContain("Connect analytics");
-    expect(source("app/app/projects/[projectId]/business-impact-actions.ts")).not.toContain("connectAnalytics");
+    expect(source("features/agent/commands/business-impact-actions.ts")).not.toContain("connectAnalytics");
   });
 });
 
@@ -228,7 +228,7 @@ describe("the panel decides nothing (§44)", () => {
   });
 
   it("cannot name a metric, a window or a source", () => {
-    const signature = source("app/app/projects/[projectId]/business-impact-actions.ts");
+    const signature = source("features/agent/commands/business-impact-actions.ts");
     const head = signature.slice(
       signature.indexOf("export async function startMeasurementAction"),
     );
@@ -239,7 +239,7 @@ describe("the panel decides nothing (§44)", () => {
   });
 
   it("resolves the session and never trusts a client-supplied user id", () => {
-    expect(source("app/app/projects/[projectId]/business-impact-actions.ts")).toContain("requireSession()");
+    expect(source("features/agent/commands/business-impact-actions.ts")).toContain("requireSession()");
   });
 });
 

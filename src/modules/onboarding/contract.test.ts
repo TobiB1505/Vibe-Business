@@ -10,7 +10,10 @@ const MIGRATION = readFileSync(
   join(ROOT, "supabase/migrations/20260817090000_project_onboarding.sql"),
   "utf8",
 );
-const ACTIONS = readFileSync(join(ONBOARDING_APP, "[projectId]/actions.ts"), "utf8");
+const ACTIONS = readFileSync(
+  join(ROOT, "src/features/onboarding/commands/onboarding-actions.ts"),
+  "utf8",
+);
 const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
 /**
  * The page with its whitespace collapsed, for assertions about *copy*.
@@ -38,7 +41,7 @@ const APP_HOME_VIEW = readFileSync(
 const ONBOARDING_SHELL = readFileSync(join(ONBOARDING_APP, "onboarding-shell.tsx"), "utf8");
 const PROJECT_ONBOARDING_PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
 const REPOSITORY_ACTION = readFileSync(
-  join(ROOT, "src/app/app/connect/github/repositories/actions.ts"),
+  join(ROOT, "src/features/connect/commands/select-repository.ts"),
   "utf8",
 );
 const PRODUCT_SCAN_EXECUTION = readFileSync(

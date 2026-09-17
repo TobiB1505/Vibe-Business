@@ -18,7 +18,7 @@ import {
   rerunChangeValidationAction,
   validateChangeAction,
   type ValidateChangeActionState,
-} from "@/app/app/projects/[projectId]/validate-change-action";
+} from "@/features/agent/commands/validate-change-action";
 
 /**
  * Isolated validation, as the user sees it (Sprint 10A §44, §45, §15 refactor).

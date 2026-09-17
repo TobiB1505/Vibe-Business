@@ -1,7 +1,8 @@
+import { projectPath } from "@/lib/routing/project-urls";
 import Link from "next/link";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { ArrowRightIcon } from "@/components/ui/dashboard-icons";
-import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
+import { scoreDisplay, type ScoreTone } from "@/lib/ui/score-display";
 import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { StatusPill, statusToneText } from "@/components/ui/status-pill";
 import { figureClasses } from "@/components/ui/figure";
@@ -90,7 +91,7 @@ export function ProductListRow({
     */
     <li data-testid="product-list-row" className={cn(divided && "border-line-2 border-t")}>
       <Link
-        href={`/app/projects/${product.id}`}
+        href={projectPath(product.id)}
         aria-label={`Open ${displayName}`}
         className={cn(
           "group hover:bg-surface-hover flex items-center gap-4 px-5 py-4 transition-interactive",

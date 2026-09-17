@@ -12,7 +12,7 @@ import {
   checkProductionOutcomeAction,
   readProductionOutcomeAction,
   type OutcomeActionState,
-} from "@/app/app/projects/[projectId]/outcome-actions";
+} from "@/features/agent/commands/outcome-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**

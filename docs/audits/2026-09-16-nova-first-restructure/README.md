@@ -474,7 +474,7 @@ Each slice is independently green, changes no domain engine, and reverts by dele
 - **Done when.** Every `page.tsx` under `projects/[projectId]` is a gate plus a mount; `src/modules` imports nothing above it; `pnpm test` green.
 - **Not in this slice.** Splitting the loaders (the page may still hold its reads; `queries.ts` arrives with Slice 3). Any new UI.
 
-### Slice 3 — One URL owner, one command/query door per feature
+### Slice 3 — One URL owner, one command/query door per feature ✅ *shipped ([Sprint 0225](../../sprints/0225-one-address-and-a-door-per-feature.md))*
 
 - **Goal.** The typed boundary: a route imports `queries.ts` and `commands.ts` and nothing deeper; URLs have one owner.
 - **Affected.** `modules/projects/attention.ts` (`projectHref`), `features/nova/home/nova-home-actions.ts` (`homePath`), `features/agent/agent-run-actions.ts` (which builds its redirect from `@/components/layout/project-shell`) → all read `src/lib/routing/project-urls.ts`. The 22 root action files → each feature's `commands.ts`. Each feature's page-level reads → `queries.ts`. `revalidatePath("/app/profile")` → `/app/settings/profile`. `modules/execution/change-history-view.ts` and `modules/projects/business-brain-view.ts` stop importing `@/components/ui/*` — `StatusTone` and `scoreDisplay` move to `src/lib`.

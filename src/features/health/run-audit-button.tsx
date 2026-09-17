@@ -15,7 +15,7 @@ import {
   getOperationStatusAction,
   startAuditAction,
   type StartAuditActionState,
-} from "@/app/app/projects/[projectId]/run-audit-action";
+} from "@/features/health/commands/run-audit-action";
 
 /** Conservative, and it stops (§20). */
 const POLL_INTERVAL_MS = 3_000;

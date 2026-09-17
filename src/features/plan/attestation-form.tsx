@@ -10,7 +10,7 @@ import { attestationPrompt } from "@/modules/action-plans/view";
 import {
   attestFounderActionStepAction,
   type FounderActionAttestationState,
-} from "@/app/app/projects/[projectId]/founder-action-attestation";
+} from "@/features/plan/commands/founder-action-attestation";
 
 /**
  * The step's own criterion, and the answer that closes it.

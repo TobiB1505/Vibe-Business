@@ -3,7 +3,7 @@
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { SetProductionUrlFailure } from "@/modules/projects/production-url";
-import { setProductionUrlAction, type ProductionUrlActionState } from "@/app/app/projects/[projectId]/production-url-action";
+import { setProductionUrlAction, type ProductionUrlActionState } from "@/features/project-settings/commands/production-url-action";
 import { DismissIcon, EditIcon } from "@/components/ui/icons.generated";
 import { StandaloneLink } from "@/components/ui/text-link";
 

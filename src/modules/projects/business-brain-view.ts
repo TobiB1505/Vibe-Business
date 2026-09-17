@@ -1,4 +1,4 @@
-import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
+import { scoreDisplay, type ScoreTone } from "@/lib/ui/score-display";
 import { conclusionKey } from "@/modules/business-audit/conclusions";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import {

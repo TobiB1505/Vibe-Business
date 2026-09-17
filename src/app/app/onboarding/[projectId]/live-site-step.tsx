@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { Notice } from "@/components/ui/states";
 import { ChoiceCard } from "@/components/ui/choice-card";
-import { beginUnderstandingAction, continueWithoutLiveSiteAction, type BeginUnderstandingState } from "./actions";
+import { beginUnderstandingAction, continueWithoutLiveSiteAction, type BeginUnderstandingState } from "@/features/onboarding/commands/onboarding-actions";
 
 const URL_ERRORS: Record<string, string> = {
   empty: "Add the address, or tell Vibe there is no live site yet.",

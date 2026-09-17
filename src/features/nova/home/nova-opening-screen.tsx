@@ -27,7 +27,7 @@ import type { OnboardingStep } from "@/modules/onboarding/state";
 import {
   introduceWithNameAction,
   markNovaIntroducedAction,
-} from "@/app/app/onboarding/[projectId]/actions";
+} from "@/features/onboarding/commands/onboarding-actions";
 import { Field, Input } from "@/components/ui/field";
 import { MAX_FOUNDER_NAME_LENGTH } from "@/modules/auth/founder-name";
 

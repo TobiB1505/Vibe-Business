@@ -54,7 +54,7 @@ const AGENT_VALIDATE = read(
   "src/features/agent/agent-validate-action.tsx",
 );
 const VALIDATE_ACTION = read(
-  "src/app/app/projects/[projectId]/validate-change-action.ts",
+  "src/features/agent/commands/validate-change-action.ts",
 );
 const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts");
 /**
@@ -66,7 +66,7 @@ const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts")
  * is what it submits to.
  */
 const AGENT_ACTIONS = read(
-  "src/app/app/projects/[projectId]/agent/agent-run-actions.ts",
+  "src/features/agent/commands/agent-run-actions.ts",
 );
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/features/agent/change-origin.tsx");

@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import type { WorkspaceCandidate } from "@/modules/validation/profile";
-import { chooseWorkspaceRootAction, type WorkspaceChoiceState } from "@/app/app/projects/[projectId]/agent/workspace-actions";
+import { chooseWorkspaceRootAction, type WorkspaceChoiceState } from "@/features/agent/commands/workspace-actions";
 
 const initialState: WorkspaceChoiceState = { status: "idle" };
 

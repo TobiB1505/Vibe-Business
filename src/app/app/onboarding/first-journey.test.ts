@@ -38,7 +38,7 @@ const copyOf = (source: string) =>
 const proseOf = (source: string) => copyOf(source).replace(/\s+/g, " ");
 
 const PAGE = read("src/app/app/onboarding/[projectId]/page.tsx");
-const ACTIONS = read("src/app/app/onboarding/[projectId]/actions.ts");
+const ACTIONS = read("src/features/onboarding/commands/onboarding-actions.ts");
 const PREREQUISITE = read("src/app/app/onboarding/[projectId]/audit-live-prerequisite.tsx");
 const WATCHER = read("src/app/app/onboarding/[projectId]/operation-watcher.tsx");
 const STATUS = read("src/app/app/onboarding/[projectId]/understanding-status.tsx");
@@ -209,9 +209,10 @@ describe("leaving and arriving are coherent", () => {
 
   /** Regression 8: a completed onboarding redirected back into onboarding. */
   it("sends a completed project to its workspace", () => {
-    expect(PAGE).toContain(
-      'onboarding.state === "complete") redirect(`/app/projects/${projectId}`)',
-    );
+    // Through the one builder rather than a literal: `projectPath` is the
+    // single owner of a project's address since ADR 0109's Slice 3, so the
+    // destination and every other link to a project move together.
+    expect(PAGE).toContain('onboarding.state === "complete") redirect(projectPath(projectId))');
   });
 
   it("names the final control after where it actually goes", () => {

@@ -7,7 +7,7 @@ import { shouldRefreshForState } from "@/modules/operations/view";
 import { REVIEW_POLICY } from "@/modules/review/policy";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
-import { getReviewStatusAction } from "@/app/app/projects/[projectId]/review-actions";
+import { getReviewStatusAction } from "@/features/agent/commands/review-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { StandaloneLink } from "@/components/ui/text-link";
 

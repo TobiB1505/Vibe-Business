@@ -413,7 +413,7 @@ describe("the progress poll cannot queue behind the analysis", () => {
     "utf8",
   );
   const actions = readFileSync(
-    join(process.cwd(), "src/app/app/projects/[projectId]/deep-scan-actions.ts"),
+    join(process.cwd(), "src/features/product/commands/deep-scan-actions.ts"),
     "utf8",
   );
 

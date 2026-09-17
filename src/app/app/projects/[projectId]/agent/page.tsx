@@ -42,7 +42,7 @@ import { ValidationDepthNote } from "@/features/agent/validation-depth-note";
 import { AgentValidateAction } from "@/features/agent/agent-validate-action";
 import { AgentQuestionPanel } from "@/features/agent/agent-question-panel";
 import { FounderInputCard } from "@/features/founder-input/founder-input-card";
-import { resolveAgentInterruptAction } from "./interrupt-actions";
+import { resolveAgentInterruptAction } from "@/features/agent/commands/interrupt-actions";
 import { AgentFileActivity } from "@/features/agent/agent-file-activity";
 import { AgentRunFiles } from "@/features/agent/agent-run-files";
 import { AgentMergeStage } from "@/features/agent/agent-merge-stage";

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { buttonClasses } from "@/components/ui/button";
 import { ConfirmPanel } from "@/components/ui/confirm-panel";
 import { Notice } from "@/components/ui/states";
-import { discardChangeAction, type DiscardActionState } from "@/app/app/projects/[projectId]/discard-actions";
+import { discardChangeAction, type DiscardActionState } from "@/features/agent/commands/discard-actions";
 
 /**
  * The other half of a decision.

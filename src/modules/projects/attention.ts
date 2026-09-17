@@ -1,3 +1,4 @@
+import { projectSectionPath } from "@/lib/routing/project-urls";
 import type { DashboardProject } from "./dashboard";
 import { productDisplayName } from "./display-name";
 
@@ -80,7 +81,7 @@ export const TIER_ORDER: Record<AttentionTier, number> = {
 export const ATTENTION_DISPLAY_LIMIT = 4;
 
 function projectHref(projectId: string, segment?: string): string {
-  return segment ? `/app/projects/${projectId}/${segment}` : `/app/projects/${projectId}`;
+  return projectSectionPath(projectId, segment ?? "");
 }
 
 function plural(count: number, singular: string, pluralForm: string): string {

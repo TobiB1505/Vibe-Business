@@ -87,7 +87,7 @@ describe("onboarding is not gated on a plan", () => {
    */
   it("does not require a plan to complete", () => {
     const source = readFileSync(
-      join(process.cwd(), "src/app/app/onboarding/[projectId]/actions.ts"),
+      join(process.cwd(), "src/features/onboarding/commands/onboarding-actions.ts"),
       "utf8",
     );
 

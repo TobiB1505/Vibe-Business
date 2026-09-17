@@ -10,7 +10,7 @@ import {
   revokeApprovalAction,
   type ApproveActionState,
   type RevokeActionState,
-} from "@/app/app/projects/[projectId]/approval-actions";
+} from "@/features/agent/commands/approval-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**

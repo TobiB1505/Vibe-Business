@@ -1,4 +1,4 @@
-import type { ScoreTone } from "@/components/ui/score-display";
+import type { ScoreTone } from "@/lib/ui/score-display";
 import type { StatusGlyphName, StatusTone } from "@/components/ui/status-pill";
 import type { FocusCandidateKind, NovaFocusTier } from "@/modules/nova/focus";
 import type { OperationPollPhase } from "@/modules/operations/view";

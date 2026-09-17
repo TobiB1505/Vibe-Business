@@ -1,5 +1,6 @@
 "use client";
 
+import { projectPath } from "@/lib/routing/project-urls";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef } from "react";
@@ -368,7 +369,7 @@ export function RepositoriesIndex({
                         <ExternalLinkIcon size={13} className="text-fg-meta shrink-0" />
                       </a>
                       <Link
-                        href={`/app/projects/${repository.projectId}`}
+                        href={projectPath(repository.projectId)}
                         className="text-fg-muted hover:text-fg-body rounded-inline transition-interactive truncate text-caption"
                       >
                         {repository.projectName}

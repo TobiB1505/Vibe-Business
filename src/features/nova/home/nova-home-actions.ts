@@ -1,14 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { projectPath } from "@/lib/routing/project-urls";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { novaActionSubjectKind, type DispatchableNovaActionId } from "./nova-dispatch";
 
-import { checkProductionOutcomeAction } from "@/app/app/projects/[projectId]/outcome-actions";
-import { startAuditAction } from "@/app/app/projects/[projectId]/run-audit-action";
-import { startPlanAction } from "@/app/app/projects/[projectId]/plan-action";
-import { startUnderstandingAction } from "@/app/app/projects/[projectId]/understanding-actions";
-import { rerunChangeValidationAction } from "@/app/app/projects/[projectId]/validate-change-action";
+import { checkProductionOutcomeAction } from "@/features/agent/commands/outcome-actions";
+import { startAuditAction } from "@/features/health/commands/run-audit-action";
+import { startPlanAction } from "@/features/plan/commands/plan-action";
+import { startUnderstandingAction } from "@/features/product/commands/understanding-actions";
+import { rerunChangeValidationAction } from "@/features/agent/commands/validate-change-action";
 
 /**
  * The controls Nova Home can press itself (UI Sourcing Spec §14, C1).
@@ -56,7 +57,7 @@ import { rerunChangeValidationAction } from "@/app/app/projects/[projectId]/vali
 /** Home's own route. The five actions below revalidate it; each also
  *  revalidates whichever surface it belongs to, and neither replaces the other. */
 function homePath(projectId: string): string {
-  return `/app/projects/${projectId}`;
+  return projectPath(projectId);
 }
 
 export type NovaHomeActionState =

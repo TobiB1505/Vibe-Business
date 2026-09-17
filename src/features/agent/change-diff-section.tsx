@@ -9,7 +9,7 @@ import {
   REVIEW_DOWNGRADE_NOTE,
   type ReviewClassificationResult,
 } from "@/modules/review/classification";
-import { getPreparedDiffAction } from "@/app/app/projects/[projectId]/prepare-change-action";
+import { getPreparedDiffAction } from "@/features/plan/commands/prepare-change-action";
 import { ChevronDownIcon } from "@/components/ui/icons.generated";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils/cn";

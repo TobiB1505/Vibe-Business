@@ -15,7 +15,7 @@ import {
   correctProductAction,
   correctProductAndStartAuditAction,
   type ConfirmAndAuditState,
-} from "./actions";
+} from "@/features/onboarding/commands/onboarding-actions";
 
 export type ConfirmationValues = {
   name: string;

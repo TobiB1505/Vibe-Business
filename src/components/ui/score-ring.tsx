@@ -1,4 +1,4 @@
-import { scoreDisplay } from "./score-display";
+import { scoreDisplay } from "@/lib/ui/score-display";
 import { statusForScoreTone } from "@/components/system/status-vocabulary";
 import { statusToneText } from "./status-pill";
 import { figureClasses } from "./figure";

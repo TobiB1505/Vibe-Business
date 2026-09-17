@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { operationPollPhase, type OperationView } from "@/modules/operations/view";
-import { getOperationStatusAction } from "../../projects/[projectId]/run-audit-action";
+import { getOperationStatusAction } from "@/features/health/commands/run-audit-action";
 
 const POLL_INTERVAL_MS = 2_500;
 

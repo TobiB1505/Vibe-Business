@@ -1,3 +1,4 @@
+import { projectPath } from "@/lib/routing/project-urls";
 import { cookies } from "next/headers";
 import { SettingsRail, type SettingsRailBack } from "@/components/layout/account-shell";
 import { createClient } from "@/lib/supabase/server";
@@ -53,7 +54,7 @@ async function resolveBack(): Promise<SettingsRailBack> {
       .maybeSingle();
 
     if (error || !data) return generic;
-    return { href: `/app/projects/${data.id}`, label: `Back to ${data.name}` };
+    return { href: projectPath(data.id), label: `Back to ${data.name}` };
   } catch {
     // A rail that cannot name the product still has to offer the way out.
     return generic;

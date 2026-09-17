@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const ACTIONS = readFileSync(
-  join(process.cwd(), "src/app/app/onboarding/[projectId]/actions.ts"),
+  join(process.cwd(), "src/features/onboarding/commands/onboarding-actions.ts"),
   "utf8",
 );
 

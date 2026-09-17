@@ -1,3 +1,4 @@
+import { projectPath } from "@/lib/routing/project-urls";
 import { notFound, redirect } from "next/navigation";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
@@ -39,7 +40,7 @@ import {
   declineSignedInProductAction,
   revealAuditAndFindFirstMoveAction,
   revealSignedInProductAction,
-} from "./actions";
+} from "@/features/onboarding/commands/onboarding-actions";
 import { NovaFirstRun } from "./nova-first-run";
 import { NovaOnboardingHeader } from "./nova-onboarding-header";
 import { NovaOpeningScreen } from "@/features/nova/home/nova-opening-screen";
@@ -104,7 +105,7 @@ export default async function ProjectOnboardingPage({
   const supabase = await createClient();
   const onboarding = await getProjectOnboarding(supabase, { projectId, userId: session.userId });
   if (!onboarding) notFound();
-  if (onboarding.state === "complete") redirect(`/app/projects/${projectId}`);
+  if (onboarding.state === "complete") redirect(projectPath(projectId));
 
   /*
    * Nova's own two screens come before the rest of setup (NOVA-3).

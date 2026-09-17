@@ -7,7 +7,10 @@ import type {
   ErasureFailureReason,
   ErasureViewState,
 } from "@/modules/operations/account-erasure/view";
-import { deleteAccountAction, type DeleteAccountActionState } from "./delete-account-actions";
+import {
+  deleteAccountAction,
+  type DeleteAccountActionState,
+} from "@/features/account/commands/delete-account-actions";
 import { DeleteIcon } from "@/components/ui/icons.generated";
 import { Button } from "@/components/ui/button";
 

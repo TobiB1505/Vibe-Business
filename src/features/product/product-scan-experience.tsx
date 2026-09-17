@@ -28,11 +28,11 @@ import type { ProductScanEvent, ProductScanSource } from "@/modules/product-scan
 import {
   startUnderstandingAction,
   type StartUnderstandingState,
-} from "@/app/app/projects/[projectId]/understanding-actions";
+} from "@/features/product/commands/understanding-actions";
 import {
   getProductScanStatusAction,
   type ProductScanStatus,
-} from "@/app/app/projects/[projectId]/product-scan-status-action";
+} from "@/features/product/commands/product-scan-status-action";
 
 const POLL_INTERVAL_MS = 1_800;
 const EMPTY_SCAN_EVENTS: ProductScanEvent[] = [];

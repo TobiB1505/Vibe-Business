@@ -260,7 +260,7 @@ describe("the panel decides nothing (§11, §29)", () => {
 });
 
 describe("the server action's surface is two identifiers (§11)", () => {
-  const src = source("app/app/projects/[projectId]/outcome-actions.ts");
+  const src = source("features/agent/commands/outcome-actions.ts");
 
   it("takes only a project id and a prepared change id", () => {
     expect(src).toMatch(

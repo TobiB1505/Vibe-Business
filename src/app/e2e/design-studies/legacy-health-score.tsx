@@ -1,6 +1,6 @@
 import { CoverageLine } from "@/components/system/confidence";
 import { Surface } from "@/components/ui/surface";
-import { scoreDisplay } from "@/components/ui/score-display";
+import { scoreDisplay } from "@/lib/ui/score-display";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
 import { StandaloneLink } from "@/components/ui/text-link";

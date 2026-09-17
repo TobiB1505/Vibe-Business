@@ -1,3 +1,4 @@
+import { projectPath } from "@/lib/routing/project-urls";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
@@ -63,5 +64,15 @@ export default async function AppEntryPage() {
   const hint = (await cookies()).get(LAST_VISITED_COOKIE)?.value ?? null;
   const target = resolveLastVisited(orderProjectsByAttention(projects), hint);
 
-  redirect(`/app/projects/${target}`);
+  /*
+   * `resolveLastVisited` returns null only for an empty list, which the guard
+   * above already sent to onboarding — so this branch is unreachable today and
+   * is written down rather than asserted away. It used to be interpolated into
+   * a template literal, where a null would have produced `/app/projects/null`:
+   * a 404 for a founder whose account had briefly disagreed with itself.
+   * Onboarding is the honest answer to having no product, here as above.
+   */
+  if (target === null) redirect("/app/onboarding");
+
+  redirect(projectPath(target));
 }

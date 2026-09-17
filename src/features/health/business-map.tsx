@@ -6,7 +6,7 @@ import type { BusinessLens } from "@/modules/business-audit/schema";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
 import { CoverageLine } from "@/components/system/confidence";
-import type { ScoreTone } from "@/components/ui/score-display";
+import type { ScoreTone } from "@/lib/ui/score-display";
 import { figureClasses } from "@/components/ui/figure";
 
 /**

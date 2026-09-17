@@ -10,7 +10,7 @@ import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { compileHandoffPrompt, type LaterStep, type SettledStep } from "@/modules/handoff/prompt";
 import { HANDOFF_TOOL_CHOICES, HANDOFF_TOOL_LABELS } from "@/modules/handoff/view";
 import type { HandoffPurpose, HandoffTool } from "@/modules/handoff/schema";
-import { recordHandoffAction, type HandoffActionState } from "@/app/app/projects/[projectId]/handoff-action";
+import { recordHandoffAction, type HandoffActionState } from "@/features/plan/commands/handoff-action";
 
 /**
  * "Vibe won't build this one — your own tool can" (ADR 0099).

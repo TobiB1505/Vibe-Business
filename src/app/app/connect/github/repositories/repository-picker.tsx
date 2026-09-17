@@ -4,7 +4,7 @@ import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ChoiceCard } from "@/components/ui/choice-card";
 import type { PickableRepository } from "@/modules/projects/connected-repositories";
-import { selectRepository, type SelectRepositoryResult } from "./actions";
+import { selectRepository, type SelectRepositoryResult } from "@/features/connect/commands/select-repository";
 
 const initialState: SelectRepositoryResult | null = null;
 

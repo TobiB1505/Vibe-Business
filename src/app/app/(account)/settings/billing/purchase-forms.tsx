@@ -11,7 +11,7 @@ import {
   startCreditPackCheckoutAction,
   startPlanCheckoutAction,
   type BillingActionState,
-} from "./actions";
+} from "@/features/account/commands/billing-actions";
 
 function SubmitButton({
   children,

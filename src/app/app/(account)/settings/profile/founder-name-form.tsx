@@ -6,7 +6,10 @@ import { buttonClasses } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/field";
 import { MAX_FOUNDER_NAME_LENGTH } from "@/modules/auth/founder-name";
 
-import { saveFounderNameAction, type SaveFounderNameState } from "./founder-name-actions";
+import {
+  saveFounderNameAction,
+  type SaveFounderNameState,
+} from "@/features/account/commands/founder-name-actions";
 
 /**
  * The one field this product asks about a person.

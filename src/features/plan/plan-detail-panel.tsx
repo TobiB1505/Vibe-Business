@@ -46,9 +46,9 @@ import {
   type StepDisplayState,
 } from "@/modules/action-plans/view";
 import { OperationProgress } from "@/components/system/operation-progress";
-import { resolveFounderInputAction } from "@/app/app/projects/[projectId]/founder-input-action";
-import { getOperationStatusAction } from "@/app/app/projects/[projectId]/run-audit-action";
-import { startPlanAction, type StartPlanActionState } from "@/app/app/projects/[projectId]/plan-action";
+import { resolveFounderInputAction } from "@/features/founder-input/commands/founder-input-action";
+import { getOperationStatusAction } from "@/features/health/commands/run-audit-action";
+import { startPlanAction, type StartPlanActionState } from "@/features/plan/commands/plan-action";
 import { PrepareChangePanel } from "./prepare-change-panel";
 import { AttestationForm } from "./attestation-form";
 import { HandoffCard } from "./handoff-card";

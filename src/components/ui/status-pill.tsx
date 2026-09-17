@@ -22,7 +22,9 @@ import { cn } from "@/lib/utils/cn";
  *               unassessable state is neutral, never a problem — the audit
  *               layer's "unknown ≠ bad" rule applies to its pixels too.
  */
-export type StatusTone = "active" | "success" | "waiting" | "problem" | "neutral";
+import type { StatusTone } from "@/lib/ui/tone";
+
+export type { StatusTone } from "@/lib/ui/tone";
 
 const TONE_CLASSES: Record<StatusTone, string> = {
   active: "bg-mint-tint border-mint-line text-mint",

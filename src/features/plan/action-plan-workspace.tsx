@@ -23,7 +23,7 @@ import type {
   BlockedActionDestinations,
   OpportunityActionState,
 } from "@/modules/execution/view";
-import { getOperationStatusAction } from "@/app/app/projects/[projectId]/run-audit-action";
+import { getOperationStatusAction } from "@/features/health/commands/run-audit-action";
 import { MoveCard } from "./move-card";
 import { MoveStepper } from "./move-stepper";
 import { PlanDetailPanel } from "./plan-detail-panel";

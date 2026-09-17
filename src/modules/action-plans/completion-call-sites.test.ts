@@ -39,7 +39,7 @@ const SITES: readonly { file: string; why: string }[] = [
     why: "The routing set decides whether the *next* step may start. Blind to handoffs, a ticked-off step leaves its successor blocked forever.",
   },
   {
-    file: join("src", "app", "app", "projects", "[projectId]", "founder-action-attestation.ts"),
+    file: join("src", "features", "plan", "commands", "founder-action-attestation.ts"),
     why: "The gate that admits the founder's confirmation. Blind to handoffs, it refuses the step the screen just offered.",
   },
 ];

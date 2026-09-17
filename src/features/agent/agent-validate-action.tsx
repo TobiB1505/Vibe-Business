@@ -11,7 +11,7 @@ import {
   getValidationProgressAction,
   rerunChangeValidationAction,
   validateChangeAction,
-} from "@/app/app/projects/[projectId]/validate-change-action";
+} from "@/features/agent/commands/validate-change-action";
 
 const POLL_INTERVAL_MS = 2_500;
 

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
-import { getOperationStatusAction } from "@/app/app/projects/[projectId]/run-audit-action";
+import { getOperationStatusAction } from "@/features/health/commands/run-audit-action";
 import { novaWorkingEntry } from "@/modules/nova/home-view";
 import type { NovaWorkingEntry } from "@/modules/nova/home-view";
 import { operationPollPhase, type OperationView } from "@/modules/operations/view";

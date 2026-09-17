@@ -8,18 +8,18 @@ import {
   confirmProductAndStartAuditAction,
   markNovaIntroducedAction,
   setNovaWorkflowStatusAction,
-} from "@/app/app/onboarding/[projectId]/actions";
+} from "@/features/onboarding/commands/onboarding-actions";
 
-import { resolveAgentInterruptAction } from "@/app/app/projects/[projectId]/agent/interrupt-actions";
-import { chooseWorkspaceRootAction } from "@/app/app/projects/[projectId]/agent/workspace-actions";
-import { startAgentRunAction } from "@/app/app/projects/[projectId]/agent/agent-run-actions";
-import { resolveFounderInputAction } from "@/app/app/projects/[projectId]/founder-input-action";
-import { mergeApprovedChangeAction } from "@/app/app/projects/[projectId]/merge-actions";
-import { checkProductionOutcomeAction } from "@/app/app/projects/[projectId]/outcome-actions";
-import { startPlanAction } from "@/app/app/projects/[projectId]/plan-action";
-import { startAuditAction } from "@/app/app/projects/[projectId]/run-audit-action";
-import { startUnderstandingAction } from "@/app/app/projects/[projectId]/understanding-actions";
-import { rerunChangeValidationAction } from "@/app/app/projects/[projectId]/validate-change-action";
+import { resolveAgentInterruptAction } from "@/features/agent/commands/interrupt-actions";
+import { chooseWorkspaceRootAction } from "@/features/agent/commands/workspace-actions";
+import { startAgentRunAction } from "@/features/agent/commands/agent-run-actions";
+import { resolveFounderInputAction } from "@/features/founder-input/commands/founder-input-action";
+import { mergeApprovedChangeAction } from "@/features/agent/commands/merge-actions";
+import { checkProductionOutcomeAction } from "@/features/agent/commands/outcome-actions";
+import { startPlanAction } from "@/features/plan/commands/plan-action";
+import { startAuditAction } from "@/features/health/commands/run-audit-action";
+import { startUnderstandingAction } from "@/features/product/commands/understanding-actions";
+import { rerunChangeValidationAction } from "@/features/agent/commands/validate-change-action";
 
 /**
  * What each of Nova's controls actually is.

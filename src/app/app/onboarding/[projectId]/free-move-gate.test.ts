@@ -59,7 +59,8 @@ vi.mock("@/modules/operations/vercel/executor", () => ({
   VercelWorkflowExecutor: class {},
 }));
 
-const { revealAuditAndFindFirstMoveAction } = await import("./actions");
+const { revealAuditAndFindFirstMoveAction } =
+  await import("@/features/onboarding/commands/onboarding-actions");
 
 /** What the action asked billing for on its last invocation. */
 function requestedBy(): string {

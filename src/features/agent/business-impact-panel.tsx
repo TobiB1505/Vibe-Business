@@ -9,7 +9,7 @@ import {
   planMeasurementAction,
   startMeasurementAction,
   type BusinessImpactActionState,
-} from "@/app/app/projects/[projectId]/business-impact-actions";
+} from "@/features/agent/commands/business-impact-actions";
 import { formatDate, formatNumber } from "@/lib/utils/format-datetime";
 
 /**

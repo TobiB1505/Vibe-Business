@@ -23,7 +23,7 @@ import {
   getDeepScanLiveViewAction,
   probeDeepScanSignInAction,
   startDeepScanAction,
-} from "@/app/app/projects/[projectId]/deep-scan-actions";
+} from "@/features/product/commands/deep-scan-actions";
 import {
   CONSECUTIVE_SIGNED_IN_PROBES,
   shouldStartUnprompted,

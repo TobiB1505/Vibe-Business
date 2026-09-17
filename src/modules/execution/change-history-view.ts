@@ -1,4 +1,4 @@
-import type { StatusTone } from "@/components/ui/status-pill";
+import type { StatusTone } from "@/lib/ui/tone";
 import type { ChangeHistoryOutcome } from "./change-history";
 
 /**

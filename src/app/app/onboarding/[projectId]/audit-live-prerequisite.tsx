@@ -12,7 +12,7 @@ import {
   completeOnboardingAction,
   parkLiveProductAction,
   type BeginUnderstandingState,
-} from "./actions";
+} from "@/features/onboarding/commands/onboarding-actions";
 
 /**
  * The audit's live-product prerequisite, in both of its honest shapes

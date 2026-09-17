@@ -17,7 +17,7 @@ import {
   getUnderstandingStatusAction,
   startUnderstandingAction,
   type StartUnderstandingState,
-} from "@/app/app/projects/[projectId]/understanding-actions";
+} from "@/features/product/commands/understanding-actions";
 
 /**
  * The understanding flow's waiting state (CORE-1 §26–§28, §48).

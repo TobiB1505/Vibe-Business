@@ -9,7 +9,10 @@ import { NovaLine, NovaRenderBlock } from "@/components/nova/nova-thread";
 import { NovaHowItWorks } from "./nova-how-it-works";
 import { WORKFLOW_EXAMPLE_ID, buildNovaWorkflowExplanation } from "@/modules/nova/first-run";
 import type { NovaEntry } from "@/modules/nova/feed";
-import { markNovaIntroducedAction, setNovaWorkflowStatusAction } from "./actions";
+import {
+  markNovaIntroducedAction,
+  setNovaWorkflowStatusAction,
+} from "@/features/onboarding/commands/onboarding-actions";
 
 /**
  * The one thing Nova asks before setup starts.

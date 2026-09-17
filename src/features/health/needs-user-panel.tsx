@@ -8,7 +8,7 @@ import { MonoLabel } from "@/components/ui/typography";
 import { GOAL_LABELS, MONETIZATION_LABELS, STAGE_LABELS } from "@/modules/projects/founder-intent";
 import type { PendingQuestion } from "@/modules/business-audit/needs-user";
 import { INTENT_ANSWER_VALUES, routeAnswer } from "@/modules/business-audit/answer-routing";
-import { submitFounderAnswerAction, type AnswerActionState } from "@/app/app/projects/[projectId]/needs-user-action";
+import { submitFounderAnswerAction, type AnswerActionState } from "@/features/health/commands/needs-user-action";
 import type { AnswerFailure } from "@/modules/business-audit/answer-service";
 
 /**

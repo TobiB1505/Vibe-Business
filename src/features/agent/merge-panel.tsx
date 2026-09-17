@@ -10,7 +10,7 @@ import {
   REVIEW_CLASSIFICATION_LABELS,
   type ReviewClassificationResult,
 } from "@/modules/review/classification";
-import { mergeApprovedChangeAction, type MergeActionState } from "@/app/app/projects/[projectId]/merge-actions";
+import { mergeApprovedChangeAction, type MergeActionState } from "@/features/agent/commands/merge-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { proseLinkClasses } from "@/components/ui/text-link";
 
