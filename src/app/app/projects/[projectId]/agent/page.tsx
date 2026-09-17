@@ -35,7 +35,7 @@ import {
 } from "@/modules/coding-agent/observability/agent-stages";
 import { listChangeHistory } from "@/modules/execution/change-history";
 import { AgentTrustPanel } from "@/features/agent/agent-header";
-import type { AgentTask } from "@/features/agent/agent-task-panel";
+import type { AgentTask } from "@/modules/coding-agent/workspace-view";
 import { AgentActivity } from "@/features/agent/agent-activity";
 import { AgentValidationChecks } from "@/features/agent/agent-validation-checks";
 import { ValidationDepthNote } from "@/features/agent/validation-depth-note";

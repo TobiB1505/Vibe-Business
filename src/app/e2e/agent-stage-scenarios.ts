@@ -82,7 +82,7 @@ function progress(stage: ChangeStage) {
   };
 }
 
-import type { AgentTask } from "@/features/agent/agent-task-panel";
+import type { AgentTask } from "@/modules/coding-agent/workspace-view";
 import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
 
 /** The Move the reference set works on, in the shape the panel takes. */
@@ -102,10 +102,10 @@ const TASK: AgentTask = {
   ],
 };
 
-import type { ValidationCheck } from "@/features/agent/agent-validation-checks";
+import type { ValidationCheck } from "@/modules/coding-agent/workspace-view";
 import type { LiveFile } from "@/modules/coding-agent/observability/live-view";
 import type { ValidationSummary } from "@/modules/validation/view";
-import type { ChangeCost } from "@/components/system/cost-line";
+import type { ChangeCost } from "@/modules/credits/change-cost";
 import { creditUnits } from "@/modules/credits/units";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
@@ -146,10 +146,8 @@ const FILE_EVENTS: StoredExecutionEvent[] = ([
   metadata: { path: path! },
 }));
 
-import type {
-  PreviewChange,
-  PreviewImages,
-} from "@/features/agent/agent-preview-stage";
+import type { PreviewImages } from "@/features/agent/agent-preview-stage";
+import type { PreviewChange } from "@/modules/coding-agent/workspace-view";
 
 const PREVIEW_CHANGES: PreviewChange[] = [
   {
@@ -177,7 +175,8 @@ const PREVIEW_CHANGES: PreviewChange[] = [
  */
 const PREVIEW_IMAGES: PreviewImages | null = null;
 
-import type { MergeFile, MergeSummary } from "@/features/agent/agent-merge-stage";
+import type { MergeFile } from "@/features/agent/agent-merge-stage";
+import type { MergeSummary } from "@/modules/coding-agent/workspace-view";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
 

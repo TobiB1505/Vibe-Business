@@ -10,7 +10,6 @@ import type { AgentStagePresentation } from "./agent-validate-stage";
 import type { PreviewChange } from "@/modules/coding-agent/workspace-view";
 import { cn } from "@/lib/utils/cn";
 
-export type { PreviewChange } from "@/modules/coding-agent/workspace-view";
 import { StandaloneLink } from "@/components/ui/text-link";
 
 /**

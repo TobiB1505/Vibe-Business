@@ -23,7 +23,6 @@ import { cn } from "@/lib/utils/cn";
  * is the same lie ADR 0094 refuses in the other direction.
  */
 
-export type { ChangeCost } from "@/modules/credits/change-cost";
 
 export function CostLine({ cost, className }: { cost: ChangeCost; className?: string }) {
   if (cost.kind === "unknown") return null;

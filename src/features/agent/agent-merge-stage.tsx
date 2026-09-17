@@ -8,7 +8,6 @@ import type { AgentStagePresentation } from "./agent-validate-stage";
 import type { MergeSummary } from "@/modules/coding-agent/workspace-view";
 import { cn } from "@/lib/utils/cn";
 
-export type { MergeSummary } from "@/modules/coding-agent/workspace-view";
 import { StandaloneLink } from "@/components/ui/text-link";
 import { MonoChip, StatusPill } from "@/components/ui/status-pill";
 

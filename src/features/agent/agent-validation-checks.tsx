@@ -27,7 +27,6 @@ import type {
  * need it" are different sentences and a founder is entitled to the difference.
  */
 
-export type { ValidationCheck, ValidationCheckState } from "@/modules/coding-agent/workspace-view";
 
 const SHIELD = (
   <>

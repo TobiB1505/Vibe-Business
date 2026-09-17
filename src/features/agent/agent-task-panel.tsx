@@ -9,8 +9,6 @@ import { LENS_LABELS } from "@/modules/business-audit/map-view";
 import { buildChainCompletionNote } from "@/modules/coding-agent/view";
 import type { AgentTask, AgentTaskRating } from "@/modules/coding-agent/workspace-view";
 
-export type { AgentTask } from "@/modules/coding-agent/workspace-view";
-
 /**
  * The task the agent is working on (UI-19, artboards 2a–2c).
  *

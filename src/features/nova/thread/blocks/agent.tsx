@@ -1,10 +1,8 @@
 "use client";
 
 import { AgentFileActivity } from "@/features/agent/agent-file-activity";
-import {
-  AgentValidationChecks,
-  type ValidationCheck,
-} from "@/features/agent/agent-validation-checks";
+import { AgentValidationChecks } from "@/features/agent/agent-validation-checks";
+import type { ValidationCheck } from "@/modules/coding-agent/workspace-view";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 
 /**

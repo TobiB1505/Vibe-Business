@@ -17,7 +17,7 @@ import {
   formatPercent,
   formatTokens,
   formatUsd,
-} from "@/modules/coding-agent/ui/format";
+} from "@/modules/coding-agent/observability/format";
 
 /**
  * One agent execution, live (EXECUTION CORE-4 observability).

@@ -1,5 +1,6 @@
 import { MonoLabel } from "@/components/ui/typography";
-import { AgentTaskPanel, type AgentTask } from "./agent-task-panel";
+import { AgentTaskPanel } from "./agent-task-panel";
+import type { AgentTask } from "@/modules/coding-agent/workspace-view";
 
 /** The compact task card above Validate, Preview and Review. */
 export function AgentRunTaskHeader({

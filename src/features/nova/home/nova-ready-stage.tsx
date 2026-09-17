@@ -2,7 +2,7 @@ import { Suspense } from "react";
 import { projectSectionHref } from "@/components/layout/project-shell";
 import { AgentReadyStage } from "@/features/agent/agent-ready-stage";
 import { agentStartControls } from "@/features/agent/agent-start-controls";
-import type { AgentTask } from "@/features/agent/agent-task-panel";
+import type { AgentTask } from "@/modules/coding-agent/workspace-view";
 import { listMeasuredRunObservations } from "@/modules/coding-agent/measured-runs-store";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import {

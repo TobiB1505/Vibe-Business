@@ -1,6 +1,7 @@
 import { MonoLabel } from "@/components/ui/typography";
 import { AgentAssuranceBar } from "./agent-assurance-bar";
-import { AgentTaskPanel, type AgentTask } from "./agent-task-panel";
+import { AgentTaskPanel } from "./agent-task-panel";
+import type { AgentTask } from "@/modules/coding-agent/workspace-view";
 import type { AgentStagePresentation } from "./agent-validate-stage";
 
 /** Stage two: task, working core and grounded activity in one live workspace. */

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import { AgentCore } from "./agent-core";
 import { AgentReadyFacts, AgentStartCta } from "./agent-start-cta";
-import { AgentTaskPanel, type AgentTask } from "./agent-task-panel";
+import { AgentTaskPanel } from "./agent-task-panel";
+import type { AgentTask } from "@/modules/coding-agent/workspace-view";
 import type { AgentStagePresentation } from "./agent-validate-stage";
 
 /**
