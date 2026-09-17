@@ -51,7 +51,6 @@ const DELIBERATELY_NARROW: Record<string, string> = {
   "features/marketing/landing-business-map.tsx": "the same caption on the landing page's own map",
   "components/brand/product-logo.tsx":
     "a customer's logo, `object-contain` — a cap is the only thing stopping a wide wordmark from setting the row height",
-  "app/e2e/design-studies/legacy-product-identity.tsx": "the same logo cap, in a design study",
   "features/marketing/legal-page.tsx":
     "the sticky table of contents, `hidden xl:block` — it does not exist on a phone",
   "app/e2e/design-studies/study-opening.tsx":

@@ -467,6 +467,57 @@ test.describe("a profile fact can be checked", () => {
     await drawer.getByRole("button", { name: /close/i }).click();
     await expect(drawer).toBeHidden();
   });
+
+  /**
+   * Two claims about the shared drawer that moved here in Slice 8.
+   *
+   * They were asserted against a legacy Nova Home fixture — a screen the thread
+   * replaced, mounting a card no founder could reach. The drawer itself is
+   * production: `CitationCount` opens it from a profile fact, a business score,
+   * a finding and a blocker, and this panel is one of the four. So the claims
+   * are unchanged and the surface under them is now one somebody uses.
+   */
+  test("says it opens something, before it is pressed", async ({ page }) => {
+    await page.goto(READY);
+
+    const trigger = page
+      .getByRole("article")
+      .first()
+      .getByRole("button", { name: /sources?$/ });
+    await expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
+    await expect(trigger).toHaveAttribute("aria-expanded", "false");
+
+    await trigger.click();
+    await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  });
+
+  test("keeps focus inside while open, and hands it back on Escape", async ({ page }) => {
+    await page.goto(READY);
+
+    const trigger = page
+      .getByRole("article")
+      .first()
+      .getByRole("button", { name: /sources?$/ });
+    await trigger.click();
+
+    const drawer = page.getByRole("dialog");
+    await expect(drawer).toBeVisible();
+
+    // Inside the dialog, not on the page behind it — `showModal` is what makes
+    // the rest of the document inert, and `show` would not.
+    const focusedInDialog = await page.evaluate(() => {
+      const dialog = document.querySelector("dialog[open]");
+      return dialog?.contains(document.activeElement) ?? false;
+    });
+    expect(focusedInDialog).toBe(true);
+
+    await page.keyboard.press("Escape");
+    await expect(drawer).not.toBeVisible();
+
+    // The trigger gets it back — `<dialog>` restores focus, and a founder who
+    // opened a drawer from the keyboard is left where they were.
+    await expect(trigger).toBeFocused();
+  });
 });
 
 /*

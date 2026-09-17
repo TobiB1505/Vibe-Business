@@ -206,25 +206,52 @@ test.describe("the offer in the thread", () => {
   });
 });
 
+/**
+ * Nova Home, in the room a founder actually opens (ADR 0109, Slice 8).
+ *
+ * ## What these assertions used to be about
+ *
+ * A Focus Card, a Working Strip, an Attention Stack, a Product Identity and a
+ * Health Score, under `design-studies/legacy-*`. Every one of them was true of
+ * that screen and none of them was about a screen a founder could reach — the
+ * thread replaced it, and the fixture kept mounting what the tests had been
+ * written against. Eight assertions titled *"Nova Home"* were passing about
+ * something that was not Nova Home.
+ *
+ * The claims survive the move intact, because they were never about those
+ * components. They are about what a founder can see before pressing, what a
+ * paused run is allowed to look like, and what a settled project offers.
+ *
+ * ## Two that did not move, and where they went instead
+ *
+ * **A missing score explains itself rather than printing a zero** is asserted
+ * against the production business map in `business-audit.spec.ts` — *"only 2
+ * of 9 areas could be assessed"*, the words, and the colour that is not the
+ * healthy one. Home has no score on it: Business Health is its own destination
+ * and its own artifact, and the copy here was of a component that is gone.
+ *
+ * **A 44px tap target on an attention row** described a stack of links. The
+ * other true things are sentences now, with no controls at all — which is the
+ * stronger version of the claim below it and is asserted as such.
+ */
 test.describe("Nova Home", () => {
   test("leads with one dominant action and its price, before any click", async ({ page }) => {
     await page.goto(NOVA("nova-priced"));
 
-    // The focus is the page's h1: one sentence about what needs the founder.
-    const heading = page.getByRole("heading", { level: 1 });
-    await expect(heading).toBeVisible();
-    await expect(heading).toHaveText(/audit behind what I am showing you/i);
+    // The focus: one sentence about what needs the founder, in her own voice.
+    const focus = page.getByRole("region", { name: "What needs your attention" });
+    await expect(focus).toContainText(/audit behind what I am showing you/i);
 
     // The price is on screen with nothing expanded and nothing pressed.
     await expect(page.getByText(/\d+ Credits/)).toBeVisible();
     // And the balance is not. Vibe states what a thing costs and never what
     // is left: the balance lives once in the chrome, not under every control,
-    // and a refusal carries the way out. This assertion used to require the
-    // opposite, and is the only place the old sentence was covered.
+    // and a refusal carries the way out.
     await expect(page.getByText(/available|Not enough/i)).toHaveCount(0);
 
-    // Exactly one primary control. The stack below carries none.
+    // Exactly one primary control. The quiet lines below carry none.
     await expect(page.getByRole("button", { name: "Run the audit again" })).toBeVisible();
+    await expect(page.locator("main").getByRole("button")).toHaveCount(1);
   });
 
   test("never shows a currency or a percentage", async ({ page }) => {
@@ -235,108 +262,75 @@ test.describe("Nova Home", () => {
     expect(body).not.toMatch(/\d+\s?%/);
   });
 
+  /**
+   * The state lives in the line under her name now, where a chat puts it — it
+   * was a panel below the thread, which is a box saying what Nova is doing
+   * under Nova saying it. The claim is unchanged: a run paused on the founder
+   * must never read as activity.
+   */
   test("shows a paused run as waiting, never as working", async ({ page }) => {
     await page.goto(NOVA("nova-waiting"));
 
-    const strip = page.getByRole("status");
-    await expect(strip).toContainText("Waiting for you");
-    await expect(strip).not.toContainText("Working");
+    const header = page.locator("header").first();
+    await expect(header).toContainText(/waiting/i);
+    await expect(header).not.toContainText(/working/i);
   });
 
-  test("shows a running operation as working", async ({ page }) => {
+  test("says nothing about a run when none is going", async ({ page }) => {
     await page.goto(NOVA("nova-review"));
-    // This scenario has no operation, so the strip is absent rather than idle.
-    await expect(page.getByRole("status")).toHaveCount(0);
+
+    // This scenario has no operation, so the line carries the moment's own
+    // word rather than a stage — and never an idle one it invented.
+    const header = page.locator("header").first();
+    await expect(header).not.toContainText(/working|running/i);
   });
 
   test("names a stall as a stall rather than a failure", async ({ page }) => {
     await page.goto(NOVA("nova-stalled"));
 
-    const strip = page.getByRole("status");
-    await expect(strip).toContainText("Stalled");
-    await expect(strip).toContainText(/running far longer than it should/i);
+    const header = page.locator("header").first();
+    await expect(header).toContainText(/stalled/i);
+    await expect(header).not.toContainText(/failed/i);
   });
 
   test("says so, and offers nothing, when there is nothing to do", async ({ page }) => {
     await page.goto(NOVA("nova-settled"));
 
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText(/Nothing needs you/i);
+    const focus = page.getByRole("region", { name: "What needs your attention" });
+    await expect(focus).toContainText(/Nothing needs you/i);
     // The failure mode this replaces is a button that does nothing.
     await expect(page.locator("main").getByRole("button")).toHaveCount(0);
-    await expect(page.getByRole("status")).toHaveCount(0);
   });
 
-  test("explains a missing score instead of printing a zero", async ({ page }) => {
-    await page.goto(NOVA("nova-unscored"));
-
-    const health = page.getByRole("region", { name: "Business health" });
-
-    await expect(health).toContainText("—");
-    await expect(health).toContainText(/Only 2 of 9 applicable areas could be scored/);
-    // A dash, never a zero standing in for "nothing was measurable".
-    await expect(health).not.toContainText(/(^|\s)0(\s|$)/);
-  });
-
-  test("keeps the attention stack ordered and free of controls", async ({ page }) => {
+  /**
+   * The other things that are also true, and the rule they exist under.
+   *
+   * They were a stack of cards with a control each, which is the wall of
+   * equally weighted choices Nova exists to replace. They are quiet sentences
+   * now — and the claim that survived the redesign is the one that matters:
+   * **no controls and no prices**, because giving each one a button would
+   * rebuild the wall.
+   */
+  test("keeps the other true things ordered and free of controls", async ({ page }) => {
     await page.goto(NOVA("nova-review"));
 
-    const stack = page.getByRole("list").filter({ hasText: "audit behind" });
-    await expect(stack).toBeVisible();
-    await expect(stack.getByRole("button")).toHaveCount(0);
-    // Every row is a real destination.
-    await expect(stack.getByRole("link").first()).toBeVisible();
-  });
+    const focus = page.getByRole("region", { name: "What needs your attention" });
 
-  test.describe("evidence drawer", () => {
-    test("opens from a citation count and shows resolved sources, never ids", async ({ page }) => {
-      await page.goto(NOVA("nova-review"));
+    // The ranking raised the change; the plan and the audit are the other two,
+    // and all three are on screen — a founder with three things pending used to
+    // see one, because `secondary` was computed and discarded.
+    await expect(focus).toContainText(/change waiting for you to look at/i);
+    await expect(focus).toContainText(/nothing left in it that I can act on/i);
+    await expect(focus).toContainText(/audit behind what I am showing you/i);
 
-      const trigger = page.getByRole("button", { name: "2 sources" });
-      await expect(trigger).toBeVisible();
-      await expect(trigger).toHaveAttribute("aria-expanded", "false");
-
-      await trigger.click();
-
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-      await expect(dialog).toContainText("Payments integration detected");
-      await expect(dialog).toContainText("Your code");
-      // A raw evidence id would look like `repo.payments.stripe`.
-      await expect(dialog).not.toContainText(/\b[a-z]+\.[a-z_]+\.[a-z_]+\b/);
-    });
-
-    test("traps focus while open and returns it on close", async ({ page }) => {
-      await page.goto(NOVA("nova-review"));
-
-      const trigger = page.getByRole("button", { name: "2 sources" });
-      await trigger.click();
-
-      const dialog = page.getByRole("dialog");
-      await expect(dialog).toBeVisible();
-
-      // Focus is inside the dialog, not on the page behind it.
-      const focusedInDialog = await page.evaluate(() => {
-        const dialogEl = document.querySelector("dialog[open]");
-        return dialogEl?.contains(document.activeElement) ?? false;
-      });
-      expect(focusedInDialog).toBe(true);
-
-      await page.keyboard.press("Escape");
-      await expect(dialog).not.toBeVisible();
-
-      // The trigger gets focus back — `<dialog>` restores it.
-      await expect(trigger).toBeFocused();
-    });
-
-    test("closes on the close control as well as Escape", async ({ page }) => {
-      await page.goto(NOVA("nova-review"));
-
-      await page.getByRole("button", { name: "2 sources" }).click();
-      await expect(page.getByRole("dialog")).toBeVisible();
-
-      await page.getByRole("button", { name: "Close" }).click();
-      await expect(page.getByRole("dialog")).not.toBeVisible();
-    });
+    /*
+      And not one control between them. The moment that leads here is a change,
+      whose control is a review gate — a block, which this fixture does not
+      mount — so every button on this screen would be one a quiet line had
+      grown. That is the failure mode the asides exist under: a button each
+      rebuilds the wall of equally weighted choices Nova replaced.
+    */
+    await expect(page.locator("main").getByRole("button")).toHaveCount(0);
   });
 
   for (const viewport of VIEWPORTS) {
@@ -344,7 +338,7 @@ test.describe("Nova Home", () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
       await page.goto(NOVA("nova-priced"));
 
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      await expect(page.getByRole("region", { name: "What needs your attention" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Run the audit again" })).toBeVisible();
       await expect(page.getByText(/\d+ Credits/)).toBeVisible();
 
@@ -355,16 +349,4 @@ test.describe("Nova Home", () => {
       expect(overflow, `${viewport.name} scrolls horizontally`).toBe(false);
     });
   }
-
-  test("keeps the attention rows readable on a phone", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 780 });
-    await page.goto(NOVA("nova-review"));
-
-    const rows = page.getByRole("list").filter({ hasText: "audit behind" }).getByRole("link");
-    await expect(rows.first()).toBeVisible();
-
-    // A tap target a thumb can hit.
-    const box = await rows.first().boundingBox();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
-  });
 });

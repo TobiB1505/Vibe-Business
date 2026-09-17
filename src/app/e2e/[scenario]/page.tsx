@@ -28,13 +28,7 @@ import {
   AuditWaitingHeader,
 } from "@/features/health/audit-lifecycle";
 import { creditsToUnits } from "@/modules/credits/units";
-import { novaPresenceState } from "@/components/system/status-vocabulary";
-import { FocusCard } from "../design-studies/legacy-focus-card";
-import { AttentionStack } from "../design-studies/legacy-attention-stack";
-import { WorkingStrip } from "../design-studies/legacy-working-strip";
-import { ProductIdentity } from "../design-studies/legacy-product-identity";
-import { HealthScore } from "../design-studies/legacy-health-score";
-import { FindingCard } from "@/components/system/finding-card";
+import { novaPresenceState, statusForCandidate } from "@/components/system/status-vocabulary";
 import { NOVA_ACTION_META } from "@/modules/nova/actions";
 import { StudyShell } from "../design-studies/study-shell";
 import { StudyNovaHome } from "../design-studies/study-nova-home";
@@ -57,7 +51,10 @@ import { NovaOpeningScreen } from "@/features/nova/home/nova-opening-screen";
 import { NovaFirstRun } from "@/app/app/onboarding/[projectId]/nova-first-run";
 import { NovaOnboardingHeader } from "@/app/app/onboarding/[projectId]/nova-onboarding-header";
 import { NovaRail } from "@/features/nova/home/nova-rail";
+import { novaHeaderStatus } from "@/features/nova/home/nova-header-status";
 import { NOVA_THREAD_SURFACE, NovaRoom } from "@/components/nova/nova-room";
+import { NovaThreadHeader } from "@/components/nova/nova-thread";
+import { NovaPresence } from "@/components/nova/nova-presence";
 import { buildNovaFirstRunFeed } from "@/modules/nova/first-run";
 import { onboardingSteps } from "@/modules/onboarding/state";
 import { NovaOnboardingThread } from "@/app/app/onboarding/[projectId]/nova-onboarding-thread";
@@ -121,12 +118,7 @@ import {
   isWireframeScenario,
   studyByScenario,
 } from "../design-studies/studies";
-import {
-  isE2eNovaScenario,
-  novaScenarioHealth,
-  novaScenarioView,
-  NOVA_SCENARIO_PRIORITY,
-} from "../nova-scenarios";
+import { isE2eNovaScenario, novaScenarioView } from "../nova-scenarios";
 import { E2E_ACTION_PLAN_SCENARIOS, isE2eActionPlanScenario } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import {
@@ -183,6 +175,8 @@ import { ChangeHistoryTable } from "@/features/agent/change-history-table";
 import { WithheldPaths } from "@/features/agent/withheld-paths";
 import { ValidationDepthNote } from "@/features/agent/validation-depth-note";
 import { CostLine } from "@/components/system/cost-line";
+import { CostDisclosure } from "@/components/system/cost-disclosure";
+import { ActionBlock } from "@/components/system/action-block";
 import { AgentPreviewStage } from "@/features/agent/agent-preview-stage";
 import { PreviewPanel } from "@/features/agent/preview-panel";
 import { AgentMergeStage } from "@/features/agent/agent-merge-stage";
@@ -1002,9 +996,34 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * Nova Home, as production composes it (ADR 0109, Slice 8).
+   *
+   * ## What this used to mount, and why it stopped
+   *
+   * Five components under `design-studies/legacy-*`: a Focus Card, a Working
+   * Strip, an Attention Stack, a Product Identity and a Health Score. They were
+   * the screen this surface had before the thread replaced it, and the eight
+   * browser assertions titled *"Nova Home"* were therefore about a screen no
+   * founder could reach — passing, correct about that card, and about nothing
+   * anybody was looking at.
+   *
+   * The claims survive the move because they were never about those
+   * components: that a price is on screen before a press, that a paused run
+   * does not read as activity, that a settled project offers no invented
+   * button, that the other true things carry no controls. Every one of them is
+   * asked of the room a founder actually opens.
+   *
+   * ## What is the product's own here, and what is not
+   *
+   * `NovaRoom`, `NovaThreadHeader`, `NovaPresence`, `NovaRail` and
+   * `NovaFocusThread` are the production components, given a view model the
+   * production ranking produced. What is stood in for is the *control*: a plain
+   * button rather than a live Server Action, because this route has no session
+   * and the claim under test is what a founder can see before pressing.
+   */
   if (isE2eNovaScenario(scenario)) {
     const view = novaScenarioView(scenario);
-    const health = novaScenarioHealth(scenario);
     const entry = view.primary;
     const control = entry.control;
     const priced = control.kind === "server_action" ? control.option : null;
@@ -1018,8 +1037,10 @@ export default async function E2eScenarioPage({
       phase: view.working?.phase ?? "idle",
     });
 
+    const label2 = novaControlLabel(control);
+
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-8 p-8 max-sm:p-4">
+      <main className="mx-auto flex max-w-5xl flex-col gap-8 p-8 max-sm:p-4">
         {label}
 
         {/*
@@ -1030,74 +1051,70 @@ export default async function E2eScenarioPage({
         */}
         <AtmosphereField />
 
-        <ProductIdentity
-          name="Payflow"
-          logoUrl={null}
-          category="Developer tool"
-          understood="confirmed"
-          productHref="/app/projects/project_e2e/product"
-        />
-
-        {/*
-          The real card, given the real view model. The control is a plain
-          button rather than a live form: this fixture is about what a founder
-          can see before pressing, and the price beside an unpressed control is
-          exactly the claim under test.
-        */}
-        <FocusCard
-          entry={entry}
-          presence={presence}
-          seed="project_e2e"
-          operation={priced ? NOVA_ACTION_META[priced.actionId].price : null}
-          /*
-            Built through `creditsToUnits` rather than cast. A raw `420` is
-            420 *internal units* — 0.42 Credits — and reads as unaffordable
-            beside a 35-Credit price. The brand exists to catch exactly that,
-            and casting past it is how a fixture ends up asserting a bug.
-          */
-          consequence={priced?.confirmationNote ?? undefined}
-          /* The same label the button carries, so the fixture exercises the
-             footnote's refusal to repeat it rather than rendering past it. */
-          controlLabel={novaControlLabel(control) ?? undefined}
-          control={
-            /* Null covers both "nothing to press" and "answered in the card",
-               and this fixture renders neither — it is the Focus Card's shape,
-               not the answering flow. */
-            novaControlLabel(control) === null ? undefined : (
-              <Button variant="primary">{novaControlLabel(control)}</Button>
-            )
+        <NovaRoom
+          header={
+            /*
+              `NovaHeaderLive` without the poll. The live wrapper is a client
+              component that asks the server for an operation every 2.5
+              seconds, and this route has no operation to ask about — so the
+              fixture mounts the header the wrapper mounts, deriving the word
+              and the mark exactly as it does: the running stage when something
+              is running, the moment's own word otherwise.
+            */
+            <NovaThreadHeader
+              availability={{ state: "online" }}
+              /*
+                The same derivation `NovaHeaderLive` makes, and it has to be:
+                a fixture that wrote `tone: "active"` by hand would have gone
+                on passing over the stalled run that read as analysis.
+              */
+              status={novaHeaderStatus(view.working, statusForCandidate(entry.kind))}
+              subject="Payflow"
+              connected
+              mark={<NovaPresence state={presence} seed="project_e2e" />}
+            />
           }
-        />
-
-        <WorkingStrip working={view.working} presence={presence} seed="project_e2e" />
-
-        <AttentionStack
-          entries={view.secondary}
-          hrefFor={() => "/app/projects/project_e2e/agent"}
-        />
-
-        {health && (
-          <HealthScore
-            score={health.score}
-            stateLabel={health.stateLabel}
-            scoredLenses={health.scoredLenses}
-            eligibleLenses={health.eligibleLenses}
-            insufficientCoverageReason={health.insufficientCoverageReason}
-            healthHref="/app/projects/project_e2e/health"
+          rail={
+            <NovaRail
+              presence={presence}
+              seed="project_e2e"
+              working={view.working}
+              checklist={null}
+              activity={[]}
+            />
+          }
+        >
+          <NovaFocusThread
+            entry={entry}
+            projectId="project_e2e"
+            asides={view.secondary.map((moment) =>
+              moment.detail === null ? moment.message : `${moment.message} ${moment.detail}`,
+            )}
+            controlLabel={label2 ?? undefined}
+            control={
+              label2 === null ? undefined : (
+                <ActionBlock
+                  consequence={priced?.confirmationNote}
+                  control={
+                    <div className="flex flex-col gap-2">
+                      <Button variant="primary">{label2}</Button>
+                      {/*
+                        The price under the control, as `NovaServerActionControl`
+                        draws it — the claim under test is that a founder reads
+                        what a thing costs *before* pressing, so it has to be the
+                        component that decides what a price says rather than a
+                        string this file writes.
+                      */}
+                      <CostDisclosure
+                        operation={priced ? NOVA_ACTION_META[priced.actionId].price : null}
+                      />
+                    </div>
+                  }
+                />
+              )
+            }
           />
-        )}
-
-        {health && (
-          <FindingCard
-            variant="priority"
-            rank={1}
-            title={NOVA_SCENARIO_PRIORITY.headline}
-            explanation={NOVA_SCENARIO_PRIORITY.explanation}
-            whyItMatters={NOVA_SCENARIO_PRIORITY.whyItMatters}
-            severity={NOVA_SCENARIO_PRIORITY.severity}
-            citations={NOVA_SCENARIO_PRIORITY.citations}
-          />
-        )}
+        </NovaRoom>
       </main>
     );
   }

@@ -629,10 +629,23 @@ describe("Nova Home", () => {
        * `aria-hidden` with the state's word beside it — the header takes both
        * as one `status` object, so a tone cannot arrive without the sentence
        * that explains it.
+       *
+       * The pairing moved to `nova-header-status.ts` when the live wrapper
+       * stopped calling every running operation *active*: a stalled run said
+       * "Analyzing business" in mint, which is the tone asserting work the
+       * product had already decided was probably not happening.
        */
       const header = component("nova-header-live.tsx");
-      expect(header).toMatch(/word:|resting/);
-      expect(header).toContain("stageLabel");
+      expect(header).toContain("novaHeaderStatus");
+
+      const status = component("nova-header-status.ts");
+      // Every branch returns a word with its tone, and the words are the
+      // vocabulary's: a live stage, or the phase's own state.
+      expect(status).toContain("stageLabel");
+      expect(status).toContain("statusForOperationPhase");
+      expect(status).toContain("resting");
+      // And the tone is never written beside a word that did not come with it.
+      expect(status).not.toMatch(/tone:\s*"active"[\s\S]{0,40}resting/);
     });
   });
 });

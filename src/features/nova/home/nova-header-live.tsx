@@ -12,6 +12,7 @@ import { NovaPresence } from "@/components/nova/nova-presence";
 import { novaPresenceState } from "@/components/system/status-vocabulary";
 import type { NovaFocusTier } from "@/modules/nova/focus";
 import type { StatusTone } from "@/components/ui/status-pill";
+import { novaHeaderStatus } from "./nova-header-status";
 
 /**
  * The status row, kept current.
@@ -128,11 +129,28 @@ export function NovaHeaderLive({
     <NovaThreadHeader
       availability={{ state: "online" }}
       /*
-       * A running stage is what she is doing; anything else is what the moment
-       * is. Both come from tables the domain owns — `OPERATION_STAGE_LABELS`
-       * and `statusForCandidate` — so neither is a sentence written here.
+       * A running stage is what she is doing; anything else is what the *state*
+       * is. Every word comes from a table the domain owns —
+       * `OPERATION_STAGE_LABELS` for a live stage, `statusForOperationPhase`
+       * for the rest, `statusForCandidate` when nothing is running — so none of
+       * them is a sentence written here.
+       *
+       * ## The one that was wrong
+       *
+       * This used to be `live ? { word: live.stageLabel, tone: "active" }`, for
+       * *any* operation the ranking had in hand. A stalled run therefore said
+       * **"Analyzing business"** in mint with a pulsing dot beside it — the
+       * last stage it reported, coloured as activity, about a run the product
+       * had already decided was probably lost. `statusForOperationPhase` has
+       * had the honest word since before this component existed: *Stalled*,
+       * amber, because a stall is inferred from a clock rather than observed.
+       *
+       * A paused run was only accidentally right: `asking_founder`'s stage
+       * label happens to read "Waiting for you", so the word was correct and
+       * the *tone* was not. It is amber now, which is what the dot beside it
+       * has always meant.
        */
-      status={live ? { word: live.stageLabel, tone: "active" } : resting}
+      status={novaHeaderStatus(live, resting)}
       subject={subject}
       connected={connected}
       /*
